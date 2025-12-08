@@ -1,0 +1,214 @@
+"use client"
+
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { MapPin, Clock, Download, Plus, Eye, Edit2, Trash2, Route } from "lucide-react"
+import Link from "next/link"
+import { exportToExcel } from "@/lib/export-utils"
+import { toast } from "sonner"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { getRoutes, deleteRoute } from "@/app/actions/routes"
+
+export default function RoutesPage() {
+  const router = useRouter()
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [routesList, setRoutesList] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  const loadRoutes = async () => {
+    setIsLoading(true)
+    const result = await getRoutes()
+    if (result.error) {
+      toast.error(result.error)
+      setIsLoading(false)
+      return
+    }
+    if (result.data) {
+      setRoutesList(result.data)
+    }
+    setIsLoading(false)
+  }
+
+  useEffect(() => {
+    loadRoutes()
+  }, [])
+
+  const handleExportRoutes = () => {
+    try {
+      const exportData = routesList.map(({ id, company_id, created_at, updated_at, waypoints, estimated_arrival, ...rest }) => rest)
+      exportToExcel(exportData, "routes")
+      toast.success("Routes exported successfully")
+    } catch (error) {
+      toast.error("Failed to export routes")
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    const result = await deleteRoute(id)
+    if (result.error) {
+      toast.error(result.error)
+      setDeleteId(null)
+    } else {
+      toast.success("Route deleted successfully")
+      setDeleteId(null)
+      await loadRoutes()
+    }
+  }
+
+  return (
+    <div className="w-full">
+      {/* Page Header */}
+      <div className="border-b border-border bg-card/30 backdrop-blur px-8 py-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Routes</h1>
+          <p className="text-muted-foreground text-sm mt-1">Manage and optimize delivery routes</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={handleExportRoutes}
+            variant="outline"
+            className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export to Excel
+          </Button>
+          <Link href="/dashboard/routes/add">
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Route
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-8">
+        <div className="max-w-7xl mx-auto">
+          {isLoading ? (
+            <Card className="border border-border/50 p-8">
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">Loading routes...</p>
+              </div>
+            </Card>
+          ) : routesList.length === 0 ? (
+            <Card className="border border-border/50 p-8">
+              <div className="text-center py-12">
+                <Route className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+                <h3 className="text-xl font-semibold text-foreground mb-2">No routes yet</h3>
+                <p className="text-muted-foreground mb-6">Get started by creating your first route</p>
+                <Link href="/dashboard/routes/add">
+                  <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Your First Route
+                  </Button>
+                </Link>
+              </div>
+            </Card>
+          ) : (
+            <div className="grid md:grid-cols-3 gap-6">
+              {routesList.map((route) => (
+              <Card
+                key={route.id}
+                className="border border-border/50 p-6 hover:border-border/80 hover:shadow-md transition-all shadow-sm"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <h3 className="text-lg font-bold text-foreground">{route.name}</h3>
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                      route.priority === "high" || route.priority === "High" ? "bg-red-500/20 text-red-400" : "bg-blue-500/20 text-blue-400"
+                    }`}
+                  >
+                    {route.priority ? route.priority.charAt(0).toUpperCase() + route.priority.slice(1) : "Normal"}
+                  </span>
+                </div>
+                <div className="space-y-3 mb-6 border-t border-border/30 pt-4">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-primary" />
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium">From</p>
+                      <p className="text-sm text-foreground">{route.origin}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-primary" />
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium">To</p>
+                      <p className="text-sm text-foreground">{route.destination}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-primary" />
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium">Duration</p>
+                      <p className="text-sm text-foreground">{route.estimated_time || "N/A"}</p>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mb-4 pb-4 border-b border-border/30">
+                  Distance: {route.distance || "N/A"}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 border-border/50 bg-transparent hover:bg-secondary/50 transition"
+                    onClick={() => router.push(`/dashboard/routes/${route.id}`)}
+                  >
+                    <Eye className="w-4 h-4 mr-1" />
+                    View
+                  </Button>
+                  <Link href={`/dashboard/routes/${route.id}/edit`}>
+                    <Button variant="outline" size="sm" className="border-border/50 bg-transparent hover:bg-secondary/50">
+                      <Edit2 className="w-4 h-4" />
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-border/50 bg-transparent hover:bg-red-500/20"
+                    onClick={() => setDeleteId(route.id)}
+                  >
+                    <Trash2 className="w-4 h-4 text-red-400" />
+                  </Button>
+                </div>
+              </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the route from the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteId && handleDelete(deleteId)}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
