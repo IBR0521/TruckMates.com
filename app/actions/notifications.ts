@@ -2,14 +2,15 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { Resend } from "resend"
 
 // Initialize Resend (will use API key from environment variable)
-// Initialize lazily to avoid errors if API key is not set
-function getResendClient() {
+// Initialize lazily to avoid errors if API key is not set or package not available
+async function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return null
   try {
+    // Dynamic import to avoid build errors if package is not installed
+    const { Resend } = await import("resend")
     return new Resend(apiKey)
   } catch (error) {
     console.error("[RESEND] Failed to initialize Resend client:", error)
@@ -163,7 +164,7 @@ export async function sendNotification(
   }
 
   // Get Resend client
-  const resend = getResendClient()
+  const resend = await getResendClient()
   
   // If Resend is not configured, log and return (don't throw error)
   if (!resend) {
@@ -356,7 +357,7 @@ export async function sendTestEmail() {
   }
 
   // Get Resend client
-  const resend = getResendClient()
+  const resend = await getResendClient()
   
   if (!resend) {
     return { 
