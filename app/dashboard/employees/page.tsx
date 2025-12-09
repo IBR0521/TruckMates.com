@@ -130,13 +130,23 @@ export default function EmployeesPage() {
     const result = await createEmployeeInvitation(newEmployeeEmail.trim())
 
     if (result.error) {
-      toast.error(result.error)
-      setIsSubmitting(false)
-      return
+      // Check if it's an email error or invitation creation error
+      if (result.error.includes("email failed")) {
+        toast.warning(`Invitation created but email failed: ${result.error}. Code: ${result.data?.invitation_code || "N/A"}`)
+      } else {
+        toast.error(result.error)
+        setIsSubmitting(false)
+        return
+      }
     }
 
     if (result.data) {
-      toast.success(`Invitation sent to ${newEmployeeEmail}. Code: ${result.data.invitation_code}`)
+      if (result.error && result.error.includes("email failed")) {
+        // Email failed but invitation was created
+        toast.warning(`Invitation created! Code: ${result.data.invitation_code}. Email failed - please share the code manually.`)
+      } else {
+        toast.success(`Invitation sent to ${newEmployeeEmail}. Code: ${result.data.invitation_code}`)
+      }
       setNewEmployeeEmail("")
       setShowAddDialog(false)
       

@@ -193,11 +193,20 @@ export async function createEmployeeInvitation(email: string) {
 
     // Send email with invitation code
     const userEmail = userData?.email || user.email || ""
-    await sendInvitationEmail(email, invitationCode, userEmail)
+    const emailResult = await sendInvitationEmail(email, invitationCode, userEmail)
+    
+    if (!emailResult.success) {
+      console.error(`[INVITATION] Failed to send email: ${emailResult.error}`)
+      // Still return success for invitation creation, but log the email error
+      // The invitation code is still created and can be shared manually
+    }
 
     revalidatePath("/dashboard/employees")
     revalidatePath("/account-setup/manager")
-    return { data: invitation, error: null }
+    return { 
+      data: invitation, 
+      error: emailResult.success ? null : `Invitation created but email failed: ${emailResult.error}` 
+    }
   }
 
   // Create invitation with generated code
@@ -219,11 +228,20 @@ export async function createEmployeeInvitation(email: string) {
 
   // Send email with invitation code
   const userEmail = userData?.email || user.email || ""
-  await sendInvitationEmail(email, codeData, userEmail)
+  const emailResult = await sendInvitationEmail(email, codeData, userEmail)
+  
+  if (!emailResult.success) {
+    console.error(`[INVITATION] Failed to send email: ${emailResult.error}`)
+    // Still return success for invitation creation, but log the email error
+    // The invitation code is still created and can be shared manually
+  }
 
   revalidatePath("/dashboard/employees")
   revalidatePath("/account-setup/manager")
-  return { data: invitation, error: null }
+  return { 
+    data: invitation, 
+    error: emailResult.success ? null : `Invitation created but email failed: ${emailResult.error}` 
+  }
 }
 
 // Verify and accept invitation code
@@ -499,21 +517,21 @@ async function sendInvitationEmail(
   employeeEmail: string,
   invitationCode: string,
   managerEmail: string
-) {
+): Promise<{ success: boolean; error?: string }> {
   try {
     const { Resend } = await import("resend")
     
     // Get Resend client
     const apiKey = process.env.RESEND_API_KEY
     if (!apiKey) {
-      console.log(`[INVITATION] Resend not configured. Invitation code: ${invitationCode}`)
-      return
+      console.error(`[INVITATION] RESEND_API_KEY not configured. Invitation code: ${invitationCode}`)
+      return { success: false, error: "Email service not configured. Please set RESEND_API_KEY in environment variables." }
     }
     
     const resend = new Resend(apiKey)
 
     const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://truckmateslogistic.com"
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://truckmateslogistic.com"
 
   const emailHtml = `
     <style>
@@ -554,23 +572,29 @@ async function sendInvitationEmail(
     </div>
   `
 
-  try {
-    const result = await resend.emails.send({
-      from: fromEmail,
-      to: employeeEmail,
-      subject: `Invitation to Join TruckMates - Code: ${invitationCode}`,
-      html: emailHtml,
-    })
+    try {
+      const result = await resend.emails.send({
+        from: fromEmail,
+        to: employeeEmail,
+        subject: `Invitation to Join TruckMates - Code: ${invitationCode}`,
+        html: emailHtml,
+      })
 
-    if (result.error) {
-      console.error("[INVITATION EMAIL ERROR]", result.error)
+      if (result.error) {
+        console.error("[INVITATION EMAIL ERROR]", result.error)
+        return { success: false, error: result.error.message || "Failed to send email" }
+      }
+
+      console.log(`[INVITATION] Email sent successfully to ${employeeEmail}. Message ID: ${result.data?.id}`)
+      return { success: true }
+    } catch (error: any) {
+      console.error("[INVITATION EMAIL ERROR]", error)
+      return { success: false, error: error?.message || "Failed to send email" }
     }
-  } catch (error: any) {
-    console.error("[INVITATION EMAIL ERROR]", error)
-  }
-  } catch (importError) {
+  } catch (importError: any) {
     // Resend package not installed or import failed
-    console.log(`[INVITATION] Resend package not available. Invitation code: ${invitationCode}`)
+    console.error(`[INVITATION] Resend package not available. Error: ${importError?.message}`)
+    return { success: false, error: "Email service not available. Please install resend package." }
   }
 }
 
