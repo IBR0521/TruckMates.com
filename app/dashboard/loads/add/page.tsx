@@ -146,7 +146,11 @@ export default function AddLoadPage() {
     if (result.error) {
       toast.error(result.error || "Failed to add load")
     } else {
-      toast.success("Load added successfully")
+      if (!formData.route) {
+        toast.success("Load added successfully! A route was automatically created and assigned.")
+      } else {
+        toast.success("Load added successfully")
+      }
       router.push("/dashboard/loads")
     }
   }

@@ -74,11 +74,38 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           }
           
           // Find routes that match the load's origin and destination
+          // More flexible matching: extract city/state from both sides
+          const normalizeLocation = (location: string) => {
+            if (!location) return ""
+            // Remove common suffixes and normalize
+            return location.toLowerCase()
+              .replace(/,/g, "")
+              .replace(/\s+/g, " ")
+              .trim()
+          }
+          
+          const loadOriginNormalized = normalizeLocation(loadResult.data.origin || "")
+          const loadDestNormalized = normalizeLocation(loadResult.data.destination || "")
+          
           const matchingRoutes = routesResult.data.filter((route: any) => {
-            const originMatch = route.origin?.toLowerCase().includes(loadResult.data.origin?.toLowerCase()) ||
-                               loadResult.data.origin?.toLowerCase().includes(route.origin?.toLowerCase())
-            const destMatch = route.destination?.toLowerCase().includes(loadResult.data.destination?.toLowerCase()) ||
-                             loadResult.data.destination?.toLowerCase().includes(route.destination?.toLowerCase())
+            const routeOriginNormalized = normalizeLocation(route.origin || "")
+            const routeDestNormalized = normalizeLocation(route.destination || "")
+            
+            // Check if any part of the location matches (more flexible)
+            const originMatch = 
+              routeOriginNormalized && loadOriginNormalized &&
+              (routeOriginNormalized.includes(loadOriginNormalized) ||
+               loadOriginNormalized.includes(routeOriginNormalized) ||
+               // Extract city name (first word) for partial matching
+               routeOriginNormalized.split(" ")[0] === loadOriginNormalized.split(" ")[0])
+            
+            const destMatch = 
+              routeDestNormalized && loadDestNormalized &&
+              (routeDestNormalized.includes(loadDestNormalized) ||
+               loadDestNormalized.includes(routeDestNormalized) ||
+               // Extract city name (first word) for partial matching
+               routeDestNormalized.split(" ")[0] === loadDestNormalized.split(" ")[0])
+            
             return originMatch && destMatch
           })
           
@@ -525,13 +552,25 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                 <h2 className="text-xl font-bold text-foreground">No Matching Route Found</h2>
               </div>
               <p className="text-muted-foreground mb-4">
-                No route found that matches this load's origin and destination. You may need to create a new route.
+                No route found that matches this load's origin ({load.origin}) and destination ({load.destination}). 
+                {routesResult?.data?.length === 0 ? (
+                  <span className="block mt-2">You don't have any routes created yet. Create a route first, then assign it to loads.</span>
+                ) : (
+                  <span className="block mt-2">You may need to create a new route, or the route names might not match exactly. Try creating a route with matching origin and destination.</span>
+                )}
               </p>
-              <Link href="/dashboard/routes/add">
-                <Button variant="outline">
-                  Create New Route
-                </Button>
-              </Link>
+              <div className="flex gap-3">
+                <Link href="/dashboard/routes/add">
+                  <Button variant="outline">
+                    Create New Route
+                  </Button>
+                </Link>
+                <Link href="/dashboard/routes">
+                  <Button variant="outline">
+                    View All Routes
+                  </Button>
+                </Link>
+              </div>
             </Card>
           )}
 
