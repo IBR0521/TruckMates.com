@@ -106,22 +106,27 @@ export async function createTruck(formData: {
     return { error: "No company found", data: null }
   }
 
+  // Build insert data, only including fields that have values
+  const truckData: any = {
+    company_id: userData.company_id,
+    truck_number: formData.truck_number,
+    status: formData.status || "available",
+  }
+
+  // Add optional fields only if they have values
+  if (formData.make) truckData.make = formData.make
+  if (formData.model) truckData.model = formData.model
+  if (formData.year !== undefined && formData.year !== null) truckData.year = formData.year
+  if (formData.vin) truckData.vin = formData.vin
+  if (formData.license_plate) truckData.license_plate = formData.license_plate
+  if (formData.current_driver_id) truckData.current_driver_id = formData.current_driver_id
+  if (formData.current_location) truckData.current_location = formData.current_location
+  if (formData.fuel_level !== undefined && formData.fuel_level !== null) truckData.fuel_level = formData.fuel_level
+  if (formData.mileage !== undefined && formData.mileage !== null) truckData.mileage = formData.mileage
+
   const { data, error } = await supabase
     .from("trucks")
-    .insert({
-      company_id: userData.company_id,
-      truck_number: formData.truck_number,
-      make: formData.make,
-      model: formData.model,
-      year: formData.year,
-      vin: formData.vin,
-      license_plate: formData.license_plate,
-      status: formData.status || "available",
-      current_driver_id: formData.current_driver_id || null,
-      current_location: formData.current_location || null,
-      fuel_level: formData.fuel_level || null,
-      mileage: formData.mileage || null,
-    })
+    .insert(truckData)
     .select()
     .single()
 
@@ -152,21 +157,24 @@ export async function updateTruck(
 ) {
   const supabase = await createClient()
 
+  // Build update data, only including fields that are provided
+  const updateData: any = {}
+  
+  if (formData.truck_number !== undefined) updateData.truck_number = formData.truck_number
+  if (formData.make !== undefined) updateData.make = formData.make
+  if (formData.model !== undefined) updateData.model = formData.model
+  if (formData.year !== undefined) updateData.year = formData.year || null
+  if (formData.vin !== undefined) updateData.vin = formData.vin
+  if (formData.license_plate !== undefined) updateData.license_plate = formData.license_plate
+  if (formData.status !== undefined) updateData.status = formData.status
+  if (formData.current_driver_id !== undefined) updateData.current_driver_id = formData.current_driver_id || null
+  if (formData.current_location !== undefined) updateData.current_location = formData.current_location || null
+  if (formData.fuel_level !== undefined) updateData.fuel_level = formData.fuel_level || null
+  if (formData.mileage !== undefined) updateData.mileage = formData.mileage || null
+
   const { data, error } = await supabase
     .from("trucks")
-    .update({
-      truck_number: formData.truck_number,
-      make: formData.make,
-      model: formData.model,
-      year: formData.year,
-      vin: formData.vin,
-      license_plate: formData.license_plate,
-      status: formData.status,
-      current_driver_id: formData.current_driver_id || null,
-      current_location: formData.current_location || null,
-      fuel_level: formData.fuel_level || null,
-      mileage: formData.mileage || null,
-    })
+    .update(updateData)
     .eq("id", id)
     .select()
     .single()

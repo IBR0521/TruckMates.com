@@ -131,22 +131,31 @@ export default function EmployeesPage() {
 
     if (result.error) {
       // Check if it's an email error or invitation creation error
-      if (result.error.includes("email failed")) {
-        toast.warning(`Invitation created but email failed: ${result.error}. Code: ${result.data?.invitation_code || "N/A"}`)
+      if (result.error.includes("email failed") && result.data) {
+        // Email failed but invitation was created - show warning with code
+        const codeMatch = result.error.match(/Invitation code: ([A-Z0-9-]+)/)
+        const code = codeMatch ? codeMatch[1] : result.data.invitation_code || "N/A"
+        toast.warning(`Invitation created but email failed. Code: ${code}. Please share manually.`, {
+          duration: 10000,
+        })
+        setNewEmployeeEmail("")
+        setShowAddDialog(false)
+        
+        // Reload invitations
+        const invitationsResult = await getPendingInvitations()
+        if (invitationsResult.data) {
+          setInvitations(invitationsResult.data)
+        }
       } else {
+        // Other error - show error message
         toast.error(result.error)
-        setIsSubmitting(false)
-        return
       }
+      setIsSubmitting(false)
+      return
     }
 
     if (result.data) {
-      if (result.error && result.error.includes("email failed")) {
-        // Email failed but invitation was created
-        toast.warning(`Invitation created! Code: ${result.data.invitation_code}. Email failed - please share the code manually.`)
-      } else {
-        toast.success(`Invitation sent to ${newEmployeeEmail}. Code: ${result.data.invitation_code}`)
-      }
+      toast.success(`Invitation sent successfully to ${newEmployeeEmail}!`)
       setNewEmployeeEmail("")
       setShowAddDialog(false)
       

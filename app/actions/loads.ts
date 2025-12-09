@@ -48,72 +48,104 @@ async function sendNotificationsForLoadUpdate(loadData: any) {
 }
 
 export async function getLoads() {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
+
+    if (userError) {
+      console.error("[getLoads] Error fetching user:", userError)
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
+
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
+
+    const { data: loads, error } = await supabase
+      .from("loads")
+      .select("*")
+      .eq("company_id", userData.company_id)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      // Check if table doesn't exist
+      if (error.code === "42P01" || error.message.includes("does not exist")) {
+        console.error("[getLoads] Loads table does not exist")
+        return { data: [], error: null } // Return empty array instead of error
+      }
+      console.error("[getLoads] Error fetching loads:", error)
+      return { error: error.message, data: null }
+    }
+
+    return { data: loads || [], error: null }
+  } catch (error: any) {
+    console.error("[getLoads] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  const { data: loads, error } = await supabase
-    .from("loads")
-    .select("*")
-    .eq("company_id", userData.company_id)
-    .order("created_at", { ascending: false })
-
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  return { data: loads, error: null }
 }
 
 export async function getLoad(id: string) {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
+
+    if (userError) {
+      console.error("[getLoad] Error fetching user:", userError)
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
+
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
+
+    const { data: load, error } = await supabase
+      .from("loads")
+      .select("*")
+      .eq("id", id)
+      .eq("company_id", userData.company_id)
+      .single()
+
+    if (error) {
+      // Check if table doesn't exist
+      if (error.code === "42P01" || error.message.includes("does not exist")) {
+        console.error("[getLoad] Loads table does not exist")
+        return { error: "Loads table does not exist", data: null }
+      }
+      console.error("[getLoad] Error fetching load:", error)
+      return { error: error.message, data: null }
+    }
+
+    return { data: load, error: null }
+  } catch (error: any) {
+    console.error("[getLoad] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  const { data: load, error } = await supabase
-    .from("loads")
-    .select("*")
-    .eq("id", id)
-    .eq("company_id", userData.company_id)
-    .single()
-
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  return { data: load, error: null }
 }
 
 export async function createLoad(formData: {
@@ -221,25 +253,30 @@ export async function createLoad(formData: {
     }
   }
 
+  // Build insert data, only including fields that have values
+  const loadData: any = {
+    company_id: userData.company_id,
+    shipment_number: formData.shipment_number,
+    origin: formData.origin,
+    destination: formData.destination,
+    status: formData.status || "pending",
+  }
+
+  // Add optional fields only if they have values
+  if (formData.weight) loadData.weight = formData.weight
+  if (formData.weight_kg !== undefined && formData.weight_kg !== null) loadData.weight_kg = formData.weight_kg
+  if (formData.contents) loadData.contents = formData.contents
+  if (formData.value !== undefined && formData.value !== null) loadData.value = formData.value
+  if (formData.carrier_type) loadData.carrier_type = formData.carrier_type
+  if (formData.driver_id) loadData.driver_id = formData.driver_id
+  if (formData.truck_id) loadData.truck_id = formData.truck_id
+  if (routeId) loadData.route_id = routeId
+  if (formData.load_date) loadData.load_date = formData.load_date
+  if (formData.estimated_delivery) loadData.estimated_delivery = formData.estimated_delivery
+
   const { data, error } = await supabase
     .from("loads")
-    .insert({
-      company_id: userData.company_id,
-      shipment_number: formData.shipment_number,
-      origin: formData.origin,
-      destination: formData.destination,
-      weight: formData.weight,
-      weight_kg: formData.weight_kg || null,
-      contents: formData.contents,
-      value: formData.value || null,
-      carrier_type: formData.carrier_type,
-      status: formData.status || "pending",
-      driver_id: formData.driver_id || null,
-      truck_id: formData.truck_id || null,
-      route_id: routeId,
-      load_date: formData.load_date || null,
-      estimated_delivery: formData.estimated_delivery || null,
-    })
+    .insert(loadData)
     .select()
     .single()
 
@@ -275,25 +312,28 @@ export async function updateLoad(
 ) {
   const supabase = await createClient()
 
+  // Build update data, only including fields that are provided
+  const updateData: any = {}
+  
+  if (formData.shipment_number !== undefined) updateData.shipment_number = formData.shipment_number
+  if (formData.origin !== undefined) updateData.origin = formData.origin
+  if (formData.destination !== undefined) updateData.destination = formData.destination
+  if (formData.weight !== undefined) updateData.weight = formData.weight
+  if (formData.weight_kg !== undefined) updateData.weight_kg = formData.weight_kg || null
+  if (formData.contents !== undefined) updateData.contents = formData.contents
+  if (formData.value !== undefined) updateData.value = formData.value || null
+  if (formData.carrier_type !== undefined) updateData.carrier_type = formData.carrier_type
+  if (formData.status !== undefined) updateData.status = formData.status
+  if (formData.driver_id !== undefined) updateData.driver_id = formData.driver_id || null
+  if (formData.truck_id !== undefined) updateData.truck_id = formData.truck_id || null
+  if (formData.route_id !== undefined) updateData.route_id = formData.route_id || null
+  if (formData.load_date !== undefined) updateData.load_date = formData.load_date || null
+  if (formData.estimated_delivery !== undefined) updateData.estimated_delivery = formData.estimated_delivery || null
+  if (formData.actual_delivery !== undefined) updateData.actual_delivery = formData.actual_delivery || null
+
   const { data, error } = await supabase
     .from("loads")
-    .update({
-      shipment_number: formData.shipment_number,
-      origin: formData.origin,
-      destination: formData.destination,
-      weight: formData.weight,
-      weight_kg: formData.weight_kg || null,
-      contents: formData.contents,
-      value: formData.value || null,
-      carrier_type: formData.carrier_type,
-      status: formData.status,
-      driver_id: formData.driver_id || null,
-      truck_id: formData.truck_id || null,
-      route_id: formData.route_id || null,
-      load_date: formData.load_date || null,
-      estimated_delivery: formData.estimated_delivery || null,
-      actual_delivery: formData.actual_delivery || null,
-    })
+    .update(updateData)
     .eq("id", id)
     .select()
     .single()

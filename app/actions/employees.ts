@@ -110,6 +110,13 @@ export async function createEmployeeInvitation(email: string) {
     return { error: "Not authenticated", data: null }
   }
 
+  // Check subscription limits
+  const { canAddUser } = await import("./subscription-limits")
+  const limitCheck = await canAddUser()
+  if (!limitCheck.allowed) {
+    return { error: limitCheck.error || "User limit reached", data: null }
+  }
+
   // Check if user is a manager
   const { role: userRole, companyId, error: roleError } = await getUserRoleAndCompany(supabase, user.id)
 
@@ -197,15 +204,20 @@ export async function createEmployeeInvitation(email: string) {
     
     if (!emailResult.success) {
       console.error(`[INVITATION] Failed to send email: ${emailResult.error}`)
-      // Still return success for invitation creation, but log the email error
-      // The invitation code is still created and can be shared manually
+      // Return error so user knows email failed, but invitation is still created
+      revalidatePath("/dashboard/employees")
+      revalidatePath("/account-setup/manager")
+      return { 
+        data: invitation, 
+        error: `Invitation created but email failed: ${emailResult.error}. Invitation code: ${invitationCode}` 
+      }
     }
 
     revalidatePath("/dashboard/employees")
     revalidatePath("/account-setup/manager")
     return { 
       data: invitation, 
-      error: emailResult.success ? null : `Invitation created but email failed: ${emailResult.error}` 
+      error: null 
     }
   }
 
@@ -232,15 +244,18 @@ export async function createEmployeeInvitation(email: string) {
   
   if (!emailResult.success) {
     console.error(`[INVITATION] Failed to send email: ${emailResult.error}`)
-    // Still return success for invitation creation, but log the email error
-    // The invitation code is still created and can be shared manually
+    // Return error so user knows email failed
+    return { 
+      data: invitation, 
+      error: `Invitation created but email failed: ${emailResult.error}. Invitation code: ${codeData}` 
+    }
   }
 
   revalidatePath("/dashboard/employees")
   revalidatePath("/account-setup/manager")
   return { 
     data: invitation, 
-    error: emailResult.success ? null : `Invitation created but email failed: ${emailResult.error}` 
+    error: null 
   }
 }
 
@@ -572,29 +587,24 @@ async function sendInvitationEmail(
     </div>
   `
 
-    try {
-      const result = await resend.emails.send({
-        from: fromEmail,
-        to: employeeEmail,
-        subject: `Invitation to Join TruckMates - Code: ${invitationCode}`,
-        html: emailHtml,
-      })
+    const result = await resend.emails.send({
+      from: fromEmail,
+      to: employeeEmail,
+      subject: `Invitation to Join TruckMates - Code: ${invitationCode}`,
+      html: emailHtml,
+    })
 
-      if (result.error) {
-        console.error("[INVITATION EMAIL ERROR]", result.error)
-        return { success: false, error: result.error.message || "Failed to send email" }
-      }
-
-      console.log(`[INVITATION] Email sent successfully to ${employeeEmail}. Message ID: ${result.data?.id}`)
-      return { success: true }
-    } catch (error: any) {
-      console.error("[INVITATION EMAIL ERROR]", error)
-      return { success: false, error: error?.message || "Failed to send email" }
+    if (result.error) {
+      console.error("[INVITATION EMAIL ERROR]", result.error)
+      return { success: false, error: result.error.message || "Failed to send email" }
     }
-  } catch (importError: any) {
-    // Resend package not installed or import failed
-    console.error(`[INVITATION] Resend package not available. Error: ${importError?.message}`)
-    return { success: false, error: "Email service not available. Please install resend package." }
+
+    console.log(`[INVITATION] Email sent successfully to ${employeeEmail}. Message ID: ${result.data?.id}`)
+    return { success: true }
+  } catch (error: any) {
+    // Resend package not installed or import failed, or sending failed
+    console.error(`[INVITATION] Email sending error: ${error?.message || error}`)
+    return { success: false, error: error?.message || "Failed to send email. Please check email configuration." }
   }
 }
 

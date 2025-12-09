@@ -146,14 +146,25 @@ export async function createRoute(formData: {
     return { error: "No company found", data: null }
   }
 
+  // Ensure required fields are present and handle undefined values
+  const routeData: any = {
+    company_id: userData.company_id,
+    name: formData.name,
+    origin: formData.origin,
+    destination: formData.destination,
+    priority: formData.priority || "normal",
+    status: formData.status || "pending",
+  }
+
+  // Only add optional fields if they have values
+  if (formData.distance) routeData.distance = formData.distance
+  if (formData.estimated_time) routeData.estimated_time = formData.estimated_time
+  if (formData.driver_id) routeData.driver_id = formData.driver_id
+  if (formData.truck_id) routeData.truck_id = formData.truck_id
+
   const { data, error } = await supabase
     .from("routes")
-    .insert({
-      company_id: userData.company_id,
-      ...formData,
-      priority: formData.priority || "normal",
-      status: formData.status || "pending",
-    })
+    .insert(routeData)
     .select()
     .single()
 
@@ -184,21 +195,24 @@ export async function updateRoute(
 ) {
   const supabase = await createClient()
 
+  // Build update data, only including fields that are provided
+  const updateData: any = {}
+  
+  if (formData.name !== undefined) updateData.name = formData.name
+  if (formData.origin !== undefined) updateData.origin = formData.origin
+  if (formData.destination !== undefined) updateData.destination = formData.destination
+  if (formData.distance !== undefined) updateData.distance = formData.distance
+  if (formData.estimated_time !== undefined) updateData.estimated_time = formData.estimated_time
+  if (formData.priority !== undefined) updateData.priority = formData.priority || "normal"
+  if (formData.status !== undefined) updateData.status = formData.status || "pending"
+  if (formData.driver_id !== undefined) updateData.driver_id = formData.driver_id || null
+  if (formData.truck_id !== undefined) updateData.truck_id = formData.truck_id || null
+  if (formData.estimated_arrival !== undefined) updateData.estimated_arrival = formData.estimated_arrival || null
+  if (formData.waypoints !== undefined) updateData.waypoints = formData.waypoints || null
+
   const { data, error } = await supabase
     .from("routes")
-    .update({
-      name: formData.name,
-      origin: formData.origin,
-      destination: formData.destination,
-      distance: formData.distance,
-      estimated_time: formData.estimated_time,
-      priority: formData.priority,
-      driver_id: formData.driver_id || null,
-      truck_id: formData.truck_id || null,
-      status: formData.status,
-      estimated_arrival: formData.estimated_arrival || null,
-      waypoints: formData.waypoints || null,
-    })
+    .update(updateData)
     .eq("id", id)
     .select()
     .single()

@@ -16,6 +16,7 @@ import {
   FolderOpen,
   Receipt,
   UserCog,
+  Shield,
 } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
@@ -129,6 +130,9 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
             <NavItem href="/dashboard/maintenance" label="Schedule" isSubitem />
             <NavItem href="/dashboard/maintenance/add" label="Add Service" isSubitem />
           </DropdownItem>
+
+          {/* ELD Service */}
+          <NavItem href="/dashboard/eld" icon={Shield} label="ELD Service" />
 
           {/* IFTA & Reports */}
           <NavItem href="/dashboard/ifta" icon={Receipt} label="IFTA Reports" />

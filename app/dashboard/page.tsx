@@ -7,6 +7,8 @@ import StatsOverview from "@/components/dashboard/stats-overview"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { getDashboardStats } from "@/app/actions/dashboard"
+import { useSearchParams } from "next/navigation"
+import { toast } from "sonner"
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({

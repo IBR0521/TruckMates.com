@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { getELDMileageData } from "./eld"
 
 export async function getIFTAReports() {
   const supabase = await createClient()
@@ -103,22 +104,42 @@ export async function createIFTAReport(formData: {
     period = `Oct-Dec ${year}`
   }
 
-  // Calculate total miles from routes/loads for selected trucks
-  const { data: routes } = await supabase
-    .from("routes")
-    .select("distance, truck_id")
-    .eq("company_id", userData.company_id)
-    .in("truck_id", formData.truck_ids)
-    .gte("created_at", periodStart)
-    .lte("created_at", periodEnd)
+  // Override with custom dates if provided
+  if (formData.period_start) periodStart = formData.period_start
+  if (formData.period_end) periodEnd = formData.period_end
 
-  // Calculate total miles (simplified - in real app, you'd parse distance strings)
+  // Calculate total miles - use ELD data if available, otherwise use routes
   let totalMiles = 0
-  routes?.forEach((route) => {
-    const distance = route.distance || "0 mi"
-    const miles = parseInt(distance.replace(/[^0-9]/g, "")) || 0
-    totalMiles += miles
-  })
+
+  if (formData.include_eld && formData.truck_ids.length > 0) {
+    // Use ELD mileage data if available
+    const eldResult = await getELDMileageData({
+      truck_ids: formData.truck_ids,
+      start_date: periodStart,
+      end_date: periodEnd,
+    })
+
+    if (eldResult.data && eldResult.data.totalMiles > 0) {
+      totalMiles = eldResult.data.totalMiles
+    }
+  }
+
+  // If no ELD data or ELD data is insufficient, fall back to routes
+  if (totalMiles === 0) {
+    const { data: routes } = await supabase
+      .from("routes")
+      .select("distance, truck_id")
+      .eq("company_id", userData.company_id)
+      .in("truck_id", formData.truck_ids)
+      .gte("created_at", periodStart)
+      .lte("created_at", periodEnd)
+
+    routes?.forEach((route) => {
+      const distance = route.distance || "0 mi"
+      const miles = parseInt(distance.replace(/[^0-9]/g, "")) || 0
+      totalMiles += miles
+    })
+  }
 
   // Estimate fuel purchased (simplified calculation)
   const estimatedFuel = Math.round(totalMiles / 6.5) // Assuming 6.5 MPG average

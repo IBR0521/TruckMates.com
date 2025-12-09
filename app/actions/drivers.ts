@@ -85,6 +85,13 @@ export async function createDriver(formData: {
     return { error: "Not authenticated", data: null }
   }
 
+  // Check subscription limits
+  const { canAddDriver } = await import("./subscription-limits")
+  const limitCheck = await canAddDriver()
+  if (!limitCheck.allowed) {
+    return { error: limitCheck.error || "Driver limit reached", data: null }
+  }
+
   const { data: userData } = await supabase
     .from("users")
     .select("company_id")
@@ -95,18 +102,23 @@ export async function createDriver(formData: {
     return { error: "No company found", data: null }
   }
 
+  // Build insert data, only including fields that have values
+  const driverData: any = {
+    company_id: userData.company_id,
+    name: formData.name,
+    status: formData.status || "active",
+  }
+
+  // Add optional fields only if they have values
+  if (formData.email) driverData.email = formData.email
+  if (formData.phone) driverData.phone = formData.phone
+  if (formData.license_number) driverData.license_number = formData.license_number
+  if (formData.license_expiry) driverData.license_expiry = formData.license_expiry
+  if (formData.truck_id) driverData.truck_id = formData.truck_id
+
   const { data, error } = await supabase
     .from("drivers")
-    .insert({
-      company_id: userData.company_id,
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      license_number: formData.license_number,
-      license_expiry: formData.license_expiry || null,
-      status: formData.status || "active",
-      truck_id: formData.truck_id || null,
-    })
+    .insert(driverData)
     .select()
     .single()
 
@@ -133,9 +145,20 @@ export async function updateDriver(
 ) {
   const supabase = await createClient()
 
+  // Build update data, only including fields that are provided
+  const updateData: any = {}
+  
+  if (formData.name !== undefined) updateData.name = formData.name
+  if (formData.email !== undefined) updateData.email = formData.email
+  if (formData.phone !== undefined) updateData.phone = formData.phone
+  if (formData.license_number !== undefined) updateData.license_number = formData.license_number
+  if (formData.license_expiry !== undefined) updateData.license_expiry = formData.license_expiry || null
+  if (formData.status !== undefined) updateData.status = formData.status
+  if (formData.truck_id !== undefined) updateData.truck_id = formData.truck_id || null
+
   const { data, error } = await supabase
     .from("drivers")
-    .update(formData)
+    .update(updateData)
     .eq("id", id)
     .select()
     .single()

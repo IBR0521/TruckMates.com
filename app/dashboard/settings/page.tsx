@@ -27,6 +27,7 @@ import { useEffect, useState } from "react"
 import { getCompany, updateCompany } from "@/app/actions/company"
 import { getCurrentUser } from "@/app/actions/user"
 import { getNotificationPreferences, updateNotificationPreferences, sendTestEmail, checkEmailConfiguration } from "@/app/actions/notifications"
+import { SubscriptionSection } from "./subscription-section"
 import Link from "next/link"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -659,33 +660,7 @@ export default function SettingsPage() {
 
           {/* Billing & Subscription - Only for Managers */}
           {isManager && (
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <CreditCard className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-bold text-foreground">Billing & Subscription</h2>
-              </div>
-              <div className="space-y-4">
-                <div className="p-4 bg-secondary/50 rounded-lg">
-                  <p className="text-foreground font-medium mb-2">Current Plan</p>
-                  <p className="text-2xl font-bold text-primary mb-1">Standard Plan</p>
-                  <p className="text-sm text-muted-foreground">$49/month</p>
-                </div>
-                <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1">
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    Update Payment Method
-                  </Button>
-                  <Button variant="outline" className="flex-1">
-                    View Billing History
-                  </Button>
-                </div>
-                <Link href="/plans">
-                  <Button variant="outline" className="w-full">
-                    Change Plan
-                  </Button>
-                </Link>
-              </div>
-            </Card>
+            <SubscriptionSection />
           )}
         </div>
       </main>

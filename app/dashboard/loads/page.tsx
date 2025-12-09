@@ -30,16 +30,26 @@ export default function LoadsPage() {
 
   const loadLoads = async () => {
     setIsLoading(true)
-    const result = await getLoads()
-    if (result.error) {
-      toast.error(result.error)
+    try {
+      const result = await getLoads()
+      if (result.error) {
+        toast.error(result.error)
+        setLoadsList([]) // Set empty array on error
+        setIsLoading(false)
+        return
+      }
+      if (result.data) {
+        setLoadsList(result.data)
+      } else {
+        setLoadsList([])
+      }
+    } catch (error: any) {
+      console.error("Error loading loads:", error)
+      toast.error("Failed to load loads. Please try again.")
+      setLoadsList([])
+    } finally {
       setIsLoading(false)
-      return
     }
-    if (result.data) {
-      setLoadsList(result.data)
-    }
-    setIsLoading(false)
   }
 
   useEffect(() => {

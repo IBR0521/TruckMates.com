@@ -10,49 +10,67 @@ import { useEffect, useState, Suspense } from "react"
 
 const plans = [
   {
-    name: "Simple",
-    price: "$25",
+    name: "Starter",
+    price: "$29",
     period: "/month",
-    description: "Perfect for small operations",
+    description: "Perfect for small fleets just getting started",
     features: [
-      "Up to 15 simple users",
-      "Up to 20 truck drivers",
+      "Up to 10 vehicles",
+      "Up to 15 drivers",
+      "Up to 10 employees",
       "Basic fleet tracking",
       "Driver management",
-      "Monthly reports",
+      "Route planning",
+      "Load management",
+      "Basic reports",
+      "Invoice & expense tracking",
+      "Maintenance scheduling",
+      "Document storage",
+      "Email notifications",
     ],
     popular: false,
+    planId: "starter",
   },
   {
-    name: "Standard",
-    price: "$49",
+    name: "Professional",
+    price: "$59",
     period: "/month",
-    description: "For growing teams",
+    description: "For growing businesses that need advanced features",
     features: [
-      "Up to 25 simple users",
-      "Up to 35 truck drivers",
+      "Up to 30 vehicles",
+      "Up to 40 drivers",
+      "Up to 25 employees",
+      "ELD Service Integration",
+      "Real-time GPS tracking",
+      "Hours of Service (HOS) compliance",
+      "IFTA reporting with ELD data",
       "Advanced analytics",
       "Route optimization",
-      "Priority support",
       "Custom reports",
+      "Priority email support",
     ],
     popular: true,
+    planId: "professional",
   },
   {
-    name: "Premium",
+    name: "Enterprise",
     price: "$99",
     period: "/month",
-    description: "Enterprise solution",
+    description: "Complete solution for large operations",
     features: [
+      "Unlimited vehicles",
       "Unlimited drivers",
-      "Unlimited users",
-      "Real-time GPS tracking",
-      "AI-powered routing",
-      "24/7 dedicated support",
+      "Unlimited employees",
+      "Advanced ELD features",
+      "AI-powered route optimization",
       "Custom integrations",
-      "Advanced security",
+      "Advanced security features",
+      "Dedicated account manager",
+      "24/7 priority support",
+      "Custom training",
     ],
     popular: false,
+    planId: "enterprise",
   },
 ]
 
@@ -66,29 +84,39 @@ function PlansContent() {
     // Update back link based on user type
   }, [userType])
 
-  const handleSelectPlan = async (planName: string) => {
+  const handleSelectPlan = async (planName: string, planId: string) => {
     setIsLoading(true)
-    toast.success(`${planName} plan selected successfully`)
+    
+    try {
+      // Start free trial (no payment required for now)
+      const { startFreeTrial } = await import("@/app/actions/subscriptions-trial")
+      const result = await startFreeTrial(planId)
 
-    // TODO: Save subscription to Supabase
-    // const { data, error } = await supabase
-    //   .from('subscriptions')
-    //   .insert({
-    //     user_id: user.id,
-    //     plan: planName,
-    //     status: 'active'
-    //   })
-
-    setTimeout(() => {
-      if (userType === "manager") {
-        // Managers go to account setup to add employees
-        router.push("/account-setup/manager")
-      } else {
-        // Simple users go directly to dashboard
-        router.push("/dashboard")
+      if (result.error) {
+        toast.error(result.error)
+        setIsLoading(false)
+        return
       }
+
+      if (result.data) {
+        toast.success(`7-day free trial started! Enjoy full access.`)
+        
+        // Redirect to dashboard after a short delay
+        setTimeout(() => {
+          if (userType === "manager") {
+            router.push("/account-setup/manager")
+          } else {
+            router.push("/dashboard")
+          }
+        }, 1500)
+      } else {
+        toast.error("Failed to start trial")
+        setIsLoading(false)
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to start trial")
       setIsLoading(false)
-    }, 1000)
+    }
   }
 
   const getBackLink = () => {
@@ -112,6 +140,11 @@ function PlansContent() {
         <div className="max-w-7xl mx-auto">
           <h1 className="text-4xl font-bold text-foreground mb-2">Choose Your Plan</h1>
           <p className="text-muted-foreground">Select the perfect plan for your fleet management needs</p>
+          <div className="mt-4 p-4 bg-primary/10 border border-primary/20 rounded-lg max-w-2xl">
+            <p className="text-sm text-foreground font-medium">
+              🎉 <strong>7-Day Free Trial</strong> - No credit card required to start. Cancel anytime.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -126,11 +159,16 @@ function PlansContent() {
                   plan.popular ? "border-primary bg-card/50" : "border-border hover:border-primary/50"
                 }`}
               >
-                {plan.popular && (
-                  <div className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full w-fit mb-4">
-                    MOST POPULAR
+                <div className="flex items-center gap-2 mb-4">
+                  {plan.popular && (
+                    <div className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full">
+                      MOST POPULAR
+                    </div>
+                  )}
+                  <div className="bg-green-500/10 text-green-500 text-xs font-bold px-3 py-1 rounded-full border border-green-500/20">
+                    7-DAY FREE TRIAL
                   </div>
-                )}
+                </div>
 
                 <h3 className="text-2xl font-bold text-foreground mb-2">{plan.name}</h3>
                 <p className="text-muted-foreground text-sm mb-6">{plan.description}</p>
@@ -141,7 +179,7 @@ function PlansContent() {
                 </div>
 
                 <Button
-                  onClick={() => handleSelectPlan(plan.name)}
+                  onClick={() => handleSelectPlan(plan.name, plan.planId)}
                   disabled={isLoading}
                   className={`w-full mb-8 ${
                     plan.popular
@@ -149,7 +187,7 @@ function PlansContent() {
                       : "bg-secondary hover:bg-secondary/90 text-foreground"
                   }`}
                 >
-                  {isLoading ? "Processing..." : "Select Plan"}
+                  {isLoading ? "Processing..." : "Start Free Trial"}
                 </Button>
 
                 <div className="space-y-4 flex-1">
