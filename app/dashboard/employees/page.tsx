@@ -105,10 +105,14 @@ export default function EmployeesPage() {
       }
 
       if (invitationsResult.error) {
-        // Don't show error for invitations, just log it
-        console.error(invitationsResult.error)
+        // Log error but don't show toast (invitations are optional)
+        console.log("Invitations:", invitationsResult.error)
+        // Set empty array if error (not critical)
+        setInvitations([])
       } else if (invitationsResult.data) {
         setInvitations(invitationsResult.data)
+      } else {
+        setInvitations([])
       }
 
       setIsLoading(false)

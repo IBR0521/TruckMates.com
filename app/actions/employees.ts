@@ -337,18 +337,35 @@ export async function getPendingInvitations() {
     return { error: "Not authenticated", data: null }
   }
 
-  // Check if user is a manager
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
+  // Check if user is a manager - try using the helper function first, then fallback
+  let userRole: string | null = null
+  let companyId: string | null = null
 
-  if (!userData || userData.role !== "manager") {
+  // Try using the RPC function (bypasses RLS)
+  const { data: roleData, error: roleError } = await supabase.rpc("get_user_role_and_company")
+
+  if (!roleError && roleData && roleData.length > 0) {
+    userRole = roleData[0].role
+    companyId = roleData[0].company_id
+  } else {
+    // Fallback: try direct query (might fail due to RLS, but worth trying)
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role, company_id")
+      .eq("id", user.id)
+      .single()
+
+    if (userData) {
+      userRole = userData.role
+      companyId = userData.company_id
+    }
+  }
+
+  if (!userRole || userRole !== "manager") {
     return { error: "Only managers can view invitations", data: null }
   }
 
-  if (!userData.company_id) {
+  if (!companyId) {
     return { error: "No company found", data: null }
   }
 
