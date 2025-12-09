@@ -373,7 +373,7 @@ export async function getPendingInvitations() {
   const { data: invitations, error } = await supabase
     .from("invitation_codes")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", companyId)
     .eq("status", "pending")
     .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false })
