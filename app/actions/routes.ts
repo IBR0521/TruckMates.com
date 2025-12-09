@@ -4,6 +4,48 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { sendNotification } from "./notifications"
 
+// Helper function to send notifications in background (non-blocking)
+async function sendNotificationsForRouteUpdate(routeData: any) {
+  const supabase = await createClient()
+  
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) return
+
+  // Get all users in the company
+  const { data: companyUsers } = await supabase
+    .from("users")
+    .select("id")
+    .eq("company_id", userData.company_id)
+
+  // Send notifications to all users who want route updates
+  if (companyUsers) {
+    for (const companyUser of companyUsers) {
+      try {
+        await sendNotification(companyUser.id, "route_update", {
+          routeName: routeData.name,
+          status: routeData.status,
+          origin: routeData.origin,
+          destination: routeData.destination,
+        })
+      } catch (error) {
+        // Silently fail - don't block the main operation
+        console.error(`[NOTIFICATION] Failed to send to user ${companyUser.id}:`, error)
+      }
+    }
+  }
+}
+
 export async function getRoutes() {
   const supabase = await createClient()
 
@@ -165,39 +207,12 @@ export async function updateRoute(
     return { error: error.message, data: null }
   }
 
-  // Send notifications to company users if route was updated
+  // Send notifications to company users if route was updated (non-blocking)
   if (data) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (user) {
-      const { data: userData } = await supabase
-        .from("users")
-        .select("company_id")
-        .eq("id", user.id)
-        .single()
-
-      if (userData?.company_id) {
-        // Get all users in the company
-        const { data: companyUsers } = await supabase
-          .from("users")
-          .select("id")
-          .eq("company_id", userData.company_id)
-
-        // Send notifications to all users who want route updates
-        if (companyUsers) {
-          for (const companyUser of companyUsers) {
-            await sendNotification(companyUser.id, "route_update", {
-              routeName: data.name,
-              status: data.status,
-              origin: data.origin,
-              destination: data.destination,
-            })
-          }
-        }
-      }
-    }
+    // Don't await - send notifications in background
+    sendNotificationsForRouteUpdate(data).catch((error) => {
+      console.error("[NOTIFICATION] Failed to send route update notifications:", error)
+    })
   }
 
   revalidatePath("/dashboard/routes")

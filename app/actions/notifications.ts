@@ -5,7 +5,17 @@ import { revalidatePath } from "next/cache"
 import { Resend } from "resend"
 
 // Initialize Resend (will use API key from environment variable)
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
+// Initialize lazily to avoid errors if API key is not set
+function getResendClient() {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) return null
+  try {
+    return new Resend(apiKey)
+  } catch (error) {
+    console.error("[RESEND] Failed to initialize Resend client:", error)
+    return null
+  }
+}
 
 export async function getNotificationPreferences() {
   const supabase = await createClient()
@@ -152,10 +162,13 @@ export async function sendNotification(
     return { sent: false, reason: "User email not found" }
   }
 
-  // If Resend is not configured, log and return
+  // Get Resend client
+  const resend = getResendClient()
+  
+  // If Resend is not configured, log and return (don't throw error)
   if (!resend) {
-    console.log(`[NOTIFICATION] Resend not configured. Would send ${type} to ${userData.email}`, data)
-    return { sent: false, reason: "Email service not configured. Please add RESEND_API_KEY to environment variables." }
+    console.log(`[NOTIFICATION] Resend not configured. Would send ${type} to ${userData.email}`)
+    return { sent: false, reason: "Email service not configured" }
   }
 
   // Generate email content based on type
@@ -163,8 +176,11 @@ export async function sendNotification(
 
   try {
     // Send email using Resend
+    // Use your verified domain or Resend's default domain
+    const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
+    
     const result = await resend.emails.send({
-      from: "TruckMates <notifications@truckmates.com>", // Change this to your verified domain
+      from: fromEmail,
       to: userData.email,
       subject: emailContent.subject,
       html: emailContent.html,
@@ -177,8 +193,9 @@ export async function sendNotification(
 
     return { sent: true, email: userData.email, messageId: result.data?.id }
   } catch (error: any) {
+    // Don't throw - just log and return failure
     console.error("[NOTIFICATION ERROR]", error)
-    return { sent: false, reason: error.message || "Failed to send email" }
+    return { sent: false, reason: error?.message || "Failed to send email" }
   }
 }
 
