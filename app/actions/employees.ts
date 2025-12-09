@@ -314,7 +314,7 @@ export async function updateEmployee(
     return { error: "Employee not found", data: null }
   }
 
-  if (employee.company_id !== userData.company_id) {
+  if (employee.company_id !== companyId) {
     return { error: "Employee does not belong to your company", data: null }
   }
 
@@ -370,7 +370,7 @@ export async function removeEmployee(employeeId: string) {
     return { error: "Employee not found", data: null }
   }
 
-  if (employee.company_id !== userData.company_id) {
+  if (employee.company_id !== companyId) {
     return { error: "Employee does not belong to your company", data: null }
   }
 
