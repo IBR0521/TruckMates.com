@@ -26,6 +26,7 @@ import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { getCompany, updateCompany } from "@/app/actions/company"
 import { getCurrentUser } from "@/app/actions/user"
+import { getNotificationPreferences, updateNotificationPreferences } from "@/app/actions/notifications"
 import Link from "next/link"
 import { Switch } from "@/components/ui/switch"
 
@@ -56,13 +57,13 @@ export default function SettingsPage() {
     phone: "",
   })
   const [notificationSettings, setNotificationSettings] = useState({
-    emailAlerts: true,
-    smsAlerts: true,
-    weeklyReports: false,
-    routeUpdates: true,
-    loadUpdates: true,
-    maintenanceAlerts: true,
-    paymentReminders: true,
+    email_alerts: true,
+    sms_alerts: true,
+    weekly_reports: false,
+    route_updates: true,
+    load_updates: true,
+    maintenance_alerts: true,
+    payment_reminders: true,
   })
   const [securitySettings, setSecuritySettings] = useState({
     twoFactor: false,
@@ -71,9 +72,10 @@ export default function SettingsPage() {
 
   useEffect(() => {
     async function loadData() {
-      const [companyResult, userResult] = await Promise.all([
+      const [companyResult, userResult, notificationResult] = await Promise.all([
         getCompany(),
         getCurrentUser(),
+        getNotificationPreferences(),
       ])
       
       if (companyResult.error) {
@@ -96,6 +98,18 @@ export default function SettingsPage() {
         setUserFormData({
           full_name: userResult.data.full_name || "",
           phone: userResult.data.phone || "",
+        })
+      }
+
+      if (notificationResult.data) {
+        setNotificationSettings({
+          email_alerts: notificationResult.data.email_alerts ?? true,
+          sms_alerts: notificationResult.data.sms_alerts ?? true,
+          weekly_reports: notificationResult.data.weekly_reports ?? false,
+          route_updates: notificationResult.data.route_updates ?? true,
+          load_updates: notificationResult.data.load_updates ?? true,
+          maintenance_alerts: notificationResult.data.maintenance_alerts ?? true,
+          payment_reminders: notificationResult.data.payment_reminders ?? true,
         })
       }
       
@@ -368,9 +382,9 @@ export default function SettingsPage() {
                   <p className="text-sm text-muted-foreground">Receive email notifications when routes are updated</p>
                 </div>
                 <Switch
-                  checked={notificationSettings.routeUpdates}
+                  checked={notificationSettings.route_updates}
                   onCheckedChange={(checked) => 
-                    setNotificationSettings({ ...notificationSettings, routeUpdates: checked })
+                    setNotificationSettings({ ...notificationSettings, route_updates: checked })
                   }
                 />
               </div>
@@ -380,9 +394,9 @@ export default function SettingsPage() {
                   <p className="text-sm text-muted-foreground">Get notified when load status changes</p>
                 </div>
                 <Switch
-                  checked={notificationSettings.loadUpdates}
+                  checked={notificationSettings.load_updates}
                   onCheckedChange={(checked) => 
-                    setNotificationSettings({ ...notificationSettings, loadUpdates: checked })
+                    setNotificationSettings({ ...notificationSettings, load_updates: checked })
                   }
                 />
               </div>
@@ -392,9 +406,9 @@ export default function SettingsPage() {
                   <p className="text-sm text-muted-foreground">Receive SMS notifications for urgent matters</p>
                 </div>
                 <Switch
-                  checked={notificationSettings.smsAlerts}
+                  checked={notificationSettings.sms_alerts}
                   onCheckedChange={(checked) => 
-                    setNotificationSettings({ ...notificationSettings, smsAlerts: checked })
+                    setNotificationSettings({ ...notificationSettings, sms_alerts: checked })
                   }
                 />
               </div>
@@ -404,9 +418,9 @@ export default function SettingsPage() {
                   <p className="text-sm text-muted-foreground">Receive weekly summary reports via email</p>
                 </div>
                 <Switch
-                  checked={notificationSettings.weeklyReports}
+                  checked={notificationSettings.weekly_reports}
                   onCheckedChange={(checked) => 
-                    setNotificationSettings({ ...notificationSettings, weeklyReports: checked })
+                    setNotificationSettings({ ...notificationSettings, weekly_reports: checked })
                   }
                 />
               </div>
@@ -416,9 +430,9 @@ export default function SettingsPage() {
                   <p className="text-sm text-muted-foreground">Get notified about upcoming maintenance schedules</p>
                 </div>
                 <Switch
-                  checked={notificationSettings.maintenanceAlerts}
+                  checked={notificationSettings.maintenance_alerts}
                   onCheckedChange={(checked) => 
-                    setNotificationSettings({ ...notificationSettings, maintenanceAlerts: checked })
+                    setNotificationSettings({ ...notificationSettings, maintenance_alerts: checked })
                   }
                 />
               </div>
@@ -428,14 +442,21 @@ export default function SettingsPage() {
                   <p className="text-sm text-muted-foreground">Receive reminders for pending payments and settlements</p>
                 </div>
                 <Switch
-                  checked={notificationSettings.paymentReminders}
+                  checked={notificationSettings.payment_reminders}
                   onCheckedChange={(checked) => 
-                    setNotificationSettings({ ...notificationSettings, paymentReminders: checked })
+                    setNotificationSettings({ ...notificationSettings, payment_reminders: checked })
                   }
                 />
               </div>
               <Button 
-                onClick={() => toast.success("Notification settings saved")}
+                onClick={async () => {
+                  const result = await updateNotificationPreferences(notificationSettings)
+                  if (result.success) {
+                    toast.success("Notification settings saved successfully")
+                  } else {
+                    toast.error(result.error || "Failed to save notification settings")
+                  }
+                }}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground"
               >
                 <Save className="w-4 h-4 mr-2" />
