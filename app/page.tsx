@@ -6,6 +6,7 @@ import { ArrowRight, Truck, BarChart3, Users, Lock } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
 
+// VERSION: 2.0 - Latest deployment
 export default function Home() {
   return (
     <div className="min-h-screen bg-background">
