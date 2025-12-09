@@ -56,6 +56,8 @@ For production, you should verify your domain:
 
 **For testing**, you can use Resend's default domain, but emails might go to spam.
 
+📖 **Need detailed instructions?** See [RESEND_DOMAIN_VERIFICATION.md](./RESEND_DOMAIN_VERIFICATION.md) for a complete step-by-step guide with screenshots and troubleshooting tips.
+
 ## Step 5: Test It!
 
 1. Go to your app → **Settings**

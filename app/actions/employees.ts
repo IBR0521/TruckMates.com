@@ -4,6 +4,37 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { sendNotification } from "./notifications"
 
+// Helper function to get user role and company_id (bypasses RLS)
+async function getUserRoleAndCompany(supabase: any, userId: string) {
+  let userRole: string | null = null
+  let companyId: string | null = null
+
+  // Try using the RPC function first (bypasses RLS)
+  try {
+    const { data: roleData, error: roleError } = await supabase.rpc("get_user_role_and_company")
+    if (!roleError && roleData && Array.isArray(roleData) && roleData.length > 0) {
+      userRole = roleData[0].role
+      companyId = roleData[0].company_id
+      return { role: userRole, companyId, error: null }
+    }
+  } catch (error) {
+    // RPC function might not exist, use fallback
+  }
+
+  // Fallback: try direct query
+  const { data: userData, error } = await supabase
+    .from("users")
+    .select("role, company_id")
+    .eq("id", userId)
+    .single()
+
+  if (error || !userData) {
+    return { role: null, companyId: null, error: error?.message || "User not found" }
+  }
+
+  return { role: userData.role, companyId: userData.company_id, error: null }
+}
+
 // Get all employees for a company (managers only)
 export async function getEmployees() {
   const supabase = await createClient()
@@ -16,22 +47,39 @@ export async function getEmployees() {
     return { error: "Not authenticated", data: null }
   }
 
-  // Check if user is a manager
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
+  // Check if user is a manager - try using RPC function first
+  let userRole: string | null = null
+  let companyId: string | null = null
 
-  if (!userData) {
-    return { error: "User not found", data: null }
+  try {
+    const { data: roleData, error: roleError } = await supabase.rpc("get_user_role_and_company")
+    if (!roleError && roleData && Array.isArray(roleData) && roleData.length > 0) {
+      userRole = roleData[0].role
+      companyId = roleData[0].company_id
+    }
+  } catch (error) {
+    // RPC function might not exist, use fallback
   }
 
-  if (userData.role !== "manager") {
+  // Fallback: try direct query
+  if (!userRole || !companyId) {
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role, company_id")
+      .eq("id", user.id)
+      .single()
+
+    if (userData) {
+      userRole = userData.role
+      companyId = userData.company_id
+    }
+  }
+
+  if (!userRole || userRole !== "manager") {
     return { error: "Only managers can view employees", data: null }
   }
 
-  if (!userData.company_id) {
+  if (!companyId) {
     return { error: "No company found", data: null }
   }
 
@@ -39,7 +87,7 @@ export async function getEmployees() {
   const { data: employees, error } = await supabase
     .from("users")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", companyId)
     .neq("id", user.id) // Exclude the manager
     .order("created_at", { ascending: false })
 
@@ -63,23 +111,26 @@ export async function createEmployeeInvitation(email: string) {
   }
 
   // Check if user is a manager
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id, email")
-    .eq("id", user.id)
-    .single()
+  const { role: userRole, companyId, error: roleError } = await getUserRoleAndCompany(supabase, user.id)
 
-  if (!userData) {
-    return { error: "User not found", data: null }
+  if (roleError || !userRole) {
+    return { error: roleError || "User not found", data: null }
   }
 
-  if (userData.role !== "manager") {
+  if (userRole !== "manager") {
     return { error: "Only managers can create invitations", data: null }
   }
 
-  if (!userData.company_id) {
+  if (!companyId) {
     return { error: "No company found", data: null }
   }
+
+  // Get user email for email sending
+  const { data: userData } = await supabase
+    .from("users")
+    .select("email")
+    .eq("id", user.id)
+    .single()
 
   // Validate email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -92,7 +143,7 @@ export async function createEmployeeInvitation(email: string) {
     .from("users")
     .select("id, role, email")
     .eq("email", email.toLowerCase().trim())
-    .eq("company_id", userData.company_id)
+    .eq("company_id", companyId)
     .maybeSingle()
 
   if (existingUser) {
@@ -107,7 +158,7 @@ export async function createEmployeeInvitation(email: string) {
     .from("invitation_codes")
     .select("id")
     .eq("email", email.toLowerCase().trim())
-    .eq("company_id", userData.company_id)
+    .eq("company_id", companyId)
     .eq("status", "pending")
     .gt("expires_at", new Date().toISOString())
     .maybeSingle()
@@ -127,7 +178,7 @@ export async function createEmployeeInvitation(email: string) {
     const { data: invitation, error: inviteError } = await supabase
       .from("invitation_codes")
       .insert({
-        company_id: userData.company_id,
+        company_id: companyId,
         email: email.toLowerCase().trim(),
         invitation_code: invitationCode,
         created_by: user.id,
@@ -141,7 +192,8 @@ export async function createEmployeeInvitation(email: string) {
     }
 
     // Send email with invitation code
-    await sendInvitationEmail(email, invitationCode, userData.email || "")
+    const userEmail = userData?.email || user.email || ""
+    await sendInvitationEmail(email, invitationCode, userEmail)
 
     revalidatePath("/dashboard/employees")
     revalidatePath("/account-setup/manager")
@@ -152,7 +204,7 @@ export async function createEmployeeInvitation(email: string) {
   const { data: invitation, error: inviteError } = await supabase
     .from("invitation_codes")
     .insert({
-      company_id: userData.company_id,
+      company_id: companyId,
       email: email.toLowerCase().trim(),
       invitation_code: codeData,
       created_by: user.id,
@@ -166,7 +218,8 @@ export async function createEmployeeInvitation(email: string) {
   }
 
   // Send email with invitation code
-  await sendInvitationEmail(email, codeData, userData.email || "")
+  const userEmail = userData?.email || user.email || ""
+  await sendInvitationEmail(email, codeData, userEmail)
 
   revalidatePath("/dashboard/employees")
   revalidatePath("/account-setup/manager")
@@ -222,14 +275,14 @@ export async function updateEmployee(
   }
 
   // Check if user is a manager
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
+  const { role: userRole, companyId, error: roleError } = await getUserRoleAndCompany(supabase, user.id)
 
-  if (!userData || userData.role !== "manager") {
-    return { error: "Only managers can update employees", data: null }
+  if (roleError || !userRole || userRole !== "manager") {
+    return { error: roleError || "Only managers can update employees", data: null }
+  }
+
+  if (!companyId) {
+    return { error: "No company found", data: null }
   }
 
   // Verify employee belongs to manager's company and is not a manager
@@ -278,14 +331,14 @@ export async function removeEmployee(employeeId: string) {
   }
 
   // Check if user is a manager
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
+  const { role: userRole, companyId, error: roleError } = await getUserRoleAndCompany(supabase, user.id)
 
-  if (!userData || userData.role !== "manager") {
-    return { error: "Only managers can remove employees", data: null }
+  if (roleError || !userRole || userRole !== "manager") {
+    return { error: roleError || "Only managers can remove employees", data: null }
+  }
+
+  if (!companyId) {
+    return { error: "No company found", data: null }
   }
 
   // Verify employee belongs to manager's company and is not a manager
@@ -398,14 +451,14 @@ export async function cancelInvitation(invitationId: string) {
   }
 
   // Check if user is a manager
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
+  const { role: userRole, companyId, error: roleError } = await getUserRoleAndCompany(supabase, user.id)
 
-  if (!userData || userData.role !== "manager") {
-    return { error: "Only managers can cancel invitations", data: null }
+  if (roleError || !userRole || userRole !== "manager") {
+    return { error: roleError || "Only managers can cancel invitations", data: null }
+  }
+
+  if (!companyId) {
+    return { error: "No company found", data: null }
   }
 
   // Verify invitation belongs to manager's company
@@ -419,7 +472,7 @@ export async function cancelInvitation(invitationId: string) {
     return { error: "Invitation not found", data: null }
   }
 
-  if (invitation.company_id !== userData.company_id) {
+  if (invitation.company_id !== companyId) {
     return { error: "Invitation does not belong to your company", data: null }
   }
 

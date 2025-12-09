@@ -19,6 +19,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   const [load, setLoad] = useState<any>(null)
   const [matchingRoute, setMatchingRoute] = useState<any>(null)
   const [truck, setTruck] = useState<any>(null)
+  const [routesResult, setRoutesResult] = useState<{ data: any[] | null; error: string | null } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         
         // Fetch routes to find matching ones
         const routesResult = await getRoutes()
+        setRoutesResult(routesResult)
         if (routesResult.data) {
           // Calculate load weight in kg
           const loadWeightKg = loadResult.data.weight_kg || 

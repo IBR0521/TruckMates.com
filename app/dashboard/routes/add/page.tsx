@@ -108,10 +108,8 @@ export default function AddRoutePage() {
       estimated_time: formData.estimatedTime,
       priority: formData.priority,
       status: formData.status,
-      driver_id: formData.driver || null,
-      truck_id: formData.truck || null,
-      estimated_arrival: formData.estimatedArrival || null,
-      waypoints: waypoints.length > 0 ? waypoints : null,
+      driver_id: formData.driver || undefined,
+      truck_id: formData.truck || undefined,
     })
 
     setIsSubmitting(false)

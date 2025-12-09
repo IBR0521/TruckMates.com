@@ -210,8 +210,8 @@ export async function createLoad(formData: {
           estimated_time: estimatedTime,
           priority: "normal",
           status: formData.status === "scheduled" ? "scheduled" : "pending",
-          driver_id: formData.driver_id || null,
-          truck_id: formData.truck_id || null,
+          driver_id: formData.driver_id || undefined,
+          truck_id: formData.truck_id || undefined,
         })
 
         if (routeResult.data) {

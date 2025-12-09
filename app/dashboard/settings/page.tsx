@@ -26,9 +26,10 @@ import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { getCompany, updateCompany } from "@/app/actions/company"
 import { getCurrentUser } from "@/app/actions/user"
-import { getNotificationPreferences, updateNotificationPreferences } from "@/app/actions/notifications"
+import { getNotificationPreferences, updateNotificationPreferences, sendTestEmail, checkEmailConfiguration } from "@/app/actions/notifications"
 import Link from "next/link"
 import { Switch } from "@/components/ui/switch"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function SettingsPage() {
   const [companyData, setCompanyData] = useState<{
@@ -69,13 +70,20 @@ export default function SettingsPage() {
     twoFactor: false,
     sessionTimeout: "30",
   })
+  const [emailConfig, setEmailConfig] = useState<{
+    configured: boolean
+    fromEmail: string
+    message: string
+  } | null>(null)
+  const [isSendingTest, setIsSendingTest] = useState(false)
 
   useEffect(() => {
     async function loadData() {
-      const [companyResult, userResult, notificationResult] = await Promise.all([
+      const [companyResult, userResult, notificationResult, emailConfigResult] = await Promise.all([
         getCompany(),
         getCurrentUser(),
         getNotificationPreferences(),
+        checkEmailConfiguration(),
       ])
       
       if (companyResult.error) {
@@ -111,6 +119,10 @@ export default function SettingsPage() {
           maintenance_alerts: notificationResult.data.maintenance_alerts ?? true,
           payment_reminders: notificationResult.data.payment_reminders ?? true,
         })
+      }
+
+      if (emailConfigResult) {
+        setEmailConfig(emailConfigResult)
       }
       
       setIsLoading(false)
@@ -376,13 +388,86 @@ export default function SettingsPage() {
               <h2 className="text-xl font-bold text-foreground">Notification Settings</h2>
             </div>
             <div className="space-y-4">
+              {/* Email Configuration Status */}
+              {emailConfig && (
+                <Alert className={emailConfig.configured ? "border-green-500/50 bg-green-500/10" : "border-yellow-500/50 bg-yellow-500/10"}>
+                  <Mail className={`w-4 h-4 ${emailConfig.configured ? "text-green-500" : "text-yellow-500"}`} />
+                  <AlertDescription>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className={`font-medium ${emailConfig.configured ? "text-green-400" : "text-yellow-400"}`}>
+                          {emailConfig.configured ? "✓ Email Service Configured" : "⚠ Email Service Not Configured"}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {emailConfig.message}
+                        </p>
+                        {emailConfig.configured && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Sending from: {emailConfig.fromEmail}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {/* Test Email Button */}
+              {emailConfig?.configured && (
+                <div className="p-4 bg-secondary/50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-foreground font-medium">Test Email Notifications</p>
+                      <p className="text-sm text-muted-foreground">Send a test email to verify your email service is working</p>
+                    </div>
+                    <Button
+                      onClick={async () => {
+                        setIsSendingTest(true)
+                        const result = await sendTestEmail()
+                        setIsSendingTest(false)
+                        if (result.sent) {
+                          toast.success(result.message || `Test email sent to ${result.email}`)
+                        } else {
+                          toast.error(result.error || "Failed to send test email")
+                        }
+                      }}
+                      disabled={isSendingTest}
+                      variant="outline"
+                      className="border-primary text-primary hover:bg-primary/10"
+                    >
+                      <Mail className="w-4 h-4 mr-2" />
+                      {isSendingTest ? "Sending..." : "Send Test Email"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              <div className="border-t border-border pt-4">
+                <p className="text-sm font-medium text-foreground mb-4">Notification Preferences</p>
+              </div>
+              
+              {/* Master Email Alerts Toggle */}
+              <div className="flex items-center justify-between p-4 bg-secondary/50 rounded-lg border-2 border-primary/20">
+                <div>
+                  <p className="text-foreground font-medium">Enable Email Notifications</p>
+                  <p className="text-sm text-muted-foreground">Master switch for all email notifications</p>
+                </div>
+                <Switch
+                  checked={notificationSettings.email_alerts}
+                  onCheckedChange={(checked) => 
+                    setNotificationSettings({ ...notificationSettings, email_alerts: checked })
+                  }
+                />
+              </div>
+              
               <div className="flex items-center justify-between p-4 bg-secondary/50 rounded-lg">
                 <div>
                   <p className="text-foreground font-medium">Email Alerts for Route Updates</p>
                   <p className="text-sm text-muted-foreground">Receive email notifications when routes are updated</p>
                 </div>
                 <Switch
-                  checked={notificationSettings.route_updates}
+                  checked={notificationSettings.route_updates && notificationSettings.email_alerts}
+                  disabled={!notificationSettings.email_alerts}
                   onCheckedChange={(checked) => 
                     setNotificationSettings({ ...notificationSettings, route_updates: checked })
                   }
@@ -394,7 +479,8 @@ export default function SettingsPage() {
                   <p className="text-sm text-muted-foreground">Get notified when load status changes</p>
                 </div>
                 <Switch
-                  checked={notificationSettings.load_updates}
+                  checked={notificationSettings.load_updates && notificationSettings.email_alerts}
+                  disabled={!notificationSettings.email_alerts}
                   onCheckedChange={(checked) => 
                     setNotificationSettings({ ...notificationSettings, load_updates: checked })
                   }
@@ -418,7 +504,8 @@ export default function SettingsPage() {
                   <p className="text-sm text-muted-foreground">Receive weekly summary reports via email</p>
                 </div>
                 <Switch
-                  checked={notificationSettings.weekly_reports}
+                  checked={notificationSettings.weekly_reports && notificationSettings.email_alerts}
+                  disabled={!notificationSettings.email_alerts}
                   onCheckedChange={(checked) => 
                     setNotificationSettings({ ...notificationSettings, weekly_reports: checked })
                   }
@@ -430,7 +517,8 @@ export default function SettingsPage() {
                   <p className="text-sm text-muted-foreground">Get notified about upcoming maintenance schedules</p>
                 </div>
                 <Switch
-                  checked={notificationSettings.maintenance_alerts}
+                  checked={notificationSettings.maintenance_alerts && notificationSettings.email_alerts}
+                  disabled={!notificationSettings.email_alerts}
                   onCheckedChange={(checked) => 
                     setNotificationSettings({ ...notificationSettings, maintenance_alerts: checked })
                   }
@@ -442,7 +530,8 @@ export default function SettingsPage() {
                   <p className="text-sm text-muted-foreground">Receive reminders for pending payments and settlements</p>
                 </div>
                 <Switch
-                  checked={notificationSettings.payment_reminders}
+                  checked={notificationSettings.payment_reminders && notificationSettings.email_alerts}
+                  disabled={!notificationSettings.email_alerts}
                   onCheckedChange={(checked) => 
                     setNotificationSettings({ ...notificationSettings, payment_reminders: checked })
                   }
