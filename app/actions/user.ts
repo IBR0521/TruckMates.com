@@ -13,11 +13,21 @@ export async function getCurrentUser() {
     return { error: "Not authenticated", data: null }
   }
 
-  // Try using the RPC function first (bypasses RLS)
-  const { data: roleData, error: roleError } = await supabase.rpc("get_user_role_and_company")
+  // Try using the RPC function first (bypasses RLS) - but handle if it doesn't exist
+  let roleData: any = null
+  let roleError: any = null
+  
+  try {
+    const result = await supabase.rpc("get_user_role_and_company")
+    roleData = result.data
+    roleError = result.error
+  } catch (error) {
+    // RPC function might not exist, that's okay - we'll use fallback
+    roleError = error
+  }
 
-  if (!roleError && roleData && roleData.length > 0) {
-    // Get full user data using the role info
+  if (!roleError && roleData && Array.isArray(roleData) && roleData.length > 0) {
+    // Get full user data - try query, but if it fails, return what we have from RPC
     const { data: userData, error } = await supabase
       .from("users")
       .select("*")
@@ -25,7 +35,7 @@ export async function getCurrentUser() {
       .single()
 
     if (error) {
-      // If RPC worked but query failed, return basic info from RPC
+      // If query failed, return basic info from RPC
       return { 
         data: { 
           id: user.id,
@@ -40,7 +50,7 @@ export async function getCurrentUser() {
     return { data: { ...userData, email: user.email }, error: null }
   }
 
-  // Fallback: try direct query (might fail due to RLS)
+  // Fallback: try direct query (might fail due to RLS, but worth trying)
   const { data: userData, error } = await supabase
     .from("users")
     .select("*")
