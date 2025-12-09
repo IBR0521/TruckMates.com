@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   BarChart3,
   Truck,
@@ -15,9 +15,11 @@ import {
   Wrench,
   FolderOpen,
   Receipt,
+  UserCog,
 } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
+import { getCurrentUser } from "@/app/actions/user"
 
 interface SidebarProps {
   isOpen: boolean
@@ -32,6 +34,26 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const [accountingOpen, setAccountingOpen] = useState(false)
   const [maintenanceOpen, setMaintenanceOpen] = useState(false)
   const [reportsOpen, setReportsOpen] = useState(false)
+  const [isManager, setIsManager] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function checkUserRole() {
+      try {
+        const result = await getCurrentUser()
+        if (result.data) {
+          setIsManager(result.data.role === "manager")
+        } else if (result.error) {
+          console.error("Error getting user role:", result.error)
+        }
+      } catch (error) {
+        console.error("Error checking user role:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    checkUserRole()
+  }, [])
 
   return (
     <>
@@ -125,6 +147,11 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
           {/* Documents */}
           <NavItem href="/dashboard/documents" icon={FolderOpen} label="Documents" />
+
+          {/* Employees - Managers Only */}
+          {isManager && (
+            <NavItem href="/dashboard/employees" icon={UserCog} label="Employees" />
+          )}
         </nav>
 
         {/* Footer */}

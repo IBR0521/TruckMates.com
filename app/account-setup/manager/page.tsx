@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation"
 import { Logo } from "@/components/logo"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
+import { createEmployeeInvitation } from "@/app/actions/employees"
 
 export default function ManagerAccountSetupPage() {
   const [showAddEmployees, setShowAddEmployees] = useState(false)
@@ -34,29 +35,25 @@ export default function ManagerAccountSetupPage() {
     }
 
     try {
-      // TODO: Check if user exists in Supabase
-      // const { data, error } = await supabase
-      //   .from('users')
-      //   .select('id, email')
-      //   .eq('email', employeeEmail)
-      //   .single()
+      // Create invitation in database
+      const result = await createEmployeeInvitation(employeeEmail)
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
 
-      // Generate a unique ID for the employee
-      const employeeId = `EMP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
-
-      // Add to list
-      setEmployeeIds([...employeeIds, { email: employeeEmail, id: employeeId }])
-      setEmployeeEmail("")
-      toast.success(`Employee ID generated: ${employeeId}`)
-    } catch (error) {
-      // If user doesn't exist, still generate ID for future use
-      const employeeId = `EMP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
-      setEmployeeIds([...employeeIds, { email: employeeEmail, id: employeeId }])
-      setEmployeeEmail("")
-      toast.success(`Employee ID generated: ${employeeId}. Share this ID with the employee.`)
+      if (result.data) {
+        // Add to list
+        setEmployeeIds([...employeeIds, { 
+          email: employeeEmail, 
+          id: result.data.invitation_code 
+        }])
+        setEmployeeEmail("")
+        toast.success(`Invitation sent to ${employeeEmail}. Code: ${result.data.invitation_code}`)
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create invitation")
     }
   }
 

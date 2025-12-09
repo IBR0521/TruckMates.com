@@ -318,3 +318,112 @@ function getEmailContent(
   }
 }
 
+// Function to check if email service is configured
+export async function checkEmailConfiguration() {
+  const apiKey = process.env.RESEND_API_KEY
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
+  
+  return {
+    configured: !!apiKey,
+    fromEmail,
+    message: apiKey 
+      ? "Email service is configured and ready" 
+      : "Email service not configured. Add RESEND_API_KEY to environment variables.",
+  }
+}
+
+// Function to send a test email
+export async function sendTestEmail() {
+  const supabase = await createClient()
+  
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { sent: false, error: "Not authenticated" }
+  }
+
+  // Get user email and name
+  const { data: userData } = await supabase
+    .from("users")
+    .select("email, full_name")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.email) {
+    return { sent: false, error: "User email not found" }
+  }
+
+  // Get Resend client
+  const resend = getResendClient()
+  
+  if (!resend) {
+    return { 
+      sent: false, 
+      error: "Email service not configured. Please add RESEND_API_KEY to your environment variables." 
+    }
+  }
+
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"
+  
+  const testEmailHtml = `
+    <style>
+      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+      .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+      .header { background: #4F46E5; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+      .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+      .button { display: inline-block; padding: 12px 24px; background: #4F46E5; color: white; text-decoration: none; border-radius: 6px; margin-top: 20px; }
+      .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 12px; }
+      .success-badge { display: inline-block; padding: 8px 16px; background: #10b981; color: white; border-radius: 20px; font-size: 14px; font-weight: bold; margin-bottom: 20px; }
+    </style>
+    <div class="container">
+      <div class="header">
+        <h1>Test Email from TruckMates</h1>
+      </div>
+      <div class="content">
+        <div class="success-badge">✓ Email Service Working</div>
+        <p>Hello ${userData.full_name || "User"},</p>
+        <p>This is a test email to confirm that your email notification system is working correctly.</p>
+        <p>If you received this email, it means:</p>
+        <ul>
+          <li>✅ Resend API is properly configured</li>
+          <li>✅ Email service is operational</li>
+          <li>✅ You will receive notifications for enabled events</li>
+        </ul>
+        <p>You can manage your notification preferences in your <a href="${appUrl}/dashboard/settings">Settings</a> page.</p>
+        <a href="${appUrl}/dashboard/settings" class="button">Go to Settings</a>
+      </div>
+      <div class="footer">
+        <p>This is a test email from TruckMates notification system.</p>
+        <p>If you did not request this test, you can safely ignore this email.</p>
+      </div>
+    </div>
+  `
+
+  try {
+    const result = await resend.emails.send({
+      from: fromEmail,
+      to: userData.email,
+      subject: "Test Email - TruckMates Notifications",
+      html: testEmailHtml,
+    })
+
+    if (result.error) {
+      console.error("[TEST EMAIL ERROR]", result.error)
+      return { sent: false, error: result.error.message || "Failed to send test email" }
+    }
+
+    return { 
+      sent: true, 
+      email: userData.email, 
+      messageId: result.data?.id,
+      message: "Test email sent successfully! Check your inbox." 
+    }
+  } catch (error: any) {
+    console.error("[TEST EMAIL ERROR]", error)
+    return { sent: false, error: error?.message || "Failed to send test email" }
+  }
+}
+

@@ -8,6 +8,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Logo } from "@/components/logo"
 import { toast } from "sonner"
+import { verifyAndAcceptInvitation } from "@/app/actions/employees"
 
 export default function UserAccountSetupPage() {
   const [workType, setWorkType] = useState<"individual" | "manager" | null>(null)
@@ -28,26 +29,27 @@ export default function UserAccountSetupPage() {
   }
 
   const handleVerifyManagerId = async () => {
-    // TODO: Verify manager ID with Supabase
-    // For now, simulate verification
+    if (!managerId.trim()) {
+      toast.error("Please enter an invitation code")
+      return
+    }
+
     try {
-      // Check if manager ID exists in database
-      // const { data, error } = await supabase
-      //   .from('companies')
-      //   .select('id')
-      //   .eq('manager_id', managerId)
-      //   .single()
+      // Verify and accept invitation code
+      const result = await verifyAndAcceptInvitation(managerId.trim())
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
 
-      // If manager ID is valid, link user to company and go to dashboard
-      toast.success("Manager ID verified! Linking your account...")
+      // If invitation is valid, user is now linked to company
+      toast.success("Invitation accepted! Linking your account...")
       setTimeout(() => {
         router.push("/dashboard")
       }, 1500)
-    } catch (error) {
-      toast.error("Invalid manager ID. Please check and try again.")
+    } catch (error: any) {
+      toast.error(error.message || "Invalid invitation code. Please check and try again.")
     }
   }
 
@@ -145,17 +147,17 @@ export default function UserAccountSetupPage() {
           {showManagerIdInput && (
             <div className="mb-6 p-4 bg-secondary/50 rounded-lg border border-border">
               <label className="block text-sm font-medium text-foreground mb-2">
-                Enter Manager ID Number
+                Enter Invitation Code
               </label>
               <input
                 type="text"
                 value={managerId}
-                onChange={(e) => setManagerId(e.target.value)}
-                placeholder="Enter the ID provided by your manager"
+                onChange={(e) => setManagerId(e.target.value.toUpperCase())}
+                placeholder="Enter the invitation code (e.g., EMP-ABC123XYZ)"
                 className="w-full px-4 py-2 bg-background border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <p className="text-xs text-muted-foreground mt-2">
-                Ask your manager for the company ID number to join their team
+                Enter the invitation code sent to your email by your manager
               </p>
             </div>
           )}
