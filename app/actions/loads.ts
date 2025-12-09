@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { createRoute } from "./routes"
+import { sendNotification } from "./notifications"
 
 export async function getLoads() {
   const supabase = await createClient()
@@ -257,6 +258,41 @@ export async function updateLoad(
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  // Send notifications to company users if load was updated
+  if (data) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (user) {
+      const { data: userData } = await supabase
+        .from("users")
+        .select("company_id")
+        .eq("id", user.id)
+        .single()
+
+      if (userData?.company_id) {
+        // Get all users in the company
+        const { data: companyUsers } = await supabase
+          .from("users")
+          .select("id")
+          .eq("company_id", userData.company_id)
+
+        // Send notifications to all users who want load updates
+        if (companyUsers) {
+          for (const companyUser of companyUsers) {
+            await sendNotification(companyUser.id, "load_update", {
+              shipmentNumber: data.shipment_number,
+              status: data.status,
+              origin: data.origin,
+              destination: data.destination,
+            })
+          }
+        }
+      }
+    }
   }
 
   revalidatePath("/dashboard/loads")

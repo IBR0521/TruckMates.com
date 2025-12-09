@@ -2,6 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { Resend } from "resend"
+
+// Initialize Resend (will use API key from environment variable)
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
 export async function getNotificationPreferences() {
   const supabase = await createClient()
@@ -137,10 +141,10 @@ export async function sendNotification(
     return { sent: false, reason: "User has disabled this notification type" }
   }
 
-  // Get user email
+  // Get user email and name
   const { data: userData } = await supabase
     .from("users")
-    .select("email")
+    .select("email, full_name")
     .eq("id", userId)
     .single()
 
@@ -148,17 +152,152 @@ export async function sendNotification(
     return { sent: false, reason: "User email not found" }
   }
 
-  // TODO: Implement actual email sending
-  // For now, we'll use Supabase's built-in email or integrate with a service like Resend
-  // This is a placeholder - you'll need to set up email sending
-  
-  console.log(`[NOTIFICATION] Would send ${type} to ${userData.email}`, data)
-  
-  // In production, you would:
-  // 1. Use Supabase Edge Functions to send emails
-  // 2. Or use a service like Resend, SendGrid, etc.
-  // 3. Or use Supabase's built-in email templates
-  
-  return { sent: true, email: userData.email }
+  // If Resend is not configured, log and return
+  if (!resend) {
+    console.log(`[NOTIFICATION] Resend not configured. Would send ${type} to ${userData.email}`, data)
+    return { sent: false, reason: "Email service not configured. Please add RESEND_API_KEY to environment variables." }
+  }
+
+  // Generate email content based on type
+  const emailContent = getEmailContent(type, data, userData.full_name || "User")
+
+  try {
+    // Send email using Resend
+    const result = await resend.emails.send({
+      from: "TruckMates <notifications@truckmates.com>", // Change this to your verified domain
+      to: userData.email,
+      subject: emailContent.subject,
+      html: emailContent.html,
+    })
+
+    if (result.error) {
+      console.error("[NOTIFICATION ERROR]", result.error)
+      return { sent: false, reason: result.error.message || "Failed to send email" }
+    }
+
+    return { sent: true, email: userData.email, messageId: result.data?.id }
+  } catch (error: any) {
+    console.error("[NOTIFICATION ERROR]", error)
+    return { sent: false, reason: error.message || "Failed to send email" }
+  }
+}
+
+// Helper function to generate email content
+function getEmailContent(
+  type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder",
+  data: any,
+  userName: string
+) {
+  const baseStyle = `
+    <style>
+      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+      .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+      .header { background: #4F46E5; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+      .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+      .button { display: inline-block; padding: 12px 24px; background: #4F46E5; color: white; text-decoration: none; border-radius: 6px; margin-top: 20px; }
+      .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 12px; }
+    </style>
+  `
+
+  switch (type) {
+    case "route_update":
+      return {
+        subject: `Route Update: ${data.routeName || "Route"}`,
+        html: `
+          ${baseStyle}
+          <div class="container">
+            <div class="header">
+              <h1>Route Update</h1>
+            </div>
+            <div class="content">
+              <p>Hello ${userName},</p>
+              <p>Your route <strong>${data.routeName || "Route"}</strong> has been updated.</p>
+              ${data.status ? `<p><strong>New Status:</strong> ${data.status}</p>` : ""}
+              ${data.origin && data.destination ? `<p><strong>Route:</strong> ${data.origin} → ${data.destination}</p>` : ""}
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/routes" class="button">View Route</a>
+            </div>
+            <div class="footer">
+              <p>This is an automated notification from TruckMates.</p>
+            </div>
+          </div>
+        `,
+      }
+
+    case "load_update":
+      return {
+        subject: `Load Update: ${data.shipmentNumber || "Load"}`,
+        html: `
+          ${baseStyle}
+          <div class="container">
+            <div class="header">
+              <h1>Load Update</h1>
+            </div>
+            <div class="content">
+              <p>Hello ${userName},</p>
+              <p>Your load <strong>${data.shipmentNumber || "Load"}</strong> status has been updated.</p>
+              ${data.status ? `<p><strong>New Status:</strong> ${data.status}</p>` : ""}
+              ${data.origin && data.destination ? `<p><strong>Route:</strong> ${data.origin} → ${data.destination}</p>` : ""}
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/loads" class="button">View Load</a>
+            </div>
+            <div class="footer">
+              <p>This is an automated notification from TruckMates.</p>
+            </div>
+          </div>
+        `,
+      }
+
+    case "maintenance_alert":
+      return {
+        subject: `Maintenance Alert: ${data.truckNumber || "Vehicle"}`,
+        html: `
+          ${baseStyle}
+          <div class="container">
+            <div class="header">
+              <h1>Maintenance Alert</h1>
+            </div>
+            <div class="content">
+              <p>Hello ${userName},</p>
+              <p>Maintenance is scheduled for <strong>${data.truckNumber || "your vehicle"}</strong>.</p>
+              ${data.serviceType ? `<p><strong>Service Type:</strong> ${data.serviceType}</p>` : ""}
+              ${data.scheduledDate ? `<p><strong>Scheduled Date:</strong> ${new Date(data.scheduledDate).toLocaleDateString()}</p>` : ""}
+              ${data.priority === "high" ? `<p style="color: #dc2626;"><strong>Priority: High</strong></p>` : ""}
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/maintenance" class="button">View Maintenance</a>
+            </div>
+            <div class="footer">
+              <p>This is an automated notification from TruckMates.</p>
+            </div>
+          </div>
+        `,
+      }
+
+    case "payment_reminder":
+      return {
+        subject: `Payment Reminder: ${data.driverName || "Driver"}`,
+        html: `
+          ${baseStyle}
+          <div class="container">
+            <div class="header">
+              <h1>Payment Reminder</h1>
+            </div>
+            <div class="content">
+              <p>Hello ${userName},</p>
+              <p>A payment reminder for <strong>${data.driverName || "driver"}</strong>.</p>
+              ${data.amount ? `<p><strong>Amount:</strong> $${parseFloat(data.amount).toFixed(2)}</p>` : ""}
+              ${data.period ? `<p><strong>Period:</strong> ${data.period}</p>` : ""}
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/accounting/settlements" class="button">View Settlement</a>
+            </div>
+            <div class="footer">
+              <p>This is an automated notification from TruckMates.</p>
+            </div>
+          </div>
+        `,
+      }
+
+    default:
+      return {
+        subject: "Notification from TruckMates",
+        html: `<p>Hello ${userName},</p><p>You have a new notification.</p>`,
+      }
+  }
 }
 

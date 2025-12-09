@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { sendNotification } from "./notifications"
 
 export async function getRoutes() {
   const supabase = await createClient()
@@ -162,6 +163,41 @@ export async function updateRoute(
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  // Send notifications to company users if route was updated
+  if (data) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (user) {
+      const { data: userData } = await supabase
+        .from("users")
+        .select("company_id")
+        .eq("id", user.id)
+        .single()
+
+      if (userData?.company_id) {
+        // Get all users in the company
+        const { data: companyUsers } = await supabase
+          .from("users")
+          .select("id")
+          .eq("company_id", userData.company_id)
+
+        // Send notifications to all users who want route updates
+        if (companyUsers) {
+          for (const companyUser of companyUsers) {
+            await sendNotification(companyUser.id, "route_update", {
+              routeName: data.name,
+              status: data.status,
+              origin: data.origin,
+              destination: data.destination,
+            })
+          }
+        }
+      }
+    }
   }
 
   revalidatePath("/dashboard/routes")
