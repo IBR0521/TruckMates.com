@@ -23,6 +23,9 @@ import { getLoad, updateLoad } from "@/app/actions/loads"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { getRoutes } from "@/app/actions/routes"
+import { LoadDeliveryPointsManager } from "@/components/load-delivery-points-manager"
+import { getLoadDeliveryPoints, createLoadDeliveryPoint, updateLoadDeliveryPoint, deleteLoadDeliveryPoint } from "@/app/actions/load-delivery-points"
+import { Building2 } from "lucide-react"
 
 export default function EditLoadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -32,6 +35,7 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
   const [drivers, setDrivers] = useState<any[]>([])
   const [trucks, setTrucks] = useState<any[]>([])
   const [routes, setRoutes] = useState<any[]>([])
+  const [deliveryPoints, setDeliveryPoints] = useState<any[]>([])
   const [formData, setFormData] = useState({
     // Basic Information
     shipmentNumber: "",
@@ -92,6 +96,11 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
     customerEmail: "",
     customerReference: "",
     notes: "",
+    
+    // Company & Delivery Type
+    companyName: "",
+    deliveryType: "single",
+    requiresSplitDelivery: false,
   })
 
   useEffect(() => {
@@ -109,6 +118,15 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
       
       if (loadResult.data) {
         const load = loadResult.data
+        
+        // Load delivery points if multi-delivery
+        if (load.delivery_type === "multi") {
+          const deliveryPointsResult = await getLoadDeliveryPoints(id)
+          if (deliveryPointsResult.data) {
+            setDeliveryPoints(deliveryPointsResult.data)
+          }
+        }
+        
         setFormData({
           shipmentNumber: load.shipment_number || "",
           bolNumber: "",
@@ -155,6 +173,9 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
           customerEmail: "",
           customerReference: "",
           notes: "",
+          companyName: load.company_name || "",
+          deliveryType: load.delivery_type || "single",
+          requiresSplitDelivery: load.requires_split_delivery || false,
         })
       }
       setIsLoading(false)
@@ -173,6 +194,18 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
+
+    // Validate delivery points if multi-delivery
+    if (formData.deliveryType === "multi" && deliveryPoints.length > 0) {
+      const invalidPoints = deliveryPoints.filter(
+        (point) => !point.location_name || !point.address
+      )
+      if (invalidPoints.length > 0) {
+        toast.error("Please fill in location name and address for all delivery points")
+        setIsSubmitting(false)
+        return
+      }
+    }
 
     const weightKg = formData.weightKg 
       ? parseInt(formData.weightKg) 
@@ -195,16 +228,47 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
       route_id: formData.route || null,
       load_date: formData.pickupDate || null,
       estimated_delivery: formData.estimatedDelivery || null,
+      delivery_type: formData.deliveryType,
+      company_name: formData.companyName || undefined,
+      total_delivery_points: formData.deliveryType === "multi" ? deliveryPoints.length : 1,
+      requires_split_delivery: formData.requiresSplitDelivery,
     })
-
-    setIsSubmitting(false)
 
     if (result.error) {
       toast.error(result.error || "Failed to update load")
+      setIsSubmitting(false)
+      return
+    }
+
+    // Update delivery points if multi-delivery
+    if (formData.deliveryType === "multi") {
+      try {
+        // Get existing delivery points to delete them
+        const existingPointsResult = await getLoadDeliveryPoints(id)
+        if (existingPointsResult.data && existingPointsResult.data.length > 0) {
+          for (const point of existingPointsResult.data) {
+            await deleteLoadDeliveryPoint(point.id)
+          }
+        }
+
+        // Create new delivery points if any
+        if (deliveryPoints.length > 0) {
+          for (const point of deliveryPoints) {
+            await createLoadDeliveryPoint(id, point)
+          }
+          toast.success(`Load updated successfully with ${deliveryPoints.length} delivery points`)
+        } else {
+          toast.success("Load updated successfully")
+        }
+      } catch (error: any) {
+        toast.error(`Load updated but failed to update some delivery points: ${error.message}`)
+      }
     } else {
       toast.success("Load updated successfully")
-      router.push(`/dashboard/loads/${id}`)
     }
+
+    setIsSubmitting(false)
+    router.push(`/dashboard/loads/${id}`)
   }
 
   const usStates = [
@@ -298,11 +362,56 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
               </div>
             </Card>
 
+            {/* Company & Delivery Type Section - Moved to Top */}
+            <Card className="border-border p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Building2 className="w-5 h-5 text-primary" />
+                <h2 className="text-xl font-semibold text-foreground">Company & Delivery Type</h2>
+              </div>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <Label htmlFor="companyName">Company/Customer Name</Label>
+                  <Input
+                    id="companyName"
+                    name="companyName"
+                    type="text"
+                    placeholder="ABC Logistics Inc."
+                    value={formData.companyName}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="deliveryType">Delivery Type *</Label>
+                  <Select
+                    value={formData.deliveryType} 
+                    onValueChange={(value) => handleSelectChange("deliveryType", value)}
+                  >
+                    <SelectTrigger className="mt-2 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="single">Single Delivery</SelectItem>
+                      <SelectItem value="multi">Multiple Deliveries</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {formData.deliveryType === "multi" && (
+                <div className="mt-6">
+                  <LoadDeliveryPointsManager
+                    deliveryPoints={deliveryPoints}
+                    onDeliveryPointsChange={setDeliveryPoints}
+                  />
+                </div>
+              )}
+            </Card>
+
             {/* Origin Information Section */}
             <Card className="border-border p-6">
               <div className="flex items-center gap-2 mb-6">
                 <MapPin className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Origin Information</h2>
+                <h2 className="text-xl font-semibold text-foreground">Pickup Location (Origin)</h2>
               </div>
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="md:col-span-2">
@@ -418,13 +527,14 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
               </div>
             </Card>
 
-            {/* Destination Information Section */}
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <MapPin className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Destination Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+            {/* Destination Information Section - Hidden for Multi-Delivery */}
+            {formData.deliveryType === "single" && (
+              <Card className="border-border p-6">
+                <div className="flex items-center gap-2 mb-6">
+                  <MapPin className="w-5 h-5 text-primary" />
+                  <h2 className="text-xl font-semibold text-foreground">Destination Information</h2>
+                </div>
+                <div className="grid md:grid-cols-2 gap-6">
                 <div className="md:col-span-2">
                   <Label htmlFor="destination">Destination City/State *</Label>
                   <Input
@@ -536,9 +646,10 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                   />
                 </div>
               </div>
-            </Card>
+              </Card>
+            )}
 
-            {/* Load Details Section */}
+            {/* Load Details Section - Simplified for Multi-Delivery */}
             <Card className="border-border p-6">
               <div className="flex items-center gap-2 mb-6">
                 <Package className="w-5 h-5 text-primary" />
@@ -557,42 +668,46 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                     className="mt-2"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="pieces">Number of Pieces</Label>
-                  <Input
-                    id="pieces"
-                    name="pieces"
-                    type="number"
-                    placeholder="50"
-                    value={formData.pieces}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="weight">Weight (tons)</Label>
-                  <Input
-                    id="weight"
-                    name="weight"
-                    type="text"
-                    placeholder="22.5 tons"
-                    value={formData.weight}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="weightKg">Weight (kg)</Label>
-                  <Input
-                    id="weightKg"
-                    name="weightKg"
-                    type="number"
-                    placeholder="22500"
-                    value={formData.weightKg}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
+                {formData.deliveryType === "single" && (
+                  <>
+                    <div>
+                      <Label htmlFor="pieces">Number of Pieces</Label>
+                      <Input
+                        id="pieces"
+                        name="pieces"
+                        type="number"
+                        placeholder="50"
+                        value={formData.pieces}
+                        onChange={handleChange}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="weight">Weight (tons)</Label>
+                      <Input
+                        id="weight"
+                        name="weight"
+                        type="text"
+                        placeholder="22.5 tons"
+                        value={formData.weight}
+                        onChange={handleChange}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="weightKg">Weight (kg)</Label>
+                      <Input
+                        id="weightKg"
+                        name="weightKg"
+                        type="number"
+                        placeholder="22500"
+                        value={formData.weightKg}
+                        onChange={handleChange}
+                        className="mt-2"
+                      />
+                    </div>
+                  </>
+                )}
                 <div>
                   <Label htmlFor="value">Declared Value ($)</Label>
                   <Input
@@ -647,43 +762,54 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                     rows={3}
                   />
                 </div>
-                <div>
-                  <Label htmlFor="requiresLiftgate">Requires Liftgate</Label>
-                  <Select value={formData.requiresLiftgate} onValueChange={(value) => handleSelectChange("requiresLiftgate", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="yes">Yes</SelectItem>
-                      <SelectItem value="no">No</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="requiresInsideDelivery">Inside Delivery Required</Label>
-                  <Select value={formData.requiresInsideDelivery} onValueChange={(value) => handleSelectChange("requiresInsideDelivery", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="yes">Yes</SelectItem>
-                      <SelectItem value="no">No</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="requiresAppointment">Appointment Required</Label>
-                  <Select value={formData.requiresAppointment} onValueChange={(value) => handleSelectChange("requiresAppointment", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="yes">Yes</SelectItem>
-                      <SelectItem value="no">No</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {formData.deliveryType === "single" && (
+                  <>
+                    <div>
+                      <Label htmlFor="requiresLiftgate">Requires Liftgate</Label>
+                      <Select value={formData.requiresLiftgate} onValueChange={(value) => handleSelectChange("requiresLiftgate", value)}>
+                        <SelectTrigger className="mt-2 w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="yes">Yes</SelectItem>
+                          <SelectItem value="no">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="requiresInsideDelivery">Inside Delivery Required</Label>
+                      <Select value={formData.requiresInsideDelivery} onValueChange={(value) => handleSelectChange("requiresInsideDelivery", value)}>
+                        <SelectTrigger className="mt-2 w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="yes">Yes</SelectItem>
+                          <SelectItem value="no">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="requiresAppointment">Appointment Required</Label>
+                      <Select value={formData.requiresAppointment} onValueChange={(value) => handleSelectChange("requiresAppointment", value)}>
+                        <SelectTrigger className="mt-2 w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="yes">Yes</SelectItem>
+                          <SelectItem value="no">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
               </div>
+              {formData.deliveryType === "multi" && (
+                <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <p className="text-sm text-blue-400">
+                    <strong>Note:</strong> Quantities (weight, pieces, pallets) and delivery requirements (liftgate, inside delivery, appointment) are configured per delivery point above.
+                  </p>
+                </div>
+              )}
             </Card>
 
             {/* Customer Information Section */}

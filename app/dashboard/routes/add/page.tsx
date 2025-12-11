@@ -14,13 +14,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ArrowLeft, Route, MapPin, Clock, Fuel, DollarSign, User, FileText } from "lucide-react"
+import { ArrowLeft, Route, MapPin, Clock, Fuel, DollarSign, User, FileText, Building2 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { createRoute } from "@/app/actions/routes"
 import { useRouter } from "next/navigation"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
+import { RouteStopsManager } from "@/components/route-stops-manager"
+import { createRouteStop } from "@/app/actions/route-stops"
 
 export default function AddRoutePage() {
   const router = useRouter()
@@ -29,6 +31,7 @@ export default function AddRoutePage() {
   const [trucks, setTrucks] = useState<any[]>([])
   const [waypoints, setWaypoints] = useState<string[]>([])
   const [newWaypoint, setNewWaypoint] = useState("")
+  const [stops, setStops] = useState<any[]>([])
   const [formData, setFormData] = useState({
     // Basic Information
     name: "",
@@ -100,6 +103,19 @@ export default function AddRoutePage() {
     e.preventDefault()
     setIsSubmitting(true)
 
+    // Validate stops
+    if (stops.length > 0) {
+      const invalidStops = stops.filter(
+        (stop) => !stop.location_name || !stop.address
+      )
+      if (invalidStops.length > 0) {
+        toast.error("Please fill in location name and address for all stops")
+        setIsSubmitting(false)
+        return
+      }
+    }
+
+    // Create route
     const result = await createRoute({
       name: formData.name,
       origin: formData.origin,
@@ -110,16 +126,39 @@ export default function AddRoutePage() {
       status: formData.status,
       driver_id: formData.driver || undefined,
       truck_id: formData.truck || undefined,
+      depot_name: formData.depotName || undefined,
+      depot_address: formData.depotAddress || undefined,
+      pre_route_time_minutes: formData.preRouteTime ? parseInt(formData.preRouteTime) : undefined,
+      post_route_time_minutes: formData.postRouteTime ? parseInt(formData.postRouteTime) : undefined,
+      route_start_time: formData.routeStartTime || undefined,
+      route_departure_time: formData.routeDepartureTime || undefined,
+      route_complete_time: formData.routeCompleteTime || undefined,
+      route_type: formData.routeType || undefined,
+      scenario: formData.scenario || undefined,
     })
-
-    setIsSubmitting(false)
 
     if (result.error) {
       toast.error(result.error || "Failed to add route")
+      setIsSubmitting(false)
+      return
+    }
+
+    // Create stops if any
+    if (stops.length > 0 && result.data?.id) {
+      try {
+        for (const stop of stops) {
+          await createRouteStop(result.data.id, stop)
+        }
+        toast.success(`Route added successfully with ${stops.length} stops`)
+      } catch (error: any) {
+        toast.error(`Route created but failed to add some stops: ${error.message}`)
+      }
     } else {
       toast.success("Route added successfully")
-      router.push("/dashboard/routes")
     }
+
+    setIsSubmitting(false)
+    router.push(`/dashboard/routes/${result.data?.id || ""}`)
   }
 
   return (
@@ -237,51 +276,95 @@ export default function AddRoutePage() {
               </div>
             </Card>
 
-            {/* Waypoints Section */}
+            {/* Route Stops Section */}
+            <RouteStopsManager stops={stops} onStopsChange={setStops} />
+
+            {/* Depot Information Section */}
             <Card className="border-border p-6">
               <div className="flex items-center gap-2 mb-6">
-                <MapPin className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Waypoints</h2>
+                <Building2 className="w-5 h-5 text-primary" />
+                <h2 className="text-xl font-semibold text-foreground">Depot Information (Optional)</h2>
               </div>
-              <div className="space-y-4">
-                <div className="flex gap-2">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="depotName">Depot Name</Label>
                   <Input
-                    type="text"
-                    placeholder="Add a waypoint (e.g., Scranton, PA)"
-                    value={newWaypoint}
-                    onChange={(e) => setNewWaypoint(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault()
-                        addWaypoint()
-                      }
-                    }}
-                    className="flex-1"
+                    id="depotName"
+                    name="depotName"
+                    value={formData.depotName}
+                    onChange={handleChange}
+                    placeholder="e.g., DPT - MAIN"
+                    className="mt-2"
                   />
-                  <Button type="button" onClick={addWaypoint} variant="outline">
-                    Add
-                  </Button>
                 </div>
-                {waypoints.length > 0 && (
-                  <div className="space-y-2">
-                    {waypoints.map((waypoint, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-secondary/50 rounded-md">
-                        <span className="text-sm text-foreground">
-                          {index + 1}. {waypoint}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeWaypoint(index)}
-                          className="text-red-400 hover:text-red-500"
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div>
+                  <Label htmlFor="depotAddress">Depot Address</Label>
+                  <Input
+                    id="depotAddress"
+                    name="depotAddress"
+                    value={formData.depotAddress}
+                    onChange={handleChange}
+                    placeholder="Depot address"
+                    className="mt-2"
+                  />
+                </div>
+              </div>
+              <div className="grid md:grid-cols-3 gap-4 mt-4">
+                <div>
+                  <Label htmlFor="preRouteTime">Pre-Route Time (minutes)</Label>
+                  <Input
+                    id="preRouteTime"
+                    name="preRouteTime"
+                    type="number"
+                    value={formData.preRouteTime}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="postRouteTime">Post-Route Time (minutes)</Label>
+                  <Input
+                    id="postRouteTime"
+                    name="postRouteTime"
+                    type="number"
+                    value={formData.postRouteTime}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="routeStartTime">Route Start Time</Label>
+                  <Input
+                    id="routeStartTime"
+                    name="routeStartTime"
+                    type="time"
+                    value={formData.routeStartTime}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="routeDepartureTime">Route Departure Time</Label>
+                  <Input
+                    id="routeDepartureTime"
+                    name="routeDepartureTime"
+                    type="time"
+                    value={formData.routeDepartureTime}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="routeCompleteTime">Route Complete Time</Label>
+                  <Input
+                    id="routeCompleteTime"
+                    name="routeCompleteTime"
+                    type="time"
+                    value={formData.routeCompleteTime}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
               </div>
             </Card>
 

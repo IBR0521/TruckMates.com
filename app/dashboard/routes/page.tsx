@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { getRoutes, deleteRoute } from "@/app/actions/routes"
+import { getRouteStops } from "@/app/actions/route-stops"
 
 export default function RoutesPage() {
   const router = useRouter()
@@ -35,7 +36,17 @@ export default function RoutesPage() {
       return
     }
     if (result.data) {
-      setRoutesList(result.data)
+      // Load stop counts for each route
+      const routesWithStops = await Promise.all(
+        result.data.map(async (route: any) => {
+          const stopsResult = await getRouteStops(route.id)
+          return {
+            ...route,
+            stop_count: stopsResult.data?.length || 0,
+          }
+        })
+      )
+      setRoutesList(routesWithStops)
     }
     setIsLoading(false)
   }
@@ -147,6 +158,15 @@ export default function RoutesPage() {
                       <p className="text-sm text-foreground">{route.destination}</p>
                     </div>
                   </div>
+                  {route.stop_count > 0 && (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-purple-400" />
+                      <div>
+                        <p className="text-xs text-muted-foreground font-medium">Stops</p>
+                        <p className="text-sm text-foreground">{route.stop_count} {route.stop_count === 1 ? 'stop' : 'stops'}</p>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-primary" />
                     <div>

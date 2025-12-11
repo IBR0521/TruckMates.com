@@ -11,7 +11,9 @@ import { TruckMap } from "@/components/truck-map"
 import { getLoad } from "@/app/actions/loads"
 import { getRoutes } from "@/app/actions/routes"
 import { getTrucks } from "@/app/actions/trucks"
+import { getLoadDeliveryPoints, getLoadSummary } from "@/app/actions/load-delivery-points"
 import { toast } from "sonner"
+import { Building2 } from "lucide-react"
 
 export default function LoadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -20,13 +22,20 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   const [matchingRoute, setMatchingRoute] = useState<any>(null)
   const [truck, setTruck] = useState<any>(null)
   const [routesResult, setRoutesResult] = useState<{ data: any[] | null; error: string | null } | null>(null)
+  const [deliveryPoints, setDeliveryPoints] = useState<any[]>([])
+  const [loadSummary, setLoadSummary] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     if (id === "add") {
       router.replace("/dashboard/loads/add")
     }
-  }, [id, router])
+  }, [id])
 
   useEffect(() => {
     async function loadData() {
@@ -42,6 +51,19 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
       
       if (loadResult.data) {
         setLoad(loadResult.data)
+        
+        // Fetch delivery points if multi-delivery load
+        if (loadResult.data.delivery_type === "multi") {
+          const deliveryPointsResult = await getLoadDeliveryPoints(id)
+          if (deliveryPointsResult.data) {
+            setDeliveryPoints(deliveryPointsResult.data)
+          }
+          
+          const summaryResult = await getLoadSummary(id)
+          if (summaryResult.data) {
+            setLoadSummary(summaryResult.data)
+          }
+        }
         
         // Fetch truck data first if load has truck_id
         let assignedTruck = null
@@ -247,7 +269,27 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     if (id && id !== "add") {
       loadData()
     }
-  }, [id, router])
+  }, [id])
+
+  // Prevent hydration mismatch by not rendering until mounted
+  if (!mounted) {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
+          <h1 className="text-2xl font-bold text-foreground">Load Details</h1>
+        </div>
+        <main className="flex-1 overflow-auto p-8">
+          <div className="max-w-3xl mx-auto">
+            <Card className="border-border p-8">
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">Loading...</p>
+              </div>
+            </Card>
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   if (id === "add") {
     return null
@@ -296,6 +338,32 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
 
   // Calculate weight in kg for the map
   const weightKg = load.weight_kg || (load.weight ? parseFloat(load.weight.replace(/[^0-9.]/g, "")) * 1000 : 0)
+
+  // Helper function to format dates consistently (prevents hydration mismatch)
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return "N/A"
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return "N/A"
+      // Use a consistent format that works on both server and client
+      return date.toISOString().split('T')[0] // YYYY-MM-DD format
+    } catch {
+      return "N/A"
+    }
+  }
+
+  // Helper function to format date with time
+  const formatDateTime = (dateString: string | null | undefined) => {
+    if (!dateString) return "N/A"
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return "N/A"
+      // Use a consistent format
+      return date.toISOString().split('T')[0] + (dateString.includes('T') ? ' ' + dateString.split('T')[1].substring(0, 5) : '')
+    } catch {
+      return "N/A"
+    }
+  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -353,8 +421,158 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                   <p className="text-foreground">{load.destination || "N/A"}</p>
                 </div>
               </div>
+              {load.company_name && (
+                <div className="flex items-center gap-3">
+                  <Building2 className="w-5 h-5 text-primary" />
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Company</p>
+                    <p className="text-foreground">{load.company_name}</p>
+                  </div>
+                </div>
+              )}
+              {load.delivery_type && (
+                <div className="flex items-center gap-3">
+                  <Package className="w-5 h-5 text-primary" />
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Delivery Type</p>
+                    <p className="text-foreground capitalize">{load.delivery_type === "multi" ? "Multiple Deliveries" : "Single Delivery"}</p>
+                  </div>
+                </div>
+              )}
             </div>
           </Card>
+
+          {/* Load Summary for Multi-Delivery */}
+          {load.delivery_type === "multi" && loadSummary && (
+            <Card className="border-border p-8">
+              <h2 className="text-xl font-bold text-foreground mb-6">Load Summary</h2>
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Total Delivery Points</p>
+                  <p className="text-2xl font-bold text-foreground">{loadSummary.total_delivery_points}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Total Weight (kg)</p>
+                  <p className="text-2xl font-bold text-foreground">{loadSummary.total_weight_kg.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Total Pieces</p>
+                  <p className="text-2xl font-bold text-foreground">{loadSummary.total_pieces}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Total Pallets</p>
+                  <p className="text-2xl font-bold text-foreground">{loadSummary.total_pallets}</p>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Delivery Points Breakdown */}
+          {load.delivery_type === "multi" && deliveryPoints.length > 0 ? (
+            <Card className="border-border p-8">
+              <h2 className="text-xl font-bold text-foreground mb-6">Delivery Points Breakdown</h2>
+              <div className="space-y-4">
+                {deliveryPoints.map((point, index) => (
+                  <Card key={point.id || index} className="border-border p-6 bg-secondary/30">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                          <span className="text-sm font-bold text-primary">{point.delivery_number}</span>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground">{point.location_name}</h3>
+                          {point.location_id && (
+                            <p className="text-xs text-muted-foreground">ID: {point.location_id}</p>
+                          )}
+                        </div>
+                      </div>
+                      {point.priority && (
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400">
+                          {point.priority}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Address</p>
+                        <p className="text-sm text-foreground">{point.address}</p>
+                        {point.city && point.state && (
+                          <p className="text-xs text-muted-foreground">{point.city}, {point.state} {point.zip}</p>
+                        )}
+                        {point.phone && (
+                          <p className="text-xs text-muted-foreground mt-1">📞 {point.phone}</p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Load Amount</p>
+                        <div className="space-y-1">
+                          {point.weight_kg > 0 && (
+                            <p className="text-xs text-foreground">Weight: {point.weight_kg} kg</p>
+                          )}
+                          {point.pieces > 0 && (
+                            <p className="text-xs text-foreground">Pieces: {point.pieces}</p>
+                          )}
+                          {point.pallets > 0 && (
+                            <p className="text-xs text-foreground">Pallets: {point.pallets}</p>
+                          )}
+                          {point.boxes > 0 && (
+                            <p className="text-xs text-foreground">Boxes: {point.boxes}</p>
+                          )}
+                          {point.carts > 0 && (
+                            <p className="text-xs text-foreground">Carts: {point.carts}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Scheduled Delivery</p>
+                        {point.scheduled_delivery_date && (
+                          <p className="text-xs text-foreground">
+                            {formatDate(point.scheduled_delivery_date)}
+                            {point.scheduled_delivery_time && ` at ${point.scheduled_delivery_time}`}
+                          </p>
+                        )}
+                        {point.time_window_start && point.time_window_end && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Window: {point.time_window_start} - {point.time_window_end}
+                          </p>
+                        )}
+                        {point.status && (
+                          <p className="text-xs mt-1">
+                            Status: <span className={`${
+                              point.status === "delivered" ? "text-green-400" :
+                              point.status === "in_transit" ? "text-blue-400" :
+                              "text-yellow-400"
+                            }`}>{point.status}</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {point.delivery_instructions && (
+                      <div className="mt-4 pt-4 border-t border-border">
+                        <p className="text-xs text-muted-foreground mb-1">Delivery Instructions</p>
+                        <p className="text-sm text-foreground">{point.delivery_instructions}</p>
+                      </div>
+                    )}
+                  </Card>
+                ))}
+              </div>
+            </Card>
+          ) : load.delivery_type === "multi" ? (
+            <Card className="border-border p-8">
+              <div className="text-center py-8">
+                <Package className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">No Delivery Points Added</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  This load is set to multi-delivery but no delivery points have been added yet.
+                </p>
+                <Link href={`/dashboard/loads/${id}/edit`}>
+                  <Button variant="outline">Add Delivery Points</Button>
+                </Link>
+              </div>
+            </Card>
+          ) : null}
 
           <Card className="border-border p-8">
             <div className="flex items-center gap-3 mb-6">
@@ -374,7 +592,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                 {load.value && (
                   <div>
                     <p className="text-sm text-muted-foreground mb-2">Shipment Value</p>
-                    <p className="text-lg text-foreground font-bold">${parseFloat(load.value).toLocaleString()}</p>
+                    <p className="text-lg text-foreground font-bold">${typeof load.value === 'number' ? load.value.toLocaleString('en-US') : parseFloat(load.value || '0').toLocaleString('en-US')}</p>
                   </div>
                 )}
                 {load.carrier_type && (
@@ -445,19 +663,19 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
               {load.load_date && (
                 <div className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
                   <span className="text-foreground">Load Date</span>
-                  <span className="text-muted-foreground">{new Date(load.load_date).toLocaleDateString()}</span>
+                  <span className="text-muted-foreground">{formatDate(load.load_date)}</span>
                 </div>
               )}
               {load.estimated_delivery && (
                 <div className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
                   <span className="text-foreground">Est. Delivery</span>
-                  <span className="text-muted-foreground">{new Date(load.estimated_delivery).toLocaleDateString()}</span>
+                  <span className="text-muted-foreground">{formatDate(load.estimated_delivery)}</span>
                 </div>
               )}
               {load.actual_delivery && (
                 <div className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
                   <span className="text-foreground">Actual Delivery</span>
-                  <span className="text-muted-foreground">{new Date(load.actual_delivery).toLocaleDateString()}</span>
+                  <span className="text-muted-foreground">{formatDate(load.actual_delivery)}</span>
                 </div>
               )}
             </div>
@@ -579,12 +797,20 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           {/* Truck Map with Navigation */}
           {load.origin && load.destination && (
             <Card className="border-border p-8">
+              <h2 className="text-xl font-bold text-foreground mb-6">Route Map</h2>
               <TruckMap
                 origin={load.origin}
                 destination={load.destination}
                 weight={weightKg}
                 truckHeight={truck ? 4.2 : 4.0}
                 contents={load.contents}
+                stops={load.delivery_type === "multi" && deliveryPoints.length > 0 ? deliveryPoints.map((point) => ({
+                  location_name: point.location_name,
+                  address: point.address,
+                  stop_number: point.delivery_number,
+                  coordinates: point.coordinates as { lat: number; lng: number } | undefined,
+                  stop_type: point.delivery_type || "delivery",
+                })) : []}
               />
             </Card>
           )}

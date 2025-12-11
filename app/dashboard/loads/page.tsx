@@ -160,11 +160,37 @@ export default function LoadsPage() {
                     </span>
                   </div>
                   <div className="space-y-2 text-sm mb-4">
-                    <p className="text-foreground">Weight: {load.weight || `${load.weight_kg ? (load.weight_kg / 1000).toFixed(1) : 0} tons`}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-foreground">Weight: {load.weight || `${load.weight_kg ? (load.weight_kg / 1000).toFixed(1) : 0} tons`}</p>
+                      {load.delivery_type === "multi" && (
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-500/20 text-purple-400">
+                          {load.total_delivery_points || 0} Delivery Points
+                        </span>
+                      )}
+                      {load.delivery_type === "single" && (
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-500/20 text-gray-400">
+                          Single Delivery
+                        </span>
+                      )}
+                    </div>
                     <p className="text-muted-foreground">From: {load.origin || "N/A"}</p>
-                    <p className="text-muted-foreground">To: {load.destination || "N/A"}</p>
+                    {load.delivery_type === "single" ? (
+                      <p className="text-muted-foreground">To: {load.destination || "N/A"}</p>
+                    ) : (
+                      <p className="text-muted-foreground">Multiple Destinations: {load.total_delivery_points || 0} locations</p>
+                    )}
                     <p className="text-muted-foreground">Contents: {load.contents || "N/A"}</p>
-                    <p className="text-muted-foreground">Est. Delivery: {load.estimated_delivery ? new Date(load.estimated_delivery).toLocaleDateString() : "N/A"}</p>
+                    {load.company_name && (
+                      <p className="text-muted-foreground">Company: {load.company_name}</p>
+                    )}
+                    <p className="text-muted-foreground">Est. Delivery: {load.estimated_delivery ? (() => {
+                      try {
+                        const date = new Date(load.estimated_delivery)
+                        return isNaN(date.getTime()) ? "N/A" : date.toISOString().split('T')[0]
+                      } catch {
+                        return "N/A"
+                      }
+                    })() : "N/A"}</p>
                   </div>
                   <div className="flex gap-2 pt-4 border-t border-border/30">
                     <Button

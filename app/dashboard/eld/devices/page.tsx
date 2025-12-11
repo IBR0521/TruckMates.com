@@ -384,12 +384,12 @@ export default function ELDDevicesPage() {
             </div>
             <div>
               <Label>Assigned Truck</Label>
-              <Select value={formData.truck_id} onValueChange={(value) => setFormData({ ...formData, truck_id: value })}>
+              <Select value={formData.truck_id || "none"} onValueChange={(value) => setFormData({ ...formData, truck_id: value === "none" ? "" : value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a truck" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {trucks.map((truck) => (
                     <SelectItem key={truck.id} value={truck.id}>
                       {truck.truck_number}
@@ -478,12 +478,12 @@ export default function ELDDevicesPage() {
             </div>
             <div>
               <Label>Assigned Truck</Label>
-              <Select value={formData.truck_id} onValueChange={(value) => setFormData({ ...formData, truck_id: value })}>
+              <Select value={formData.truck_id || "none"} onValueChange={(value) => setFormData({ ...formData, truck_id: value === "none" ? "" : value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a truck" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {trucks.map((truck) => (
                     <SelectItem key={truck.id} value={truck.id}>
                       {truck.truck_number}

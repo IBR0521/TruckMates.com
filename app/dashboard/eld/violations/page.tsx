@@ -153,12 +153,12 @@ export default function ELDViolationsPage() {
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Driver</label>
-                <Select value={filters.driver_id} onValueChange={(value) => setFilters({ ...filters, driver_id: value })}>
+                <Select value={filters.driver_id || "all"} onValueChange={(value) => setFilters({ ...filters, driver_id: value === "all" ? "" : value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="All Drivers" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Drivers</SelectItem>
+                    <SelectItem value="all">All Drivers</SelectItem>
                     {drivers.map((driver) => (
                       <SelectItem key={driver.id} value={driver.id}>
                         {driver.name}
@@ -169,12 +169,12 @@ export default function ELDViolationsPage() {
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Status</label>
-                <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
+                <Select value={filters.status || "all"} onValueChange={(value) => setFilters({ ...filters, status: value === "all" ? "" : value })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Statuses</SelectItem>
+                    <SelectItem value="all">All Statuses</SelectItem>
                     <SelectItem value="open">Open</SelectItem>
                     <SelectItem value="acknowledged">Acknowledged</SelectItem>
                     <SelectItem value="resolved">Resolved</SelectItem>
@@ -184,12 +184,12 @@ export default function ELDViolationsPage() {
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Severity</label>
-                <Select value={filters.severity} onValueChange={(value) => setFilters({ ...filters, severity: value })}>
+                <Select value={filters.severity || "all"} onValueChange={(value) => setFilters({ ...filters, severity: value === "all" ? "" : value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="All Severities" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Severities</SelectItem>
+                    <SelectItem value="all">All Severities</SelectItem>
                     <SelectItem value="critical">Critical</SelectItem>
                     <SelectItem value="serious">Serious</SelectItem>
                     <SelectItem value="minor">Minor</SelectItem>

@@ -17,6 +17,7 @@ import {
   Receipt,
   UserCog,
   Shield,
+  Upload,
 } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
@@ -151,6 +152,9 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
           {/* Documents */}
           <NavItem href="/dashboard/documents" icon={FolderOpen} label="Documents" />
+
+          {/* Upload & Analyze Document */}
+          <NavItem href="/dashboard/upload-document" icon={Upload} label="Upload Document" />
 
           {/* Employees - Managers Only */}
           {isManager && (

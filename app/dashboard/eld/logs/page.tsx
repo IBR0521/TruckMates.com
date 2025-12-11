@@ -117,12 +117,12 @@ export default function ELDLogsPage() {
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Driver</label>
-                <Select value={filters.driver_id} onValueChange={(value) => setFilters({ ...filters, driver_id: value })}>
+                <Select value={filters.driver_id || "all"} onValueChange={(value) => setFilters({ ...filters, driver_id: value === "all" ? "" : value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="All Drivers" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Drivers</SelectItem>
+                    <SelectItem value="all">All Drivers</SelectItem>
                     {drivers.map((driver) => (
                       <SelectItem key={driver.id} value={driver.id}>
                         {driver.name}
@@ -133,12 +133,12 @@ export default function ELDLogsPage() {
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Truck</label>
-                <Select value={filters.truck_id} onValueChange={(value) => setFilters({ ...filters, truck_id: value })}>
+                <Select value={filters.truck_id || "all"} onValueChange={(value) => setFilters({ ...filters, truck_id: value === "all" ? "" : value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="All Trucks" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Trucks</SelectItem>
+                    <SelectItem value="all">All Trucks</SelectItem>
                     {trucks.map((truck) => (
                       <SelectItem key={truck.id} value={truck.id}>
                         {truck.truck_number}
@@ -149,12 +149,12 @@ export default function ELDLogsPage() {
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Log Type</label>
-                <Select value={filters.log_type} onValueChange={(value) => setFilters({ ...filters, log_type: value })}>
+                <Select value={filters.log_type || "all"} onValueChange={(value) => setFilters({ ...filters, log_type: value === "all" ? "" : value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="All Types" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Types</SelectItem>
+                    <SelectItem value="all">All Types</SelectItem>
                     <SelectItem value="driving">Driving</SelectItem>
                     <SelectItem value="on_duty">On Duty</SelectItem>
                     <SelectItem value="off_duty">Off Duty</SelectItem>

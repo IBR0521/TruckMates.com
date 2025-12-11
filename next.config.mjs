@@ -6,9 +6,9 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Disable static optimization for better cache control
-  experimental: {
-    isrMemoryCacheSize: 0,
+  // Increase body size limit for Server Actions (for file uploads)
+  serverActions: {
+    bodySizeLimit: '10mb', // Allow up to 10MB file uploads
   },
 }
 

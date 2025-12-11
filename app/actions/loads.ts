@@ -163,6 +163,10 @@ export async function createLoad(formData: {
   route_id?: string | null
   load_date?: string | null
   estimated_delivery?: string | null
+  delivery_type?: string
+  company_name?: string
+  customer_reference?: string
+  requires_split_delivery?: boolean
 }) {
   const supabase = await createClient()
 
@@ -260,6 +264,8 @@ export async function createLoad(formData: {
     origin: formData.origin,
     destination: formData.destination,
     status: formData.status || "pending",
+    delivery_type: formData.delivery_type || "single",
+    total_delivery_points: 1, // Will be updated if delivery points are added
   }
 
   // Add optional fields only if they have values
@@ -273,6 +279,9 @@ export async function createLoad(formData: {
   if (routeId) loadData.route_id = routeId
   if (formData.load_date) loadData.load_date = formData.load_date
   if (formData.estimated_delivery) loadData.estimated_delivery = formData.estimated_delivery
+  if (formData.company_name) loadData.company_name = formData.company_name
+  if (formData.customer_reference) loadData.customer_reference = formData.customer_reference
+  if (formData.requires_split_delivery !== undefined) loadData.requires_split_delivery = formData.requires_split_delivery
 
   const { data, error } = await supabase
     .from("loads")
@@ -307,6 +316,11 @@ export async function updateLoad(
     load_date?: string | null
     estimated_delivery?: string | null
     actual_delivery?: string | null
+    delivery_type?: string
+    company_name?: string
+    customer_reference?: string
+    requires_split_delivery?: boolean
+    total_delivery_points?: number
     [key: string]: any
   }
 ) {
@@ -330,6 +344,11 @@ export async function updateLoad(
   if (formData.load_date !== undefined) updateData.load_date = formData.load_date || null
   if (formData.estimated_delivery !== undefined) updateData.estimated_delivery = formData.estimated_delivery || null
   if (formData.actual_delivery !== undefined) updateData.actual_delivery = formData.actual_delivery || null
+  if (formData.delivery_type !== undefined) updateData.delivery_type = formData.delivery_type
+  if (formData.company_name !== undefined) updateData.company_name = formData.company_name || null
+  if (formData.customer_reference !== undefined) updateData.customer_reference = formData.customer_reference || null
+  if (formData.requires_split_delivery !== undefined) updateData.requires_split_delivery = formData.requires_split_delivery
+  if (formData.total_delivery_points !== undefined) updateData.total_delivery_points = formData.total_delivery_points
 
   const { data, error } = await supabase
     .from("loads")
