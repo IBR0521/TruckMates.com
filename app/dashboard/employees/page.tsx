@@ -11,7 +11,9 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Search
+  Search,
+  Copy,
+  Check
 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -63,6 +65,10 @@ export default function EmployeesPage() {
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showCodeDialog, setShowCodeDialog] = useState(false)
+  const [generatedCode, setGeneratedCode] = useState("")
+  const [generatedEmail, setGeneratedEmail] = useState("")
+  const [codeCopied, setCodeCopied] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null)
   const [newEmployeeEmail, setNewEmployeeEmail] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -137,20 +143,14 @@ export default function EmployeesPage() {
 
     if (result.data) {
       const invitationCode = result.data.invitation_code || "N/A"
+      const email = newEmployeeEmail.trim()
       
-      // Show success message with invitation code
-      toast.success(
-        `Invitation code generated: ${invitationCode}. Please share this code with ${newEmployeeEmail}.`, 
-        {
-          duration: 20000, // Show longer so user can copy the code
-        }
-      )
-      
-      // Also log to console for easy copying
-      console.log(`Invitation Code for ${newEmployeeEmail}: ${invitationCode}`)
-      
+      // Store code and email, then show dialog
+      setGeneratedCode(invitationCode)
+      setGeneratedEmail(email)
       setNewEmployeeEmail("")
       setShowAddDialog(false)
+      setShowCodeDialog(true)
       
       // Reload invitations
       const invitationsResult = await getPendingInvitations()
@@ -519,7 +519,7 @@ export default function EmployeesPage() {
           <DialogHeader>
             <DialogTitle>Add Employee</DialogTitle>
             <DialogDescription>
-              Enter the employee's email address. An invitation code will be sent to them.
+              Enter the employee's email address. An invitation code will be generated for you to share.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -549,7 +549,7 @@ export default function EmployeesPage() {
               disabled={isSubmitting || !newEmployeeEmail.trim()}
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
-              {isSubmitting ? "Sending..." : "Send Invitation"}
+              {isSubmitting ? "Generating..." : "Generate Invitation Code"}
             </Button>
           </DialogFooter>
         </DialogContent>
