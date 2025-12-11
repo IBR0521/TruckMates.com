@@ -130,39 +130,25 @@ export default function EmployeesPage() {
     const result = await createEmployeeInvitation(newEmployeeEmail.trim())
 
     if (result.error) {
-      // Check if it's an email error or invitation creation error
-      if (result.error.includes("email failed") && result.data) {
-        // Email failed but invitation was created - show warning with code
-        const codeMatch = result.error.match(/Code: ([A-Z0-9-]+)/)
-        const code = codeMatch ? codeMatch[1] : result.data.invitation_code || "N/A"
-        
-        // Extract the error reason
-        const errorReason = result.error.split("Code:")[0].replace("Invitation created but email failed: ", "").trim()
-        
-        toast.warning(
-          `Invitation created but email failed. Code: ${code}. Please share manually.${errorReason ? ` Error: ${errorReason}` : ""}`, 
-          {
-            duration: 15000, // Show longer so user can copy the code
-          }
-        )
-        setNewEmployeeEmail("")
-        setShowAddDialog(false)
-        
-        // Reload invitations
-        const invitationsResult = await getPendingInvitations()
-        if (invitationsResult.data) {
-          setInvitations(invitationsResult.data)
-        }
-      } else {
-        // Other error - show error message
-        toast.error(result.error)
-      }
+      toast.error(result.error)
       setIsSubmitting(false)
       return
     }
 
     if (result.data) {
-      toast.success(`Invitation sent successfully to ${newEmployeeEmail}!`)
+      const invitationCode = result.data.invitation_code || "N/A"
+      
+      // Show success message with invitation code
+      toast.success(
+        `Invitation code generated: ${invitationCode}. Please share this code with ${newEmployeeEmail}.`, 
+        {
+          duration: 20000, // Show longer so user can copy the code
+        }
+      )
+      
+      // Also log to console for easy copying
+      console.log(`Invitation Code for ${newEmployeeEmail}: ${invitationCode}`)
+      
       setNewEmployeeEmail("")
       setShowAddDialog(false)
       

@@ -198,25 +198,11 @@ export async function createEmployeeInvitation(email: string) {
       return { error: inviteError.message, data: null }
     }
 
-    // Send email with invitation code
-    const userEmail = userData?.email || user.email || ""
-    const emailResult = await sendInvitationEmail(email, invitationCode, userEmail)
-    
-    if (!emailResult.success) {
-      console.error(`[INVITATION] Failed to send email: ${emailResult.error}`)
-      // Return error so user knows email failed, but invitation is still created
-      revalidatePath("/dashboard/employees")
-      revalidatePath("/account-setup/manager")
-      return { 
-        data: invitation, 
-        error: `Invitation created but email failed: ${emailResult.error}. Code: ${invitationCode}. Please share this code manually with the employee.` 
-      }
-    }
-
+    // Don't send email - just return the invitation code
     revalidatePath("/dashboard/employees")
     revalidatePath("/account-setup/manager")
     return { 
-      data: invitation, 
+      data: { ...invitation, invitation_code: invitationCode }, 
       error: null 
     }
   }
@@ -238,21 +224,7 @@ export async function createEmployeeInvitation(email: string) {
     return { error: inviteError.message, data: null }
   }
 
-  // Send email with invitation code
-  const userEmail = userData?.email || user.email || ""
-  const emailResult = await sendInvitationEmail(email, codeData, userEmail)
-  
-  if (!emailResult.success) {
-    console.error(`[INVITATION] Failed to send email: ${emailResult.error}`)
-    // Return error so user knows email failed
-    revalidatePath("/dashboard/employees")
-    revalidatePath("/account-setup/manager")
-    return { 
-      data: invitation, 
-      error: `Invitation created but email failed: ${emailResult.error}. Code: ${codeData}. Please share this code manually with the employee.` 
-    }
-  }
-
+  // Don't send email - just return the invitation code
   revalidatePath("/dashboard/employees")
   revalidatePath("/account-setup/manager")
   return { 
