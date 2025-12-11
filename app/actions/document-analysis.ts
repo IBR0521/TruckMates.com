@@ -336,11 +336,14 @@ IMPORTANT:
     if (!openAIResponse.ok) {
       let errorMessage = "Unknown error"
       
+      // Clone the response so we can read it multiple times if needed
+      const responseClone = openAIResponse.clone()
+      
       try {
-        const errorData = await openAIResponse.json()
+        const errorData = await responseClone.json()
         errorMessage = errorData.error?.message || errorData.error || JSON.stringify(errorData)
       } catch (parseError) {
-        // If JSON parsing fails, try to get text
+        // If JSON parsing fails, try to get text from original response
         try {
           const errorText = await openAIResponse.text()
           errorMessage = errorText || `HTTP ${openAIResponse.status}: ${openAIResponse.statusText}`
@@ -374,9 +377,17 @@ IMPORTANT:
     let openAIData
     try {
       openAIData = await openAIResponse.json()
-    } catch (jsonError) {
+    } catch (jsonError: any) {
+      console.error("[DOCUMENT_ANALYSIS] Failed to parse OpenAI response:", jsonError)
+      // Try to get the raw text to see what we received
+      try {
+        const responseText = await openAIResponse.text()
+        console.error("[DOCUMENT_ANALYSIS] Raw response text:", responseText.substring(0, 500))
+      } catch (textError) {
+        console.error("[DOCUMENT_ANALYSIS] Could not read response text:", textError)
+      }
       return {
-        error: "Failed to parse OpenAI response. The API returned an unexpected format.",
+        error: "Failed to parse OpenAI response. The API returned an unexpected format. Please try again.",
         data: null
       }
     }
