@@ -209,7 +209,7 @@ export async function createEmployeeInvitation(email: string) {
       revalidatePath("/account-setup/manager")
       return { 
         data: invitation, 
-        error: `Invitation created but email failed: ${emailResult.error}. Invitation code: ${invitationCode}` 
+        error: `Invitation created but email failed: ${emailResult.error}. Code: ${invitationCode}. Please share this code manually with the employee.` 
       }
     }
 
@@ -245,9 +245,11 @@ export async function createEmployeeInvitation(email: string) {
   if (!emailResult.success) {
     console.error(`[INVITATION] Failed to send email: ${emailResult.error}`)
     // Return error so user knows email failed
+    revalidatePath("/dashboard/employees")
+    revalidatePath("/account-setup/manager")
     return { 
       data: invitation, 
-      error: `Invitation created but email failed: ${emailResult.error}. Invitation code: ${codeData}` 
+      error: `Invitation created but email failed: ${emailResult.error}. Code: ${codeData}. Please share this code manually with the employee.` 
     }
   }
 
@@ -540,12 +542,24 @@ async function sendInvitationEmail(
     const apiKey = process.env.RESEND_API_KEY
     if (!apiKey) {
       console.error(`[INVITATION] RESEND_API_KEY not configured. Invitation code: ${invitationCode}`)
-      return { success: false, error: "Email service not configured. Please set RESEND_API_KEY in environment variables." }
+      return { 
+        success: false, 
+        error: "Email service not configured. Please set RESEND_API_KEY in Vercel environment variables and redeploy." 
+      }
     }
     
     const resend = new Resend(apiKey)
 
     const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
+    
+    // Validate from email format
+    if (!fromEmail.includes("@")) {
+      console.error(`[INVITATION] Invalid RESEND_FROM_EMAIL: ${fromEmail}`)
+      return { 
+        success: false, 
+        error: "Invalid sender email. Please set RESEND_FROM_EMAIL in environment variables (e.g., noreply@yourdomain.com or onboarding@resend.dev)." 
+      }
+    }
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://truckmateslogistic.com"
 
   const emailHtml = `
@@ -596,7 +610,35 @@ async function sendInvitationEmail(
 
     if (result.error) {
       console.error("[INVITATION EMAIL ERROR]", result.error)
-      return { success: false, error: result.error.message || "Failed to send email" }
+      
+      // Provide more specific error messages
+      const errorMessage = result.error.message || JSON.stringify(result.error)
+      
+      if (errorMessage.includes("Invalid API key") || errorMessage.includes("401")) {
+        return { 
+          success: false, 
+          error: "Email service authentication failed. Please check RESEND_API_KEY in environment variables." 
+        }
+      }
+      
+      if (errorMessage.includes("domain") || errorMessage.includes("from")) {
+        return { 
+          success: false, 
+          error: "Email sending failed: Invalid sender email. Please check RESEND_FROM_EMAIL and verify your domain in Resend." 
+        }
+      }
+      
+      if (errorMessage.includes("rate limit") || errorMessage.includes("429")) {
+        return { 
+          success: false, 
+          error: "Email sending rate limit reached. Please try again later." 
+        }
+      }
+      
+      return { 
+        success: false, 
+        error: `Email sending failed: ${errorMessage}. Please check your Resend configuration.` 
+      }
     }
 
     console.log(`[INVITATION] Email sent successfully to ${employeeEmail}. Message ID: ${result.data?.id}`)

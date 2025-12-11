@@ -133,11 +133,18 @@ export default function EmployeesPage() {
       // Check if it's an email error or invitation creation error
       if (result.error.includes("email failed") && result.data) {
         // Email failed but invitation was created - show warning with code
-        const codeMatch = result.error.match(/Invitation code: ([A-Z0-9-]+)/)
+        const codeMatch = result.error.match(/Code: ([A-Z0-9-]+)/)
         const code = codeMatch ? codeMatch[1] : result.data.invitation_code || "N/A"
-        toast.warning(`Invitation created but email failed. Code: ${code}. Please share manually.`, {
-          duration: 10000,
-        })
+        
+        // Extract the error reason
+        const errorReason = result.error.split("Code:")[0].replace("Invitation created but email failed: ", "").trim()
+        
+        toast.warning(
+          `Invitation created but email failed. Code: ${code}. Please share manually.${errorReason ? ` Error: ${errorReason}` : ""}`, 
+          {
+            duration: 15000, // Show longer so user can copy the code
+          }
+        )
         setNewEmployeeEmail("")
         setShowAddDialog(false)
         
