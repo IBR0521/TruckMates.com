@@ -172,10 +172,10 @@ export default function SettingsPage() {
   if (isLoading) {
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
+        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
           <h1 className="text-2xl font-bold text-foreground">Settings</h1>
         </div>
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto p-4 md:p-8">
           <div className="max-w-4xl mx-auto">
             <p className="text-muted-foreground">Loading...</p>
           </div>
@@ -187,7 +187,7 @@ export default function SettingsPage() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
+      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Settings</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage your account and company settings</p>
@@ -203,7 +203,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Content */}
-      <main className="flex-1 overflow-auto p-8">
+      <main className="flex-1 overflow-auto p-4 md:p-8">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Company Information - Only for Managers */}
           {isManager && (

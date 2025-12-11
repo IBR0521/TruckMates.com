@@ -22,7 +22,7 @@ export default function DashboardLayout({
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Navigation - Shared across all dashboard pages */}
-        <header className="border-b border-border bg-gradient-to-r from-card to-card/50 backdrop-blur px-8 py-4 flex items-center justify-between shadow-sm">
+        <header className="border-b border-border bg-gradient-to-r from-card to-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}

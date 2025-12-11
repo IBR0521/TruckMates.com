@@ -69,31 +69,34 @@ export default function TrucksPage() {
   return (
     <div className="w-full">
       {/* Page Header */}
-      <div className="border-b border-border bg-card/30 backdrop-blur px-8 py-6 flex items-center justify-between">
+      <div className="border-b border-border bg-card/30 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Vehicles</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Vehicles</h1>
           <p className="text-muted-foreground text-sm mt-1">Monitor your fleet status and details</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <Button
             onClick={handleExportTrucks}
             variant="outline"
-            className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+            size="sm"
+            className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground flex-1 sm:flex-initial"
           >
-            <Download className="w-4 h-4 mr-2" />
-            Export to Excel
+            <Download className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Export to Excel</span>
+            <span className="sm:hidden">Export</span>
           </Button>
-          <Link href="/dashboard/trucks/add">
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Vehicle
+          <Link href="/dashboard/trucks/add" className="flex-1 sm:flex-initial">
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition w-full sm:w-auto">
+              <Plus className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Add Vehicle</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </Link>
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           {isLoading ? (
             <Card className="border border-border/50 p-8">

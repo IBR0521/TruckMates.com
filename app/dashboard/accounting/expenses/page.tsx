@@ -68,52 +68,54 @@ export default function ExpensesPage() {
 
   return (
     <div className="w-full">
-      <div className="border-b border-border bg-card/30 backdrop-blur px-8 py-6 flex items-center justify-between">
+      <div className="border-b border-border bg-card/30 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Expenses</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Expenses</h1>
           <p className="text-muted-foreground text-sm mt-1">Track and manage fleet expenses</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <Button
             onClick={handleExport}
             variant="outline"
-            className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+            size="sm"
+            className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground flex-1 sm:flex-initial"
           >
-            <Download className="w-4 h-4 mr-2" />
-            Export
+            <Download className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Export</span>
           </Button>
-          <Link href="/dashboard/accounting/expenses/add">
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Expense
+          <Link href="/dashboard/accounting/expenses/add" className="flex-1 sm:flex-initial">
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md w-full sm:w-auto">
+              <Plus className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Add Expense</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </Link>
         </div>
       </div>
 
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Summary Cards */}
-          <div className="grid md:grid-cols-4 gap-6">
-            <Card className="border border-border/50 p-6">
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+            <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Total Expenses</p>
               <p className="text-3xl font-bold text-foreground">
                 ${expensesList.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0).toFixed(2)}
               </p>
             </Card>
-            <Card className="border border-border/50 p-6">
+            <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Fuel Costs</p>
               <p className="text-3xl font-bold text-foreground">
                 ${expensesList.filter(e => e.category === "fuel").reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0).toFixed(2)}
               </p>
             </Card>
-            <Card className="border border-border/50 p-6">
+            <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Maintenance</p>
               <p className="text-3xl font-bold text-foreground">
                 ${expensesList.filter(e => e.category === "maintenance").reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0).toFixed(2)}
               </p>
             </Card>
-            <Card className="border border-border/50 p-6">
+            <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Total Records</p>
               <p className="text-3xl font-bold text-foreground">{expensesList.length}</p>
             </Card>
@@ -141,57 +143,111 @@ export default function ExpensesPage() {
               </div>
             </Card>
           ) : (
-            <Card className="border border-border/50 overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-secondary/30">
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Date</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Category</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Description</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Amount</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Receipt</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expensesList.map((expense) => (
-                      <tr key={expense.id} className="border-b border-border hover:bg-secondary/20 transition">
-                        <td className="px-6 py-4 text-foreground">{expense.date ? new Date(expense.date).toLocaleDateString() : "N/A"}</td>
-                        <td className="px-6 py-4">
-                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-primary/20 text-primary">
-                            {expense.category ? expense.category.charAt(0).toUpperCase() + expense.category.slice(1) : "N/A"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-foreground">{expense.description || "N/A"}</td>
-                        <td className="px-6 py-4 text-foreground font-semibold">${expense.amount ? parseFloat(expense.amount).toFixed(2) : "0.00"}</td>
-                        <td className="px-6 py-4 text-foreground">{expense.has_receipt ? "Yes" : "No"}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="hover:bg-secondary/50"
-                              onClick={() => router.push(`/dashboard/accounting/expenses/${expense.id}`)}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="hover:bg-red-500/20"
-                              onClick={() => setDeleteId(expense.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-red-400" />
-                            </Button>
-                          </div>
-                        </td>
+            <>
+              {/* Desktop: Table */}
+              <Card className="border border-border/50 overflow-hidden shadow-sm hidden md:block">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border bg-secondary/30">
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Date</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Category</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Description</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Amount</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Receipt</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {expensesList.map((expense) => (
+                        <tr key={expense.id} className="border-b border-border hover:bg-secondary/20 transition">
+                          <td className="px-6 py-4 text-foreground">{expense.date ? new Date(expense.date).toLocaleDateString() : "N/A"}</td>
+                          <td className="px-6 py-4">
+                            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-primary/20 text-primary">
+                              {expense.category ? expense.category.charAt(0).toUpperCase() + expense.category.slice(1) : "N/A"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-foreground">{expense.description || "N/A"}</td>
+                          <td className="px-6 py-4 text-foreground font-semibold">${expense.amount ? parseFloat(expense.amount).toFixed(2) : "0.00"}</td>
+                          <td className="px-6 py-4 text-foreground">{expense.has_receipt ? "Yes" : "No"}</td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="hover:bg-secondary/50"
+                                onClick={() => router.push(`/dashboard/accounting/expenses/${expense.id}`)}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="hover:bg-red-500/20"
+                                onClick={() => setDeleteId(expense.id)}
+                              >
+                                <Trash2 className="w-4 h-4 text-red-400" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+
+              {/* Mobile: Cards */}
+              <div className="md:hidden space-y-4">
+                {expensesList.map((expense) => (
+                  <Card key={expense.id} className="border border-border/50 p-4">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold text-foreground">{expense.description || "N/A"}</h3>
+                          <p className="text-sm text-muted-foreground">{expense.date ? new Date(expense.date).toLocaleDateString() : "N/A"}</p>
+                        </div>
+                        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-primary/20 text-primary">
+                          {expense.category ? expense.category.charAt(0).toUpperCase() + expense.category.slice(1) : "N/A"}
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-2 pt-2 border-t border-border/30">
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Amount</p>
+                          <p className="text-lg font-bold text-foreground">${expense.amount ? parseFloat(expense.amount).toFixed(2) : "0.00"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Receipt</p>
+                          <p className="text-sm text-foreground">{expense.has_receipt ? "Yes" : "No"}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-2 border-t border-border/30">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => router.push(`/dashboard/accounting/expenses/${expense.id}`)}
+                        >
+                          <Eye className="w-4 h-4 mr-2" />
+                          View
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 border-red-500/50 text-red-400 hover:bg-red-500/20"
+                          onClick={() => setDeleteId(expense.id)}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
               </div>
-            </Card>
+            </>
           )}
         </div>
       </div>

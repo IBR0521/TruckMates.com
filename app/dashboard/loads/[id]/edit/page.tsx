@@ -282,12 +282,12 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
   if (isLoading) {
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
+        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
           <h1 className="text-2xl font-bold text-foreground">Edit Load</h1>
         </div>
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto p-4 md:p-8">
           <div className="max-w-4xl mx-auto">
-            <Card className="border-border p-8">
+            <Card className="border-border p-4 md:p-8">
               <div className="text-center py-8">
                 <p className="text-muted-foreground">Loading load information...</p>
               </div>
@@ -300,7 +300,7 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center gap-4">
+      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center gap-4">
         <Link href={`/dashboard/loads/${id}`}>
           <Button variant="ghost" size="sm">
             <ArrowLeft className="w-4 h-4" />
@@ -309,7 +309,7 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
         <h1 className="text-2xl font-bold text-foreground">Edit Load</h1>
       </div>
 
-      <main className="flex-1 overflow-auto p-8">
+      <main className="flex-1 overflow-auto p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basic Information Section */}

@@ -79,12 +79,12 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
   if (isLoading) {
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
-          <h1 className="text-2xl font-bold text-foreground">Route Details</h1>
+        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Route Details</h1>
         </div>
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto p-4 md:p-8">
           <div className="max-w-6xl mx-auto">
-            <Card className="p-8 text-center">
+            <Card className="p-4 md:p-8 text-center">
               <p className="text-muted-foreground">Loading route details...</p>
             </Card>
           </div>
@@ -96,12 +96,12 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
   if (!route) {
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
-          <h1 className="text-2xl font-bold text-foreground">Route Details</h1>
+        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Route Details</h1>
         </div>
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto p-4 md:p-8">
           <div className="max-w-6xl mx-auto">
-            <Card className="p-8 text-center">
+            <Card className="p-4 md:p-8 text-center">
               <p className="text-muted-foreground">Route not found</p>
               <Link href="/dashboard/routes">
                 <Button className="mt-4">Back to Routes</Button>
@@ -129,14 +129,14 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
+      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/routes">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold text-foreground">Route Details</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Route Details</h1>
         </div>
         <Link href={`/dashboard/routes/${id}/edit`}>
           <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -146,13 +146,13 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
         </Link>
       </div>
 
-      <main className="flex-1 overflow-auto p-8">
+      <main className="flex-1 overflow-auto p-4 md:p-8">
         <div className="max-w-6xl mx-auto space-y-6">
           {/* Route Header */}
-          <Card className="border-border p-8">
+          <Card className="border-border p-4 md:p-8">
             <div className="flex items-start justify-between mb-6">
               <div>
-                <h2 className="text-2xl font-bold text-foreground">{route.name}</h2>
+                <h2 className="text-xl md:text-2xl font-bold text-foreground">{route.name}</h2>
                 {route.depot_name && (
                   <p className="text-sm text-muted-foreground mt-1">
                     <Building2 className="w-4 h-4 inline mr-1" />
@@ -190,7 +190,7 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
 
           {/* Route Map with Multi-Stops */}
           {route.origin && route.destination && (
-            <Card className="border-border p-8">
+            <Card className="border-border p-4 md:p-8">
               <h2 className="text-xl font-bold text-foreground mb-6">Route Map</h2>
               <TruckMap
                 origin={route.origin}
@@ -210,24 +210,24 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
 
           {/* Route Summary */}
           {summary && (
-            <Card className="border-border p-8">
+            <Card className="border-border p-4 md:p-8">
               <h2 className="text-xl font-bold text-foreground mb-6">Route Summary</h2>
               <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Total Stops</p>
-                  <p className="text-2xl font-bold text-foreground">{summary.total_stops}</p>
+                  <p className="text-xl md:text-2xl font-bold text-foreground">{summary.total_stops}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Total Travel Time</p>
-                  <p className="text-2xl font-bold text-foreground">{formatDuration(summary.total_travel_time_minutes)}</p>
+                  <p className="text-xl md:text-2xl font-bold text-foreground">{formatDuration(summary.total_travel_time_minutes)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Total Service Time</p>
-                  <p className="text-2xl font-bold text-foreground">{formatDuration(summary.total_service_time_minutes)}</p>
+                  <p className="text-xl md:text-2xl font-bold text-foreground">{formatDuration(summary.total_service_time_minutes)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Total Distance</p>
-                  <p className="text-2xl font-bold text-foreground">{route.distance || "N/A"}</p>
+                  <p className="text-xl md:text-2xl font-bold text-foreground">{route.distance || "N/A"}</p>
                 </div>
               </div>
 
@@ -286,11 +286,11 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
 
           {/* Stop-by-Stop Breakdown */}
           {stops.length > 0 ? (
-            <Card className="border-border p-8">
+            <Card className="border-border p-4 md:p-8">
               <h2 className="text-xl font-bold text-foreground mb-6">Stop-by-Stop Breakdown</h2>
               <div className="space-y-4">
                 {stops.map((stop, index) => (
-                  <Card key={stop.id} className="border-border p-6 bg-secondary/30">
+                  <Card key={stop.id} className="border-border p-4 md:p-6 bg-secondary/30">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
@@ -382,7 +382,7 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
               </div>
             </Card>
           ) : (
-            <Card className="border-border p-8">
+            <Card className="border-border p-4 md:p-8">
               <div className="text-center py-8">
                 <Package className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-foreground mb-2">No Stops Added</h3>
@@ -397,7 +397,7 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
           )}
 
           {/* Trip Information */}
-          <Card className="border-border p-8">
+          <Card className="border-border p-4 md:p-8">
             <h2 className="text-xl font-bold text-foreground mb-6">Trip Information</h2>
             <div className="grid md:grid-cols-3 gap-4">
               <div>
@@ -455,7 +455,7 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
           </Card>
 
           {/* Assignment */}
-          <Card className="border-border p-8">
+          <Card className="border-border p-4 md:p-8">
             <div className="flex items-center gap-3 mb-6">
               <User className="w-6 h-6 text-primary" />
               <h2 className="text-xl font-bold text-foreground">Assignment</h2>
@@ -481,7 +481,7 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
           </Card>
 
           {/* Status */}
-          <Card className="border-border p-8">
+          <Card className="border-border p-4 md:p-8">
             <div className="flex items-center gap-3 mb-6">
               <Clock className="w-6 h-6 text-primary" />
               <h2 className="text-xl font-bold text-foreground">Status</h2>

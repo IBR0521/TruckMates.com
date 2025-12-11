@@ -106,19 +106,19 @@ export default function CreateInvoicePage() {
 
   return (
     <div className="w-full">
-      <div className="border-b border-border bg-card/30 backdrop-blur px-8 py-6">
+      <div className="border-b border-border bg-card/30 backdrop-blur px-4 md:px-8 py-4 md:py-6">
         <Link href="/dashboard/accounting/invoices">
           <Button variant="ghost" size="sm" className="mb-4">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Invoices
           </Button>
         </Link>
-        <h1 className="text-3xl font-bold text-foreground">Create Invoice</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground">Create Invoice</h1>
         <p className="text-muted-foreground text-sm mt-1">Generate a new customer invoice</p>
       </div>
 
-      <div className="p-8">
-        <Card className="max-w-3xl mx-auto border-border p-8">
+      <div className="p-4 md:p-8">
+        <Card className="max-w-3xl mx-auto border-border p-4 md:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Load (Optional - Auto-fills invoice details)</label>

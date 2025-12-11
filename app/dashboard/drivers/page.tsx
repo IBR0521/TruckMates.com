@@ -70,47 +70,50 @@ export default function DriversPage() {
   return (
     <div className="w-full">
       {/* Page Header */}
-      <div className="border-b border-border bg-card/30 backdrop-blur px-8 py-6 flex items-center justify-between">
+      <div className="border-b border-border bg-card/30 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Drivers</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Drivers</h1>
           <p className="text-muted-foreground text-sm mt-1">Manage your fleet drivers</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <Button
             onClick={handleExportDrivers}
             variant="outline"
-            className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+            size="sm"
+            className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground flex-1 sm:flex-initial"
           >
-            <Download className="w-4 h-4 mr-2" />
-            Export to Excel
+            <Download className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Export to Excel</span>
+            <span className="sm:hidden">Export</span>
           </Button>
-          <Link href="/dashboard/drivers/add">
+          <Link href="/dashboard/drivers/add" className="flex-1 sm:flex-initial">
             <Button
-              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition w-full sm:w-auto"
               onClick={() => console.log("[v0] Navigating to /dashboard/drivers/add")}
             >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Driver
+              <Plus className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Add Driver</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </Link>
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           {isLoading ? (
-            <Card className="border border-border/50 p-8">
+            <Card className="border border-border/50 p-4 md:p-8">
               <div className="text-center py-8">
                 <p className="text-muted-foreground">Loading drivers...</p>
               </div>
             </Card>
           ) : driversList.length === 0 ? (
-            <Card className="border border-border/50 p-8">
-              <div className="text-center py-12">
-                <Users className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
-                <h3 className="text-xl font-semibold text-foreground mb-2">No drivers yet</h3>
-                <p className="text-muted-foreground mb-6">Get started by adding your first driver to the fleet</p>
+            <Card className="border border-border/50 p-4 md:p-8">
+              <div className="text-center py-8 md:py-12">
+                <Users className="w-12 h-12 md:w-16 md:h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+                <h3 className="text-lg md:text-xl font-semibold text-foreground mb-2">No drivers yet</h3>
+                <p className="text-muted-foreground mb-6 text-sm md:text-base">Get started by adding your first driver to the fleet</p>
                 <Link href="/dashboard/drivers/add">
                   <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
                     <Plus className="w-4 h-4 mr-2" />
@@ -120,34 +123,36 @@ export default function DriversPage() {
               </div>
             </Card>
           ) : (
-            <Card className="border border-border/50 overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-secondary/30">
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Name</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Contact</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">License</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">License Expiry</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Status</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {driversList.map((driver) => (
-                      <tr key={driver.id} className="border-b border-border hover:bg-secondary/20 transition">
-                        <td className="px-6 py-4">
-                          <div>
-                            <p className="text-foreground font-medium">{driver.name || "N/A"}</p>
-                            <p className="text-xs text-muted-foreground">{driver.email || ""}</p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div>
-                            <p className="text-sm text-foreground">{driver.phone || "N/A"}</p>
-                            {driver.email && <p className="text-xs text-muted-foreground">{driver.email}</p>}
-                          </div>
-                        </td>
+            <>
+              {/* Desktop: Table */}
+              <Card className="border border-border/50 overflow-hidden shadow-sm hidden md:block">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border bg-secondary/30">
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Name</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Contact</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">License</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">License Expiry</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Status</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {driversList.map((driver) => (
+                        <tr key={driver.id} className="border-b border-border hover:bg-secondary/20 transition">
+                          <td className="px-6 py-4">
+                            <div>
+                              <p className="text-foreground font-medium">{driver.name || "N/A"}</p>
+                              <p className="text-xs text-muted-foreground">{driver.email || ""}</p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div>
+                              <p className="text-sm text-foreground">{driver.phone || "N/A"}</p>
+                              {driver.email && <p className="text-xs text-muted-foreground">{driver.email}</p>}
+                            </div>
+                          </td>
                         <td className="px-6 py-4">
                           <div>
                             <p className="text-sm text-foreground">{driver.license_number || "N/A"}</p>
@@ -209,6 +214,87 @@ export default function DriversPage() {
                 </table>
               </div>
             </Card>
+              )}
+
+              {/* Mobile: Cards */}
+              <div className="md:hidden space-y-4">
+                {driversList.map((driver) => (
+                  <Card key={driver.id} className="border border-border/50 p-4">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold text-foreground">{driver.name || "N/A"}</h3>
+                          {driver.email && (
+                            <p className="text-sm text-muted-foreground">{driver.email}</p>
+                          )}
+                        </div>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            driver.status === "on_route" || driver.status === "On Route"
+                              ? "bg-green-500/20 text-green-400"
+                              : driver.status === "active" || driver.status === "Active"
+                                ? "bg-blue-500/20 text-blue-400"
+                                : driver.status === "inactive" || driver.status === "off_duty"
+                                  ? "bg-gray-500/20 text-gray-400"
+                                  : "bg-yellow-500/20 text-yellow-400"
+                          }`}
+                        >
+                          {driver.status ? driver.status.charAt(0).toUpperCase() + driver.status.slice(1).replace("_", " ") : "N/A"}
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-2 pt-2 border-t border-border/30">
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Phone</p>
+                          <p className="text-sm text-foreground">{driver.phone || "N/A"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">License Number</p>
+                          <p className="text-sm text-foreground">{driver.license_number || "N/A"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">License Expiry</p>
+                          <p className="text-sm text-foreground">
+                            {driver.license_expiry 
+                              ? new Date(driver.license_expiry).toLocaleDateString() 
+                              : "N/A"}
+                            {driver.license_expiry && new Date(driver.license_expiry) < new Date() && (
+                              <span className="ml-2 text-xs text-red-400">(Expired)</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-2 border-t border-border/30">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => router.push(`/dashboard/drivers/${driver.id}`)}
+                        >
+                          <Eye className="w-4 h-4 mr-2" />
+                          View
+                        </Button>
+                        <Link href={`/dashboard/drivers/${driver.id}/edit`} className="flex-1">
+                          <Button variant="outline" size="sm" className="w-full">
+                            <Edit2 className="w-4 h-4 mr-2" />
+                            Edit
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 border-red-500/50 text-red-400 hover:bg-red-500/20"
+                          onClick={() => setDeleteId(driver.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>

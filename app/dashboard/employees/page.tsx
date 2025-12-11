@@ -262,10 +262,10 @@ export default function EmployeesPage() {
   if (isLoading) {
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
+        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
           <h1 className="text-2xl font-bold text-foreground">Employees</h1>
         </div>
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto p-4 md:p-8">
           <div className="max-w-6xl mx-auto">
             <p className="text-muted-foreground">Loading...</p>
           </div>
@@ -281,7 +281,7 @@ export default function EmployeesPage() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
+      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Employee Management</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage your company employees</p>
@@ -296,7 +296,7 @@ export default function EmployeesPage() {
       </div>
 
       {/* Content */}
-      <main className="flex-1 overflow-auto p-8">
+      <main className="flex-1 overflow-auto p-4 md:p-8">
         <div className="max-w-6xl mx-auto space-y-6">
           {/* Pending Invitations */}
           {invitations.length > 0 && (
@@ -374,34 +374,91 @@ export default function EmployeesPage() {
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Name</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Email</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Phone</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Position</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Status</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold text-foreground">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredEmployees.map((employee) => (
-                      <tr key={employee.id} className="border-b border-border hover:bg-secondary/50">
-                        <td className="py-3 px-4">
-                          <p className="text-foreground font-medium">{employee.full_name || "N/A"}</p>
-                        </td>
-                        <td className="py-3 px-4">
-                          <p className="text-muted-foreground">{employee.email}</p>
-                        </td>
-                        <td className="py-3 px-4">
-                          <p className="text-muted-foreground">{employee.phone || "N/A"}</p>
-                        </td>
-                        <td className="py-3 px-4">
-                          <p className="text-muted-foreground">{employee.position || "N/A"}</p>
-                        </td>
-                        <td className="py-3 px-4">
+              <>
+                {/* Desktop: Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Name</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Email</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Phone</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Position</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Status</th>
+                        <th className="text-right py-3 px-4 text-sm font-semibold text-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredEmployees.map((employee) => (
+                        <tr key={employee.id} className="border-b border-border hover:bg-secondary/50">
+                          <td className="py-3 px-4">
+                            <p className="text-foreground font-medium">{employee.full_name || "N/A"}</p>
+                          </td>
+                          <td className="py-3 px-4">
+                            <p className="text-muted-foreground">{employee.email}</p>
+                          </td>
+                          <td className="py-3 px-4">
+                            <p className="text-muted-foreground">{employee.phone || "N/A"}</p>
+                          </td>
+                          <td className="py-3 px-4">
+                            <p className="text-muted-foreground">{employee.position || "N/A"}</p>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
+                                employee.employee_status === "active"
+                                  ? "bg-green-500/20 text-green-400"
+                                  : employee.employee_status === "inactive"
+                                    ? "bg-gray-500/20 text-gray-400"
+                                    : "bg-yellow-500/20 text-yellow-400"
+                              }`}
+                            >
+                              {employee.employee_status === "active" ? (
+                                <CheckCircle2 className="w-3 h-3" />
+                              ) : employee.employee_status === "inactive" ? (
+                                <XCircle className="w-3 h-3" />
+                              ) : (
+                                <Clock className="w-3 h-3" />
+                              )}
+                              {employee.employee_status || "active"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditClick(employee)}
+                                className="text-primary hover:text-primary hover:bg-primary/10"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteClick(employee)}
+                                className="text-red-400 hover:text-red-500 hover:bg-red-400/10"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile: Cards */}
+                <div className="md:hidden space-y-4">
+                  {filteredEmployees.map((employee) => (
+                    <Card key={employee.id} className="border border-border/50 p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="text-lg font-semibold text-foreground">{employee.full_name || "N/A"}</h3>
+                            <p className="text-sm text-muted-foreground">{employee.email}</p>
+                          </div>
                           <span
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
                               employee.employee_status === "active"
@@ -420,32 +477,44 @@ export default function EmployeesPage() {
                             )}
                             {employee.employee_status || "active"}
                           </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditClick(employee)}
-                              className="text-primary hover:text-primary hover:bg-primary/10"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteClick(employee)}
-                              className="text-red-400 hover:text-red-500 hover:bg-red-400/10"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                        </div>
+                        
+                        <div className="space-y-2 pt-2 border-t border-border/30">
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Phone</p>
+                            <p className="text-sm text-foreground">{employee.phone || "N/A"}</p>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Position</p>
+                            <p className="text-sm text-foreground">{employee.position || "N/A"}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-2 border-t border-border/30">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handleEditClick(employee)}
+                          >
+                            <Edit2 className="w-4 h-4 mr-2" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 border-red-500/50 text-red-400 hover:bg-red-500/20"
+                            onClick={() => handleDeleteClick(employee)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </>
             )}
           </Card>
         </div>

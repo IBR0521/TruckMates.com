@@ -80,44 +80,47 @@ export default function RoutesPage() {
   return (
     <div className="w-full">
       {/* Page Header */}
-      <div className="border-b border-border bg-card/30 backdrop-blur px-8 py-6 flex items-center justify-between">
+      <div className="border-b border-border bg-card/30 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Routes</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Routes</h1>
           <p className="text-muted-foreground text-sm mt-1">Manage and optimize delivery routes</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <Button
             onClick={handleExportRoutes}
             variant="outline"
-            className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+            size="sm"
+            className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground flex-1 sm:flex-initial"
           >
-            <Download className="w-4 h-4 mr-2" />
-            Export to Excel
+            <Download className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Export to Excel</span>
+            <span className="sm:hidden">Export</span>
           </Button>
-          <Link href="/dashboard/routes/add">
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Route
+          <Link href="/dashboard/routes/add" className="flex-1 sm:flex-initial">
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition w-full sm:w-auto">
+              <Plus className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Add Route</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </Link>
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           {isLoading ? (
-            <Card className="border border-border/50 p-8">
+            <Card className="border border-border/50 p-4 md:p-8">
               <div className="text-center py-8">
                 <p className="text-muted-foreground">Loading routes...</p>
               </div>
             </Card>
           ) : routesList.length === 0 ? (
-            <Card className="border border-border/50 p-8">
-              <div className="text-center py-12">
-                <Route className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
-                <h3 className="text-xl font-semibold text-foreground mb-2">No routes yet</h3>
-                <p className="text-muted-foreground mb-6">Get started by creating your first route</p>
+            <Card className="border border-border/50 p-4 md:p-8">
+              <div className="text-center py-8 md:py-12">
+                <Route className="w-12 h-12 md:w-16 md:h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+                <h3 className="text-lg md:text-xl font-semibold text-foreground mb-2">No routes yet</h3>
+                <p className="text-muted-foreground mb-6 text-sm md:text-base">Get started by creating your first route</p>
                 <Link href="/dashboard/routes/add">
                   <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
                     <Plus className="w-4 h-4 mr-2" />
@@ -127,11 +130,11 @@ export default function RoutesPage() {
               </div>
             </Card>
           ) : (
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               {routesList.map((route) => (
               <Card
                 key={route.id}
-                className="border border-border/50 p-6 hover:border-border/80 hover:shadow-md transition-all shadow-sm"
+                className="border border-border/50 p-4 md:p-6 hover:border-border/80 hover:shadow-md transition-all shadow-sm"
               >
                 <div className="flex items-start justify-between mb-4">
                   <h3 className="text-lg font-bold text-foreground">{route.name}</h3>

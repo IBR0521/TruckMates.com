@@ -115,21 +115,21 @@ export default function AddDriverPage() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center gap-4">
+      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center gap-4">
         <Link href="/dashboard/drivers">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="w-4 h-4" />
           </Button>
         </Link>
-        <h1 className="text-2xl font-bold text-foreground">Add New Driver</h1>
+        <h1 className="text-xl md:text-2xl font-bold text-foreground">Add New Driver</h1>
       </div>
 
       {/* Content */}
-      <main className="flex-1 overflow-auto p-8">
+      <main className="flex-1 overflow-auto p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
             <form onSubmit={handleSubmit} className="space-y-6">
             {/* Personal Information Section */}
-            <Card className="border-border p-6">
+            <Card className="border-border p-4 md:p-6">
               <div className="flex items-center gap-2 mb-6">
                 <User className="w-5 h-5 text-primary" />
                 <h2 className="text-xl font-semibold text-foreground">Personal Information</h2>
@@ -240,7 +240,7 @@ export default function AddDriverPage() {
             </Card>
 
             {/* License Details Section */}
-            <Card className="border-border p-6">
+            <Card className="border-border p-4 md:p-6">
               <div className="flex items-center gap-2 mb-6">
                 <FileText className="w-5 h-5 text-primary" />
                 <h2 className="text-xl font-semibold text-foreground">License Details</h2>
@@ -304,7 +304,7 @@ export default function AddDriverPage() {
             </Card>
 
             {/* Employment Information Section */}
-            <Card className="border-border p-6">
+            <Card className="border-border p-4 md:p-6">
               <div className="flex items-center gap-2 mb-6">
                 <Briefcase className="w-5 h-5 text-primary" />
                 <h2 className="text-xl font-semibold text-foreground">Employment Information</h2>
@@ -381,7 +381,7 @@ export default function AddDriverPage() {
             </Card>
 
             {/* Emergency Contact Section */}
-            <Card className="border-border p-6">
+            <Card className="border-border p-4 md:p-6">
               <div className="flex items-center gap-2 mb-6">
                 <Phone className="w-5 h-5 text-primary" />
                 <h2 className="text-xl font-semibold text-foreground">Emergency Contact</h2>
@@ -431,7 +431,7 @@ export default function AddDriverPage() {
             </Card>
 
             {/* Additional Notes Section */}
-            <Card className="border-border p-6">
+            <Card className="border-border p-4 md:p-6">
               <div className="flex items-center gap-2 mb-6">
                 <FileText className="w-5 h-5 text-primary" />
                 <h2 className="text-xl font-semibold text-foreground">Additional Information</h2>

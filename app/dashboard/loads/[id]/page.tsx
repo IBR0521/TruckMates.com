@@ -275,12 +275,12 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   if (!mounted) {
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
-          <h1 className="text-2xl font-bold text-foreground">Load Details</h1>
+        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Load Details</h1>
         </div>
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto p-4 md:p-8">
           <div className="max-w-3xl mx-auto">
-            <Card className="border-border p-8">
+            <Card className="border-border p-4 md:p-8">
               <div className="text-center py-8">
                 <p className="text-muted-foreground">Loading...</p>
               </div>
@@ -298,12 +298,12 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   if (isLoading) {
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
-          <h1 className="text-2xl font-bold text-foreground">Load Details</h1>
+        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Load Details</h1>
         </div>
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto p-4 md:p-8">
           <div className="max-w-3xl mx-auto">
-            <Card className="border-border p-8">
+            <Card className="border-border p-4 md:p-8">
               <div className="text-center py-8">
                 <p className="text-muted-foreground">Loading load details...</p>
               </div>
@@ -317,12 +317,12 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   if (!load) {
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
-          <h1 className="text-2xl font-bold text-foreground">Load Details</h1>
+        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Load Details</h1>
         </div>
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto p-4 md:p-8">
           <div className="max-w-3xl mx-auto">
-            <Card className="border-border p-8">
+            <Card className="border-border p-4 md:p-8">
               <div className="text-center py-8">
                 <p className="text-muted-foreground">Load not found</p>
                 <Link href="/dashboard/loads">
@@ -367,14 +367,14 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
+      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/loads">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold text-foreground">Load Details</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Load Details</h1>
         </div>
         <Link href={`/dashboard/loads/${id}/edit`}>
           <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -384,13 +384,13 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         </Link>
       </div>
 
-      <main className="flex-1 overflow-auto p-8">
+      <main className="flex-1 overflow-auto p-4 md:p-8">
         <div className="max-w-3xl mx-auto space-y-6">
-          <Card className="border-border p-8">
+          <Card className="border-border p-4 md:p-8">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Shipment ID</p>
-                <h2 className="text-2xl font-bold text-foreground">{load.shipment_number || "N/A"}</h2>
+                <h2 className="text-xl md:text-2xl font-bold text-foreground">{load.shipment_number || "N/A"}</h2>
               </div>
               <span
                 className={`px-3 py-1 rounded-full text-sm font-semibold ${
@@ -444,24 +444,24 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* Load Summary for Multi-Delivery */}
           {load.delivery_type === "multi" && loadSummary && (
-            <Card className="border-border p-8">
+            <Card className="border-border p-4 md:p-8">
               <h2 className="text-xl font-bold text-foreground mb-6">Load Summary</h2>
               <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Total Delivery Points</p>
-                  <p className="text-2xl font-bold text-foreground">{loadSummary.total_delivery_points}</p>
+                  <p className="text-xl md:text-2xl font-bold text-foreground">{loadSummary.total_delivery_points}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Total Weight (kg)</p>
-                  <p className="text-2xl font-bold text-foreground">{loadSummary.total_weight_kg.toFixed(2)}</p>
+                  <p className="text-xl md:text-2xl font-bold text-foreground">{loadSummary.total_weight_kg.toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Total Pieces</p>
-                  <p className="text-2xl font-bold text-foreground">{loadSummary.total_pieces}</p>
+                  <p className="text-xl md:text-2xl font-bold text-foreground">{loadSummary.total_pieces}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Total Pallets</p>
-                  <p className="text-2xl font-bold text-foreground">{loadSummary.total_pallets}</p>
+                  <p className="text-xl md:text-2xl font-bold text-foreground">{loadSummary.total_pallets}</p>
                 </div>
               </div>
             </Card>
@@ -469,11 +469,11 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* Delivery Points Breakdown */}
           {load.delivery_type === "multi" && deliveryPoints.length > 0 ? (
-            <Card className="border-border p-8">
+            <Card className="border-border p-4 md:p-8">
               <h2 className="text-xl font-bold text-foreground mb-6">Delivery Points Breakdown</h2>
               <div className="space-y-4">
                 {deliveryPoints.map((point, index) => (
-                  <Card key={point.id || index} className="border-border p-6 bg-secondary/30">
+                  <Card key={point.id || index} className="border-border p-4 md:p-6 bg-secondary/30">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
@@ -560,7 +560,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             </Card>
           ) : load.delivery_type === "multi" ? (
-            <Card className="border-border p-8">
+            <Card className="border-border p-4 md:p-8">
               <div className="text-center py-8">
                 <Package className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-foreground mb-2">No Delivery Points Added</h3>
@@ -574,7 +574,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
             </Card>
           ) : null}
 
-          <Card className="border-border p-8">
+          <Card className="border-border p-4 md:p-8">
             <div className="flex items-center gap-3 mb-6">
               <Package className="w-6 h-6 text-primary" />
               <h2 className="text-xl font-bold text-foreground">Cargo Details</h2>
@@ -605,7 +605,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
             </div>
           </Card>
 
-          <Card className="border-border p-8">
+          <Card className="border-border p-4 md:p-8">
             <div className="flex items-center gap-3 mb-6">
               <Truck className="w-6 h-6 text-primary" />
               <h2 className="text-xl font-bold text-foreground">Assignment</h2>
@@ -654,7 +654,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
             </div>
           </Card>
 
-          <Card className="border-border p-8">
+          <Card className="border-border p-4 md:p-8">
             <div className="flex items-center gap-3 mb-6">
               <Calendar className="w-6 h-6 text-primary" />
               <h2 className="text-xl font-bold text-foreground">Timeline</h2>
@@ -683,7 +683,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* Matching Route Information */}
           {matchingRoute ? (
-            <Card className="border-border p-8 bg-primary/5">
+            <Card className="border-border p-4 md:p-8 bg-primary/5">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <Route className="w-6 h-6 text-primary" />
@@ -766,7 +766,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             </Card>
           ) : (
-            <Card className="border-border p-8">
+            <Card className="border-border p-4 md:p-8">
               <div className="flex items-center gap-3 mb-4">
                 <AlertCircle className="w-6 h-6 text-yellow-500" />
                 <h2 className="text-xl font-bold text-foreground">No Matching Route Found</h2>
@@ -796,7 +796,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* Truck Map with Navigation */}
           {load.origin && load.destination && (
-            <Card className="border-border p-8">
+            <Card className="border-border p-4 md:p-8">
               <h2 className="text-xl font-bold text-foreground mb-6">Route Map</h2>
               <TruckMap
                 origin={load.origin}
