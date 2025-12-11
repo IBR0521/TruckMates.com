@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { getDocuments, deleteDocument } from "@/app/actions/documents"
+import { getDocuments, deleteDocument, getDocumentUrl } from "@/app/actions/documents"
 
 export default function DocumentsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -52,20 +52,45 @@ export default function DocumentsPage() {
     }
   }
 
-  const handleView = (doc: any) => {
-    if (doc.file_url) {
-      window.open(doc.file_url, "_blank")
-    } else {
-      toast.info(`Viewing document: ${doc.name}`)
+  const handleView = async (doc: any) => {
+    try {
+      const result = await getDocumentUrl(doc.id)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      if (result.data?.url) {
+        window.open(result.data.url, "_blank")
+      } else {
+        toast.error("Document URL not available")
+      }
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to open document")
     }
   }
 
-  const handleDownload = (doc: any) => {
-    if (doc.file_url) {
-      window.open(doc.file_url, "_blank")
-      toast.success(`Downloading: ${doc.name}`)
-    } else {
-      toast.error("Document URL not available")
+  const handleDownload = async (doc: any) => {
+    try {
+      const result = await getDocumentUrl(doc.id)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      if (result.data?.url) {
+        // Create a temporary link and trigger download
+        const link = document.createElement("a")
+        link.href = result.data.url
+        link.download = result.data.name || doc.name || "document"
+        link.target = "_blank"
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        toast.success(`Downloading: ${result.data.name || doc.name}`)
+      } else {
+        toast.error("Document URL not available")
+      }
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to download document")
     }
   }
 
