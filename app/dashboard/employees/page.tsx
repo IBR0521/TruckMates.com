@@ -658,6 +658,64 @@ export default function EmployeesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Invitation Code Dialog */}
+      <Dialog open={showCodeDialog} onOpenChange={setShowCodeDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invitation Code Generated</DialogTitle>
+            <DialogDescription>
+              Share this code with <strong>{generatedEmail}</strong> so they can join your company.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="bg-secondary/50 border-2 border-dashed border-primary/50 rounded-lg p-6 text-center">
+              <p className="text-sm text-muted-foreground mb-2">Invitation Code</p>
+              <p className="text-3xl font-bold font-mono text-primary tracking-wider">
+                {generatedCode}
+              </p>
+            </div>
+            <Button
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(generatedCode)
+                  setCodeCopied(true)
+                  setTimeout(() => setCodeCopied(false), 2000)
+                } catch (err) {
+                  console.error("Failed to copy:", err)
+                }
+              }}
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              {codeCopied ? (
+                <>
+                  <Check className="w-4 h-4 mr-2" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copy Code
+                </>
+              )}
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              The employee should use this code when registering or in their account setup.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCodeDialog(false)
+                setCodeCopied(false)
+              }}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
