@@ -89,6 +89,7 @@ export default function AddDriverPage() {
       license_expiry: formData.licenseExpiry || null,
       status: formData.status,
       truck_id: formData.assignedTruck || null,
+      pay_rate: formData.payRate ? Number.parseFloat(formData.payRate) : null,
       // Additional fields will be stored in a JSONB field or separate columns
       // For now, we'll store the essential ones
     })

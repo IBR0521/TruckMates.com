@@ -326,6 +326,34 @@ export async function updateLoad(
 ) {
   const supabase = await createClient()
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  // Get current load to check if status is changing to "delivered"
+  const { data: currentLoad } = await supabase
+    .from("loads")
+    .select("status, value, shipment_number, origin, destination, company_name")
+    .eq("id", id)
+    .single()
+
+  const wasDelivered = currentLoad?.status === "delivered"
+  const willBeDelivered = formData.status === "delivered"
+
   // Build update data, only including fields that are provided
   const updateData: any = {}
   
@@ -361,6 +389,46 @@ export async function updateLoad(
     return { error: error.message, data: null }
   }
 
+  // Auto-generate invoice when load status changes to "delivered"
+  if (data && !wasDelivered && willBeDelivered) {
+    // Check if invoice already exists for this load
+    const { data: existingInvoice } = await supabase
+      .from("invoices")
+      .select("id")
+      .eq("load_id", id)
+      .single()
+
+    if (!existingInvoice && data.value) {
+      // Auto-generate invoice
+      const invoiceNumber = `INV-${data.shipment_number}-${Date.now()}`
+      const issueDate = new Date().toISOString().split("T")[0]
+      const dueDate = new Date()
+      dueDate.setDate(dueDate.getDate() + 30) // Net 30 default
+
+      const { error: invoiceError } = await supabase
+        .from("invoices")
+        .insert({
+          company_id: userData.company_id,
+          invoice_number: invoiceNumber,
+          customer_name: data.company_name || "Customer",
+          load_id: id,
+          amount: Number(data.value) || 0,
+          status: "pending",
+          issue_date: issueDate,
+          due_date: dueDate.toISOString().split("T")[0],
+          payment_terms: "Net 30",
+          description: `Invoice for load ${data.shipment_number} - ${data.origin} to ${data.destination}`,
+        })
+
+      if (invoiceError) {
+        console.error("[AUTO-INVOICE] Failed to create invoice:", invoiceError)
+        // Don't fail the load update if invoice creation fails
+      } else {
+        console.log(`[AUTO-INVOICE] Invoice ${invoiceNumber} created automatically for load ${data.shipment_number}`)
+      }
+    }
+  }
+
   // Send notifications to company users if load was updated (non-blocking)
   if (data) {
     // Don't await - send notifications in background
@@ -371,6 +439,7 @@ export async function updateLoad(
 
   revalidatePath("/dashboard/loads")
   revalidatePath(`/dashboard/loads/${id}`)
+  revalidatePath("/dashboard/accounting/invoices")
 
   return { data, error: null }
 }

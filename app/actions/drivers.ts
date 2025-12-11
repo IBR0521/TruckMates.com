@@ -115,6 +115,7 @@ export async function createDriver(formData: {
   if (formData.license_number) driverData.license_number = formData.license_number
   if (formData.license_expiry) driverData.license_expiry = formData.license_expiry
   if (formData.truck_id) driverData.truck_id = formData.truck_id
+  if (formData.pay_rate !== undefined) driverData.pay_rate = formData.pay_rate || null
 
   const { data, error } = await supabase
     .from("drivers")
@@ -155,6 +156,7 @@ export async function updateDriver(
   if (formData.license_expiry !== undefined) updateData.license_expiry = formData.license_expiry || null
   if (formData.status !== undefined) updateData.status = formData.status
   if (formData.truck_id !== undefined) updateData.truck_id = formData.truck_id || null
+  if (formData.pay_rate !== undefined) updateData.pay_rate = formData.pay_rate || null
 
   const { data, error } = await supabase
     .from("drivers")

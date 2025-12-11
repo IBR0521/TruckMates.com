@@ -90,7 +90,7 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
           hireDate: "",
           employmentType: "full-time",
           status: driver.status || "active",
-          payRate: "",
+          payRate: driver.pay_rate ? String(driver.pay_rate) : "",
           assignedTruck: driver.truck_id || "",
           emergencyContactName: "",
           emergencyContactPhone: "",
@@ -123,6 +123,7 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
       license_expiry: formData.licenseExpiry || null,
       status: formData.status,
       truck_id: formData.assignedTruck || null,
+      pay_rate: formData.payRate ? Number.parseFloat(formData.payRate) : null,
     })
 
     setIsSubmitting(false)
