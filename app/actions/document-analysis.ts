@@ -334,13 +334,33 @@ IMPORTANT:
     })
 
     if (!openAIResponse.ok) {
-      const errorData = await openAIResponse.json()
-      const errorMessage = errorData.error?.message || "Unknown error"
+      let errorMessage = "Unknown error"
+      
+      try {
+        const errorData = await openAIResponse.json()
+        errorMessage = errorData.error?.message || errorData.error || JSON.stringify(errorData)
+      } catch (parseError) {
+        // If JSON parsing fails, try to get text
+        try {
+          const errorText = await openAIResponse.text()
+          errorMessage = errorText || `HTTP ${openAIResponse.status}: ${openAIResponse.statusText}`
+        } catch (textError) {
+          errorMessage = `HTTP ${openAIResponse.status}: ${openAIResponse.statusText}`
+        }
+      }
       
       // Check if it's a rate limit error
       if (errorMessage.includes("Rate limit") || errorMessage.includes("rate_limit")) {
         return {
           error: `OpenAI rate limit reached. ${errorMessage}. Please try again later or add a payment method to increase your limits at https://platform.openai.com/account/billing`,
+          data: null
+        }
+      }
+      
+      // Check if it's an authentication error
+      if (errorMessage.includes("Invalid API key") || errorMessage.includes("authentication") || openAIResponse.status === 401) {
+        return {
+          error: `OpenAI API authentication failed. Please check that OPENAI_API_KEY is correctly set in your environment variables.`,
           data: null
         }
       }
@@ -351,8 +371,33 @@ IMPORTANT:
       }
     }
 
-    const openAIData = await openAIResponse.json()
-    const analysisResult = JSON.parse(openAIData.choices[0].message.content)
+    let openAIData
+    try {
+      openAIData = await openAIResponse.json()
+    } catch (jsonError) {
+      return {
+        error: "Failed to parse OpenAI response. The API returned an unexpected format.",
+        data: null
+      }
+    }
+
+    // Validate response structure
+    if (!openAIData.choices || !openAIData.choices[0] || !openAIData.choices[0].message || !openAIData.choices[0].message.content) {
+      return {
+        error: "OpenAI API returned an unexpected response format. Please try again.",
+        data: null
+      }
+    }
+
+    let analysisResult
+    try {
+      analysisResult = JSON.parse(openAIData.choices[0].message.content)
+    } catch (parseError) {
+      return {
+        error: `Failed to parse AI analysis result. The AI may have returned invalid JSON. Error: ${parseError instanceof Error ? parseError.message : "Unknown parsing error"}`,
+        data: null
+      }
+    }
 
     // Structure the response
     let extractedData: ExtractedData
@@ -375,8 +420,25 @@ IMPORTANT:
       error: null
     }
   } catch (error: any) {
+    console.error("[DOCUMENT_ANALYSIS] Error:", error)
+    
+    // Provide more specific error messages
+    if (error?.message?.includes("fetch")) {
+      return {
+        error: "Failed to connect to OpenAI API. Please check your internet connection and try again.",
+        data: null
+      }
+    }
+    
+    if (error?.message?.includes("JSON")) {
+      return {
+        error: "Failed to parse response from OpenAI. Please try again.",
+        data: null
+      }
+    }
+    
     return {
-      error: error?.message || "Failed to analyze document",
+      error: error?.message || "An unexpected error occurred while analyzing the document. Please try again.",
       data: null
     }
   }
