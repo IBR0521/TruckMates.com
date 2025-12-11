@@ -214,7 +214,6 @@ export default function DriversPage() {
                 </table>
               </div>
             </Card>
-              )}
 
               {/* Mobile: Cards */}
               <div className="md:hidden space-y-4">
