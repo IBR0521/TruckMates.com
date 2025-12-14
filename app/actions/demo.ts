@@ -34,8 +34,8 @@ export async function setupDemoCompany(userId: string | null) {
 
     if (userRecord?.company_id) {
       companyId = userRecord.company_id
-    } else {
-      // Create demo company if it doesn't exist
+    } else if (userId) {
+      // Check if demo company already exists
       const { data: existingCompany } = await supabase
         .from("companies")
         .select("id")
@@ -44,57 +44,81 @@ export async function setupDemoCompany(userId: string | null) {
 
       if (existingCompany) {
         companyId = existingCompany.id
-      } else {
-        // Create new demo company
-        const { data: newCompany, error: companyError } = await supabase
-          .from("companies")
-          .insert({
-            name: DEMO_COMPANY_NAME,
-            email: DEMO_EMAIL,
-            phone: "+1-555-DEMO",
+        // Link user to existing company
+        const { error: updateError } = await supabase
+          .from("users")
+          .update({
+            company_id: companyId,
+            role: "manager",
           })
-          .select()
-          .single()
+          .eq("id", userId)
 
-        if (companyError || !newCompany) {
-          return { error: companyError?.message || "Failed to create demo company", data: null }
+        if (updateError) {
+          console.error("Error linking user to existing company:", updateError)
         }
+      } else {
+        // Use RPC function to create company (bypasses RLS)
+        const { data: newCompanyId, error: rpcError } = await supabase.rpc('create_company_for_user', {
+          p_name: DEMO_COMPANY_NAME,
+          p_email: DEMO_EMAIL,
+          p_phone: "+1-555-DEMO",
+          p_user_id: userId
+        })
 
-        companyId = newCompany.id
-      }
-
-      // Create or update user record (only if we have userId)
-      if (userId) {
-        if (!userRecord) {
-          const { error: userError } = await supabase
-            .from("users")
+        if (rpcError) {
+          console.error("RPC function error, trying fallback:", rpcError.message)
+          
+          // Fallback: Try direct insert (might fail due to RLS, but worth trying)
+          const { data: newCompany, error: companyError } = await supabase
+            .from("companies")
             .insert({
-              id: userId,
+              name: DEMO_COMPANY_NAME,
               email: DEMO_EMAIL,
-              full_name: "Demo User",
-              role: "manager",
-              company_id: companyId,
               phone: "+1-555-DEMO",
             })
+            .select()
+            .single()
 
-          if (userError) {
-            console.error("Error creating user record:", userError)
-            // Don't fail - user might be created by trigger
+          if (companyError || !newCompany) {
+            return { 
+              error: `Failed to create demo company: ${companyError?.message || rpcError.message}. Please check RLS policies.`, 
+              data: null 
+            }
+          }
+
+          companyId = newCompany.id
+
+          // Link user to company
+          if (!userRecord) {
+            const { error: userError } = await supabase
+              .from("users")
+              .insert({
+                id: userId,
+                email: DEMO_EMAIL,
+                full_name: "Demo User",
+                role: "manager",
+                company_id: companyId,
+                phone: "+1-555-DEMO",
+              })
+
+            if (userError) {
+              console.error("Error creating user record:", userError)
+            }
+          } else {
+            const { error: updateError } = await supabase
+              .from("users")
+              .update({
+                company_id: companyId,
+                role: "manager",
+              })
+              .eq("id", userId)
+
+            if (updateError) {
+              console.error("Error updating user record:", updateError)
+            }
           }
         } else {
-          // Update existing user record
-          const { error: updateError } = await supabase
-            .from("users")
-            .update({
-              company_id: companyId,
-              role: "manager",
-            })
-            .eq("id", userId)
-
-          if (updateError) {
-            console.error("Error updating user record:", updateError)
-            // Don't fail - continue with setup
-          }
+          companyId = newCompanyId
         }
       }
     }
