@@ -19,13 +19,26 @@ export async function setupDemoCompany(userId: string | null) {
       }
     }
 
-    // Get user record if userId is provided
+    // Verify user is authenticated
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !authUser) {
+      return {
+        error: "User not authenticated. Please sign in first.",
+        data: null
+      }
+    }
+
+    // Use authenticated user ID (from session) if userId not provided
+    const actualUserId = userId || authUser.id
+
+    // Get user record
     let userRecord = null
-    if (userId) {
+    if (actualUserId) {
       const { data } = await supabase
         .from("users")
         .select("id, company_id, role")
-        .eq("id", userId)
+        .eq("id", actualUserId)
         .maybeSingle()
       userRecord = data
     }
@@ -51,7 +64,7 @@ export async function setupDemoCompany(userId: string | null) {
             company_id: companyId,
             role: "manager",
           })
-          .eq("id", userId)
+          .eq("id", actualUserId)
 
         if (updateError) {
           console.error("Error linking user to existing company:", updateError)
@@ -62,7 +75,7 @@ export async function setupDemoCompany(userId: string | null) {
           p_name: DEMO_COMPANY_NAME,
           p_email: DEMO_EMAIL,
           p_phone: "+1-555-DEMO",
-          p_user_id: userId
+          p_user_id: actualUserId
         })
 
         if (rpcError) {
@@ -93,7 +106,7 @@ export async function setupDemoCompany(userId: string | null) {
             const { error: userError } = await supabase
               .from("users")
               .insert({
-                id: userId,
+                id: actualUserId,
                 email: DEMO_EMAIL,
                 full_name: "Demo User",
                 role: "manager",
@@ -111,7 +124,7 @@ export async function setupDemoCompany(userId: string | null) {
                 company_id: companyId,
                 role: "manager",
               })
-              .eq("id", userId)
+              .eq("id", actualUserId)
 
             if (updateError) {
               console.error("Error updating user record:", updateError)
