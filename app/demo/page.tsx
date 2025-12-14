@@ -20,30 +20,43 @@ export default function DemoPage() {
         const result = await createDemoAccount()
 
         if (result.error) {
+          console.error("Demo account creation error:", result.error)
           setStatus("error")
           setErrorMessage(result.error)
           return
         }
 
-        if (result.data) {
-          // Now sign in on client side (this sets cookies properly)
-          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-            email: result.data.email,
-            password: result.data.password,
-          })
-
-          if (signInError || !signInData.user) {
-            setStatus("error")
-            setErrorMessage(signInError?.message || "Failed to sign in demo account")
-            return
-          }
-
-          // Redirect to dashboard
-          router.push("/dashboard")
+        if (!result.data) {
+          setStatus("error")
+          setErrorMessage("Failed to create demo account. No data returned.")
+          return
         }
+
+        // Now sign in on client side (this sets cookies properly)
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: result.data.email,
+          password: result.data.password,
+        })
+
+        if (signInError) {
+          console.error("Demo sign-in error:", signInError)
+          setStatus("error")
+          setErrorMessage(`Sign-in failed: ${signInError.message}. The demo account may need to be created first.`)
+          return
+        }
+
+        if (!signInData.user) {
+          setStatus("error")
+          setErrorMessage("Sign-in succeeded but no user data returned.")
+          return
+        }
+
+        // Redirect to dashboard
+        router.push("/dashboard")
       } catch (error: any) {
+        console.error("Demo setup error:", error)
         setStatus("error")
-        setErrorMessage(error.message || "Failed to start demo")
+        setErrorMessage(error?.message || "Failed to start demo. Please check the console for details.")
       }
     }
 

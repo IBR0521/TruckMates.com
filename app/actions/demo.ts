@@ -7,9 +7,8 @@ const DEMO_PASSWORD = "demo123456"
 const DEMO_COMPANY_NAME = "Demo Logistics Company"
 
 export async function createDemoAccount() {
-  const supabase = await createClient()
-
   try {
+    const supabase = await createClient()
     // Check if demo user already exists by trying to create it
     // If it exists, signUp will fail but that's okay - we'll handle sign-in on client
     let userId: string | null = null
@@ -157,6 +156,11 @@ export async function createDemoAccount() {
     }
   } catch (error: any) {
     console.error("Demo account creation error:", error)
-    return { error: error.message || "Failed to create demo account", data: null }
+    // Return detailed error for debugging
+    const errorMessage = error?.message || String(error) || "Failed to create demo account"
+    return { 
+      error: `Demo setup failed: ${errorMessage}. Please check server logs for details.`, 
+      data: null 
+    }
   }
 }
