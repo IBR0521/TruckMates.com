@@ -31,11 +31,18 @@ export default function Home() {
               Streamline your logistics operations with real-time tracking, driver management, and intelligent route
               optimization for your fleet.
             </p>
-            <Link href="/login">
-              <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                Get Started <ArrowRight className="ml-2 w-5 h-5" />
-              </Button>
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Link href="/login">
+                <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
+                  Get Started <ArrowRight className="ml-2 w-5 h-5" />
+                </Button>
+              </Link>
+              <Link href="/demo">
+                <Button size="lg" variant="outline" className="w-full sm:w-auto border-2 border-primary text-primary hover:bg-primary/10">
+                  Try Demo for Free
+                </Button>
+              </Link>
+            </div>
           </div>
           <div className="hidden lg:flex justify-center">
             <div className="w-full h-96 bg-gradient-to-br from-primary/20 to-transparent rounded-2xl border border-primary/30 flex items-center justify-center">
