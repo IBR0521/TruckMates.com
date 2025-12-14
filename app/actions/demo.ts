@@ -47,7 +47,7 @@ export async function setupDemoCompany(userId: string | null) {
 
     if (userRecord?.company_id) {
       companyId = userRecord.company_id
-    } else if (userId) {
+    } else if (actualUserId) {
       // Check if demo company already exists
       const { data: existingCompany } = await supabase
         .from("companies")
