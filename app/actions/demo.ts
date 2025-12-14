@@ -3,54 +3,23 @@
 import { createClient } from "@/lib/supabase/server"
 
 const DEMO_EMAIL = "demo@truckmates.com"
-const DEMO_PASSWORD = "demo123456"
 const DEMO_COMPANY_NAME = "Demo Logistics Company"
 
-export async function createDemoAccount() {
+// Setup demo company and subscription for a user
+// This is called AFTER the user is signed in on the client side
+export async function setupDemoCompany(userId: string | null) {
   try {
-    let supabase
-    try {
-      supabase = await createClient()
-    } catch (clientError: any) {
-      console.error("Failed to create Supabase client:", clientError)
+    // Create Supabase client
+    const supabase = await createClient()
+    
+    if (!supabase) {
       return { 
-        error: `Database connection failed: ${clientError?.message || "Unknown error"}. Please check your Supabase configuration.`, 
+        error: "Failed to initialize database connection. Please check your Supabase configuration.", 
         data: null 
       }
     }
-    // Check if demo user already exists by trying to create it
-    // If it exists, signUp will fail but that's okay - we'll handle sign-in on client
-    let userId: string | null = null
-    let isNewUser = false
 
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: DEMO_EMAIL,
-      password: DEMO_PASSWORD,
-      options: {
-        emailRedirectTo: undefined,
-        data: {
-          is_demo: true
-        }
-      }
-    })
-
-    if (signUpData?.user) {
-      // New user created
-      userId = signUpData.user.id
-      isNewUser = true
-    } else if (signUpError) {
-      // User might already exist - that's fine, we'll sign in on client side
-      // Try to get user ID from error or just proceed - client will handle sign-in
-      console.log("Demo user might already exist:", signUpError.message)
-    }
-
-    // Wait a bit for user record to be created by trigger (if new user)
-    if (isNewUser && userId) {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-    }
-
-    // If we don't have userId (user already exists), we'll still setup company/subscription
-    // The client will handle sign-in and link the user
+    // Get user record if userId is provided
     let userRecord = null
     if (userId) {
       const { data } = await supabase
@@ -110,6 +79,7 @@ export async function createDemoAccount() {
 
           if (userError) {
             console.error("Error creating user record:", userError)
+            // Don't fail - user might be created by trigger
           }
         } else {
           // Update existing user record
@@ -123,6 +93,7 @@ export async function createDemoAccount() {
 
           if (updateError) {
             console.error("Error updating user record:", updateError)
+            // Don't fail - continue with setup
           }
         }
       }
@@ -153,22 +124,19 @@ export async function createDemoAccount() {
       }
     }
 
-    // Return success - sign in will be handled on client side
-    // All authentication is done in the client component to properly set cookies
+    // Return success
     return { 
       data: { 
-        email: DEMO_EMAIL,
-        password: DEMO_PASSWORD,
         company_id: companyId 
       }, 
       error: null 
     }
   } catch (error: any) {
-    console.error("Demo account creation error:", error)
+    console.error("Demo company setup error:", error)
     // Return detailed error for debugging
-    const errorMessage = error?.message || String(error) || "Failed to create demo account"
+    const errorMessage = error?.message || String(error) || "Failed to setup demo company"
     return { 
-      error: `Demo setup failed: ${errorMessage}. Please check server logs for details.`, 
+      error: `Demo company setup failed: ${errorMessage}. Please check server logs for details.`, 
       data: null 
     }
   }

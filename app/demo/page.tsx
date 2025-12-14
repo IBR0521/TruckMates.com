@@ -3,9 +3,12 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Logo } from "@/components/logo"
-import { createDemoAccount } from "@/app/actions/demo"
+import { setupDemoCompany } from "@/app/actions/demo"
 import { createClient } from "@/lib/supabase/client"
 import { Loader2 } from "lucide-react"
+
+const DEMO_EMAIL = "demo@truckmates.com"
+const DEMO_PASSWORD = "demo123456"
 
 export default function DemoPage() {
   const router = useRouter()
@@ -16,40 +19,75 @@ export default function DemoPage() {
   useEffect(() => {
     async function handleDemo() {
       try {
-        // First, create/setup demo account (server action)
-        const result = await createDemoAccount()
-
-        if (result.error) {
-          console.error("Demo account creation error:", result.error)
-          setStatus("error")
-          setErrorMessage(result.error)
-          return
-        }
-
-        if (!result.data) {
-          setStatus("error")
-          setErrorMessage("Failed to create demo account. No data returned.")
-          return
-        }
-
-        // Now sign in on client side (this sets cookies properly)
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-          email: result.data.email,
-          password: result.data.password,
+        // Try to sign in first (demo user might already exist)
+        let signInResult = await supabase.auth.signInWithPassword({
+          email: DEMO_EMAIL,
+          password: DEMO_PASSWORD,
         })
 
-        if (signInError) {
-          console.error("Demo sign-in error:", signInError)
+        let userId: string | null = null
+        let isNewUser = false
+
+        // If sign-in fails, create the user
+        if (signInResult.error) {
+          console.log("Sign-in failed, creating new demo user:", signInResult.error.message)
+          
+          const signUpResult = await supabase.auth.signUp({
+            email: DEMO_EMAIL,
+            password: DEMO_PASSWORD,
+            options: {
+              emailRedirectTo: undefined,
+              data: {
+                is_demo: true
+              }
+            }
+          })
+
+          if (signUpResult.error) {
+            console.error("Demo sign-up error:", signUpResult.error)
+            setStatus("error")
+            setErrorMessage(`Failed to create demo account: ${signUpResult.error.message}`)
+            return
+          }
+
+          if (!signUpResult.data.user) {
+            setStatus("error")
+            setErrorMessage("Failed to create demo user. Please try again.")
+            return
+          }
+
+          userId = signUpResult.data.user.id
+          isNewUser = true
+
+          // Wait a bit for user record to be created by trigger
+          await new Promise(resolve => setTimeout(resolve, 1500))
+
+          // Now sign in with the newly created account
+          signInResult = await supabase.auth.signInWithPassword({
+            email: DEMO_EMAIL,
+            password: DEMO_PASSWORD,
+          })
+        } else {
+          // Sign-in succeeded, get user ID
+          userId = signInResult.data.user?.id || null
+        }
+
+        if (signInResult.error || !signInResult.data.user) {
+          console.error("Final sign-in error:", signInResult.error)
           setStatus("error")
-          setErrorMessage(`Sign-in failed: ${signInError.message}. The demo account may need to be created first.`)
+          setErrorMessage(`Sign-in failed: ${signInResult.error?.message || "Unknown error"}`)
           return
         }
 
-        if (!signInData.user) {
-          setStatus("error")
-          setErrorMessage("Sign-in succeeded but no user data returned.")
-          return
+        // Now setup company and subscription (server action)
+        const result = await setupDemoCompany(userId)
+
+        if (result.error) {
+          console.error("Demo company setup error:", result.error)
+          // Continue anyway - user is signed in, company setup can be done later
         }
+
+        // User is signed in, redirect to dashboard
 
         // Redirect to dashboard
         router.push("/dashboard")
