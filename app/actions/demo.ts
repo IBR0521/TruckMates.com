@@ -146,6 +146,7 @@ export async function createDemoAccount() {
     }
 
     // Return success - sign in will be handled on client side
+    // All authentication is done in the client component to properly set cookies
     return { 
       data: { 
         email: DEMO_EMAIL,
