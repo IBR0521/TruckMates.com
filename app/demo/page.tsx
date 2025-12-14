@@ -4,16 +4,19 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Logo } from "@/components/logo"
 import { createDemoAccount } from "@/app/actions/demo"
+import { createClient } from "@/lib/supabase/client"
 import { Loader2 } from "lucide-react"
 
 export default function DemoPage() {
   const router = useRouter()
   const [status, setStatus] = useState<"loading" | "error">("loading")
   const [errorMessage, setErrorMessage] = useState("")
+  const supabase = createClient()
 
   useEffect(() => {
     async function handleDemo() {
       try {
+        // First, create/setup demo account (server action)
         const result = await createDemoAccount()
 
         if (result.error) {
@@ -23,6 +26,18 @@ export default function DemoPage() {
         }
 
         if (result.data) {
+          // Now sign in on client side (this sets cookies properly)
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: result.data.email,
+            password: result.data.password,
+          })
+
+          if (signInError || !signInData.user) {
+            setStatus("error")
+            setErrorMessage(signInError?.message || "Failed to sign in demo account")
+            return
+          }
+
           // Redirect to dashboard
           router.push("/dashboard")
         }
@@ -33,7 +48,7 @@ export default function DemoPage() {
     }
 
     handleDemo()
-  }, [router])
+  }, [router, supabase])
 
   if (status === "loading") {
     return (

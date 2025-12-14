@@ -147,19 +147,11 @@ export async function createDemoAccount() {
       }
     }
 
-    // Sign in the demo user
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email: DEMO_EMAIL,
-      password: DEMO_PASSWORD,
-    })
-
-    if (signInError || !signInData.user) {
-      return { error: signInError?.message || "Failed to sign in demo account", data: null }
-    }
-
+    // Return success - sign in will be handled on client side
     return { 
       data: { 
-        user: signInData.user,
+        email: DEMO_EMAIL,
+        password: DEMO_PASSWORD,
         company_id: companyId 
       }, 
       error: null 
