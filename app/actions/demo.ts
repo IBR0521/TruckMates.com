@@ -10,52 +10,48 @@ export async function createDemoAccount() {
   const supabase = await createClient()
 
   try {
-    // Try to sign in first (demo user might already exist)
-    let userId: string
+    // Check if demo user already exists by trying to create it
+    // If it exists, signUp will fail but that's okay - we'll handle sign-in on client
+    let userId: string | null = null
     let isNewUser = false
 
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: DEMO_EMAIL,
       password: DEMO_PASSWORD,
-    })
-
-    if (signInError || !signInData.user) {
-      // User doesn't exist, create demo user
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: DEMO_EMAIL,
-        password: DEMO_PASSWORD,
-        options: {
-          emailRedirectTo: undefined,
-          data: {
-            is_demo: true
-          }
-        }
-      })
-
-      if (signUpError || !signUpData.user) {
-        return { 
-          error: signUpError?.message || "Failed to create demo account", 
-          data: null 
+      options: {
+        emailRedirectTo: undefined,
+        data: {
+          is_demo: true
         }
       }
+    })
 
+    if (signUpData?.user) {
+      // New user created
       userId = signUpData.user.id
       isNewUser = true
-    } else {
-      userId = signInData.user.id
+    } else if (signUpError) {
+      // User might already exist - that's fine, we'll sign in on client side
+      // Try to get user ID from error or just proceed - client will handle sign-in
+      console.log("Demo user might already exist:", signUpError.message)
     }
 
-    // Wait a bit for user record to be created by trigger
-    if (isNewUser) {
+    // Wait a bit for user record to be created by trigger (if new user)
+    if (isNewUser && userId) {
       await new Promise(resolve => setTimeout(resolve, 1000))
     }
 
-    // Check if user record exists in users table
-    const { data: userRecord } = await supabase
-      .from("users")
-      .select("id, company_id, role")
-      .eq("id", userId)
-      .maybeSingle()
+    // If we don't have userId (user already exists), we'll still setup company/subscription
+    // The client will handle sign-in and link the user
+    let userRecord = null
+    if (userId) {
+      const { data } = await supabase
+        .from("users")
+        .select("id, company_id, role")
+        .eq("id", userId)
+        .maybeSingle()
+      userRecord = data
+    }
 
     let companyId: string | null = null
 
@@ -90,34 +86,36 @@ export async function createDemoAccount() {
         companyId = newCompany.id
       }
 
-      // Create or update user record
-      if (!userRecord) {
-        const { error: userError } = await supabase
-          .from("users")
-          .insert({
-            id: userId,
-            email: DEMO_EMAIL,
-            full_name: "Demo User",
-            role: "manager",
-            company_id: companyId,
-            phone: "+1-555-DEMO",
-          })
+      // Create or update user record (only if we have userId)
+      if (userId) {
+        if (!userRecord) {
+          const { error: userError } = await supabase
+            .from("users")
+            .insert({
+              id: userId,
+              email: DEMO_EMAIL,
+              full_name: "Demo User",
+              role: "manager",
+              company_id: companyId,
+              phone: "+1-555-DEMO",
+            })
 
-        if (userError) {
-          console.error("Error creating user record:", userError)
-        }
-      } else {
-        // Update existing user record
-        const { error: updateError } = await supabase
-          .from("users")
-          .update({
-            company_id: companyId,
-            role: "manager",
-          })
-          .eq("id", userId)
+          if (userError) {
+            console.error("Error creating user record:", userError)
+          }
+        } else {
+          // Update existing user record
+          const { error: updateError } = await supabase
+            .from("users")
+            .update({
+              company_id: companyId,
+              role: "manager",
+            })
+            .eq("id", userId)
 
-        if (updateError) {
-          console.error("Error updating user record:", updateError)
+          if (updateError) {
+            console.error("Error updating user record:", updateError)
+          }
         }
       }
     }
