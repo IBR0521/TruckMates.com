@@ -8,7 +8,16 @@ const DEMO_COMPANY_NAME = "Demo Logistics Company"
 
 export async function createDemoAccount() {
   try {
-    const supabase = await createClient()
+    let supabase
+    try {
+      supabase = await createClient()
+    } catch (clientError: any) {
+      console.error("Failed to create Supabase client:", clientError)
+      return { 
+        error: `Database connection failed: ${clientError?.message || "Unknown error"}. Please check your Supabase configuration.`, 
+        data: null 
+      }
+    }
     // Check if demo user already exists by trying to create it
     // If it exists, signUp will fail but that's okay - we'll handle sign-in on client
     let userId: string | null = null
