@@ -140,9 +140,17 @@ export default function ELDViolationsPage() {
           <h1 className="text-2xl font-bold text-foreground">ELD Violations</h1>
           <p className="text-sm text-muted-foreground mt-1">View and manage HOS violations</p>
         </div>
-        <Link href="/dashboard/eld">
-          <Button variant="outline">Back to ELD</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/dashboard/eld/violations/add">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Event/Violation
+            </Button>
+          </Link>
+          <Link href="/dashboard/eld">
+            <Button variant="outline">Back to ELD</Button>
+          </Link>
+        </div>
       </div>
 
       {/* Content */}
