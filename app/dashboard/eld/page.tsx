@@ -300,6 +300,32 @@ export default function ELDPage() {
                 </div>
               </Card>
             </Link>
+            <Link href="/dashboard/eld/driver-app">
+              <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer border-border">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-indigo-500/10 rounded-lg">
+                    <Clock className="w-6 h-6 text-indigo-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">Driver App</h3>
+                    <p className="text-xs text-muted-foreground">Mobile HOS status</p>
+                  </div>
+                </div>
+              </Card>
+            </Link>
+            <Link href="/dashboard/eld/insights">
+              <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer border-border">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-orange-500/10 rounded-lg">
+                    <Activity className="w-6 h-6 text-orange-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">AI Insights</h3>
+                    <p className="text-xs text-muted-foreground">Smart recommendations</p>
+                  </div>
+                </div>
+              </Card>
+            </Link>
           </div>
 
           {/* Active Events Alert */}
