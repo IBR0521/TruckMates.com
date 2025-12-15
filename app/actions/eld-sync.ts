@@ -61,10 +61,12 @@ async function syncKeepTruckinData(device: any) {
     const events = eventsData.violations || []
 
     // Store logs in database
+    // Note: log.driver_id from provider might be provider's driver ID, not internal driver ID
+    // For now, we store it as-is. In production, you'd need a mapping table.
     const logsToInsert = logs.map((log: any) => ({
       company_id: device.company_id,
       eld_device_id: device.id,
-      driver_id: log.driver_id || null,
+      driver_id: log.driver_id || null, // TODO: Map provider driver ID to internal driver ID
       truck_id: device.truck_id || null,
       log_date: log.date || log.log_date,
       log_type: mapKeepTruckinStatus(log.status),

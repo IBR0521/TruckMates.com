@@ -106,9 +106,17 @@ export default function ELDLogsPage() {
           <h1 className="text-2xl font-bold text-foreground">ELD Log Entries</h1>
           <p className="text-sm text-muted-foreground mt-1">View Hours of Service (HOS) logs</p>
         </div>
-        <Link href="/dashboard/eld">
-          <Button variant="outline">Back to ELD</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/dashboard/eld/logs/add">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Log Entry
+            </Button>
+          </Link>
+          <Link href="/dashboard/eld">
+            <Button variant="outline">Back to ELD</Button>
+          </Link>
+        </div>
       </div>
 
       {/* Content */}

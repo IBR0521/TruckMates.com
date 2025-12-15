@@ -13,16 +13,20 @@ import {
   Clock,
   Truck,
   Search,
-  Filter
+  Filter,
+  RefreshCw
 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { 
   getELDDevices, 
+  createELDDevice,
+  updateELDDevice,
   deleteELDDevice,
   getELDEvents
 } from "@/app/actions/eld"
 import { canUseELD, canAccessFeature } from "@/app/actions/subscription-limits"
+import { getTrucks } from "@/app/actions/trucks"
 import { Input } from "@/components/ui/input"
 import {
   Dialog,
@@ -65,6 +69,9 @@ export default function ELDPage() {
   const [selectedDevice, setSelectedDevice] = useState<any>(null)
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [filterProvider, setFilterProvider] = useState<string>("all")
+  const [trucks, setTrucks] = useState<any[]>([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [syncingDevice, setSyncingDevice] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     device_name: "",
     device_serial_number: "",
@@ -89,7 +96,15 @@ export default function ELDPage() {
     }
     checkAccess()
     loadData()
+    loadTrucks()
   }, [])
+
+  async function loadTrucks() {
+    const result = await getTrucks()
+    if (result.data) {
+      setTrucks(result.data)
+    }
+  }
 
   async function loadData() {
     setIsLoading(true)
@@ -126,6 +141,23 @@ export default function ELDPage() {
       setShowDeleteDialog(false)
       setSelectedDevice(null)
       loadData()
+    }
+  }
+
+  const handleSyncDevice = async (deviceId: string) => {
+    setSyncingDevice(deviceId)
+    try {
+      const result = await syncELDData(deviceId)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success("Device synced successfully")
+        loadData()
+      }
+    } catch (error) {
+      toast.error("Failed to sync device")
+    } finally {
+      setSyncingDevice(null)
     }
   }
 
@@ -216,24 +248,24 @@ export default function ELDPage() {
           <h1 className="text-2xl font-bold text-foreground">ELD Service</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage Electronic Logging Devices</p>
         </div>
-        <Button
-          onClick={() => {
-            setFormData({
-              device_name: "",
-              device_serial_number: "",
-              provider: "",
-              provider_device_id: "",
-              api_key: "",
-              api_secret: "",
-              truck_id: "",
-              status: "active",
-              firmware_version: "",
-              installation_date: "",
-              notes: "",
-            })
-            setSelectedDevice(null)
-            setShowAddDialog(true)
-          }}
+            <Button
+              onClick={() => {
+                setFormData({
+                  device_name: "",
+                  device_serial_number: "",
+                  provider: "",
+                  provider_device_id: "",
+                  api_key: "",
+                  api_secret: "",
+                  truck_id: "",
+                  status: "active",
+                  firmware_version: "",
+                  installation_date: "",
+                  notes: "",
+                })
+                setSelectedDevice(null)
+                setShowAddDialog(true)
+              }}
           className="bg-primary hover:bg-primary/90 text-primary-foreground"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -498,12 +530,45 @@ export default function ELDPage() {
                   </div>
 
                   <div className="flex gap-2">
-                    <Link href={`/dashboard/eld/${device.id}`} className="flex-1">
+                    <Link href={`/dashboard/eld/devices/${device.id}`} className="flex-1">
                       <Button variant="outline" className="w-full" size="sm">
                         <Activity className="w-4 h-4 mr-2" />
                         View Details
                       </Button>
                     </Link>
+                    {device.status === "active" && device.api_key && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSyncDevice(device.id)}
+                        disabled={syncingDevice === device.id}
+                      >
+                        <RefreshCw className={`w-4 h-4 ${syncingDevice === device.id ? "animate-spin" : ""}`} />
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedDevice(device)
+                        setFormData({
+                          device_name: device.device_name || "",
+                          device_serial_number: device.device_serial_number || "",
+                          provider: device.provider || "",
+                          provider_device_id: device.provider_device_id || "",
+                          api_key: device.api_key || "",
+                          api_secret: device.api_secret || "",
+                          truck_id: device.truck_id || "",
+                          status: device.status || "active",
+                          firmware_version: device.firmware_version || "",
+                          installation_date: device.installation_date || "",
+                          notes: device.notes || "",
+                        })
+                        setShowEditDialog(true)
+                      }}
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -624,6 +689,23 @@ export default function ELDPage() {
             </div>
 
             <div>
+              <Label htmlFor="truck_id">Truck (Optional)</Label>
+              <Select value={formData.truck_id} onValueChange={(value) => setFormData({ ...formData, truck_id: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select truck" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {trucks.map((truck) => (
+                    <SelectItem key={truck.id} value={truck.id}>
+                      {truck.truck_number}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
               <Label htmlFor="provider_device_id">Provider Device ID</Label>
               <Input
                 id="provider_device_id"
@@ -695,13 +777,40 @@ export default function ELDPage() {
             }}>
               Cancel
             </Button>
-            <Button onClick={async () => {
-              // This would call createELDDevice or updateELDDevice
-              toast.info("ELD device management form - integration needed")
-              setShowAddDialog(false)
-              setShowEditDialog(false)
-            }}>
-              {showEditDialog ? "Update" : "Add"} Device
+            <Button 
+              onClick={async () => {
+                if (!formData.device_name || !formData.device_serial_number || !formData.provider) {
+                  toast.error("Please fill in required fields (Device Name, Serial Number, Provider)")
+                  return
+                }
+
+                setIsSubmitting(true)
+                try {
+                  let result
+                  if (showEditDialog && selectedDevice) {
+                    result = await updateELDDevice(selectedDevice.id, formData)
+                  } else {
+                    result = await createELDDevice(formData)
+                  }
+
+                  if (result.error) {
+                    toast.error(result.error)
+                  } else {
+                    toast.success(`Device ${showEditDialog ? "updated" : "created"} successfully`)
+                    setShowAddDialog(false)
+                    setShowEditDialog(false)
+                    setSelectedDevice(null)
+                    loadData()
+                  }
+                } catch (error) {
+                  toast.error("Failed to save device")
+                } finally {
+                  setIsSubmitting(false)
+                }
+              }}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Saving..." : showEditDialog ? "Update" : "Add"} Device
             </Button>
           </DialogFooter>
         </DialogContent>
