@@ -22,6 +22,8 @@ import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { toast } from "sonner"
 import Link from "next/link"
+import { HOSCalculator } from "@/components/hos-calculator"
+import { DriverScorecard } from "@/components/driver-scorecard"
 
 export default function ELDLogsPage() {
   const [logs, setLogs] = useState<any[]>([])
@@ -112,6 +114,12 @@ export default function ELDLogsPage() {
       {/* Content */}
       <main className="flex-1 overflow-auto p-8">
         <div className="max-w-7xl mx-auto space-y-6">
+          {/* Tools Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <HOSCalculator />
+            <DriverScorecard />
+          </div>
+
           {/* Filters */}
           <Card className="p-4 bg-card/50 border-border">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">

@@ -244,6 +244,64 @@ export default function ELDPage() {
       {/* Content */}
       <main className="flex-1 overflow-auto p-8">
         <div className="max-w-7xl mx-auto space-y-6">
+          {/* Quick Access Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/dashboard/eld/health">
+              <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer border-border">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-blue-500/10 rounded-lg">
+                    <Activity className="w-6 h-6 text-blue-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">Fleet Health</h3>
+                    <p className="text-xs text-muted-foreground">Real-time overview</p>
+                  </div>
+                </div>
+              </Card>
+            </Link>
+            <Link href="/dashboard/eld/logs">
+              <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer border-border">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-green-500/10 rounded-lg">
+                    <Clock className="w-6 h-6 text-green-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">HOS Logs</h3>
+                    <p className="text-xs text-muted-foreground">View log entries</p>
+                  </div>
+                </div>
+              </Card>
+            </Link>
+            <Link href="/dashboard/eld/violations">
+              <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer border-border">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-red-500/10 rounded-lg">
+                    <AlertTriangle className="w-6 h-6 text-red-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">Violations</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {events.length} active
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            </Link>
+            <Link href="/dashboard/eld/devices">
+              <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer border-border">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-purple-500/10 rounded-lg">
+                    <Truck className="w-6 h-6 text-purple-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">Devices</h3>
+                    <p className="text-xs text-muted-foreground">Manage ELD devices</p>
+                  </div>
+                </div>
+              </Card>
+            </Link>
+          </div>
+
           {/* Active Events Alert */}
           {events && events.length > 0 && (
             <Card className="bg-yellow-500/10 border-yellow-500/20 p-4">
@@ -255,8 +313,8 @@ export default function ELDPage() {
                     {events.length} unresolved event{events.length !== 1 ? "s" : ""} require attention
                   </p>
                 </div>
-                <Link href="/dashboard/eld/events">
-                  <Button variant="outline" size="sm">View Events</Button>
+                <Link href="/dashboard/eld/violations">
+                  <Button variant="outline" size="sm">View Violations</Button>
                 </Link>
               </div>
             </Card>
@@ -304,8 +362,71 @@ export default function ELDPage() {
             </div>
           </Card>
 
+          {/* Enhanced Tools Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="p-6 border-border">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-foreground">Quick Tools</h3>
+              </div>
+              <div className="space-y-3">
+                <Link href="/dashboard/eld/health">
+                  <Button variant="outline" className="w-full justify-start">
+                    <Activity className="w-4 h-4 mr-2" />
+                    Fleet Health Dashboard
+                  </Button>
+                </Link>
+                <Link href="/dashboard/eld/logs">
+                  <Button variant="outline" className="w-full justify-start">
+                    <Clock className="w-4 h-4 mr-2" />
+                    View HOS Logs
+                  </Button>
+                </Link>
+                <Link href="/dashboard/eld/violations">
+                  <Button variant="outline" className="w-full justify-start">
+                    <AlertTriangle className="w-4 h-4 mr-2" />
+                    View Violations
+                  </Button>
+                </Link>
+              </div>
+            </Card>
+
+            <Card className="p-6 border-border">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-foreground">Device Status</h3>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Total Devices</span>
+                  <span className="font-semibold text-foreground">{devices.length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Active</span>
+                  <span className="font-semibold text-green-500">
+                    {devices.filter(d => d.status === "active").length}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Inactive</span>
+                  <span className="font-semibold text-gray-500">
+                    {devices.filter(d => d.status === "inactive").length}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Maintenance</span>
+                  <span className="font-semibold text-yellow-500">
+                    {devices.filter(d => d.status === "maintenance").length}
+                  </span>
+                </div>
+              </div>
+            </Card>
+          </div>
+
           {/* Devices Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-foreground">ELD Devices</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredDevices.length === 0 ? (
               <div className="col-span-full text-center py-12">
                 <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
@@ -371,6 +492,7 @@ export default function ELDPage() {
                 </Card>
               ))
             )}
+            </div>
           </div>
         </div>
       </main>
