@@ -6,9 +6,11 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Increase body size limit for Server Actions (for file uploads)
-  serverActions: {
-    bodySizeLimit: '10mb', // Allow up to 10MB file uploads
+  // Note: bodySizeLimit moved to experimental in Next.js 16
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb', // Allow up to 10MB file uploads
+    },
   },
 }
 

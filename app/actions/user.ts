@@ -28,6 +28,11 @@ export async function getUserProfile() {
   return { data: userData, error: null }
 }
 
+// Alias for backward compatibility
+export async function getCurrentUser() {
+  return getUserProfile()
+}
+
 // Update user profile
 export async function updateUserProfile(formData: {
   full_name?: string

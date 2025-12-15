@@ -25,7 +25,8 @@ import {
   AlertTriangle, 
   Search,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Plus
 } from "lucide-react"
 import { getELDEvents, resolveELDEvent } from "@/app/actions/eld"
 import { getDrivers } from "@/app/actions/drivers"
