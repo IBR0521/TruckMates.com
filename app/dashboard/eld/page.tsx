@@ -445,6 +445,24 @@ export default function ELDPage() {
                     View Violations
                   </Button>
                 </Link>
+                <Link href="/dashboard/eld/logs/add">
+                  <Button variant="outline" className="w-full justify-start">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Log Entry
+                  </Button>
+                </Link>
+                <Link href="/dashboard/eld/locations/add">
+                  <Button variant="outline" className="w-full justify-start">
+                    <Truck className="w-4 h-4 mr-2" />
+                    Add Location
+                  </Button>
+                </Link>
+                <Link href="/dashboard/eld/violations/add">
+                  <Button variant="outline" className="w-full justify-start">
+                    <AlertTriangle className="w-4 h-4 mr-2" />
+                    Add Event/Violation
+                  </Button>
+                </Link>
               </div>
             </Card>
 
