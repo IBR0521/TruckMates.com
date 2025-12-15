@@ -1,10 +1,12 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { revalidatePath } from "next/cache"
 
-export async function getCurrentUser() {
+// Get current user profile
+export async function getUserProfile() {
   const supabase = await createClient()
-  
+
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -13,47 +15,9 @@ export async function getCurrentUser() {
     return { error: "Not authenticated", data: null }
   }
 
-  // Try using the RPC function first (bypasses RLS) - but handle if it doesn't exist
-  let roleData: any = null
-  let roleError: any = null
-  
-  try {
-    const result = await supabase.rpc("get_user_role_and_company")
-    roleData = result.data
-    roleError = result.error
-  } catch (error) {
-    // RPC function might not exist, that's okay - we'll use fallback
-    roleError = error
-  }
-
-  if (!roleError && roleData && Array.isArray(roleData) && roleData.length > 0) {
-    // Get full user data - try query, but if it fails, return what we have from RPC
-    const { data: userData, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", user.id)
-      .single()
-
-    if (error) {
-      // If query failed, return basic info from RPC
-      return { 
-        data: { 
-          id: user.id,
-          email: user.email,
-          role: roleData[0].role,
-          company_id: roleData[0].company_id
-        }, 
-        error: null 
-      }
-    }
-
-    return { data: { ...userData, email: user.email }, error: null }
-  }
-
-  // Fallback: try direct query (might fail due to RLS, but worth trying)
   const { data: userData, error } = await supabase
     .from("users")
-    .select("*")
+    .select("id, email, full_name, phone, role, company_id")
     .eq("id", user.id)
     .single()
 
@@ -61,6 +25,71 @@ export async function getCurrentUser() {
     return { error: error.message, data: null }
   }
 
-  return { data: { ...userData, email: user.email }, error: null }
+  return { data: userData, error: null }
 }
 
+// Update user profile
+export async function updateUserProfile(formData: {
+  full_name?: string
+  phone?: string
+}) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const updateData: any = {}
+  if (formData.full_name !== undefined) updateData.full_name = formData.full_name
+  if (formData.phone !== undefined) updateData.phone = formData.phone || null
+
+  const { error } = await supabase
+    .from("users")
+    .update(updateData)
+    .eq("id", user.id)
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  revalidatePath("/dashboard/settings")
+  return { data: { success: true }, error: null }
+}
+
+// Update user password
+export async function updateUserPassword(currentPassword: string, newPassword: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  // Verify current password by attempting to sign in
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: user.email!,
+    password: currentPassword,
+  })
+
+  if (signInError) {
+    return { error: "Current password is incorrect", data: null }
+  }
+
+  // Update password
+  const { error: updateError } = await supabase.auth.updateUser({
+    password: newPassword,
+  })
+
+  if (updateError) {
+    return { error: updateError.message, data: null }
+  }
+
+  return { data: { success: true }, error: null }
+}

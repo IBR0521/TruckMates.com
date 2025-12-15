@@ -112,17 +112,54 @@ export async function getDashboardStats() {
   // Get recent routes
   const { data: recentRoutes } = await supabase
     .from("routes")
-    .select("name, created_at, status")
+    .select("name, created_at, status, updated_at")
     .eq("company_id", companyId)
-    .order("created_at", { ascending: false })
+    .order("updated_at", { ascending: false })
     .limit(2)
 
   if (recentRoutes) {
     recentRoutes.forEach((route) => {
       recentActivity.push({
         action: `Route ${route.name} was ${route.status === "completed" ? "completed" : route.status === "in_progress" ? "started" : "created"}`,
-        time: route.created_at,
+        time: route.updated_at || route.created_at,
         type: route.status === "completed" ? "success" : route.status === "in_progress" ? "info" : "default",
+      })
+    })
+  }
+
+  // Get recent invoices
+  const { data: recentInvoices } = await supabase
+    .from("invoices")
+    .select("invoice_number, created_at, status, amount")
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false })
+    .limit(2)
+
+  if (recentInvoices) {
+    recentInvoices.forEach((invoice) => {
+      recentActivity.push({
+        action: `Invoice ${invoice.invoice_number} for $${Number(invoice.amount).toFixed(2)} was ${invoice.status === "paid" ? "paid" : invoice.status === "sent" ? "sent" : "created"}`,
+        time: invoice.created_at,
+        type: invoice.status === "paid" ? "success" : invoice.status === "overdue" ? "error" : "info",
+      })
+    })
+  }
+
+  // Get recent settlements
+  const { data: recentSettlements } = await supabase
+    .from("settlements")
+    .select("created_at, status, net_pay, drivers(name)")
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false })
+    .limit(2)
+
+  if (recentSettlements) {
+    recentSettlements.forEach((settlement: any) => {
+      const driverName = settlement.drivers?.name || "Driver"
+      recentActivity.push({
+        action: `Settlement for ${driverName} ($${Number(settlement.net_pay).toFixed(2)}) was ${settlement.status === "paid" ? "paid" : "created"}`,
+        time: settlement.created_at,
+        type: settlement.status === "paid" ? "success" : "info",
       })
     })
   }

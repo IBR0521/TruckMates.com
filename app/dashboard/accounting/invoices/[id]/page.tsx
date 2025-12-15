@@ -6,54 +6,147 @@ import { ArrowLeft, Download, Send, Mail, MessageSquare, Share2 } from "lucide-r
 import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { use } from "react"
 import { exportToPDF } from "@/lib/export-utils"
 import { toast } from "sonner"
+import { getInvoice } from "@/app/actions/accounting"
 
 export default function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const [id, setId] = useState<string | null>(null)
-  const [showShareMenu, setShowShareMenu] = useState(false)
+  const { id } = use(params)
   const router = useRouter()
+  const [invoice, setInvoice] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [showShareMenu, setShowShareMenu] = useState(false)
 
   useEffect(() => {
-    params.then((resolvedParams) => {
-      if (resolvedParams.id === "add" || resolvedParams.id === "create") {
-        router.push("/dashboard/accounting/invoices/create")
-      } else {
-        setId(resolvedParams.id)
-      }
-    })
-  }, [params, router])
+    if (id === "add" || id === "create") {
+      router.push("/dashboard/accounting/invoices/create")
+      return
+    }
 
-  if (!id) {
+    async function loadInvoice() {
+      setIsLoading(true)
+      const result = await getInvoice(id)
+      if (result.error) {
+        toast.error(result.error || "Failed to load invoice")
+        router.push("/dashboard/accounting/invoices")
+        return
+      }
+      if (result.data) {
+        setInvoice(result.data)
+      }
+      setIsLoading(false)
+    }
+
+    loadInvoice()
+  }, [id, router])
+
+  if (id === "add" || id === "create") {
     return null
   }
 
-  const invoice = {
-    id: id,
-    customer: "ABC Logistics",
-    load: "LD-234",
-    amount: "$2,450.00",
-    status: "Paid",
-    dueDate: "01/15/2025",
-    issueDate: "12/20/2024",
-    paymentTerms: "Net 30",
-    description: "Freight delivery services from New York to Philadelphia",
-    items: [
-      { description: "Freight Charge", quantity: 1, rate: 2200, amount: 2200 },
-      { description: "Fuel Surcharge", quantity: 1, rate: 250, amount: 250 },
+  if (isLoading) {
+    return (
+      <div className="w-full">
+        <div className="border-b border-border bg-card/30 backdrop-blur px-8 py-6">
+          <h1 className="text-3xl font-bold text-foreground">Invoice</h1>
+        </div>
+        <div className="p-8">
+          <div className="max-w-4xl mx-auto">
+            <Card className="p-8 text-center">
+              <p className="text-muted-foreground">Loading invoice...</p>
+            </Card>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!invoice) {
+    return (
+      <div className="w-full">
+        <div className="border-b border-border bg-card/30 backdrop-blur px-8 py-6">
+          <Link href="/dashboard/accounting/invoices">
+            <Button variant="ghost" size="sm" className="mb-4">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Invoices
+            </Button>
+          </Link>
+          <h1 className="text-3xl font-bold text-foreground">Invoice Not Found</h1>
+        </div>
+        <div className="p-8">
+          <div className="max-w-4xl mx-auto">
+            <Card className="p-8 text-center">
+              <p className="text-muted-foreground mb-4">Invoice not found</p>
+              <Link href="/dashboard/accounting/invoices">
+                <Button>Back to Invoices</Button>
+              </Link>
+            </Card>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Format invoice data
+  const invoiceData = {
+    id: invoice.id,
+    invoice_number: invoice.invoice_number,
+    customer: invoice.customer_name,
+    load: invoice.loads ? (invoice.loads as any).shipment_number : null,
+    amount: `$${Number(invoice.amount).toFixed(2)}`,
+    status: invoice.status,
+    dueDate: invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : "N/A",
+    issueDate: invoice.issue_date ? new Date(invoice.issue_date).toLocaleDateString() : "N/A",
+    paymentTerms: invoice.payment_terms || "Net 30",
+    description: invoice.description || "",
+    items: invoice.items && Array.isArray(invoice.items) ? invoice.items : [
+      { description: "Service", quantity: 1, rate: Number(invoice.amount), amount: Number(invoice.amount) },
     ],
   }
 
   const handleDownload = () => {
     try {
+      const itemsHtml = invoiceData.items.map((item: any) => `
+        <tr>
+          <td>${item.description || "Item"}</td>
+          <td style="text-align: right;">${item.quantity || 1}</td>
+          <td style="text-align: right;">$${Number(item.rate || item.amount || 0).toFixed(2)}</td>
+          <td style="text-align: right;">$${Number(item.amount || 0).toFixed(2)}</td>
+        </tr>
+      `).join("")
+
       const content = `
-        <h1>Invoice ${invoice.id}</h1>
-        <p>Customer: ${invoice.customer}</p>
-        <p>Amount: ${invoice.amount}</p>
-        <p>Due Date: ${invoice.dueDate}</p>
-        <p>Status: ${invoice.status}</p>
+        <h1>Invoice ${invoiceData.invoice_number}</h1>
+        <div style="margin: 20px 0;">
+          <p><strong>Bill To:</strong> ${invoiceData.customer}</p>
+          <p><strong>Invoice Date:</strong> ${invoiceData.issueDate}</p>
+          <p><strong>Due Date:</strong> ${invoiceData.dueDate}</p>
+          <p><strong>Payment Terms:</strong> ${invoiceData.paymentTerms}</p>
+          <p><strong>Status:</strong> ${invoiceData.status}</p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+          <thead>
+            <tr style="border-bottom: 2px solid #ddd;">
+              <th style="text-align: left; padding: 8px;">Description</th>
+              <th style="text-align: right; padding: 8px;">Qty</th>
+              <th style="text-align: right; padding: 8px;">Rate</th>
+              <th style="text-align: right; padding: 8px;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" style="text-align: right; padding: 8px; font-weight: bold;">Total:</td>
+              <td style="text-align: right; padding: 8px; font-weight: bold; font-size: 1.2em;">${invoiceData.amount}</td>
+            </tr>
+          </tfoot>
+        </table>
+        ${invoiceData.description ? `<p style="margin-top: 20px;"><strong>Notes:</strong> ${invoiceData.description}</p>` : ""}
       `
-      exportToPDF(content, `invoice-${invoice.id}`)
+      exportToPDF(content, `invoice-${invoiceData.invoice_number}`)
       toast.success("Invoice downloaded successfully")
     } catch (error) {
       toast.error("Failed to download invoice")
@@ -61,7 +154,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const handleShare = (method: string) => {
-    const message = `Invoice ${invoice.id} - Amount: ${invoice.amount} - Due: ${invoice.dueDate}`
+    const message = `Invoice ${invoiceData.invoice_number} - Amount: ${invoiceData.amount} - Due: ${invoiceData.dueDate}`
     const url = window.location.href
 
     switch (method) {
@@ -95,8 +188,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Invoice {invoice.id}</h1>
-            <p className="text-muted-foreground text-sm mt-1">Issued on {invoice.issueDate}</p>
+            <h1 className="text-3xl font-bold text-foreground">Invoice {invoiceData.invoice_number}</h1>
+            <p className="text-muted-foreground text-sm mt-1">Issued on {invoiceData.issueDate}</p>
           </div>
           <div className="flex gap-2 relative">
             <Button onClick={handleDownload} variant="outline" className="border-border bg-transparent">
@@ -143,29 +236,34 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
             <div className="grid md:grid-cols-2 gap-8 mb-8">
               <div>
                 <h3 className="text-sm font-semibold text-muted-foreground mb-2">BILL TO</h3>
-                <p className="text-lg font-bold text-foreground">{invoice.customer}</p>
-                <p className="text-sm text-muted-foreground">123 Customer Street</p>
-                <p className="text-sm text-muted-foreground">New York, NY 10001</p>
+                <p className="text-lg font-bold text-foreground">{invoiceData.customer}</p>
+                {invoice.loads && (invoice.loads as any).shipment_number && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Related Load: {(invoice.loads as any).shipment_number}
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <div className="mb-4">
                   <span
                     className={`px-4 py-2 rounded-full text-sm font-semibold ${
-                      invoice.status === "Paid" ? "bg-green-500/20 text-green-400" : "bg-yellow-500/20 text-yellow-400"
+                      invoiceData.status === "paid" ? "bg-green-500/20 text-green-400" : 
+                      invoiceData.status === "overdue" ? "bg-red-500/20 text-red-400" : 
+                      "bg-yellow-500/20 text-yellow-400"
                     }`}
                   >
-                    {invoice.status}
+                    {invoiceData.status.charAt(0).toUpperCase() + invoiceData.status.slice(1)}
                   </span>
                 </div>
                 <div className="space-y-1 text-sm">
                   <p className="text-muted-foreground">
-                    Invoice Date: <span className="text-foreground font-medium">{invoice.issueDate}</span>
+                    Invoice Date: <span className="text-foreground font-medium">{invoiceData.issueDate}</span>
                   </p>
                   <p className="text-muted-foreground">
-                    Due Date: <span className="text-foreground font-medium">{invoice.dueDate}</span>
+                    Due Date: <span className="text-foreground font-medium">{invoiceData.dueDate}</span>
                   </p>
                   <p className="text-muted-foreground">
-                    Terms: <span className="text-foreground font-medium">{invoice.paymentTerms}</span>
+                    Terms: <span className="text-foreground font-medium">{invoiceData.paymentTerms}</span>
                   </p>
                 </div>
               </div>
@@ -182,12 +280,12 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                   </tr>
                 </thead>
                 <tbody>
-                  {invoice.items.map((item, i) => (
+                  {invoiceData.items.map((item: any, i: number) => (
                     <tr key={i} className="border-b border-border">
-                      <td className="py-3 text-foreground">{item.description}</td>
-                      <td className="text-right py-3 text-foreground">{item.quantity}</td>
-                      <td className="text-right py-3 text-foreground">${item.rate}</td>
-                      <td className="text-right py-3 text-foreground font-semibold">${item.amount}</td>
+                      <td className="py-3 text-foreground">{item.description || "Item"}</td>
+                      <td className="text-right py-3 text-foreground">{item.quantity || 1}</td>
+                      <td className="text-right py-3 text-foreground">${Number(item.rate || item.amount || 0).toFixed(2)}</td>
+                      <td className="text-right py-3 text-foreground font-semibold">${Number(item.amount || 0).toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -196,16 +294,16 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                     <td colSpan={3} className="pt-6 text-right text-lg font-semibold text-foreground">
                       Total Amount:
                     </td>
-                    <td className="pt-6 text-right text-2xl font-bold text-primary">{invoice.amount}</td>
+                    <td className="pt-6 text-right text-2xl font-bold text-primary">{invoiceData.amount}</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
 
-            {invoice.description && (
+            {invoiceData.description && (
               <div className="border-t border-border pt-6 mt-6">
                 <h3 className="text-sm font-semibold text-foreground mb-2">Notes</h3>
-                <p className="text-sm text-muted-foreground">{invoice.description}</p>
+                <p className="text-sm text-muted-foreground">{invoiceData.description}</p>
               </div>
             )}
           </Card>

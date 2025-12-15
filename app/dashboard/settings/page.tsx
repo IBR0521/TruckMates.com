@@ -25,7 +25,7 @@ import {
 import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { getCompany, updateCompany } from "@/app/actions/company"
-import { getCurrentUser } from "@/app/actions/user"
+import { getUserProfile } from "@/app/actions/user"
 import { getNotificationPreferences, updateNotificationPreferences, sendTestEmail, checkEmailConfiguration } from "@/app/actions/notifications"
 import { SubscriptionSection } from "./subscription-section"
 import Link from "next/link"
@@ -82,7 +82,7 @@ export default function SettingsPage() {
     async function loadData() {
       const [companyResult, userResult, notificationResult, emailConfigResult] = await Promise.all([
         getCompany(),
-        getCurrentUser(),
+        getUserProfile(),
         getNotificationPreferences(),
         checkEmailConfiguration(),
       ])
@@ -164,8 +164,24 @@ export default function SettingsPage() {
   const handleUserSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSaving(true)
-    // TODO: Implement user profile update
-    toast.success("Profile settings saved successfully")
+    
+    const result = await updateUserProfile({
+      full_name: userFormData.full_name,
+      phone: userFormData.phone,
+    })
+    
+    if (result.error) {
+      toast.error(result.error || "Failed to save profile settings")
+    } else {
+      toast.success("Profile settings saved successfully")
+      if (userData) {
+        setUserData({
+          ...userData,
+          full_name: userFormData.full_name,
+          phone: userFormData.phone,
+        })
+      }
+    }
     setIsSaving(false)
   }
 

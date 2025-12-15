@@ -37,6 +37,51 @@ export async function getInvoices() {
   return { data: invoices, error: null }
 }
 
+// Get single invoice
+export async function getInvoice(id: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  const { data: invoice, error } = await supabase
+    .from("invoices")
+    .select(`
+      *,
+      loads:load_id (
+        id,
+        shipment_number,
+        origin,
+        destination,
+        company_name
+      )
+    `)
+    .eq("id", id)
+    .eq("company_id", userData.company_id)
+    .single()
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  return { data: invoice, error: null }
+}
+
 export async function getExpenses() {
   const supabase = await createClient()
 
@@ -94,7 +139,13 @@ export async function getSettlements() {
 
   const { data: settlements, error } = await supabase
     .from("settlements")
-    .select("*")
+    .select(`
+      *,
+      drivers:driver_id (
+        id,
+        name
+      )
+    `)
     .eq("company_id", userData.company_id)
     .order("created_at", { ascending: false })
 
@@ -161,29 +212,7 @@ export async function createInvoice(formData: {
   }
 
   // Generate invoice number
-  const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
-
-  // If load_id is provided, try to get load data for auto-fill
-  let loadData = null
-  if (formData.load_id) {
-    const { data: load } = await supabase
-      .from("loads")
-      .select("value, company_name, shipment_number, origin, destination")
-      .eq("id", formData.load_id)
-      .single()
-    
-    if (load) {
-      loadData = load
-      // Auto-fill amount from load value if not provided
-      if (!formData.amount && load.value) {
-        formData.amount = Number(load.value)
-      }
-      // Auto-fill customer from load company_name if not provided
-      if (!formData.customer_name && load.company_name) {
-        formData.customer_name = load.company_name
-      }
-    }
-  }
+  const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}`
 
   const { data, error } = await supabase
     .from("invoices")
@@ -539,6 +568,27 @@ export async function createSettlement(formData: {
     formData.period_end
   )
 
+  // Get ELD mileage data for the period (if driver has ELD device)
+  let eldMiles = 0
+  try {
+    const { getELDLogs } = await import("./eld")
+    const eldLogsResult = await getELDLogs({
+      driver_id: formData.driver_id,
+      start_date: formData.period_start,
+      end_date: formData.period_end,
+    })
+    
+    if (eldLogsResult.data) {
+      // Sum miles from ELD logs
+      eldMiles = eldLogsResult.data
+        .filter((log: any) => log.log_type === "driving" && log.miles_driven)
+        .reduce((sum: number, log: any) => sum + (Number(log.miles_driven) || 0), 0)
+    }
+  } catch (error) {
+    // ELD data not available, continue without it
+    console.log("ELD data not available for settlement calculation")
+  }
+
   const fuelDeduction = formData.fuel_deduction !== undefined 
     ? formData.fuel_deduction 
     : (fuelResult.totalFuelExpense || 0)
@@ -584,4 +634,3 @@ export async function createSettlement(formData: {
   revalidatePath("/dashboard/accounting/settlements")
   return { data, error: null }
 }
-

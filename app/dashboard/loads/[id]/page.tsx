@@ -12,8 +12,9 @@ import { getLoad } from "@/app/actions/loads"
 import { getRoutes } from "@/app/actions/routes"
 import { getTrucks } from "@/app/actions/trucks"
 import { getLoadDeliveryPoints, getLoadSummary } from "@/app/actions/load-delivery-points"
+import { getInvoices } from "@/app/actions/accounting"
 import { toast } from "sonner"
-import { Building2 } from "lucide-react"
+import { Building2, FileText } from "lucide-react"
 
 export default function LoadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -24,6 +25,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   const [routesResult, setRoutesResult] = useState<{ data: any[] | null; error: string | null } | null>(null)
   const [deliveryPoints, setDeliveryPoints] = useState<any[]>([])
   const [loadSummary, setLoadSummary] = useState<any>(null)
+  const [relatedInvoice, setRelatedInvoice] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
 
@@ -77,6 +79,17 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           }
         }
         
+        // Fetch related invoice if load is delivered
+        if (loadResult.data.status === "delivered") {
+          const invoicesResult = await getInvoices()
+          if (invoicesResult.data) {
+            const invoice = invoicesResult.data.find((inv: any) => inv.load_id === id)
+            if (invoice) {
+              setRelatedInvoice(invoice)
+            }
+          }
+        }
+
         // Fetch routes to find matching ones
         const routesResult = await getRoutes()
         setRoutesResult(routesResult)
@@ -593,6 +606,17 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                   <div>
                     <p className="text-sm text-muted-foreground mb-2">Shipment Value</p>
                     <p className="text-lg text-foreground font-bold">${typeof load.value === 'number' ? load.value.toLocaleString('en-US') : parseFloat(load.value || '0').toLocaleString('en-US')}</p>
+                  </div>
+                )}
+                {relatedInvoice && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Related Invoice</p>
+                    <Link href={`/dashboard/accounting/invoices/${relatedInvoice.id}`}>
+                      <Button variant="outline" size="sm" className="w-full">
+                        <FileText className="w-4 h-4 mr-2" />
+                        View Invoice {relatedInvoice.invoice_number}
+                      </Button>
+                    </Link>
                   </div>
                 )}
                 {load.carrier_type && (

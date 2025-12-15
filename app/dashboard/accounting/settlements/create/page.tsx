@@ -26,6 +26,7 @@ export default function CreateSettlementPage() {
   const [isCalculating, setIsCalculating] = useState(false)
   const [selectedLoads, setSelectedLoads] = useState<any[]>([])
   const [fuelExpenses, setFuelExpenses] = useState<any[]>([])
+  const [selectedDriver, setSelectedDriver] = useState<any>(null)
   const [formData, setFormData] = useState({
     driver_id: "",
     periodStart: "",
@@ -89,27 +90,30 @@ export default function CreateSettlementPage() {
       setFuelExpenses(fuelResult.data || [])
 
       // Get driver's pay rate
-      const selectedDriver = drivers.find((d) => d.id === formData.driver_id)
-      const payRate = selectedDriver?.pay_rate
+      const driver = drivers.find((d) => d.id === formData.driver_id)
+      setSelectedDriver(driver || null)
+      const payRate = driver?.pay_rate
 
       // Calculate gross pay
       let calculatedGrossPay = 0
+      let calculationBreakdown = ""
       if (loads.length > 0) {
         if (payRate) {
           const payRateNum = Number(payRate) || 0
           if (payRateNum <= 1) {
             // Percentage: multiply each load value by pay rate
-            calculatedGrossPay = loads.reduce((sum, load) => {
-              const loadValue = Number(load.value) || 0
-              return sum + (loadValue * payRateNum)
-            }, 0)
+            const totalLoadValue = loads.reduce((sum, load) => sum + (Number(load.value) || 0), 0)
+            calculatedGrossPay = totalLoadValue * payRateNum
+            calculationBreakdown = `${loads.length} loads × $${totalLoadValue.toFixed(2)} total value × ${(payRateNum * 100).toFixed(1)}% = $${calculatedGrossPay.toFixed(2)}`
           } else {
             // Per-load amount: multiply by number of loads
             calculatedGrossPay = loads.length * payRateNum
+            calculationBreakdown = `${loads.length} loads × $${payRateNum.toFixed(2)} per load = $${calculatedGrossPay.toFixed(2)}`
           }
         } else {
           // If no pay rate, sum load values as estimate
           calculatedGrossPay = loads.reduce((sum, load) => sum + (Number(load.value) || 0), 0)
+          calculationBreakdown = `Sum of ${loads.length} load values = $${calculatedGrossPay.toFixed(2)} (Note: Set driver pay rate for accurate calculation)`
         }
       }
 
@@ -120,7 +124,33 @@ export default function CreateSettlementPage() {
         fuelDeduction: fuelResult.totalFuelExpense > 0 ? fuelResult.totalFuelExpense.toFixed(2) : "",
       })
 
-      toast.success(`Found ${loads.length} loads and ${fuelResult.data?.length || 0} fuel expenses`)
+      // Get ELD mileage if available
+      let eldMilesMessage = ""
+      try {
+        const { getELDLogs } = await import("@/app/actions/eld")
+        const eldLogsResult = await getELDLogs({
+          driver_id: formData.driver_id,
+          start_date: formData.periodStart,
+          end_date: formData.periodEnd,
+        })
+        
+        if (eldLogsResult.data) {
+          const eldMiles = eldLogsResult.data
+            .filter((log: any) => log.log_type === "driving" && log.miles_driven)
+            .reduce((sum: number, log: any) => sum + (Number(log.miles_driven) || 0), 0)
+          
+          if (eldMiles > 0) {
+            eldMilesMessage = ` ELD miles: ${eldMiles.toFixed(0)} miles.`
+          }
+        }
+      } catch (error) {
+        // ELD data not available, continue
+      }
+
+      toast.success(
+        `Found ${loads.length} loads and ${fuelResult.data?.length || 0} fuel expenses.${eldMilesMessage} ${calculationBreakdown ? `Calculation: ${calculationBreakdown}` : ""}`,
+        { duration: 7000 }
+      )
     } catch (error: any) {
       toast.error(error.message || "Failed to calculate settlement")
     } finally {
@@ -190,7 +220,13 @@ export default function CreateSettlementPage() {
               <label className="block text-sm font-medium text-foreground mb-2">Driver *</label>
               <Select
                 value={formData.driver_id}
-                onValueChange={(value) => setFormData({ ...formData, driver_id: value, grossPay: "", fuelDeduction: "" })}
+                onValueChange={(value) => {
+                  const driver = drivers.find((d) => d.id === value)
+                  setSelectedDriver(driver || null)
+                  setFormData({ ...formData, driver_id: value, grossPay: "", fuelDeduction: "" })
+                  setSelectedLoads([])
+                  setFuelExpenses([])
+                }}
               >
                 <SelectTrigger className="bg-background border-border">
                   <SelectValue placeholder="Select driver" />
@@ -255,16 +291,59 @@ export default function CreateSettlementPage() {
 
             {selectedLoads.length > 0 && (
               <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
-                <p className="text-sm font-semibold text-foreground mb-2">
-                  ✓ Found {selectedLoads.length} loads for this period
-                </p>
-                <div className="max-h-32 overflow-y-auto space-y-1">
-                  {selectedLoads.map((load) => (
-                    <p key={load.id} className="text-xs text-muted-foreground">
-                      • {load.shipment_number} - ${load.value || 0}
-                    </p>
-                  ))}
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-semibold text-foreground">
+                    ✓ Found {selectedLoads.length} loads for this period
+                  </p>
+                  <span className="text-xs text-muted-foreground">
+                    Total Value: ${selectedLoads.reduce((sum, load) => sum + (Number(load.value) || 0), 0).toFixed(2)}
+                  </span>
                 </div>
+                <div className="max-h-40 overflow-y-auto space-y-2 mt-2">
+                  {selectedLoads.map((load) => {
+                    const payRate = selectedDriver?.pay_rate
+                    let loadPay = 0
+                    if (payRate) {
+                      const payRateNum = Number(payRate) || 0
+                      if (payRateNum <= 1) {
+                        loadPay = (Number(load.value) || 0) * payRateNum
+                      } else {
+                        loadPay = payRateNum
+                      }
+                    }
+                    return (
+                      <div key={load.id} className="flex items-center justify-between text-xs bg-background/50 p-2 rounded">
+                        <div>
+                          <p className="text-foreground font-medium">{load.shipment_number}</p>
+                          <p className="text-muted-foreground">Value: ${load.value || 0}</p>
+                        </div>
+                        {payRate && (
+                          <div className="text-right">
+                            <p className="text-foreground font-medium">${loadPay.toFixed(2)}</p>
+                            <p className="text-muted-foreground text-xs">
+                              {Number(payRate) <= 1 ? `${(Number(payRate) * 100).toFixed(1)}%` : "per load"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                {selectedDriver?.pay_rate && (
+                  <div className="mt-3 pt-3 border-t border-primary/20">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-semibold text-foreground">Gross Pay Calculation:</span>
+                      <span className="text-sm font-bold text-primary">
+                        ${formData.grossPay || "0.00"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {Number(selectedDriver.pay_rate) <= 1
+                        ? `Pay Rate: ${(Number(selectedDriver.pay_rate) * 100).toFixed(1)}% of load value`
+                        : `Pay Rate: $${Number(selectedDriver.pay_rate).toFixed(2)} per load`}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -273,6 +352,16 @@ export default function CreateSettlementPage() {
                 <p className="text-sm font-semibold text-foreground mb-2">
                   ✓ Found {fuelExpenses.length} fuel expenses (Total: ${fuelExpenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0).toFixed(2)})
                 </p>
+                <div className="max-h-32 overflow-y-auto space-y-1 mt-2">
+                  {fuelExpenses.slice(0, 5).map((exp) => (
+                    <p key={exp.id} className="text-xs text-muted-foreground">
+                      • {exp.description || "Fuel expense"} - ${Number(exp.amount).toFixed(2)} ({new Date(exp.date).toLocaleDateString()})
+                    </p>
+                  ))}
+                  {fuelExpenses.length > 5 && (
+                    <p className="text-xs text-muted-foreground">... and {fuelExpenses.length - 5} more</p>
+                  )}
+                </div>
               </div>
             )}
 
