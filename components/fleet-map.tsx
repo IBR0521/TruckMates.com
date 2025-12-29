@@ -1,0 +1,239 @@
+"use client"
+
+import { useEffect, useRef, useState } from "react"
+import { Truck } from "lucide-react"
+
+interface Vehicle {
+  id: string
+  truck_number: string
+  status?: string
+  driver?: { name: string }
+  location?: {
+    latitude: number
+    longitude: number
+    speed?: number
+    heading?: number
+    timestamp: string
+  }
+}
+
+interface FleetMapProps {
+  vehicles: Vehicle[]
+  selectedVehicle: string | null
+  onVehicleClick: (vehicleId: string) => void
+  center: [number, number]
+  zoom: number
+}
+
+declare global {
+  interface Window {
+    google: any
+    initMap: () => void
+  }
+}
+
+export function FleetMap({ vehicles, selectedVehicle, onVehicleClick, center, zoom }: FleetMapProps) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const mapInstanceRef = useRef<any>(null)
+  const markersRef = useRef<Map<string, any>>(new Map())
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Load Google Maps script
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+
+    if (!apiKey) {
+      setLoadError("Google Maps API key not configured. Please set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in .env.local")
+      setIsLoading(false)
+      return
+    }
+
+    // Check if Google Maps is already loaded
+    if (window.google && window.google.maps) {
+      initializeMap()
+      return
+    }
+
+    // Check if script is already being loaded
+    const existingScript = document.querySelector(`script[src*="maps.googleapis.com"]`)
+    if (existingScript) {
+      existingScript.addEventListener("load", initializeMap)
+      return
+    }
+
+    // Load Google Maps script
+    const script = document.createElement("script")
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
+    script.async = true
+    script.defer = true
+    script.onload = initializeMap
+    script.onerror = () => {
+      setLoadError("Failed to load Google Maps. Please check your API key.")
+      setIsLoading(false)
+    }
+    document.head.appendChild(script)
+
+    return () => {
+      // Cleanup: remove script load listener if it exists
+      existingScript?.removeEventListener("load", initializeMap)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (mapInstanceRef.current && vehicles.length > 0) {
+      updateMarkers()
+    }
+  }, [vehicles, selectedVehicle])
+
+  useEffect(() => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.setCenter({ lat: center[0], lng: center[1] })
+      mapInstanceRef.current.setZoom(zoom)
+    }
+  }, [center, zoom])
+
+  const initializeMap = () => {
+    if (!mapRef.current || !window.google) {
+      return
+    }
+
+    try {
+      const map = new window.google.maps.Map(mapRef.current, {
+        center: { lat: center[0], lng: center[1] },
+        zoom: zoom,
+        mapTypeControl: true,
+        streetViewControl: false,
+        fullscreenControl: true,
+        styles: [
+          {
+            featureType: "poi",
+            elementType: "labels",
+            stylers: [{ visibility: "off" }],
+          },
+        ],
+      })
+
+      mapInstanceRef.current = map
+      setIsLoading(false)
+      updateMarkers()
+    } catch (error) {
+      console.error("Error initializing map:", error)
+      setLoadError("Error initializing Google Maps")
+      setIsLoading(false)
+    }
+  }
+
+  const updateMarkers = () => {
+    if (!mapInstanceRef.current || !window.google) return
+
+    const map = mapInstanceRef.current
+
+    // Clear existing markers
+    markersRef.current.forEach((marker) => {
+      marker.setMap(null)
+    })
+    markersRef.current.clear()
+
+    // Add markers for vehicles with locations
+    vehicles.forEach((vehicle) => {
+      if (!vehicle.location) return
+
+      const lat = Number(vehicle.location.latitude)
+      const lng = Number(vehicle.location.longitude)
+      const isSelected = selectedVehicle === vehicle.id
+
+      // Determine marker color based on status
+      let iconColor = "#6B7280" // gray (default)
+      if (vehicle.status === "in_use" || vehicle.status === "in-use") {
+        iconColor = "#10B981" // green
+      } else if (vehicle.status === "maintenance") {
+        iconColor = "#F59E0B" // yellow
+      }
+
+      // Create custom marker icon
+      const icon = {
+        path: window.google.maps.SymbolPath.CIRCLE,
+        fillColor: iconColor,
+        fillOpacity: 1,
+        strokeColor: "#FFFFFF",
+        strokeWeight: 2,
+        scale: isSelected ? 10 : 8,
+      }
+
+      const marker = new window.google.maps.Marker({
+        position: { lat, lng },
+        map: map,
+        icon: icon,
+        title: vehicle.truck_number,
+        zIndex: isSelected ? 1000 : 100,
+      })
+
+      // Create info window
+      const infoContent = `
+        <div style="padding: 8px; min-width: 200px;">
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">
+            ${vehicle.truck_number}
+          </div>
+          ${vehicle.driver ? `<div style="font-size: 12px; color: #6B7280; margin-bottom: 4px;">${vehicle.driver.name}</div>` : ""}
+          ${vehicle.location.speed ? `<div style="font-size: 12px; color: #6B7280;">Speed: ${vehicle.location.speed} mph</div>` : ""}
+          <div style="font-size: 11px; color: #9CA3AF; margin-top: 4px;">
+            ${new Date(vehicle.location.timestamp).toLocaleTimeString()}
+          </div>
+        </div>
+      `
+
+      const infoWindow = new window.google.maps.InfoWindow({
+        content: infoContent,
+      })
+
+      // Show info window if selected
+      if (isSelected) {
+        infoWindow.open(map, marker)
+      }
+
+      // Add click listener
+      marker.addListener("click", () => {
+        onVehicleClick(vehicle.id)
+        infoWindow.open(map, marker)
+      })
+
+      markersRef.current.set(vehicle.id, { marker, infoWindow })
+    })
+  }
+
+  if (loadError) {
+    return (
+      <div className="h-full w-full flex items-center justify-center bg-secondary/20 rounded-lg border border-border">
+        <div className="text-center p-8">
+          <Truck className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-foreground font-medium mb-2">Map Unavailable</p>
+          <p className="text-sm text-muted-foreground">{loadError}</p>
+          <p className="text-xs text-muted-foreground mt-4">
+            To enable the map, add your Google Maps API key to <code className="bg-secondary px-1 rounded">.env.local</code>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="h-full w-full flex items-center justify-center bg-secondary/20 rounded-lg border border-border">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-sm text-muted-foreground">Loading map...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      ref={mapRef}
+      className="h-full w-full rounded-lg"
+      style={{ minHeight: "600px" }}
+    />
+  )
+}
+
