@@ -7,8 +7,16 @@ import { QueryProvider } from "@/components/providers/query-provider"
 import { Toaster } from "sonner"
 import "./globals.css"
 
-const _geist = Geist({ subsets: ["latin"] })
-const _geistMono = Geist_Mono({ subsets: ["latin"] })
+const geist = Geist({ 
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-geist-sans",
+})
+const geistMono = Geist_Mono({ 
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-geist-mono",
+})
 
 export const metadata: Metadata = {
   title: "TruckMates - Fleet Management Dashboard",
@@ -17,11 +25,11 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: "/logo.png",
-        type: "image/png",
+        url: "/icon.svg",
+        type: "image/svg+xml",
       },
     ],
-    apple: "/logo.png",
+    apple: "/apple-icon.png",
   },
 }
 
@@ -32,7 +40,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`font-sans antialiased`}>
+      <body className={`${geist.variable} ${geistMono.variable} font-sans antialiased`}>
         <QueryProvider>
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
             {children}
