@@ -21,12 +21,21 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "TruckMates - Fleet Management Dashboard",
   description: "Professional fleet and logistics management platform for teams",
-  generator: "v0.app",
   icons: {
     icon: [
       {
         url: "/icon.svg",
         type: "image/svg+xml",
+      },
+      {
+        url: "/icon-dark-32x32.png",
+        type: "image/png",
+        sizes: "32x32",
+      },
+      {
+        url: "/icon-light-32x32.png",
+        type: "image/png",
+        sizes: "32x32",
       },
     ],
     apple: "/apple-icon.png",
