@@ -605,7 +605,7 @@ export default function DashboardPage() {
           <Card className="border-border bg-card/50 p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-foreground">Recent Activity</h3>
-              <Link href="/dashboard">
+              <Link href="/dashboard/alerts">
                 <Button variant="ghost" size="sm" className="text-xs">
                   View All
                 </Button>
