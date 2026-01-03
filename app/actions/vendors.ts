@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
 
 // Get all vendors
@@ -8,6 +9,8 @@ export async function getVendors(filters?: {
   status?: string
   vendor_type?: string
   search?: string
+  limit?: number
+  offset?: number
 }) {
   const supabase = await createClient()
 
@@ -19,20 +22,20 @@ export async function getVendors(filters?: {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
+  // Use optimized helper with caching
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+  const companyError = result.error
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  if (companyError || !company_id) {
+    return { error: companyError || "No company found", data: null }
   }
 
+  // Build query with selective columns and pagination
   let query = supabase
     .from("vendors")
-    .select("*")
-    .eq("company_id", userData.company_id)
+    .select("id, name, company_name, email, phone, status, vendor_type, created_at", { count: "exact" })
+    .eq("company_id", company_id)
     .order("created_at", { ascending: false })
 
   if (filters?.status) {
@@ -50,13 +53,18 @@ export async function getVendors(filters?: {
     )
   }
 
-  const { data, error } = await query
+  // Apply pagination (default limit 100)
+  const limit = filters?.limit || 100
+  const offset = filters?.offset || 0
+  query = query.range(offset, offset + limit - 1)
+
+  const { data, error, count } = await query
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: error.message, data: null, count: 0 }
   }
 
-  return { data, error: null }
+  return { data: data || [], error: null, count: count || 0 }
 }
 
 // Get single vendor
@@ -140,20 +148,82 @@ export async function createVendor(formData: {
     return { error: "No company found", data: null }
   }
 
+  // Professional validation
+  if (!validateRequiredString(formData.name, 2, 200)) {
+    return { error: "Vendor name is required and must be between 2 and 200 characters", data: null }
+  }
+
+  if (formData.email && !validateEmail(formData.email)) {
+    return { error: "Invalid email format", data: null }
+  }
+
+  if (formData.phone && !validatePhone(formData.phone)) {
+    return { error: "Invalid phone number format", data: null }
+  }
+
+  if (formData.primary_contact_email && !validateEmail(formData.primary_contact_email)) {
+    return { error: "Invalid primary contact email format", data: null }
+  }
+
+  if (formData.primary_contact_phone && !validatePhone(formData.primary_contact_phone)) {
+    return { error: "Invalid primary contact phone format", data: null }
+  }
+
+  // Validate address if provided
+  if (formData.city || formData.state || formData.zip) {
+    const addressValidation = validateAddress({
+      street: formData.address_line1,
+      city: formData.city,
+      state: formData.state,
+      zip: formData.zip,
+    })
+    if (!addressValidation.valid) {
+      return { error: addressValidation.errors.join("; "), data: null }
+    }
+  }
+
+  // Check for duplicate company name if provided
+  if (formData.company_name) {
+    const { data: existingVendor } = await supabase
+      .from("vendors")
+      .select("id")
+      .eq("company_id", userData.company_id)
+      .eq("company_name", sanitizeString(formData.company_name, 200))
+      .single()
+
+    if (existingVendor) {
+      return { error: "Vendor with this company name already exists", data: null }
+    }
+  }
+
+  // Check for duplicate email if provided
+  if (formData.email) {
+    const { data: existingEmail } = await supabase
+      .from("vendors")
+      .select("id")
+      .eq("company_id", userData.company_id)
+      .eq("email", sanitizeEmail(formData.email))
+      .single()
+
+    if (existingEmail) {
+      return { error: "Vendor with this email already exists", data: null }
+    }
+  }
+
   const { data, error } = await supabase
     .from("vendors")
     .insert({
       company_id: userData.company_id,
-      name: formData.name,
-      company_name: formData.company_name || null,
-      email: formData.email || null,
-      phone: formData.phone || null,
-      website: formData.website || null,
-      address_line1: formData.address_line1 || null,
-      address_line2: formData.address_line2 || null,
-      city: formData.city || null,
-      state: formData.state || null,
-      zip: formData.zip || null,
+      name: sanitizeString(formData.name, 200),
+      company_name: formData.company_name ? sanitizeString(formData.company_name, 200) : null,
+      email: formData.email ? sanitizeEmail(formData.email) : null,
+      phone: formData.phone ? sanitizePhone(formData.phone) : null,
+      website: formData.website ? sanitizeString(formData.website, 200) : null,
+      address_line1: formData.address_line1 ? sanitizeString(formData.address_line1, 200) : null,
+      address_line2: formData.address_line2 ? sanitizeString(formData.address_line2, 200) : null,
+      city: formData.city ? sanitizeString(formData.city, 100) : null,
+      state: formData.state ? sanitizeString(formData.state, 2).toUpperCase() : null,
+      zip: formData.zip ? sanitizeString(formData.zip, 10) : null,
       country: formData.country || "USA",
       tax_id: formData.tax_id || null,
       payment_terms: formData.payment_terms || "Net 30",
@@ -161,11 +231,11 @@ export async function createVendor(formData: {
       vendor_type: formData.vendor_type || "supplier",
       status: formData.status || "active",
       priority: formData.priority || "normal",
-      notes: formData.notes || null,
+      notes: formData.notes ? sanitizeString(formData.notes, 2000) : null,
       tags: formData.tags || [],
-      primary_contact_name: formData.primary_contact_name || null,
-      primary_contact_email: formData.primary_contact_email || null,
-      primary_contact_phone: formData.primary_contact_phone || null,
+      primary_contact_name: formData.primary_contact_name ? sanitizeString(formData.primary_contact_name, 100) : null,
+      primary_contact_email: formData.primary_contact_email ? sanitizeEmail(formData.primary_contact_email) : null,
+      primary_contact_phone: formData.primary_contact_phone ? sanitizePhone(formData.primary_contact_phone) : null,
     })
     .select()
     .single()

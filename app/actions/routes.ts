@@ -1,7 +1,9 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
+import { validateRequiredString, sanitizeString } from "@/lib/validation"
 import { sendNotification } from "./notifications"
 
 // Helper function to send notifications in background (non-blocking)
@@ -46,7 +48,11 @@ async function sendNotificationsForRouteUpdate(routeData: any) {
   }
 }
 
-export async function getRoutes() {
+export async function getRoutes(filters?: {
+  status?: string
+  limit?: number
+  offset?: number
+}) {
   const supabase = await createClient()
 
   const {
@@ -57,27 +63,39 @@ export async function getRoutes() {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
+  // Use optimized helper with caching
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+  const companyError = result.error
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  if (companyError || !company_id) {
+    return { error: companyError || "No company found", data: null }
   }
 
-  const { data: routes, error } = await supabase
+  // Build query with selective columns and pagination
+  let query = supabase
     .from("routes")
-    .select("*")
-    .eq("company_id", userData.company_id)
+    .select("id, name, origin, destination, status, driver_id, truck_id, priority, created_at, updated_at", { count: "exact" })
+    .eq("company_id", company_id)
     .order("created_at", { ascending: false })
 
-  if (error) {
-    return { error: error.message, data: null }
+  // Apply filters
+  if (filters?.status) {
+    query = query.eq("status", filters.status)
   }
 
-  return { data: routes, error: null }
+  // Apply pagination (default limit 100)
+  const limit = filters?.limit || 100
+  const offset = filters?.offset || 0
+  query = query.range(offset, offset + limit - 1)
+
+  const { data: routes, error, count } = await query
+
+  if (error) {
+    return { error: error.message, data: null, count: 0 }
+  }
+
+  return { data: routes || [], error: null, count: count || 0 }
 }
 
 export async function getRoute(id: string) {
@@ -155,23 +173,72 @@ export async function createRoute(formData: {
     return { error: "No company found", data: null }
   }
 
+  // Professional validation
+  if (!validateRequiredString(formData.name, 1, 200)) {
+    return { error: "Route name is required and must be between 1 and 200 characters", data: null }
+  }
+
+  if (!validateRequiredString(formData.origin, 3, 200)) {
+    return { error: "Origin is required and must be between 3 and 200 characters", data: null }
+  }
+
+  if (!validateRequiredString(formData.destination, 3, 200)) {
+    return { error: "Destination is required and must be between 3 and 200 characters", data: null }
+  }
+
+  // Validate driver assignment if provided
+  if (formData.driver_id) {
+    const { data: driver, error: driverError } = await supabase
+      .from("drivers")
+      .select("id, status, company_id")
+      .eq("id", formData.driver_id)
+      .eq("company_id", userData.company_id)
+      .single()
+
+    if (driverError || !driver) {
+      return { error: "Invalid driver selected", data: null }
+    }
+
+    if (driver.status !== "active") {
+      return { error: "Cannot assign inactive driver to route", data: null }
+    }
+  }
+
+  // Validate truck assignment if provided
+  if (formData.truck_id) {
+    const { data: truck, error: truckError } = await supabase
+      .from("trucks")
+      .select("id, status, company_id")
+      .eq("id", formData.truck_id)
+      .eq("company_id", userData.company_id)
+      .single()
+
+    if (truckError || !truck) {
+      return { error: "Invalid truck selected", data: null }
+    }
+
+    if (truck.status !== "available" && truck.status !== "in-use") {
+      return { error: "Cannot assign truck with status: " + truck.status, data: null }
+    }
+  }
+
   // Ensure required fields are present and handle undefined values
   const routeData: any = {
     company_id: userData.company_id,
-    name: formData.name,
-    origin: formData.origin,
-    destination: formData.destination,
+    name: sanitizeString(formData.name, 200),
+    origin: sanitizeString(formData.origin, 200),
+    destination: sanitizeString(formData.destination, 200),
     priority: formData.priority || "normal",
     status: formData.status || "pending",
   }
 
-  // Only add optional fields if they have values
-  if (formData.distance) routeData.distance = formData.distance
-  if (formData.estimated_time) routeData.estimated_time = formData.estimated_time
+  // Only add optional fields if they have values (with sanitization)
+  if (formData.distance) routeData.distance = sanitizeString(formData.distance, 50)
+  if (formData.estimated_time) routeData.estimated_time = sanitizeString(formData.estimated_time, 50)
   if (formData.driver_id) routeData.driver_id = formData.driver_id
   if (formData.truck_id) routeData.truck_id = formData.truck_id
-  if (formData.depot_name) routeData.depot_name = formData.depot_name
-  if (formData.depot_address) routeData.depot_address = formData.depot_address
+  if (formData.depot_name) routeData.depot_name = sanitizeString(formData.depot_name, 200)
+  if (formData.depot_address) routeData.depot_address = sanitizeString(formData.depot_address, 200)
   if (formData.pre_route_time_minutes !== undefined) routeData.pre_route_time_minutes = formData.pre_route_time_minutes
   if (formData.post_route_time_minutes !== undefined) routeData.post_route_time_minutes = formData.post_route_time_minutes
   if (formData.route_start_time) routeData.route_start_time = formData.route_start_time

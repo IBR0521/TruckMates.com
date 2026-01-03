@@ -67,31 +67,26 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           }
         }
         
-        // Fetch truck data first if load has truck_id
-        let assignedTruck = null
+        // Fetch truck data directly by ID if load has truck_id (optimized - no need to fetch all trucks)
         if (loadResult.data.truck_id) {
-          const trucksResult = await getTrucks()
-          if (trucksResult.data) {
-            assignedTruck = trucksResult.data.find((t: any) => t.id === loadResult.data.truck_id)
-            if (assignedTruck) {
-              setTruck(assignedTruck)
-            }
+          const { getTruck } = await import("@/app/actions/trucks")
+          const truckResult = await getTruck(loadResult.data.truck_id)
+          if (truckResult.data) {
+            setTruck(truckResult.data)
           }
         }
         
-        // Fetch related invoice if load is delivered
+        // Fetch related invoice directly by load_id if load is delivered (optimized)
         if (loadResult.data.status === "delivered") {
-          const invoicesResult = await getInvoices()
-          if (invoicesResult.data) {
-            const invoice = invoicesResult.data.find((inv: any) => inv.load_id === id)
-            if (invoice) {
-              setRelatedInvoice(invoice)
-            }
+          const { getInvoices } = await import("@/app/actions/accounting")
+          const invoicesResult = await getInvoices({ load_id: id, limit: 1 })
+          if (invoicesResult.data && invoicesResult.data.length > 0) {
+            setRelatedInvoice(invoicesResult.data[0])
           }
         }
 
-        // Fetch routes to find matching ones
-        const routesResult = await getRoutes()
+        // Fetch routes with limit (optimized - only need a few for matching)
+        const routesResult = await getRoutes({ limit: 50 })
         setRoutesResult(routesResult)
         if (routesResult.data) {
           // Calculate load weight in kg

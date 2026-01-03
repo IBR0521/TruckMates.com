@@ -1,9 +1,11 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
 import { createRoute } from "./routes"
 import { sendNotification } from "./notifications"
+import { validateLoadData, validatePricingData, sanitizeString, sanitizeEmail, sanitizePhone, validateAddress } from "@/lib/validation"
 
 // Helper function to send notifications in background (non-blocking)
 async function sendNotificationsForLoadUpdate(loadData: any) {
@@ -47,53 +49,70 @@ async function sendNotificationsForLoadUpdate(loadData: any) {
   }
 }
 
-export async function getLoads() {
+export async function getLoads(filters?: {
+  status?: string
+  limit?: number
+  offset?: number
+}) {
   try {
     const supabase = await createClient()
 
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser()
 
+    if (authError) {
+      console.error("[getLoads] Auth error:", authError)
+      return { error: "Authentication failed. Please try logging in again.", data: null, count: 0 }
+    }
+
     if (!user) {
-      return { error: "Not authenticated", data: null }
+      return { error: "Not authenticated", data: null, count: 0 }
     }
 
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
+    // Use optimized helper with caching
+    const result = await getCachedUserCompany(user.id)
+    const company_id = result.company_id
+    const companyError = result.error
 
-    if (userError) {
-      console.error("[getLoads] Error fetching user:", userError)
-      return { error: userError.message || "Failed to fetch user data", data: null }
+    if (companyError || !company_id) {
+      return { error: companyError || "No company found", data: null, count: 0 }
     }
 
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
-    }
-
-    const { data: loads, error } = await supabase
+    // Build query with pagination
+    let query = supabase
       .from("loads")
-      .select("*")
-      .eq("company_id", userData.company_id)
+      .select("id, shipment_number, origin, destination, status, driver_id, truck_id, load_date, estimated_delivery, created_at, company_name, value", { count: "exact" })
+      .eq("company_id", company_id)
       .order("created_at", { ascending: false })
+
+    // Apply filters
+    if (filters?.status) {
+      query = query.eq("status", filters.status)
+    }
+
+    // Apply pagination (default limit 100)
+    const limit = filters?.limit || 100
+    const offset = filters?.offset || 0
+    query = query.range(offset, offset + limit - 1)
+
+    const { data: loads, error, count } = await query
 
     if (error) {
       // Check if table doesn't exist
       if (error.code === "42P01" || error.message.includes("does not exist")) {
         console.error("[getLoads] Loads table does not exist")
-        return { data: [], error: null } // Return empty array instead of error
+        return { data: [], error: null, count: 0 } // Return empty array instead of error
       }
       console.error("[getLoads] Error fetching loads:", error)
-      return { error: error.message, data: null }
+      return { error: error.message, data: null, count: 0 }
     }
 
-    return { data: loads || [], error: null }
+    return { data: loads || [], error: null, count: count || 0 }
   } catch (error: any) {
     console.error("[getLoads] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
   }
 }
 
@@ -248,6 +267,114 @@ export async function createLoad(formData: {
     return { error: "No company found", data: null }
   }
 
+  // Professional validation
+  const loadValidation = validateLoadData({
+    origin: formData.origin,
+    destination: formData.destination,
+    weight: formData.weight_kg || formData.weight,
+    value: formData.value,
+    estimated_delivery: formData.estimated_delivery || undefined,
+    load_date: formData.load_date || undefined,
+  })
+
+  if (!loadValidation.valid) {
+    return { error: loadValidation.errors.join("; "), data: null }
+  }
+
+  // Validate pricing data if provided
+  if (formData.rate !== undefined || formData.total_rate !== undefined) {
+    const pricingValidation = validatePricingData({
+      rate: formData.rate,
+      fuel_surcharge: formData.fuel_surcharge,
+      accessorial_charges: formData.accessorial_charges,
+      discount: formData.discount,
+      total_rate: formData.total_rate,
+    })
+
+    if (!pricingValidation.valid) {
+      return { error: pricingValidation.errors.join("; "), data: null }
+    }
+  }
+
+  // Validate driver assignment if provided
+  if (formData.driver_id) {
+    const { data: driver, error: driverError } = await supabase
+      .from("drivers")
+      .select("id, status, company_id")
+      .eq("id", formData.driver_id)
+      .eq("company_id", userData.company_id)
+      .single()
+
+    if (driverError || !driver) {
+      return { error: "Invalid driver selected", data: null }
+    }
+
+    if (driver.status !== "active") {
+      return { error: "Cannot assign inactive driver to load", data: null }
+    }
+  }
+
+  // Validate truck assignment if provided
+  if (formData.truck_id) {
+    const { data: truck, error: truckError } = await supabase
+      .from("trucks")
+      .select("id, status, company_id")
+      .eq("id", formData.truck_id)
+      .eq("company_id", userData.company_id)
+      .single()
+
+    if (truckError || !truck) {
+      return { error: "Invalid truck selected", data: null }
+    }
+
+    if (truck.status !== "available" && truck.status !== "in-use") {
+      return { error: "Cannot assign truck with status: " + truck.status, data: null }
+    }
+  }
+
+  // Validate customer if provided
+  if (formData.customer_id) {
+    const { data: customer, error: customerError } = await supabase
+      .from("customers")
+      .select("id, company_id")
+      .eq("id", formData.customer_id)
+      .eq("company_id", userData.company_id)
+      .single()
+
+    if (customerError || !customer) {
+      return { error: "Invalid customer selected", data: null }
+    }
+  }
+
+  // Auto-generate shipment number if not provided
+  let shipmentNumber = formData.shipment_number
+  if (!shipmentNumber || shipmentNumber.trim() === "") {
+    const { generateLoadNumber } = await import("./number-formats")
+    const numberResult = await generateLoadNumber()
+    if (numberResult.error || !numberResult.data) {
+      return { error: numberResult.error || "Failed to generate load number", data: null }
+    }
+    shipmentNumber = numberResult.data
+  } else {
+    // Sanitize and validate shipment number
+    shipmentNumber = sanitizeString(shipmentNumber, 50).toUpperCase()
+    if (!shipmentNumber) {
+      return { error: "Invalid shipment number", data: null }
+    }
+
+    // Check for duplicate shipment number
+    const { data: existingLoad } = await supabase
+      .from("loads")
+      .select("id")
+      .eq("company_id", userData.company_id)
+      .eq("shipment_number", shipmentNumber)
+      .single()
+
+    if (existingLoad) {
+      return { error: "Shipment number already exists", data: null }
+    }
+  }
+
   let routeId = formData.route_id || null
 
   // If no route is assigned, automatically create one (skip for multi-delivery with "Multiple Locations")
@@ -317,60 +444,78 @@ export async function createLoad(formData: {
     }
   }
 
-  // Build insert data, only including fields that have values
+  // Build insert data with professional sanitization
   const loadData: any = {
     company_id: userData.company_id,
-    shipment_number: formData.shipment_number,
-    origin: formData.origin,
-    destination: formData.destination,
+    shipment_number: shipmentNumber,
+    origin: sanitizeString(formData.origin, 200),
+    destination: sanitizeString(formData.destination, 200),
     status: formData.status || "pending",
     delivery_type: formData.delivery_type || "single",
     total_delivery_points: 1, // Will be updated if delivery points are added
   }
 
-  // Add optional fields only if they have values
-  if (formData.weight) loadData.weight = formData.weight
-  if (formData.weight_kg !== undefined && formData.weight_kg !== null) loadData.weight_kg = formData.weight_kg
-  if (formData.contents) loadData.contents = formData.contents
-  if (formData.value !== undefined && formData.value !== null) loadData.value = formData.value
-  if (formData.carrier_type) loadData.carrier_type = formData.carrier_type
+  // Add optional fields with validation and sanitization
+  if (formData.weight) loadData.weight = sanitizeString(formData.weight, 50)
+  if (formData.weight_kg !== undefined && formData.weight_kg !== null) {
+    const weight = typeof formData.weight_kg === 'string' ? parseFloat(formData.weight_kg) : formData.weight_kg
+    if (!isNaN(weight) && weight > 0) loadData.weight_kg = weight
+  }
+  if (formData.contents) loadData.contents = sanitizeString(formData.contents, 500)
+  if (formData.value !== undefined && formData.value !== null) {
+    const value = typeof formData.value === 'string' ? parseFloat(formData.value) : formData.value
+    if (!isNaN(value) && value >= 0) loadData.value = value
+  }
+  if (formData.carrier_type) loadData.carrier_type = sanitizeString(formData.carrier_type, 50)
   if (formData.driver_id) loadData.driver_id = formData.driver_id
   if (formData.truck_id) loadData.truck_id = formData.truck_id
   if (routeId) loadData.route_id = routeId
   if (formData.load_date) loadData.load_date = formData.load_date
   if (formData.estimated_delivery) loadData.estimated_delivery = formData.estimated_delivery
-  if (formData.company_name) loadData.company_name = formData.company_name
-  if (formData.customer_reference) loadData.customer_reference = formData.customer_reference
+  if (formData.company_name) loadData.company_name = sanitizeString(formData.company_name, 200)
+  if (formData.customer_reference) loadData.customer_reference = sanitizeString(formData.customer_reference, 100)
   if (formData.requires_split_delivery !== undefined) loadData.requires_split_delivery = formData.requires_split_delivery
 
   // New TruckLogics fields
-  if (formData.load_type) loadData.load_type = formData.load_type
+  if (formData.load_type) loadData.load_type = sanitizeString(formData.load_type, 50)
   if (formData.customer_id) loadData.customer_id = formData.customer_id
-  if (formData.bol_number) loadData.bol_number = formData.bol_number
+  if (formData.bol_number) loadData.bol_number = sanitizeString(formData.bol_number, 50)
   
-  // Shipper fields
-  if (formData.shipper_name) loadData.shipper_name = formData.shipper_name
-  if (formData.shipper_address) loadData.shipper_address = formData.shipper_address
-  if (formData.shipper_city) loadData.shipper_city = formData.shipper_city
-  if (formData.shipper_state) loadData.shipper_state = formData.shipper_state
-  if (formData.shipper_zip) loadData.shipper_zip = formData.shipper_zip
-  if (formData.shipper_contact_name) loadData.shipper_contact_name = formData.shipper_contact_name
-  if (formData.shipper_contact_phone) loadData.shipper_contact_phone = formData.shipper_contact_phone
-  if (formData.shipper_contact_email) loadData.shipper_contact_email = formData.shipper_contact_email
+  // Shipper fields with validation
+  if (formData.shipper_name) loadData.shipper_name = sanitizeString(formData.shipper_name, 200)
+  if (formData.shipper_address) loadData.shipper_address = sanitizeString(formData.shipper_address, 200)
+  if (formData.shipper_city) loadData.shipper_city = sanitizeString(formData.shipper_city, 100)
+  if (formData.shipper_state) {
+    const state = sanitizeString(formData.shipper_state, 2).toUpperCase()
+    if (state.length === 2) loadData.shipper_state = state
+  }
+  if (formData.shipper_zip) {
+    const zip = sanitizeString(formData.shipper_zip, 10)
+    if (zip.length >= 5) loadData.shipper_zip = zip
+  }
+  if (formData.shipper_contact_name) loadData.shipper_contact_name = sanitizeString(formData.shipper_contact_name, 100)
+  if (formData.shipper_contact_phone) loadData.shipper_contact_phone = sanitizePhone(formData.shipper_contact_phone)
+  if (formData.shipper_contact_email) loadData.shipper_contact_email = sanitizeEmail(formData.shipper_contact_email)
   if (formData.pickup_time) loadData.pickup_time = formData.pickup_time
   if (formData.pickup_time_window_start) loadData.pickup_time_window_start = formData.pickup_time_window_start
   if (formData.pickup_time_window_end) loadData.pickup_time_window_end = formData.pickup_time_window_end
   if (formData.pickup_instructions) loadData.pickup_instructions = formData.pickup_instructions
   
-  // Consignee fields
-  if (formData.consignee_name) loadData.consignee_name = formData.consignee_name
-  if (formData.consignee_address) loadData.consignee_address = formData.consignee_address
-  if (formData.consignee_city) loadData.consignee_city = formData.consignee_city
-  if (formData.consignee_state) loadData.consignee_state = formData.consignee_state
-  if (formData.consignee_zip) loadData.consignee_zip = formData.consignee_zip
-  if (formData.consignee_contact_name) loadData.consignee_contact_name = formData.consignee_contact_name
-  if (formData.consignee_contact_phone) loadData.consignee_contact_phone = formData.consignee_contact_phone
-  if (formData.consignee_contact_email) loadData.consignee_contact_email = formData.consignee_contact_email
+  // Consignee fields with validation
+  if (formData.consignee_name) loadData.consignee_name = sanitizeString(formData.consignee_name, 200)
+  if (formData.consignee_address) loadData.consignee_address = sanitizeString(formData.consignee_address, 200)
+  if (formData.consignee_city) loadData.consignee_city = sanitizeString(formData.consignee_city, 100)
+  if (formData.consignee_state) {
+    const state = sanitizeString(formData.consignee_state, 2).toUpperCase()
+    if (state.length === 2) loadData.consignee_state = state
+  }
+  if (formData.consignee_zip) {
+    const zip = sanitizeString(formData.consignee_zip, 10)
+    if (zip.length >= 5) loadData.consignee_zip = zip
+  }
+  if (formData.consignee_contact_name) loadData.consignee_contact_name = sanitizeString(formData.consignee_contact_name, 100)
+  if (formData.consignee_contact_phone) loadData.consignee_contact_phone = sanitizePhone(formData.consignee_contact_phone)
+  if (formData.consignee_contact_email) loadData.consignee_contact_email = sanitizeEmail(formData.consignee_contact_email)
   if (formData.delivery_time) loadData.delivery_time = formData.delivery_time
   if (formData.delivery_time_window_start) loadData.delivery_time_window_start = formData.delivery_time_window_start
   if (formData.delivery_time_window_end) loadData.delivery_time_window_end = formData.delivery_time_window_end
@@ -406,9 +551,12 @@ export async function createLoad(formData: {
   if (formData.estimated_profit !== undefined && formData.estimated_profit !== null) loadData.estimated_profit = formData.estimated_profit
   if (formData.estimated_revenue !== undefined && formData.estimated_revenue !== null) loadData.estimated_revenue = formData.estimated_revenue
   
-  // Notes
-  if (formData.notes) loadData.notes = formData.notes
-  if (formData.internal_notes) loadData.internal_notes = formData.internal_notes
+  // Notes with sanitization
+  if (formData.notes) loadData.notes = sanitizeString(formData.notes, 2000)
+  if (formData.internal_notes) loadData.internal_notes = sanitizeString(formData.internal_notes, 2000)
+  if (formData.special_instructions) loadData.special_instructions = sanitizeString(formData.special_instructions, 1000)
+  if (formData.pickup_instructions) loadData.pickup_instructions = sanitizeString(formData.pickup_instructions, 1000)
+  if (formData.delivery_instructions) loadData.delivery_instructions = sanitizeString(formData.delivery_instructions, 1000)
 
   const { data, error } = await supabase
     .from("loads")
@@ -418,6 +566,40 @@ export async function createLoad(formData: {
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  // Auto-schedule check calls if load has driver
+  if (data.driver_id) {
+    try {
+      const { scheduleCheckCallsForLoad } = await import("./check-calls")
+      await scheduleCheckCallsForLoad(data.id).catch((err) => {
+        console.warn("[createLoad] Check calls scheduling failed (table may not exist):", err.message)
+      })
+    } catch (err: any) {
+      console.warn("[createLoad] Failed to import check-calls:", err.message)
+    }
+  }
+
+  // Trigger alert for new load creation
+  try {
+    const { createAlert } = await import("./alerts")
+    await createAlert({
+      title: `New Load Created: ${shipmentNumber}`,
+      message: `Load ${shipmentNumber} from ${formData.origin} to ${formData.destination} has been created`,
+      event_type: "load_created",
+      priority: "normal",
+      load_id: data.id,
+      metadata: {
+        shipment_number: shipmentNumber,
+        origin: formData.origin,
+        destination: formData.destination,
+        status: data.status,
+      },
+    }).catch((err) => {
+      console.warn("[createLoad] Alert creation failed (table may not exist):", err.message)
+    })
+  } catch (error) {
+    console.error("[AUTO-ALERT] Failed to create alert:", error)
   }
 
   revalidatePath("/dashboard/loads")
@@ -571,6 +753,39 @@ export async function updateLoad(
     sendNotificationsForLoadUpdate(data).catch((error) => {
       console.error("[NOTIFICATION] Failed to send load update notifications:", error)
     })
+  }
+
+  // Trigger alert on status change
+  if (formData.status && updateData.status) {
+    try {
+      const { createAlert } = await import("./alerts")
+      await createAlert({
+        title: `Load Status Changed: ${data.shipment_number}`,
+        message: `Load ${data.shipment_number} status changed to ${formData.status}`,
+        event_type: "load_status_change",
+        priority: formData.status === "delivered" ? "high" : "normal",
+        load_id: id,
+        metadata: {
+          shipment_number: data.shipment_number,
+          old_status: data.status,
+          new_status: formData.status,
+        },
+      }).catch((err) => {
+        console.warn("[updateLoad] Alert creation failed (table may not exist):", err.message)
+      })
+    } catch (err: any) {
+      console.warn("[updateLoad] Failed to import alerts:", err.message)
+    }
+  }
+
+  // Auto-schedule check calls if driver was just assigned
+  if (formData.driver_id && !data.driver_id) {
+    try {
+      const { scheduleCheckCallsForLoad } = await import("./check-calls")
+      await scheduleCheckCallsForLoad(id)
+    } catch (error) {
+      console.error("[AUTO-CHECK-CALLS] Failed to schedule check calls:", error)
+    }
   }
 
   revalidatePath("/dashboard/loads")

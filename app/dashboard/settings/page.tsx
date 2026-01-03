@@ -203,19 +203,11 @@ export default function SettingsPage() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center justify-between">
+      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Settings</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage your account and company settings</p>
         </div>
-        {isManager && (
-          <Link href="/account-setup/manager">
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              <UserPlus className="w-4 h-4 mr-2" />
-              Add Employee
-            </Button>
-          </Link>
-        )}
       </div>
 
       {/* Content */}

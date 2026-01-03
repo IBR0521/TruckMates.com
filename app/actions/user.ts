@@ -3,29 +3,48 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 
-// Get current user profile
+// Get current user profile (with timeout protection)
 export async function getUserProfile() {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    // Add timeout to auth check
+    const authPromise = supabase.auth.getUser()
+    const authTimeout = new Promise((resolve) => {
+      setTimeout(() => resolve({ data: { user: null } }), 1000) // 1 second timeout
+    })
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+    const authResult = await Promise.race([authPromise, authTimeout]) as any
+    const user = authResult?.data?.user
+
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    // Add timeout to user query
+    const userQueryPromise = supabase
+      .from("users")
+      .select("id, email, full_name, phone, role, company_id")
+      .eq("id", user.id)
+      .single()
+
+    const userQueryTimeout = new Promise((resolve) => {
+      setTimeout(() => resolve({ data: null, error: { message: "Query timeout" } }), 1000) // 1 second timeout
+    })
+
+    const { data: userData, error } = await Promise.race([
+      userQueryPromise,
+      userQueryTimeout
+    ]) as any
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    return { data: userData, error: null }
+  } catch (error: any) {
+    return { error: error?.message || "Failed to get user profile", data: null }
   }
-
-  const { data: userData, error } = await supabase
-    .from("users")
-    .select("id, email, full_name, phone, role, company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  return { data: userData, error: null }
 }
 
 // Alias for backward compatibility

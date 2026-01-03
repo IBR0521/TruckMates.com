@@ -1,9 +1,15 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
+import { validateDriverData, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
 
-export async function getDrivers() {
+export async function getDrivers(filters?: {
+  status?: string
+  limit?: number
+  offset?: number
+}) {
   const supabase = await createClient()
 
   // Get current user
@@ -16,29 +22,39 @@ export async function getDrivers() {
     return { error: "Not authenticated", data: null }
   }
 
-  // Get user's company_id
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
+  // Use optimized helper with caching
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+  const companyError = result.error
 
-  if (userError || !userData?.company_id) {
-    return { error: "No company found", data: null }
+  if (companyError || !company_id) {
+    return { error: companyError || "No company found", data: null }
   }
 
-  // Get drivers for this company
-  const { data: drivers, error } = await supabase
+  // Build query with selective columns and pagination
+  let query = supabase
     .from("drivers")
-    .select("*")
-    .eq("company_id", userData.company_id)
+    .select("id, name, email, phone, status, license_number, license_state, license_expiry, truck_id, created_at", { count: "exact" })
+    .eq("company_id", company_id)
     .order("created_at", { ascending: false })
 
-  if (error) {
-    return { error: error.message, data: null }
+  // Apply filters
+  if (filters?.status) {
+    query = query.eq("status", filters.status)
   }
 
-  return { data: drivers, error: null }
+  // Apply pagination (default limit 100)
+  const limit = filters?.limit || 100
+  const offset = filters?.offset || 0
+  query = query.range(offset, offset + limit - 1)
+
+  const { data: drivers, error, count } = await query
+
+  if (error) {
+    return { error: error.message, data: null, count: 0 }
+  }
+
+  return { data: drivers || [], error: null, count: count || 0 }
 }
 
 export async function getDriver(id: string) {
@@ -115,32 +131,95 @@ export async function createDriver(formData: {
     return { error: "No company found", data: null }
   }
 
-  // Build insert data, only including fields that have values
+  // Professional validation
+  const driverValidation = validateDriverData({
+    name: formData.name,
+    email: formData.email,
+    phone: formData.phone,
+    license_number: formData.license_number,
+    license_state: formData.license_state,
+    license_expiry: formData.license_expiry || undefined,
+  })
+
+  if (!driverValidation.valid) {
+    return { error: driverValidation.errors.join("; "), data: null }
+  }
+
+  // Check for duplicate email if provided
+  if (formData.email) {
+    const { data: existingDriver } = await supabase
+      .from("drivers")
+      .select("id")
+      .eq("company_id", userData.company_id)
+      .eq("email", sanitizeEmail(formData.email))
+      .single()
+
+    if (existingDriver) {
+      return { error: "Driver with this email already exists", data: null }
+    }
+  }
+
+  // Check for duplicate license number if provided
+  if (formData.license_number) {
+    const { data: existingLicense } = await supabase
+      .from("drivers")
+      .select("id")
+      .eq("company_id", userData.company_id)
+      .eq("license_number", sanitizeString(formData.license_number, 20).toUpperCase())
+      .single()
+
+    if (existingLicense) {
+      return { error: "Driver with this license number already exists", data: null }
+    }
+  }
+
+  // Validate truck assignment if provided
+  if (formData.truck_id) {
+    const { data: truck, error: truckError } = await supabase
+      .from("trucks")
+      .select("id, status, company_id, current_driver_id")
+      .eq("id", formData.truck_id)
+      .eq("company_id", userData.company_id)
+      .single()
+
+    if (truckError || !truck) {
+      return { error: "Invalid truck selected", data: null }
+    }
+
+    if (truck.current_driver_id && truck.current_driver_id !== formData.truck_id) {
+      return { error: "Truck is already assigned to another driver", data: null }
+    }
+  }
+
+  // Build insert data with professional sanitization
   const driverData: any = {
     company_id: userData.company_id,
-    name: formData.name,
+    name: sanitizeString(formData.name, 100),
     status: formData.status || "active",
   }
 
-  // Add optional fields only if they have values
-  if (formData.email) driverData.email = formData.email
-  if (formData.phone) driverData.phone = formData.phone
-  if (formData.address) driverData.address = formData.address
-  if (formData.city) driverData.city = formData.city
-  if (formData.state) driverData.state = formData.state
-  if (formData.zip) driverData.zip = formData.zip
-  if (formData.license_number) driverData.license_number = formData.license_number
-  if (formData.license_state) driverData.license_state = formData.license_state
+  // Add optional fields with validation and sanitization
+  if (formData.email) driverData.email = sanitizeEmail(formData.email)
+  if (formData.phone) driverData.phone = sanitizePhone(formData.phone)
+  // Note: address, city, state, zip are not in the drivers table schema
+  if (formData.license_number) driverData.license_number = sanitizeString(formData.license_number, 20).toUpperCase()
+  if (formData.license_state) {
+    const state = sanitizeString(formData.license_state, 2).toUpperCase()
+    if (state.length === 2) driverData.license_state = state
+  }
   if (formData.license_expiry) driverData.license_expiry = formData.license_expiry
   if (formData.date_of_birth) driverData.date_of_birth = formData.date_of_birth
-  if (formData.emergency_contact_name) driverData.emergency_contact_name = formData.emergency_contact_name
-  if (formData.emergency_contact_phone) driverData.emergency_contact_phone = formData.emergency_contact_phone
-  if (formData.emergency_contact_relationship) driverData.emergency_contact_relationship = formData.emergency_contact_relationship
+  if (formData.emergency_contact_name) driverData.emergency_contact_name = sanitizeString(formData.emergency_contact_name, 100)
+  if (formData.emergency_contact_phone) driverData.emergency_contact_phone = sanitizePhone(formData.emergency_contact_phone)
+  if (formData.emergency_contact_relationship) driverData.emergency_contact_relationship = sanitizeString(formData.emergency_contact_relationship, 50)
   if (formData.hire_date) driverData.hire_date = formData.hire_date
-  if (formData.pay_rate_type) driverData.pay_rate_type = formData.pay_rate_type
-  if (formData.pay_rate !== undefined) driverData.pay_rate = formData.pay_rate || null
+  if (formData.pay_rate_type) driverData.pay_rate_type = sanitizeString(formData.pay_rate_type, 50)
+  if (formData.pay_rate !== undefined && formData.pay_rate !== null) {
+    const rate = typeof formData.pay_rate === 'string' ? parseFloat(formData.pay_rate) : formData.pay_rate
+    if (!isNaN(rate) && rate >= 0) driverData.pay_rate = rate
+  }
   if (formData.truck_id) driverData.truck_id = formData.truck_id
-  if (formData.notes) driverData.notes = formData.notes
+  if (formData.notes) driverData.notes = sanitizeString(formData.notes, 2000)
 
   const { data, error } = await supabase
     .from("drivers")

@@ -15,17 +15,23 @@ export default function DashboardLayout({
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
-  // Load sidebar collapse state from localStorage (only on desktop)
+  // Load sidebar collapse state from localStorage (only on desktop) - client only
   useEffect(() => {
-    const saved = localStorage.getItem("sidebarCollapsed")
-    if (saved !== null && window.innerWidth >= 1024) {
-      setSidebarCollapsed(JSON.parse(saved))
+    setMounted(true)
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("sidebarCollapsed")
+      if (saved !== null && window.innerWidth >= 1024) {
+        setSidebarCollapsed(JSON.parse(saved))
+      }
     }
   }, [])
 
-  // Save sidebar collapse state to localStorage and handle resize
+  // Save sidebar collapse state to localStorage and handle resize - client only
   useEffect(() => {
+    if (!mounted || typeof window === "undefined") return
+
     const handleResize = () => {
       // On mobile/tablet (below lg breakpoint), always show full sidebar
       if (window.innerWidth < 1024) {
@@ -41,7 +47,7 @@ export default function DashboardLayout({
     }
 
     return () => window.removeEventListener("resize", handleResize)
-  }, [sidebarCollapsed])
+  }, [sidebarCollapsed, mounted])
 
   return (
     <div className="flex h-screen bg-background">

@@ -346,13 +346,16 @@ export async function getELDLogs(filters?: {
     query = query.eq("log_type", filters.log_type)
   }
 
-  const { data: logs, error } = await query.limit(1000)
+  // Apply pagination (default limit 100, max 500 for performance)
+  const limit = Math.min(filters?.limit || 100, 500)
+  const offset = filters?.offset || 0
+  const { data: logs, error, count } = await query.range(offset, offset + limit - 1)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: error.message, data: null, count: 0 }
   }
 
-  return { data: logs, error: null }
+  return { data: logs || [], error: null, count: count || 0 }
 }
 
 // Get ELD events/alerts
@@ -431,13 +434,16 @@ export async function getELDEvents(filters?: {
     query = query.lte("event_time", filters.end_date)
   }
 
-  const { data: events, error } = await query.limit(500)
+  // Apply pagination (default limit 100, max 500)
+  const limit = Math.min(filters?.limit || 100, 500)
+  const offset = filters?.offset || 0
+  const { data: events, error, count } = await query.range(offset, offset + limit - 1)
 
   if (error) {
     return { error: error.message, data: null }
   }
 
-  return { data: events, error: null }
+  return { data: events || [], error: null, count: count || 0 }
 }
 
 // Get ELD mileage data for IFTA reports

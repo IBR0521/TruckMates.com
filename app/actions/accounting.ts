@@ -2,8 +2,15 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { validatePricingData, validateNonNegativeNumber, sanitizeString, validateDate } from "@/lib/validation"
 
-export async function getInvoices() {
+export async function getInvoices(filters?: {
+  load_id?: string
+  status?: string
+  limit?: number
+  offset?: number
+}) {
   const supabase = await createClient()
 
   const {
@@ -14,27 +21,42 @@ export async function getInvoices() {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
+  // Use optimized helper with caching
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+  const companyError = result.error
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  if (companyError || !company_id) {
+    return { error: companyError || "No company found", data: null }
   }
 
-  const { data: invoices, error } = await supabase
+  // Build query with selective columns and pagination
+  let query = supabase
     .from("invoices")
-    .select("*")
-    .eq("company_id", userData.company_id)
+    .select("id, invoice_number, customer_name, amount, status, issue_date, due_date, load_id, created_at", { count: "exact" })
+    .eq("company_id", company_id)
     .order("created_at", { ascending: false })
 
-  if (error) {
-    return { error: error.message, data: null }
+  // Apply filters
+  if (filters?.load_id) {
+    query = query.eq("load_id", filters.load_id)
+  }
+  if (filters?.status) {
+    query = query.eq("status", filters.status)
   }
 
-  return { data: invoices, error: null }
+  // Apply pagination (default limit 100)
+  const limit = filters?.limit || 100
+  const offset = filters?.offset || 0
+  query = query.range(offset, offset + limit - 1)
+
+  const { data: invoices, error, count } = await query
+
+  if (error) {
+    return { error: error.message, data: null, count: 0 }
+  }
+
+  return { data: invoices || [], error: null, count: count || 0 }
 }
 
 // Get single invoice
@@ -211,22 +233,68 @@ export async function createInvoice(formData: {
     return { error: "No company found", data: null }
   }
 
-  // Generate invoice number
-  const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}`
+  // Professional validation
+  if (!validateRequiredString(formData.customer_name, 2, 200)) {
+    return { error: "Customer name is required and must be between 2 and 200 characters", data: null }
+  }
+
+  if (!validateNonNegativeNumber(formData.amount)) {
+    return { error: "Amount must be a non-negative number", data: null }
+  }
+
+  if (formData.amount <= 0) {
+    return { error: "Invoice amount must be greater than 0", data: null }
+  }
+
+  if (!validateDate(formData.issue_date)) {
+    return { error: "Invalid issue date format (use YYYY-MM-DD)", data: null }
+  }
+
+  if (!validateDate(formData.due_date)) {
+    return { error: "Invalid due date format (use YYYY-MM-DD)", data: null }
+  }
+
+  const issueDate = new Date(formData.issue_date)
+  const dueDate = new Date(formData.due_date)
+  if (dueDate < issueDate) {
+    return { error: "Due date must be after or equal to issue date", data: null }
+  }
+
+  // Validate load if provided
+  if (formData.load_id) {
+    const { data: load, error: loadError } = await supabase
+      .from("loads")
+      .select("id, company_id")
+      .eq("id", formData.load_id)
+      .eq("company_id", userData.company_id)
+      .single()
+
+    if (loadError || !load) {
+      return { error: "Invalid load selected", data: null }
+    }
+  }
+
+  // Generate invoice number using format system
+  const { generateInvoiceNumber } = await import("./number-formats")
+  const numberResult = await generateInvoiceNumber()
+  if (numberResult.error || !numberResult.data) {
+    return { error: numberResult.error || "Failed to generate invoice number", data: null }
+  }
+  const invoiceNumber = numberResult.data
 
   const { data, error } = await supabase
     .from("invoices")
     .insert({
       company_id: userData.company_id,
       invoice_number: invoiceNumber,
-      customer_name: formData.customer_name,
+      customer_name: sanitizeString(formData.customer_name, 200),
       load_id: formData.load_id || null,
-      amount: formData.amount,
+      amount: typeof formData.amount === 'string' ? parseFloat(formData.amount) : formData.amount,
       status: "pending",
       issue_date: formData.issue_date,
       due_date: formData.due_date,
-      payment_terms: formData.payment_terms || "Net 30",
-      description: formData.description || null,
+      payment_terms: formData.payment_terms ? sanitizeString(formData.payment_terms, 50) : "Net 30",
+      description: formData.description ? sanitizeString(formData.description, 2000) : null,
       items: formData.items || null,
     })
     .select()
@@ -311,6 +379,82 @@ export async function createExpense(formData: {
     return { error: "No company found", data: null }
   }
 
+  // Professional validation
+  if (!validateRequiredString(formData.category, 1, 100)) {
+    return { error: "Category is required and must be between 1 and 100 characters", data: null }
+  }
+
+  if (!validateRequiredString(formData.description, 3, 500)) {
+    return { error: "Description is required and must be between 3 and 500 characters", data: null }
+  }
+
+  if (!validateNonNegativeNumber(formData.amount)) {
+    return { error: "Amount must be a non-negative number", data: null }
+  }
+
+  if (formData.amount <= 0) {
+    return { error: "Expense amount must be greater than 0", data: null }
+  }
+
+  if (!validateDate(formData.date)) {
+    return { error: "Invalid date format (use YYYY-MM-DD)", data: null }
+  }
+
+  if (formData.mileage !== undefined && formData.mileage !== null) {
+    if (!validateNonNegativeNumber(formData.mileage)) {
+      return { error: "Mileage must be a non-negative number", data: null }
+    }
+  }
+
+  if (formData.fuel_level_after !== undefined && formData.fuel_level_after !== null) {
+    const fuel = typeof formData.fuel_level_after === 'string' ? parseFloat(formData.fuel_level_after) : formData.fuel_level_after
+    if (isNaN(fuel) || fuel < 0 || fuel > 100) {
+      return { error: "Fuel level must be between 0 and 100", data: null }
+    }
+  }
+
+  // Validate driver if provided
+  if (formData.driver_id) {
+    const { data: driver, error: driverError } = await supabase
+      .from("drivers")
+      .select("id, company_id")
+      .eq("id", formData.driver_id)
+      .eq("company_id", userData.company_id)
+      .single()
+
+    if (driverError || !driver) {
+      return { error: "Invalid driver selected", data: null }
+    }
+  }
+
+  // Validate truck if provided
+  if (formData.truck_id) {
+    const { data: truck, error: truckError } = await supabase
+      .from("trucks")
+      .select("id, company_id")
+      .eq("id", formData.truck_id)
+      .eq("company_id", userData.company_id)
+      .single()
+
+    if (truckError || !truck) {
+      return { error: "Invalid truck selected", data: null }
+    }
+  }
+
+  // Validate vendor if provided
+  if (formData.vendor) {
+    const { data: vendor, error: vendorError } = await supabase
+      .from("vendors")
+      .select("id, company_id")
+      .eq("id", formData.vendor)
+      .eq("company_id", userData.company_id)
+      .single()
+
+    if (vendorError || !vendor) {
+      return { error: "Invalid vendor selected", data: null }
+    }
+  }
+
   // Try to auto-link to route/load based on date, driver, and truck
   let linkedRouteId = null
   let linkedLoadId = null
@@ -362,17 +506,20 @@ export async function createExpense(formData: {
     .from("expenses")
     .insert({
       company_id: userData.company_id,
-      category: formData.category.toLowerCase(),
-      description: formData.description,
-      amount: formData.amount,
+      category: sanitizeString(formData.category, 100).toLowerCase(),
+      description: sanitizeString(formData.description, 500),
+      amount: typeof formData.amount === 'string' ? parseFloat(formData.amount) : formData.amount,
       date: formData.date,
       vendor: formData.vendor || null,
       driver_id: formData.driver_id || null,
       truck_id: formData.truck_id || null,
-      mileage: formData.mileage || null,
-      payment_method: formData.payment_method || null,
-      receipt_url: formData.receipt_url || null,
+      mileage: formData.mileage ? (typeof formData.mileage === 'string' ? parseFloat(formData.mileage) : formData.mileage) : null,
+      payment_method: formData.payment_method ? sanitizeString(formData.payment_method, 50) : null,
+      receipt_url: formData.receipt_url ? sanitizeString(formData.receipt_url, 500) : null,
       has_receipt: formData.has_receipt || false,
+      fuel_level_after: formData.fuel_level_after ? (typeof formData.fuel_level_after === 'string' ? parseFloat(formData.fuel_level_after) : formData.fuel_level_after) : null,
+      route_id: linkedRouteId,
+      load_id: linkedLoadId,
     })
     .select()
     .single()

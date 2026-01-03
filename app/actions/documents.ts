@@ -2,8 +2,12 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { getCachedUserCompany } from "@/lib/query-optimizer"
 
-export async function getDocuments() {
+export async function getDocuments(filters?: {
+  limit?: number
+  offset?: number
+}) {
   const supabase = await createClient()
 
   const {
@@ -14,27 +18,31 @@ export async function getDocuments() {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
+  // Use optimized helper with caching
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+  const companyError = result.error
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  if (companyError || !company_id) {
+    return { error: companyError || "No company found", data: null }
   }
 
-  const { data: documents, error } = await supabase
+  // Build query with pagination
+  const limit = filters?.limit || 100
+  const offset = filters?.offset || 0
+
+  const { data: documents, error, count } = await supabase
     .from("documents")
-    .select("*")
-    .eq("company_id", userData.company_id)
-    .order("created_at", { ascending: false })
+    .select("id, file_name, file_type, file_size, upload_date, company_id, load_id, route_id", { count: "exact" })
+    .eq("company_id", company_id)
+    .order("upload_date", { ascending: false })
+    .range(offset, offset + limit - 1)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: error.message, data: null, count: 0 }
   }
 
-  return { data: documents, error: null }
+  return { data: documents || [], error: null, count: count || 0 }
 }
 
 export async function deleteDocument(id: string) {

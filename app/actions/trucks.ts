@@ -1,9 +1,15 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
+import { validateTruckData, sanitizeString } from "@/lib/validation"
 
-export async function getTrucks() {
+export async function getTrucks(filters?: {
+  status?: string
+  limit?: number
+  offset?: number
+}) {
   const supabase = await createClient()
 
   const {
@@ -14,27 +20,39 @@ export async function getTrucks() {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
+  // Use optimized helper with caching
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+  const companyError = result.error
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  if (companyError || !company_id) {
+    return { error: companyError || "No company found", data: null }
   }
 
-  const { data: trucks, error } = await supabase
+  // Build query with selective columns and pagination
+  let query = supabase
     .from("trucks")
-    .select("*")
-    .eq("company_id", userData.company_id)
+    .select("id, truck_number, make, model, year, status, current_driver_id, mileage, fuel_level, created_at", { count: "exact" })
+    .eq("company_id", company_id)
     .order("created_at", { ascending: false })
 
-  if (error) {
-    return { error: error.message, data: null }
+  // Apply filters
+  if (filters?.status) {
+    query = query.eq("status", filters.status)
   }
 
-  return { data: trucks, error: null }
+  // Apply pagination (default limit 100)
+  const limit = filters?.limit || 100
+  const offset = filters?.offset || 0
+  query = query.range(offset, offset + limit - 1)
+
+  const { data: trucks, error, count } = await query
+
+  if (error) {
+    return { error: error.message, data: null, count: 0 }
+  }
+
+  return { data: trucks || [], error: null, count: count || 0 }
 }
 
 export async function getTruck(id: string) {
@@ -119,23 +137,114 @@ export async function createTruck(formData: {
     return { error: "No company found", data: null }
   }
 
-  // Build insert data, only including fields that have values
+  // Professional validation
+  const truckValidation = validateTruckData({
+    truck_number: formData.truck_number,
+    vin: formData.vin,
+    license_plate: formData.license_plate,
+    year: formData.year,
+    mileage: formData.mileage,
+  })
+
+  if (!truckValidation.valid) {
+    return { error: truckValidation.errors.join("; "), data: null }
+  }
+
+  // Check for duplicate truck number
+  const { data: existingTruck } = await supabase
+    .from("trucks")
+    .select("id")
+    .eq("company_id", userData.company_id)
+    .eq("truck_number", sanitizeString(formData.truck_number, 50).toUpperCase())
+    .single()
+
+  if (existingTruck) {
+    return { error: "Truck number already exists", data: null }
+  }
+
+  // Check for duplicate VIN if provided
+  if (formData.vin) {
+    const { data: existingVIN } = await supabase
+      .from("trucks")
+      .select("id")
+      .eq("company_id", userData.company_id)
+      .eq("vin", sanitizeString(formData.vin, 17).toUpperCase())
+      .single()
+
+    if (existingVIN) {
+      return { error: "VIN already exists in the system", data: null }
+    }
+  }
+
+  // Check for duplicate license plate if provided
+  if (formData.license_plate) {
+    const { data: existingPlate } = await supabase
+      .from("trucks")
+      .select("id")
+      .eq("company_id", userData.company_id)
+      .eq("license_plate", sanitizeString(formData.license_plate, 20).toUpperCase())
+      .single()
+
+    if (existingPlate) {
+      return { error: "License plate already exists in the system", data: null }
+    }
+  }
+
+  // Validate driver assignment if provided
+  if (formData.current_driver_id) {
+    const { data: driver, error: driverError } = await supabase
+      .from("drivers")
+      .select("id, status, company_id, truck_id")
+      .eq("id", formData.current_driver_id)
+      .eq("company_id", userData.company_id)
+      .single()
+
+    if (driverError || !driver) {
+      return { error: "Invalid driver selected", data: null }
+    }
+
+    if (driver.status !== "active") {
+      return { error: "Cannot assign inactive driver to truck", data: null }
+    }
+
+    if (driver.truck_id && driver.truck_id !== formData.current_driver_id) {
+      return { error: "Driver is already assigned to another truck", data: null }
+    }
+  }
+
+  // Build insert data with professional sanitization
   const truckData: any = {
     company_id: userData.company_id,
-    truck_number: formData.truck_number,
+    truck_number: sanitizeString(formData.truck_number, 50).toUpperCase(),
     status: formData.status || "available",
   }
 
-  // Add optional fields only if they have values
-  if (formData.make) truckData.make = formData.make
-  if (formData.model) truckData.model = formData.model
-  if (formData.year !== undefined && formData.year !== null) truckData.year = formData.year
-  if (formData.vin) truckData.vin = formData.vin
-  if (formData.license_plate) truckData.license_plate = formData.license_plate
+  // Add optional fields with validation and sanitization
+  if (formData.make) truckData.make = sanitizeString(formData.make, 50)
+  if (formData.model) truckData.model = sanitizeString(formData.model, 50)
+  if (formData.year !== undefined && formData.year !== null) {
+    const currentYear = new Date().getFullYear()
+    const year = typeof formData.year === 'string' ? parseInt(formData.year) : formData.year
+    if (!isNaN(year) && year >= 1900 && year <= currentYear + 1) {
+      truckData.year = year
+    }
+  }
+  if (formData.vin) truckData.vin = sanitizeString(formData.vin, 17).toUpperCase()
+  if (formData.license_plate) truckData.license_plate = sanitizeString(formData.license_plate, 20).toUpperCase()
   if (formData.current_driver_id) truckData.current_driver_id = formData.current_driver_id
-  if (formData.current_location) truckData.current_location = formData.current_location
-  if (formData.fuel_level !== undefined && formData.fuel_level !== null) truckData.fuel_level = formData.fuel_level
-  if (formData.mileage !== undefined && formData.mileage !== null) truckData.mileage = formData.mileage
+  if (formData.current_location) truckData.current_location = sanitizeString(formData.current_location, 200)
+  if (formData.fuel_level !== undefined && formData.fuel_level !== null) {
+    const fuel = typeof formData.fuel_level === 'string' ? parseFloat(formData.fuel_level) : formData.fuel_level
+    if (!isNaN(fuel) && fuel >= 0 && fuel <= 100) {
+      truckData.fuel_level = fuel
+    }
+  }
+  if (formData.mileage !== undefined && formData.mileage !== null) {
+    const mileage = typeof formData.mileage === 'string' ? parseFloat(formData.mileage) : formData.mileage
+    if (!isNaN(mileage) && mileage >= 0) {
+      truckData.mileage = mileage
+    }
+  }
   
   // Extended TruckLogics fields
   if (formData.height) truckData.height = formData.height

@@ -31,11 +31,38 @@ export async function updateSession(request: NextRequest) {
   // supabase.auth.getUser(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Add timeout protection to prevent hanging (2 seconds - more lenient)
+  // If timeout occurs, allow request to continue - let the page handle auth
+  let user = null
+  let authCheckCompleted = false
+  try {
+    const getUserPromise = supabase.auth.getUser()
+    const timeoutPromise = new Promise((resolve) => {
+      setTimeout(() => {
+        // Timeout occurred - don't set user, but mark as incomplete
+        resolve({ data: { user: null }, timeout: true })
+      }, 2000) // 2 second timeout - more lenient
+    })
+    
+    const result = await Promise.race([getUserPromise, timeoutPromise]) as any
+    
+    // Only set user if we didn't timeout
+    if (!result.timeout) {
+      user = result?.data?.user || null
+      authCheckCompleted = true
+    }
+    // If timeout occurred, authCheckCompleted stays false, user stays null
+  } catch (error) {
+    // If auth check fails, allow request to continue (will be handled by page)
+    // Don't log to avoid spam - just continue
+    authCheckCompleted = false
+    user = null
+  }
 
+  // Only redirect if auth check completed AND user is null
+  // If timeout occurred, let the page handle authentication
   if (
+    authCheckCompleted &&
     !user &&
     !request.nextUrl.pathname.startsWith('/login') &&
     !request.nextUrl.pathname.startsWith('/register') &&
@@ -43,11 +70,14 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith('/demo') &&
     request.nextUrl.pathname.startsWith('/dashboard')
   ) {
-    // no user, potentially respond by redirecting the user to the login page
+    // Auth check completed and no user found - redirect to login
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
+  
+  // If auth check didn't complete (timeout), allow request to continue
+  // The page will handle authentication with its own timeout protection
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
   // creating a new response object with NextResponse.next() make sure to:

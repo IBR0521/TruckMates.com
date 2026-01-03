@@ -25,6 +25,8 @@ import {
   Contact,
   ChevronLeft,
   ChevronRight,
+  Bell,
+  Calendar,
 } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
@@ -52,12 +54,17 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
   const [maintenanceOpen, setMaintenanceOpen] = useState(false)
   const [reportsOpen, setReportsOpen] = useState(false)
   const [crmOpen, setCrmOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [isManager, setIsManager] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isDesktop, setIsDesktop] = useState(true)
+  const [mounted, setMounted] = useState(false)
 
-  // Check if we're on desktop (lg breakpoint = 1024px)
+  // Check if we're on desktop (lg breakpoint = 1024px) - client only
   useEffect(() => {
+    setMounted(true)
+    if (typeof window === "undefined") return
+    
     const checkDesktop = () => {
       setIsDesktop(window.innerWidth >= 1024)
     }
@@ -80,25 +87,55 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
       setMaintenanceOpen(false)
       setReportsOpen(false)
       setCrmOpen(false)
+      setSettingsOpen(false)
     }
   }, [shouldShowCollapsed])
 
   useEffect(() => {
+    let isMounted = true
+    let timeoutId: NodeJS.Timeout | null = null
+    
     async function checkUserRole() {
       try {
-        const result = await getCurrentUser()
-        if (result.data) {
+        // Add timeout to prevent hanging (1 second max - very aggressive)
+        const timeoutPromise = new Promise((resolve) => {
+          timeoutId = setTimeout(() => {
+            resolve({ data: null, error: "Timeout" })
+          }, 1000) // 1 second timeout - very aggressive
+        })
+        
+        const result = await Promise.race([
+          getCurrentUser(),
+          timeoutPromise
+        ]) as any
+        
+        if (!isMounted) return
+        
+        if (result?.data) {
           setIsManager(result.data.role === "manager")
-        } else if (result.error) {
-          console.error("Error getting user role:", result.error)
+        } else {
+          // Default to false if error or timeout - don't block sidebar
+          setIsManager(false)
         }
       } catch (error) {
-        console.error("Error checking user role:", error)
+        if (!isMounted) return
+        // Default to false on error - don't block sidebar
+        setIsManager(false)
       } finally {
-        setIsLoading(false)
+        if (isMounted) {
+          setIsLoading(false)
+        }
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+        }
       }
     }
     checkUserRole()
+    
+    return () => {
+      isMounted = false
+      if (timeoutId) clearTimeout(timeoutId)
+    }
   }, [])
 
   return (
@@ -277,6 +314,12 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
           {/* Documents */}
           <NavItem href="/dashboard/documents" icon={FolderOpen} label="Documents" isCollapsed={shouldShowCollapsed} />
 
+          {/* Alerts */}
+          <NavItem href="/dashboard/alerts" icon={Bell} label="Alerts" isCollapsed={shouldShowCollapsed} />
+
+          {/* Reminders */}
+          <NavItem href="/dashboard/reminders" icon={Calendar} label="Reminders" isCollapsed={shouldShowCollapsed} />
+
           {/* BOLs (Bill of Lading) */}
           <NavItem href="/dashboard/bols" icon={FileText} label="Bill of Lading" isCollapsed={shouldShowCollapsed} />
 
@@ -287,11 +330,27 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
           {isManager && (
             <NavItem href="/dashboard/employees" icon={UserCog} label="Employees" isCollapsed={shouldShowCollapsed} />
           )}
+
         </nav>
 
         {/* Footer */}
         <div className={`border-t border-sidebar-border ${shouldShowCollapsed ? "p-2" : "p-4"}`}>
-          <NavItem href="/dashboard/settings" icon={Settings} label="Settings" isCollapsed={shouldShowCollapsed} />
+          {/* Settings Dropdown */}
+          <DropdownItem
+            icon={Settings}
+            label="Settings"
+            href="/dashboard/settings"
+            isOpen={settingsOpen}
+            onToggle={() => setSettingsOpen(!settingsOpen)}
+            isCollapsed={shouldShowCollapsed}
+          >
+            <NavItem href="/dashboard/settings" label="General" isSubitem isCollapsed={shouldShowCollapsed} />
+            <NavItem href="/dashboard/settings/invoice" label="Invoice" isSubitem isCollapsed={shouldShowCollapsed} />
+            <NavItem href="/dashboard/settings/load" label="Load" isSubitem isCollapsed={shouldShowCollapsed} />
+            <NavItem href="/dashboard/settings/dispatch" label="Dispatch" isSubitem isCollapsed={shouldShowCollapsed} />
+            <NavItem href="/dashboard/settings/business" label="Business" isSubitem isCollapsed={shouldShowCollapsed} />
+            <NavItem href="/dashboard/settings/alerts" label="Alerts" isSubitem isCollapsed={shouldShowCollapsed} />
+          </DropdownItem>
         </div>
       </aside>
     </TooltipProvider>

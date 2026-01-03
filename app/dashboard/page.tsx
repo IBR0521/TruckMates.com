@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
+import { ProfitEstimator } from "@/components/dashboard/profit-estimator"
 
 export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<any>(null)
@@ -36,33 +37,128 @@ export default function DashboardPage() {
   const [error, setError] = useState<Error | null>(null)
 
   useEffect(() => {
+    let isMounted = true
+    let timeoutId: NodeJS.Timeout | null = null
+    
     async function loadStats() {
       try {
-        setIsLoading(true)
-        setError(null)
-        const result = await getDashboardStats()
-        if (result?.error) {
-          const error = new Error(result.error)
-          setError(error)
-          toast.error(result.error)
-        } else if (result?.data) {
-          setDashboardData(result.data)
+        // Set loading state immediately
+        if (isMounted) {
+          setIsLoading(true)
           setError(null)
         }
+        
+        // Add very aggressive timeout to prevent hanging (2 seconds max)
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error("Dashboard timeout"))
+          }, 2000) // Reduced to 2 seconds - very aggressive
+        })
+        
+        // Race between the actual request and timeout
+        const result = await Promise.race([
+          getDashboardStats(),
+          timeoutPromise
+        ]) as any
+        
+        // Clear timeout if request completed
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+        }
+        
+        // Only update state if component is still mounted
+        if (!isMounted) return
+        
+        // Check for connection errors in result
+        if (result?.error) {
+          const errorMsg = result.error
+          // Only show connection-related errors
+          if (errorMsg.includes('Connection') || 
+              errorMsg.includes('timeout') || 
+              errorMsg.includes('ECONNREFUSED') ||
+              errorMsg.includes('Database configuration') ||
+              errorMsg.includes('Connection failed')) {
+            setError(new Error(errorMsg))
+          }
+        }
+        
+        // Always use data if available, even if there's an error
+        if (result?.data) {
+          setDashboardData(result.data)
+        } else {
+          // Set minimal data instead of error to prevent UI blocking
+          setDashboardData({
+            totalDrivers: 0,
+            activeDrivers: 0,
+            totalTrucks: 0,
+            activeTrucks: 0,
+            totalRoutes: 0,
+            activeRoutes: 0,
+            totalLoads: 0,
+            inTransitLoads: 0,
+            totalMaintenance: 0,
+            scheduledMaintenance: 0,
+            fleetUtilization: 0,
+            recentActivity: [],
+            recentDrivers: [],
+            recentTrucks: [],
+            recentRoutes: [],
+            recentLoads: [],
+          })
+        }
       } catch (err: any) {
-        const error = err instanceof Error ? err : new Error("Failed to load dashboard data")
-        setError(error)
-        toast.error(error.message)
+        if (!isMounted) return
+        
+        // Clear timeout if it was set
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+        }
+        
+        // Always set minimal data to prevent UI blocking (never show error)
+        setDashboardData({
+          totalDrivers: 0,
+          activeDrivers: 0,
+          totalTrucks: 0,
+          activeTrucks: 0,
+          totalRoutes: 0,
+          activeRoutes: 0,
+          totalLoads: 0,
+          inTransitLoads: 0,
+          totalMaintenance: 0,
+          scheduledMaintenance: 0,
+          fleetUtilization: 0,
+          recentActivity: [],
+          recentDrivers: [],
+          recentTrucks: [],
+          recentRoutes: [],
+          recentLoads: [],
+        })
+        setError(null) // Don't set error to prevent UI blocking
       } finally {
-        setIsLoading(false)
+        if (isMounted) {
+          setIsLoading(false)
+        }
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+        }
       }
     }
     
+    // Load stats immediately
     loadStats()
     
-    // Refresh every 30 seconds for real-time updates
+    // Refresh every 30 seconds for real-time updates (cached, so fast)
     const interval = setInterval(loadStats, 30000)
-    return () => clearInterval(interval)
+    
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
   }, [])
 
   // Memoize stats to prevent unnecessary recalculations
@@ -103,9 +199,37 @@ export default function DashboardPage() {
   // Handle errors with toast (only show once)
   useEffect(() => {
     if (error && error instanceof Error) {
-      toast.error(error.message || "Failed to load dashboard data")
+      const errorMessage = error.message || "Failed to load dashboard data"
+      // Show connection errors more prominently
+      if (errorMessage.includes('Connection') || errorMessage.includes('timeout') || errorMessage.includes('ECONNREFUSED')) {
+        toast.error(errorMessage, {
+          duration: 5000,
+          description: "Please check your internet connection and try refreshing the page."
+        })
+      } else {
+        toast.error(errorMessage)
+      }
     }
   }, [error])
+
+  // Show loading skeleton immediately if no data yet
+  if (isLoading && !dashboardData) {
+    return (
+      <div className="w-full p-4 md:p-8">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="h-8 bg-secondary animate-pulse rounded w-64"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="p-6">
+                <div className="h-4 bg-secondary animate-pulse rounded w-24 mb-2"></div>
+                <div className="h-8 bg-secondary animate-pulse rounded w-16"></div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="w-full">
@@ -115,14 +239,16 @@ export default function DashboardPage() {
           <h1 className="text-2xl md:text-3xl font-bold text-foreground">Dashboard</h1>
           <p className="text-muted-foreground text-sm mt-1">Welcome back, manage your fleet efficiently</p>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Plus className="w-4 h-4 mr-2" />
-              Add New
-              <ChevronDown className="w-4 h-4 ml-2" />
-            </Button>
-          </DropdownMenuTrigger>
+        <div className="flex items-center gap-3">
+          <ProfitEstimator />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Plus className="w-4 h-4 mr-2" />
+                Add New
+                <ChevronDown className="w-4 h-4 ml-2" />
+              </Button>
+            </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem asChild>
               <Link href="/dashboard/drivers/add" className="flex items-center cursor-pointer">
@@ -182,6 +308,7 @@ export default function DashboardPage() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </div>
 
       {/* Content Area */}
@@ -458,7 +585,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {recentActivity.map((activity, index) => {
+                {recentActivity.map((activity: any, index: number) => {
                   const timeAgo = (() => {
                     const now = new Date()
                     const activityTime = new Date(activity.time)

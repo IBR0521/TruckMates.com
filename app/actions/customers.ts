@@ -1,13 +1,17 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
+import { validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
 
 // Get all customers
 export async function getCustomers(filters?: {
   status?: string
   customer_type?: string
   search?: string
+  limit?: number
+  offset?: number
 }) {
   const supabase = await createClient()
 
@@ -19,20 +23,20 @@ export async function getCustomers(filters?: {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
+  // Use optimized helper with caching
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+  const companyError = result.error
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  if (companyError || !company_id) {
+    return { error: companyError || "No company found", data: null }
   }
 
+  // Build query with selective columns and pagination
   let query = supabase
     .from("customers")
-    .select("*")
-    .eq("company_id", userData.company_id)
+    .select("id, name, company_name, email, phone, status, customer_type, created_at", { count: "exact" })
+    .eq("company_id", company_id)
     .order("created_at", { ascending: false })
 
   if (filters?.status) {
@@ -49,13 +53,18 @@ export async function getCustomers(filters?: {
     )
   }
 
-  const { data, error } = await query
+  // Apply pagination (default limit 100)
+  const limit = filters?.limit || 100
+  const offset = filters?.offset || 0
+  query = query.range(offset, offset + limit - 1)
+
+  const { data, error, count } = await query
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: error.message, data: null, count: 0 }
   }
 
-  return { data, error: null }
+  return { data: data || [], error: null, count: count || 0 }
 }
 
 // Get single customer
@@ -157,20 +166,82 @@ export async function createCustomer(formData: {
     return { error: "No company found", data: null }
   }
 
+  // Professional validation
+  if (!validateRequiredString(formData.name, 2, 200)) {
+    return { error: "Customer name is required and must be between 2 and 200 characters", data: null }
+  }
+
+  if (formData.email && !validateEmail(formData.email)) {
+    return { error: "Invalid email format", data: null }
+  }
+
+  if (formData.phone && !validatePhone(formData.phone)) {
+    return { error: "Invalid phone number format", data: null }
+  }
+
+  if (formData.primary_contact_email && !validateEmail(formData.primary_contact_email)) {
+    return { error: "Invalid primary contact email format", data: null }
+  }
+
+  if (formData.primary_contact_phone && !validatePhone(formData.primary_contact_phone)) {
+    return { error: "Invalid primary contact phone format", data: null }
+  }
+
+  // Validate addresses if provided
+  if (formData.city || formData.state || formData.zip) {
+    const addressValidation = validateAddress({
+      street: formData.address_line1 || formData.physical_address_line1,
+      city: formData.city || formData.physical_city,
+      state: formData.state || formData.physical_state,
+      zip: formData.zip || formData.physical_zip,
+    })
+    if (!addressValidation.valid) {
+      return { error: addressValidation.errors.join("; "), data: null }
+    }
+  }
+
+  // Check for duplicate company name if provided
+  if (formData.company_name) {
+    const { data: existingCustomer } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("company_id", userData.company_id)
+      .eq("company_name", sanitizeString(formData.company_name, 200))
+      .single()
+
+    if (existingCustomer) {
+      return { error: "Customer with this company name already exists", data: null }
+    }
+  }
+
+  // Check for duplicate email if provided
+  if (formData.email) {
+    const { data: existingEmail } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("company_id", userData.company_id)
+      .eq("email", sanitizeEmail(formData.email))
+      .single()
+
+    if (existingEmail) {
+      return { error: "Customer with this email already exists", data: null }
+    }
+  }
+
   const { data, error } = await supabase
     .from("customers")
     .insert({
       company_id: userData.company_id,
-      name: formData.name,
-      company_name: formData.company_name || null,
-      email: formData.email || null,
-      phone: formData.phone || null,
-      website: formData.website || null,
-      address_line1: formData.address_line1 || formData.physical_address_line1 || null,
-      address_line2: formData.address_line2 || formData.physical_address_line2 || null,
-      city: formData.city || formData.physical_city || null,
-      state: formData.state || formData.physical_state || null,
-      zip: formData.zip || formData.physical_zip || null,
+      name: sanitizeString(formData.name, 200),
+      company_name: formData.company_name ? sanitizeString(formData.company_name, 200) : null,
+      email: formData.email ? sanitizeEmail(formData.email) : null,
+      phone: formData.phone ? sanitizePhone(formData.phone) : null,
+      website: formData.website ? sanitizeString(formData.website, 200) : null,
+      address_line1: (formData.address_line1 || formData.physical_address_line1) ? sanitizeString(formData.address_line1 || formData.physical_address_line1, 200) : null,
+      address_line2: (formData.address_line2 || formData.physical_address_line2) ? sanitizeString(formData.address_line2 || formData.physical_address_line2, 200) : null,
+      city: (formData.city || formData.physical_city) ? sanitizeString(formData.city || formData.physical_city, 100) : null,
+      state: (formData.state || formData.physical_state) ? sanitizeString(formData.state || formData.physical_state, 2).toUpperCase() : null,
+      zip: (formData.zip || formData.physical_zip) ? sanitizeString(formData.zip || formData.physical_zip, 10) : null,
       country: formData.country || formData.physical_country || "USA",
       mailing_address_line1: formData.mailing_address_line1 || null,
       mailing_address_line2: formData.mailing_address_line2 || null,
@@ -195,12 +266,12 @@ export async function createCustomer(formData: {
       customer_type: formData.customer_type || "shipper",
       status: formData.status || "active",
       priority: formData.priority || "normal",
-      notes: formData.notes || null,
-      terms: formData.terms || null,
+      notes: formData.notes ? sanitizeString(formData.notes, 2000) : null,
+      terms: formData.terms ? sanitizeString(formData.terms, 2000) : null,
       tags: formData.tags || [],
-      primary_contact_name: formData.primary_contact_name || null,
-      primary_contact_email: formData.primary_contact_email || null,
-      primary_contact_phone: formData.primary_contact_phone || null,
+      primary_contact_name: formData.primary_contact_name ? sanitizeString(formData.primary_contact_name, 100) : null,
+      primary_contact_email: formData.primary_contact_email ? sanitizeEmail(formData.primary_contact_email) : null,
+      primary_contact_phone: formData.primary_contact_phone ? sanitizePhone(formData.primary_contact_phone) : null,
     })
     .select()
     .single()
