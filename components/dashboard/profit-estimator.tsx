@@ -141,9 +141,10 @@ export function ProfitEstimator() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="bg-primary/10 hover:bg-primary/20 text-primary border-primary/20">
+        <Button variant="outline" className="bg-primary/10 hover:bg-primary/20 text-primary border-primary/20 w-full sm:w-auto">
           <Calculator className="w-4 h-4 mr-2" />
-          Profit Estimator
+          <span className="hidden xs:inline">Profit Estimator</span>
+          <span className="xs:hidden">Profit</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">

@@ -243,7 +243,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="hidden sm:block">
+            <div className="w-full sm:w-auto">
               <ProfitEstimator />
             </div>
             <DropdownMenu>
