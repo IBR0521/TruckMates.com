@@ -6,6 +6,7 @@ import { Plus, Edit2, Trash2, Eye, Download, Users, Search, Filter } from "lucid
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
 import { exportToExcel } from "@/lib/export-utils"
 import { toast } from "sonner"
@@ -20,8 +21,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useRouter } from "next/navigation"
-import { getDrivers, deleteDriver } from "@/app/actions/drivers"
+import { getDrivers, deleteDriver, bulkDeleteDrivers, bulkUpdateDriverStatus, updateDriver } from "@/app/actions/drivers"
 
 export default function DriversPage() {
   const router = useRouter()
@@ -32,6 +39,8 @@ export default function DriversPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [sortBy, setSortBy] = useState("name")
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isBulkMode, setIsBulkMode] = useState(false)
 
   const loadDrivers = async () => {
     setIsLoading(true)
@@ -112,6 +121,98 @@ export default function DriversPage() {
     }
   }
 
+  // Bulk operations
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    const result = await bulkDeleteDrivers(Array.from(selectedIds))
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success(`Deleted ${selectedIds.size} driver(s) successfully`)
+      setSelectedIds(new Set())
+      setIsBulkMode(false)
+      await loadDrivers()
+    }
+  }
+
+  const handleBulkStatusUpdate = async (status: string) => {
+    if (selectedIds.size === 0) return
+    const result = await bulkUpdateDriverStatus(Array.from(selectedIds), status)
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success(`Updated ${selectedIds.size} driver(s) to ${status}`)
+      setSelectedIds(new Set())
+      setIsBulkMode(false)
+      await loadDrivers()
+    }
+  }
+
+  const handleQuickStatusUpdate = async (id: string, status: string) => {
+    const result = await updateDriver(id, { status })
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success("Status updated successfully")
+      await loadDrivers()
+    }
+  }
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedIds(newSelected)
+    if (newSelected.size > 0 && !isBulkMode) {
+      setIsBulkMode(true)
+    } else if (newSelected.size === 0 && isBulkMode) {
+      setIsBulkMode(false)
+    }
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredDrivers.length) {
+      setSelectedIds(new Set())
+      setIsBulkMode(false)
+    } else {
+      setSelectedIds(new Set(filteredDrivers.map(d => d.id)))
+      setIsBulkMode(true)
+    }
+  }
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + N: New driver
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault()
+        router.push('/dashboard/drivers/add')
+      }
+      // Ctrl/Cmd + F: Focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault()
+        const searchInput = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement
+        searchInput?.focus()
+      }
+      // Delete: Bulk delete if items selected
+      if (e.key === 'Delete' && selectedIds.size > 0 && !isLoading) {
+        e.preventDefault()
+        handleBulkDelete()
+      }
+      // Escape: Clear selection
+      if (e.key === 'Escape' && selectedIds.size > 0) {
+        setSelectedIds(new Set())
+        setIsBulkMode(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedIds, isLoading, router])
+
   return (
     <div className="w-full">
       {/* Page Header */}
@@ -119,28 +220,85 @@ export default function DriversPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-foreground">Drivers</h1>
           <p className="text-muted-foreground text-sm mt-1">Manage your fleet drivers</p>
+          <p className="text-xs text-muted-foreground mt-1">Press Ctrl+N for new, Ctrl+F to search, Delete to bulk delete</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-          <Button
-            onClick={handleExportDrivers}
-            variant="outline"
-            size="sm"
-            className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground flex-1 sm:flex-initial"
-          >
-            <Download className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">Export to Excel</span>
-            <span className="sm:hidden">Export</span>
-          </Button>
-          <Link href="/dashboard/drivers/add" className="flex-1 sm:flex-initial">
-            <Button
-              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition w-full sm:w-auto"
-              onClick={() => console.log("[v0] Navigating to /dashboard/drivers/add")}
-            >
-              <Plus className="w-4 h-4 sm:mr-2" />
-              <span className="hidden sm:inline">Add Driver</span>
-              <span className="sm:hidden">Add</span>
-            </Button>
-          </Link>
+          {isBulkMode && selectedIds.size > 0 && (
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+                  >
+                    Update Status ({selectedIds.size})
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("active")}>
+                    Active
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("on_route")}>
+                    On Route
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("off_duty")}>
+                    Off Duty
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("inactive")}>
+                    Inactive
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("on_leave")}>
+                    On Leave
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                onClick={handleBulkDelete}
+                variant="outline"
+                size="sm"
+                className="border-red-500/50 bg-transparent hover:bg-red-500/20 text-red-400"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete ({selectedIds.size})
+              </Button>
+              <Button
+                onClick={() => {
+                  setSelectedIds(new Set())
+                  setIsBulkMode(false)
+                }}
+                variant="outline"
+                size="sm"
+                className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+              >
+                Cancel
+              </Button>
+            </>
+          )}
+          {!isBulkMode && (
+            <>
+              <Button
+                onClick={handleExportDrivers}
+                variant="outline"
+                size="sm"
+                className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground flex-1 sm:flex-initial"
+              >
+                <Download className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">Export to Excel</span>
+                <span className="sm:hidden">Export</span>
+              </Button>
+              <Link href="/dashboard/drivers/add" className="flex-1 sm:flex-initial">
+                <Button
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition w-full sm:w-auto"
+                  onClick={() => console.log("[v0] Navigating to /dashboard/drivers/add")}
+                >
+                  <Plus className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Add Driver</span>
+                  <span className="sm:hidden">Add</span>
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
@@ -150,7 +308,18 @@ export default function DriversPage() {
           {/* Search and Filters */}
           {!isLoading && driversList.length > 0 && (
             <Card className="border-border/50 p-4 mb-6">
-              <div className="grid md:grid-cols-3 gap-4">
+              <div className="grid md:grid-cols-4 gap-4">
+                {filteredDrivers.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={selectedIds.size === filteredDrivers.length && filteredDrivers.length > 0}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
+                    </span>
+                  </div>
+                )}
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
@@ -224,6 +393,14 @@ export default function DriversPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-border bg-secondary/30">
+                        {isBulkMode && (
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-foreground w-12">
+                            <Checkbox
+                              checked={selectedIds.size === filteredDrivers.length && filteredDrivers.length > 0}
+                              onCheckedChange={toggleSelectAll}
+                            />
+                          </th>
+                        )}
                         <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Name</th>
                         <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Contact</th>
                         <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">License</th>
@@ -234,7 +411,15 @@ export default function DriversPage() {
                     </thead>
                     <tbody>
                       {filteredDrivers.map((driver) => (
-                        <tr key={driver.id} className="border-b border-border hover:bg-secondary/20 transition">
+                        <tr key={driver.id} className={`border-b border-border hover:bg-secondary/20 transition ${selectedIds.has(driver.id) ? 'bg-primary/5' : ''}`}>
+                          {isBulkMode && (
+                            <td className="px-6 py-4">
+                              <Checkbox
+                                checked={selectedIds.has(driver.id)}
+                                onCheckedChange={() => toggleSelect(driver.id)}
+                              />
+                            </td>
+                          )}
                           <td className="px-6 py-4">
                             <div>
                               <p className="text-foreground font-medium">{driver.name || "N/A"}</p>
@@ -263,19 +448,42 @@ export default function DriversPage() {
                           </p>
                         </td>
                         <td className="px-6 py-4">
-                          <Badge
-                            className={
-                              driver.status === "on_route"
-                                ? "bg-green-500/20 text-green-400 border-green-500/50"
-                                : driver.status === "active"
-                                ? "bg-blue-500/20 text-blue-400 border-blue-500/50"
-                                : driver.status === "inactive" || driver.status === "off_duty"
-                                ? "bg-gray-500/20 text-gray-400 border-gray-500/50"
-                                : "bg-yellow-500/20 text-yellow-400 border-yellow-500/50"
-                            }
-                          >
-                            {driver.status ? driver.status.charAt(0).toUpperCase() + driver.status.slice(1).replace("_", " ") : "N/A"}
-                          </Badge>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-7 px-2">
+                                <Badge
+                                  className={
+                                    driver.status === "on_route"
+                                      ? "bg-green-500/20 text-green-400 border-green-500/50 cursor-pointer"
+                                      : driver.status === "active"
+                                      ? "bg-blue-500/20 text-blue-400 border-blue-500/50 cursor-pointer"
+                                      : driver.status === "inactive" || driver.status === "off_duty"
+                                      ? "bg-gray-500/20 text-gray-400 border-gray-500/50 cursor-pointer"
+                                      : "bg-yellow-500/20 text-yellow-400 border-yellow-500/50 cursor-pointer"
+                                  }
+                                >
+                                  {driver.status ? driver.status.charAt(0).toUpperCase() + driver.status.slice(1).replace("_", " ") : "N/A"}
+                                </Badge>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "active")}>
+                                Active
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "on_route")}>
+                                On Route
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "off_duty")}>
+                                Off Duty
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "inactive")}>
+                                Inactive
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "on_leave")}>
+                                On Leave
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
@@ -312,28 +520,59 @@ export default function DriversPage() {
               {/* Mobile: Cards */}
               <div className="md:hidden space-y-4">
                 {filteredDrivers.map((driver) => (
-                  <Card key={driver.id} className="border border-border/50 p-4">
+                  <Card key={driver.id} className={`border border-border/50 p-4 ${selectedIds.has(driver.id) ? 'border-primary bg-primary/5' : ''}`}>
                     <div className="space-y-3">
                       <div className="flex items-start justify-between">
-                        <div>
-                          <h3 className="text-lg font-semibold text-foreground">{driver.name || "N/A"}</h3>
-                          {driver.email && (
-                            <p className="text-sm text-muted-foreground">{driver.email}</p>
+                        <div className="flex items-center gap-2">
+                          {isBulkMode && (
+                            <Checkbox
+                              checked={selectedIds.has(driver.id)}
+                              onCheckedChange={() => toggleSelect(driver.id)}
+                            />
                           )}
+                          <div>
+                            <h3 className="text-lg font-semibold text-foreground">{driver.name || "N/A"}</h3>
+                            {driver.email && (
+                              <p className="text-sm text-muted-foreground">{driver.email}</p>
+                            )}
+                          </div>
                         </div>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            driver.status === "on_route" || driver.status === "On Route"
-                              ? "bg-green-500/20 text-green-400"
-                              : driver.status === "active" || driver.status === "Active"
-                                ? "bg-blue-500/20 text-blue-400"
-                                : driver.status === "inactive" || driver.status === "off_duty"
-                                  ? "bg-gray-500/20 text-gray-400"
-                                  : "bg-yellow-500/20 text-yellow-400"
-                          }`}
-                        >
-                          {driver.status ? driver.status.charAt(0).toUpperCase() + driver.status.slice(1).replace("_", " ") : "N/A"}
-                        </span>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 px-2">
+                              <span
+                                className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                                  driver.status === "on_route" || driver.status === "On Route"
+                                    ? "bg-green-500/20 text-green-400"
+                                    : driver.status === "active" || driver.status === "Active"
+                                      ? "bg-blue-500/20 text-blue-400"
+                                      : driver.status === "inactive" || driver.status === "off_duty"
+                                        ? "bg-gray-500/20 text-gray-400"
+                                        : "bg-yellow-500/20 text-yellow-400"
+                                }`}
+                              >
+                                {driver.status ? driver.status.charAt(0).toUpperCase() + driver.status.slice(1).replace("_", " ") : "N/A"}
+                              </span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "active")}>
+                              Active
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "on_route")}>
+                              On Route
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "off_duty")}>
+                              Off Duty
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "inactive")}>
+                              Inactive
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "on_leave")}>
+                              On Leave
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                       
                       <div className="space-y-2 pt-2 border-t border-border/30">

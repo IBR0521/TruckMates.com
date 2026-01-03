@@ -94,7 +94,8 @@ export async function getCompanySettings() {
   }
 
   if (error && error.code === 'PGRST116') {
-    // Settings don't exist, create them
+    // Settings don't exist, try to create them
+    // But if RLS blocks it, return default settings instead
     const { data: newSettings, error: createError } = await supabase
       .from("company_settings")
       .insert({
@@ -104,12 +105,82 @@ export async function getCompanySettings() {
       .single()
 
     if (createError) {
-      return { error: createError.message, data: null }
+      // If creation fails (likely RLS), return default settings
+      console.warn("[getCompanySettings] Failed to create settings, using defaults:", createError.message)
+      return {
+        data: {
+          load_number_format: "LOAD-{YEAR}-{SEQUENCE}",
+          load_number_sequence: 1,
+          invoice_number_format: "INV-{YEAR}-{MONTH}-{SEQUENCE}",
+          invoice_number_sequence: 1,
+          dispatch_number_format: "DISP-{YEAR}-{SEQUENCE}",
+          dispatch_number_sequence: 1,
+          bol_number_format: "BOL-{YEAR}-{SEQUENCE}",
+          bol_number_sequence: 1,
+          timezone: "America/New_York",
+          date_format: "MM/DD/YYYY",
+          time_format: "12h",
+          currency: "USD",
+          currency_symbol: "$",
+          default_payment_terms: "Net 30",
+          invoice_auto_send: false,
+          default_load_type: "ftl",
+          default_carrier_type: "dry-van",
+          auto_create_route: true,
+          default_check_call_interval: 4,
+          check_call_reminder_minutes: 15,
+          require_check_call_at_pickup: true,
+          require_check_call_at_delivery: true,
+          auto_attach_bol_to_load: false,
+          auto_email_bol_to_customer: false,
+          document_retention_days: 365,
+          bol_auto_generate: false,
+          odometer_validation_enabled: true,
+          max_odometer_increase_per_day: 1000,
+          odometer_auto_sync_from_eld: true,
+        },
+        error: null,
+      }
     }
 
     settings = newSettings
   } else if (error) {
-    return { error: error.message, data: null }
+    // For other errors, also return defaults instead of failing
+    console.warn("[getCompanySettings] Error fetching settings, using defaults:", error.message)
+    return {
+      data: {
+        load_number_format: "LOAD-{YEAR}-{SEQUENCE}",
+        load_number_sequence: 1,
+        invoice_number_format: "INV-{YEAR}-{MONTH}-{SEQUENCE}",
+        invoice_number_sequence: 1,
+        dispatch_number_format: "DISP-{YEAR}-{SEQUENCE}",
+        dispatch_number_sequence: 1,
+        bol_number_format: "BOL-{YEAR}-{SEQUENCE}",
+        bol_number_sequence: 1,
+        timezone: "America/New_York",
+        date_format: "MM/DD/YYYY",
+        time_format: "12h",
+        currency: "USD",
+        currency_symbol: "$",
+        default_payment_terms: "Net 30",
+        invoice_auto_send: false,
+        default_load_type: "ftl",
+        default_carrier_type: "dry-van",
+        auto_create_route: true,
+        default_check_call_interval: 4,
+        check_call_reminder_minutes: 15,
+        require_check_call_at_pickup: true,
+        require_check_call_at_delivery: true,
+        auto_attach_bol_to_load: false,
+        auto_email_bol_to_customer: false,
+        document_retention_days: 365,
+        bol_auto_generate: false,
+        odometer_validation_enabled: true,
+        max_odometer_increase_per_day: 1000,
+        odometer_auto_sync_from_eld: true,
+      },
+      error: null,
+    }
   }
 
   return { data: settings, error: null }
@@ -228,11 +299,16 @@ export async function generateLoadNumber(): Promise<{ data: string | null; error
   // Generate number
   const number = generateNumber(format, sequence, company?.name)
 
-  // Increment sequence
-  await supabase
+  // Increment sequence (non-blocking - if it fails, we still return the number)
+  const { error: updateError } = await supabase
     .from("company_settings")
     .update({ load_number_sequence: sequence + 1 })
     .eq("company_id", userData.company_id)
+
+  if (updateError) {
+    // If update fails (RLS or table doesn't exist), log but don't fail
+    console.warn("[generateLoadNumber] Failed to update sequence:", updateError.message)
+  }
 
   return { data: number, error: null }
 }

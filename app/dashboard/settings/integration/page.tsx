@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { Badge } from "@/components/ui/badge"
 import { 
   Plug, 
   Save,
@@ -14,13 +15,18 @@ import {
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
 import { getIntegrationSettings, updateIntegrationSettings } from "@/app/actions/settings-integration"
+import { testQuickBooksConnection } from "@/app/actions/integrations-quickbooks"
+import { Button as TestButton } from "@/components/ui/button"
 
 export default function IntegrationSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isTesting, setIsTesting] = useState<string | null>(null)
   const [integrations, setIntegrations] = useState({
     quickbooks_enabled: false,
     quickbooks_api_key: "",
+    quickbooks_api_secret: "",
+    quickbooks_company_id: "",
     stripe_enabled: false,
     stripe_api_key: "",
     paypal_enabled: false,
@@ -40,6 +46,8 @@ export default function IntegrationSettingsPage() {
           setIntegrations({
             quickbooks_enabled: result.data.quickbooks_enabled || false,
             quickbooks_api_key: result.data.quickbooks_api_key || "",
+            quickbooks_api_secret: result.data.quickbooks_api_secret || "",
+            quickbooks_company_id: result.data.quickbooks_company_id || "",
             stripe_enabled: result.data.stripe_enabled || false,
             stripe_api_key: result.data.stripe_api_key || "",
             paypal_enabled: result.data.paypal_enabled || false,
@@ -63,6 +71,8 @@ export default function IntegrationSettingsPage() {
       const result = await updateIntegrationSettings({
         quickbooks_enabled: integrations.quickbooks_enabled,
         quickbooks_api_key: integrations.quickbooks_api_key,
+        quickbooks_api_secret: integrations.quickbooks_api_secret,
+        quickbooks_company_id: integrations.quickbooks_company_id,
         stripe_enabled: integrations.stripe_enabled,
         stripe_api_key: integrations.stripe_api_key,
         paypal_enabled: integrations.paypal_enabled,
@@ -131,26 +141,71 @@ export default function IntegrationSettingsPage() {
                     })}
                   />
                 </div>
-                <Label>API Key</Label>
-                <Input
-                  type="password"
-                  value={integrations.quickbooks_api_key}
-                  onChange={(e) => setIntegrations({
-                    ...integrations,
-                    quickbooks_api_key: e.target.value
-                  })}
-                  placeholder="Enter QuickBooks API key"
-                  disabled={!integrations.quickbooks_enabled}
-                />
+                <div className="space-y-2">
+                  <Label>API Key</Label>
+                  <Input
+                    type="password"
+                    value={integrations.quickbooks_api_key}
+                    onChange={(e) => setIntegrations({
+                      ...integrations,
+                      quickbooks_api_key: e.target.value
+                    })}
+                    placeholder="Enter QuickBooks API key"
+                    disabled={!integrations.quickbooks_enabled}
+                  />
+                  <Label>API Secret</Label>
+                  <Input
+                    type="password"
+                    value={integrations.quickbooks_api_secret}
+                    onChange={(e) => setIntegrations({
+                      ...integrations,
+                      quickbooks_api_secret: e.target.value
+                    })}
+                    placeholder="Enter QuickBooks API secret"
+                    disabled={!integrations.quickbooks_enabled}
+                  />
+                  <Label>Company ID</Label>
+                  <Input
+                    type="text"
+                    value={integrations.quickbooks_company_id}
+                    onChange={(e) => setIntegrations({
+                      ...integrations,
+                      quickbooks_company_id: e.target.value
+                    })}
+                    placeholder="Enter QuickBooks Company ID"
+                    disabled={!integrations.quickbooks_enabled}
+                  />
+                  <TestButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      setIsTesting("quickbooks")
+                      const result = await testQuickBooksConnection()
+                      setIsTesting(null)
+                      if (result.error) {
+                        toast.error(result.error)
+                      } else {
+                        toast.success(`Connected to QuickBooks: ${result.data?.company || "Success"}`)
+                      }
+                    }}
+                    disabled={!integrations.quickbooks_enabled || isTesting === "quickbooks"}
+                  >
+                    {isTesting === "quickbooks" ? "Testing..." : "Test Connection"}
+                  </TestButton>
+                </div>
               </div>
             </div>
 
-            {/* Stripe */}
-            <div className="border rounded-lg p-4">
+            {/* Stripe - Optional (requires bank account) */}
+            <div className="border rounded-lg p-4 opacity-75">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
                 <div className="flex-1">
-                  <h3 className="font-semibold">Stripe</h3>
-                  <p className="text-sm text-muted-foreground">Process payments with Stripe</p>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold">Stripe</h3>
+                    <Badge variant="outline" className="text-xs">Optional</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Process payments with Stripe (requires bank account)</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {integrations.stripe_enabled ? (
@@ -169,6 +224,7 @@ export default function IntegrationSettingsPage() {
                       ...integrations,
                       stripe_enabled: checked
                     })}
+                    disabled={true}
                   />
                 </div>
                 <Label>API Key</Label>
@@ -179,9 +235,10 @@ export default function IntegrationSettingsPage() {
                     ...integrations,
                     stripe_api_key: e.target.value
                   })}
-                  placeholder="Enter Stripe API key"
-                  disabled={!integrations.stripe_enabled}
+                  placeholder="Enter Stripe API key (configure when bank account is ready)"
+                  disabled={true}
                 />
+                <p className="text-xs text-muted-foreground">Configure this when you have a bank account set up</p>
               </div>
             </div>
 

@@ -808,3 +808,304 @@ export async function deleteLoad(id: string) {
   return { error: null }
 }
 
+// Bulk operations for workflow optimization
+export async function bulkDeleteLoads(ids: string[]) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  const { error } = await supabase
+    .from("loads")
+    .delete()
+    .in("id", ids)
+    .eq("company_id", userData.company_id)
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  revalidatePath("/dashboard/loads")
+  return { data: { deleted: ids.length }, error: null }
+}
+
+export async function bulkUpdateLoadStatus(ids: string[], status: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  const { error } = await supabase
+    .from("loads")
+    .update({ status })
+    .in("id", ids)
+    .eq("company_id", userData.company_id)
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  revalidatePath("/dashboard/loads")
+  return { data: { updated: ids.length }, error: null }
+}
+
+// Duplicate/clone load for workflow optimization
+export async function duplicateLoad(id: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  // Get the original load
+  const { data: originalLoad, error: fetchError } = await supabase
+    .from("loads")
+    .select("*")
+    .eq("id", id)
+    .eq("company_id", userData.company_id)
+    .single()
+
+  if (fetchError || !originalLoad) {
+    return { error: "Load not found", data: null }
+  }
+
+  // Generate new shipment number
+  const { generateLoadNumber } = await import("./number-formats")
+  const numberResult = await generateLoadNumber()
+  if (numberResult.error || !numberResult.data) {
+    return { error: numberResult.error || "Failed to generate load number", data: null }
+  }
+
+  // Create duplicate with new shipment number and reset status
+  // Explicitly set required fields to avoid RLS issues
+  // Only include columns that exist in the base schema
+  const duplicateData: any = {
+    company_id: userData.company_id, // Explicitly set company_id
+    shipment_number: numberResult.data,
+    origin: originalLoad.origin || "",
+    destination: originalLoad.destination || "",
+    weight: originalLoad.weight || null,
+    weight_kg: originalLoad.weight_kg || null,
+    contents: originalLoad.contents || null,
+    value: originalLoad.value || null,
+    carrier_type: originalLoad.carrier_type || null,
+    status: "draft", // Reset to draft
+    load_date: null,
+    estimated_delivery: null,
+    actual_delivery: null,
+    driver_id: null,
+    truck_id: null,
+    route_id: null,
+    coordinates: originalLoad.coordinates || null,
+  }
+
+  // Conditionally add optional columns only if they exist in originalLoad
+  // These columns may not exist in all database schemas
+  if (originalLoad.delivery_type !== undefined) {
+    duplicateData.delivery_type = originalLoad.delivery_type || "single"
+  }
+  if (originalLoad.company_name !== undefined) {
+    duplicateData.company_name = originalLoad.company_name || null
+  }
+  if (originalLoad.customer_reference !== undefined) {
+    duplicateData.customer_reference = originalLoad.customer_reference || null
+  }
+  if (originalLoad.requires_split_delivery !== undefined) {
+    duplicateData.requires_split_delivery = originalLoad.requires_split_delivery || false
+  }
+  if (originalLoad.total_delivery_points !== undefined) {
+    duplicateData.total_delivery_points = originalLoad.total_delivery_points || null
+  }
+  if (originalLoad.customer_id !== undefined) {
+    duplicateData.customer_id = originalLoad.customer_id || null
+  }
+  // Only include bol_number if it exists in the original load (column may not exist in schema)
+  if (originalLoad.bol_number !== undefined && originalLoad.hasOwnProperty('bol_number')) {
+    duplicateData.bol_number = originalLoad.bol_number || null
+  }
+  // Only include load_type if it exists in the original load (column may not exist in schema)
+  if (originalLoad.load_type !== undefined && originalLoad.hasOwnProperty('load_type')) {
+    duplicateData.load_type = originalLoad.load_type || null
+  }
+
+  const { data: newLoad, error: createError } = await supabase
+    .from("loads")
+    .insert(duplicateData)
+    .select()
+    .single()
+
+  if (createError) {
+    console.error("[duplicateLoad] Error creating duplicate:", createError)
+    return { error: createError.message, data: null }
+  }
+
+  // Duplicate delivery points if any
+  const { data: deliveryPoints } = await supabase
+    .from("load_delivery_points")
+    .select("*")
+    .eq("load_id", id)
+    .eq("company_id", userData.company_id)
+
+  if (deliveryPoints && deliveryPoints.length > 0) {
+    const { createLoadDeliveryPoint } = await import("./load-delivery-points")
+    for (const point of deliveryPoints) {
+      const pointData: any = { ...point }
+      delete pointData.id
+      delete pointData.load_id
+      delete pointData.created_at
+      delete pointData.updated_at
+      await createLoadDeliveryPoint(newLoad.id, pointData)
+    }
+  }
+
+  revalidatePath("/dashboard/loads")
+  return { data: newLoad, error: null }
+}
+
+// Smart suggestions for workflow optimization
+export async function getLoadSuggestions(origin?: string, destination?: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  const suggestions: any = {
+    suggestedDriver: null,
+    suggestedTruck: null,
+    lastUsedCustomer: null,
+    similarLoads: [],
+  }
+
+  // Suggest driver based on route history (if origin/destination provided)
+  if (origin && destination) {
+    const { data: recentLoads } = await supabase
+      .from("loads")
+      .select("driver_id, truck_id, customer_id")
+      .eq("company_id", userData.company_id)
+      .or(`origin.ilike.%${origin}%,destination.ilike.%${destination}%`)
+      .order("created_at", { ascending: false })
+      .limit(5)
+
+    if (recentLoads && recentLoads.length > 0) {
+      // Find most frequently used driver for this route
+      const driverCounts: Record<string, number> = {}
+      const truckCounts: Record<string, number> = {}
+      recentLoads.forEach((load) => {
+        if (load.driver_id) {
+          driverCounts[load.driver_id] = (driverCounts[load.driver_id] || 0) + 1
+        }
+        if (load.truck_id) {
+          truckCounts[load.truck_id] = (truckCounts[load.truck_id] || 0) + 1
+        }
+      })
+
+      const topDriverId = Object.entries(driverCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
+      const topTruckId = Object.entries(truckCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
+
+      if (topDriverId) {
+        const { data: driver } = await supabase
+          .from("drivers")
+          .select("id, name, status")
+          .eq("id", topDriverId)
+          .eq("status", "active")
+          .single()
+        if (driver) suggestions.suggestedDriver = driver
+      }
+
+      if (topTruckId) {
+        const { data: truck } = await supabase
+          .from("trucks")
+          .select("id, truck_number, status")
+          .eq("id", topTruckId)
+          .in("status", ["available", "in_use"])
+          .single()
+        if (truck) suggestions.suggestedTruck = truck
+      }
+
+      // Get last used customer
+      const lastLoad = recentLoads[0]
+      if (lastLoad.customer_id) {
+        const { data: customer } = await supabase
+          .from("customers")
+          .select("id, name, company_name")
+          .eq("id", lastLoad.customer_id)
+          .single()
+        if (customer) suggestions.lastUsedCustomer = customer
+      }
+    }
+  }
+
+  // Get similar loads for reference
+  const { data: similarLoads } = await supabase
+    .from("loads")
+    .select("id, shipment_number, origin, destination, contents, value, status")
+    .eq("company_id", userData.company_id)
+    .order("created_at", { ascending: false })
+    .limit(5)
+
+  if (similarLoads) {
+    suggestions.similarLoads = similarLoads
+  }
+
+  return { data: suggestions, error: null }
+}
+

@@ -36,6 +36,8 @@ export async function getIntegrationSettings() {
       data: {
         quickbooks_enabled: false,
         quickbooks_api_key: "",
+        quickbooks_api_secret: "",
+        quickbooks_company_id: "",
         stripe_enabled: false,
         stripe_api_key: "",
         paypal_enabled: false,
@@ -53,6 +55,8 @@ export async function getIntegrationSettings() {
 export async function updateIntegrationSettings(settings: {
   quickbooks_enabled?: boolean
   quickbooks_api_key?: string
+  quickbooks_api_secret?: string
+  quickbooks_company_id?: string
   stripe_enabled?: boolean
   stripe_api_key?: string
   paypal_enabled?: boolean

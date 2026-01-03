@@ -30,7 +30,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { createLoad } from "@/app/actions/loads"
+import { createLoad, getLoadSuggestions } from "@/app/actions/loads"
 import { useRouter } from "next/navigation"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
@@ -182,6 +182,47 @@ export default function AddLoadPage() {
       }))
     }
   }, [selectedCustomer])
+
+  // Smart suggestions when origin/destination changes
+  useEffect(() => {
+    async function fetchSuggestions() {
+      if (formData.origin && formData.destination) {
+        const suggestionsResult = await getLoadSuggestions(formData.origin, formData.destination)
+        if (suggestionsResult.data && !suggestionsResult.error) {
+          const suggestions = suggestionsResult.data
+          
+          // Auto-suggest driver if available and not already set
+          if (suggestions.suggestedDriver && !formData.driver) {
+            setFormData(prev => ({ ...prev, driver: suggestions.suggestedDriver.id }))
+            toast.success(`Suggested driver: ${suggestions.suggestedDriver.name}`)
+          }
+          
+          // Auto-suggest truck if available and not already set
+          if (suggestions.suggestedTruck && !formData.truck) {
+            setFormData(prev => ({ ...prev, truck: suggestions.suggestedTruck.id }))
+            toast.success(`Suggested truck: ${suggestions.suggestedTruck.truck_number}`)
+          }
+          
+          // Auto-suggest customer if available and not already set
+          if (suggestions.lastUsedCustomer && !formData.customerId) {
+            setSelectedCustomer(suggestions.lastUsedCustomer)
+            setFormData(prev => ({
+              ...prev,
+              customerId: suggestions.lastUsedCustomer.id,
+              companyName: suggestions.lastUsedCustomer.name || suggestions.lastUsedCustomer.company_name || "",
+            }))
+          }
+        }
+      }
+    }
+
+    // Debounce suggestions
+    const timeoutId = setTimeout(() => {
+      fetchSuggestions()
+    }, 1000)
+
+    return () => clearTimeout(timeoutId)
+  }, [formData.origin, formData.destination])
 
   // Filter customers based on search
   const filteredCustomers = customers.filter((customer) =>

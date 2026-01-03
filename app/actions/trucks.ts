@@ -365,3 +365,74 @@ export async function deleteTruck(id: string) {
   return { error: null }
 }
 
+// Bulk operations for workflow optimization
+export async function bulkDeleteTrucks(ids: string[]) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  const { error } = await supabase
+    .from("trucks")
+    .delete()
+    .in("id", ids)
+    .eq("company_id", userData.company_id)
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  revalidatePath("/dashboard/trucks")
+  return { data: { deleted: ids.length }, error: null }
+}
+
+export async function bulkUpdateTruckStatus(ids: string[], status: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  const { error } = await supabase
+    .from("trucks")
+    .update({ status })
+    .in("id", ids)
+    .eq("company_id", userData.company_id)
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  revalidatePath("/dashboard/trucks")
+  return { data: { updated: ids.length }, error: null }
+}
+

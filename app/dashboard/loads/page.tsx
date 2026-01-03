@@ -2,12 +2,13 @@
 
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, Package, Download, Eye, Edit2, Trash2, Search, Filter } from "lucide-react"
+import { Plus, Package, Download, Eye, Edit2, Trash2, Search, Filter, Copy, MoreVertical, CheckSquare, Square } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { exportToExcel } from "@/lib/export-utils"
 import { TruckMap } from "@/components/truck-map"
 import { toast } from "sonner"
@@ -22,7 +23,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { getLoads, deleteLoad } from "@/app/actions/loads"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { getLoads, deleteLoad, bulkDeleteLoads, bulkUpdateLoadStatus, duplicateLoad, updateLoad } from "@/app/actions/loads"
 
 export default function LoadsPage() {
   const router = useRouter()
@@ -34,6 +41,8 @@ export default function LoadsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [sortBy, setSortBy] = useState("created_at")
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isBulkMode, setIsBulkMode] = useState(false)
 
   const loadLoads = async () => {
     setIsLoading(true)
@@ -128,6 +137,111 @@ export default function LoadsPage() {
     }
   }
 
+  // Bulk operations
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    const result = await bulkDeleteLoads(Array.from(selectedIds))
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success(`Deleted ${selectedIds.size} load(s) successfully`)
+      setSelectedIds(new Set())
+      setIsBulkMode(false)
+      await loadLoads()
+    }
+  }
+
+  const handleBulkStatusUpdate = async (status: string) => {
+    if (selectedIds.size === 0) return
+    const result = await bulkUpdateLoadStatus(Array.from(selectedIds), status)
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success(`Updated ${selectedIds.size} load(s) to ${status}`)
+      setSelectedIds(new Set())
+      setIsBulkMode(false)
+      await loadLoads()
+    }
+  }
+
+  const handleDuplicate = async (id: string) => {
+    const result = await duplicateLoad(id)
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success("Load duplicated successfully")
+      await loadLoads()
+      if (result.data) {
+        router.push(`/dashboard/loads/${result.data.id}/edit`)
+      }
+    }
+  }
+
+  const handleQuickStatusUpdate = async (id: string, status: string) => {
+    const result = await updateLoad(id, { status })
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success("Status updated successfully")
+      await loadLoads()
+    }
+  }
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedIds(newSelected)
+    if (newSelected.size > 0 && !isBulkMode) {
+      setIsBulkMode(true)
+    } else if (newSelected.size === 0 && isBulkMode) {
+      setIsBulkMode(false)
+    }
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredLoads.length) {
+      setSelectedIds(new Set())
+      setIsBulkMode(false)
+    } else {
+      setSelectedIds(new Set(filteredLoads.map(l => l.id)))
+      setIsBulkMode(true)
+    }
+  }
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + N: New load
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault()
+        router.push('/dashboard/loads/add')
+      }
+      // Ctrl/Cmd + F: Focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault()
+        const searchInput = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement
+        searchInput?.focus()
+      }
+      // Delete: Bulk delete if items selected
+      if (e.key === 'Delete' && selectedIds.size > 0 && !isLoading) {
+        e.preventDefault()
+        handleBulkDelete()
+      }
+      // Escape: Clear selection
+      if (e.key === 'Escape' && selectedIds.size > 0) {
+        setSelectedIds(new Set())
+        setIsBulkMode(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedIds, isLoading, router])
+
   return (
     <div className="w-full">
       {/* Page Header */}
@@ -135,25 +249,85 @@ export default function LoadsPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-foreground">Loads</h1>
           <p className="text-muted-foreground text-sm mt-1">Manage shipments and track deliveries</p>
+          <p className="text-xs text-muted-foreground mt-1">Press Ctrl+N for new, Ctrl+F to search, Delete to bulk delete</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-          <Button
-            onClick={handleExportLoads}
-            variant="outline"
-            size="sm"
-            className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground flex-1 sm:flex-initial"
-          >
-            <Download className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">Export to Excel</span>
-            <span className="sm:hidden">Export</span>
-          </Button>
-          <Link href="/dashboard/loads/add" className="flex-1 sm:flex-initial">
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition w-full sm:w-auto">
-              <Plus className="w-4 h-4 sm:mr-2" />
-              <span className="hidden sm:inline">New Load</span>
-              <span className="sm:hidden">New</span>
-            </Button>
-          </Link>
+          {isBulkMode && selectedIds.size > 0 && (
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+                  >
+                    Update Status ({selectedIds.size})
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("draft")}>
+                    Draft
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("pending")}>
+                    Pending
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("scheduled")}>
+                    Scheduled
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("in_transit")}>
+                    In Transit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("delivered")}>
+                    Delivered
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("cancelled")}>
+                    Cancelled
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                onClick={handleBulkDelete}
+                variant="outline"
+                size="sm"
+                className="border-red-500/50 bg-transparent hover:bg-red-500/20 text-red-400"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete ({selectedIds.size})
+              </Button>
+              <Button
+                onClick={() => {
+                  setSelectedIds(new Set())
+                  setIsBulkMode(false)
+                }}
+                variant="outline"
+                size="sm"
+                className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+              >
+                Cancel
+              </Button>
+            </>
+          )}
+          {!isBulkMode && (
+            <>
+              <Button
+                onClick={handleExportLoads}
+                variant="outline"
+                size="sm"
+                className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground flex-1 sm:flex-initial"
+              >
+                <Download className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">Export to Excel</span>
+                <span className="sm:hidden">Export</span>
+              </Button>
+              <Link href="/dashboard/loads/add" className="flex-1 sm:flex-initial">
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition w-full sm:w-auto">
+                  <Plus className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">New Load</span>
+                  <span className="sm:hidden">New</span>
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
@@ -163,7 +337,18 @@ export default function LoadsPage() {
           {/* Search and Filters */}
           {!isLoading && loadsList.length > 0 && (
             <Card className="border-border/50 p-4 mb-6">
-              <div className="grid md:grid-cols-3 gap-4">
+              <div className="grid md:grid-cols-4 gap-4">
+                {filteredLoads.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={selectedIds.size === filteredLoads.length && filteredLoads.length > 0}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all'}
+                    </span>
+                  </div>
+                )}
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
@@ -238,10 +423,17 @@ export default function LoadsPage() {
                 {filteredLoads.map((load) => (
                 <Card
                   key={load.id}
-                  className="border-border p-4 md:p-6 hover:border-primary/50 hover:shadow-md transition"
+                  className={`border-border p-4 md:p-6 hover:border-primary/50 hover:shadow-md transition ${selectedIds.has(load.id) ? 'border-primary bg-primary/5' : ''}`}
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
+                      {isBulkMode && (
+                        <Checkbox
+                          checked={selectedIds.has(load.id)}
+                          onCheckedChange={() => toggleSelect(load.id)}
+                          className="mt-1"
+                        />
+                      )}
                       <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center">
                         <Package className="w-5 h-5 text-primary" />
                       </div>
@@ -250,23 +442,51 @@ export default function LoadsPage() {
                         <p className="font-bold text-foreground">{load.shipment_number || "N/A"}</p>
                       </div>
                     </div>
-                    <Badge
-                      className={
-                        load.status === "in_transit" || load.status === "In Transit"
-                          ? "bg-green-500/20 text-green-400 border-green-500/50"
-                          : load.status === "delivered" || load.status === "Delivered"
-                          ? "bg-gray-500/20 text-gray-400 border-gray-500/50"
-                          : load.status === "scheduled"
-                          ? "bg-blue-500/20 text-blue-400 border-blue-500/50"
-                          : load.status === "draft"
-                          ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/50"
-                          : load.status === "cancelled"
-                          ? "bg-red-500/20 text-red-400 border-red-500/50"
-                          : "bg-blue-500/20 text-blue-400 border-blue-500/50"
-                      }
-                    >
-                      {load.status ? load.status.charAt(0).toUpperCase() + load.status.slice(1).replace("_", " ") : "N/A"}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-7 px-2">
+                            <Badge
+                              className={
+                                load.status === "in_transit" || load.status === "In Transit"
+                                  ? "bg-green-500/20 text-green-400 border-green-500/50 cursor-pointer"
+                                  : load.status === "delivered" || load.status === "Delivered"
+                                  ? "bg-gray-500/20 text-gray-400 border-gray-500/50 cursor-pointer"
+                                  : load.status === "scheduled"
+                                  ? "bg-blue-500/20 text-blue-400 border-blue-500/50 cursor-pointer"
+                                  : load.status === "draft"
+                                  ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/50 cursor-pointer"
+                                  : load.status === "cancelled"
+                                  ? "bg-red-500/20 text-red-400 border-red-500/50 cursor-pointer"
+                                  : "bg-blue-500/20 text-blue-400 border-blue-500/50 cursor-pointer"
+                              }
+                            >
+                              {load.status ? load.status.charAt(0).toUpperCase() + load.status.slice(1).replace("_", " ") : "N/A"}
+                            </Badge>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleQuickStatusUpdate(load.id, "draft")}>
+                            Draft
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleQuickStatusUpdate(load.id, "pending")}>
+                            Pending
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleQuickStatusUpdate(load.id, "scheduled")}>
+                            Scheduled
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleQuickStatusUpdate(load.id, "in_transit")}>
+                            In Transit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleQuickStatusUpdate(load.id, "delivered")}>
+                            Delivered
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleQuickStatusUpdate(load.id, "cancelled")}>
+                            Cancelled
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                   <div className="space-y-2 text-sm mb-4">
                     <div className="flex items-center gap-2">
@@ -318,6 +538,15 @@ export default function LoadsPage() {
                         <Edit2 className="w-4 h-4" />
                       </Button>
                     </Link>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-border/50 bg-transparent hover:bg-blue-500/20"
+                      onClick={() => handleDuplicate(load.id)}
+                      title="Duplicate load"
+                    >
+                      <Copy className="w-4 h-4 text-blue-400" />
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"

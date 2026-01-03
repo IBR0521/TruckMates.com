@@ -36,6 +36,16 @@ export async function getDashboardStats() {
           recentTrucks: [],
           recentRoutes: [],
           recentLoads: [],
+          totalRevenue: 0,
+          totalExpenses: 0,
+          netProfit: 0,
+          profitMargin: 0,
+          outstandingInvoices: 0,
+          revenueTrend: [],
+          loadStatusDistribution: [],
+          upcomingMaintenance: [],
+          overdueInvoices: [],
+          upcomingDeliveries: [],
         },
         error: errorMessage.includes('Missing Supabase') 
           ? "Database configuration error. Please check your Supabase settings."
@@ -45,12 +55,12 @@ export async function getDashboardStats() {
       }
     }
 
-    // Get authenticated user and company_id with aggressive timeout (1 second)
+    // Get authenticated user and company_id with reasonable timeout (3 seconds)
     const authPromise = getAuthContext()
     const authTimeout = new Promise((resolve) => {
       setTimeout(() => {
         resolve({ companyId: null, error: "Auth timeout" })
-      }, 1000) // 1 second timeout - very aggressive
+      }, 5000) // Increased to 5 seconds - more reasonable
     })
 
     const { companyId, error: authError } = await Promise.race([
@@ -84,6 +94,16 @@ export async function getDashboardStats() {
           recentTrucks: [],
           recentRoutes: [],
           recentLoads: [],
+          totalRevenue: 0,
+          totalExpenses: 0,
+          netProfit: 0,
+          profitMargin: 0,
+          outstandingInvoices: 0,
+          revenueTrend: [],
+          loadStatusDistribution: [],
+          upcomingMaintenance: [],
+          overdueInvoices: [],
+          upcomingDeliveries: [],
         },
         error: isConnectionError ? authError : null, // Only show connection errors
       }
@@ -97,30 +117,26 @@ export async function getDashboardStats() {
     }
 
     // Get counts for all entities - optimized to use count queries instead of fetching data
-    const [
-      totalDriversResult,
-      activeDriversResult,
-      totalTrucksResult,
-      activeTrucksResult,
-      totalRoutesResult,
-      activeRoutesResult,
-      totalLoadsResult,
-      inTransitLoadsResult,
-      totalMaintenanceResult,
-      scheduledMaintenanceResult,
-    ] = await Promise.all([
-      // Total counts
-      supabase.from("drivers").select("*", { count: "exact", head: true }).eq("company_id", companyId),
-      supabase.from("drivers").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["active", "on_route"]),
-      supabase.from("trucks").select("*", { count: "exact", head: true }).eq("company_id", companyId),
-      supabase.from("trucks").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["available", "in_use"]),
-      supabase.from("routes").select("*", { count: "exact", head: true }).eq("company_id", companyId),
-      supabase.from("routes").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["in_progress", "scheduled"]),
-      supabase.from("loads").select("*", { count: "exact", head: true }).eq("company_id", companyId),
-      supabase.from("loads").select("*", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "in_transit"),
-      supabase.from("maintenance").select("*", { count: "exact", head: true }).eq("company_id", companyId),
-      supabase.from("maintenance").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["scheduled", "overdue"]),
-    ])
+    let countResults: any[] = []
+    try {
+      countResults = await Promise.all([
+        // Total counts
+        supabase.from("drivers").select("*", { count: "exact", head: true }).eq("company_id", companyId),
+        supabase.from("drivers").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["active", "on_route"]),
+        supabase.from("trucks").select("*", { count: "exact", head: true }).eq("company_id", companyId),
+        supabase.from("trucks").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["available", "in_use"]),
+        supabase.from("routes").select("*", { count: "exact", head: true }).eq("company_id", companyId),
+        supabase.from("routes").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["in_progress", "scheduled"]),
+        supabase.from("loads").select("*", { count: "exact", head: true }).eq("company_id", companyId),
+        supabase.from("loads").select("*", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "in_transit"),
+        supabase.from("maintenance").select("*", { count: "exact", head: true }).eq("company_id", companyId),
+        supabase.from("maintenance").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["scheduled", "overdue"]),
+      ])
+    } catch (countError) {
+      console.error("Error fetching counts:", countError)
+      // If counts fail, use zeros
+      countResults = Array(10).fill({ count: 0 })
+    }
 
     const totalDrivers = countResults[0]?.count || 0
     const activeDrivers = countResults[1]?.count || 0
@@ -166,7 +182,7 @@ export async function getDashboardStats() {
           { data: [] },
           { data: [] },
         ])
-      }, 3000) // 3 second timeout
+      }, 5000) // Increased to 5 seconds
     })
 
     const [
@@ -256,7 +272,7 @@ export async function getDashboardStats() {
     ])
     
     const cardTimeout = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("Card data timeout")), 5000)
+      setTimeout(() => reject(new Error("Card data timeout")), 8000) // Increased to 8 seconds
     })
     
     let recentDriversData: any = null
@@ -275,6 +291,128 @@ export async function getDashboardStats() {
       console.warn("Card data queries timed out, using empty data")
     }
 
+    // Get financial metrics (with timeout protection)
+    const financialPromise = Promise.all([
+      supabase.from("invoices").select("amount, status, issue_date").eq("company_id", companyId).eq("status", "paid"),
+      supabase.from("expenses").select("amount, date").eq("company_id", companyId),
+      supabase.from("invoices").select("amount, status, due_date").eq("company_id", companyId).in("status", ["sent", "overdue"]),
+    ]).catch(() => {
+      return [
+        { data: [] },
+        { data: [] },
+        { data: [] },
+      ]
+    })
+
+    const financialTimeout = new Promise((resolve) => {
+      setTimeout(() => {
+        resolve([
+          { data: [] },
+          { data: [] },
+          { data: [] },
+        ])
+      }, 3000)
+    })
+
+    const [
+      { data: paidInvoices },
+      { data: expenses },
+      { data: pendingInvoices },
+    ] = await Promise.race([financialPromise, financialTimeout]) as any
+
+    // Calculate financial metrics
+    const totalRevenue = paidInvoices?.reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0) || 0
+    const totalExpenses = expenses?.reduce((sum: number, exp: any) => sum + (Number(exp.amount) || 0), 0) || 0
+    const netProfit = totalRevenue - totalExpenses
+    const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100) : 0
+    const outstandingInvoices = pendingInvoices?.reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0) || 0
+
+    // Get revenue trend data (last 30 days)
+    let revenueTrendData: any[] = []
+    try {
+      const now = new Date()
+      const thirtyDaysAgo = new Date(now)
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      const revenueTrendResult = await supabase
+        .from("invoices")
+        .select("amount, issue_date")
+        .eq("company_id", companyId)
+        .eq("status", "paid")
+        .gte("issue_date", thirtyDaysAgo.toISOString().split('T')[0])
+        .order("issue_date", { ascending: true })
+      
+      revenueTrendData = revenueTrendResult.data || []
+    } catch (error) {
+      console.error("Error fetching revenue trend:", error)
+      revenueTrendData = []
+    }
+
+    // Group revenue by date
+    const revenueByDate: Record<string, number> = {}
+    revenueTrendData?.forEach((inv: any) => {
+      const date = inv.issue_date?.split('T')[0] || ''
+      revenueByDate[date] = (revenueByDate[date] || 0) + (Number(inv.amount) || 0)
+    })
+
+    // Get load status distribution
+    let allLoads: any[] = []
+    try {
+      const loadStatusResult = await supabase
+        .from("loads")
+        .select("status")
+        .eq("company_id", companyId)
+      
+      allLoads = loadStatusResult.data || []
+    } catch (error) {
+      console.error("Error fetching load status:", error)
+      allLoads = []
+    }
+
+    // Count loads by status
+    const loadStatusCounts: Record<string, number> = {}
+    allLoads?.forEach((load: any) => {
+      const status = load.status || 'unknown'
+      loadStatusCounts[status] = (loadStatusCounts[status] || 0) + 1
+    })
+
+    // Get critical alerts
+    let upcomingMaintenance: any[] = []
+    let overdueInvoices: any[] = []
+    let upcomingDeliveries: any[] = []
+    
+    try {
+      const alertsResults = await Promise.all([
+        supabase.from("maintenance")
+          .select("id, service_type, scheduled_date, status")
+          .eq("company_id", companyId)
+          .in("status", ["overdue", "scheduled"])
+          .lte("scheduled_date", new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+          .limit(5)
+          .catch(() => ({ data: [] })),
+        supabase.from("invoices")
+          .select("id, invoice_number, due_date, amount, status")
+          .eq("company_id", companyId)
+          .eq("status", "overdue")
+          .limit(5)
+          .catch(() => ({ data: [] })),
+        supabase.from("loads")
+          .select("id, shipment_number, estimated_delivery, status")
+          .eq("company_id", companyId)
+          .eq("status", "in_transit")
+          .lte("estimated_delivery", new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString())
+          .limit(5)
+          .catch(() => ({ data: [] })),
+      ])
+      
+      upcomingMaintenance = alertsResults[0]?.data || []
+      overdueInvoices = alertsResults[1]?.data || []
+      upcomingDeliveries = alertsResults[2]?.data || []
+    } catch (error) {
+      console.error("Error fetching alerts:", error)
+      // Use empty arrays if alerts fail
+    }
+
+
     const dashboardData = {
       totalDrivers,
       activeDrivers,
@@ -292,10 +430,22 @@ export async function getDashboardStats() {
       recentTrucks: recentTrucksData || [],
       recentRoutes: recentRoutesData || [],
       recentLoads: recentLoadsData || [],
+      // Financial metrics
+      totalRevenue,
+      totalExpenses,
+      netProfit,
+      profitMargin,
+      outstandingInvoices,
+      revenueTrend: Object.entries(revenueByDate).map(([date, amount]) => ({ date, amount })),
+      loadStatusDistribution: Object.entries(loadStatusCounts).map(([status, count]) => ({ status, count })),
+      // Alerts
+      upcomingMaintenance: upcomingMaintenance || [],
+      overdueInvoices: overdueInvoices || [],
+      upcomingDeliveries: upcomingDeliveries || [],
     }
 
-    // Cache for 30 seconds
-    cache.set(cacheKey, dashboardData, 30000)
+    // Cache for 60 seconds (longer cache for better performance)
+    cache.set(cacheKey, dashboardData, 60000)
 
     return {
       data: dashboardData,
@@ -305,25 +455,35 @@ export async function getDashboardStats() {
     console.error("Error in getDashboardStats:", error)
     // Return minimal data instead of error to prevent UI blocking
     return {
-      data: {
-        totalDrivers: 0,
-        activeDrivers: 0,
-        totalTrucks: 0,
-        activeTrucks: 0,
-        totalRoutes: 0,
-        activeRoutes: 0,
-        totalLoads: 0,
-        inTransitLoads: 0,
-        totalMaintenance: 0,
-        scheduledMaintenance: 0,
-        fleetUtilization: 0,
-        recentActivity: [],
-        recentDrivers: [],
-        recentTrucks: [],
-        recentRoutes: [],
-        recentLoads: [],
-      },
-      error: null, // Don't return error to prevent UI blocking
+        data: {
+          totalDrivers: 0,
+          activeDrivers: 0,
+          totalTrucks: 0,
+          activeTrucks: 0,
+          totalRoutes: 0,
+          activeRoutes: 0,
+          totalLoads: 0,
+          inTransitLoads: 0,
+          totalMaintenance: 0,
+          scheduledMaintenance: 0,
+          fleetUtilization: 0,
+          recentActivity: [],
+          recentDrivers: [],
+          recentTrucks: [],
+          recentRoutes: [],
+          recentLoads: [],
+          totalRevenue: 0,
+          totalExpenses: 0,
+          netProfit: 0,
+          profitMargin: 0,
+          outstandingInvoices: 0,
+          revenueTrend: [],
+          loadStatusDistribution: [],
+          upcomingMaintenance: [],
+          overdueInvoices: [],
+          upcomingDeliveries: [],
+        },
+        error: null, // Don't return error to prevent UI blocking
     }
   }
 }

@@ -351,3 +351,237 @@ export async function deleteRoute(id: string) {
   return { error: null }
 }
 
+// Bulk operations for workflow optimization
+export async function bulkDeleteRoutes(ids: string[]) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  const { error } = await supabase
+    .from("routes")
+    .delete()
+    .in("id", ids)
+    .eq("company_id", userData.company_id)
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  revalidatePath("/dashboard/routes")
+  return { data: { deleted: ids.length }, error: null }
+}
+
+export async function bulkUpdateRouteStatus(ids: string[], status: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  const { error } = await supabase
+    .from("routes")
+    .update({ status })
+    .in("id", ids)
+    .eq("company_id", userData.company_id)
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  revalidatePath("/dashboard/routes")
+  return { data: { updated: ids.length }, error: null }
+}
+
+// Duplicate/clone route for workflow optimization
+export async function duplicateRoute(id: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  // Get the original route
+  const { data: originalRoute, error: fetchError } = await supabase
+    .from("routes")
+    .select("*")
+    .eq("id", id)
+    .eq("company_id", userData.company_id)
+    .single()
+
+  if (fetchError || !originalRoute) {
+    return { error: "Route not found", data: null }
+  }
+
+  // Create duplicate with new name and reset status
+  const duplicateData: any = { ...originalRoute }
+  delete duplicateData.id
+  delete duplicateData.created_at
+  delete duplicateData.updated_at
+  duplicateData.name = `${originalRoute.name} (Copy)`
+  duplicateData.status = "pending" // Reset to pending
+  duplicateData.estimated_arrival = null
+
+  const { data: newRoute, error: createError } = await supabase
+    .from("routes")
+    .insert(duplicateData)
+    .select()
+    .single()
+
+  if (createError) {
+    return { error: createError.message, data: null }
+  }
+
+  // Duplicate stops if any
+  const { getRouteStops } = await import("./route-stops")
+  const { createRouteStop } = await import("./route-stops")
+  const stopsResult = await getRouteStops(id)
+  
+  if (stopsResult.data && stopsResult.data.length > 0) {
+    for (const stop of stopsResult.data) {
+      const stopData: any = { ...stop }
+      delete stopData.id
+      delete stopData.route_id
+      delete stopData.created_at
+      delete stopData.updated_at
+      await createRouteStop(newRoute.id, stopData)
+    }
+  }
+
+  revalidatePath("/dashboard/routes")
+  return { data: newRoute, error: null }
+}
+
+// Smart suggestions for workflow optimization
+export async function getRouteSuggestions(origin?: string, destination?: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  const suggestions: any = {
+    suggestedDriver: null,
+    suggestedTruck: null,
+    similarRoutes: [],
+  }
+
+  // Suggest driver/truck based on route history
+  if (origin && destination) {
+    const { data: recentRoutes } = await supabase
+      .from("routes")
+      .select("driver_id, truck_id")
+      .eq("company_id", userData.company_id)
+      .or(`origin.ilike.%${origin}%,destination.ilike.%${destination}%`)
+      .order("created_at", { ascending: false })
+      .limit(5)
+
+    if (recentRoutes && recentRoutes.length > 0) {
+      const driverCounts: Record<string, number> = {}
+      const truckCounts: Record<string, number> = {}
+      recentRoutes.forEach((route) => {
+        if (route.driver_id) {
+          driverCounts[route.driver_id] = (driverCounts[route.driver_id] || 0) + 1
+        }
+        if (route.truck_id) {
+          truckCounts[route.truck_id] = (truckCounts[route.truck_id] || 0) + 1
+        }
+      })
+
+      const topDriverId = Object.entries(driverCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
+      const topTruckId = Object.entries(truckCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
+
+      if (topDriverId) {
+        const { data: driver } = await supabase
+          .from("drivers")
+          .select("id, name, status")
+          .eq("id", topDriverId)
+          .eq("status", "active")
+          .single()
+        if (driver) suggestions.suggestedDriver = driver
+      }
+
+      if (topTruckId) {
+        const { data: truck } = await supabase
+          .from("trucks")
+          .select("id, truck_number, status")
+          .eq("id", topTruckId)
+          .in("status", ["available", "in_use"])
+          .single()
+        if (truck) suggestions.suggestedTruck = truck
+      }
+    }
+  }
+
+  // Get similar routes for reference
+  const { data: similarRoutes } = await supabase
+    .from("routes")
+    .select("id, name, origin, destination, distance, estimated_time")
+    .eq("company_id", userData.company_id)
+    .order("created_at", { ascending: false })
+    .limit(5)
+
+  if (similarRoutes) {
+    suggestions.similarRoutes = similarRoutes
+  }
+
+  return { data: suggestions, error: null }
+}
+

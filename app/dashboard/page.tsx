@@ -30,6 +30,10 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { ProfitEstimator } from "@/components/dashboard/profit-estimator"
+import { RevenueChart } from "@/components/dashboard/revenue-chart"
+import { LoadStatusChart } from "@/components/dashboard/load-status-chart"
+import { AlertsSection } from "@/components/dashboard/alerts-section"
+import { PerformanceMetrics } from "@/components/dashboard/performance-metrics"
 
 export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<any>(null)
@@ -42,17 +46,20 @@ export default function DashboardPage() {
     
     async function loadStats() {
       try {
-        // Set loading state immediately
-        if (isMounted) {
+        // Only set loading state if we don't have data yet (first load)
+        // This prevents data from disappearing during reloads
+        if (isMounted && !dashboardData) {
           setIsLoading(true)
+        }
+        if (isMounted) {
           setError(null)
         }
         
-        // Add very aggressive timeout to prevent hanging (2 seconds max)
+        // Increased timeout to 8 seconds for better reliability
         const timeoutPromise = new Promise((_, reject) => {
           timeoutId = setTimeout(() => {
             reject(new Error("Dashboard timeout"))
-          }, 2000) // Reduced to 2 seconds - very aggressive
+          }, 8000) // 8 seconds - more reasonable
         })
         
         // Race between the actual request and timeout
@@ -84,10 +91,23 @@ export default function DashboardPage() {
         }
         
         // Always use data if available, even if there's an error
+        // Only update if we got new data - preserve existing data on timeout/error
         if (result?.data) {
           setDashboardData(result.data)
-        } else {
-          // Set minimal data instead of error to prevent UI blocking
+        }
+        // Don't clear data if result is empty - keep showing existing data
+      } catch (err: any) {
+        if (!isMounted) return
+        
+        // Clear timeout if it was set
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+        }
+        
+        // Don't clear existing data on error - keep showing what we have
+        // Only set minimal data if we don't have any data yet
+        if (!dashboardData) {
           setDashboardData({
             totalDrivers: 0,
             activeDrivers: 0,
@@ -105,36 +125,18 @@ export default function DashboardPage() {
             recentTrucks: [],
             recentRoutes: [],
             recentLoads: [],
+            totalRevenue: 0,
+            totalExpenses: 0,
+            netProfit: 0,
+            profitMargin: 0,
+            outstandingInvoices: 0,
+            revenueTrend: [],
+            loadStatusDistribution: [],
+            upcomingMaintenance: [],
+            overdueInvoices: [],
+            upcomingDeliveries: [],
           })
         }
-      } catch (err: any) {
-        if (!isMounted) return
-        
-        // Clear timeout if it was set
-        if (timeoutId) {
-          clearTimeout(timeoutId)
-          timeoutId = null
-        }
-        
-        // Always set minimal data to prevent UI blocking (never show error)
-        setDashboardData({
-          totalDrivers: 0,
-          activeDrivers: 0,
-          totalTrucks: 0,
-          activeTrucks: 0,
-          totalRoutes: 0,
-          activeRoutes: 0,
-          totalLoads: 0,
-          inTransitLoads: 0,
-          totalMaintenance: 0,
-          scheduledMaintenance: 0,
-          fleetUtilization: 0,
-          recentActivity: [],
-          recentDrivers: [],
-          recentTrucks: [],
-          recentRoutes: [],
-          recentLoads: [],
-        })
         setError(null) // Don't set error to prevent UI blocking
       } finally {
         if (isMounted) {
@@ -149,8 +151,8 @@ export default function DashboardPage() {
     // Load stats immediately
     loadStats()
     
-    // Refresh every 30 seconds for real-time updates (cached, so fast)
-    const interval = setInterval(loadStats, 30000)
+    // Refresh every 60 seconds for real-time updates (cached, so fast)
+    const interval = setInterval(loadStats, 60000)
     
     return () => {
       isMounted = false
@@ -159,7 +161,7 @@ export default function DashboardPage() {
         clearTimeout(timeoutId)
       }
     }
-  }, [])
+  }, []) // Load once on mount
 
   // Memoize stats to prevent unnecessary recalculations
   const stats = useMemo(() => {
@@ -236,7 +238,7 @@ export default function DashboardPage() {
       {/* Page Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-foreground">Dashboard</h1>
               <p className="text-muted-foreground text-sm mt-1">Welcome back, manage your fleet efficiently</p>
@@ -320,6 +322,82 @@ export default function DashboardPage() {
       {/* Content Area */}
       <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
+          {/* Financial Overview Section */}
+          <div className="grid md:grid-cols-4 gap-4">
+            <Card className="border-border bg-card/50 p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-muted-foreground text-sm font-medium mb-2">Total Revenue</p>
+                  <p className="text-2xl font-bold text-green-400">
+                    {isLoading ? "..." : `$${Number(dashboardData?.totalRevenue || 0).toLocaleString()}`}
+                  </p>
+                </div>
+                <DollarSign className="w-5 h-5 text-green-400 opacity-70" />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">All paid invoices</p>
+            </Card>
+
+            <Card className="border-border bg-card/50 p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-muted-foreground text-sm font-medium mb-2">Total Expenses</p>
+                  <p className="text-2xl font-bold text-red-400">
+                    {isLoading ? "..." : `$${Number(dashboardData?.totalExpenses || 0).toLocaleString()}`}
+                  </p>
+                </div>
+                <DollarSign className="w-5 h-5 text-red-400 opacity-70" />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">All expenses</p>
+            </Card>
+
+            <Card className="border-border bg-card/50 p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-muted-foreground text-sm font-medium mb-2">Net Profit</p>
+                  <p className={`text-2xl font-bold ${(dashboardData?.netProfit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {isLoading ? "..." : `$${Number(dashboardData?.netProfit || 0).toLocaleString()}`}
+                  </p>
+                </div>
+                <TrendingUp className={`w-5 h-5 opacity-70 ${(dashboardData?.netProfit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`} />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                {dashboardData?.profitMargin ? `${Number(dashboardData.profitMargin).toFixed(1)}% margin` : "0% margin"}
+              </p>
+            </Card>
+
+            <Card className="border-border bg-card/50 p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-muted-foreground text-sm font-medium mb-2">Outstanding</p>
+                  <p className="text-2xl font-bold text-yellow-400">
+                    {isLoading ? "..." : `$${Number(dashboardData?.outstandingInvoices || 0).toLocaleString()}`}
+                  </p>
+                </div>
+                <FileText className="w-5 h-5 text-yellow-400 opacity-70" />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Pending invoices</p>
+            </Card>
+          </div>
+
+          {/* Charts Section */}
+          <div className="grid md:grid-cols-2 gap-6">
+            {dashboardData?.revenueTrend && (
+              <RevenueChart data={dashboardData.revenueTrend} />
+            )}
+            {dashboardData?.loadStatusDistribution && (
+              <LoadStatusChart data={dashboardData.loadStatusDistribution} />
+            )}
+          </div>
+
+          {/* Alerts Section */}
+          {dashboardData && (
+            <AlertsSection
+              upcomingMaintenance={dashboardData.upcomingMaintenance || []}
+              overdueInvoices={dashboardData.overdueInvoices || []}
+              upcomingDeliveries={dashboardData.upcomingDeliveries || []}
+            />
+          )}
+
           {/* Detailed Stats Cards with Partial Info */}
           {/* First Row: Trucks and Drivers */}
           <div className="grid md:grid-cols-2 gap-4">
@@ -515,51 +593,13 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* Additional Metrics */}
-          <div className="grid md:grid-cols-3 gap-4">
-            <Card className="border-border bg-card/50 p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-muted-foreground text-sm font-medium mb-2">Fleet Utilization</p>
-                  <p className="text-3xl font-bold text-foreground">{isLoading ? "..." : `${stats.fleetUtilization}%`}</p>
-                </div>
-                <TrendingUp className="w-5 h-5 text-primary opacity-70" />
-              </div>
-              <p className="text-xs text-muted-foreground mt-4">
-                {stats.fleetUtilization >= 80 ? "Optimal performance" : stats.fleetUtilization >= 50 ? "Good performance" : "Room for improvement"}
-              </p>
-            </Card>
-
-            <Card className="border-border bg-card/50 p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-muted-foreground text-sm font-medium mb-2">Total Loads</p>
-                  <p className="text-3xl font-bold text-foreground">{isLoading ? "..." : stats.totalLoads}</p>
-                </div>
-                <Package className="w-5 h-5 text-primary opacity-70" />
-              </div>
-              <Link href="/dashboard/loads">
-                <Button variant="ghost" size="sm" className="mt-4 text-xs">
-                  View Loads <ArrowRight className="w-3 h-3 ml-1" />
-                </Button>
-              </Link>
-            </Card>
-
-            <Card className="border-border bg-card/50 p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-muted-foreground text-sm font-medium mb-2">Maintenance Alerts</p>
-                  <p className="text-3xl font-bold text-foreground">{isLoading ? "..." : stats.scheduledMaintenance}</p>
-                </div>
-                <AlertCircle className="w-5 h-5 text-red-500 opacity-70" />
-              </div>
-              <Link href="/dashboard/maintenance">
-                <Button variant="ghost" size="sm" className="mt-4 text-xs">
-                  View Maintenance <ArrowRight className="w-3 h-3 ml-1" />
-                </Button>
-              </Link>
-            </Card>
-          </div>
+          {/* Performance Metrics */}
+          <PerformanceMetrics
+            fleetUtilization={stats.fleetUtilization}
+            totalLoads={stats.totalLoads}
+            onTimeDeliveryRate={dashboardData?.totalLoads > 0 && dashboardData?.inTransitLoads > 0 ? Math.round((dashboardData.inTransitLoads / dashboardData.totalLoads) * 100) : 0}
+            averageLoadValue={dashboardData?.totalRevenue && dashboardData?.totalLoads ? (dashboardData.totalRevenue / dashboardData.totalLoads) : 0}
+          />
 
           {/* Recent Activity */}
           <Card className="border-border bg-card/50 p-6">

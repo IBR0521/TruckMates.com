@@ -97,7 +97,8 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           let truckHeight = 4.0 // default in meters
           let truckMaxWeight = 80000 // default in lbs (80,000 lbs = ~36,000 kg)
           
-          if (assignedTruck) {
+          // Check if truck is assigned (truck state is set asynchronously, so check truck_id from load)
+          if (loadResult.data.truck_id) {
             // Estimate truck height from type (if available) or use default
             // Standard semi-truck height is typically 4.0-4.2m
             truckHeight = 4.2 // Default for semi-trucks
