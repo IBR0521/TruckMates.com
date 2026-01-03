@@ -107,12 +107,12 @@ export default function IntegrationSettingsPage() {
           <div className="space-y-4">
             {/* QuickBooks */}
             <div className="border rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                <div className="flex-1">
                   <h3 className="font-semibold">QuickBooks</h3>
                   <p className="text-sm text-muted-foreground">Sync accounting data with QuickBooks</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   {integrations.quickbooks_enabled ? (
                     <CheckCircle2 className="w-5 h-5 text-green-500" />
                   ) : (
@@ -147,12 +147,12 @@ export default function IntegrationSettingsPage() {
 
             {/* Stripe */}
             <div className="border rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                <div className="flex-1">
                   <h3 className="font-semibold">Stripe</h3>
                   <p className="text-sm text-muted-foreground">Process payments with Stripe</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   {integrations.stripe_enabled ? (
                     <CheckCircle2 className="w-5 h-5 text-green-500" />
                   ) : (
@@ -187,12 +187,12 @@ export default function IntegrationSettingsPage() {
 
             {/* Google Maps */}
             <div className="border rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                <div className="flex-1">
                   <h3 className="font-semibold">Google Maps</h3>
                   <p className="text-sm text-muted-foreground">Enhanced mapping and routing</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   {integrations.google_maps_enabled ? (
                     <CheckCircle2 className="w-5 h-5 text-green-500" />
                   ) : (
@@ -227,7 +227,7 @@ export default function IntegrationSettingsPage() {
           </div>
 
           <div className="mt-6 flex justify-end">
-            <Button onClick={handleSave} disabled={isSaving}>
+            <Button onClick={handleSave} disabled={isSaving} className="w-full sm:w-auto">
               <Save className="w-4 h-4 mr-2" />
               {isSaving ? "Saving..." : "Save Changes"}
             </Button>

@@ -184,7 +184,7 @@ export default function BillingSettingsPage() {
           </div>
 
           <div className="mt-6 flex justify-end">
-            <Button onClick={handleSave} disabled={isSaving}>
+            <Button onClick={handleSave} disabled={isSaving} className="w-full sm:w-auto">
               <Save className="w-4 h-4 mr-2" />
               {isSaving ? "Saving..." : "Save Changes"}
             </Button>

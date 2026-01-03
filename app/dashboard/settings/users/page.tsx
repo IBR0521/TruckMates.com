@@ -18,10 +18,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { getCompanyUsers, updateUserRole, removeUser } from "@/app/actions/settings-users"
 import { toast } from "sonner"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 export default function UsersSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const isMobile = useIsMobile()
   const [users, setUsers] = useState<Array<{
     id: string
     email: string
@@ -148,44 +150,25 @@ export default function UsersSettingsPage() {
               </div>
             </div>
 
-            <div className="border rounded-lg overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-secondary">
-                  <tr>
-                    <th className="text-left p-3 font-semibold text-sm">Name</th>
-                    <th className="text-left p-3 font-semibold text-sm">Email</th>
-                    <th className="text-left p-3 font-semibold text-sm">Role</th>
-                    <th className="text-left p-3 font-semibold text-sm">Status</th>
-                    <th className="text-right p-3 font-semibold text-sm">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                        {searchQuery ? "No users found matching your search" : "No users found"}
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredUsers.map((user) => (
-                      <tr key={user.id} className="border-t">
-                        <td className="p-3">{user.full_name || "N/A"}</td>
-                        <td className="p-3 text-muted-foreground">{user.email}</td>
-                        <td className="p-3">
-                          <span className="px-2 py-1 bg-primary/10 text-primary rounded text-sm">
-                            {user.role}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          <span className={`px-2 py-1 rounded text-sm ${
-                            user.status === "Active" 
-                              ? "bg-green-500/10 text-green-500" 
-                              : "bg-red-500/10 text-red-500"
-                          }`}>
-                            {user.status}
-                          </span>
-                        </td>
-                        <td className="p-3 text-right">
+            {isMobile ? (
+              // Mobile: Card view
+              <div className="space-y-3">
+                {filteredUsers.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    {searchQuery ? "No users found matching your search" : "No users found"}
+                  </div>
+                ) : (
+                  filteredUsers.map((user) => (
+                    <Card key={user.id} className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-foreground">{user.full_name || "N/A"}</h3>
+                            <p className="text-sm text-muted-foreground mt-1">{user.email}</p>
+                            {user.phone && (
+                              <p className="text-xs text-muted-foreground mt-1">{user.phone}</p>
+                            )}
+                          </div>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon">
@@ -204,13 +187,90 @@ export default function UsersSettingsPage() {
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="px-2 py-1 bg-primary/10 text-primary rounded text-xs">
+                            {user.role}
+                          </span>
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            user.status === "Active" 
+                              ? "bg-green-500/10 text-green-500" 
+                              : "bg-red-500/10 text-red-500"
+                          }`}>
+                            {user.status}
+                          </span>
+                        </div>
+                      </div>
+                    </Card>
+                  ))
+                )}
+              </div>
+            ) : (
+              // Desktop: Table view
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-secondary">
+                    <tr>
+                      <th className="text-left p-3 font-semibold text-sm">Name</th>
+                      <th className="text-left p-3 font-semibold text-sm">Email</th>
+                      <th className="text-left p-3 font-semibold text-sm">Role</th>
+                      <th className="text-left p-3 font-semibold text-sm">Status</th>
+                      <th className="text-right p-3 font-semibold text-sm">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                          {searchQuery ? "No users found matching your search" : "No users found"}
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    ) : (
+                      filteredUsers.map((user) => (
+                        <tr key={user.id} className="border-t">
+                          <td className="p-3">{user.full_name || "N/A"}</td>
+                          <td className="p-3 text-muted-foreground">{user.email}</td>
+                          <td className="p-3">
+                            <span className="px-2 py-1 bg-primary/10 text-primary rounded text-sm">
+                              {user.role}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <span className={`px-2 py-1 rounded text-sm ${
+                              user.status === "Active" 
+                                ? "bg-green-500/10 text-green-500" 
+                                : "bg-red-500/10 text-red-500"
+                            }`}>
+                              {user.status}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreVertical className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleUpdateRole(user.id, user.role === "Manager" ? "Employee" : "Manager")}>
+                                  Change Role
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="text-red-500"
+                                  onClick={() => handleRemoveUser(user.id, user.full_name || user.email)}
+                                >
+                                  Remove
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </Card>
         )}

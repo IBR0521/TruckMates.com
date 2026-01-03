@@ -76,21 +76,21 @@ export default function PredictiveMaintenancePage() {
   return (
     <div className="w-full">
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Predictive Maintenance</h1>
-            <p className="text-muted-foreground text-sm mt-1">
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Predictive Maintenance</h1>
+            <p className="text-muted-foreground text-xs sm:text-sm mt-1">
               AI-powered maintenance predictions based on usage patterns
             </p>
           </div>
-          <Button onClick={loadPredictions} variant="outline">
+          <Button onClick={loadPredictions} variant="outline" className="w-full sm:w-auto">
             Refresh
           </Button>
         </div>
       </div>
 
-      <div className="p-8">
-        <div className="max-w-7xl mx-auto space-y-6">
+      <div className="p-4 sm:p-6 md:p-8">
+        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
           {predictions.length === 0 ? (
             <Card className="p-8 text-center">
               <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
@@ -103,11 +103,11 @@ export default function PredictiveMaintenancePage() {
             predictions.map((truck, index) => (
               <Card key={index} className="p-6 border border-border/50">
                 <div className="mb-4">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-foreground">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                    <h3 className="text-base sm:text-lg font-semibold text-foreground break-words">
                       {truck.truck_number} - {truck.make} {truck.model}
                     </h3>
-                    <span className={`px-2 py-1 text-xs rounded ${
+                    <span className={`px-2 py-1 text-xs rounded flex-shrink-0 ${
                       truck.priority === "high" 
                         ? "bg-red-500/10 text-red-500" 
                         : truck.priority === "medium"
@@ -117,7 +117,7 @@ export default function PredictiveMaintenancePage() {
                       {truck.priority.toUpperCase()} PRIORITY
                     </span>
                   </div>
-                  <div className="grid md:grid-cols-3 gap-4 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 text-sm">
                     <div className="flex items-center gap-2">
                       <TrendingUp className="w-4 h-4 text-muted-foreground" />
                       <div>
@@ -154,12 +154,12 @@ export default function PredictiveMaintenancePage() {
                   <div className="space-y-3 mt-4 pt-4 border-t">
                     <h4 className="font-semibold text-sm">Predicted Maintenance Needs:</h4>
                     {truck.predicted_needs.map((need: any, needIndex: number) => (
-                      <div key={needIndex} className="flex items-start justify-between p-3 bg-secondary rounded-lg">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Wrench className="w-4 h-4 text-muted-foreground" />
+                      <div key={needIndex} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 p-3 bg-secondary rounded-lg">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <Wrench className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                             <span className="font-medium">{need.type}</span>
-                            <span className={`px-2 py-0.5 text-xs rounded ${
+                            <span className={`px-2 py-0.5 text-xs rounded flex-shrink-0 ${
                               need.priority === "high" 
                                 ? "bg-red-500/10 text-red-500" 
                                 : "bg-yellow-500/10 text-yellow-500"
@@ -167,14 +167,14 @@ export default function PredictiveMaintenancePage() {
                               {need.priority.toUpperCase()}
                             </span>
                           </div>
-                          <p className="text-xs text-muted-foreground mb-2">{need.reason}</p>
+                          <p className="text-xs text-muted-foreground mb-2 break-words">{need.reason}</p>
                           <p className="text-xs text-muted-foreground">
                             Estimated at: {need.estimated_mileage.toLocaleString()} miles
                           </p>
                         </div>
                         <Button
                           onClick={() => handleScheduleMaintenance(truck, need)}
-                          className="ml-4"
+                          className="w-full sm:w-auto sm:ml-4 flex-shrink-0"
                           size="sm"
                           disabled={schedulingId === `${truck.truck_id}-${need.type}`}
                         >

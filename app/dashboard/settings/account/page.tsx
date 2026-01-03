@@ -165,7 +165,7 @@ export default function AccountSettingsPage() {
           </div>
 
           <div className="mt-6 flex justify-end">
-            <Button onClick={handleSaveProfile} disabled={isSaving}>
+            <Button onClick={handleSaveProfile} disabled={isSaving} className="w-full sm:w-auto">
               <Save className="w-4 h-4 mr-2" />
               {isSaving ? "Saving..." : "Save Changes"}
             </Button>
@@ -219,7 +219,7 @@ export default function AccountSettingsPage() {
           </div>
 
           <div className="mt-6 flex justify-end">
-            <Button onClick={handleChangePassword} disabled={isSaving}>
+            <Button onClick={handleChangePassword} disabled={isSaving} className="w-full sm:w-auto">
               <Save className="w-4 h-4 mr-2" />
               {isSaving ? "Updating..." : "Update Password"}
             </Button>

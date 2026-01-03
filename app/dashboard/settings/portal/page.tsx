@@ -144,20 +144,20 @@ export default function PortalSettingsPage() {
                 </div>
 
                 <div className="p-4 bg-secondary rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex-1 min-w-0">
                       <Label className="text-sm text-muted-foreground">Portal URL</Label>
-                      <p className="font-mono text-sm mt-1">{portalUrl}</p>
+                      <p className="font-mono text-xs sm:text-sm mt-1 break-all">{portalUrl}</p>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={handleCopyUrl}>
-                        <Copy className="w-4 h-4 mr-2" />
-                        Copy
+                    <div className="flex gap-2 flex-shrink-0">
+                      <Button variant="outline" size="sm" onClick={handleCopyUrl} className="flex-1 sm:flex-initial">
+                        <Copy className="w-4 h-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Copy</span>
                       </Button>
-                      <Button variant="outline" size="sm" asChild>
+                      <Button variant="outline" size="sm" asChild className="flex-1 sm:flex-initial">
                         <a href={portalUrl} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="w-4 h-4 mr-2" />
-                          Open
+                          <ExternalLink className="w-4 h-4 sm:mr-2" />
+                          <span className="hidden sm:inline">Open</span>
                         </a>
                       </Button>
                     </div>
@@ -226,7 +226,7 @@ export default function PortalSettingsPage() {
             )}
 
             <div className="flex justify-end pt-4 border-t">
-              <Button onClick={handleSave} disabled={isSaving}>
+              <Button onClick={handleSave} disabled={isSaving} className="w-full sm:w-auto">
                 <Save className="w-4 h-4 mr-2" />
                 {isSaving ? "Saving..." : "Save Changes"}
               </Button>
