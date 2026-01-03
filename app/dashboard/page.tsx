@@ -234,21 +234,26 @@ export default function DashboardPage() {
   return (
     <div className="w-full">
       {/* Page Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground text-sm mt-1">Welcome back, manage your fleet efficiently</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <ProfitEstimator />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                <Plus className="w-4 h-4 mr-2" />
-                Add New
-                <ChevronDown className="w-4 h-4 ml-2" />
-              </Button>
-            </DropdownMenuTrigger>
+      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground">Dashboard</h1>
+              <p className="text-muted-foreground text-sm mt-1">Welcome back, manage your fleet efficiently</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="hidden sm:block">
+              <ProfitEstimator />
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add New
+                  <ChevronDown className="w-4 h-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem asChild>
               <Link href="/dashboard/drivers/add" className="flex items-center cursor-pointer">
