@@ -254,6 +254,68 @@ export default function DashboardPage() {
                   <ChevronDown className="w-4 h-4 ml-2" />
                 </Button>
               </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/drivers/add" className="flex items-center cursor-pointer">
+                    <Users className="w-4 h-4 mr-2" />
+                    Add Driver
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/trucks/add" className="flex items-center cursor-pointer">
+                    <Truck className="w-4 h-4 mr-2" />
+                    Add Vehicle
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/routes/add" className="flex items-center cursor-pointer">
+                    <Route className="w-4 h-4 mr-2" />
+                    Add Route
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/loads/add" className="flex items-center cursor-pointer">
+                    <Package className="w-4 h-4 mr-2" />
+                    Add Load
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/customers/add" className="flex items-center cursor-pointer">
+                    <Building2 className="w-4 h-4 mr-2" />
+                    Add Customer
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/vendors/add" className="flex items-center cursor-pointer">
+                    <Building2 className="w-4 h-4 mr-2" />
+                    Add Vendor
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/accounting/invoices/create" className="flex items-center cursor-pointer">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Create Invoice
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/accounting/expenses/add" className="flex items-center cursor-pointer">
+                    <DollarSign className="w-4 h-4 mr-2" />
+                    Add Expense
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/maintenance/add" className="flex items-center cursor-pointer">
+                    <Wrench className="w-4 h-4 mr-2" />
+                    Schedule Maintenance
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem asChild>
               <Link href="/dashboard/drivers/add" className="flex items-center cursor-pointer">
