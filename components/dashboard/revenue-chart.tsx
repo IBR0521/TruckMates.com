@@ -60,9 +60,9 @@ export function RevenueChart({ data }: RevenueChartProps) {
           <Line 
             type="monotone" 
             dataKey="amount" 
-            stroke="hsl(var(--primary))" 
+            stroke="#22c55e" 
             strokeWidth={2}
-            dot={{ fill: "hsl(var(--primary))", r: 4 }}
+            dot={{ fill: "#22c55e", r: 4 }}
             activeDot={{ r: 6 }}
           />
         </LineChart>
