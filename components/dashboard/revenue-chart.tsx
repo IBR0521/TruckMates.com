@@ -60,10 +60,11 @@ export function RevenueChart({ data }: RevenueChartProps) {
           <Line 
             type="monotone" 
             dataKey="amount" 
-            stroke="#fbbf24" 
-            strokeWidth={3}
+            stroke="transparent" 
+            strokeWidth={0}
             dot={{ fill: "#fbbf24", r: 5, strokeWidth: 2, stroke: "#ffffff" }}
             activeDot={{ r: 7, fill: "#fbbf24", stroke: "#ffffff", strokeWidth: 2 }}
+            connectNulls={false}
           />
         </LineChart>
       </ResponsiveContainer>
