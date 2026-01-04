@@ -45,8 +45,8 @@ export async function getInvoices(filters?: {
     query = query.eq("status", filters.status)
   }
 
-  // Apply pagination (default limit 100)
-  const limit = filters?.limit || 100
+  // Apply pagination (default limit 25 for faster initial loads, max 100)
+  const limit = Math.min(filters?.limit || 25, 100)
   const offset = filters?.offset || 0
   query = query.range(offset, offset + limit - 1)
 

@@ -27,8 +27,8 @@ export async function getDocuments(filters?: {
     return { error: companyError || "No company found", data: null }
   }
 
-  // Build query with pagination
-  const limit = filters?.limit || 100
+  // Build query with pagination (default limit 25 for faster initial loads, max 100)
+  const limit = Math.min(filters?.limit || 25, 100)
   const offset = filters?.offset || 0
 
   const { data: documents, error, count } = await supabase
