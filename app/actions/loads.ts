@@ -470,14 +470,49 @@ export async function createLoad(formData: {
   
   if ((settings.auto_assign_driver || settings.auto_assign_truck) && formData.origin && formData.destination) {
     try {
-      const { getLoadSuggestions } = await import("./loads")
-      const suggestionsResult = await getLoadSuggestions(formData.origin, formData.destination)
-      if (suggestionsResult.data) {
-        if (settings.auto_assign_driver && !finalDriverId && suggestionsResult.data.suggestedDriver) {
-          finalDriverId = suggestionsResult.data.suggestedDriver.id
+      // Get suggestions directly (avoid circular import by calling the logic inline)
+      const { data: recentLoads } = await supabase
+        .from("loads")
+        .select("driver_id, truck_id, customer_id")
+        .eq("company_id", userData.company_id)
+        .or(`origin.ilike.%${formData.origin}%,destination.ilike.%${formData.destination}%`)
+        .order("created_at", { ascending: false })
+        .limit(5)
+
+      if (recentLoads && recentLoads.length > 0) {
+        // Find most frequently used driver for this route
+        const driverCounts: Record<string, number> = {}
+        const truckCounts: Record<string, number> = {}
+        recentLoads.forEach((load) => {
+          if (load.driver_id) {
+            driverCounts[load.driver_id] = (driverCounts[load.driver_id] || 0) + 1
+          }
+          if (load.truck_id) {
+            truckCounts[load.truck_id] = (truckCounts[load.truck_id] || 0) + 1
+          }
+        })
+
+        const topDriverId = Object.entries(driverCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
+        const topTruckId = Object.entries(truckCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
+
+        if (settings.auto_assign_driver && !finalDriverId && topDriverId) {
+          const { data: driver } = await supabase
+            .from("drivers")
+            .select("id, name, status")
+            .eq("id", topDriverId)
+            .eq("status", "active")
+            .single()
+          if (driver) finalDriverId = driver.id
         }
-        if (settings.auto_assign_truck && !finalTruckId && suggestionsResult.data.suggestedTruck) {
-          finalTruckId = suggestionsResult.data.suggestedTruck.id
+
+        if (settings.auto_assign_truck && !finalTruckId && topTruckId) {
+          const { data: truck } = await supabase
+            .from("trucks")
+            .select("id, truck_number, status")
+            .eq("id", topTruckId)
+            .in("status", ["available", "in_use"])
+            .single()
+          if (truck) finalTruckId = truck.id
         }
       }
     } catch (err) {

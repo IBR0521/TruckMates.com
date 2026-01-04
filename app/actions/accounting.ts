@@ -307,8 +307,8 @@ export async function createInvoice(formData: {
   }
 
   // Calculate due date from payment terms if not provided
-  let dueDate = formData.due_date
-  if (!dueDate && formData.issue_date) {
+  let calculatedDueDate = formData.due_date
+  if (!calculatedDueDate && formData.issue_date) {
     const issueDate = new Date(formData.issue_date)
     let days = 30 // default
     if (paymentTerms.includes("Net 7")) days = 7
@@ -318,7 +318,7 @@ export async function createInvoice(formData: {
     else if (paymentTerms.includes("Net 90")) days = 90
     else if (paymentTerms.includes("Due on Receipt")) days = 0
     issueDate.setDate(issueDate.getDate() + days)
-    dueDate = issueDate.toISOString().split('T')[0]
+    calculatedDueDate = issueDate.toISOString().split('T')[0]
   }
 
   const invoiceData: any = {
@@ -329,7 +329,7 @@ export async function createInvoice(formData: {
     amount: finalAmount,
     status: "pending",
     issue_date: formData.issue_date,
-    due_date: dueDate,
+    due_date: calculatedDueDate,
     payment_terms: sanitizeString(paymentTerms, 50),
     description: formData.description ? sanitizeString(formData.description, 2000) : null,
     items: formData.items || null,
