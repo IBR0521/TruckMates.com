@@ -267,6 +267,11 @@ export async function createLoad(formData: {
     return { error: "No company found", data: null }
   }
 
+  // Get company settings to apply load defaults
+  const { getCompanySettings } = await import("./number-formats")
+  const settingsResult = await getCompanySettings()
+  const settings = settingsResult.data || {}
+
   // Professional validation
   const loadValidation = validateLoadData({
     origin: formData.origin,
@@ -377,8 +382,8 @@ export async function createLoad(formData: {
 
   let routeId = formData.route_id || null
 
-  // If no route is assigned, automatically create one (skip for multi-delivery with "Multiple Locations")
-  if (!routeId && formData.origin && formData.destination && formData.destination !== "Multiple Locations") {
+  // If no route is assigned, automatically create one if setting is enabled (skip for multi-delivery with "Multiple Locations")
+  if (!routeId && settings.auto_create_route && formData.origin && formData.destination && formData.destination !== "Multiple Locations") {
     // Check if a matching route already exists
     const normalizeLocation = (location: string) => {
       if (!location) return ""
@@ -444,16 +449,58 @@ export async function createLoad(formData: {
     }
   }
 
+  // Apply load settings defaults
+  const finalLoadType = formData.load_type || settings.default_load_type || "ftl"
+  const finalCarrierType = formData.carrier_type || settings.default_carrier_type || "dry-van"
+  const finalStatus = formData.status || settings.default_status || "pending"
+  
+  // Apply default pricing if not provided
+  let finalRate = formData.rate
+  let finalFuelSurcharge = formData.fuel_surcharge
+  if (!finalRate && settings.default_rate_per_mile && formData.estimated_miles) {
+    finalRate = settings.default_rate_per_mile * formData.estimated_miles
+  }
+  if (!finalFuelSurcharge && settings.default_fuel_surcharge_percentage && finalRate) {
+    finalFuelSurcharge = (finalRate * settings.default_fuel_surcharge_percentage) / 100
+  }
+
+  // Auto-assign driver/truck if enabled and not provided
+  let finalDriverId = formData.driver_id
+  let finalTruckId = formData.truck_id
+  
+  if ((settings.auto_assign_driver || settings.auto_assign_truck) && formData.origin && formData.destination) {
+    try {
+      const { getLoadSuggestions } = await import("./loads")
+      const suggestionsResult = await getLoadSuggestions(formData.origin, formData.destination)
+      if (suggestionsResult.data) {
+        if (settings.auto_assign_driver && !finalDriverId && suggestionsResult.data.suggestedDriver) {
+          finalDriverId = suggestionsResult.data.suggestedDriver.id
+        }
+        if (settings.auto_assign_truck && !finalTruckId && suggestionsResult.data.suggestedTruck) {
+          finalTruckId = suggestionsResult.data.suggestedTruck.id
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to get load suggestions for auto-assignment:", err)
+    }
+  }
+
   // Build insert data with professional sanitization
   const loadData: any = {
     company_id: userData.company_id,
     shipment_number: shipmentNumber,
     origin: sanitizeString(formData.origin, 200),
     destination: sanitizeString(formData.destination, 200),
-    status: formData.status || "pending",
+    status: finalStatus,
+    load_type: finalLoadType,
+    carrier_type: finalCarrierType,
     delivery_type: formData.delivery_type || "single",
     total_delivery_points: 1, // Will be updated if delivery points are added
   }
+  
+  // Use auto-assigned driver/truck if available
+  if (finalDriverId) loadData.driver_id = finalDriverId
+  if (finalTruckId) loadData.truck_id = finalTruckId
 
   // Add optional fields with validation and sanitization
   if (formData.weight) loadData.weight = sanitizeString(formData.weight, 50)
@@ -466,7 +513,9 @@ export async function createLoad(formData: {
     const value = typeof formData.value === 'string' ? parseFloat(formData.value) : formData.value
     if (!isNaN(value) && value >= 0) loadData.value = value
   }
+  // Carrier type already set from defaults above, only override if explicitly provided
   if (formData.carrier_type) loadData.carrier_type = sanitizeString(formData.carrier_type, 50)
+  // Driver/truck already set from auto-assignment above, only override if explicitly provided
   if (formData.driver_id) loadData.driver_id = formData.driver_id
   if (formData.truck_id) loadData.truck_id = formData.truck_id
   if (routeId) loadData.route_id = routeId
@@ -539,10 +588,12 @@ export async function createLoad(formData: {
   if (formData.requires_appointment !== undefined) loadData.requires_appointment = formData.requires_appointment
   if (formData.appointment_time) loadData.appointment_time = formData.appointment_time
   
-  // Pricing
-  if (formData.rate !== undefined && formData.rate !== null) loadData.rate = formData.rate
+  // Pricing (use defaults if not provided)
+  if (finalRate !== undefined && finalRate !== null) loadData.rate = finalRate
+  else if (formData.rate !== undefined && formData.rate !== null) loadData.rate = formData.rate
   if (formData.rate_type) loadData.rate_type = formData.rate_type
-  if (formData.fuel_surcharge !== undefined && formData.fuel_surcharge !== null) loadData.fuel_surcharge = formData.fuel_surcharge
+  if (finalFuelSurcharge !== undefined && finalFuelSurcharge !== null) loadData.fuel_surcharge = finalFuelSurcharge
+  else if (formData.fuel_surcharge !== undefined && formData.fuel_surcharge !== null) loadData.fuel_surcharge = formData.fuel_surcharge
   if (formData.accessorial_charges !== undefined && formData.accessorial_charges !== null) loadData.accessorial_charges = formData.accessorial_charges
   if (formData.discount !== undefined && formData.discount !== null) loadData.discount = formData.discount
   if (formData.advance !== undefined && formData.advance !== null) loadData.advance = formData.advance

@@ -233,6 +233,11 @@ export async function createInvoice(formData: {
     return { error: "No company found", data: null }
   }
 
+  // Get company settings to apply invoice defaults
+  const { getCompanySettings } = await import("./number-formats")
+  const settingsResult = await getCompanySettings()
+  const settings = settingsResult.data || {}
+
   // Professional validation
   if (!validateRequiredString(formData.customer_name, 2, 200)) {
     return { error: "Customer name is required and must be between 2 and 200 characters", data: null }
@@ -282,26 +287,89 @@ export async function createInvoice(formData: {
   }
   const invoiceNumber = numberResult.data
 
+  // Apply invoice settings
+  const paymentTerms = formData.payment_terms || settings.default_payment_terms || "Net 30"
+  let finalAmount = typeof formData.amount === 'string' ? parseFloat(formData.amount) : formData.amount
+  let taxAmount = 0
+  let subtotal = finalAmount
+
+  // Apply tax if enabled
+  if (settings.tax_enabled && settings.default_tax_rate) {
+    if (settings.tax_inclusive) {
+      // Tax is included in the amount, calculate subtotal
+      subtotal = finalAmount / (1 + settings.default_tax_rate / 100)
+      taxAmount = finalAmount - subtotal
+    } else {
+      // Tax is added to the amount
+      taxAmount = (subtotal * settings.default_tax_rate) / 100
+      finalAmount = subtotal + taxAmount
+    }
+  }
+
+  // Calculate due date from payment terms if not provided
+  let dueDate = formData.due_date
+  if (!dueDate && formData.issue_date) {
+    const issueDate = new Date(formData.issue_date)
+    let days = 30 // default
+    if (paymentTerms.includes("Net 7")) days = 7
+    else if (paymentTerms.includes("Net 15")) days = 15
+    else if (paymentTerms.includes("Net 45")) days = 45
+    else if (paymentTerms.includes("Net 60")) days = 60
+    else if (paymentTerms.includes("Net 90")) days = 90
+    else if (paymentTerms.includes("Due on Receipt")) days = 0
+    issueDate.setDate(issueDate.getDate() + days)
+    dueDate = issueDate.toISOString().split('T')[0]
+  }
+
+  const invoiceData: any = {
+    company_id: userData.company_id,
+    invoice_number: invoiceNumber,
+    customer_name: sanitizeString(formData.customer_name, 200),
+    load_id: formData.load_id || null,
+    amount: finalAmount,
+    status: "pending",
+    issue_date: formData.issue_date,
+    due_date: dueDate,
+    payment_terms: sanitizeString(paymentTerms, 50),
+    description: formData.description ? sanitizeString(formData.description, 2000) : null,
+    items: formData.items || null,
+  }
+
+  // Add tax information if tax is enabled
+  if (settings.tax_enabled) {
+    invoiceData.tax_amount = taxAmount
+    invoiceData.tax_rate = settings.default_tax_rate
+    invoiceData.subtotal = subtotal
+  }
+
   const { data, error } = await supabase
     .from("invoices")
-    .insert({
-      company_id: userData.company_id,
-      invoice_number: invoiceNumber,
-      customer_name: sanitizeString(formData.customer_name, 200),
-      load_id: formData.load_id || null,
-      amount: typeof formData.amount === 'string' ? parseFloat(formData.amount) : formData.amount,
-      status: "pending",
-      issue_date: formData.issue_date,
-      due_date: formData.due_date,
-      payment_terms: formData.payment_terms ? sanitizeString(formData.payment_terms, 50) : "Net 30",
-      description: formData.description ? sanitizeString(formData.description, 2000) : null,
-      items: formData.items || null,
-    })
+    .insert(invoiceData)
     .select()
     .single()
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  // Auto-send invoice if enabled
+  if (settings.invoice_auto_send && data) {
+    try {
+      // Import email sending function (to be implemented)
+      const { sendInvoiceEmail } = await import("./invoice-email")
+      await sendInvoiceEmail(data.id, {
+        subject: settings.invoice_email_subject || "Invoice {INVOICE_NUMBER} from {COMPANY_NAME}",
+        body: settings.invoice_email_body || "",
+        cc_emails: settings.cc_emails ? settings.cc_emails.split(',').map(e => e.trim()) : [],
+        bcc_emails: settings.bcc_emails ? settings.bcc_emails.split(',').map(e => e.trim()) : [],
+        send_copy_to_company: settings.send_copy_to_company || false,
+        include_bol: settings.include_bol_in_invoice || false,
+        auto_attach_documents: settings.auto_attach_documents || false,
+      })
+    } catch (emailError) {
+      // Log error but don't fail invoice creation
+      console.error("Failed to auto-send invoice email:", emailError)
+    }
   }
 
   revalidatePath("/dashboard/accounting/invoices")
