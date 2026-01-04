@@ -33,7 +33,7 @@ export async function getDocuments(filters?: {
 
   const { data: documents, error, count } = await supabase
     .from("documents")
-    .select("id, file_name, file_type, file_size, upload_date, company_id, load_id, route_id", { count: "exact" })
+    .select("id, name, type, file_url, file_size, upload_date, expiry_date, company_id, truck_id, driver_id", { count: "exact" })
     .eq("company_id", company_id)
     .order("upload_date", { ascending: false })
     .range(offset, offset + limit - 1)
