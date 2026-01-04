@@ -34,7 +34,7 @@ export async function getDrivers(filters?: {
   // Build query with selective columns and pagination
   let query = supabase
     .from("drivers")
-    .select("id, name, email, phone, status, license_number, license_state, license_expiry, truck_id, created_at", { count: "exact" })
+    .select("id, name, email, phone, status, license_number, license_expiry, truck_id, created_at", { count: "exact" })
     .eq("company_id", company_id)
     .order("created_at", { ascending: false })
 
@@ -85,23 +85,10 @@ export async function createDriver(formData: {
   name: string
   email: string
   phone: string
-  address?: string
-  city?: string
-  state?: string
-  zip?: string
   license_number: string
-  license_state?: string
   license_expiry?: string | null
-  date_of_birth?: string | null
-  emergency_contact_name?: string
-  emergency_contact_phone?: string
-  emergency_contact_relationship?: string
-  hire_date?: string | null
-  pay_rate_type?: string
-  pay_rate?: number | null
   status?: string
   truck_id?: string | null
-  notes?: string
   [key: string]: any // Allow additional fields
 }) {
   const supabase = await createClient()
@@ -137,7 +124,6 @@ export async function createDriver(formData: {
     email: formData.email,
     phone: formData.phone,
     license_number: formData.license_number,
-    license_state: formData.license_state,
     license_expiry: formData.license_expiry || undefined,
   })
 
@@ -192,34 +178,19 @@ export async function createDriver(formData: {
   }
 
   // Build insert data with professional sanitization
+  // Only include fields that exist in the drivers table schema
   const driverData: any = {
     company_id: userData.company_id,
     name: sanitizeString(formData.name, 100),
     status: formData.status || "active",
   }
 
-  // Add optional fields with validation and sanitization
+  // Add optional fields with validation and sanitization (only fields that exist in schema)
   if (formData.email) driverData.email = sanitizeEmail(formData.email)
   if (formData.phone) driverData.phone = sanitizePhone(formData.phone)
-  // Note: address, city, state, zip are not in the drivers table schema
   if (formData.license_number) driverData.license_number = sanitizeString(formData.license_number, 20).toUpperCase()
-  if (formData.license_state) {
-    const state = sanitizeString(formData.license_state, 2).toUpperCase()
-    if (state.length === 2) driverData.license_state = state
-  }
   if (formData.license_expiry) driverData.license_expiry = formData.license_expiry
-  if (formData.date_of_birth) driverData.date_of_birth = formData.date_of_birth
-  if (formData.emergency_contact_name) driverData.emergency_contact_name = sanitizeString(formData.emergency_contact_name, 100)
-  if (formData.emergency_contact_phone) driverData.emergency_contact_phone = sanitizePhone(formData.emergency_contact_phone)
-  if (formData.emergency_contact_relationship) driverData.emergency_contact_relationship = sanitizeString(formData.emergency_contact_relationship, 50)
-  if (formData.hire_date) driverData.hire_date = formData.hire_date
-  if (formData.pay_rate_type) driverData.pay_rate_type = sanitizeString(formData.pay_rate_type, 50)
-  if (formData.pay_rate !== undefined && formData.pay_rate !== null) {
-    const rate = typeof formData.pay_rate === 'string' ? parseFloat(formData.pay_rate) : formData.pay_rate
-    if (!isNaN(rate) && rate >= 0) driverData.pay_rate = rate
-  }
   if (formData.truck_id) driverData.truck_id = formData.truck_id
-  if (formData.notes) driverData.notes = sanitizeString(formData.notes, 2000)
 
   const { data, error } = await supabase
     .from("drivers")
@@ -251,6 +222,7 @@ export async function updateDriver(
   const supabase = await createClient()
 
   // Build update data, only including fields that are provided
+  // Only include fields that exist in the drivers table schema
   const updateData: any = {}
   
   if (formData.name !== undefined) updateData.name = formData.name
@@ -260,7 +232,7 @@ export async function updateDriver(
   if (formData.license_expiry !== undefined) updateData.license_expiry = formData.license_expiry || null
   if (formData.status !== undefined) updateData.status = formData.status
   if (formData.truck_id !== undefined) updateData.truck_id = formData.truck_id || null
-  if (formData.pay_rate !== undefined) updateData.pay_rate = formData.pay_rate || null
+  // Note: pay_rate column doesn't exist in drivers table schema
 
   const { data, error } = await supabase
     .from("drivers")

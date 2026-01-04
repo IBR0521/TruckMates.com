@@ -759,39 +759,14 @@ export async function createSettlement(formData: {
 
   const loads = loadsResult.data || []
 
-  // Get driver's pay rate
-  const { data: driver } = await supabase
-    .from("drivers")
-    .select("pay_rate")
-    .eq("id", formData.driver_id)
-    .single()
-
   // Calculate gross pay if not provided
   let grossPay = formData.gross_pay || 0
   if (!formData.gross_pay && loads.length > 0) {
-    if (driver?.pay_rate) {
-      // If pay rate exists, calculate from loads
-      // Pay rate can be:
-      // - Percentage (0-1): multiply by load value
-      // - Per load amount: multiply by number of loads
-      // - Per mile: would need route distance (future enhancement)
-      // For now, treating as percentage if < 1, otherwise as per-load amount
-      const payRate = Number(driver.pay_rate) || 0
-      if (payRate <= 1) {
-        // Percentage: multiply each load value by pay rate
-        grossPay = loads.reduce((sum, load) => {
-          const loadValue = Number(load.value) || 0
-          return sum + (loadValue * payRate)
-        }, 0)
-      } else {
-        // Per-load amount: multiply by number of loads
-        grossPay = loads.length * payRate
-      }
-    } else {
-      // If no pay rate, sum load values as gross pay estimate
-      // (This is just an estimate - user should set pay rate for accurate calculations)
-      grossPay = loads.reduce((sum, load) => sum + (Number(load.value) || 0), 0)
-    }
+    // Note: pay_rate column doesn't exist in drivers table schema
+    // For now, sum load values as gross pay estimate
+    // (This is just an estimate - user should set pay rate for accurate calculations)
+    // Future: Add pay_rate column to drivers table or use a separate pay_rates table
+    grossPay = loads.reduce((sum, load) => sum + (Number(load.value) || 0), 0)
   }
 
   // Get fuel expenses for the period

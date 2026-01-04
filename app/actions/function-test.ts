@@ -211,7 +211,6 @@ export async function testAllPlatformFunctions() {
         email: `testdriver${Date.now()}@test.com`,
         phone: "555-123-4567",
         license_number: `TEST${Date.now()}`,
-        license_state: "CA",
         status: "active",
         // Note: address, city, state, zip are not in the drivers table schema
       })
