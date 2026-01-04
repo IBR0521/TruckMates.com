@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createInvoice, getLoadForInvoice } from "@/app/actions/accounting"
 import { getLoads } from "@/app/actions/loads"
+import { getCompanySettings } from "@/app/actions/number-formats"
 import {
   Select,
   SelectContent,
@@ -35,15 +36,25 @@ export default function CreateInvoicePage() {
   })
 
   useEffect(() => {
-    async function loadLoads() {
+    async function loadData() {
       setIsLoadingLoads(true)
-      const result = await getLoads()
-      if (result.data) {
-        setLoads(result.data)
+      const [loadsResult, settingsResult] = await Promise.all([
+        getLoads(),
+        getCompanySettings(),
+      ])
+      if (loadsResult.data) {
+        setLoads(loadsResult.data)
+      }
+      // Apply default payment terms from settings
+      if (settingsResult.data?.default_payment_terms) {
+        setFormData(prev => ({
+          ...prev,
+          paymentTerms: settingsResult.data.default_payment_terms,
+        }))
       }
       setIsLoadingLoads(false)
     }
-    loadLoads()
+    loadData()
   }, [])
 
   // Auto-fill invoice when load is selected
