@@ -41,17 +41,24 @@ function Button({
   variant,
   size,
   asChild = false,
+  'aria-label': ariaLabel,
   ...props
 }: React.ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
+    'aria-label'?: string
   }) {
   const Comp = asChild ? Slot : 'button'
-
+  
+  // Accessibility: Add aria-label if button only has icon and no text
+  const hasText = props.children && typeof props.children === 'string'
+  const hasIconOnly = !hasText && !ariaLabel && props.children
+  
   return (
     <Comp
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      aria-label={hasIconOnly && !ariaLabel ? 'Button' : ariaLabel}
       {...props}
     />
   )

@@ -231,6 +231,8 @@ export default function DriversPage() {
                     variant="outline"
                     size="sm"
                     className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+                    aria-label={`Update status for ${selectedIds.size} selected drivers`}
+                    aria-haspopup="true"
                   >
                     Update Status ({selectedIds.size})
                   </Button>
@@ -258,8 +260,9 @@ export default function DriversPage() {
                 variant="outline"
                 size="sm"
                 className="border-red-500/50 bg-transparent hover:bg-red-500/20 text-red-400"
+                aria-label={`Delete ${selectedIds.size} selected drivers`}
               >
-                <Trash2 className="w-4 h-4 mr-2" />
+                <Trash2 className="w-4 h-4 mr-2" aria-hidden="true" />
                 Delete ({selectedIds.size})
               </Button>
               <Button
@@ -270,6 +273,7 @@ export default function DriversPage() {
                 variant="outline"
                 size="sm"
                 className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+                aria-label="Cancel selection"
               >
                 Cancel
               </Button>
@@ -282,17 +286,18 @@ export default function DriversPage() {
                 variant="outline"
                 size="sm"
                 className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground flex-1 sm:flex-initial"
+                aria-label="Export drivers to Excel"
               >
-                <Download className="w-4 h-4 sm:mr-2" />
+                <Download className="w-4 h-4 sm:mr-2" aria-hidden="true" />
                 <span className="hidden sm:inline">Export to Excel</span>
                 <span className="sm:hidden">Export</span>
               </Button>
               <Link href="/dashboard/drivers/add" className="flex-1 sm:flex-initial">
                 <Button
                   className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition w-full sm:w-auto"
-                  onClick={() => console.log("[v0] Navigating to /dashboard/drivers/add")}
+                  aria-label="Add new driver"
                 >
-                  <Plus className="w-4 h-4 sm:mr-2" />
+                  <Plus className="w-4 h-4 sm:mr-2" aria-hidden="true" />
                   <span className="hidden sm:inline">Add Driver</span>
                   <span className="sm:hidden">Add</span>
                 </Button>
@@ -327,6 +332,8 @@ export default function DriversPage() {
                     className="pl-9"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    aria-label="Search drivers"
+                    type="search"
                   />
                 </div>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>

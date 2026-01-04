@@ -66,20 +66,24 @@ export default function DashboardLayout({
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="lg:hidden p-2 hover:bg-secondary rounded-lg transition"
+              aria-label="Toggle sidebar"
+              aria-expanded={sidebarOpen}
             >
               <Menu className="w-5 h-5 text-foreground" />
             </button>
           </div>
           <Link href="/">
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-              <LogOut className="w-4 h-4 mr-2" />
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" aria-label="Logout">
+              <LogOut className="w-4 h-4 mr-2" aria-hidden="true" />
               Logout
             </Button>
           </Link>
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto bg-background/50">{children}</main>
+        <main id="main-content" className="flex-1 overflow-auto bg-background/50" role="main" tabIndex={-1}>
+          {children}
+        </main>
       </div>
     </div>
   )

@@ -373,8 +373,9 @@ function NavItem({ href, icon: Icon, label, isSubitem, isCollapsed }: NavItemPro
           ? "justify-center px-2 py-2.5" 
           : `gap-3 px-4 py-2.5 ${isSubitem ? "text-sm" : ""}`
       }`}
+      role={isSubitem ? "menuitem" : undefined}
     >
-      {Icon && <Icon className="w-5 h-5 flex-shrink-0" />}
+      {Icon && <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />}
       {!isCollapsed && <span>{label}</span>}
     </div>
   )
@@ -383,14 +384,14 @@ function NavItem({ href, icon: Icon, label, isSubitem, isCollapsed }: NavItemPro
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <Link href={href}>{content}</Link>
+          <Link href={href} aria-label={label}>{content}</Link>
         </TooltipTrigger>
         <TooltipContent side="right">{label}</TooltipContent>
       </Tooltip>
     )
   }
 
-  return <Link href={href}>{content}</Link>
+  return <Link href={href} aria-label={isSubitem ? undefined : label}>{content}</Link>
 }
 
 interface DropdownItemProps {
@@ -424,15 +425,22 @@ function DropdownItem({ icon: Icon, label, href, isOpen, onToggle, children, isC
       <button
         onClick={onToggle}
         className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition font-medium"
+        aria-expanded={isOpen}
+        aria-haspopup="true"
+        aria-label={`${label} menu`}
       >
         <div className="flex items-center gap-3">
-          <Icon className="w-5 h-5" />
+          <Icon className="w-5 h-5" aria-hidden="true" />
           <span>{label}</span>
         </div>
-        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} aria-hidden="true" />
       </button>
 
-      {isOpen && <div className="ml-6 mt-2 space-y-1 border-l border-sidebar-border pl-4">{children}</div>}
+      {isOpen && (
+        <div className="ml-6 mt-2 space-y-1 border-l border-sidebar-border pl-4" role="menu">
+          {children}
+        </div>
+      )}
     </div>
   )
 }

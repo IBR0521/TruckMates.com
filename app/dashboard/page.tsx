@@ -29,11 +29,34 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
-import { ProfitEstimator } from "@/components/dashboard/profit-estimator"
-import { RevenueChart } from "@/components/dashboard/revenue-chart"
-import { LoadStatusChart } from "@/components/dashboard/load-status-chart"
-import { AlertsSection } from "@/components/dashboard/alerts-section"
-import { PerformanceMetrics } from "@/components/dashboard/performance-metrics"
+import dynamic from "next/dynamic"
+import { Suspense } from "react"
+
+// Performance: Lazy load heavy components
+const ProfitEstimator = dynamic(() => import("@/components/dashboard/profit-estimator").then(mod => ({ default: mod.ProfitEstimator })), {
+  loading: () => <div className="h-64 animate-pulse bg-muted rounded-lg" aria-label="Loading profit estimator" />,
+  ssr: false
+})
+
+const RevenueChart = dynamic(() => import("@/components/dashboard/revenue-chart").then(mod => ({ default: mod.RevenueChart })), {
+  loading: () => <div className="h-64 animate-pulse bg-muted rounded-lg" aria-label="Loading revenue chart" />,
+  ssr: false
+})
+
+const LoadStatusChart = dynamic(() => import("@/components/dashboard/load-status-chart").then(mod => ({ default: mod.LoadStatusChart })), {
+  loading: () => <div className="h-64 animate-pulse bg-muted rounded-lg" aria-label="Loading load status chart" />,
+  ssr: false
+})
+
+const AlertsSection = dynamic(() => import("@/components/dashboard/alerts-section").then(mod => ({ default: mod.AlertsSection })), {
+  loading: () => <div className="h-48 animate-pulse bg-muted rounded-lg" aria-label="Loading alerts" />,
+  ssr: false
+})
+
+const PerformanceMetrics = dynamic(() => import("@/components/dashboard/performance-metrics").then(mod => ({ default: mod.PerformanceMetrics })), {
+  loading: () => <div className="h-48 animate-pulse bg-muted rounded-lg" aria-label="Loading performance metrics" />,
+  ssr: false
+})
 
 export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<any>(null)
@@ -242,18 +265,21 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-foreground">Dashboard</h1>
               <p className="text-muted-foreground text-sm mt-1">Welcome back, manage your fleet efficiently</p>
+              <p className="sr-only">Use keyboard shortcuts: Ctrl+N for new item, Ctrl+F to search</p>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <div className="w-full sm:w-auto">
-              <ProfitEstimator />
+              <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" aria-label="Loading profit estimator" />}>
+                <ProfitEstimator />
+              </Suspense>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
-                  <Plus className="w-4 h-4 mr-2" />
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto" aria-label="Add new item" aria-haspopup="true" aria-expanded="false">
+                  <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
                   Add New
-                  <ChevronDown className="w-4 h-4 ml-2" />
+                  <ChevronDown className="w-4 h-4 ml-2" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -391,11 +417,13 @@ export default function DashboardPage() {
 
           {/* Alerts Section */}
           {dashboardData && (
-            <AlertsSection
-              upcomingMaintenance={dashboardData.upcomingMaintenance || []}
-              overdueInvoices={dashboardData.overdueInvoices || []}
-              upcomingDeliveries={dashboardData.upcomingDeliveries || []}
-            />
+            <Suspense fallback={<div className="h-48 animate-pulse bg-muted rounded-lg" aria-label="Loading alerts" />}>
+              <AlertsSection
+                upcomingMaintenance={dashboardData.upcomingMaintenance || []}
+                overdueInvoices={dashboardData.overdueInvoices || []}
+                upcomingDeliveries={dashboardData.upcomingDeliveries || []}
+              />
+            </Suspense>
           )}
 
           {/* Detailed Stats Cards with Partial Info */}
@@ -446,9 +474,9 @@ export default function DashboardPage() {
                 </div>
               )}
               <Link href="/dashboard/trucks" className="mt-auto">
-                <Button variant="outline" size="sm" className="w-full">
+                <Button variant="outline" size="sm" className="w-full" aria-label="View all trucks">
                   View All Trucks
-                  <ArrowRight className="w-4 h-4 ml-2" />
+                  <ArrowRight className="w-4 h-4 ml-2" aria-hidden="true" />
                 </Button>
               </Link>
             </Card>
@@ -496,9 +524,9 @@ export default function DashboardPage() {
                 </div>
               )}
               <Link href="/dashboard/drivers" className="mt-auto">
-                <Button variant="outline" size="sm" className="w-full">
+                <Button variant="outline" size="sm" className="w-full" aria-label="View all drivers">
                   View All Drivers
-                  <ArrowRight className="w-4 h-4 ml-2" />
+                  <ArrowRight className="w-4 h-4 ml-2" aria-hidden="true" />
                 </Button>
               </Link>
             </Card>
@@ -542,9 +570,9 @@ export default function DashboardPage() {
                 </div>
               )}
               <Link href="/dashboard/routes" className="mt-auto">
-                <Button variant="outline" size="sm" className="w-full">
+                <Button variant="outline" size="sm" className="w-full" aria-label="View all routes">
                   View All Routes
-                  <ArrowRight className="w-4 h-4 ml-2" />
+                  <ArrowRight className="w-4 h-4 ml-2" aria-hidden="true" />
                 </Button>
               </Link>
             </Card>
@@ -585,21 +613,23 @@ export default function DashboardPage() {
                 </div>
               )}
               <Link href="/dashboard/loads" className="mt-auto">
-                <Button variant="outline" size="sm" className="w-full">
+                <Button variant="outline" size="sm" className="w-full" aria-label="View all loads">
                   View All Loads
-                  <ArrowRight className="w-4 h-4 ml-2" />
+                  <ArrowRight className="w-4 h-4 ml-2" aria-hidden="true" />
                 </Button>
               </Link>
             </Card>
           </div>
 
           {/* Performance Metrics */}
-          <PerformanceMetrics
-            fleetUtilization={stats.fleetUtilization}
-            totalLoads={stats.totalLoads}
-            onTimeDeliveryRate={dashboardData?.totalLoads > 0 && dashboardData?.inTransitLoads > 0 ? Math.round((dashboardData.inTransitLoads / dashboardData.totalLoads) * 100) : 0}
-            averageLoadValue={dashboardData?.totalRevenue && dashboardData?.totalLoads ? (dashboardData.totalRevenue / dashboardData.totalLoads) : 0}
-          />
+          <Suspense fallback={<div className="h-48 animate-pulse bg-muted rounded-lg" aria-label="Loading performance metrics" />}>
+            <PerformanceMetrics
+              fleetUtilization={stats.fleetUtilization}
+              totalLoads={stats.totalLoads}
+              onTimeDeliveryRate={dashboardData?.totalLoads > 0 && dashboardData?.inTransitLoads > 0 ? Math.round((dashboardData.inTransitLoads / dashboardData.totalLoads) * 100) : 0}
+              averageLoadValue={dashboardData?.totalRevenue && dashboardData?.totalLoads ? (dashboardData.totalRevenue / dashboardData.totalLoads) : 0}
+            />
+          </Suspense>
 
           {/* Recent Activity */}
           <Card className="border-border bg-card/50 p-6">

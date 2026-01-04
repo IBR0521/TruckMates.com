@@ -260,6 +260,8 @@ export default function LoadsPage() {
                     variant="outline"
                     size="sm"
                     className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+                    aria-label={`Update status for ${selectedIds.size} selected loads`}
+                    aria-haspopup="true"
                   >
                     Update Status ({selectedIds.size})
                   </Button>
@@ -290,8 +292,9 @@ export default function LoadsPage() {
                 variant="outline"
                 size="sm"
                 className="border-red-500/50 bg-transparent hover:bg-red-500/20 text-red-400"
+                aria-label={`Delete ${selectedIds.size} selected loads`}
               >
-                <Trash2 className="w-4 h-4 mr-2" />
+                <Trash2 className="w-4 h-4 mr-2" aria-hidden="true" />
                 Delete ({selectedIds.size})
               </Button>
               <Button
@@ -302,6 +305,7 @@ export default function LoadsPage() {
                 variant="outline"
                 size="sm"
                 className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+                aria-label="Cancel selection"
               >
                 Cancel
               </Button>
@@ -314,14 +318,15 @@ export default function LoadsPage() {
                 variant="outline"
                 size="sm"
                 className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground flex-1 sm:flex-initial"
+                aria-label="Export loads to Excel"
               >
-                <Download className="w-4 h-4 sm:mr-2" />
+                <Download className="w-4 h-4 sm:mr-2" aria-hidden="true" />
                 <span className="hidden sm:inline">Export to Excel</span>
                 <span className="sm:hidden">Export</span>
               </Button>
               <Link href="/dashboard/loads/add" className="flex-1 sm:flex-initial">
-                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition w-full sm:w-auto">
-                  <Plus className="w-4 h-4 sm:mr-2" />
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition w-full sm:w-auto" aria-label="Add new load">
+                  <Plus className="w-4 h-4 sm:mr-2" aria-hidden="true" />
                   <span className="hidden sm:inline">New Load</span>
                   <span className="sm:hidden">New</span>
                 </Button>
@@ -356,6 +361,8 @@ export default function LoadsPage() {
                     className="pl-9"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    aria-label="Search loads"
+                    type="search"
                   />
                 </div>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -445,7 +452,7 @@ export default function LoadsPage() {
                     <div className="flex items-center gap-2">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-7 px-2">
+                          <Button variant="ghost" size="sm" className="h-7 px-2" aria-label={`Change status for load ${load.shipment_number || load.id}`} aria-haspopup="true">
                             <Badge
                               className={
                                 load.status === "in_transit" || load.status === "In Transit"
@@ -460,6 +467,7 @@ export default function LoadsPage() {
                                   ? "bg-red-500/20 text-red-400 border-red-500/50 cursor-pointer"
                                   : "bg-blue-500/20 text-blue-400 border-blue-500/50 cursor-pointer"
                               }
+                              aria-label={`Current status: ${load.status || "N/A"}`}
                             >
                               {load.status ? load.status.charAt(0).toUpperCase() + load.status.slice(1).replace("_", " ") : "N/A"}
                             </Badge>

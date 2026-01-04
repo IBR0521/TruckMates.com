@@ -20,6 +20,8 @@ const nextConfig = {
     },
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },
+  // Performance: Enable React strict mode for better development experience
+  reactStrictMode: true,
 }
 
 export default nextConfig
