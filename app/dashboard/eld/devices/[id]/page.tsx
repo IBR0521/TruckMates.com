@@ -37,6 +37,7 @@ export default function ELDDeviceDetailsPage() {
     if (deviceId) {
       loadDeviceData()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceId])
 
   async function loadDeviceData() {
