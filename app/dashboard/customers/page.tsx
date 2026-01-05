@@ -27,8 +27,10 @@ import {
 } from "@/components/ui/select"
 import { getCustomers, deleteCustomer } from "@/app/actions/customers"
 import { Badge } from "@/components/ui/badge"
+import { useRouter } from "next/navigation"
 
 export default function CustomersPage() {
+  const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [customersList, setCustomersList] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -212,12 +214,22 @@ export default function CustomersPage() {
               </thead>
               <tbody>
                 {customersList.map((customer) => (
-                  <tr key={customer.id} className="border-b border-border/50 hover:bg-secondary/20 transition">
+                  <tr 
+                    key={customer.id} 
+                    className="border-b border-border/50 hover:bg-secondary/20 transition cursor-pointer"
+                    onClick={() => router.push(`/dashboard/customers/${customer.id}`)}
+                  >
                     <td className="p-4">
-                      <div className="font-medium text-foreground">{customer.name}</div>
-                      {customer.email && (
-                        <div className="text-sm text-muted-foreground">{customer.email}</div>
-                      )}
+                      <Link 
+                        href={`/dashboard/customers/${customer.id}`}
+                        className="block hover:text-primary transition"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="font-medium text-foreground">{customer.name}</div>
+                        {customer.email && (
+                          <div className="text-sm text-muted-foreground">{customer.email}</div>
+                        )}
+                      </Link>
                     </td>
                     <td className="p-4 text-foreground">{customer.company_name || "—"}</td>
                     <td className="p-4">
@@ -248,7 +260,7 @@ export default function CustomersPage() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                         <Link href={`/dashboard/customers/${customer.id}`}>
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                             <Eye className="w-4 h-4" />

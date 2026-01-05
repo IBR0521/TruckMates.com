@@ -337,6 +337,50 @@ export async function getCustomerPortalInvoices(token: string) {
 }
 
 /**
+ * Get customer portal access by customer ID
+ */
+export async function getCustomerPortalAccess(customerId: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  const { data, error } = await supabase
+    .from("customer_portal_access")
+    .select("*")
+    .eq("customer_id", customerId)
+    .eq("company_id", userData.company_id)
+    .eq("is_active", true)
+    .single()
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return { data: null, error: null } // No access found
+    }
+    const result = handleDbError(error, null)
+    if (result.error) return { error: result.error, data: null }
+    return { error: "Table not available. Please run the SQL schema.", data: null }
+  }
+
+  return { data, error: null }
+}
+
+/**
  * Revoke customer portal access
  */
 export async function revokeCustomerPortalAccess(customerId: string) {
