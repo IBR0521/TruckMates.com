@@ -23,6 +23,7 @@ import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { RouteStopsManager } from "@/components/route-stops-manager"
 import { createRouteStop } from "@/app/actions/route-stops"
+import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 
 export default function AddRoutePage() {
   const router = useRouter()
@@ -51,6 +52,16 @@ export default function AddRoutePage() {
     // Timing
     estimatedArrival: "",
     departureTime: "",
+    
+    // Depot Information
+    depotName: "",
+    depotAddress: "",
+    preRouteTime: "",
+    postRouteTime: "",
+    routeStartTime: "",
+    routeDepartureTime: "",
+    routeCompleteTime: "",
+    scenario: "",
     
     // Financial Information
     estimatedFuelCost: "",
@@ -162,26 +173,18 @@ export default function AddRoutePage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center gap-4">
-        <Link href="/dashboard/routes">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-        </Link>
-        <h1 className="text-xl md:text-2xl font-bold text-foreground">Add New Route</h1>
-      </div>
-
-      <main className="flex-1 overflow-auto p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
-            <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Basic Information Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Route className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Basic Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+    <FormPageLayout
+      title="Add New Route"
+      subtitle="Create a new route for your fleet"
+      backUrl="/dashboard/routes"
+      onSubmit={handleSubmit}
+      isSubmitting={isSubmitting}
+      submitLabel="Add Route"
+    >
+      <div className="space-y-6">
+        {/* Basic Information Section */}
+        <FormSection title="Basic Information" icon={<Route className="w-5 h-5" />}>
+          <FormGrid cols={2}>
                 <div className="md:col-span-2">
                   <Label htmlFor="name">Route Name *</Label>
                 <Input
@@ -273,19 +276,15 @@ export default function AddRoutePage() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            </Card>
+              </FormGrid>
+            </FormSection>
 
             {/* Route Stops Section */}
             <RouteStopsManager stops={stops} onStopsChange={setStops} />
 
             {/* Depot Information Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Building2 className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Depot Information (Optional)</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-4">
+            <FormSection title="Depot Information (Optional)" icon={<Building2 className="w-5 h-5" />}>
+              <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="depotName">Depot Name</Label>
                   <Input
@@ -308,10 +307,11 @@ export default function AddRoutePage() {
                     className="mt-2"
                   />
                 </div>
-              </div>
-              <div className="grid md:grid-cols-3 gap-4 mt-4">
-                <div>
-                  <Label htmlFor="preRouteTime">Pre-Route Time (minutes)</Label>
+              </FormGrid>
+              <div className="mt-4">
+                <FormGrid cols={3}>
+                  <div>
+                    <Label htmlFor="preRouteTime">Pre-Route Time (minutes)</Label>
                   <Input
                     id="preRouteTime"
                     name="preRouteTime"
@@ -364,24 +364,22 @@ export default function AddRoutePage() {
                     onChange={handleChange}
                     className="mt-2"
                   />
-                </div>
+                  </div>
+                </FormGrid>
               </div>
-            </Card>
+            </FormSection>
 
             {/* Assignment Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <User className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Assignment</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+            <FormSection title="Assignment" icon={<User className="w-5 h-5" />}>
+              <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="driver">Assigned Driver</Label>
-                  <Select value={formData.driver || undefined} onValueChange={(value) => handleSelectChange("driver", value)}>
+                  <Select value={formData.driver || "none"} onValueChange={(value) => handleSelectChange("driver", value === "none" ? "" : value)}>
                     <SelectTrigger className="mt-2 w-full">
                       <SelectValue placeholder="Select a driver (optional)" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
                       {drivers.map((driver) => (
                         <SelectItem key={driver.id} value={driver.id}>
                           {driver.name}
@@ -392,11 +390,12 @@ export default function AddRoutePage() {
                 </div>
                 <div>
                   <Label htmlFor="truck">Assigned Truck</Label>
-                  <Select value={formData.truck || undefined} onValueChange={(value) => handleSelectChange("truck", value)}>
+                  <Select value={formData.truck || "none"} onValueChange={(value) => handleSelectChange("truck", value === "none" ? "" : value)}>
                     <SelectTrigger className="mt-2 w-full">
                       <SelectValue placeholder="Select a truck (optional)" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
                       {trucks.map((truck) => (
                         <SelectItem key={truck.id} value={truck.id}>
                           {truck.truck_number} - {truck.make} {truck.model}
@@ -405,16 +404,12 @@ export default function AddRoutePage() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            </Card>
+              </FormGrid>
+            </FormSection>
 
             {/* Timing Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Clock className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Timing Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+            <FormSection title="Timing Information" icon={<Clock className="w-5 h-5" />}>
+              <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="departureTime">Departure Time</Label>
                   <Input
@@ -437,16 +432,12 @@ export default function AddRoutePage() {
                     className="mt-2"
                   />
                 </div>
-              </div>
-            </Card>
+              </FormGrid>
+            </FormSection>
 
             {/* Financial Information Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <DollarSign className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Financial Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+            <FormSection title="Financial Information" icon={<DollarSign className="w-5 h-5" />}>
+              <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="estimatedFuelCost">Estimated Fuel Cost ($)</Label>
                   <Input
@@ -486,16 +477,12 @@ export default function AddRoutePage() {
                     step="0.01"
                   />
                 </div>
-              </div>
-            </Card>
+              </FormGrid>
+            </FormSection>
 
             {/* Route Details Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Route className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Route Details</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+            <FormSection title="Route Details" icon={<Route className="w-5 h-5" />}>
+              <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="routeType">Route Type</Label>
                   <Select value={formData.routeType} onValueChange={(value) => handleSelectChange("routeType", value)}>
@@ -559,15 +546,11 @@ export default function AddRoutePage() {
                     rows={3}
                   />
                 </div>
-              </div>
-            </Card>
+              </FormGrid>
+            </FormSection>
 
             {/* Additional Notes Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <FileText className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Additional Information</h2>
-              </div>
+            <FormSection title="Additional Information" icon={<FileText className="w-5 h-5" />}>
               <div>
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea
@@ -580,26 +563,8 @@ export default function AddRoutePage() {
                   rows={4}
                 />
               </div>
-            </Card>
-
-            {/* Submit Buttons */}
-            <div className="flex gap-4 justify-end">
-                <Link href="/dashboard/routes">
-                  <Button type="button" variant="outline" className="border-border bg-transparent">
-                    Cancel
-                  </Button>
-                </Link>
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                {isSubmitting ? "Adding Route..." : "Add Route"}
-              </Button>
-              </div>
-            </form>
-        </div>
-      </main>
-    </div>
+            </FormSection>
+      </div>
+    </FormPageLayout>
   )
 }

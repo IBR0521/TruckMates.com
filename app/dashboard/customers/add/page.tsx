@@ -18,6 +18,7 @@ import Link from "next/link"
 import { toast } from "sonner"
 import { createCustomer } from "@/app/actions/customers"
 import { useRouter } from "next/navigation"
+import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 
 export default function AddCustomerPage() {
   const router = useRouter()
@@ -146,27 +147,18 @@ export default function AddCustomerPage() {
   ]
 
   return (
-    <div className="w-full">
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
-        <Link href="/dashboard/customers">
-          <Button variant="ghost" size="sm" className="mb-4">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Customers
-          </Button>
-        </Link>
-        <h1 className="text-xl md:text-2xl font-bold text-foreground">Add New Customer</h1>
-      </div>
-
-      <div className="p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Basic Information */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Building2 className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Basic Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+    <FormPageLayout
+      title="Add New Customer"
+      subtitle="Create a new customer in your system"
+      backUrl="/dashboard/customers"
+      onSubmit={handleSubmit}
+      isSubmitting={isSubmitting}
+      submitLabel="Add Customer"
+    >
+      <div className="space-y-6">
+        {/* Basic Information */}
+        <FormSection title="Basic Information" icon={<Building2 className="w-5 h-5" />}>
+          <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="name">Customer Name *</Label>
                   <Input
@@ -240,16 +232,12 @@ export default function AddCustomerPage() {
                     className="mt-2"
                   />
                 </div>
-              </div>
-            </Card>
+              </FormGrid>
+            </FormSection>
 
             {/* Business Information */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Briefcase className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Business Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+            <FormSection title="Business Information" icon={<Briefcase className="w-5 h-5" />}>
+              <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="customer_type">Customer Type</Label>
                   <Select value={formData.customer_type} onValueChange={(value) => handleSelectChange("customer_type", value)}>
@@ -319,16 +307,12 @@ export default function AddCustomerPage() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            </Card>
+              </FormGrid>
+            </FormSection>
 
             {/* Social Media */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Share2 className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Social Media</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+            <FormSection title="Social Media" icon={<Share2 className="w-5 h-5" />}>
+              <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="facebook_url">Facebook URL</Label>
                   <Input
@@ -377,16 +361,12 @@ export default function AddCustomerPage() {
                     className="mt-2"
                   />
                 </div>
-              </div>
-            </Card>
+              </FormGrid>
+            </FormSection>
 
             {/* Primary Contact */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Tag className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Primary Contact</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+            <FormSection title="Primary Contact" icon={<Tag className="w-5 h-5" />}>
+              <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="primary_contact_name">Contact Name</Label>
                   <Input
@@ -423,15 +403,11 @@ export default function AddCustomerPage() {
                     className="mt-2"
                   />
                 </div>
-              </div>
-            </Card>
+              </FormGrid>
+            </FormSection>
 
             {/* Terms and Notes */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <FileText className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Terms and Additional Information</h2>
-              </div>
+            <FormSection title="Terms and Additional Information" icon={<FileText className="w-5 h-5" />}>
               <div className="space-y-6">
                 <div>
                   <Label htmlFor="terms">Terms & Conditions</Label>
@@ -458,23 +434,9 @@ export default function AddCustomerPage() {
                   />
                 </div>
               </div>
-            </Card>
-
-            {/* Submit Button */}
-            <div className="flex justify-end gap-4">
-              <Link href="/dashboard/customers">
-                <Button type="button" variant="outline">
-                  Cancel
-                </Button>
-              </Link>
-              <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                {isSubmitting ? "Adding..." : "Add Customer"}
-              </Button>
-            </div>
-          </form>
-        </div>
+            </FormSection>
       </div>
-    </div>
+    </FormPageLayout>
   )
 }
 

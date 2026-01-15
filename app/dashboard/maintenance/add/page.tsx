@@ -5,11 +5,13 @@ import type React from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { ArrowLeft, Wrench } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
+import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 
 export default function AddMaintenancePage() {
   const router = useRouter()
@@ -33,22 +35,17 @@ export default function AddMaintenancePage() {
   }
 
   return (
-    <div className="w-full">
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
-        <Link href="/dashboard/maintenance">
-          <Button variant="ghost" size="sm" className="mb-4">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Maintenance
-          </Button>
-        </Link>
-        <h1 className="text-3xl font-bold text-foreground">Schedule Service</h1>
-        <p className="text-muted-foreground text-sm mt-1">Schedule a maintenance service</p>
-      </div>
-
-      <div className="p-4 md:p-8">
-        <Card className="max-w-3xl mx-auto border-border p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
+    <FormPageLayout
+      title="Schedule Service"
+      subtitle="Schedule a maintenance service"
+      backUrl="/dashboard/maintenance"
+      onSubmit={handleSubmit}
+      isSubmitting={false}
+      submitLabel="Schedule Service"
+    >
+      <FormSection title="Service Details" icon={<Wrench className="w-5 h-5" />}>
+        <div className="space-y-6">
+          <FormGrid cols={2}>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Truck *</label>
                 <Input
@@ -76,11 +73,11 @@ export default function AddMaintenancePage() {
                   <option>Other</option>
                 </select>
               </div>
-            </div>
+          </FormGrid>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Scheduled Date *</label>
+          <FormGrid cols={2}>
+            <div>
+              <Label>Scheduled Date *</Label>
                 <Input
                   required
                   type="date"
@@ -100,11 +97,11 @@ export default function AddMaintenancePage() {
                   className="bg-background border-border"
                 />
               </div>
-            </div>
+          </FormGrid>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Priority *</label>
+          <FormGrid cols={2}>
+            <div>
+              <Label>Priority *</Label>
                 <select
                   required
                   value={formData.priority}
@@ -127,10 +124,10 @@ export default function AddMaintenancePage() {
                   className="bg-background border-border"
                 />
               </div>
-            </div>
+          </FormGrid>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Service Vendor</label>
+          <div>
+            <Label>Service Vendor</Label>
               <Input
                 value={formData.vendor}
                 onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
@@ -139,30 +136,18 @@ export default function AddMaintenancePage() {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Notes</label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                rows={3}
+          <div>
+            <Label>Notes</Label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              rows={3}
                 placeholder="Additional service notes..."
                 className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground"
               />
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                Schedule Service
-              </Button>
-              <Link href="/dashboard/maintenance">
-                <Button type="button" variant="outline" className="border-border bg-transparent">
-                  Cancel
-                </Button>
-              </Link>
-            </div>
-          </form>
-        </Card>
-      </div>
-    </div>
+          </div>
+        </div>
+      </FormSection>
+    </FormPageLayout>
   )
 }

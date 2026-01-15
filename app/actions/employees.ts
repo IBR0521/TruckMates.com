@@ -37,11 +37,12 @@ async function getUserRoleAndCompany(supabase: any, userId: string) {
 
 // Get all employees for a company (managers only)
 export async function getEmployees() {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
   if (!user) {
     return { error: "Not authenticated", data: null }
@@ -96,15 +97,20 @@ export async function getEmployees() {
   }
 
   return { data: employees, error: null }
+  } catch (error: any) {
+    console.error("[EMPLOYEES] Error in getEmployees:", error)
+    return { error: error?.message || "Failed to fetch employees", data: null }
+  }
 }
 
 // Create invitation for employee
 export async function createEmployeeInvitation(email: string) {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
   if (!user) {
     return { error: "Not authenticated", data: null }
@@ -191,13 +197,13 @@ export async function createEmployeeInvitation(email: string) {
       return { error: inviteError.message, data: null }
     }
 
-    // Don't send email - just return the invitation code
-    revalidatePath("/dashboard/employees")
-    revalidatePath("/account-setup/manager")
-    return { 
-      data: { ...invitation, invitation_code: invitationCode }, 
-      error: null 
-    }
+  // Don't send email - just return the invitation code
+  revalidatePath("/dashboard/employees")
+  revalidatePath("/account-setup/manager")
+  return { 
+    data: { ...invitation, invitation_code: invitationCode }, 
+    error: null 
+  }
   }
 
   // Create invitation with generated code
@@ -223,6 +229,10 @@ export async function createEmployeeInvitation(email: string) {
   return { 
     data: invitation, 
     error: null 
+  }
+  } catch (error: any) {
+    console.error("[EMPLOYEES] Error in createEmployeeInvitation:", error)
+    return { error: error?.message || "Failed to create invitation", data: null }
   }
 }
 

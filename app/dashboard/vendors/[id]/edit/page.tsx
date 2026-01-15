@@ -19,6 +19,7 @@ import { toast } from "sonner"
 import { getVendor, updateVendor } from "@/app/actions/vendors"
 import { useRouter } from "next/navigation"
 import { use } from "react"
+import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 
 export default function EditVendorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -152,36 +153,31 @@ export default function EditVendorPage({ params }: { params: Promise<{ id: strin
 
   if (isLoading) {
     return (
-      <div className="w-full">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
+      <FormPageLayout
+        title="Edit Vendor"
+        subtitle="Loading vendor information..."
+        backUrl={`/dashboard/vendors/${id}`}
+      >
+        <div className="text-center py-12">
           <p className="text-muted-foreground">Loading vendor information...</p>
         </div>
-      </div>
+      </FormPageLayout>
     )
   }
 
   return (
-    <div className="w-full">
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
-        <Link href={`/dashboard/vendors/${id}`}>
-          <Button variant="ghost" size="sm" className="mb-4">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Vendor
-          </Button>
-        </Link>
-        <h1 className="text-xl md:text-2xl font-bold text-foreground">Edit Vendor</h1>
-      </div>
-
-      <div className="p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Basic Information */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Store className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Basic Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+    <FormPageLayout
+      title="Edit Vendor"
+      subtitle="Update vendor information"
+      backUrl={`/dashboard/vendors/${id}`}
+      onSubmit={handleSubmit}
+      isSubmitting={isSubmitting}
+      submitLabel="Update Vendor"
+    >
+      <div className="space-y-6">
+        {/* Basic Information */}
+        <FormSection title="Basic Information" icon={<Store className="w-5 h-5" />}>
+          <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="name">Vendor Name *</Label>
                   <Input
@@ -323,16 +319,12 @@ export default function EditVendorPage({ params }: { params: Promise<{ id: strin
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            </Card>
+          </FormGrid>
+        </FormSection>
 
-            {/* Address Information */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <MapPin className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Address</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+        {/* Address Information */}
+        <FormSection title="Address" icon={<MapPin className="w-5 h-5" />}>
+          <FormGrid cols={2}>
                 <div className="md:col-span-2">
                   <Label htmlFor="address_line1">Address Line 1</Label>
                   <Input
@@ -409,16 +401,12 @@ export default function EditVendorPage({ params }: { params: Promise<{ id: strin
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            </Card>
+          </FormGrid>
+        </FormSection>
 
-            {/* Primary Contact */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Briefcase className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Primary Contact</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+        {/* Primary Contact */}
+        <FormSection title="Primary Contact" icon={<Tag className="w-5 h-5" />}>
+          <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="primary_contact_name">Contact Name</Label>
                   <Input
@@ -455,16 +443,12 @@ export default function EditVendorPage({ params }: { params: Promise<{ id: strin
                     className="mt-2"
                   />
                 </div>
-              </div>
-            </Card>
+          </FormGrid>
+        </FormSection>
 
-            {/* Notes */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Tag className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Additional Information</h2>
-              </div>
-              <div>
+        {/* Notes */}
+        <FormSection title="Additional Information" icon={<Tag className="w-5 h-5" />}>
+          <div>
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea
                   id="notes"
@@ -475,24 +459,10 @@ export default function EditVendorPage({ params }: { params: Promise<{ id: strin
                   className="mt-2"
                   rows={4}
                 />
-              </div>
-            </Card>
-
-            {/* Form Actions */}
-            <div className="flex gap-4 justify-end">
-              <Link href={`/dashboard/vendors/${id}`}>
-                <Button type="button" variant="outline">
-                  Cancel
-                </Button>
-              </Link>
-              <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                {isSubmitting ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          </form>
-        </div>
+          </div>
+        </FormSection>
       </div>
-    </div>
+    </FormPageLayout>
   )
 }
 

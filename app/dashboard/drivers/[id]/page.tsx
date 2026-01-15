@@ -147,10 +147,33 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
                 icon={<Phone className="w-4 h-4" />}
               />
             )}
+            {driver.driver_id && (
+              <InfoField
+                label="Driver ID"
+                value={driver.driver_id}
+              />
+            )}
+            {driver.employee_type && (
+              <InfoField
+                label="Employee Type"
+                value={driver.employee_type.charAt(0).toUpperCase() + driver.employee_type.slice(1)}
+              />
+            )}
+            {driver.date_of_birth && (
+              <InfoField
+                label="Date of Birth"
+                value={new Date(driver.date_of_birth).toLocaleDateString()}
+                icon={<Calendar className="w-4 h-4" />}
+              />
+            )}
             {driver.address && (
               <InfoField
                 label="Address"
-                value={driver.address}
+                value={
+                  [driver.address, driver.city, driver.state, driver.zip]
+                    .filter(Boolean)
+                    .join(", ") || driver.address
+                }
                 icon={<MapPin className="w-4 h-4" />}
                 className="md:col-span-2"
               />
@@ -186,12 +209,62 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
             )}
             {driver.license_type && (
               <InfoField
-                label="License Type"
-                value={driver.license_type}
+                label="CDL License Type"
+                value={driver.license_type.replace("_", " ").toUpperCase().replace("CLASS", "Class")}
+              />
+            )}
+            {driver.license_endorsements && (
+              <InfoField
+                label="License Endorsements"
+                value={
+                  <div className="flex flex-wrap gap-2">
+                    {driver.license_endorsements.split(",").map((endorsement: string, idx: number) => (
+                      <span key={idx} className="px-2 py-1 bg-primary/10 text-primary rounded text-sm font-medium">
+                        {endorsement.trim()}
+                      </span>
+                    ))}
+                  </div>
+                }
+                className="md:col-span-2"
               />
             )}
           </InfoGrid>
         </DetailSection>
+        
+        {/* Emergency Contact */}
+        {(driver.emergency_contact_name || driver.emergency_contact_phone) && (
+          <DetailSection
+            title="Emergency Contact"
+            icon={<User className="w-5 h-5" />}
+            description="Emergency contact information"
+          >
+            <InfoGrid cols={2}>
+              {driver.emergency_contact_name && (
+                <InfoField
+                  label="Contact Name"
+                  value={driver.emergency_contact_name}
+                />
+              )}
+              {driver.emergency_contact_phone && (
+                <InfoField
+                  label="Contact Phone"
+                  value={
+                    <a href={`tel:${driver.emergency_contact_phone}`} className="text-primary hover:underline">
+                      {driver.emergency_contact_phone}
+                    </a>
+                  }
+                  icon={<Phone className="w-4 h-4" />}
+                />
+              )}
+              {driver.emergency_contact_relationship && (
+                <InfoField
+                  label="Relationship"
+                  value={driver.emergency_contact_relationship}
+                />
+              )}
+            </InfoGrid>
+          </DetailSection>
+        )}
 
         {/* Vehicle Assignment */}
         {truck && (

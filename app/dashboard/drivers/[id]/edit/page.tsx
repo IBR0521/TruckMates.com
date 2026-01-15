@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -14,6 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
 import { ArrowLeft, User, FileText, Briefcase, Phone } from "lucide-react"
 import Link from "next/link"
 import { use } from "react"
@@ -21,6 +28,7 @@ import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { getDriver, updateDriver } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
+import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 
 export default function EditDriverPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -29,35 +37,29 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [trucks, setTrucks] = useState<any[]>([])
   const [formData, setFormData] = useState({
-    // Personal Information
     name: "",
     email: "",
     phone: "",
+    driverId: "",
+    employeeType: "employee",
+    dateOfBirth: "",
     address: "",
     city: "",
     state: "",
-    zipCode: "",
-    dateOfBirth: "",
-    
-    // License Details
+    zip: "",
     licenseNumber: "",
     licenseState: "",
+    licenseType: "class_a",
+    licenseEndorsements: [] as string[],
     licenseExpiry: "",
-    licenseClass: "",
-    
-    // Employment Information
-    hireDate: "",
-    employmentType: "full-time",
     status: "active",
-    payRate: "",
+    hireDate: "",
     assignedTruck: "",
-    
-    // Emergency Contact
+    payRateType: "per_mile",
+    payRate: "",
     emergencyContactName: "",
     emergencyContactPhone: "",
-    emergencyContactRelation: "",
-    
-    // Additional Information
+    emergencyContactRelationship: "",
     notes: "",
   })
 
@@ -78,24 +80,27 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
           name: driver.name || "",
           email: driver.email || "",
           phone: driver.phone || "",
-          address: "",
-          city: "",
-          state: "",
-          zipCode: "",
-          dateOfBirth: "",
+          driverId: driver.driver_id || "",
+          employeeType: driver.employee_type || "employee",
+          dateOfBirth: driver.date_of_birth || "",
+          address: driver.address || "",
+          city: driver.city || "",
+          state: driver.state || driver.license_state || "",
+          zip: driver.zip || "",
           licenseNumber: driver.license_number || "",
-          licenseState: "",
+          licenseState: driver.license_state || "",
+          licenseType: driver.license_type || "class_a",
+          licenseEndorsements: driver.license_endorsements ? driver.license_endorsements.split(",") : [],
           licenseExpiry: driver.license_expiry || "",
-          licenseClass: "",
-          hireDate: "",
-          employmentType: "full-time",
           status: driver.status || "active",
-          payRate: driver.pay_rate ? String(driver.pay_rate) : "",
+          hireDate: driver.hire_date || "",
           assignedTruck: driver.truck_id || "",
-          emergencyContactName: "",
-          emergencyContactPhone: "",
-          emergencyContactRelation: "",
-          notes: "",
+          payRateType: driver.pay_rate_type || "per_mile",
+          payRate: driver.pay_rate ? String(driver.pay_rate) : "",
+          emergencyContactName: driver.emergency_contact_name || "",
+          emergencyContactPhone: driver.emergency_contact_phone || "",
+          emergencyContactRelationship: driver.emergency_contact_relationship || "",
+          notes: driver.notes || "",
         })
       }
       setIsLoading(false)
@@ -119,17 +124,33 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
       name: formData.name,
       email: formData.email,
       phone: formData.phone,
+      driver_id: formData.driverId || undefined,
+      employee_type: formData.employeeType || undefined,
+      date_of_birth: formData.dateOfBirth || undefined,
+      address: formData.address || undefined,
+      city: formData.city || undefined,
+      state: formData.state || undefined,
+      zip: formData.zip || undefined,
       license_number: formData.licenseNumber,
+      license_state: formData.licenseState || undefined,
+      license_type: formData.licenseType || undefined,
+      license_endorsements: formData.licenseEndorsements.length > 0 ? formData.licenseEndorsements.join(",") : undefined,
       license_expiry: formData.licenseExpiry || null,
       status: formData.status,
+      hire_date: formData.hireDate || undefined,
       truck_id: formData.assignedTruck || null,
+      pay_rate_type: formData.payRateType || undefined,
       pay_rate: formData.payRate ? Number.parseFloat(formData.payRate) : null,
+      emergency_contact_name: formData.emergencyContactName || undefined,
+      emergency_contact_phone: formData.emergencyContactPhone || undefined,
+      emergency_contact_relationship: formData.emergencyContactRelationship || undefined,
+      notes: formData.notes || undefined,
     })
 
     setIsSubmitting(false)
 
     if (result.error) {
-      toast.error(result.error || "Failed to update driver")
+      toast.error(result.error)
     } else {
       toast.success("Driver updated successfully")
       router.push(`/dashboard/drivers/${id}`)
@@ -146,379 +167,357 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">Edit Driver</h1>
+      <FormPageLayout
+        title="Edit Driver"
+        subtitle="Loading driver information..."
+        backUrl={`/dashboard/drivers/${id}`}
+      >
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Loading driver information...</p>
         </div>
-        <main className="flex-1 overflow-auto p-8">
-          <div className="max-w-4xl mx-auto">
-            <Card className="border-border p-8">
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Loading driver information...</p>
-              </div>
-            </Card>
-          </div>
-        </main>
-      </div>
+      </FormPageLayout>
     )
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center gap-4">
-        <Link href={`/dashboard/drivers/${id}`}>
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-        </Link>
-        <h1 className="text-2xl font-bold text-foreground">Edit Driver</h1>
-      </div>
+    <FormPageLayout
+      title="Edit Driver"
+      subtitle="Update driver information"
+      backUrl={`/dashboard/drivers/${id}`}
+      onSubmit={handleSubmit}
+      isSubmitting={isSubmitting}
+      submitLabel="Update Driver"
+    >
+            <Tabs defaultValue="personal" className="space-y-6">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="personal">Personal</TabsTrigger>
+                <TabsTrigger value="license">License</TabsTrigger>
+                <TabsTrigger value="employment">Employment</TabsTrigger>
+                <TabsTrigger value="emergency">Emergency</TabsTrigger>
+              </TabsList>
 
-      {/* Content */}
-      <main className="flex-1 overflow-auto p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
-            <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Personal Information Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <User className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Personal Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="md:col-span-2">
-                  <Label htmlFor="name">Full Name *</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    type="text"
-                    placeholder="John Smith"
-                    value={formData.name}
-                    onChange={handleChange}
-                    className="mt-2"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email Address *</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder="john@company.com"
-                    value={formData.email}
-                    onChange={handleChange}
-                    className="mt-2"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Phone Number *</Label>
-                  <Input
-                    id="phone"
-                    name="phone"
-                    type="tel"
-                    placeholder="+1 (555) 123-4567"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    className="mt-2"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                  <Input
-                    id="dateOfBirth"
-                    name="dateOfBirth"
-                    type="date"
-                    value={formData.dateOfBirth}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="address">Street Address</Label>
-                  <Input
-                    id="address"
-                    name="address"
-                    type="text"
-                    placeholder="123 Main Street"
-                    value={formData.address}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="city">City</Label>
-                  <Input
-                    id="city"
-                    name="city"
-                    type="text"
-                    placeholder="New York"
-                    value={formData.city}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="state">State</Label>
-                  <Select value={formData.state} onValueChange={(value) => handleSelectChange("state", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue placeholder="Select state" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {usStates.map((state) => (
-                        <SelectItem key={state} value={state}>
-                          {state}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="zipCode">ZIP Code</Label>
-                  <Input
-                    id="zipCode"
-                    name="zipCode"
-                    type="text"
-                    placeholder="10001"
-                    value={formData.zipCode}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-              </div>
-            </Card>
+              {/* Personal Information Tab */}
+              <TabsContent value="personal" className="space-y-6">
+                <FormSection title="Personal Information" icon={<User className="w-5 h-5" />}>
+                  <FormGrid cols={2}>
+                    <div className="md:col-span-2">
+                      <Label>Full Name *</Label>
+                      <Input
+                        name="name"
+                        value={formData.name}
+                        onChange={handleChange}
+                        className="mt-1"
+                        required
+                        placeholder="John Smith"
+                      />
+                    </div>
+                    <div>
+                      <Label>Driver ID</Label>
+                      <Input
+                        name="driverId"
+                        value={formData.driverId}
+                        onChange={handleChange}
+                        className="mt-1"
+                        placeholder="DRV-001"
+                      />
+                    </div>
+                    <div>
+                      <Label>Employee Type</Label>
+                      <Select value={formData.employeeType} onValueChange={(v) => handleSelectChange("employeeType", v)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="employee">Employee</SelectItem>
+                          <SelectItem value="contractor">Contractor</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Email Address *</Label>
+                      <Input
+                        name="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        className="mt-1"
+                        required
+                        placeholder="john@company.com"
+                      />
+                    </div>
+                    <div>
+                      <Label>Phone Number *</Label>
+                      <Input
+                        name="phone"
+                        type="tel"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        className="mt-1"
+                        required
+                        placeholder="+1 (555) 123-4567"
+                      />
+                    </div>
+                    <div>
+                      <Label>Date of Birth</Label>
+                      <Input
+                        name="dateOfBirth"
+                        type="date"
+                        value={formData.dateOfBirth}
+                        onChange={handleChange}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label>Address</Label>
+                      <Input
+                        name="address"
+                        value={formData.address}
+                        onChange={handleChange}
+                        className="mt-1"
+                        placeholder="Street address"
+                      />
+                    </div>
+                    <div>
+                      <Label>City</Label>
+                      <Input
+                        name="city"
+                        value={formData.city}
+                        onChange={handleChange}
+                        className="mt-1"
+                        placeholder="City"
+                      />
+                    </div>
+                    <div>
+                      <Label>State</Label>
+                      <Select value={formData.state} onValueChange={(v) => handleSelectChange("state", v)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select state" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {usStates.map(state => (
+                            <SelectItem key={state} value={state}>{state}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>ZIP Code</Label>
+                      <Input
+                        name="zip"
+                        value={formData.zip}
+                        onChange={handleChange}
+                        className="mt-1"
+                        placeholder="12345"
+                      />
+                    </div>
+                  </FormGrid>
+                </FormSection>
+              </TabsContent>
 
-            {/* License Details Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <FileText className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">License Details</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="licenseNumber">License Number *</Label>
-                  <Input
-                    id="licenseNumber"
-                    name="licenseNumber"
-                    type="text"
-                    placeholder="DL12345678"
-                    value={formData.licenseNumber}
-                    onChange={handleChange}
-                    className="mt-2"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="licenseState">License State *</Label>
-                  <Select value={formData.licenseState} onValueChange={(value) => handleSelectChange("licenseState", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue placeholder="Select state" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {usStates.map((state) => (
-                        <SelectItem key={state} value={state}>
-                          {state}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="licenseExpiry">License Expiry Date *</Label>
-                  <Input
-                    id="licenseExpiry"
-                    name="licenseExpiry"
-                    type="date"
-                    value={formData.licenseExpiry}
-                    onChange={handleChange}
-                    className="mt-2"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="licenseClass">License Class</Label>
-                  <Select value={formData.licenseClass} onValueChange={(value) => handleSelectChange("licenseClass", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue placeholder="Select class" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Class A">Class A - Combination Vehicle</SelectItem>
-                      <SelectItem value="Class B">Class B - Heavy Straight Vehicle</SelectItem>
-                      <SelectItem value="Class C">Class C - Small Vehicle</SelectItem>
-                      <SelectItem value="CDL">CDL - Commercial Driver's License</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </Card>
+              {/* License Details Tab */}
+              <TabsContent value="license" className="space-y-6">
+                <FormSection title="License Information" icon={<FileText className="w-5 h-5" />}>
+                  <FormGrid cols={2}>
+                    <div>
+                      <Label>License Number *</Label>
+                      <Input
+                        name="licenseNumber"
+                        value={formData.licenseNumber}
+                        onChange={handleChange}
+                        className="mt-1"
+                        required
+                        placeholder="DL12345678"
+                      />
+                    </div>
+                    <div>
+                      <Label>License State *</Label>
+                      <Select value={formData.licenseState} onValueChange={(v) => handleSelectChange("licenseState", v)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select state" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {usStates.map(state => (
+                            <SelectItem key={state} value={state}>{state}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>CDL License Type *</Label>
+                      <Select value={formData.licenseType} onValueChange={(v) => handleSelectChange("licenseType", v)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="class_a">Class A</SelectItem>
+                          <SelectItem value="class_b">Class B</SelectItem>
+                          <SelectItem value="class_c">Class C</SelectItem>
+                          <SelectItem value="non_cdl">Non-CDL</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>License Expiry Date *</Label>
+                      <Input
+                        name="licenseExpiry"
+                        type="date"
+                        value={formData.licenseExpiry}
+                        onChange={handleChange}
+                        className="mt-1"
+                        required
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label>License Endorsements</Label>
+                      <div className="grid grid-cols-3 md:grid-cols-4 gap-3 mt-2">
+                        {["H", "N", "P", "S", "T", "X", "L", "E"].map(endorsement => (
+                          <label key={endorsement} className="flex items-center gap-2 cursor-pointer">
+                            <Checkbox
+                              checked={formData.licenseEndorsements.includes(endorsement)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    licenseEndorsements: [...prev.licenseEndorsements, endorsement]
+                                  }))
+                                } else {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    licenseEndorsements: prev.licenseEndorsements.filter(e => e !== endorsement)
+                                  }))
+                                }
+                              }}
+                            />
+                            <span className="text-sm">{endorsement}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </FormGrid>
+                </FormSection>
+              </TabsContent>
 
-            {/* Employment Information Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Briefcase className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Employment Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="hireDate">Hire Date</Label>
-                  <Input
-                    id="hireDate"
-                    name="hireDate"
-                    type="date"
-                    value={formData.hireDate}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="employmentType">Employment Type</Label>
-                  <Select value={formData.employmentType} onValueChange={(value) => handleSelectChange("employmentType", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="full-time">Full-Time</SelectItem>
-                      <SelectItem value="part-time">Part-Time</SelectItem>
-                      <SelectItem value="contractor">Contractor</SelectItem>
-                      <SelectItem value="temporary">Temporary</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="status">Status *</Label>
-                  <Select value={formData.status} onValueChange={(value) => handleSelectChange("status", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                      <SelectItem value="on_route">On Route</SelectItem>
-                      <SelectItem value="off_duty">Off Duty</SelectItem>
-                      <SelectItem value="on_leave">On Leave</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="payRate">Pay Rate (per mile/hour)</Label>
-                  <Input
-                    id="payRate"
-                    name="payRate"
-                    type="text"
-                    placeholder="0.50"
-                    value={formData.payRate}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="assignedTruck">Assigned Truck</Label>
-                  <Select value={formData.assignedTruck || undefined} onValueChange={(value) => handleSelectChange("assignedTruck", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue placeholder="Select a truck (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {trucks.map((truck) => (
-                        <SelectItem key={truck.id} value={truck.id}>
-                          {truck.truck_number} - {truck.make} {truck.model}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </Card>
+              {/* Employment Information Tab */}
+              <TabsContent value="employment" className="space-y-6">
+                <FormSection title="Employment Information" icon={<Briefcase className="w-5 h-5" />}>
+                  <FormGrid cols={2}>
+                    <div>
+                      <Label>Status *</Label>
+                      <Select value={formData.status} onValueChange={(v) => handleSelectChange("status", v)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                          <SelectItem value="on_route">On Route</SelectItem>
+                          <SelectItem value="off_duty">Off Duty</SelectItem>
+                          <SelectItem value="on_leave">On Leave</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Hire Date</Label>
+                      <Input
+                        name="hireDate"
+                        type="date"
+                        value={formData.hireDate}
+                        onChange={handleChange}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label>Assigned Truck</Label>
+                      <Select value={formData.assignedTruck || "none"} onValueChange={(v) => handleSelectChange("assignedTruck", v === "none" ? "" : v)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select truck" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {trucks.map(t => (
+                            <SelectItem key={t.id} value={t.id}>{t.truck_number} - {t.make} {t.model}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Pay Rate Type</Label>
+                      <Select value={formData.payRateType} onValueChange={(v) => handleSelectChange("payRateType", v)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="per_mile">Per Mile</SelectItem>
+                          <SelectItem value="per_hour">Per Hour</SelectItem>
+                          <SelectItem value="percentage">Percentage</SelectItem>
+                          <SelectItem value="flat">Flat Rate</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Pay Rate</Label>
+                      <Input
+                        name="payRate"
+                        value={formData.payRate}
+                        onChange={handleChange}
+                        className="mt-1"
+                        placeholder="0.50"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label>Notes</Label>
+                      <Textarea
+                        name="notes"
+                        value={formData.notes}
+                        onChange={handleChange}
+                        className="mt-1"
+                        rows={3}
+                        placeholder="Additional notes..."
+                      />
+                    </div>
+                  </FormGrid>
+                </FormSection>
+              </TabsContent>
 
-            {/* Emergency Contact Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Phone className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Emergency Contact</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="emergencyContactName">Contact Name</Label>
-                  <Input
-                    id="emergencyContactName"
-                    name="emergencyContactName"
-                    type="text"
-                    placeholder="Jane Smith"
-                    value={formData.emergencyContactName}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="emergencyContactPhone">Contact Phone</Label>
-                  <Input
-                    id="emergencyContactPhone"
-                    name="emergencyContactPhone"
-                    type="tel"
-                    placeholder="+1 (555) 987-6543"
-                    value={formData.emergencyContactPhone}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="emergencyContactRelation">Relationship</Label>
-                  <Select value={formData.emergencyContactRelation} onValueChange={(value) => handleSelectChange("emergencyContactRelation", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue placeholder="Select relationship" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="spouse">Spouse</SelectItem>
-                      <SelectItem value="parent">Parent</SelectItem>
-                      <SelectItem value="sibling">Sibling</SelectItem>
-                      <SelectItem value="child">Child</SelectItem>
-                      <SelectItem value="friend">Friend</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </Card>
-
-            {/* Additional Notes Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <FileText className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Additional Information</h2>
-              </div>
-              <div>
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea
-                  id="notes"
-                  name="notes"
-                  placeholder="Any additional information about the driver..."
-                  value={formData.notes}
-                  onChange={handleChange}
-                  className="mt-2 min-h-24"
-                  rows={4}
-                />
-              </div>
-            </Card>
-
-            {/* Submit Buttons */}
-            <div className="flex gap-4 justify-end">
-              <Link href={`/dashboard/drivers/${id}`}>
-                  <Button type="button" variant="outline" className="border-border bg-transparent">
-                    Cancel
-                  </Button>
-                </Link>
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                {isSubmitting ? "Saving Changes..." : "Save Changes"}
-              </Button>
-              </div>
-            </form>
-        </div>
-      </main>
-    </div>
+              {/* Emergency Contact Tab */}
+              <TabsContent value="emergency" className="space-y-6">
+                <FormSection title="Emergency Contact" icon={<Phone className="w-5 h-5" />}>
+                  <FormGrid cols={2}>
+                    <div>
+                      <Label>Contact Name</Label>
+                      <Input
+                        name="emergencyContactName"
+                        value={formData.emergencyContactName}
+                        onChange={handleChange}
+                        className="mt-1"
+                        placeholder="Jane Smith"
+                      />
+                    </div>
+                    <div>
+                      <Label>Contact Phone</Label>
+                      <Input
+                        name="emergencyContactPhone"
+                        type="tel"
+                        value={formData.emergencyContactPhone}
+                        onChange={handleChange}
+                        className="mt-1"
+                        placeholder="+1 (555) 123-4567"
+                      />
+                    </div>
+                    <div>
+                      <Label>Relationship</Label>
+                      <Input
+                        name="emergencyContactRelationship"
+                        value={formData.emergencyContactRelationship}
+                        onChange={handleChange}
+                        className="mt-1"
+                        placeholder="Spouse, Parent, etc."
+                      />
+                    </div>
+                  </FormGrid>
+                </FormSection>
+              </TabsContent>
+            </Tabs>
+    </FormPageLayout>
   )
 }

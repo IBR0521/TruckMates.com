@@ -24,6 +24,7 @@ import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { RouteStopsManager } from "@/components/route-stops-manager"
 import { getRouteStops, createRouteStop, updateRouteStop, deleteRouteStop } from "@/app/actions/route-stops"
+import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 
 export default function EditRoutePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -224,44 +225,31 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
-          <h1 className="text-2xl font-bold text-foreground">Edit Route</h1>
+      <FormPageLayout
+        title="Edit Route"
+        subtitle="Loading route information..."
+        backUrl={`/dashboard/routes/${id}`}
+      >
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Loading route information...</p>
         </div>
-        <main className="flex-1 overflow-auto p-4 md:p-8">
-          <div className="max-w-4xl mx-auto">
-            <Card className="border-border p-4 md:p-8">
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Loading route information...</p>
-              </div>
-            </Card>
-          </div>
-        </main>
-      </div>
+      </FormPageLayout>
     )
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center gap-4">
-        <Link href={`/dashboard/routes/${id}`}>
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-        </Link>
-        <h1 className="text-2xl font-bold text-foreground">Edit Route</h1>
-      </div>
-
-      <main className="flex-1 overflow-auto p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Basic Information Section */}
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Route className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Basic Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+    <FormPageLayout
+      title="Edit Route"
+      subtitle="Update route information"
+      backUrl={`/dashboard/routes/${id}`}
+      onSubmit={handleSubmit}
+      isSubmitting={isSubmitting}
+      submitLabel="Update Route"
+    >
+      <div className="space-y-6">
+        {/* Basic Information Section */}
+        <FormSection title="Basic Information" icon={<Route className="w-5 h-5" />}>
+          <FormGrid cols={2}>
                 <div className="md:col-span-2">
                   <Label htmlFor="name">Route Name *</Label>
                   <Input
@@ -353,19 +341,15 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            </Card>
+          </FormGrid>
+        </FormSection>
 
             {/* Route Stops Section */}
             <RouteStopsManager stops={stops} onStopsChange={setStops} />
 
             {/* Depot Information Section */}
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Building2 className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Depot Information (Optional)</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-4">
+            <FormSection title="Depot Information (Optional)" icon={<Building2 className="w-5 h-5" />}>
+              <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="depotName">Depot Name</Label>
                   <Input
@@ -456,16 +440,12 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                     className="mt-2"
                   />
                 </div>
-              </div>
-            </Card>
+              </FormGrid>
+            </FormSection>
 
             {/* Assignment Section */}
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <User className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Assignment</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+            <FormSection title="Assignment" icon={<User className="w-5 h-5" />}>
+              <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="driver">Driver</Label>
                   <Select value={formData.driver || "none"} onValueChange={(value) => handleSelectChange("driver", value === "none" ? "" : value)}>
@@ -498,8 +478,8 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            </Card>
+          </FormGrid>
+        </FormSection>
 
             {/* Additional Information Section */}
             <Card className="border-border p-6">
@@ -534,25 +514,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                 </div>
               </div>
             </Card>
-
-            {/* Submit Buttons */}
-            <div className="flex gap-4 justify-end">
-              <Link href={`/dashboard/routes/${id}`}>
-                <Button type="button" variant="outline" className="border-border bg-transparent">
-                  Cancel
-                </Button>
-              </Link>
-              <Button
-                type="submit"
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Updating..." : "Update Route"}
-              </Button>
-            </div>
-          </form>
-        </div>
-      </main>
-    </div>
+      </div>
+    </FormPageLayout>
   )
 }

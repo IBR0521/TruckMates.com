@@ -16,120 +16,106 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import {
   ArrowLeft,
   Package,
   MapPin,
-  User,
   Building2,
   Users,
   DollarSign,
-  Calculator,
   Truck,
-  Search,
   X,
+  Plus,
 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { createLoad, getLoadSuggestions } from "@/app/actions/loads"
+import { createLoad } from "@/app/actions/loads"
 import { useRouter } from "next/navigation"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { getRoutes } from "@/app/actions/routes"
-import { getCustomers } from "@/app/actions/customers"
+import { getCustomers, createCustomer } from "@/app/actions/customers"
 import { calculateMileage } from "@/app/actions/load-mileage"
 import { LoadDeliveryPointsManager } from "@/components/load-delivery-points-manager"
 import { createLoadDeliveryPoint } from "@/app/actions/load-delivery-points"
+import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 
 export default function AddLoadPage() {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isCalculatingMiles, setIsCalculatingMiles] = useState(false)
   const [drivers, setDrivers] = useState<any[]>([])
   const [trucks, setTrucks] = useState<any[]>([])
   const [routes, setRoutes] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
   const [deliveryPoints, setDeliveryPoints] = useState<any[]>([])
-  const [customerSearch, setCustomerSearch] = useState("")
-  const [showCustomerSearch, setShowCustomerSearch] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
+  const [showAddCustomer, setShowAddCustomer] = useState(false)
+  const [showAddShipper, setShowAddShipper] = useState(false)
+  const [showAddConsignee, setShowAddConsignee] = useState(false)
+  const [isCalculatingMiles, setIsCalculatingMiles] = useState(false)
 
   const [formData, setFormData] = useState({
-    // Basic Information
+    // Load Info
     shipmentNumber: "",
-    bolNumber: "",
-    loadType: "ftl", // 'ftl' or 'ltl'
-    
-    // Customer
+    autoNumbering: false,
+    loadType: "ftl",
+    customerType: "customer",
     customerId: "",
     companyName: "",
+    reference: "",
     
-    // Origin & Destination (simplified for now)
-    origin: "",
-    destination: "",
-    pickupDate: "",
-    estimatedDelivery: "",
-    
-    // Detailed Shipper Information
+    // Origin/Shipper
     shipperName: "",
     shipperAddress: "",
     shipperCity: "",
     shipperState: "",
     shipperZip: "",
-    shipperContactName: "",
-    shipperContactPhone: "",
-    shipperContactEmail: "",
+    shipperContact: "",
+    shipperPhone: "",
+    origin: "",
+    pickupDate: "",
     pickupTime: "",
-    pickupTimeWindowStart: "",
-    pickupTimeWindowEnd: "",
     pickupInstructions: "",
     
-    // Detailed Consignee Information
+    // Destination/Consignee
     consigneeName: "",
     consigneeAddress: "",
     consigneeCity: "",
     consigneeState: "",
     consigneeZip: "",
-    consigneeContactName: "",
-    consigneeContactPhone: "",
-    consigneeContactEmail: "",
+    consigneeContact: "",
+    consigneePhone: "",
+    destination: "",
+    deliveryType: "single",
+    estimatedDelivery: "",
     deliveryTime: "",
-    deliveryTimeWindowStart: "",
-    deliveryTimeWindowEnd: "",
     deliveryInstructions: "",
     
-    // Enhanced Freight Details
+    // Freight
     contents: "",
     weight: "",
     pieces: "",
     pallets: "",
-    boxes: "",
-    length: "",
-    width: "",
-    height: "",
-    temperature: "",
+    freightClass: "",
     isHazardous: false,
     isOversized: false,
-    specialInstructions: "",
+    isReefer: false,
     
-    // Carrier Information
-    carrierType: "dry-van",
+    // Route
+    estimatedMiles: "",
+    milesMethod: "manual",
     
-    // Special Requirements
-    requiresLiftgate: false,
-    requiresInsideDelivery: false,
-    requiresAppointment: false,
-    appointmentTime: "",
-    
-    // Pricing & Financial
-    rate: "",
-    rateType: "per-mile",
+    // Charges
+    haulingFee: "",
     fuelSurcharge: "",
     accessorialCharges: "",
     discount: "",
-    advance: "",
-    estimatedMiles: "",
-    estimatedProfit: "",
-    estimatedRevenue: "",
+    totalRate: "",
     
     // Assignment
     status: "pending",
@@ -137,15 +123,19 @@ export default function AddLoadPage() {
     truck: "",
     route: "",
     
-    // Additional Information
-    customerReference: "",
+    // Special Requirements
+    requiresLiftgate: false,
+    requiresInsideDelivery: false,
+    requiresAppointment: false,
+    
+    // Notes
     notes: "",
     internalNotes: "",
-    
-    // Delivery Type
-    deliveryType: "single",
-    requiresSplitDelivery: false,
   })
+
+  const [newCustomer, setNewCustomer] = useState({ name: "", email: "", phone: "", address: "", city: "", state: "", zip: "" })
+  const [newShipper, setNewShipper] = useState({ name: "", address: "", city: "", state: "", zip: "", contact: "", phone: "" })
+  const [newConsignee, setNewConsignee] = useState({ name: "", address: "", city: "", state: "", zip: "", contact: "", phone: "" })
 
   useEffect(() => {
     async function loadData() {
@@ -163,1247 +153,583 @@ export default function AddLoadPage() {
     loadData()
   }, [])
 
-  // Auto-fill customer data when selected
   useEffect(() => {
     if (selectedCustomer) {
       setFormData(prev => ({
         ...prev,
         customerId: selectedCustomer.id,
         companyName: selectedCustomer.name || selectedCustomer.company_name || "",
-        // Auto-fill consignee info from customer if available
-        consigneeName: selectedCustomer.name || selectedCustomer.company_name || "",
-        consigneeAddress: selectedCustomer.address || selectedCustomer.address_line1 || "",
-        consigneeCity: selectedCustomer.city || "",
-        consigneeState: selectedCustomer.state || "",
-        consigneeZip: selectedCustomer.zip || selectedCustomer.zip_code || "",
-        consigneeContactName: selectedCustomer.primary_contact_name || "",
-        consigneeContactPhone: selectedCustomer.phone || selectedCustomer.primary_contact_phone || "",
-        consigneeContactEmail: selectedCustomer.email || selectedCustomer.primary_contact_email || "",
       }))
     }
   }, [selectedCustomer])
 
-  // Smart suggestions when origin/destination changes
-  useEffect(() => {
-    async function fetchSuggestions() {
-      if (formData.origin && formData.destination) {
-        const suggestionsResult = await getLoadSuggestions(formData.origin, formData.destination)
-        if (suggestionsResult.data && !suggestionsResult.error) {
-          const suggestions = suggestionsResult.data
-          
-          // Auto-suggest driver if available and not already set
-          if (suggestions.suggestedDriver && !formData.driver) {
-            setFormData(prev => ({ ...prev, driver: suggestions.suggestedDriver.id }))
-            toast.success(`Suggested driver: ${suggestions.suggestedDriver.name}`)
-          }
-          
-          // Auto-suggest truck if available and not already set
-          if (suggestions.suggestedTruck && !formData.truck) {
-            setFormData(prev => ({ ...prev, truck: suggestions.suggestedTruck.id }))
-            toast.success(`Suggested truck: ${suggestions.suggestedTruck.truck_number}`)
-          }
-          
-          // Auto-suggest customer if available and not already set
-          if (suggestions.lastUsedCustomer && !formData.customerId) {
-            setSelectedCustomer(suggestions.lastUsedCustomer)
-            setFormData(prev => ({
-              ...prev,
-              customerId: suggestions.lastUsedCustomer.id,
-              companyName: suggestions.lastUsedCustomer.name || suggestions.lastUsedCustomer.company_name || "",
-            }))
-          }
-        }
-      }
-    }
-
-    // Debounce suggestions
-    const timeoutId = setTimeout(() => {
-      fetchSuggestions()
-    }, 1000)
-
-    return () => clearTimeout(timeoutId)
-  }, [formData.origin, formData.destination])
-
-  // Filter customers based on search
-  const filteredCustomers = customers.filter((customer) =>
-    customer.name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
-    customer.company_name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
-    customer.email?.toLowerCase().includes(customerSearch.toLowerCase())
-  )
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target
-    const checked = (e.target as HTMLInputElement).checked
-    
-    if (type === "checkbox") {
-      setFormData({ ...formData, [name]: checked })
-    } else {
-      setFormData({ ...formData, [name]: value })
-    }
+    setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData({ ...formData, [name]: value })
   }
 
-  // Calculate mileage
-  const handleCalculateMiles = async () => {
+  const calculateMiles = async () => {
     if (!formData.origin || !formData.destination) {
-      toast.error("Please enter both origin and destination")
+      toast.error("Please enter origin and destination")
       return
     }
-
     setIsCalculatingMiles(true)
+    try {
     const result = await calculateMileage(formData.origin, formData.destination)
-    setIsCalculatingMiles(false)
-
-    if (result.error) {
-      toast.error(result.error)
-    } else if (result.miles) {
+      if (result.miles) {
       setFormData(prev => ({ ...prev, estimatedMiles: result.miles!.toString() }))
       toast.success(`Calculated: ${result.miles} miles`)
+      } else {
+        toast.error(result.error || "Failed to calculate miles")
+      }
+    } catch (error) {
+      toast.error("Failed to calculate miles")
+    } finally {
+      setIsCalculatingMiles(false)
     }
   }
-
-  // Calculate profit/revenue
-  useEffect(() => {
-    const rate = parseFloat(formData.rate) || 0
-    const fuelSurcharge = parseFloat(formData.fuelSurcharge) || 0
-    const accessorial = parseFloat(formData.accessorialCharges) || 0
-    const discount = parseFloat(formData.discount) || 0
-    const advance = parseFloat(formData.advance) || 0
-    const miles = parseFloat(formData.estimatedMiles) || 0
-
-    let revenue = 0
-    if (formData.rateType === "per-mile" && miles > 0) {
-      revenue = rate * miles
-    } else if (formData.rateType === "flat-rate") {
-      revenue = rate
-    } else if (formData.rateType === "per-ton") {
-      const weight = parseFloat(formData.weight) || 0
-      revenue = rate * weight
-    }
-
-    revenue = revenue + fuelSurcharge + accessorial - discount
-    const totalRate = revenue
-    const estimatedProfit = totalRate - advance // Simplified - in reality, you'd subtract expenses
-
-    setFormData(prev => ({
-      ...prev,
-      totalRate: totalRate.toFixed(2),
-      estimatedRevenue: revenue.toFixed(2),
-      estimatedProfit: estimatedProfit.toFixed(2),
-    }))
-  }, [formData.rate, formData.rateType, formData.fuelSurcharge, formData.accessorialCharges, formData.discount, formData.advance, formData.estimatedMiles, formData.weight])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
 
-    // Validate required fields
-    if (!formData.shipmentNumber || !formData.origin) {
-      toast.error("Please fill in all required fields (Shipment Number, Origin)")
-      setIsSubmitting(false)
-      return
-    }
-
-    // Validate destination for single delivery
-    if (formData.deliveryType === "single" && !formData.destination) {
-      toast.error("Please provide a destination for single delivery")
-      setIsSubmitting(false)
-      return
-    }
-
-    // Validate delivery points if multi-delivery
-    if (formData.deliveryType === "multi") {
-      if (deliveryPoints.length === 0) {
-        toast.error("Please add at least one delivery point for multi-delivery loads")
-        setIsSubmitting(false)
-        return
-      }
-    }
-
-    // Auto-calculate weight in kg if weight is provided
-    const weightKg = formData.weight 
-      ? Math.round(parseFloat(formData.weight.replace(/[^0-9.]/g, "")) * 1000) 
-      : null
-
-    const destination = formData.deliveryType === "multi" && !formData.destination
-      ? "Multiple Locations"
-      : formData.destination
-
-    const result = await createLoad({
-      shipment_number: formData.shipmentNumber,
+    try {
+      const payload: any = {
+        shipment_number: formData.autoNumbering ? "" : formData.shipmentNumber,
       origin: formData.origin,
-      destination: destination,
+        destination: formData.deliveryType === "multi" ? "Multiple Locations" : formData.destination,
       weight: formData.weight || undefined,
-      weight_kg: weightKg ?? undefined,
       contents: formData.contents || undefined,
-      value: formData.estimatedRevenue ? parseFloat(formData.estimatedRevenue) : undefined,
-      carrier_type: formData.carrierType,
-      status: formData.status,
-      driver_id: formData.driver || undefined,
-      truck_id: formData.truck || undefined,
-      route_id: formData.route || null,
-      load_date: formData.pickupDate || null,
-      estimated_delivery: formData.estimatedDelivery || null,
-      delivery_type: formData.deliveryType,
       company_name: formData.companyName || undefined,
-      customer_reference: formData.customerReference || undefined,
-      requires_split_delivery: formData.requiresSplitDelivery,
-      // New TruckLogics fields
+        customer_reference: formData.reference || undefined,
+        delivery_type: formData.deliveryType,
       load_type: formData.loadType,
       customer_id: formData.customerId || undefined,
-      bol_number: formData.bolNumber || undefined,
-      // Shipper
       shipper_name: formData.shipperName || undefined,
       shipper_address: formData.shipperAddress || undefined,
       shipper_city: formData.shipperCity || undefined,
       shipper_state: formData.shipperState || undefined,
       shipper_zip: formData.shipperZip || undefined,
-      shipper_contact_name: formData.shipperContactName || undefined,
-      shipper_contact_phone: formData.shipperContactPhone || undefined,
-      shipper_contact_email: formData.shipperContactEmail || undefined,
-      pickup_time: formData.pickupTime || undefined,
-      pickup_time_window_start: formData.pickupTimeWindowStart || undefined,
-      pickup_time_window_end: formData.pickupTimeWindowEnd || undefined,
-      pickup_instructions: formData.pickupInstructions || undefined,
-      // Consignee
+        shipper_contact_name: formData.shipperContact || undefined,
+        shipper_contact_phone: formData.shipperPhone || undefined,
       consignee_name: formData.consigneeName || undefined,
       consignee_address: formData.consigneeAddress || undefined,
       consignee_city: formData.consigneeCity || undefined,
       consignee_state: formData.consigneeState || undefined,
       consignee_zip: formData.consigneeZip || undefined,
-      consignee_contact_name: formData.consigneeContactName || undefined,
-      consignee_contact_phone: formData.consigneeContactPhone || undefined,
-      consignee_contact_email: formData.consigneeContactEmail || undefined,
+        consignee_contact_name: formData.consigneeContact || undefined,
+        consignee_contact_phone: formData.consigneePhone || undefined,
+        pickup_time: formData.pickupTime || undefined,
       delivery_time: formData.deliveryTime || undefined,
-      delivery_time_window_start: formData.deliveryTimeWindowStart || undefined,
-      delivery_time_window_end: formData.deliveryTimeWindowEnd || undefined,
+        pickup_instructions: formData.pickupInstructions || undefined,
       delivery_instructions: formData.deliveryInstructions || undefined,
-      // Enhanced freight
       pieces: formData.pieces ? parseInt(formData.pieces) : undefined,
       pallets: formData.pallets ? parseInt(formData.pallets) : undefined,
-      boxes: formData.boxes ? parseInt(formData.boxes) : undefined,
-      length: formData.length ? parseFloat(formData.length) : undefined,
-      width: formData.width ? parseFloat(formData.width) : undefined,
-      height: formData.height ? parseFloat(formData.height) : undefined,
-      temperature: formData.temperature ? parseFloat(formData.temperature) : undefined,
       is_hazardous: formData.isHazardous,
       is_oversized: formData.isOversized,
-      special_instructions: formData.specialInstructions || undefined,
-      // Special requirements
       requires_liftgate: formData.requiresLiftgate,
       requires_inside_delivery: formData.requiresInsideDelivery,
       requires_appointment: formData.requiresAppointment,
-      appointment_time: formData.appointmentTime || undefined,
-      // Pricing
-      rate: formData.rate ? parseFloat(formData.rate) : undefined,
-      rate_type: formData.rateType,
+        rate: formData.haulingFee ? parseFloat(formData.haulingFee) : undefined,
       fuel_surcharge: formData.fuelSurcharge ? parseFloat(formData.fuelSurcharge) : undefined,
       accessorial_charges: formData.accessorialCharges ? parseFloat(formData.accessorialCharges) : undefined,
       discount: formData.discount ? parseFloat(formData.discount) : undefined,
-      advance: formData.advance ? parseFloat(formData.advance) : undefined,
-      total_rate: formData.totalRate ? parseFloat(formData.totalRate) : undefined,
       estimated_miles: formData.estimatedMiles ? parseInt(formData.estimatedMiles) : undefined,
-      estimated_profit: formData.estimatedProfit ? parseFloat(formData.estimatedProfit) : undefined,
-      estimated_revenue: formData.estimatedRevenue ? parseFloat(formData.estimatedRevenue) : undefined,
-      // Notes
+        driver_id: formData.driver || undefined,
+        truck_id: formData.truck || undefined,
+        route_id: formData.route || undefined,
+        status: formData.status,
       notes: formData.notes || undefined,
       internal_notes: formData.internalNotes || undefined,
-    })
+        load_date: formData.pickupDate || undefined,
+        estimated_delivery: formData.estimatedDelivery || undefined,
+      }
+
+      const result = await createLoad(payload)
 
     if (result.error) {
-      toast.error(result.error || "Failed to add load")
+        toast.error(result.error)
       setIsSubmitting(false)
       return
     }
 
-    // Create delivery points if multi-delivery
     if (formData.deliveryType === "multi" && deliveryPoints.length > 0 && result.data?.id) {
-      try {
         for (const point of deliveryPoints) {
           await createLoadDeliveryPoint(result.data.id, point)
         }
-        toast.success(`Load added successfully with ${deliveryPoints.length} delivery points`)
-      } catch (error: any) {
-        toast.error(`Load created but failed to add some delivery points: ${error.message}`)
-      }
+        toast.success(`Load created with ${deliveryPoints.length} delivery points`)
     } else {
-      toast.success("Load added successfully")
+        toast.success("Load created successfully")
     }
 
-    setIsSubmitting(false)
     router.push(`/dashboard/loads/${result.data?.id || ""}`)
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create load")
+      setIsSubmitting(false)
+    }
   }
 
-  return (
-    <div className="w-full">
-      {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
-        <Link href="/dashboard/loads">
-          <Button variant="ghost" size="sm" className="mb-4">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Loads
-          </Button>
-        </Link>
-        <h1 className="text-xl md:text-2xl font-bold text-foreground">Add New Load</h1>
-      </div>
+  const filteredCustomers = customers.filter(c => 
+    (c.name || c.company_name || "").toLowerCase().includes((selectedCustomer?.name || "").toLowerCase())
+  )
 
-      {/* Content */}
-      <div className="p-4 md:p-8">
-        <div className="max-w-6xl mx-auto">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            
-            {/* Basic Information Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Package className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Basic Information</h2>
-              </div>
-              <div className="grid md:grid-cols-3 gap-6">
+  return (
+    <FormPageLayout
+      title="Create Load"
+      subtitle="Add a new load to your system"
+      backUrl="/dashboard/loads"
+      onSubmit={handleSubmit}
+      isSubmitting={isSubmitting}
+      submitLabel="Create Load"
+    >
+            <Tabs defaultValue="load-info" className="space-y-6">
+              <TabsList className="grid w-full grid-cols-6">
+                <TabsTrigger value="load-info">Load Info</TabsTrigger>
+                <TabsTrigger value="shipper">Shipper</TabsTrigger>
+                <TabsTrigger value="consignee">Consignee</TabsTrigger>
+                <TabsTrigger value="freight">Freight</TabsTrigger>
+                <TabsTrigger value="charges">Charges</TabsTrigger>
+                <TabsTrigger value="assignment">Assignment</TabsTrigger>
+              </TabsList>
+
+              {/* Load Information Tab */}
+              <TabsContent value="load-info" className="space-y-6">
+                <FormSection title="Load Information" icon={<Package className="w-5 h-5" />}>
+                  <FormGrid cols={3}>
                 <div>
-                  <Label htmlFor="shipmentNumber">Shipment Number *</Label>
+                      <Label>Load Number *</Label>
+                      <div className="flex gap-2 mt-1">
                   <Input
-                    id="shipmentNumber"
-                    name="shipmentNumber"
-                    type="text"
-                    placeholder="SHP-001"
                     value={formData.shipmentNumber}
-                    onChange={handleChange}
-                    className="mt-2"
-                    required
-                  />
+                          onChange={(e) => setFormData(prev => ({ ...prev, shipmentNumber: e.target.value }))}
+                          disabled={formData.autoNumbering}
+                          required={!formData.autoNumbering}
+                          placeholder="Auto-generated"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, autoNumbering: !prev.autoNumbering }))}
+                        className="text-xs text-primary hover:underline mt-1"
+                      >
+                        {formData.autoNumbering ? "Manual Entry" : "Auto-generate"}
+                      </button>
                 </div>
                 <div>
-                  <Label htmlFor="bolNumber">BOL Number</Label>
-                  <Input
-                    id="bolNumber"
-                    name="bolNumber"
-                    type="text"
-                    placeholder="BOL-001"
-                    value={formData.bolNumber}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                      <Label>Load Type</Label>
+                      <div className="flex gap-4 mt-1">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="loadType" value="ftl" checked={formData.loadType === "ftl"} onChange={(e) => handleSelectChange("loadType", e.target.value)} />
+                          <span className="text-sm">FTL</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="loadType" value="ltl" checked={formData.loadType === "ltl"} onChange={(e) => handleSelectChange("loadType", e.target.value)} />
+                          <span className="text-sm">LTL</span>
+                        </label>
+                      </div>
                 </div>
                 <div>
-                  <Label htmlFor="loadType">Load Type *</Label>
-                  <Select value={formData.loadType} onValueChange={(value) => handleSelectChange("loadType", value)}>
-                    <SelectTrigger className="mt-2 w-full">
+                      <Label>Customer Type</Label>
+                      <Select value={formData.customerType} onValueChange={(v) => handleSelectChange("customerType", v)}>
+                        <SelectTrigger className="mt-1">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ftl">Full Truckload (FTL)</SelectItem>
-                      <SelectItem value="ltl">Less Than Truckload (LTL)</SelectItem>
+                          <SelectItem value="customer">Customer</SelectItem>
+                          <SelectItem value="carrier">Carrier</SelectItem>
+                          <SelectItem value="broker">Broker</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            </Card>
-
-            {/* Customer Selection Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Building2 className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Customer</h2>
-              </div>
-              <div className="space-y-4">
-                <div className="relative">
-                  <Label>Select Customer</Label>
-                  <div className="mt-2 flex gap-2">
-                    <div className="flex-1 relative">
-                      <Input
-                        placeholder="Search customer by name or email..."
-                        value={customerSearch}
-                        onChange={(e) => {
-                          setCustomerSearch(e.target.value)
-                          setShowCustomerSearch(true)
-                        }}
-                        onFocus={() => setShowCustomerSearch(true)}
-                      />
-                      {showCustomerSearch && filteredCustomers.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-md shadow-lg max-h-60 overflow-y-auto">
-                          {filteredCustomers.map((customer) => (
-                            <button
-                              key={customer.id}
-                              type="button"
-                              className="w-full text-left px-4 py-2 hover:bg-secondary cursor-pointer"
-                              onClick={() => {
-                                setSelectedCustomer(customer)
-                                setCustomerSearch(customer.name || customer.company_name || "")
-                                setShowCustomerSearch(false)
-                              }}
-                            >
-                              <div className="font-medium">{customer.name || customer.company_name}</div>
-                              {customer.email && (
-                                <div className="text-sm text-muted-foreground">{customer.email}</div>
-                              )}
-                            </button>
-                          ))}
+                    <div className="md:col-span-2">
+                      <Label>Customer *</Label>
+                      <div className="flex gap-2 mt-1">
+                        <Select value={formData.customerId} onValueChange={(v) => {
+                          const customer = customers.find(c => c.id === v)
+                          setSelectedCustomer(customer || null)
+                          handleSelectChange("customerId", v)
+                        }}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select customer" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {customers.map(c => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.name || c.company_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button type="button" variant="outline" size="icon" onClick={() => setShowAddCustomer(!showAddCustomer)}>
+                          <Plus className="w-4 h-4" />
+                        </Button>
                         </div>
-                      )}
+                      {showAddCustomer && (
+                        <Card className="mt-2 p-4 border-primary/20">
+                          <div className="grid md:grid-cols-2 gap-3">
+                            <Input placeholder="Name *" value={newCustomer.name} onChange={(e) => setNewCustomer(prev => ({ ...prev, name: e.target.value }))} />
+                            <Input placeholder="Email" value={newCustomer.email} onChange={(e) => setNewCustomer(prev => ({ ...prev, email: e.target.value }))} />
+                            <Input placeholder="Phone" value={newCustomer.phone} onChange={(e) => setNewCustomer(prev => ({ ...prev, phone: e.target.value }))} />
+                            <Input placeholder="Address" value={newCustomer.address} onChange={(e) => setNewCustomer(prev => ({ ...prev, address: e.target.value }))} />
+                            <Input placeholder="City" value={newCustomer.city} onChange={(e) => setNewCustomer(prev => ({ ...prev, city: e.target.value }))} />
+                            <Input placeholder="State" value={newCustomer.state} onChange={(e) => setNewCustomer(prev => ({ ...prev, state: e.target.value }))} />
+                            <Input placeholder="ZIP" value={newCustomer.zip} onChange={(e) => setNewCustomer(prev => ({ ...prev, zip: e.target.value }))} />
                     </div>
-                    {selectedCustomer && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedCustomer(null)
-                          setCustomerSearch("")
-                          setFormData(prev => ({ ...prev, customerId: "", companyName: "" }))
-                        }}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    )}
+                          <div className="flex gap-2 mt-3">
+                            <Button type="button" size="sm" onClick={async () => {
+                              if (!newCustomer.name) { toast.error("Name required"); return }
+                              const result = await createCustomer({ ...newCustomer, customer_type: formData.customerType })
+                              if (result.data) {
+                                setCustomers([...customers, result.data])
+                                setSelectedCustomer(result.data)
+                                setFormData(prev => ({ ...prev, customerId: result.data.id, companyName: result.data.name || result.data.company_name || "" }))
+                                setNewCustomer({ name: "", email: "", phone: "", address: "", city: "", state: "", zip: "" })
+                                setShowAddCustomer(false)
+                                toast.success("Customer added")
+                              }
+                            }}>Add</Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => setShowAddCustomer(false)}>Cancel</Button>
                   </div>
-                  {selectedCustomer && (
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Selected: {selectedCustomer.name || selectedCustomer.company_name}
-                    </p>
+                        </Card>
                   )}
                 </div>
                 <div>
-                  <Label htmlFor="companyName">Company/Customer Name *</Label>
-                  <Input
-                    id="companyName"
-                    name="companyName"
-                    type="text"
-                    placeholder="Enter company name"
-                    value={formData.companyName}
-                    onChange={handleChange}
-                    className="mt-2"
-                    required
-                  />
+                      <Label>Reference</Label>
+                      <Input name="reference" value={formData.reference} onChange={handleChange} className="mt-1" />
                 </div>
-              </div>
-            </Card>
+                  </FormGrid>
+                </FormSection>
+              </TabsContent>
 
-            {/* Shipper Information Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <MapPin className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Shipper Information (Pickup Location)</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+              {/* Shipper Tab */}
+              <TabsContent value="shipper" className="space-y-6">
+                <FormSection title="Shipper Information" icon={<Building2 className="w-5 h-5" />}>
+                  <FormGrid cols={2}>
                 <div className="md:col-span-2">
-                  <Label htmlFor="shipperName">Shipper Name</Label>
-                  <Input
-                    id="shipperName"
-                    name="shipperName"
-                    type="text"
-                    value={formData.shipperName}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                      <Label>Shipper *</Label>
+                      <div className="flex gap-2 mt-1">
+                        <Input name="shipperName" value={formData.shipperName} onChange={handleChange} placeholder="Shipper name" />
+                        <Button type="button" variant="outline" size="icon" onClick={() => setShowAddShipper(!showAddShipper)}>
+                          <Plus className="w-4 h-4" />
+                        </Button>
                 </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="shipperAddress">Address</Label>
-                  <Input
-                    id="shipperAddress"
-                    name="shipperAddress"
-                    type="text"
-                    value={formData.shipperAddress}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                      {showAddShipper && (
+                        <Card className="mt-2 p-4 border-primary/20">
+                          <div className="grid md:grid-cols-2 gap-3">
+                            <Input placeholder="Name *" value={newShipper.name} onChange={(e) => setNewShipper(prev => ({ ...prev, name: e.target.value }))} />
+                            <Input placeholder="Address" value={newShipper.address} onChange={(e) => setNewShipper(prev => ({ ...prev, address: e.target.value }))} />
+                            <Input placeholder="City" value={newShipper.city} onChange={(e) => setNewShipper(prev => ({ ...prev, city: e.target.value }))} />
+                            <Input placeholder="State" value={newShipper.state} onChange={(e) => setNewShipper(prev => ({ ...prev, state: e.target.value }))} />
+                            <Input placeholder="ZIP" value={newShipper.zip} onChange={(e) => setNewShipper(prev => ({ ...prev, zip: e.target.value }))} />
+                            <Input placeholder="Contact" value={newShipper.contact} onChange={(e) => setNewShipper(prev => ({ ...prev, contact: e.target.value }))} />
+                            <Input placeholder="Phone" value={newShipper.phone} onChange={(e) => setNewShipper(prev => ({ ...prev, phone: e.target.value }))} />
                 </div>
-                <div>
-                  <Label htmlFor="shipperCity">City</Label>
-                  <Input
-                    id="shipperCity"
-                    name="shipperCity"
-                    type="text"
-                    value={formData.shipperCity}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                          <div className="flex gap-2 mt-3">
+                            <Button type="button" size="sm" onClick={() => {
+                              if (!newShipper.name) { toast.error("Name required"); return }
+                              setFormData(prev => ({
+                                ...prev,
+                                shipperName: newShipper.name,
+                                shipperAddress: newShipper.address,
+                                shipperCity: newShipper.city,
+                                shipperState: newShipper.state,
+                                shipperZip: newShipper.zip,
+                                shipperContact: newShipper.contact,
+                                shipperPhone: newShipper.phone,
+                                origin: `${newShipper.city}, ${newShipper.state}`.replace(/^,\s*|,\s*$/g, ''),
+                              }))
+                              setNewShipper({ name: "", address: "", city: "", state: "", zip: "", contact: "", phone: "" })
+                              setShowAddShipper(false)
+                              toast.success("Shipper added")
+                            }}>Add to Form</Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => setShowAddShipper(false)}>Cancel</Button>
                 </div>
-                <div>
-                  <Label htmlFor="shipperState">State</Label>
-                  <Input
-                    id="shipperState"
-                    name="shipperState"
-                    type="text"
-                    value={formData.shipperState}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="shipperZip">ZIP Code</Label>
-                  <Input
-                    id="shipperZip"
-                    name="shipperZip"
-                    type="text"
-                    value={formData.shipperZip}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                        </Card>
+                      )}
                 </div>
                 <div className="md:col-span-2">
-                  <Label htmlFor="origin">Origin (City, State) *</Label>
-                  <Input
-                    id="origin"
-                    name="origin"
-                    type="text"
-                    placeholder="New York, NY"
-                    value={formData.origin}
-                    onChange={handleChange}
-                    className="mt-2"
-                    required
-                  />
+                      <Label>Pickup Location *</Label>
+                      <Input name="origin" value={formData.origin} onChange={handleChange} className="mt-1" required />
                 </div>
                 <div>
-                  <Label htmlFor="pickupDate">Pickup Date</Label>
-                  <Input
-                    id="pickupDate"
-                    name="pickupDate"
-                    type="date"
-                    value={formData.pickupDate}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                      <Label>Pickup Date</Label>
+                      <Input name="pickupDate" type="date" value={formData.pickupDate} onChange={handleChange} className="mt-1" />
                 </div>
                 <div>
-                  <Label htmlFor="pickupTime">Pickup Time</Label>
-                  <Input
-                    id="pickupTime"
-                    name="pickupTime"
-                    type="time"
-                    value={formData.pickupTime}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="pickupTimeWindowStart">Time Window Start</Label>
-                  <Input
-                    id="pickupTimeWindowStart"
-                    name="pickupTimeWindowStart"
-                    type="time"
-                    value={formData.pickupTimeWindowStart}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="pickupTimeWindowEnd">Time Window End</Label>
-                  <Input
-                    id="pickupTimeWindowEnd"
-                    name="pickupTimeWindowEnd"
-                    type="time"
-                    value={formData.pickupTimeWindowEnd}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                      <Label>Pickup Time</Label>
+                      <Input name="pickupTime" type="time" value={formData.pickupTime} onChange={handleChange} className="mt-1" />
                 </div>
                 <div className="md:col-span-2">
-                  <Label htmlFor="shipperContactName">Contact Name</Label>
-                  <Input
-                    id="shipperContactName"
-                    name="shipperContactName"
-                    type="text"
-                    value={formData.shipperContactName}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                      <Label>Pickup Instructions</Label>
+                      <Textarea name="pickupInstructions" value={formData.pickupInstructions} onChange={handleChange} className="mt-1" rows={2} />
                 </div>
-                <div>
-                  <Label htmlFor="shipperContactPhone">Contact Phone</Label>
-                  <Input
-                    id="shipperContactPhone"
-                    name="shipperContactPhone"
-                    type="tel"
-                    value={formData.shipperContactPhone}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="shipperContactEmail">Contact Email</Label>
-                  <Input
-                    id="shipperContactEmail"
-                    name="shipperContactEmail"
-                    type="email"
-                    value={formData.shipperContactEmail}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="pickupInstructions">Pickup Instructions</Label>
-                  <Textarea
-                    id="pickupInstructions"
-                    name="pickupInstructions"
-                    value={formData.pickupInstructions}
-                    onChange={handleChange}
-                    className="mt-2"
-                    rows={3}
-                  />
-                </div>
-              </div>
-            </Card>
+                  </FormGrid>
+                </FormSection>
+              </TabsContent>
 
-            {/* Consignee Information Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <MapPin className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Consignee Information (Delivery Location)</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+              {/* Consignee Tab */}
+              <TabsContent value="consignee" className="space-y-6">
+                <FormSection title="Consignee Information" icon={<MapPin className="w-5 h-5" />}>
+                  <FormGrid cols={2}>
                 <div className="md:col-span-2">
-                  <Label htmlFor="consigneeName">Consignee Name</Label>
-                  <Input
-                    id="consigneeName"
-                    name="consigneeName"
-                    type="text"
-                    value={formData.consigneeName}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                      <Label>Delivery Type *</Label>
+                      <Select value={formData.deliveryType} onValueChange={(v) => {
+                        handleSelectChange("deliveryType", v)
+                        if (v === "single") setDeliveryPoints([])
+                      }}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="single">Single Destination</SelectItem>
+                          <SelectItem value="multi">Multiple Stops</SelectItem>
+                        </SelectContent>
+                      </Select>
                 </div>
+                    {formData.deliveryType === "single" ? (
+                      <>
                 <div className="md:col-span-2">
-                  <Label htmlFor="consigneeAddress">Address</Label>
-                  <Input
-                    id="consigneeAddress"
-                    name="consigneeAddress"
-                    type="text"
-                    value={formData.consigneeAddress}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                          <Label>Consignee *</Label>
+                          <div className="flex gap-2 mt-1">
+                            <Input name="consigneeName" value={formData.consigneeName} onChange={handleChange} placeholder="Consignee name" />
+                            <Button type="button" variant="outline" size="icon" onClick={() => setShowAddConsignee(!showAddConsignee)}>
+                              <Plus className="w-4 h-4" />
+                            </Button>
                 </div>
-                <div>
-                  <Label htmlFor="consigneeCity">City</Label>
-                  <Input
-                    id="consigneeCity"
-                    name="consigneeCity"
-                    type="text"
-                    value={formData.consigneeCity}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                          {showAddConsignee && (
+                            <Card className="mt-2 p-4 border-primary/20">
+                              <div className="grid md:grid-cols-2 gap-3">
+                                <Input placeholder="Name *" value={newConsignee.name} onChange={(e) => setNewConsignee(prev => ({ ...prev, name: e.target.value }))} />
+                                <Input placeholder="Address" value={newConsignee.address} onChange={(e) => setNewConsignee(prev => ({ ...prev, address: e.target.value }))} />
+                                <Input placeholder="City" value={newConsignee.city} onChange={(e) => setNewConsignee(prev => ({ ...prev, city: e.target.value }))} />
+                                <Input placeholder="State" value={newConsignee.state} onChange={(e) => setNewConsignee(prev => ({ ...prev, state: e.target.value }))} />
+                                <Input placeholder="ZIP" value={newConsignee.zip} onChange={(e) => setNewConsignee(prev => ({ ...prev, zip: e.target.value }))} />
+                                <Input placeholder="Contact" value={newConsignee.contact} onChange={(e) => setNewConsignee(prev => ({ ...prev, contact: e.target.value }))} />
+                                <Input placeholder="Phone" value={newConsignee.phone} onChange={(e) => setNewConsignee(prev => ({ ...prev, phone: e.target.value }))} />
                 </div>
-                <div>
-                  <Label htmlFor="consigneeState">State</Label>
-                  <Input
-                    id="consigneeState"
-                    name="consigneeState"
-                    type="text"
-                    value={formData.consigneeState}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                              <div className="flex gap-2 mt-3">
+                                <Button type="button" size="sm" onClick={() => {
+                                  if (!newConsignee.name) { toast.error("Name required"); return }
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    consigneeName: newConsignee.name,
+                                    consigneeAddress: newConsignee.address,
+                                    consigneeCity: newConsignee.city,
+                                    consigneeState: newConsignee.state,
+                                    consigneeZip: newConsignee.zip,
+                                    consigneeContact: newConsignee.contact,
+                                    consigneePhone: newConsignee.phone,
+                                    destination: `${newConsignee.city}, ${newConsignee.state}`.replace(/^,\s*|,\s*$/g, ''),
+                                  }))
+                                  setNewConsignee({ name: "", address: "", city: "", state: "", zip: "", contact: "", phone: "" })
+                                  setShowAddConsignee(false)
+                                  toast.success("Consignee added")
+                                }}>Add to Form</Button>
+                                <Button type="button" size="sm" variant="outline" onClick={() => setShowAddConsignee(false)}>Cancel</Button>
                 </div>
-                <div>
-                  <Label htmlFor="consigneeZip">ZIP Code</Label>
-                  <Input
-                    id="consigneeZip"
-                    name="consigneeZip"
-                    type="text"
-                    value={formData.consigneeZip}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="destination">Destination (City, State) *</Label>
-                  <Input
-                    id="destination"
-                    name="destination"
-                    type="text"
-                    placeholder="Philadelphia, PA"
-                    value={formData.destination}
-                    onChange={handleChange}
-                    className="mt-2"
-                    required={formData.deliveryType === "single"}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="estimatedDelivery">Estimated Delivery Date</Label>
-                  <Input
-                    id="estimatedDelivery"
-                    name="estimatedDelivery"
-                    type="date"
-                    value={formData.estimatedDelivery}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="deliveryTime">Delivery Time</Label>
-                  <Input
-                    id="deliveryTime"
-                    name="deliveryTime"
-                    type="time"
-                    value={formData.deliveryTime}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="deliveryTimeWindowStart">Time Window Start</Label>
-                  <Input
-                    id="deliveryTimeWindowStart"
-                    name="deliveryTimeWindowStart"
-                    type="time"
-                    value={formData.deliveryTimeWindowStart}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="deliveryTimeWindowEnd">Time Window End</Label>
-                  <Input
-                    id="deliveryTimeWindowEnd"
-                    name="deliveryTimeWindowEnd"
-                    type="time"
-                    value={formData.deliveryTimeWindowEnd}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                            </Card>
+                          )}
                 </div>
                 <div className="md:col-span-2">
-                  <Label htmlFor="consigneeContactName">Contact Name</Label>
-                  <Input
-                    id="consigneeContactName"
-                    name="consigneeContactName"
-                    type="text"
-                    value={formData.consigneeContactName}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                          <Label>Drop Off Location *</Label>
+                          <Input name="destination" value={formData.destination} onChange={handleChange} className="mt-1" required />
                 </div>
                 <div>
-                  <Label htmlFor="consigneeContactPhone">Contact Phone</Label>
-                  <Input
-                    id="consigneeContactPhone"
-                    name="consigneeContactPhone"
-                    type="tel"
-                    value={formData.consigneeContactPhone}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                          <Label>Delivery Date</Label>
+                          <Input name="estimatedDelivery" type="date" value={formData.estimatedDelivery} onChange={handleChange} className="mt-1" />
                 </div>
                 <div>
-                  <Label htmlFor="consigneeContactEmail">Contact Email</Label>
-                  <Input
-                    id="consigneeContactEmail"
-                    name="consigneeContactEmail"
-                    type="email"
-                    value={formData.consigneeContactEmail}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                          <Label>Delivery Time</Label>
+                          <Input name="deliveryTime" type="time" value={formData.deliveryTime} onChange={handleChange} className="mt-1" />
                 </div>
                 <div className="md:col-span-2">
-                  <Label htmlFor="deliveryInstructions">Delivery Instructions</Label>
-                  <Textarea
-                    id="deliveryInstructions"
-                    name="deliveryInstructions"
-                    value={formData.deliveryInstructions}
-                    onChange={handleChange}
-                    className="mt-2"
-                    rows={3}
+                          <Label>Delivery Instructions</Label>
+                          <Textarea name="deliveryInstructions" value={formData.deliveryInstructions} onChange={handleChange} className="mt-1" rows={2} />
+                </div>
+                      </>
+                    ) : (
+                <div className="md:col-span-2">
+                        <LoadDeliveryPointsManager
+                          deliveryPoints={deliveryPoints}
+                          onDeliveryPointsChange={setDeliveryPoints}
                   />
                 </div>
-              </div>
-            </Card>
+                    )}
+                  </FormGrid>
+                </FormSection>
+              </TabsContent>
 
-            {/* Freight Details Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Package className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Freight Details</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+              {/* Freight Tab */}
+              <TabsContent value="freight" className="space-y-6">
+                <FormSection title="Freight Information" icon={<Package className="w-5 h-5" />}>
+                  <FormGrid cols={2}>
                 <div className="md:col-span-2">
-                  <Label htmlFor="contents">Contents/Description</Label>
-                  <Input
-                    id="contents"
-                    name="contents"
-                    type="text"
-                    placeholder="Electronics, Machinery, etc."
-                    value={formData.contents}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                      <Label>Description</Label>
+                      <Input name="contents" value={formData.contents} onChange={handleChange} className="mt-1" />
                 </div>
                 <div>
-                  <Label htmlFor="weight">Weight (tons)</Label>
-                  <Input
-                    id="weight"
-                    name="weight"
-                    type="text"
-                    placeholder="22.5"
-                    value={formData.weight}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                      <Label>Weight</Label>
+                      <Input name="weight" value={formData.weight} onChange={handleChange} className="mt-1" placeholder="lbs" />
                 </div>
                 <div>
-                  <Label htmlFor="pieces">Pieces</Label>
-                  <Input
-                    id="pieces"
-                    name="pieces"
-                    type="number"
-                    placeholder="100"
-                    value={formData.pieces}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                      <Label>Pieces</Label>
+                      <Input name="pieces" type="number" value={formData.pieces} onChange={handleChange} className="mt-1" />
                 </div>
                 <div>
-                  <Label htmlFor="pallets">Pallets</Label>
-                  <Input
-                    id="pallets"
-                    name="pallets"
-                    type="number"
-                    placeholder="10"
-                    value={formData.pallets}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                      <Label>Pallets</Label>
+                      <Input name="pallets" type="number" value={formData.pallets} onChange={handleChange} className="mt-1" />
                 </div>
                 <div>
-                  <Label htmlFor="boxes">Boxes</Label>
-                  <Input
-                    id="boxes"
-                    name="boxes"
-                    type="number"
-                    placeholder="50"
-                    value={formData.boxes}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
+                      <Label>Freight Class</Label>
+                      <Input name="freightClass" type="number" value={formData.freightClass} onChange={handleChange} className="mt-1" placeholder="50-500" />
                 </div>
-                <div>
-                  <Label htmlFor="length">Length (ft)</Label>
-                  <Input
-                    id="length"
-                    name="length"
-                    type="number"
-                    placeholder="48"
-                    value={formData.length}
-                    onChange={handleChange}
-                    className="mt-2"
-                    step="0.01"
-                  />
+                    <div className="md:col-span-2 space-y-2">
+                      <Label>Load Type</Label>
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox checked={formData.isHazardous} onCheckedChange={(c) => setFormData(prev => ({ ...prev, isHazardous: !!c }))} />
+                          <span className="text-sm">HazMat</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox checked={formData.isOversized} onCheckedChange={(c) => setFormData(prev => ({ ...prev, isOversized: !!c }))} />
+                          <span className="text-sm">Oversized</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox checked={formData.isReefer} onCheckedChange={(c) => setFormData(prev => ({ ...prev, isReefer: !!c }))} />
+                          <span className="text-sm">Reefer</span>
+                        </label>
                 </div>
-                <div>
-                  <Label htmlFor="width">Width (ft)</Label>
-                  <Input
-                    id="width"
-                    name="width"
-                    type="number"
-                    placeholder="8.5"
-                    value={formData.width}
-                    onChange={handleChange}
-                    className="mt-2"
-                    step="0.01"
-                  />
                 </div>
-                <div>
-                  <Label htmlFor="height">Height (ft)</Label>
-                  <Input
-                    id="height"
-                    name="height"
-                    type="number"
-                    placeholder="9.5"
-                    value={formData.height}
-                    onChange={handleChange}
-                    className="mt-2"
-                    step="0.01"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="temperature">Temperature (°F)</Label>
-                  <Input
-                    id="temperature"
-                    name="temperature"
-                    type="number"
-                    placeholder="32"
-                    value={formData.temperature}
-                    onChange={handleChange}
-                    className="mt-2"
-                    step="0.1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">For reefer loads</p>
-                </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="carrierType">Carrier Type</Label>
-                  <Select value={formData.carrierType} onValueChange={(value) => handleSelectChange("carrierType", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="dry-van">Dry Van</SelectItem>
-                      <SelectItem value="refrigerated">Refrigerated</SelectItem>
-                      <SelectItem value="flatbed">Flatbed</SelectItem>
-                      <SelectItem value="step-deck">Step Deck</SelectItem>
-                      <SelectItem value="lowboy">Lowboy</SelectItem>
-                      <SelectItem value="tanker">Tanker</SelectItem>
-                      <SelectItem value="box-truck">Box Truck</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="md:col-span-2 flex gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="isHazardous"
-                      name="isHazardous"
-                      checked={formData.isHazardous}
-                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isHazardous: !!checked }))}
-                    />
-                    <Label htmlFor="isHazardous" className="cursor-pointer">Hazardous Materials</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="isOversized"
-                      name="isOversized"
-                      checked={formData.isOversized}
-                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isOversized: !!checked }))}
-                    />
-                    <Label htmlFor="isOversized" className="cursor-pointer">Oversized Load</Label>
-                  </div>
-                </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="specialInstructions">Special Instructions</Label>
-                  <Textarea
-                    id="specialInstructions"
-                    name="specialInstructions"
-                    value={formData.specialInstructions}
-                    onChange={handleChange}
-                    className="mt-2"
-                    rows={3}
-                  />
-                </div>
-              </div>
-            </Card>
+                    <div className="md:col-span-2 space-y-2">
+                      <Label>Special Requirements</Label>
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox checked={formData.requiresLiftgate} onCheckedChange={(c) => setFormData(prev => ({ ...prev, requiresLiftgate: !!c }))} />
+                          <span className="text-sm">Liftgate</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox checked={formData.requiresInsideDelivery} onCheckedChange={(c) => setFormData(prev => ({ ...prev, requiresInsideDelivery: !!c }))} />
+                          <span className="text-sm">Inside Delivery</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox checked={formData.requiresAppointment} onCheckedChange={(c) => setFormData(prev => ({ ...prev, requiresAppointment: !!c }))} />
+                          <span className="text-sm">Appointment</span>
+                        </label>
+                      </div>
+                    </div>
+                  </FormGrid>
+                </FormSection>
+              </TabsContent>
 
-            {/* Special Requirements Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Truck className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Special Requirements</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="requiresLiftgate"
-                    name="requiresLiftgate"
-                    checked={formData.requiresLiftgate}
-                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, requiresLiftgate: !!checked }))}
-                  />
-                  <Label htmlFor="requiresLiftgate" className="cursor-pointer">Requires Liftgate</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="requiresInsideDelivery"
-                    name="requiresInsideDelivery"
-                    checked={formData.requiresInsideDelivery}
-                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, requiresInsideDelivery: !!checked }))}
-                  />
-                  <Label htmlFor="requiresInsideDelivery" className="cursor-pointer">Requires Inside Delivery</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="requiresAppointment"
-                    name="requiresAppointment"
-                    checked={formData.requiresAppointment}
-                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, requiresAppointment: !!checked }))}
-                  />
-                  <Label htmlFor="requiresAppointment" className="cursor-pointer">Requires Appointment</Label>
-                </div>
-                {formData.requiresAppointment && (
+              {/* Charges Tab */}
+              <TabsContent value="charges" className="space-y-6">
+                <FormSection title="Charges & Pricing" icon={<DollarSign className="w-5 h-5" />}>
+                  <FormGrid cols={2}>
                   <div>
-                    <Label htmlFor="appointmentTime">Appointment Time</Label>
-                    <Input
-                      id="appointmentTime"
-                      name="appointmentTime"
-                      type="datetime-local"
-                      value={formData.appointmentTime}
-                      onChange={handleChange}
-                      className="mt-2"
-                    />
+                      <Label>Estimated Miles</Label>
+                      <div className="flex gap-2 mt-1">
+                        <Input name="estimatedMiles" value={formData.estimatedMiles} onChange={handleChange} placeholder="0" />
+                        <Button type="button" variant="outline" onClick={calculateMiles} disabled={isCalculatingMiles}>
+                          {isCalculatingMiles ? "Calculating..." : "Calculate"}
+                        </Button>
                   </div>
-                )}
               </div>
-            </Card>
+                <div>
+                      <Label>Hauling Fee</Label>
+                      <Input name="haulingFee" value={formData.haulingFee} onChange={handleChange} className="mt-1" placeholder="0.00" />
+                </div>
+                <div>
+                      <Label>Fuel Surcharge</Label>
+                      <Input name="fuelSurcharge" value={formData.fuelSurcharge} onChange={handleChange} className="mt-1" placeholder="0.00" />
+                </div>
+                <div>
+                      <Label>Accessorial Charges</Label>
+                      <Input name="accessorialCharges" value={formData.accessorialCharges} onChange={handleChange} className="mt-1" placeholder="0.00" />
+                </div>
+                <div>
+                      <Label>Discount</Label>
+                      <Input name="discount" value={formData.discount} onChange={handleChange} className="mt-1" placeholder="0.00" />
+                </div>
+                <div>
+                      <Label>Total Rate</Label>
+                      <Input name="totalRate" value={formData.totalRate} onChange={handleChange} className="mt-1" placeholder="0.00" readOnly />
+                </div>
+                  </FormGrid>
+                </FormSection>
+              </TabsContent>
 
-            {/* Pricing & Charges Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <DollarSign className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Pricing & Charges</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+              {/* Assignment Tab */}
+              <TabsContent value="assignment" className="space-y-6">
+                <FormSection title="Assignment" icon={<Truck className="w-5 h-5" />}>
+                  <FormGrid cols={2}>
                 <div>
-                  <Label htmlFor="rateType">Rate Type</Label>
-                  <Select value={formData.rateType} onValueChange={(value) => handleSelectChange("rateType", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="per-mile">Per Mile</SelectItem>
-                      <SelectItem value="flat-rate">Flat Rate</SelectItem>
-                      <SelectItem value="per-ton">Per Ton</SelectItem>
-                      <SelectItem value="per-hundred-weight">Per Hundred Weight (CWT)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="rate">Rate ($)</Label>
-                  <Input
-                    id="rate"
-                    name="rate"
-                    type="number"
-                    placeholder="2.50"
-                    value={formData.rate}
-                    onChange={handleChange}
-                    className="mt-2"
-                    step="0.01"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="fuelSurcharge">Fuel Surcharge ($)</Label>
-                  <Input
-                    id="fuelSurcharge"
-                    name="fuelSurcharge"
-                    type="number"
-                    placeholder="0.00"
-                    value={formData.fuelSurcharge}
-                    onChange={handleChange}
-                    className="mt-2"
-                    step="0.01"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="accessorialCharges">Accessorial Charges ($)</Label>
-                  <Input
-                    id="accessorialCharges"
-                    name="accessorialCharges"
-                    type="number"
-                    placeholder="0.00"
-                    value={formData.accessorialCharges}
-                    onChange={handleChange}
-                    className="mt-2"
-                    step="0.01"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="discount">Discount ($)</Label>
-                  <Input
-                    id="discount"
-                    name="discount"
-                    type="number"
-                    placeholder="0.00"
-                    value={formData.discount}
-                    onChange={handleChange}
-                    className="mt-2"
-                    step="0.01"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="advance">Advance ($)</Label>
-                  <Input
-                    id="advance"
-                    name="advance"
-                    type="number"
-                    placeholder="0.00"
-                    value={formData.advance}
-                    onChange={handleChange}
-                    className="mt-2"
-                    step="0.01"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="estimatedMiles">Estimated Miles</Label>
-                  <div className="flex gap-2 mt-2">
-                    <Input
-                      id="estimatedMiles"
-                      name="estimatedMiles"
-                      type="number"
-                      placeholder="250"
-                      value={formData.estimatedMiles}
-                      onChange={handleChange}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleCalculateMiles}
-                      disabled={isCalculatingMiles}
-                    >
-                      {isCalculatingMiles ? "Calculating..." : <Calculator className="w-4 h-4" />}
-                    </Button>
-                  </div>
-                </div>
-                <div>
-                  <Label>Total Rate ($)</Label>
-                  <Input
-                    type="text"
-                    value={formData.totalRate || "0.00"}
-                    readOnly
-                    className="mt-2 bg-muted"
-                  />
-                </div>
-                <div>
-                  <Label>Estimated Revenue ($)</Label>
-                  <Input
-                    type="text"
-                    value={formData.estimatedRevenue || "0.00"}
-                    readOnly
-                    className="mt-2 bg-muted"
-                  />
-                </div>
-                <div>
-                  <Label>Estimated Profit ($)</Label>
-                  <Input
-                    type="text"
-                    value={formData.estimatedProfit || "0.00"}
-                    readOnly
-                    className="mt-2 bg-muted"
-                  />
-                </div>
-              </div>
-            </Card>
-
-            {/* Assignment Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Users className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Assignment</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="status">Status *</Label>
-                  <Select value={formData.status} onValueChange={(value) => handleSelectChange("status", value)}>
-                    <SelectTrigger className="mt-2 w-full">
+                      <Label>Status</Label>
+                      <Select value={formData.status} onValueChange={(v) => handleSelectChange("status", v)}>
+                        <SelectTrigger className="mt-1">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="pending">Pending</SelectItem>
                       <SelectItem value="scheduled">Scheduled</SelectItem>
                       <SelectItem value="in_transit">In Transit</SelectItem>
-                      <SelectItem value="delivered">Delivered</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="driver">Assigned Driver</Label>
-                  <Select value={formData.driver || undefined} onValueChange={(value) => handleSelectChange("driver", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue placeholder="Select a driver (optional)" />
+                      <Label>Driver</Label>
+                      <Select value={formData.driver} onValueChange={(v) => handleSelectChange("driver", v)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select driver" />
                     </SelectTrigger>
                     <SelectContent>
-                      {drivers.map((driver) => (
-                        <SelectItem key={driver.id} value={driver.id}>
-                          {driver.name}
-                        </SelectItem>
+                          {drivers.map(d => (
+                            <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="truck">Assigned Truck</Label>
-                  <Select value={formData.truck || undefined} onValueChange={(value) => handleSelectChange("truck", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue placeholder="Select a truck (optional)" />
+                      <Label>Truck</Label>
+                      <Select value={formData.truck} onValueChange={(v) => handleSelectChange("truck", v)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select truck" />
                     </SelectTrigger>
                     <SelectContent>
-                      {trucks.map((truck) => (
-                        <SelectItem key={truck.id} value={truck.id}>
-                          {truck.truck_number} - {truck.make} {truck.model}
-                        </SelectItem>
+                          {trucks.map(t => (
+                            <SelectItem key={t.id} value={t.id}>{t.truck_number}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="route">Assigned Route</Label>
-                  <Select value={formData.route || undefined} onValueChange={(value) => handleSelectChange("route", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue placeholder="Select a route (optional)" />
+                      <Label>Route</Label>
+                      <Select value={formData.route} onValueChange={(v) => handleSelectChange("route", v)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select route" />
                     </SelectTrigger>
                     <SelectContent>
-                      {routes.map((route) => (
-                        <SelectItem key={route.id} value={route.id}>
-                          {route.name} - {route.origin} to {route.destination}
-                        </SelectItem>
+                          {routes.map(r => (
+                            <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
+                    <div className="md:col-span-2">
+                      <Label>Notes</Label>
+                      <Textarea name="notes" value={formData.notes} onChange={handleChange} className="mt-1" rows={3} />
               </div>
-            </Card>
+                    <div className="md:col-span-2">
+                      <Label>Internal Notes</Label>
+                      <Textarea name="internalNotes" value={formData.internalNotes} onChange={handleChange} className="mt-1" rows={2} />
+                    </div>
+                  </FormGrid>
+                </FormSection>
+              </TabsContent>
+            </Tabs>
 
-            {/* Additional Notes Section */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <User className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Additional Information</h2>
-              </div>
-              <div className="space-y-6">
-                <div>
-                  <Label htmlFor="customerReference">Customer Reference #</Label>
-                  <Input
-                    id="customerReference"
-                    name="customerReference"
-                    type="text"
-                    placeholder="PO-12345"
-                    value={formData.customerReference}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea
-                    id="notes"
-                    name="notes"
-                    value={formData.notes}
-                    onChange={handleChange}
-                    className="mt-2"
-                    rows={3}
-                    placeholder="Public notes visible to customer..."
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="internalNotes">Internal Notes</Label>
-                  <Textarea
-                    id="internalNotes"
-                    name="internalNotes"
-                    value={formData.internalNotes}
-                    onChange={handleChange}
-                    className="mt-2"
-                    rows={3}
-                    placeholder="Private notes for internal use only..."
-                  />
-                </div>
-              </div>
-            </Card>
-
-            {/* Submit Buttons */}
-            <div className="flex gap-4 justify-end">
-              <Link href="/dashboard/loads">
-                <Button type="button" variant="outline" className="border-border bg-transparent">
-                  Cancel
-                </Button>
-              </Link>
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                {isSubmitting ? "Adding Load..." : "Add Load"}
-              </Button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+    </FormPageLayout>
   )
 }

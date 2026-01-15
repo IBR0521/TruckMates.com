@@ -156,19 +156,19 @@ export default function BusinessSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="w-full">
         <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
           <h1 className="text-2xl font-bold text-foreground">Business Settings</h1>
         </div>
-        <main className="flex-1 overflow-auto p-8">
+        <div className="p-4 md:p-8">
           <div className="text-center py-8">Loading...</div>
-        </main>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="w-full">
       <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Business Settings</h1>
@@ -180,7 +180,7 @@ export default function BusinessSettingsPage() {
         </Button>
       </div>
 
-      <main className="flex-1 overflow-auto p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Company Information */}
           <Card className="p-6">
@@ -721,7 +721,7 @@ export default function BusinessSettingsPage() {
             </div>
           </Card>
         </div>
-      </main>
+      </div>
     </div>
   )
 }

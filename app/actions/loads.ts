@@ -634,8 +634,11 @@ export async function createLoad(formData: {
   if (formData.advance !== undefined && formData.advance !== null) loadData.advance = formData.advance
   if (formData.total_rate !== undefined && formData.total_rate !== null) loadData.total_rate = formData.total_rate
   if (formData.estimated_miles !== undefined && formData.estimated_miles !== null) loadData.estimated_miles = formData.estimated_miles
-  if (formData.estimated_profit !== undefined && formData.estimated_profit !== null) loadData.estimated_profit = formData.estimated_profit
-  if (formData.estimated_revenue !== undefined && formData.estimated_revenue !== null) loadData.estimated_revenue = formData.estimated_revenue
+  // Note: estimated_profit and estimated_revenue are optional fields
+  // If you get column errors, run: supabase/add_loads_pricing_columns.sql
+  // These fields are calculated and don't need to be stored in the database
+  // if (formData.estimated_profit !== undefined && formData.estimated_profit !== null) loadData.estimated_profit = formData.estimated_profit
+  // if (formData.estimated_revenue !== undefined && formData.estimated_revenue !== null) loadData.estimated_revenue = formData.estimated_revenue
   
   // Notes with sanitization
   if (formData.notes) loadData.notes = sanitizeString(formData.notes, 2000)

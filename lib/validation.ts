@@ -219,12 +219,12 @@ export function validateLoadData(data: {
 }): ValidationResult {
   const errors: string[] = []
 
-  if (!validateRequiredString(data.origin, 3, 200)) {
-    errors.push('Origin is required and must be between 3 and 200 characters')
+  if (!validateRequiredString(data.origin, 1, 200)) {
+    errors.push('Origin is required and must be between 1 and 200 characters')
   }
 
-  if (!validateRequiredString(data.destination, 3, 200)) {
-    errors.push('Destination is required and must be between 3 and 200 characters')
+  if (!validateRequiredString(data.destination, 1, 200)) {
+    errors.push('Destination is required and must be between 1 and 200 characters')
   }
 
   if (data.weight !== undefined && data.weight !== null) {

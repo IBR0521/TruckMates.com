@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ArrowLeft, Package, MapPin, Calendar, DollarSign, User, FileText } from "lucide-react"
+import { ArrowLeft, Package, MapPin, Calendar, DollarSign, User, FileText, Building2, Truck } from "lucide-react"
 import Link from "next/link"
 import { use } from "react"
 import { toast } from "sonner"
@@ -25,7 +25,7 @@ import { getTrucks } from "@/app/actions/trucks"
 import { getRoutes } from "@/app/actions/routes"
 import { LoadDeliveryPointsManager } from "@/components/load-delivery-points-manager"
 import { getLoadDeliveryPoints, createLoadDeliveryPoint, updateLoadDeliveryPoint, deleteLoadDeliveryPoint } from "@/app/actions/load-delivery-points"
-import { Building2 } from "lucide-react"
+import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 
 export default function EditLoadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -296,44 +296,31 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
-          <h1 className="text-2xl font-bold text-foreground">Edit Load</h1>
+      <FormPageLayout
+        title="Edit Load"
+        subtitle="Loading load information..."
+        backUrl={`/dashboard/loads/${id}`}
+      >
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Loading load information...</p>
         </div>
-        <main className="flex-1 overflow-auto p-4 md:p-8">
-          <div className="max-w-4xl mx-auto">
-            <Card className="border-border p-4 md:p-8">
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Loading load information...</p>
-              </div>
-            </Card>
-          </div>
-        </main>
-      </div>
+      </FormPageLayout>
     )
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center gap-4">
-        <Link href={`/dashboard/loads/${id}`}>
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-        </Link>
-        <h1 className="text-2xl font-bold text-foreground">Edit Load</h1>
-      </div>
-
-      <main className="flex-1 overflow-auto p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Basic Information Section */}
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Package className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Basic Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+    <FormPageLayout
+      title="Edit Load"
+      subtitle="Update load information"
+      backUrl={`/dashboard/loads/${id}`}
+      onSubmit={handleSubmit}
+      isSubmitting={isSubmitting}
+      submitLabel="Update Load"
+    >
+      <div className="space-y-6">
+        {/* Basic Information Section */}
+        <FormSection title="Basic Information" icon={<Package className="w-5 h-5" />}>
+          <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="shipmentNumber">Shipment Number *</Label>
                   <Input
@@ -374,16 +361,12 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            </Card>
+          </FormGrid>
+        </FormSection>
 
-            {/* Company & Delivery Type Section - Moved to Top */}
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Building2 className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Company & Delivery Type</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+        {/* Company & Delivery Type Section */}
+        <FormSection title="Company & Delivery Type" icon={<Building2 className="w-5 h-5" />}>
+          <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="companyName">Company/Customer Name</Label>
                   <Input
@@ -411,7 +394,7 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
+          </FormGrid>
               {formData.deliveryType === "multi" && (
                 <div className="mt-6">
                   <LoadDeliveryPointsManager
@@ -420,15 +403,11 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                   />
                 </div>
               )}
-            </Card>
+        </FormSection>
 
-            {/* Origin Information Section */}
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <MapPin className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Pickup Location (Origin)</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+        {/* Origin Information Section */}
+        <FormSection title="Pickup Location (Origin)" icon={<MapPin className="w-5 h-5" />}>
+          <FormGrid cols={2}>
                 <div className="md:col-span-2">
                   <Label htmlFor="origin">Origin City/State *</Label>
                   <Input
@@ -539,17 +518,13 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                     className="mt-2"
                   />
                 </div>
-              </div>
-            </Card>
+          </FormGrid>
+        </FormSection>
 
-            {/* Destination Information Section - Hidden for Multi-Delivery */}
-            {formData.deliveryType === "single" && (
-              <Card className="border-border p-6">
-                <div className="flex items-center gap-2 mb-6">
-                  <MapPin className="w-5 h-5 text-primary" />
-                  <h2 className="text-xl font-semibold text-foreground">Destination Information</h2>
-                </div>
-                <div className="grid md:grid-cols-2 gap-6">
+        {/* Destination Information Section - Hidden for Multi-Delivery */}
+        {formData.deliveryType === "single" && (
+          <FormSection title="Destination Information" icon={<MapPin className="w-5 h-5" />}>
+            <FormGrid cols={2}>
                 <div className="md:col-span-2">
                   <Label htmlFor="destination">Destination City/State *</Label>
                   <Input
@@ -660,17 +635,13 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                     className="mt-2"
                   />
                 </div>
-              </div>
-              </Card>
-            )}
+          </FormGrid>
+        </FormSection>
+        )}
 
-            {/* Load Details Section - Simplified for Multi-Delivery */}
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Package className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Load Details</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+        {/* Load Details Section */}
+        <FormSection title="Load Details" icon={<Package className="w-5 h-5" />}>
+          <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="contents">Contents/Description</Label>
                   <Input
@@ -817,7 +788,6 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                     </div>
                   </>
                 )}
-              </div>
               {formData.deliveryType === "multi" && (
                 <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                   <p className="text-sm text-blue-400">
@@ -825,15 +795,12 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                   </p>
                 </div>
               )}
-            </Card>
+          </FormGrid>
+        </FormSection>
 
-            {/* Customer Information Section */}
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <User className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Customer Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+        {/* Customer Information Section */}
+        <FormSection title="Customer Information" icon={<User className="w-5 h-5" />}>
+          <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="customerName">Customer Name</Label>
                   <Input
@@ -882,23 +849,20 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                     className="mt-2"
                   />
                 </div>
-              </div>
-            </Card>
+          </FormGrid>
+        </FormSection>
 
-            {/* Assignment Section */}
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <User className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Assignment</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+        {/* Assignment Section */}
+        <FormSection title="Assignment" icon={<Truck className="w-5 h-5" />}>
+          <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="driver">Assigned Driver</Label>
-                  <Select value={formData.driver || undefined} onValueChange={(value) => handleSelectChange("driver", value)}>
+                  <Select value={formData.driver || "none"} onValueChange={(value) => handleSelectChange("driver", value === "none" ? "" : value)}>
                     <SelectTrigger className="mt-2 w-full">
                       <SelectValue placeholder="Select a driver (optional)" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
                       {drivers.map((driver) => (
                         <SelectItem key={driver.id} value={driver.id}>
                           {driver.name}
@@ -909,11 +873,12 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                 </div>
                 <div>
                   <Label htmlFor="truck">Assigned Truck</Label>
-                  <Select value={formData.truck || undefined} onValueChange={(value) => handleSelectChange("truck", value)}>
+                  <Select value={formData.truck || "none"} onValueChange={(value) => handleSelectChange("truck", value === "none" ? "" : value)}>
                     <SelectTrigger className="mt-2 w-full">
                       <SelectValue placeholder="Select a truck (optional)" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
                       {trucks.map((truck) => (
                         <SelectItem key={truck.id} value={truck.id}>
                           {truck.truck_number} - {truck.make} {truck.model}
@@ -924,11 +889,12 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                 </div>
                 <div className="md:col-span-2">
                   <Label htmlFor="route">Assigned Route</Label>
-                  <Select value={formData.route || undefined} onValueChange={(value) => handleSelectChange("route", value)}>
+                  <Select value={formData.route || "none"} onValueChange={(value) => handleSelectChange("route", value === "none" ? "" : value)}>
                     <SelectTrigger className="mt-2 w-full">
                       <SelectValue placeholder="Select a route (optional)" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
                       {routes.map((route) => (
                         <SelectItem key={route.id} value={route.id}>
                           {route.name} - {route.origin} to {route.destination}
@@ -937,16 +903,12 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            </Card>
+          </FormGrid>
+        </FormSection>
 
-            {/* Pricing Section */}
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <DollarSign className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Pricing Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+        {/* Pricing Section */}
+        <FormSection title="Pricing Information" icon={<DollarSign className="w-5 h-5" />}>
+          <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="rate">Rate ($)</Label>
                   <Input
@@ -1013,16 +975,12 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                     step="0.01"
                   />
                 </div>
-              </div>
-            </Card>
+          </FormGrid>
+        </FormSection>
 
-            {/* Additional Notes Section */}
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <FileText className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Additional Information</h2>
-              </div>
-              <div>
+        {/* Additional Notes Section */}
+        <FormSection title="Additional Information" icon={<FileText className="w-5 h-5" />}>
+          <div>
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea
                   id="notes"
@@ -1034,26 +992,8 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                   rows={4}
                 />
               </div>
-            </Card>
-
-            {/* Submit Buttons */}
-            <div className="flex gap-4 justify-end">
-              <Link href={`/dashboard/loads/${id}`}>
-                <Button type="button" variant="outline" className="border-border bg-transparent">
-                  Cancel
-                </Button>
-              </Link>
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                {isSubmitting ? "Saving Changes..." : "Save Changes"}
-              </Button>
-            </div>
-          </form>
-        </div>
-      </main>
-    </div>
+        </FormSection>
+      </div>
+    </FormPageLayout>
   )
 }

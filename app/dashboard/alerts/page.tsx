@@ -106,7 +106,7 @@ export default function AlertsPage() {
   const criticalAlerts = alerts.filter(a => a.priority === "critical" && a.status === "active")
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="w-full">
       <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Alerts</h1>
@@ -117,7 +117,7 @@ export default function AlertsPage() {
         </Link>
       </div>
 
-      <main className="flex-1 overflow-auto p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Summary Cards */}
           <div className="grid md:grid-cols-4 gap-4">
@@ -271,10 +271,12 @@ export default function AlertsPage() {
             </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   )
 }
+
+
 
 
 

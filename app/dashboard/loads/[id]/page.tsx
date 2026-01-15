@@ -14,7 +14,14 @@ import { getTrucks } from "@/app/actions/trucks"
 import { getLoadDeliveryPoints, getLoadSummary } from "@/app/actions/load-delivery-points"
 import { getInvoices } from "@/app/actions/accounting"
 import { toast } from "sonner"
-import { Building2, FileText } from "lucide-react"
+import { Building2, FileText, DollarSign } from "lucide-react"
+import {
+  DetailPageLayout,
+  DetailSection,
+  InfoGrid,
+  InfoField,
+  StatusBadge,
+} from "@/components/dashboard/detail-page-layout"
 
 export default function LoadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -37,17 +44,24 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     if (id === "add") {
       router.replace("/dashboard/loads/add")
     }
-  }, [id])
+  }, [id, router])
 
   useEffect(() => {
+    let isMounted = true
+    
     async function loadData() {
+      if (!id || id === "add" || !isMounted) return
+      
       setIsLoading(true)
       
+      try {
       // Fetch load data
       const loadResult = await getLoad(id)
+        if (!isMounted) return
+        
       if (loadResult.error) {
         toast.error(loadResult.error || "Failed to load load details")
-        setIsLoading(false)
+          if (isMounted) setIsLoading(false)
         return
       }
       
@@ -57,12 +71,12 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         // Fetch delivery points if multi-delivery load
         if (loadResult.data.delivery_type === "multi") {
           const deliveryPointsResult = await getLoadDeliveryPoints(id)
-          if (deliveryPointsResult.data) {
+            if (isMounted && deliveryPointsResult.data) {
             setDeliveryPoints(deliveryPointsResult.data)
           }
           
           const summaryResult = await getLoadSummary(id)
-          if (summaryResult.data) {
+            if (isMounted && summaryResult.data) {
             setLoadSummary(summaryResult.data)
           }
         }
@@ -71,7 +85,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         if (loadResult.data.truck_id) {
           const { getTruck } = await import("@/app/actions/trucks")
           const truckResult = await getTruck(loadResult.data.truck_id)
-          if (truckResult.data) {
+            if (isMounted && truckResult.data) {
             setTruck(truckResult.data)
           }
         }
@@ -80,13 +94,15 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         if (loadResult.data.status === "delivered") {
           const { getInvoices } = await import("@/app/actions/accounting")
           const invoicesResult = await getInvoices({ load_id: id, limit: 1 })
-          if (invoicesResult.data && invoicesResult.data.length > 0) {
+            if (isMounted && invoicesResult.data && invoicesResult.data.length > 0) {
             setRelatedInvoice(invoicesResult.data[0])
           }
         }
 
         // Fetch routes with limit (optimized - only need a few for matching)
         const routesResult = await getRoutes({ limit: 50 })
+          if (!isMounted) return
+          
         setRoutesResult(routesResult)
         if (routesResult.data) {
           // Calculate load weight in kg
@@ -271,77 +287,56 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           setMatchingRoute(bestRoute || null)
         }
       }
-      
+      } catch (error: any) {
+        if (isMounted) {
+          toast.error(error.message || "Failed to load load details")
+        }
+      } finally {
+        if (isMounted) {
       setIsLoading(false)
+        }
+      }
     }
     
     if (id && id !== "add") {
       loadData()
     }
+    
+    return () => {
+      isMounted = false
+    }
   }, [id])
-
-  // Prevent hydration mismatch by not rendering until mounted
-  if (!mounted) {
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">Load Details</h1>
-        </div>
-        <main className="flex-1 overflow-auto p-4 md:p-8">
-          <div className="max-w-3xl mx-auto">
-            <Card className="border-border p-4 md:p-8">
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Loading...</p>
-              </div>
-            </Card>
-          </div>
-        </main>
-      </div>
-    )
-  }
 
   if (id === "add") {
     return null
   }
 
-  if (isLoading) {
+  if (isLoading || !mounted) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">Load Details</h1>
-        </div>
-        <main className="flex-1 overflow-auto p-4 md:p-8">
-          <div className="max-w-3xl mx-auto">
-            <Card className="border-border p-4 md:p-8">
-              <div className="text-center py-8">
+      <DetailPageLayout
+        title="Loading..."
+        backUrl="/dashboard/loads"
+      >
+        <div className="text-center py-12">
                 <p className="text-muted-foreground">Loading load details...</p>
               </div>
-            </Card>
-          </div>
-        </main>
-      </div>
+      </DetailPageLayout>
     )
   }
 
   if (!load) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">Load Details</h1>
-        </div>
-        <main className="flex-1 overflow-auto p-4 md:p-8">
-          <div className="max-w-3xl mx-auto">
-            <Card className="border-border p-4 md:p-8">
-              <div className="text-center py-8">
+      <DetailPageLayout
+        title="Load Not Found"
+        backUrl="/dashboard/loads"
+      >
+        <div className="text-center py-12">
                 <p className="text-muted-foreground">Load not found</p>
                 <Link href="/dashboard/loads">
                   <Button className="mt-4">Back to Loads</Button>
                 </Link>
               </div>
-            </Card>
-          </div>
-        </main>
-      </div>
+      </DetailPageLayout>
     )
   }
 
@@ -374,82 +369,153 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/dashboard/loads">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </Link>
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">Load Details</h1>
-        </div>
-        <Link href={`/dashboard/loads/${id}/edit`}>
-          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Edit2 className="w-4 h-4 mr-2" />
-            Edit Load
-          </Button>
-        </Link>
-      </div>
+  const getStatusVariant = (status: string): "success" | "default" | "warning" | "danger" | "info" => {
+    switch (status?.toLowerCase()) {
+      case "delivered":
+        return "success"
+      case "in_transit":
+        return "info"
+      case "pending":
+        return "warning"
+      case "cancelled":
+        return "danger"
+      default:
+        return "default"
+    }
+  }
 
-      <main className="flex-1 overflow-auto p-4 md:p-8">
-        <div className="max-w-3xl mx-auto space-y-6">
-          <Card className="border-border p-4 md:p-8">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Shipment ID</p>
-                <h2 className="text-xl md:text-2xl font-bold text-foreground">{load.shipment_number || "N/A"}</h2>
-              </div>
-              <span
-                className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                  load.status === "in_transit" || load.status === "In Transit"
-                    ? "bg-green-500/20 text-green-400"
-                    : load.status === "delivered" || load.status === "Delivered"
-                      ? "bg-blue-500/20 text-blue-400"
-                      : load.status === "pending" || load.status === "Pending"
-                        ? "bg-yellow-500/20 text-yellow-400"
-                        : "bg-gray-500/20 text-gray-400"
-                }`}
-              >
-                {load.status ? load.status.charAt(0).toUpperCase() + load.status.slice(1).replace("_", " ") : "N/A"}
-              </span>
-            </div>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="flex items-center gap-3">
-                <MapPin className="w-5 h-5 text-primary" />
+  if (!load) {
+  return (
+      <DetailPageLayout
+        title="Loading..."
+        backUrl="/dashboard/loads"
+      >
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Loading load details...</p>
+        </div>
+      </DetailPageLayout>
+    )
+  }
+
+  // Determine dispatch status
+  const dispatchStatus = load.driver_id && load.truck_id ? "Dispatched" : "Undispatched"
+  const dispatchStatusVariant = dispatchStatus === "Dispatched" ? "success" : "warning"
+  
+  // Determine invoice status
+  const invoiceStatus = relatedInvoice 
+    ? relatedInvoice.status === "paid" ? "Paid" 
+      : relatedInvoice.status === "partially_paid" ? "Partially Paid"
+      : "Invoiced"
+    : "Uninvoiced"
+  const invoiceStatusVariant = invoiceStatus === "Paid" ? "success" 
+    : invoiceStatus === "Partially Paid" ? "info"
+    : invoiceStatus === "Invoiced" ? "info"
+    : "warning"
+
+  return (
+    <DetailPageLayout
+      title={load.shipment_number || "Load Details"}
+      subtitle={load.origin && load.destination ? `${load.origin} → ${load.destination}` : undefined}
+      backUrl="/dashboard/loads"
+      editUrl={`/dashboard/loads/${id}/edit`}
+    >
+      <div className="space-y-6">
+        {/* Status Indicators - TruckLogics Style */}
+        <div className="grid md:grid-cols-3 gap-4">
+          <Card className="p-4 border-2">
+            <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-muted-foreground font-medium">From</p>
-                  <p className="text-foreground">{load.origin || "N/A"}</p>
+                <p className="text-sm text-muted-foreground mb-1">Dispatch Status</p>
+                <StatusBadge 
+                  status={dispatchStatus} 
+                  variant={dispatchStatusVariant}
+                />
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <MapPin className="w-5 h-5 text-primary" />
+          </Card>
+          <Card className="p-4 border-2">
+            <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-muted-foreground font-medium">To</p>
-                  <p className="text-foreground">{load.destination || "N/A"}</p>
+                <p className="text-sm text-muted-foreground mb-1">Invoice Status</p>
+                <StatusBadge 
+                  status={invoiceStatus} 
+                  variant={invoiceStatusVariant}
+                />
                 </div>
               </div>
-              {load.company_name && (
-                <div className="flex items-center gap-3">
-                  <Building2 className="w-5 h-5 text-primary" />
+          </Card>
+          <Card className="p-4 border-2">
+            <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-muted-foreground font-medium">Company</p>
-                    <p className="text-foreground">{load.company_name}</p>
+                <p className="text-sm text-muted-foreground mb-1">Load Status</p>
+                <StatusBadge 
+                  status={load.status?.replace("_", " ") || "Unknown"} 
+                  variant={getStatusVariant(load.status)}
+                />
                   </div>
                 </div>
+          </Card>
+        </div>
+
+        {/* Load Overview - Always Visible */}
+        <DetailSection
+          title="Load Overview"
+          icon={<Package className="w-5 h-5" />}
+          description="Basic load information and status"
+        >
+            <InfoGrid cols={2}>
+              <InfoField
+                label="Shipment Number"
+                value={load.shipment_number || "—"}
+              />
+              <InfoField
+                label="Status"
+                value={
+                  <StatusBadge
+                    status={load.status?.replace("_", " ") || "Unknown"}
+                    variant={getStatusVariant(load.status)}
+                  />
+                }
+              />
+              <InfoField
+                label="Origin"
+                value={load.origin || "—"}
+                icon={<MapPin className="w-4 h-4" />}
+              />
+              <InfoField
+                label="Destination"
+                value={load.destination || "—"}
+                icon={<MapPin className="w-4 h-4" />}
+              />
+              {load.company_name && (
+                <InfoField
+                  label="Company"
+                  value={load.company_name}
+                  icon={<Building2 className="w-4 h-4" />}
+                />
               )}
               {load.delivery_type && (
-                <div className="flex items-center gap-3">
-                  <Package className="w-5 h-5 text-primary" />
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium">Delivery Type</p>
-                    <p className="text-foreground capitalize">{load.delivery_type === "multi" ? "Multiple Deliveries" : "Single Delivery"}</p>
-                  </div>
-                </div>
+                <InfoField
+                  label="Delivery Type"
+                  value={load.delivery_type === "multi" ? "Multiple Deliveries" : "Single Delivery"}
+                />
               )}
-            </div>
-          </Card>
+              {load.load_date && (
+                <InfoField
+                  label="Load Date"
+                  value={formatDate(load.load_date)}
+                  icon={<Calendar className="w-4 h-4" />}
+                />
+              )}
+              {load.estimated_delivery && (
+                <InfoField
+                  label="Estimated Delivery"
+                  value={formatDate(load.estimated_delivery)}
+                  icon={<Calendar className="w-4 h-4" />}
+                />
+              )}
+            </InfoGrid>
+          </DetailSection>
 
           {/* Load Summary for Multi-Delivery */}
           {load.delivery_type === "multi" && loadSummary && (
@@ -583,36 +649,225 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
             </Card>
           ) : null}
 
-          <Card className="border-border p-4 md:p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <Package className="w-6 h-6 text-primary" />
-              <h2 className="text-xl font-bold text-foreground">Cargo Details</h2>
-            </div>
+          {/* Reference & C-TPAT */}
+          {(load.customer_reference || load.bol_number) && (
+            <DetailSection
+              title="Reference Information"
+              icon={<FileText className="w-5 h-5" />}
+            >
+              <InfoGrid cols={2}>
+                {load.customer_reference && (
+                  <InfoField
+                    label="Reference"
+                    value={load.customer_reference}
+                  />
+                )}
+                {load.bol_number && (
+                  <InfoField
+                    label="BOL Number"
+                    value={load.bol_number}
+                  />
+                )}
+              </InfoGrid>
+            </DetailSection>
+          )}
+        {/* Shipper Information */}
+          {(load.shipper_name || load.shipper_address || load.shipper_contact_name) && (
+            <DetailSection
+              title="Shipper Information"
+              icon={<Building2 className="w-5 h-5" />}
+            >
+              <InfoGrid cols={2}>
+                {load.shipper_name && (
+                  <InfoField
+                    label="Name"
+                    value={load.shipper_name}
+                  />
+                )}
+                {load.shipper_address && (
+                  <InfoField
+                    label="Address"
+                    value={
+                      <>
+                        {load.shipper_address}
+                        {(load.shipper_city || load.shipper_state || load.shipper_zip) && (
+                          <span className="block text-sm text-muted-foreground mt-1">
+                            {[load.shipper_city, load.shipper_state, load.shipper_zip].filter(Boolean).join(", ")}
+                          </span>
+                        )}
+                      </>
+                    }
+                    icon={<MapPin className="w-4 h-4" />}
+                    className="md:col-span-2"
+                  />
+                )}
+                {load.shipper_contact_name && (
+                  <InfoField
+                    label="Contact Name"
+                    value={load.shipper_contact_name}
+                  />
+                )}
+                {load.shipper_contact_phone && (
+                  <InfoField
+                    label="Contact Phone"
+                    value={load.shipper_contact_phone}
+                  />
+                )}
+                {load.shipper_contact_email && (
+                  <InfoField
+                    label="Contact Email"
+                    value={load.shipper_contact_email}
+                  />
+                )}
+                {load.pickup_time && (
+                  <InfoField
+                    label="Pickup Time"
+                    value={load.pickup_time}
+                    icon={<Calendar className="w-4 h-4" />}
+                  />
+                )}
+                {(load.pickup_time_window_start || load.pickup_time_window_end) && (
+                  <InfoField
+                    label="Pickup Window"
+                    value={`${load.pickup_time_window_start || ""} - ${load.pickup_time_window_end || ""}`}
+                  />
+                )}
+                {load.pickup_instructions && (
+                  <InfoField
+                    label="Pickup Instructions"
+                    value={<span className="whitespace-pre-wrap">{load.pickup_instructions}</span>}
+                    className="md:col-span-2"
+                  />
+                )}
+              </InfoGrid>
+            </DetailSection>
+          )}
+        {/* Consignee Information */}
+          {(load.consignee_name || load.consignee_address || load.consignee_contact_name) && (
+            <DetailSection
+              title="Consignee Information"
+              icon={<Building2 className="w-5 h-5" />}
+            >
+              <InfoGrid cols={2}>
+                {load.consignee_name && (
+                  <InfoField
+                    label="Name"
+                    value={load.consignee_name}
+                  />
+                )}
+                {load.consignee_address && (
+                  <InfoField
+                    label="Address"
+                    value={
+                      <>
+                        {load.consignee_address}
+                        {(load.consignee_city || load.consignee_state || load.consignee_zip) && (
+                          <span className="block text-sm text-muted-foreground mt-1">
+                            {[load.consignee_city, load.consignee_state, load.consignee_zip].filter(Boolean).join(", ")}
+                          </span>
+                        )}
+                      </>
+                    }
+                    icon={<MapPin className="w-4 h-4" />}
+                    className="md:col-span-2"
+                  />
+                )}
+                {load.consignee_contact_name && (
+                  <InfoField
+                    label="Contact Name"
+                    value={load.consignee_contact_name}
+                  />
+                )}
+                {load.consignee_contact_phone && (
+                  <InfoField
+                    label="Contact Phone"
+                    value={load.consignee_contact_phone}
+                  />
+                )}
+                {load.consignee_contact_email && (
+                  <InfoField
+                    label="Contact Email"
+                    value={load.consignee_contact_email}
+                  />
+                )}
+                {load.delivery_time && (
+                  <InfoField
+                    label="Delivery Time"
+                    value={load.delivery_time}
+                    icon={<Calendar className="w-4 h-4" />}
+                  />
+                )}
+                {(load.delivery_time_window_start || load.delivery_time_window_end) && (
+                  <InfoField
+                    label="Delivery Window"
+                    value={`${load.delivery_time_window_start || ""} - ${load.delivery_time_window_end || ""}`}
+                  />
+                )}
+                {load.delivery_instructions && (
+                  <InfoField
+                    label="Delivery Instructions"
+                    value={<span className="whitespace-pre-wrap">{load.delivery_instructions}</span>}
+                    className="md:col-span-2"
+                  />
+                )}
+              </InfoGrid>
+            </DetailSection>
+          )}
+
+        {/* Freight Information */}
+          <DetailSection
+            title="Cargo Details"
+            icon={<Package className="w-5 h-5" />}
+          >
             <div className="space-y-4">
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Weight</p>
                   <p className="text-lg text-foreground font-bold">{load.weight || (load.weight_kg ? `${(load.weight_kg / 1000).toFixed(1)} tons` : "N/A")}</p>
+                  {load.weight_kg && (
+                    <p className="text-xs text-muted-foreground mt-1">{load.weight_kg.toLocaleString()} kg</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Contents</p>
                   <p className="text-lg text-foreground font-bold">{load.contents || "N/A"}</p>
                 </div>
+                {load.pieces && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Pieces</p>
+                    <p className="text-foreground font-medium">{load.pieces}</p>
+                  </div>
+                )}
+                {load.pallets && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Pallets</p>
+                    <p className="text-foreground font-medium">{load.pallets}</p>
+                  </div>
+                )}
+                {load.boxes && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Boxes</p>
+                    <p className="text-foreground font-medium">{load.boxes}</p>
+                  </div>
+                )}
+                {(load.length || load.width || load.height) && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Dimensions</p>
+                    <p className="text-foreground font-medium">
+                      {[load.length, load.width, load.height].filter(Boolean).join(" × ")} ft
+                    </p>
+                  </div>
+                )}
+                {load.temperature && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Temperature</p>
+                    <p className="text-foreground font-medium">{load.temperature}°F</p>
+                  </div>
+                )}
                 {load.value && (
                   <div>
                     <p className="text-sm text-muted-foreground mb-2">Shipment Value</p>
                     <p className="text-lg text-foreground font-bold">${typeof load.value === 'number' ? load.value.toLocaleString('en-US') : parseFloat(load.value || '0').toLocaleString('en-US')}</p>
-                  </div>
-                )}
-                {relatedInvoice && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-2">Related Invoice</p>
-                    <Link href={`/dashboard/accounting/invoices/${relatedInvoice.id}`}>
-                      <Button variant="outline" size="sm" className="w-full">
-                        <FileText className="w-4 h-4 mr-2" />
-                        View Invoice {relatedInvoice.invoice_number}
-                      </Button>
-                    </Link>
                   </div>
                 )}
                 {load.carrier_type && (
@@ -621,15 +876,198 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                     <p className="text-lg text-foreground font-bold">{load.carrier_type}</p>
                   </div>
                 )}
+                {load.load_type && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Load Type</p>
+                    <p className="text-foreground font-medium capitalize">{load.load_type}</p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Load Type Flags */}
+              {(load.is_hazardous || load.is_oversized || load.is_reefer || load.is_tanker) && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-sm text-muted-foreground mb-2">Special Requirements</p>
+                  <div className="flex flex-wrap gap-2">
+                    {load.is_hazardous && (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/50">
+                        HazMat
+                      </span>
+                    )}
+                    {load.is_oversized && (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/50">
+                        Oversized
+                      </span>
+                    )}
+                    {load.is_reefer && (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/50">
+                        Reefer
+                      </span>
+                    )}
+                    {load.is_tanker && (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-400 border border-purple-500/50">
+                        Tanker
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Special Requirements */}
+              {(load.requires_liftgate || load.requires_inside_delivery || load.requires_appointment) && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-sm text-muted-foreground mb-2">Delivery Requirements</p>
+                  <div className="flex flex-wrap gap-2">
+                    {load.requires_liftgate && (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-400">
+                        Requires Liftgate
+                      </span>
+                    )}
+                    {load.requires_inside_delivery && (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-400">
+                        Inside Delivery Required
+                      </span>
+                    )}
+                    {load.requires_appointment && (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-400">
+                        Appointment Required
+                        {load.appointment_time && ` (${load.appointment_time})`}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {load.special_instructions && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-sm text-muted-foreground mb-2">Special Instructions</p>
+                  <p className="text-foreground whitespace-pre-wrap">{load.special_instructions}</p>
+                </div>
+              )}
+
+              {relatedInvoice && (
+                <div className="mt-4 pt-4 border-t border-border">
+                    <p className="text-sm text-muted-foreground mb-2">Related Invoice</p>
+                    <Link href={`/dashboard/accounting/invoices/${relatedInvoice.id}`}>
+                    <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                        <FileText className="w-4 h-4 mr-2" />
+                        View Invoice {relatedInvoice.invoice_number}
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+            </div>
+          </DetailSection>
+
+        {/* Pricing & Financial Information */}
+          {(load.rate || load.total_rate || load.fuel_surcharge || load.accessorial_charges || load.discount || load.estimated_miles) && (
+            <DetailSection
+              title="Pricing & Charges"
+              icon={<DollarSign className="w-5 h-5" />}
+            >
+              <div className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  {load.rate && (
+                  <div>
+                      <p className="text-sm text-muted-foreground mb-2">Rate</p>
+                      <p className="text-lg text-foreground font-bold">
+                        ${typeof load.rate === 'number' ? load.rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(load.rate || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {load.rate_type && <span className="text-sm text-muted-foreground ml-2">({load.rate_type})</span>}
+                      </p>
+                  </div>
+                )}
+                  {load.fuel_surcharge && (
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Fuel Surcharge</p>
+                      <p className="text-foreground font-medium">
+                        ${typeof load.fuel_surcharge === 'number' ? load.fuel_surcharge.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(load.fuel_surcharge || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  )}
+                  {load.accessorial_charges && (
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Accessorial Charges</p>
+                      <p className="text-foreground font-medium">
+                        ${typeof load.accessorial_charges === 'number' ? load.accessorial_charges.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(load.accessorial_charges || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  )}
+                  {load.discount && (
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Discount</p>
+                      <p className="text-foreground font-medium text-red-400">
+                        -${typeof load.discount === 'number' ? load.discount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(load.discount || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  )}
+                  {load.total_rate && (
+                    <div className="md:col-span-2 pt-4 border-t border-border">
+                      <p className="text-sm text-muted-foreground mb-2">Total Rate</p>
+                      <p className="text-2xl text-foreground font-bold">
+                        ${typeof load.total_rate === 'number' ? load.total_rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(load.total_rate || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  )}
+                  {load.estimated_miles && (
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Estimated Miles</p>
+                      <p className="text-foreground font-medium">{load.estimated_miles.toLocaleString()} miles</p>
+                    </div>
+                  )}
+                  {(load.estimated_revenue || load.estimated_profit) && (
+                    <>
+                      {load.estimated_revenue && (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-2">Estimated Revenue</p>
+                          <p className="text-foreground font-medium text-green-400">
+                            ${typeof load.estimated_revenue === 'number' ? load.estimated_revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(load.estimated_revenue || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      )}
+                      {load.estimated_profit && (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-2">Estimated Profit</p>
+                          <p className="text-foreground font-medium text-green-400">
+                            ${typeof load.estimated_profit === 'number' ? load.estimated_profit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(load.estimated_profit || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
               </div>
             </div>
-          </Card>
+          </DetailSection>
+          )}
 
+          {/* Notes */}
+          {(load.notes || load.internal_notes) && (
           <Card className="border-border p-4 md:p-8">
             <div className="flex items-center gap-3 mb-6">
-              <Truck className="w-6 h-6 text-primary" />
-              <h2 className="text-xl font-bold text-foreground">Assignment</h2>
+                <FileText className="w-6 h-6 text-primary" />
+                <h2 className="text-xl font-bold text-foreground">Notes</h2>
             </div>
+              <div className="space-y-4">
+                {load.notes && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Public Notes</p>
+                    <p className="text-foreground whitespace-pre-wrap">{load.notes}</p>
+                  </div>
+                )}
+                {load.internal_notes && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Internal Notes</p>
+                    <p className="text-foreground whitespace-pre-wrap bg-secondary/50 p-3 rounded">{load.internal_notes}</p>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
+        {/* Assignment & Dispatch Information */}
+          <DetailSection
+            title="Assignment"
+            icon={<Truck className="w-5 h-5" />}
+          >
             <div className="space-y-4">
               {load.driver_id ? (
                 <div>
@@ -672,55 +1110,21 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
               )}
             </div>
-          </Card>
-
-          <Card className="border-border p-4 md:p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <Calendar className="w-6 h-6 text-primary" />
-              <h2 className="text-xl font-bold text-foreground">Timeline</h2>
-            </div>
-            <div className="space-y-3">
-              {load.load_date && (
-                <div className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
-                  <span className="text-foreground">Load Date</span>
-                  <span className="text-muted-foreground">{formatDate(load.load_date)}</span>
-                </div>
-              )}
-              {load.estimated_delivery && (
-                <div className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
-                  <span className="text-foreground">Est. Delivery</span>
-                  <span className="text-muted-foreground">{formatDate(load.estimated_delivery)}</span>
-                </div>
-              )}
-              {load.actual_delivery && (
-                <div className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
-                  <span className="text-foreground">Actual Delivery</span>
-                  <span className="text-muted-foreground">{formatDate(load.actual_delivery)}</span>
-                </div>
-              )}
-            </div>
-          </Card>
+          </DetailSection>
 
           {/* Matching Route Information */}
           {matchingRoute ? (
-            <Card className="border-border p-4 md:p-8 bg-primary/5">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <Route className="w-6 h-6 text-primary" />
-                  <div>
-                    <h2 className="text-xl font-bold text-foreground">Recommended Truck Route</h2>
-                    {matchingRoute._compatibilityScore && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Compatibility Score: {matchingRoute._compatibilityScore}/300
-                      </p>
-                    )}
-                  </div>
-                </div>
+          <DetailSection
+            title="Recommended Truck Route"
+            icon={<Route className="w-5 h-5" />}
+            description={matchingRoute._compatibilityScore ? `Compatibility Score: ${matchingRoute._compatibilityScore}/300` : undefined}
+            action={
                 <div className="flex items-center gap-2 px-3 py-1 bg-green-500/20 rounded-full">
                   <Truck className="w-4 h-4 text-green-400" />
                   <span className="text-xs font-semibold text-green-400">Truck-Optimized</span>
                 </div>
-              </div>
+            }
+          >
               <div className="space-y-4">
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Route Name</p>
@@ -784,14 +1188,14 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                   </Button>
                 </Link>
               </div>
-            </Card>
+          </DetailSection>
           ) : (
-            <Card className="border-border p-4 md:p-8">
-              <div className="flex items-center gap-3 mb-4">
-                <AlertCircle className="w-6 h-6 text-yellow-500" />
-                <h2 className="text-xl font-bold text-foreground">No Matching Route Found</h2>
-              </div>
-              <p className="text-muted-foreground mb-4">
+          <DetailSection
+            title="No Matching Route Found"
+            icon={<AlertCircle className="w-5 h-5" />}
+          >
+            <div className="space-y-4">
+              <p className="text-muted-foreground">
                 No route found that matches this load's origin ({load.origin}) and destination ({load.destination}). 
                 {routesResult?.data?.length === 0 ? (
                   <span className="block mt-2">You don't have any routes created yet. Create a route first, then assign it to loads.</span>
@@ -811,13 +1215,17 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                   </Button>
                 </Link>
               </div>
-            </Card>
+            </div>
+          </DetailSection>
           )}
 
           {/* Truck Map with Navigation */}
           {load.origin && load.destination && (
-            <Card className="border-border p-4 md:p-8">
-              <h2 className="text-xl font-bold text-foreground mb-6">Route Map</h2>
+          <DetailSection
+            title="Route Map"
+            icon={<MapPin className="w-5 h-5" />}
+            description="Visual route representation"
+          >
               <TruckMap
                 origin={load.origin}
                 destination={load.destination}
@@ -832,10 +1240,9 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                   stop_type: point.delivery_type || "delivery",
                 })) : []}
               />
-            </Card>
+          </DetailSection>
           )}
-        </div>
-      </main>
-    </div>
+      </div>
+    </DetailPageLayout>
   )
 }

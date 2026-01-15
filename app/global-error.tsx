@@ -13,6 +13,12 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
+    // Log the error to Sentry
+    if (typeof window !== "undefined") {
+      import("@sentry/nextjs").then((Sentry) => {
+        Sentry.captureException(error)
+      })
+    }
     console.error("Global application error:", error)
   }, [error])
 
@@ -48,6 +54,10 @@ export default function GlobalError({
     </html>
   )
 }
+
+
+
+
 
 
 

@@ -4,14 +4,18 @@ import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { ThemeProvider } from "@/components/theme-provider"
 import { QueryProvider } from "@/components/providers/query-provider"
+import { KeyboardShortcutsProvider } from "@/components/keyboard-shortcuts"
+import { GlobalSearch } from "@/components/global-search"
 import { Toaster } from "sonner"
 import "./globals.css"
 
+// Load fonts - must be const at module scope
 const geist = Geist({ 
   subsets: ["latin"],
   display: "swap",
   variable: "--font-geist-sans",
 })
+
 const geistMono = Geist_Mono({ 
   subsets: ["latin"],
   display: "swap",
@@ -56,7 +60,10 @@ export default function RootLayout({
         </a>
         <QueryProvider>
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-            {children}
+            <KeyboardShortcutsProvider>
+              {children}
+              <GlobalSearch />
+            </KeyboardShortcutsProvider>
             <Toaster />
           </ThemeProvider>
         </QueryProvider>

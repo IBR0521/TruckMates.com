@@ -202,26 +202,26 @@ export default function ELDPage() {
 
   if (isLoading || canAccessELD === null) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="w-full">
         <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
           <h1 className="text-2xl font-bold text-foreground">ELD Service</h1>
         </div>
-        <main className="flex-1 overflow-auto p-8">
+        <div className="p-4 md:p-8">
           <div className="max-w-6xl mx-auto">
             <p className="text-muted-foreground">Loading...</p>
           </div>
-        </main>
+        </div>
       </div>
     )
   }
 
   if (canAccessELD === false) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="w-full">
         <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
           <h1 className="text-2xl font-bold text-foreground">ELD Service</h1>
         </div>
-        <main className="flex-1 overflow-auto p-8">
+        <div className="p-4 md:p-8">
           <div className="max-w-6xl mx-auto">
             <Card className="p-8 text-center">
               <Shield className="w-16 h-16 text-primary mx-auto mb-4 opacity-50" />
@@ -236,13 +236,13 @@ export default function ELDPage() {
               </Link>
             </Card>
           </div>
-        </main>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="w-full">
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
         <div>
@@ -275,7 +275,7 @@ export default function ELDPage() {
       </div>
 
       {/* Content */}
-      <main className="flex-1 overflow-auto p-8">
+      <div className="p-8">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Quick Access Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -606,7 +606,7 @@ export default function ELDPage() {
             </div>
           </div>
         </div>
-      </main>
+      </div>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

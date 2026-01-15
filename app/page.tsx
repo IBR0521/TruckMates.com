@@ -19,10 +19,16 @@ import {
   AlertTriangle,
   TrendingUp,
   Database,
-  Cloud
+  Cloud,
+  Search,
+  Bell,
+  Keyboard,
+  Layers,
+  Sparkles
 } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
+import { Badge } from "@/components/ui/badge"
 
 export default function Home() {
   return (
@@ -60,6 +66,20 @@ export default function Home() {
               reduce costs, ensure compliance, and grow your business with intelligent automation 
               and real-time insights.
             </p>
+            <div className="flex flex-wrap justify-center gap-4 mb-8 text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <TrendingUp className="w-4 h-4 text-primary" />
+                <span>Reduce operating costs by up to 30%</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Shield className="w-4 h-4 text-primary" />
+                <span>100% DOT compliance guarantee</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Zap className="w-4 h-4 text-primary" />
+                <span>Save 15+ hours per week on admin</span>
+              </div>
+            </div>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/register">
                 <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-8">
@@ -106,11 +126,12 @@ export default function Home() {
                 </p>
               </div>
               <div>
-                <h3 className="text-2xl font-bold text-foreground mb-3">Real-Time Visibility</h3>
+                <h3 className="text-2xl font-bold text-foreground mb-3">Real-Time Visibility That Drives Decisions</h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  Get instant visibility into every aspect of your operation. Track vehicles in real-time, 
-                  monitor driver status, view route progress, manage loads, and access comprehensive analytics 
-                  - all from a single dashboard.
+                  See exactly where every vehicle is, what every driver is doing, and how every route is performing 
+                  - in real-time. Make instant decisions when problems arise. No more waiting for phone calls or 
+                  checking multiple systems. Everything you need to run your operation is on one dashboard that 
+                  updates automatically.
                 </p>
               </div>
             </div>
@@ -411,6 +432,160 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ROI & Business Impact */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-background to-secondary/20">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
+              Stop Losing Money on Inefficiency
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Logistics companies using TruckMates see measurable improvements in their bottom line
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 mb-12">
+            <Card className="bg-card border-border p-8 text-center hover:border-primary/50 transition-all">
+              <div className="text-5xl font-bold text-primary mb-2">30%</div>
+              <h3 className="text-xl font-bold text-foreground mb-3">Reduction in Operating Costs</h3>
+              <p className="text-muted-foreground mb-4">
+                Optimize routes to reduce fuel consumption, minimize idle time, and improve fleet utilization. 
+                Average savings: $15,000+ per year for a 10-truck fleet.
+              </p>
+              <ul className="space-y-2 text-sm text-muted-foreground text-left">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <span>Route optimization reduces fuel costs by 15-25%</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <span>Predictive maintenance prevents costly breakdowns</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <span>Automated workflows eliminate manual errors</span>
+                </li>
+              </ul>
+            </Card>
+
+            <Card className="bg-card border-border p-8 text-center hover:border-primary/50 transition-all">
+              <div className="text-5xl font-bold text-primary mb-2">$0</div>
+              <h3 className="text-xl font-bold text-foreground mb-3">DOT Compliance Fines</h3>
+              <p className="text-muted-foreground mb-4">
+                Automatic HOS tracking and violation alerts keep you compliant. Avoid fines that can cost 
+                $1,000-$10,000+ per violation.
+              </p>
+              <ul className="space-y-2 text-sm text-muted-foreground text-left">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <span>Real-time violation detection prevents issues</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <span>Automated IFTA reporting saves 10+ hours monthly</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <span>ELD integration ensures 100% compliance</span>
+                </li>
+              </ul>
+            </Card>
+
+            <Card className="bg-card border-border p-8 text-center hover:border-primary/50 transition-all">
+              <div className="text-5xl font-bold text-primary mb-2">15+</div>
+              <h3 className="text-xl font-bold text-foreground mb-3">Hours Saved Per Week</h3>
+              <p className="text-muted-foreground mb-4">
+                Automate paperwork, eliminate duplicate data entry, and streamline operations. 
+                Focus on growing your business instead of managing spreadsheets.
+              </p>
+              <ul className="space-y-2 text-sm text-muted-foreground text-left">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <span>Automated invoice generation saves 5+ hours/week</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <span>One-click reporting replaces manual compilation</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <span>Real-time data eliminates status check calls</span>
+                </li>
+              </ul>
+            </Card>
+          </div>
+
+          {/* Pain Points Solved */}
+          <div className="grid md:grid-cols-2 gap-8">
+            <Card className="bg-card border-border p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-red-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-6 h-6 text-red-500" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">The Problems You Face</h3>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li className="flex items-start gap-2">
+                      <span className="text-red-500">•</span>
+                      <span>Spending $5,000+ annually on DOT fines and violations</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-red-500">•</span>
+                      <span>Wasting 20%+ of fuel budget on inefficient routes</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-red-500">•</span>
+                      <span>Losing drivers due to payment disputes and poor scheduling</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-red-500">•</span>
+                      <span>Spending weekends compiling reports and invoices</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-red-500">•</span>
+                      <span>Missing maintenance causing costly breakdowns</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="bg-card border-border p-6 border-primary/30">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <CheckCircle2 className="w-6 h-6 text-green-500" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">How TruckMates Solves Them</h3>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <span>Automatic compliance monitoring prevents fines</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <span>AI-powered route optimization cuts fuel costs</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <span>Fair payment tracking and better scheduling improve retention</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <span>Automated reports and invoices save 15+ hours weekly</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <span>Predictive maintenance alerts prevent breakdowns</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      </section>
+
       {/* Technology & Integrations */}
       <section className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
@@ -568,6 +743,9 @@ export default function Home() {
                 <li>Fleet Tracking</li>
                 <li>ELD Integration</li>
                 <li>Route Optimization</li>
+                <li>Real-Time Updates</li>
+                <li>Global Search</li>
+                <li>Bulk Operations</li>
                 <li>Analytics & Reports</li>
               </ul>
             </div>

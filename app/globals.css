@@ -59,40 +59,47 @@ body {
 }
 
 :root {
-  /* Updated color scheme from navy/orange to dark blue and white */
-  --background: oklch(0.08 0.02 250);
-  --foreground: oklch(0.98 0 0);
-  --card: oklch(0.12 0.02 250);
-  --card-foreground: oklch(0.98 0 0);
-  --popover: oklch(0.12 0.02 250);
-  --popover-foreground: oklch(0.98 0 0);
-  --primary: oklch(0.45 0.15 250);
-  --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.25 0.02 250);
-  --secondary-foreground: oklch(0.98 0 0);
-  --muted: oklch(0.3 0 0);
-  --muted-foreground: oklch(0.7 0 0);
-  --accent: oklch(0.45 0.15 250);
-  --accent-foreground: oklch(0.98 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.2 0.02 250);
-  --input: oklch(0.15 0.02 250);
-  --ring: oklch(0.45 0.15 250);
-  --chart-1: oklch(0.45 0.15 250);
-  --chart-2: oklch(0.6 0.15 200);
-  --chart-3: oklch(0.75 0.12 200);
-  --chart-4: oklch(0.5 0.2 240);
-  --chart-5: oklch(0.7 0.2 260);
+  /* Light mode - Premium, vibrant, and polished */
+  --background: oklch(0.995 0.003 250);
+  --foreground: oklch(0.11 0.018 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.11 0.018 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.11 0.018 250);
+  --primary: oklch(0.40 0.18 250);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.012 250);
+  --secondary-foreground: oklch(0.22 0.018 250);
+  --muted: oklch(0.94 0.008 250);
+  --muted-foreground: oklch(0.48 0.012 250);
+  --accent: oklch(0.95 0.012 250);
+  --accent-foreground: oklch(0.22 0.018 250);
+  --destructive: oklch(0.52 0.24 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.85 0.012 250);
+  --input: oklch(0.99 0.003 250);
+  --ring: oklch(0.40 0.18 250);
+  --chart-1: oklch(0.40 0.18 250);
+  --chart-2: oklch(0.56 0.16 200);
+  --chart-3: oklch(0.70 0.14 200);
+  --chart-4: oklch(0.46 0.19 240);
+  --chart-5: oklch(0.66 0.19 260);
   --radius: 0.5rem;
-  --sidebar: oklch(0.12 0.02 250);
-  --sidebar-foreground: oklch(0.98 0 0);
-  --sidebar-primary: oklch(0.45 0.15 250);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.2 0.02 250);
-  --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(0.2 0.02 250);
-  --sidebar-ring: oklch(0.45 0.15 250);
+  --sidebar: oklch(0.98 0.006 250);
+  --sidebar-foreground: oklch(0.16 0.018 250);
+  --sidebar-primary: oklch(0.40 0.18 250);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.95 0.010 250);
+  --sidebar-accent-foreground: oklch(0.22 0.018 250);
+  --sidebar-border: oklch(0.90 0.012 250);
+  --sidebar-ring: oklch(0.40 0.18 250);
+  
+  /* Enhanced hover states for light mode */
+  --hover-primary: oklch(0.38 0.20 250);
+  --hover-secondary: oklch(0.93 0.015 250);
+  --hover-accent: oklch(0.95 0.012 250);
+  --hover-card: oklch(0.99 0.005 250);
+  --hover-border: oklch(0.82 0.015 250);
 }
 
 .dark {
@@ -113,8 +120,8 @@ body {
   --accent-foreground: oklch(0.98 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.9 0 0);
-  --border: oklch(0.2 0.02 250);
-  --input: oklch(0.15 0.02 250);
+  --border: oklch(0.22 0.02 250);
+  --input: oklch(0.16 0.02 250);
   --ring: oklch(0.45 0.15 250);
   --chart-1: oklch(0.45 0.15 250);
   --chart-2: oklch(0.6 0.15 200);
@@ -178,5 +185,122 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Enhanced hover effects for light mode only */
+@layer utilities {
+  /* Light mode only - use :root:not(.dark) to exclude dark mode */
+  :root:not(.dark) {
+    /* Smooth transitions for all interactive elements */
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+  }
+  
+  /* Card hover effects - Enhanced for light mode only */
+  :root:not(.dark) .card-hover,
+  :root:not(.dark) [data-slot="card"]:hover {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  :root:not(.dark) .card-hover:hover,
+  :root:not(.dark) [data-slot="card"]:hover {
+    background-color: var(--hover-card);
+    border-color: var(--hover-border);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px -4px oklch(0.4 0.18 250 / 0.12), 0 4px 8px -2px oklch(0.4 0.18 250 / 0.08);
+  }
+  
+  /* Interactive elements hover - light mode only */
+  :root:not(.dark) [role="button"]:not(:disabled):hover,
+  :root:not(.dark) button:not(:disabled):hover {
+    cursor: pointer;
+  }
+  
+  /* Button hover enhancements - light mode only */
+  :root:not(.dark) button:hover,
+  :root:not(.dark) [role="button"]:hover {
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Input focus and hover - light mode only */
+  :root:not(.dark) input:hover,
+  :root:not(.dark) textarea:hover,
+  :root:not(.dark) select:hover {
+    border-color: var(--hover-border);
+    background-color: oklch(1 0 0);
+    color: var(--foreground);
+  }
+  
+  :root:not(.dark) input:focus,
+  :root:not(.dark) textarea:focus,
+  :root:not(.dark) select:focus {
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px oklch(0.40 0.18 250 / 0.1);
+    color: var(--foreground);
+  }
+  
+  /* Link hover - light mode only */
+  :root:not(.dark) a:hover {
+    color: var(--hover-primary);
+    transition: color 0.15s ease;
+  }
+  
+  /* Table row hover - light mode only */
+  :root:not(.dark) tr:hover {
+    background-color: var(--hover-secondary);
+    color: var(--foreground);
+    transition: background-color 0.15s ease;
+  }
+  
+  /* Sidebar item hover - light mode only */
+  :root:not(.dark) [data-sidebar-item]:hover {
+    background-color: var(--hover-accent);
+    color: var(--sidebar-accent-foreground);
+    transition: all 0.15s ease;
+  }
+  
+  /* Ensure text stays readable on hover in light mode */
+  :root:not(.dark) button:hover,
+  :root:not(.dark) [role="button"]:hover,
+  :root:not(.dark) a:hover {
+    color: inherit;
+  }
+  
+  /* Ghost buttons - light background with dark text - light mode only */
+  :root:not(.dark) button[class*="ghost"]:hover {
+    background-color: var(--hover-accent);
+    color: var(--accent-foreground);
+  }
+  
+  /* Outline buttons - light background with dark text - light mode only */
+  :root:not(.dark) button[class*="outline"]:hover {
+    background-color: var(--hover-accent);
+    color: var(--accent-foreground);
+  }
+  
+  /* Navigation items hover - keep text readable - light mode only */
+  :root:not(.dark) nav a:hover,
+  :root:not(.dark) nav button:hover {
+    color: var(--foreground);
+  }
+  
+  /* Dropdown menu items hover - light mode only */
+  :root:not(.dark) [role="menuitem"]:hover {
+    background-color: var(--hover-accent);
+    color: var(--accent-foreground);
+  }
+  
+  /* Input visibility enhancements for dark mode */
+  .dark input:hover,
+  .dark textarea:hover,
+  .dark select:hover {
+    border-color: oklch(0.28 0.02 250);
+  }
+  
+  .dark input:focus,
+  .dark textarea:focus,
+  .dark select:focus {
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px oklch(0.45 0.15 250 / 0.15);
   }
 }

@@ -7,6 +7,13 @@ import { Menu, LogOut } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import Sidebar from "@/components/dashboard/sidebar"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { FeedbackWidget } from "@/components/feedback-widget"
+import { NotificationsCenter } from "@/components/notifications-center"
+import { RealtimeStatusChecker } from "@/components/realtime-status-checker"
+import { createClient } from "@/lib/supabase/client"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
 export default function DashboardLayout({
   children,
@@ -16,6 +23,8 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const router = useRouter()
+  const supabase = createClient()
 
   // Load sidebar collapse state from localStorage (only on desktop) - client only
   useEffect(() => {
@@ -72,12 +81,35 @@ export default function DashboardLayout({
               <Menu className="w-5 h-5 text-foreground" />
             </button>
           </div>
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" aria-label="Logout">
+          <div className="flex items-center gap-2">
+            <RealtimeStatusChecker />
+            <NotificationsCenter />
+            <ThemeToggle />
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-muted-foreground hover:text-foreground" 
+              aria-label="Logout"
+              onClick={async () => {
+                try {
+                  const { error } = await supabase.auth.signOut()
+                  if (error) {
+                    toast.error("Failed to logout: " + error.message)
+                  } else {
+                    toast.success("Logged out successfully")
+                    router.push("/login")
+                    router.refresh()
+                  }
+                } catch (error: any) {
+                  toast.error("An error occurred during logout")
+                  console.error("Logout error:", error)
+                }
+              }}
+            >
               <LogOut className="w-4 h-4 mr-2" aria-hidden="true" />
               Logout
             </Button>
-          </Link>
+          </div>
         </header>
 
         {/* Page Content */}
@@ -85,6 +117,9 @@ export default function DashboardLayout({
           {children}
         </main>
       </div>
+
+      {/* Floating Feedback Widget */}
+      <FeedbackWidget />
     </div>
   )
 }

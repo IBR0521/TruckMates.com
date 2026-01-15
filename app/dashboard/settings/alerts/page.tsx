@@ -105,19 +105,19 @@ export default function AlertsSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="w-full">
         <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
           <h1 className="text-2xl font-bold text-foreground">Alert Rules</h1>
         </div>
-        <main className="flex-1 overflow-auto p-8">
+        <div className="p-4 md:p-8">
           <div className="text-center py-8">Loading...</div>
-        </main>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="w-full">
       <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Alert Rules</h1>
@@ -262,7 +262,7 @@ export default function AlertsSettingsPage() {
         </Dialog>
       </div>
 
-      <main className="flex-1 overflow-auto p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
           {alertRules.length === 0 ? (
             <Card className="p-8 text-center">
@@ -313,7 +313,7 @@ export default function AlertsSettingsPage() {
             </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   )
 }

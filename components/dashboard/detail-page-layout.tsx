@@ -32,7 +32,7 @@ export function DetailPageLayout({
   headerActions,
 }: DetailPageLayoutProps) {
   return (
-    <div className="w-full min-h-screen bg-background">
+    <div className="w-full bg-background">
       {/* Professional Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur sticky top-0 z-10">
         <div className="px-4 md:px-8 py-4 md:py-6">
@@ -186,4 +186,6 @@ export function StatusBadge({ status, variant = "default" }: StatusBadgeProps) {
     </span>
   )
 }
+
+
 

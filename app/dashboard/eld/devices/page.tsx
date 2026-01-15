@@ -209,19 +209,19 @@ export default function ELDDevicesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="w-full">
         <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
           <h1 className="text-2xl font-bold text-foreground">ELD Devices</h1>
         </div>
-        <main className="flex-1 overflow-auto p-8">
+        <div className="p-4 md:p-8">
           <p className="text-muted-foreground">Loading...</p>
-        </main>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="w-full">
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
         <div>
@@ -240,7 +240,7 @@ export default function ELDDevicesPage() {
       </div>
 
       {/* Content */}
-      <main className="flex-1 overflow-auto p-8">
+      <div className="p-8">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Search */}
           <div className="relative">
@@ -338,7 +338,7 @@ export default function ELDDevicesPage() {
             </Card>
           )}
         </div>
-      </main>
+      </div>
 
       {/* Add Device Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>

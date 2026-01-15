@@ -30,6 +30,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { getLoads, deleteLoad, bulkDeleteLoads, bulkUpdateLoadStatus, duplicateLoad, updateLoad } from "@/app/actions/loads"
+import { useRealtimeSubscription } from "@/lib/hooks/use-realtime"
+import { BulkActionsBar } from "@/components/bulk-actions-bar"
 
 export default function LoadsPage() {
   const router = useRouter()
@@ -73,6 +75,26 @@ export default function LoadsPage() {
   useEffect(() => {
     loadLoads()
   }, [])
+
+  // Real-time updates for loads
+  useRealtimeSubscription("loads", {
+    event: "*",
+    onInsert: (newLoad) => {
+      setLoadsList((prev) => [newLoad, ...prev])
+      toast.success("New load added")
+    },
+    onUpdate: (updatedLoad) => {
+      setLoadsList((prev) =>
+        prev.map((load) => (load.id === updatedLoad.id ? updatedLoad : load))
+      )
+    },
+    onDelete: (deletedLoad) => {
+      setLoadsList((prev) => prev.filter((load) => load.id !== deletedLoad.id))
+      if (selectedLoad?.id === deletedLoad.id) {
+        setSelectedLoad(null)
+      }
+    },
+  })
 
   // Filter and sort loads
   useEffect(() => {
@@ -530,17 +552,16 @@ export default function LoadsPage() {
                     })() : "N/A"}</p>
                   </div>
                   <div className="flex gap-2 pt-4 border-t border-border/30">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 border-border/50 bg-transparent hover:bg-secondary/50"
-                      onClick={() => {
-                        setSelectedLoad(load)
-                      }}
-                    >
-                      <Eye className="w-4 h-4 mr-1" />
-                      View Details
-                    </Button>
+                    <Link href={`/dashboard/loads/${load.id}`}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 border-border/50 bg-transparent hover:bg-secondary/50"
+                      >
+                        <Eye className="w-4 h-4 mr-1" />
+                        View Details
+                      </Button>
+                    </Link>
                     <Link href={`/dashboard/loads/${load.id}/edit`}>
                       <Button variant="outline" size="sm" className="border-border/50 bg-transparent hover:bg-secondary/50">
                         <Edit2 className="w-4 h-4" />
@@ -616,6 +637,45 @@ export default function LoadsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Actions Bar */}
+      <BulkActionsBar
+        selectedCount={selectedIds.size}
+        onClearSelection={() => {
+          setSelectedIds(new Set())
+          setIsBulkMode(false)
+        }}
+        onBulkDelete={handleBulkDelete}
+        onBulkStatusChange={handleBulkStatusUpdate}
+        onBulkExport={() => {
+          const selectedLoads = loadsList.filter((load) =>
+            selectedIds.has(load.id)
+          )
+          const exportData = selectedLoads.map(
+            ({
+              id,
+              company_id,
+              route_id,
+              driver_id,
+              truck_id,
+              coordinates,
+              created_at,
+              updated_at,
+              ...rest
+            }) => rest
+          )
+          exportToExcel(exportData, "selected-loads")
+          toast.success(`Exported ${selectedIds.size} load(s)`)
+        }}
+        availableStatuses={[
+          "draft",
+          "pending",
+          "scheduled",
+          "in_transit",
+          "delivered",
+          "cancelled",
+        ]}
+      />
     </div>
   )
 }

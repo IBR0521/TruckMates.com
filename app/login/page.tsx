@@ -47,6 +47,8 @@ export default function LoginPage() {
 
       if (data.user) {
         toast.success("Login successful")
+        // Refresh router to ensure session is properly established
+        router.refresh()
         setTimeout(() => {
           router.push("/dashboard")
         }, 500)

@@ -83,7 +83,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     )
   }
 
-  const getStatusVariant = (status: string): "success" | "default" | "warning" | "danger" => {
+  const getStatusVariant = (status: string): "success" | "default" | "warning" | "danger" | "info" => {
     switch (status?.toLowerCase()) {
       case "available":
         return "success"
@@ -161,6 +161,50 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               <InfoField
                 label="Current Location"
                 value={truck.current_location}
+                icon={<MapPin className="w-4 h-4" />}
+                className="md:col-span-2"
+              />
+            )}
+            {truck.fuel_type && (
+              <InfoField
+                label="Fuel Type"
+                value={truck.fuel_type.charAt(0).toUpperCase() + truck.fuel_type.slice(1).replace("_", " ")}
+              />
+            )}
+            {truck.color && (
+              <InfoField
+                label="Color"
+                value={truck.color}
+              />
+            )}
+            {truck.height && (
+              <InfoField
+                label="Height"
+                value={truck.height}
+              />
+            )}
+            {truck.gross_vehicle_weight && (
+              <InfoField
+                label="Gross Vehicle Weight"
+                value={`${truck.gross_vehicle_weight.toLocaleString()} lbs`}
+              />
+            )}
+            {truck.owner_name && (
+              <InfoField
+                label="Owner's Name"
+                value={truck.owner_name}
+              />
+            )}
+            {truck.cost && (
+              <InfoField
+                label="Cost"
+                value={`$${parseFloat(truck.cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              />
+            )}
+            {truck.last_known_address && (
+              <InfoField
+                label="Last Known Address"
+                value={truck.last_known_address}
                 icon={<MapPin className="w-4 h-4" />}
                 className="md:col-span-2"
               />

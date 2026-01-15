@@ -254,25 +254,25 @@ export default function EmployeesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="w-full">
         <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
           <h1 className="text-2xl font-bold text-foreground">Employees</h1>
         </div>
-        <main className="flex-1 overflow-auto p-4 md:p-8">
+        <div className="p-4 md:p-8">
           <div className="max-w-6xl mx-auto">
             <p className="text-muted-foreground">Loading...</p>
-          </div>
-        </main>
+        </div>
       </div>
-    )
-  }
+    </div>
+  )
+}
 
   if (!isManager) {
     return null
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="w-full">
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center justify-between">
         <div>
@@ -289,7 +289,7 @@ export default function EmployeesPage() {
       </div>
 
       {/* Content */}
-      <main className="flex-1 overflow-auto p-4 md:p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-6xl mx-auto space-y-6">
           {/* Pending Invitations */}
           {invitations.length > 0 && (
@@ -511,7 +511,7 @@ export default function EmployeesPage() {
             )}
           </Card>
         </div>
-      </main>
+      </div>
 
       {/* Add Employee Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>

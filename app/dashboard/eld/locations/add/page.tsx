@@ -106,7 +106,7 @@ export default function AddELDLocationPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="w-full">
       <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Add ELD Location Entry</h1>
@@ -120,7 +120,7 @@ export default function AddELDLocationPage() {
         </Link>
       </div>
 
-      <main className="flex-1 overflow-auto p-8">
+        <div className="p-4 md:p-8">
         <div className="max-w-3xl mx-auto">
           <Card className="p-6 border-border">
             <div className="space-y-6">
@@ -293,7 +293,7 @@ export default function AddELDLocationPage() {
             </div>
           </Card>
         </div>
-      </main>
+      </div>
     </div>
   )
 }

@@ -5,13 +5,15 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, DollarSign } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createExpense } from "@/app/actions/accounting"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
+import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
+import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -95,24 +97,18 @@ export default function AddExpensePage() {
   }
 
   return (
-    <div className="w-full">
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
-        <Link href="/dashboard/accounting/expenses">
-          <Button variant="ghost" size="sm" className="mb-4">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Expenses
-          </Button>
-        </Link>
-        <h1 className="text-2xl md:text-3xl font-bold text-foreground">Add Expense</h1>
-        <p className="text-muted-foreground text-sm mt-1">Record a new fleet expense</p>
-      </div>
-
-      <div className="p-4 md:p-8">
-        <Card className="max-w-3xl mx-auto border-border p-4 md:p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Date *</label>
+    <FormPageLayout
+      title="Add Expense"
+      subtitle="Record a new fleet expense"
+      backUrl="/dashboard/accounting/expenses"
+      onSubmit={handleSubmit}
+      isSubmitting={isSubmitting}
+      submitLabel="Add Expense"
+    >
+      <FormSection title="Expense Details" icon={<DollarSign className="w-5 h-5" />}>
+        <FormGrid cols={2}>
+          <div>
+            <Label>Date *</Label>
                 <Input
                   required
                   type="date"
@@ -121,8 +117,8 @@ export default function AddExpensePage() {
                   className="bg-background border-border"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Category *</label>
+          <div>
+            <Label>Category *</Label>
                 <Select
                   value={formData.category}
                   onValueChange={(value) => setFormData({ ...formData, category: value })}
@@ -142,10 +138,10 @@ export default function AddExpensePage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+          </FormGrid>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Description *</label>
+          <div>
+            <Label>Description *</Label>
               <Input
                 required
                 value={formData.description}
@@ -153,11 +149,11 @@ export default function AddExpensePage() {
                 placeholder="e.g. Diesel - Route TX-CA"
                 className="bg-background border-border"
               />
-            </div>
+          </div>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Amount *</label>
+          <FormGrid cols={2}>
+            <div>
+              <Label>Amount *</Label>
                 <Input
                   required
                   type="number"
@@ -167,9 +163,9 @@ export default function AddExpensePage() {
                   placeholder="0.00"
                   className="bg-background border-border"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Vendor</label>
+            </div>
+            <div>
+              <Label>Vendor</Label>
                 <Input
                   value={formData.vendor}
                   onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
@@ -177,11 +173,11 @@ export default function AddExpensePage() {
                   className="bg-background border-border"
                 />
               </div>
-            </div>
+          </FormGrid>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Driver</label>
+          <FormGrid cols={2}>
+            <div>
+              <Label>Driver</Label>
                 <Select
                   value={formData.driver_id || "none"}
                   onValueChange={(value) => setFormData({ ...formData, driver_id: value === "none" ? "" : value })}
@@ -201,9 +197,9 @@ export default function AddExpensePage() {
                 <p className="text-xs text-muted-foreground mt-1">
                   Expense will auto-link to routes/loads for this driver and date
                 </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Truck</label>
+            </div>
+            <div>
+              <Label>Truck</Label>
                 <Select
                   value={formData.truck_id || "none"}
                   onValueChange={(value) => setFormData({ ...formData, truck_id: value === "none" ? "" : value })}
@@ -224,11 +220,11 @@ export default function AddExpensePage() {
                   Expense will auto-link to routes/loads for this truck and date
                 </p>
               </div>
-            </div>
+          </FormGrid>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Mileage</label>
+          <FormGrid cols={2}>
+            <div>
+              <Label>Mileage</Label>
                 <Input
                   type="number"
                   value={formData.mileage}
@@ -236,9 +232,9 @@ export default function AddExpensePage() {
                   placeholder="0"
                   className="bg-background border-border"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Payment Method</label>
+            </div>
+            <div>
+              <Label>Payment Method</Label>
                 <Select
                   value={formData.payment_method || "none"}
                   onValueChange={(value) => setFormData({ ...formData, payment_method: value === "none" ? "" : value })}
@@ -256,14 +252,12 @@ export default function AddExpensePage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+          </FormGrid>
 
-            {/* Fuel Level After Fill - Only show for fuel expenses with truck selected */}
-            {formData.category === "fuel" && formData.truck_id && (
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Fuel Level After Fill (%)
-                </label>
+          {/* Fuel Level After Fill - Only show for fuel expenses with truck selected */}
+          {formData.category === "fuel" && formData.truck_id && (
+            <div>
+              <Label>Fuel Level After Fill (%)</Label>
                 <Input
                   type="number"
                   min="0"
@@ -279,35 +273,18 @@ export default function AddExpensePage() {
               </div>
             )}
 
-            <div>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={formData.has_receipt}
-                  onChange={(e) => setFormData({ ...formData, has_receipt: e.target.checked })}
-                  className="w-4 h-4"
-                />
-                <span className="text-sm font-medium text-foreground">Has Receipt</span>
-              </label>
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <Button 
-                type="submit" 
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Adding..." : "Add Expense"}
-              </Button>
-              <Link href="/dashboard/accounting/expenses">
-                <Button type="button" variant="outline" className="border-border bg-transparent">
-                  Cancel
-                </Button>
-              </Link>
-            </div>
-          </form>
-        </Card>
-      </div>
-    </div>
+          <div>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={formData.has_receipt}
+                onChange={(e) => setFormData({ ...formData, has_receipt: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <span className="text-sm font-medium text-foreground">Has Receipt</span>
+            </label>
+          </div>
+        </FormSection>
+    </FormPageLayout>
   )
 }

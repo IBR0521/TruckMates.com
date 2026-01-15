@@ -132,7 +132,7 @@ export default function RemindersPage() {
       case "pending":
         return <Badge variant="secondary"><Clock className="w-3 h-3 mr-1" />Pending</Badge>
       case "completed":
-        return <Badge variant="success"><CheckCircle2 className="w-3 h-3 mr-1" />Completed</Badge>
+        return <Badge variant="default" className="bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/50"><CheckCircle2 className="w-3 h-3 mr-1" />Completed</Badge>
       case "overdue":
         return <Badge variant="destructive"><AlertTriangle className="w-3 h-3 mr-1" />Overdue</Badge>
       default:
@@ -143,8 +143,8 @@ export default function RemindersPage() {
   const displayReminders = filter === "overdue" ? overdueReminders : reminders
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
+    <div className="w-full">
+      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Reminders</h1>
           <p className="text-sm text-muted-foreground mt-1">Track important deadlines and tasks</p>
@@ -224,12 +224,12 @@ export default function RemindersPage() {
               <div className="grid md:grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="driver">Driver</Label>
-                  <Select value={formData.driver_id} onValueChange={(value) => setFormData({ ...formData, driver_id: value })}>
+                  <Select value={formData.driver_id || "none"} onValueChange={(value) => setFormData({ ...formData, driver_id: value === "none" ? "" : value })}>
                     <SelectTrigger className="mt-2">
                       <SelectValue placeholder="Select driver" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {drivers.map((driver) => (
                         <SelectItem key={driver.id} value={driver.id}>{driver.name}</SelectItem>
                       ))}
@@ -238,12 +238,12 @@ export default function RemindersPage() {
                 </div>
                 <div>
                   <Label htmlFor="truck">Truck</Label>
-                  <Select value={formData.truck_id} onValueChange={(value) => setFormData({ ...formData, truck_id: value })}>
+                  <Select value={formData.truck_id || "none"} onValueChange={(value) => setFormData({ ...formData, truck_id: value === "none" ? "" : value })}>
                     <SelectTrigger className="mt-2">
                       <SelectValue placeholder="Select truck" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {trucks.map((truck) => (
                         <SelectItem key={truck.id} value={truck.id}>{truck.truck_number}</SelectItem>
                       ))}
@@ -252,12 +252,12 @@ export default function RemindersPage() {
                 </div>
                 <div>
                   <Label htmlFor="load">Load</Label>
-                  <Select value={formData.load_id} onValueChange={(value) => setFormData({ ...formData, load_id: value })}>
+                  <Select value={formData.load_id || "none"} onValueChange={(value) => setFormData({ ...formData, load_id: value === "none" ? "" : value })}>
                     <SelectTrigger className="mt-2">
                       <SelectValue placeholder="Select load" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {loads.map((load) => (
                         <SelectItem key={load.id} value={load.id}>{load.shipment_number}</SelectItem>
                       ))}
@@ -273,7 +273,7 @@ export default function RemindersPage() {
         </Dialog>
       </div>
 
-      <main className="flex-1 overflow-auto p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Filters */}
           <Card className="p-4">
@@ -355,10 +355,12 @@ export default function RemindersPage() {
             </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   )
 }
+
+
 
 
 

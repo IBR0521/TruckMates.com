@@ -78,28 +78,28 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="w-full">
         <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
           <h1 className="text-xl md:text-2xl font-bold text-foreground">Route Details</h1>
         </div>
-        <main className="flex-1 overflow-auto p-4 md:p-8">
+        <div className="p-4 md:p-8">
           <div className="max-w-6xl mx-auto">
             <Card className="p-4 md:p-8 text-center">
               <p className="text-muted-foreground">Loading route details...</p>
             </Card>
           </div>
-        </main>
+        </div>
       </div>
     )
   }
 
   if (!route) {
     return (
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="w-full">
         <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
           <h1 className="text-xl md:text-2xl font-bold text-foreground">Route Details</h1>
         </div>
-        <main className="flex-1 overflow-auto p-4 md:p-8">
+        <div className="p-4 md:p-8">
           <div className="max-w-6xl mx-auto">
             <Card className="p-4 md:p-8 text-center">
               <p className="text-muted-foreground">Route not found</p>
@@ -108,7 +108,7 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
               </Link>
             </Card>
           </div>
-        </main>
+        </div>
       </div>
     )
   }
@@ -128,7 +128,7 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="w-full">
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/routes">
@@ -146,7 +146,7 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
         </Link>
       </div>
 
-      <main className="flex-1 overflow-auto p-4 md:p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-6xl mx-auto space-y-6">
           {/* Route Header */}
           <Card className="border-border p-4 md:p-8">
@@ -509,7 +509,7 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           </Card>
         </div>
-      </main>
+      </div>
     </div>
   )
 }

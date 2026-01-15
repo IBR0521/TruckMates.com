@@ -27,6 +27,7 @@ import {
   ChevronRight,
   Bell,
   Calendar,
+  MessageSquare,
 } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
