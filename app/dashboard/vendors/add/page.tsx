@@ -13,6 +13,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
 import { ArrowLeft, Store, MapPin, Briefcase, Tag } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -116,9 +122,17 @@ export default function AddVendorPage() {
       isSubmitting={isSubmitting}
       submitLabel="Add Vendor"
     >
-      <div className="space-y-6">
-        {/* Basic Information */}
-        <FormSection title="Basic Information" icon={<Store className="w-5 h-5" />}>
+      <Tabs defaultValue="basic" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="basic">Basic Info</TabsTrigger>
+          <TabsTrigger value="address">Address</TabsTrigger>
+          <TabsTrigger value="business">Business</TabsTrigger>
+          <TabsTrigger value="contact">Contact</TabsTrigger>
+        </TabsList>
+
+        {/* Basic Information Tab */}
+        <TabsContent value="basic" className="space-y-6">
+          <FormSection title="Basic Information" icon={<Store className="w-5 h-5" />}>
           <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="name">Vendor Name *</Label>
@@ -195,8 +209,10 @@ export default function AddVendorPage() {
                 </div>
               </FormGrid>
             </FormSection>
+          </TabsContent>
 
-            {/* Address Information */}
+          {/* Address Tab */}
+          <TabsContent value="address" className="space-y-6">
             <FormSection title="Address" icon={<MapPin className="w-5 h-5" />}>
               <FormGrid cols={2}>
                 <div className="md:col-span-2">
@@ -275,8 +291,10 @@ export default function AddVendorPage() {
                 </div>
               </FormGrid>
             </FormSection>
+          </TabsContent>
 
-            {/* Business Information */}
+          {/* Business Information Tab */}
+          <TabsContent value="business" className="space-y-6">
             <FormSection title="Business Information" icon={<Briefcase className="w-5 h-5" />}>
               <FormGrid cols={2}>
                 <div>
@@ -336,8 +354,10 @@ export default function AddVendorPage() {
                 </div>
               </FormGrid>
             </FormSection>
+          </TabsContent>
 
-            {/* Primary Contact */}
+          {/* Contact Tab */}
+          <TabsContent value="contact" className="space-y-6">
             <FormSection title="Primary Contact" icon={<Tag className="w-5 h-5" />}>
               <FormGrid cols={2}>
                 <div>
@@ -379,12 +399,7 @@ export default function AddVendorPage() {
           </FormGrid>
         </FormSection>
 
-            {/* Notes */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Tag className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Additional Information</h2>
-              </div>
+            <FormSection title="Additional Information" icon={<Tag className="w-5 h-5" />}>
               <div>
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea
@@ -397,8 +412,9 @@ export default function AddVendorPage() {
                   rows={4}
                 />
               </div>
-            </Card>
-      </div>
+            </FormSection>
+          </TabsContent>
+        </Tabs>
     </FormPageLayout>
   )
 }

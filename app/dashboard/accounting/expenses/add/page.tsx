@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, DollarSign } from "lucide-react"
+import { ArrowLeft, DollarSign, Calendar, Truck, User, CreditCard } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -14,6 +14,8 @@ import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -21,6 +23,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
 
 export default function AddExpensePage() {
   const router = useRouter()
@@ -105,7 +113,17 @@ export default function AddExpensePage() {
       isSubmitting={isSubmitting}
       submitLabel="Add Expense"
     >
-      <FormSection title="Expense Details" icon={<DollarSign className="w-5 h-5" />}>
+      <Tabs defaultValue="details" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="details">Expense Details</TabsTrigger>
+          <TabsTrigger value="assignment">Assignment</TabsTrigger>
+          <TabsTrigger value="payment">Payment</TabsTrigger>
+          <TabsTrigger value="additional">Additional</TabsTrigger>
+        </TabsList>
+
+        {/* Expense Details Tab */}
+        <TabsContent value="details" className="space-y-6">
+          <FormSection title="Expense Details" icon={<DollarSign className="w-5 h-5" />}>
         <FormGrid cols={2}>
           <div>
             <Label>Date *</Label>
@@ -174,10 +192,15 @@ export default function AddExpensePage() {
                 />
               </div>
           </FormGrid>
+        </FormSection>
+        </TabsContent>
 
-          <FormGrid cols={2}>
-            <div>
-              <Label>Driver</Label>
+        {/* Assignment Tab */}
+        <TabsContent value="assignment" className="space-y-6">
+          <FormSection title="Assignment" icon={<Truck className="w-5 h-5" />}>
+            <FormGrid cols={2}>
+              <div>
+                <Label>Driver</Label>
                 <Select
                   value={formData.driver_id || "none"}
                   onValueChange={(value) => setFormData({ ...formData, driver_id: value === "none" ? "" : value })}
@@ -197,9 +220,9 @@ export default function AddExpensePage() {
                 <p className="text-xs text-muted-foreground mt-1">
                   Expense will auto-link to routes/loads for this driver and date
                 </p>
-            </div>
-            <div>
-              <Label>Truck</Label>
+              </div>
+              <div>
+                <Label>Truck</Label>
                 <Select
                   value={formData.truck_id || "none"}
                   onValueChange={(value) => setFormData({ ...formData, truck_id: value === "none" ? "" : value })}
@@ -220,21 +243,27 @@ export default function AddExpensePage() {
                   Expense will auto-link to routes/loads for this truck and date
                 </p>
               </div>
-          </FormGrid>
+            </FormGrid>
 
-          <FormGrid cols={2}>
             <div>
               <Label>Mileage</Label>
-                <Input
-                  type="number"
-                  value={formData.mileage}
-                  onChange={(e) => setFormData({ ...formData, mileage: e.target.value })}
-                  placeholder="0"
-                  className="bg-background border-border"
-                />
+              <Input
+                type="number"
+                value={formData.mileage}
+                onChange={(e) => setFormData({ ...formData, mileage: e.target.value })}
+                placeholder="0"
+                className="bg-background border-border"
+              />
             </div>
-            <div>
-              <Label>Payment Method</Label>
+          </FormSection>
+        </TabsContent>
+
+        {/* Payment Tab */}
+        <TabsContent value="payment" className="space-y-6">
+          <FormSection title="Payment Information" icon={<CreditCard className="w-5 h-5" />}>
+            <FormGrid cols={2}>
+              <div>
+                <Label>Payment Method</Label>
                 <Select
                   value={formData.payment_method || "none"}
                   onValueChange={(value) => setFormData({ ...formData, payment_method: value === "none" ? "" : value })}
@@ -252,12 +281,25 @@ export default function AddExpensePage() {
                   </SelectContent>
                 </Select>
               </div>
-          </FormGrid>
+              <div className="flex items-center space-x-2 pt-8">
+                <Checkbox
+                  id="has_receipt"
+                  checked={formData.has_receipt}
+                  onCheckedChange={(checked) => setFormData({ ...formData, has_receipt: checked as boolean })}
+                />
+                <Label htmlFor="has_receipt" className="cursor-pointer">Has Receipt</Label>
+              </div>
+            </FormGrid>
+          </FormSection>
+        </TabsContent>
 
-          {/* Fuel Level After Fill - Only show for fuel expenses with truck selected */}
-          {formData.category === "fuel" && formData.truck_id && (
-            <div>
-              <Label>Fuel Level After Fill (%)</Label>
+        {/* Additional Tab */}
+        <TabsContent value="additional" className="space-y-6">
+          <FormSection title="Additional Information" icon={<Calendar className="w-5 h-5" />}>
+            {/* Fuel Level After Fill - Only show for fuel expenses with truck selected */}
+            {formData.category === "fuel" && formData.truck_id && (
+              <div>
+                <Label>Fuel Level After Fill (%)</Label>
                 <Input
                   type="number"
                   min="0"
@@ -272,19 +314,9 @@ export default function AddExpensePage() {
                 </p>
               </div>
             )}
-
-          <div>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={formData.has_receipt}
-                onChange={(e) => setFormData({ ...formData, has_receipt: e.target.checked })}
-                className="w-4 h-4"
-              />
-              <span className="text-sm font-medium text-foreground">Has Receipt</span>
-            </label>
-          </div>
-        </FormSection>
+          </FormSection>
+        </TabsContent>
+      </Tabs>
     </FormPageLayout>
   )
 }

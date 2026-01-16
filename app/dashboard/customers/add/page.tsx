@@ -13,6 +13,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
 import { ArrowLeft, Building2, MapPin, Briefcase, Tag, Mail, Share2, FileText } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -155,9 +161,18 @@ export default function AddCustomerPage() {
       isSubmitting={isSubmitting}
       submitLabel="Add Customer"
     >
-      <div className="space-y-6">
-        {/* Basic Information */}
-        <FormSection title="Basic Information" icon={<Building2 className="w-5 h-5" />}>
+      <Tabs defaultValue="basic" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="basic">Basic Info</TabsTrigger>
+          <TabsTrigger value="address">Address</TabsTrigger>
+          <TabsTrigger value="business">Business</TabsTrigger>
+          <TabsTrigger value="contact">Contact</TabsTrigger>
+          <TabsTrigger value="additional">Additional</TabsTrigger>
+        </TabsList>
+
+        {/* Basic Information Tab */}
+        <TabsContent value="basic" className="space-y-6">
+          <FormSection title="Basic Information" icon={<Building2 className="w-5 h-5" />}>
           <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="name">Customer Name *</Label>
@@ -234,8 +249,171 @@ export default function AddCustomerPage() {
                 </div>
               </FormGrid>
             </FormSection>
+          </TabsContent>
 
-            {/* Business Information */}
+          {/* Address Tab */}
+          <TabsContent value="address" className="space-y-6">
+            <FormSection title="Physical Address" icon={<MapPin className="w-5 h-5" />}>
+              <FormGrid cols={2}>
+                <div className="md:col-span-2">
+                  <Label htmlFor="physical_address_line1">Address Line 1</Label>
+                  <Input
+                    id="physical_address_line1"
+                    name="physical_address_line1"
+                    type="text"
+                    placeholder="123 Main Street"
+                    value={formData.physical_address_line1}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label htmlFor="physical_address_line2">Address Line 2</Label>
+                  <Input
+                    id="physical_address_line2"
+                    name="physical_address_line2"
+                    type="text"
+                    placeholder="Suite 100"
+                    value={formData.physical_address_line2}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="physical_city">City</Label>
+                  <Input
+                    id="physical_city"
+                    name="physical_city"
+                    type="text"
+                    placeholder="New York"
+                    value={formData.physical_city}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="physical_state">State</Label>
+                  <Select value={formData.physical_state} onValueChange={(value) => handleSelectChange("physical_state", value)}>
+                    <SelectTrigger className="mt-2 w-full">
+                      <SelectValue placeholder="Select state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {usStates.map((state) => (
+                        <SelectItem key={state} value={state}>
+                          {state}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="physical_zip">ZIP Code</Label>
+                  <Input
+                    id="physical_zip"
+                    name="physical_zip"
+                    type="text"
+                    placeholder="10001"
+                    value={formData.physical_zip}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="physical_country">Country</Label>
+                  <Input
+                    id="physical_country"
+                    name="physical_country"
+                    type="text"
+                    value={formData.physical_country}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+              </FormGrid>
+            </FormSection>
+
+            <FormSection title="Mailing Address" icon={<Mail className="w-5 h-5" />}>
+              <FormGrid cols={2}>
+                <div className="md:col-span-2">
+                  <Label htmlFor="mailing_address_line1">Address Line 1</Label>
+                  <Input
+                    id="mailing_address_line1"
+                    name="mailing_address_line1"
+                    type="text"
+                    placeholder="123 Main Street"
+                    value={formData.mailing_address_line1}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label htmlFor="mailing_address_line2">Address Line 2</Label>
+                  <Input
+                    id="mailing_address_line2"
+                    name="mailing_address_line2"
+                    type="text"
+                    placeholder="Suite 100"
+                    value={formData.mailing_address_line2}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="mailing_city">City</Label>
+                  <Input
+                    id="mailing_city"
+                    name="mailing_city"
+                    type="text"
+                    placeholder="New York"
+                    value={formData.mailing_city}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="mailing_state">State</Label>
+                  <Select value={formData.mailing_state} onValueChange={(value) => handleSelectChange("mailing_state", value)}>
+                    <SelectTrigger className="mt-2 w-full">
+                      <SelectValue placeholder="Select state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {usStates.map((state) => (
+                        <SelectItem key={state} value={state}>
+                          {state}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="mailing_zip">ZIP Code</Label>
+                  <Input
+                    id="mailing_zip"
+                    name="mailing_zip"
+                    type="text"
+                    placeholder="10001"
+                    value={formData.mailing_zip}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="mailing_country">Country</Label>
+                  <Input
+                    id="mailing_country"
+                    name="mailing_country"
+                    type="text"
+                    value={formData.mailing_country}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+              </FormGrid>
+            </FormSection>
+          </TabsContent>
+
+          {/* Business Information Tab */}
+          <TabsContent value="business" className="space-y-6">
             <FormSection title="Business Information" icon={<Briefcase className="w-5 h-5" />}>
               <FormGrid cols={2}>
                 <div>
@@ -309,6 +487,51 @@ export default function AddCustomerPage() {
                 </div>
               </FormGrid>
             </FormSection>
+          </TabsContent>
+
+          {/* Contact Tab */}
+          <TabsContent value="contact" className="space-y-6">
+            {/* Primary Contact */}
+            <FormSection title="Primary Contact" icon={<Tag className="w-5 h-5" />}>
+              <FormGrid cols={2}>
+                <div>
+                  <Label htmlFor="primary_contact_name">Contact Name</Label>
+                  <Input
+                    id="primary_contact_name"
+                    name="primary_contact_name"
+                    type="text"
+                    placeholder="John Smith"
+                    value={formData.primary_contact_name}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="primary_contact_email">Contact Email</Label>
+                  <Input
+                    id="primary_contact_email"
+                    name="primary_contact_email"
+                    type="email"
+                    placeholder="john@abcshipping.com"
+                    value={formData.primary_contact_email}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="primary_contact_phone">Contact Phone</Label>
+                  <Input
+                    id="primary_contact_phone"
+                    name="primary_contact_phone"
+                    type="tel"
+                    placeholder="+1 (555) 123-4567"
+                    value={formData.primary_contact_phone}
+                    onChange={handleChange}
+                    className="mt-2"
+                  />
+                </div>
+              </FormGrid>
+            </FormSection>
 
             {/* Social Media */}
             <FormSection title="Social Media" icon={<Share2 className="w-5 h-5" />}>
@@ -363,50 +586,10 @@ export default function AddCustomerPage() {
                 </div>
               </FormGrid>
             </FormSection>
+          </TabsContent>
 
-            {/* Primary Contact */}
-            <FormSection title="Primary Contact" icon={<Tag className="w-5 h-5" />}>
-              <FormGrid cols={2}>
-                <div>
-                  <Label htmlFor="primary_contact_name">Contact Name</Label>
-                  <Input
-                    id="primary_contact_name"
-                    name="primary_contact_name"
-                    type="text"
-                    placeholder="John Smith"
-                    value={formData.primary_contact_name}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="primary_contact_email">Contact Email</Label>
-                  <Input
-                    id="primary_contact_email"
-                    name="primary_contact_email"
-                    type="email"
-                    placeholder="john@abcshipping.com"
-                    value={formData.primary_contact_email}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="primary_contact_phone">Contact Phone</Label>
-                  <Input
-                    id="primary_contact_phone"
-                    name="primary_contact_phone"
-                    type="tel"
-                    placeholder="+1 (555) 123-4567"
-                    value={formData.primary_contact_phone}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-              </FormGrid>
-            </FormSection>
-
-            {/* Terms and Notes */}
+          {/* Additional Information Tab */}
+          <TabsContent value="additional" className="space-y-6">
             <FormSection title="Terms and Additional Information" icon={<FileText className="w-5 h-5" />}>
               <div className="space-y-6">
                 <div>
@@ -435,7 +618,8 @@ export default function AddCustomerPage() {
                 </div>
               </div>
             </FormSection>
-      </div>
+          </TabsContent>
+        </Tabs>
     </FormPageLayout>
   )
 }
