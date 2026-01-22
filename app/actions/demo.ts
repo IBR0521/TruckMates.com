@@ -5,8 +5,9 @@ import { createClient } from "@/lib/supabase/server"
 const DEMO_EMAIL = "demo@truckmates.com"
 const DEMO_COMPANY_NAME = "Demo Logistics Company"
 
-// Setup demo company and subscription for a user
+// Setup demo company for a user
 // This is called AFTER the user is signed in on the client side
+// Platform is now free - no subscription needed
 export async function setupDemoCompany(userId: string | null) {
   try {
     // Create Supabase client
@@ -136,30 +137,7 @@ export async function setupDemoCompany(userId: string | null) {
       }
     }
 
-    // Ensure demo company has a subscription (free trial)
-    if (companyId) {
-      const { data: existingSubscription } = await supabase
-        .from("subscriptions")
-        .select("id")
-        .eq("company_id", companyId)
-        .maybeSingle()
-
-      if (!existingSubscription) {
-        // Create a free trial subscription for demo
-        const { error: subError } = await supabase
-          .from("subscriptions")
-          .insert({
-            company_id: companyId,
-            plan_id: "simple", // Free tier
-            status: "active",
-            trial_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
-          })
-
-        if (subError) {
-          console.error("Error creating demo subscription:", subError)
-        }
-      }
-    }
+    // Platform is now free - no subscription needed
 
     // Return success
     return { 
