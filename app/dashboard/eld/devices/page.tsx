@@ -62,13 +62,15 @@ export default function ELDDevicesPage() {
   const [formData, setFormData] = useState({
     device_serial_number: "",
     device_name: "",
-    manufacturer: "",
-    model: "",
+    provider: "",
+    provider_device_id: "",
     truck_id: "",
-    installed_date: "",
+    installation_date: "",
     firmware_version: "",
     api_key: "",
-    api_endpoint: "",
+    api_secret: "",
+    status: "active",
+    notes: "",
   })
 
   useEffect(() => {
@@ -174,13 +176,15 @@ export default function ELDDevicesPage() {
     setFormData({
       device_serial_number: "",
       device_name: "",
-      manufacturer: "",
-      model: "",
+      provider: "",
+      provider_device_id: "",
       truck_id: "",
-      installed_date: "",
+      installation_date: "",
       firmware_version: "",
       api_key: "",
-      api_endpoint: "",
+      api_secret: "",
+      status: "active",
+      notes: "",
     })
     setSelectedDevice(null)
   }
@@ -190,13 +194,15 @@ export default function ELDDevicesPage() {
     setFormData({
       device_serial_number: device.device_serial_number,
       device_name: device.device_name,
-      manufacturer: device.manufacturer || "",
-      model: device.model || "",
+      provider: device.provider || "",
+      provider_device_id: device.provider_device_id || "",
       truck_id: device.truck_id || "",
-      installed_date: device.installed_date || "",
+      installation_date: device.installation_date || "",
       firmware_version: device.firmware_version || "",
       api_key: device.api_key || "",
-      api_endpoint: device.api_endpoint || "",
+      api_secret: device.api_secret || "",
+      status: device.status || "active",
+      notes: device.notes || "",
     })
     setShowEditDialog(true)
   }
@@ -204,7 +210,7 @@ export default function ELDDevicesPage() {
   const filteredDevices = devices.filter((device) =>
     device.device_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     device.device_serial_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    device.manufacturer?.toLowerCase().includes(searchQuery.toLowerCase())
+    device.provider?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   if (isLoading) {
@@ -366,21 +372,42 @@ export default function ELDDevicesPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Manufacturer</Label>
-                <Input
-                  value={formData.manufacturer}
-                  onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
-                  placeholder="KeepTruckin, Samsara, etc."
-                />
+                <Label>Provider *</Label>
+                <Select value={formData.provider} onValueChange={(value) => setFormData({ ...formData, provider: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="keeptruckin">KeepTruckin</SelectItem>
+                    <SelectItem value="samsara">Samsara</SelectItem>
+                    <SelectItem value="geotab">Geotab</SelectItem>
+                    <SelectItem value="rand_mcnally">Rand McNally</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
-                <Label>Model</Label>
-                <Input
-                  value={formData.model}
-                  onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                  placeholder="Model number"
-                />
+                <Label>Status</Label>
+                <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                    <SelectItem value="maintenance">Maintenance</SelectItem>
+                    <SelectItem value="disconnected">Disconnected</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+            </div>
+            <div>
+              <Label>Provider Device ID (Optional)</Label>
+              <Input
+                value={formData.provider_device_id}
+                onChange={(e) => setFormData({ ...formData, provider_device_id: e.target.value })}
+                placeholder="Device ID from provider"
+              />
             </div>
             <div>
               <Label>Assigned Truck</Label>
@@ -400,11 +427,11 @@ export default function ELDDevicesPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Installed Date</Label>
+                <Label>Installation Date</Label>
                 <Input
                   type="date"
-                  value={formData.installed_date}
-                  onChange={(e) => setFormData({ ...formData, installed_date: e.target.value })}
+                  value={formData.installation_date}
+                  onChange={(e) => setFormData({ ...formData, installation_date: e.target.value })}
                 />
               </div>
               <div>
@@ -416,21 +443,32 @@ export default function ELDDevicesPage() {
                 />
               </div>
             </div>
-            <div>
-              <Label>API Key (Optional)</Label>
-              <Input
-                type="password"
-                value={formData.api_key}
-                onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
-                placeholder="For ELD provider integration"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>API Key (Optional)</Label>
+                <Input
+                  type="password"
+                  value={formData.api_key}
+                  onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
+                  placeholder="For ELD provider integration"
+                />
+              </div>
+              <div>
+                <Label>API Secret (Optional)</Label>
+                <Input
+                  type="password"
+                  value={formData.api_secret}
+                  onChange={(e) => setFormData({ ...formData, api_secret: e.target.value })}
+                  placeholder="API secret for provider"
+                />
+              </div>
             </div>
             <div>
-              <Label>API Endpoint (Optional)</Label>
+              <Label>Notes (Optional)</Label>
               <Input
-                value={formData.api_endpoint}
-                onChange={(e) => setFormData({ ...formData, api_endpoint: e.target.value })}
-                placeholder="https://api.eld-provider.com"
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="Additional notes about the device"
               />
             </div>
           </div>
@@ -438,7 +476,7 @@ export default function ELDDevicesPage() {
             <Button variant="outline" onClick={() => setShowAddDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddDevice} disabled={isSubmitting || !formData.device_serial_number || !formData.device_name}>
+            <Button onClick={handleAddDevice} disabled={isSubmitting || !formData.device_serial_number || !formData.device_name || !formData.provider}>
               {isSubmitting ? "Adding..." : "Add Device"}
             </Button>
           </DialogFooter>
@@ -462,19 +500,42 @@ export default function ELDDevicesPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Manufacturer</Label>
-                <Input
-                  value={formData.manufacturer}
-                  onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
-                />
+                <Label>Provider *</Label>
+                <Select value={formData.provider} onValueChange={(value) => setFormData({ ...formData, provider: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="keeptruckin">KeepTruckin</SelectItem>
+                    <SelectItem value="samsara">Samsara</SelectItem>
+                    <SelectItem value="geotab">Geotab</SelectItem>
+                    <SelectItem value="rand_mcnally">Rand McNally</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
-                <Label>Model</Label>
-                <Input
-                  value={formData.model}
-                  onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                />
+                <Label>Status</Label>
+                <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                    <SelectItem value="maintenance">Maintenance</SelectItem>
+                    <SelectItem value="disconnected">Disconnected</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+            </div>
+            <div>
+              <Label>Provider Device ID (Optional)</Label>
+              <Input
+                value={formData.provider_device_id}
+                onChange={(e) => setFormData({ ...formData, provider_device_id: e.target.value })}
+                placeholder="Device ID from provider"
+              />
             </div>
             <div>
               <Label>Assigned Truck</Label>
@@ -492,27 +553,13 @@ export default function ELDDevicesPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Status</Label>
-              <Select value={selectedDevice?.status} onValueChange={(value) => setSelectedDevice({ ...selectedDevice, status: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                  <SelectItem value="maintenance">Maintenance</SelectItem>
-                  <SelectItem value="replaced">Replaced</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Installed Date</Label>
+                <Label>Installation Date</Label>
                 <Input
                   type="date"
-                  value={formData.installed_date}
-                  onChange={(e) => setFormData({ ...formData, installed_date: e.target.value })}
+                  value={formData.installation_date}
+                  onChange={(e) => setFormData({ ...formData, installation_date: e.target.value })}
                 />
               </div>
               <div>
@@ -520,15 +567,44 @@ export default function ELDDevicesPage() {
                 <Input
                   value={formData.firmware_version}
                   onChange={(e) => setFormData({ ...formData, firmware_version: e.target.value })}
+                  placeholder="v1.0.0"
                 />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>API Key (Optional)</Label>
+                <Input
+                  type="password"
+                  value={formData.api_key}
+                  onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
+                  placeholder="For ELD provider integration"
+                />
+              </div>
+              <div>
+                <Label>API Secret (Optional)</Label>
+                <Input
+                  type="password"
+                  value={formData.api_secret}
+                  onChange={(e) => setFormData({ ...formData, api_secret: e.target.value })}
+                  placeholder="API secret for provider"
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Notes (Optional)</Label>
+              <Input
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="Additional notes about the device"
+              />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleUpdateDevice} disabled={isSubmitting}>
+            <Button onClick={handleUpdateDevice} disabled={isSubmitting || !formData.device_serial_number || !formData.device_name || !formData.provider}>
               {isSubmitting ? "Updating..." : "Update Device"}
             </Button>
           </DialogFooter>

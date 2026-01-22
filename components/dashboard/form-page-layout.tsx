@@ -65,8 +65,8 @@ export function FormPageLayout({
           {onSubmit ? (
             <form onSubmit={onSubmit} className="space-y-6">
               {children}
-              {/* Submit Button at Bottom */}
-              <div className="flex items-center justify-end gap-3 pt-6 border-t border-border">
+              {/* Submit Button at Bottom - Added padding to avoid feedback button */}
+              <div className="flex items-center justify-end gap-3 pt-6 pb-20 sm:pb-6 border-t border-border">
                 <Link href={backUrl}>
                   <Button type="button" variant="outline">
                     Cancel

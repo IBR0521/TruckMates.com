@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedUserCompany } from "@/lib/query-optimizer"
 
 // Generate AI-powered insights based on ELD data
 export async function generateELDInsights(driverId?: string, days: number = 7) {
@@ -317,5 +318,206 @@ export async function getDriverRecommendations(driverId: string) {
       totalViolations: violations?.length || 0,
     },
     error: null,
+  }
+}
+
+/**
+ * Calculate driver behavior score (0-100)
+ * Higher score = better performance
+ */
+export async function getDriverBehaviorScore(driverId: string, days: number = 30) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+
+  if (!company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+
+  try {
+    // Get violations
+    const { data: violations, error: violationsError } = await supabase
+      .from("eld_events")
+      .select("*")
+      .eq("driver_id", driverId)
+      .eq("company_id", company_id)
+      .gte("event_time", startDate)
+
+    if (violationsError) {
+      return { error: violationsError.message, data: null }
+    }
+
+    // Get logs for driving time
+    const { data: logs, error: logsError } = await supabase
+      .from("eld_logs")
+      .select("*")
+      .eq("driver_id", driverId)
+      .eq("company_id", company_id)
+      .gte("log_date", startDate.split("T")[0])
+
+    if (logsError) {
+      return { error: logsError.message, data: null }
+    }
+
+    // Calculate score components
+    const totalViolations = violations?.length || 0
+    const totalDrivingHours = logs
+      ?.filter((l) => l.log_type === "driving")
+      .reduce((sum, l) => sum + (l.duration_minutes || 0) / 60, 0) || 0
+
+    // Violation score (0-50 points)
+    // Fewer violations = higher score
+    const violationsPer100Hours = totalDrivingHours > 0 ? (totalViolations / totalDrivingHours) * 100 : totalViolations
+    let violationScore = 50
+    if (violationsPer100Hours > 5) {
+      violationScore = 0
+    } else if (violationsPer100Hours > 3) {
+      violationScore = 10
+    } else if (violationsPer100Hours > 2) {
+      violationScore = 20
+    } else if (violationsPer100Hours > 1) {
+      violationScore = 30
+    } else if (violationsPer100Hours > 0.5) {
+      violationScore = 40
+    } else if (violationsPer100Hours === 0) {
+      violationScore = 50
+    }
+
+    // Compliance score (0-30 points)
+    // Based on HOS compliance
+    const hosViolations = violations?.filter((v) => v.event_type === "hos_violation").length || 0
+    const complianceScore = hosViolations === 0 ? 30 : Math.max(0, 30 - (hosViolations * 5))
+
+    // Safety score (0-20 points)
+    // Based on safety-related violations
+    const safetyViolations = violations?.filter((v) => 
+      v.event_type === "hard_brake" || v.event_type === "speeding"
+    ).length || 0
+    const safetyScore = safetyViolations === 0 ? 20 : Math.max(0, 20 - (safetyViolations * 2))
+
+    // Total score
+    const totalScore = Math.round(violationScore + complianceScore + safetyScore)
+    const scoreGrade = totalScore >= 90 ? "Excellent" : totalScore >= 75 ? "Good" : totalScore >= 60 ? "Fair" : "Needs Improvement"
+
+    // Calculate trend (compare to previous period)
+    const previousStartDate = new Date(Date.now() - (days * 2) * 24 * 60 * 60 * 1000).toISOString()
+    const { data: previousViolations } = await supabase
+      .from("eld_events")
+      .select("*")
+      .eq("driver_id", driverId)
+      .eq("company_id", company_id)
+      .gte("event_time", previousStartDate)
+      .lt("event_time", startDate)
+
+    const previousTotalViolations = previousViolations?.length || 0
+    const trend = previousTotalViolations > 0
+      ? ((previousTotalViolations - totalViolations) / previousTotalViolations) * 100
+      : totalViolations === 0 ? 100 : 0
+
+    return {
+      data: {
+        driver_id: driverId,
+        score: totalScore,
+        grade: scoreGrade,
+        breakdown: {
+          violation_score: violationScore,
+          compliance_score: complianceScore,
+          safety_score: safetyScore,
+        },
+        metrics: {
+          total_violations: totalViolations,
+          violations_per_100_hours: Math.round(violationsPer100Hours * 10) / 10,
+          total_driving_hours: Math.round(totalDrivingHours * 10) / 10,
+          hos_violations: hosViolations,
+          safety_violations: safetyViolations,
+        },
+        trend: Math.round(trend * 10) / 10,
+        period_days: days,
+      },
+      error: null,
+    }
+  } catch (error: any) {
+    return { error: error.message || "Failed to calculate behavior score", data: null }
+  }
+}
+
+/**
+ * Get behavior scores for all drivers
+ */
+export async function getAllDriverBehaviorScores(days: number = 30) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+
+  if (!company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  try {
+    // Get all drivers
+    const { data: drivers, error: driversError } = await supabase
+      .from("drivers")
+      .select("id, name")
+      .eq("company_id", company_id)
+      .eq("status", "active")
+
+    if (driversError) {
+      return { error: driversError.message, data: null }
+    }
+
+    // Calculate scores for each driver
+    const scores = await Promise.all(
+      (drivers || []).map(async (driver) => {
+        const scoreResult = await getDriverBehaviorScore(driver.id, days)
+        if (scoreResult.data) {
+          return {
+            driver_id: driver.id,
+            driver_name: driver.name,
+            ...scoreResult.data,
+          }
+        }
+        return null
+      })
+    )
+
+    const validScores = scores.filter((s) => s !== null)
+
+    // Sort by score (highest first)
+    validScores.sort((a: any, b: any) => b.score - a.score)
+
+    return {
+      data: {
+        scores: validScores,
+        average_score: validScores.length > 0
+          ? Math.round(validScores.reduce((sum: number, s: any) => sum + s.score, 0) / validScores.length)
+          : 0,
+        total_drivers: validScores.length,
+      },
+      error: null,
+    }
+  } catch (error: any) {
+    return { error: error.message || "Failed to get driver behavior scores", data: null }
   }
 }

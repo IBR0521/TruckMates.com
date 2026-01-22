@@ -49,9 +49,29 @@ export default function LoginPage() {
         toast.success("Login successful")
         // Refresh router to ensure session is properly established
         router.refresh()
-        setTimeout(() => {
-          router.push("/dashboard")
-        }, 500)
+        
+        // Get company type and redirect accordingly
+        try {
+          const response = await fetch("/api/get-company-type")
+          const result = await response.json()
+          
+          // Brokers and carriers go to marketplace dashboard, regular managers go to platform dashboard
+          if (result.data === "broker" || result.data === "carrier" || result.data === "both") {
+            setTimeout(() => {
+              router.push("/marketplace/dashboard")
+            }, 500)
+          } else {
+            setTimeout(() => {
+              router.push("/dashboard")
+            }, 500)
+          }
+        } catch (error) {
+          // If API fails, default to dashboard
+          console.error("Error getting company type:", error)
+          setTimeout(() => {
+            router.push("/dashboard")
+          }, 500)
+        }
       }
     } catch (error) {
       toast.error("An error occurred. Please try again.")

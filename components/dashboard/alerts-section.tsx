@@ -75,11 +75,13 @@ export function AlertsSection({ upcomingMaintenance, overdueInvoices, upcomingDe
                       Due: {new Date(invoice.due_date).toLocaleDateString()} • ${Number(invoice.amount).toFixed(2)}
                     </p>
                   </div>
-                  <Link href={`/dashboard/accounting/invoices/${invoice.id}`}>
-                    <Button variant="ghost" size="sm">
-                      View
-                    </Button>
-                  </Link>
+                  {invoice.id && typeof invoice.id === 'string' && invoice.id.trim() !== '' ? (
+                    <Link href={`/dashboard/accounting/invoices/${invoice.id}`}>
+                      <Button variant="ghost" size="sm">
+                        View
+                      </Button>
+                    </Link>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -148,11 +150,13 @@ export function AlertsSection({ upcomingMaintenance, overdueInvoices, upcomingDe
                       ETA: {new Date(load.estimated_delivery).toLocaleDateString()}
                     </p>
                   </div>
-                  <Link href={`/dashboard/loads/${load.id}`}>
-                    <Button variant="ghost" size="sm">
-                      View
-                    </Button>
-                  </Link>
+                  {load.id && typeof load.id === 'string' && load.id.trim() !== '' ? (
+                    <Link href={`/dashboard/loads/${load.id}`}>
+                      <Button variant="ghost" size="sm">
+                        View
+                      </Button>
+                    </Link>
+                  ) : null}
                 </div>
               ))}
             </div>

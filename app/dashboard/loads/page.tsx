@@ -30,7 +30,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { getLoads, deleteLoad, bulkDeleteLoads, bulkUpdateLoadStatus, duplicateLoad, updateLoad } from "@/app/actions/loads"
-import { useRealtimeSubscription } from "@/lib/hooks/use-realtime"
 import { BulkActionsBar } from "@/components/bulk-actions-bar"
 
 export default function LoadsPage() {
@@ -76,25 +75,6 @@ export default function LoadsPage() {
     loadLoads()
   }, [])
 
-  // Real-time updates for loads
-  useRealtimeSubscription("loads", {
-    event: "*",
-    onInsert: (newLoad) => {
-      setLoadsList((prev) => [newLoad, ...prev])
-      toast.success("New load added")
-    },
-    onUpdate: (updatedLoad) => {
-      setLoadsList((prev) =>
-        prev.map((load) => (load.id === updatedLoad.id ? updatedLoad : load))
-      )
-    },
-    onDelete: (deletedLoad) => {
-      setLoadsList((prev) => prev.filter((load) => load.id !== deletedLoad.id))
-      if (selectedLoad?.id === deletedLoad.id) {
-        setSelectedLoad(null)
-      }
-    },
-  })
 
   // Filter and sort loads
   useEffect(() => {
@@ -552,21 +532,25 @@ export default function LoadsPage() {
                     })() : "N/A"}</p>
                   </div>
                   <div className="flex gap-2 pt-4 border-t border-border/30">
-                    <Link href={`/dashboard/loads/${load.id}`}>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 border-border/50 bg-transparent hover:bg-secondary/50"
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        View Details
-                      </Button>
-                    </Link>
-                    <Link href={`/dashboard/loads/${load.id}/edit`}>
-                      <Button variant="outline" size="sm" className="border-border/50 bg-transparent hover:bg-secondary/50">
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                    </Link>
+                    {load.id && typeof load.id === 'string' && load.id.trim() !== '' ? (
+                      <>
+                        <Link href={`/dashboard/loads/${load.id}`}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 border-border/50 bg-transparent hover:bg-secondary/50"
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            View Details
+                          </Button>
+                        </Link>
+                        <Link href={`/dashboard/loads/${load.id}/edit`}>
+                          <Button variant="outline" size="sm" className="border-border/50 bg-transparent hover:bg-secondary/50">
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                        </Link>
+                      </>
+                    ) : null}
                     <Button
                       variant="outline"
                       size="sm"

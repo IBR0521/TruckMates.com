@@ -220,16 +220,25 @@ export default function CustomersPage() {
                     onClick={() => router.push(`/dashboard/customers/${customer.id}`)}
                   >
                     <td className="p-4">
-                      <Link 
-                        href={`/dashboard/customers/${customer.id}`}
-                        className="block hover:text-primary transition"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="font-medium text-foreground">{customer.name}</div>
-                        {customer.email && (
-                          <div className="text-sm text-muted-foreground">{customer.email}</div>
-                        )}
-                      </Link>
+                      {customer.id && typeof customer.id === 'string' && customer.id.trim() !== '' ? (
+                        <Link 
+                          href={`/dashboard/customers/${customer.id}`}
+                          className="block hover:text-primary transition"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="font-medium text-foreground">{customer.name}</div>
+                          {customer.email && (
+                            <div className="text-sm text-muted-foreground">{customer.email}</div>
+                          )}
+                        </Link>
+                      ) : (
+                        <>
+                          <div className="font-medium text-foreground">{customer.name}</div>
+                          {customer.email && (
+                            <div className="text-sm text-muted-foreground">{customer.email}</div>
+                          )}
+                        </>
+                      )}
                     </td>
                     <td className="p-4 text-foreground">{customer.company_name || "—"}</td>
                     <td className="p-4">
@@ -261,24 +270,28 @@ export default function CustomersPage() {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                        <Link href={`/dashboard/customers/${customer.id}`}>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        </Link>
-                        <Link href={`/dashboard/customers/${customer.id}/edit`}>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                        </Link>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteId(customer.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {customer.id && typeof customer.id === 'string' && customer.id.trim() !== '' ? (
+                          <>
+                            <Link href={`/dashboard/customers/${customer.id}`}>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </Link>
+                            <Link href={`/dashboard/customers/${customer.id}/edit`}>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                            </Link>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              onClick={() => setDeleteId(customer.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

@@ -26,7 +26,6 @@ import {
   getELDEvents,
   syncELDData
 } from "@/app/actions/eld"
-import { canUseELD, canAccessFeature } from "@/app/actions/subscription-limits"
 import { getTrucks } from "@/app/actions/trucks"
 import { Input } from "@/components/ui/input"
 import {
@@ -62,7 +61,6 @@ export default function ELDPage() {
   const [devices, setDevices] = useState<any[]>([])
   const [events, setEvents] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [canAccessELD, setCanAccessELD] = useState<boolean | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
@@ -88,14 +86,6 @@ export default function ELDPage() {
   })
 
   useEffect(() => {
-    async function checkAccess() {
-      const result = await canUseELD()
-      setCanAccessELD(result.allowed)
-      if (!result.allowed && result.error) {
-        toast.error(result.error)
-      }
-    }
-    checkAccess()
     loadData()
     loadTrucks()
   }, [])
@@ -200,7 +190,7 @@ export default function ELDPage() {
     }
   }
 
-  if (isLoading || canAccessELD === null) {
+  if (isLoading) {
     return (
       <div className="w-full">
         <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
@@ -215,31 +205,6 @@ export default function ELDPage() {
     )
   }
 
-  if (canAccessELD === false) {
-    return (
-      <div className="w-full">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
-          <h1 className="text-2xl font-bold text-foreground">ELD Service</h1>
-        </div>
-        <div className="p-4 md:p-8">
-          <div className="max-w-6xl mx-auto">
-            <Card className="p-8 text-center">
-              <Shield className="w-16 h-16 text-primary mx-auto mb-4 opacity-50" />
-              <h2 className="text-2xl font-bold text-foreground mb-2">ELD Service Not Available</h2>
-              <p className="text-muted-foreground mb-6">
-                ELD integration is only available in Professional and Enterprise plans.
-              </p>
-              <Link href="/plans">
-                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                  Upgrade Plan
-                </Button>
-              </Link>
-            </Card>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="w-full">
@@ -550,12 +515,14 @@ export default function ELDPage() {
                   </div>
 
                   <div className="flex gap-2">
-                    <Link href={`/dashboard/eld/devices/${device.id}`} className="flex-1">
-                      <Button variant="outline" className="w-full" size="sm">
-                        <Activity className="w-4 h-4 mr-2" />
-                        View Details
-                      </Button>
-                    </Link>
+                    {device.id && typeof device.id === 'string' && device.id.trim() !== '' ? (
+                      <Link href={`/dashboard/eld/devices/${device.id}`} className="flex-1">
+                        <Button variant="outline" className="w-full" size="sm">
+                          <Activity className="w-4 h-4 mr-2" />
+                          View Details
+                        </Button>
+                      </Link>
+                    ) : null}
                     {device.status === "active" && device.api_key && (
                       <Button
                         variant="outline"

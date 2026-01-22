@@ -642,9 +642,11 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                 <p className="text-sm text-muted-foreground mb-4">
                   This load is set to multi-delivery but no delivery points have been added yet.
                 </p>
-                <Link href={`/dashboard/loads/${id}/edit`}>
-                  <Button variant="outline">Add Delivery Points</Button>
-                </Link>
+                {id && typeof id === 'string' && id.trim() !== '' ? (
+                  <Link href={`/dashboard/loads/${id}/edit`}>
+                    <Button variant="outline">Add Delivery Points</Button>
+                  </Link>
+                ) : null}
               </div>
             </Card>
           ) : null}
@@ -948,12 +950,14 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
               {relatedInvoice && (
                 <div className="mt-4 pt-4 border-t border-border">
                     <p className="text-sm text-muted-foreground mb-2">Related Invoice</p>
-                    <Link href={`/dashboard/accounting/invoices/${relatedInvoice.id}`}>
-                    <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                        <FileText className="w-4 h-4 mr-2" />
-                        View Invoice {relatedInvoice.invoice_number}
-                      </Button>
-                    </Link>
+                    {relatedInvoice.id && typeof relatedInvoice.id === 'string' && relatedInvoice.id.trim() !== '' ? (
+                      <Link href={`/dashboard/accounting/invoices/${relatedInvoice.id}`}>
+                        <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                          <FileText className="w-4 h-4 mr-2" />
+                          View Invoice {relatedInvoice.invoice_number}
+                        </Button>
+                      </Link>
+                    ) : null}
                   </div>
                 )}
             </div>
@@ -1182,11 +1186,13 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                     </div>
                   </div>
                 )}
-                <Link href={`/dashboard/routes/${matchingRoute.id}`}>
-                  <Button variant="outline" className="w-full">
-                    View Full Route Details
-                  </Button>
-                </Link>
+                {matchingRoute.id && typeof matchingRoute.id === 'string' && matchingRoute.id.trim() !== '' ? (
+                  <Link href={`/dashboard/routes/${matchingRoute.id}`}>
+                    <Button variant="outline" className="w-full">
+                      View Full Route Details
+                    </Button>
+                  </Link>
+                ) : null}
               </div>
           </DetailSection>
           ) : (

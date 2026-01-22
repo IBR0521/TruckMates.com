@@ -28,6 +28,7 @@ import { toast } from "sonner"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { getTrucks } from "@/app/actions/trucks"
 import { getVendors } from "@/app/actions/vendors"
+import { createMaintenance } from "@/app/actions/maintenance"
 
 export default function AddMaintenancePage() {
   const router = useRouter()
@@ -61,12 +62,31 @@ export default function AddMaintenancePage() {
     e.preventDefault()
     setIsSubmitting(true)
     
-    // TODO: Call createMaintenance action
-    toast.success("Maintenance scheduled successfully")
-    setTimeout(() => {
-      router.push("/dashboard/maintenance")
-    }, 500)
+    if (!formData.truck_id || !formData.service_type || !formData.scheduled_date) {
+      toast.error("Please fill in all required fields")
+      setIsSubmitting(false)
+      return
+    }
+
+    const result = await createMaintenance({
+      truck_id: formData.truck_id,
+      service_type: formData.service_type,
+      scheduled_date: formData.scheduled_date,
+      current_mileage: formData.current_mileage ? Number(formData.current_mileage) : undefined,
+      priority: formData.priority,
+      estimated_cost: formData.estimated_cost ? Number(formData.estimated_cost) : undefined,
+      notes: formData.notes || undefined,
+      vendor_id: formData.vendor_id || undefined,
+    })
+
     setIsSubmitting(false)
+
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success("Maintenance scheduled successfully")
+      router.push("/dashboard/maintenance")
+    }
   }
 
   return (

@@ -277,9 +277,13 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
               <InfoField
                 label="Truck Number"
                 value={
-                  <Link href={`/dashboard/trucks/${truck.id}`} className="text-primary hover:underline font-semibold">
-                    {truck.truck_number || "—"}
-                  </Link>
+                  truck.id && typeof truck.id === 'string' && truck.id.trim() !== '' ? (
+                    <Link href={`/dashboard/trucks/${truck.id}`} className="text-primary hover:underline font-semibold">
+                      {truck.truck_number || "—"}
+                    </Link>
+                  ) : (
+                    <span>{truck.truck_number || "—"}</span>
+                  )
                 }
               />
               {truck.make && truck.model && (

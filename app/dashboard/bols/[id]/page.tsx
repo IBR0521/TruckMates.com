@@ -177,11 +177,13 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
             <Download className="w-4 h-4 mr-2" />
             Download PDF
           </Button>
-          <Link href={`/dashboard/loads/${bol.load_id}`}>
-            <Button variant="outline" size="sm">
-              View Load
-            </Button>
-          </Link>
+          {bol.load_id && typeof bol.load_id === 'string' && bol.load_id.trim() !== '' ? (
+            <Link href={`/dashboard/loads/${bol.load_id}`}>
+              <Button variant="outline" size="sm">
+                View Load
+              </Button>
+            </Link>
+          ) : null}
         </div>
       </div>
 

@@ -289,16 +289,20 @@ export default function VendorsPage() {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-end gap-2">
-                        <Link href={`/dashboard/vendors/${vendor.id}`}>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        </Link>
-                        <Link href={`/dashboard/vendors/${vendor.id}/edit`}>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                        </Link>
+                        {vendor.id && typeof vendor.id === 'string' && vendor.id.trim() !== '' ? (
+                          <>
+                            <Link href={`/dashboard/vendors/${vendor.id}`}>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </Link>
+                            <Link href={`/dashboard/vendors/${vendor.id}/edit`}>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                            </Link>
+                          </>
+                        ) : null}
                         <Button
                           variant="ghost"
                           size="sm"

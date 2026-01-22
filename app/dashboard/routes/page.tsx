@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { exportToExcel } from "@/lib/export-utils"
 import { toast } from "sonner"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import {
   AlertDialog,
@@ -21,8 +21,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { getRoutes, deleteRoute } from "@/app/actions/routes"
+import { getRoutes, deleteRoute, updateRoute, duplicateRoute } from "@/app/actions/routes"
 import { getRouteStops } from "@/app/actions/route-stops"
+import { InlineStatusSelect } from "@/components/dashboard/inline-status-select"
+import { useListPageShortcuts } from "@/lib/hooks/use-keyboard-shortcuts"
+import { Copy } from "lucide-react"
 
 export default function RoutesPage() {
   const router = useRouter()
@@ -33,6 +36,7 @@ export default function RoutesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [sortBy, setSortBy] = useState("created_at")
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const loadRoutes = async () => {
     setIsLoading(true)
@@ -122,6 +126,32 @@ export default function RoutesPage() {
     }
   }
 
+  const handleStatusUpdate = async (id: string, status: string) => {
+    const result = await updateRoute(id, { status })
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success("Status updated successfully")
+      await loadRoutes()
+    }
+  }
+
+  const handleDuplicate = async (id: string) => {
+    const result = await duplicateRoute(id)
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success("Route duplicated successfully")
+      await loadRoutes()
+      if (result.data) {
+        router.push(`/dashboard/routes/${result.data.id}/edit`)
+      }
+    }
+  }
+
+  // Keyboard shortcuts
+  useListPageShortcuts(router, "/dashboard/routes/add", searchInputRef)
+
   return (
     <div className="w-full">
       {/* Page Header */}
@@ -191,21 +221,11 @@ export default function RoutesPage() {
               >
                 <div className="flex items-start justify-between mb-4">
                   <h3 className="text-lg font-bold text-foreground">{route.name}</h3>
-                  <Badge
-                    className={
-                      route.status === "completed"
-                        ? "bg-green-500/20 text-green-400 border-green-500/50"
-                        : route.status === "in_progress"
-                        ? "bg-blue-500/20 text-blue-400 border-blue-500/50"
-                        : route.status === "scheduled"
-                        ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/50"
-                        : route.status === "cancelled"
-                        ? "bg-red-500/20 text-red-400 border-red-500/50"
-                        : "bg-gray-500/20 text-gray-400 border-gray-500/50"
-                    }
-                  >
-                    {route.status ? route.status.charAt(0).toUpperCase() + route.status.slice(1).replace("_", " ") : "Pending"}
-                  </Badge>
+                  <InlineStatusSelect
+                    currentStatus={route.status || "pending"}
+                    availableStatuses={["pending", "scheduled", "in_progress", "completed", "cancelled"]}
+                    onStatusChange={(newStatus) => handleStatusUpdate(route.id, newStatus)}
+                  />
                 </div>
                 <div className="space-y-3 mb-6 border-t border-border/30 pt-4">
                   <div className="flex items-center gap-2">
@@ -252,11 +272,22 @@ export default function RoutesPage() {
                     <Eye className="w-4 h-4 mr-1" />
                     View
                   </Button>
-                  <Link href={`/dashboard/routes/${route.id}/edit`}>
-                    <Button variant="outline" size="sm" className="border-border/50 bg-transparent hover:bg-secondary/50">
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                  </Link>
+                  {route.id && typeof route.id === 'string' && route.id.trim() !== '' ? (
+                    <Link href={`/dashboard/routes/${route.id}/edit`}>
+                      <Button variant="outline" size="sm" className="border-border/50 bg-transparent hover:bg-secondary/50">
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                    </Link>
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-border/50 bg-transparent hover:bg-blue-500/20"
+                    onClick={() => handleDuplicate(route.id)}
+                    title="Duplicate route"
+                  >
+                    <Copy className="w-4 h-4 text-blue-400" />
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"

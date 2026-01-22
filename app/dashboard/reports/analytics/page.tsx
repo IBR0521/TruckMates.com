@@ -153,7 +153,7 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard/reports">
+          <Link href="/dashboard">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="w-4 h-4" />
             </Button>

@@ -234,11 +234,13 @@ export default function DispatchesPage() {
                           )}
                         </div>
                       </div>
-                      <Link href={`/dashboard/loads/${load.id}`}>
-                        <Button variant="ghost" size="sm">
-                          <ExternalLink className="w-4 h-4" />
-                        </Button>
-                      </Link>
+                      {load.id && typeof load.id === 'string' && load.id.trim() !== '' ? (
+                        <Link href={`/dashboard/loads/${load.id}`}>
+                          <Button variant="ghost" size="sm">
+                            <ExternalLink className="w-4 h-4" />
+                          </Button>
+                        </Link>
+                      ) : null}
                     </div>
 
                     <div className="space-y-3 pt-3 border-t border-border">
@@ -339,11 +341,13 @@ export default function DispatchesPage() {
                           )}
                         </div>
                       </div>
-                      <Link href={`/dashboard/routes/${route.id}`}>
-                        <Button variant="ghost" size="sm">
-                          <ExternalLink className="w-4 h-4" />
-                        </Button>
-                      </Link>
+                      {route.id && typeof route.id === 'string' && route.id.trim() !== '' ? (
+                        <Link href={`/dashboard/routes/${route.id}`}>
+                          <Button variant="ghost" size="sm">
+                            <ExternalLink className="w-4 h-4" />
+                          </Button>
+                        </Link>
+                      ) : null}
                     </div>
 
                     <div className="space-y-3 pt-3 border-t border-border">

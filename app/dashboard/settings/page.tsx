@@ -27,7 +27,6 @@ import { useEffect, useState } from "react"
 import { getCompany, updateCompany } from "@/app/actions/company"
 import { getUserProfile } from "@/app/actions/user"
 import { getNotificationPreferences, updateNotificationPreferences, sendTestEmail, checkEmailConfiguration } from "@/app/actions/notifications"
-import { SubscriptionSection } from "./subscription-section"
 import Link from "next/link"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -666,10 +665,6 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          {/* Billing & Subscription - Only for Managers */}
-          {isManager && (
-            <SubscriptionSection />
-          )}
         </div>
       </div>
     </div>

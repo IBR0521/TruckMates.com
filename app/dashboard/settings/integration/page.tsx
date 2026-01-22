@@ -33,6 +33,9 @@ export default function IntegrationSettingsPage() {
     paypal_client_id: "",
     google_maps_enabled: false,
     google_maps_api_key: "",
+    resend_enabled: false,
+    resend_api_key: "",
+    resend_from_email: "",
   })
 
   useEffect(() => {
@@ -54,6 +57,9 @@ export default function IntegrationSettingsPage() {
             paypal_client_id: result.data.paypal_client_id || "",
             google_maps_enabled: result.data.google_maps_enabled || false,
             google_maps_api_key: result.data.google_maps_api_key || "",
+            resend_enabled: result.data.resend_enabled || false,
+            resend_api_key: result.data.resend_api_key || "",
+            resend_from_email: result.data.resend_from_email || "",
           })
         }
       } catch (error) {
@@ -79,6 +85,9 @@ export default function IntegrationSettingsPage() {
         paypal_client_id: integrations.paypal_client_id,
         google_maps_enabled: integrations.google_maps_enabled,
         google_maps_api_key: integrations.google_maps_api_key,
+        resend_enabled: integrations.resend_enabled,
+        resend_api_key: integrations.resend_api_key,
+        resend_from_email: integrations.resend_from_email,
       })
 
       if (result.error) {
@@ -279,6 +288,60 @@ export default function IntegrationSettingsPage() {
                   placeholder="Enter Google Maps API key"
                   disabled={!integrations.google_maps_enabled}
                 />
+              </div>
+            </div>
+
+            {/* Resend Email */}
+            <div className="border rounded-lg p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                <div className="flex-1">
+                  <h3 className="font-semibold">Resend Email</h3>
+                  <p className="text-sm text-muted-foreground">Send invoices and notifications via email</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {integrations.resend_enabled ? (
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <XCircle className="w-5 h-5 text-muted-foreground" />
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Enable Resend</Label>
+                  <Switch
+                    checked={integrations.resend_enabled}
+                    onCheckedChange={(checked) => setIntegrations({
+                      ...integrations,
+                      resend_enabled: checked
+                    })}
+                  />
+                </div>
+                <Label>API Key</Label>
+                <Input
+                  type="password"
+                  value={integrations.resend_api_key}
+                  onChange={(e) => setIntegrations({
+                    ...integrations,
+                    resend_api_key: e.target.value
+                  })}
+                  placeholder="Enter Resend API key (re_...)"
+                  disabled={!integrations.resend_enabled}
+                />
+                <Label>From Email</Label>
+                <Input
+                  type="email"
+                  value={integrations.resend_from_email}
+                  onChange={(e) => setIntegrations({
+                    ...integrations,
+                    resend_from_email: e.target.value
+                  })}
+                  placeholder="TruckMates <notifications@yourdomain.com>"
+                  disabled={!integrations.resend_enabled}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use your verified domain email or onboarding@resend.dev for testing
+                </p>
               </div>
             </div>
           </div>

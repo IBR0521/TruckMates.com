@@ -381,7 +381,20 @@ export default function AddLoadPage() {
                           <div className="flex gap-2 mt-3">
                             <Button type="button" size="sm" onClick={async () => {
                               if (!newCustomer.name) { toast.error("Name required"); return }
-                              const result = await createCustomer({ ...newCustomer, customer_type: formData.customerType })
+                              const result = await createCustomer({ 
+                                name: newCustomer.name,
+                                email: newCustomer.email || undefined,
+                                phone: newCustomer.phone || undefined,
+                                address_line1: newCustomer.address || undefined,
+                                city: newCustomer.city || undefined,
+                                state: newCustomer.state || undefined,
+                                zip: newCustomer.zip || undefined,
+                                customer_type: formData.customerType 
+                              })
+                              if (result.error) {
+                                toast.error(result.error)
+                                return
+                              }
                               if (result.data) {
                                 setCustomers([...customers, result.data])
                                 setSelectedCustomer(result.data)

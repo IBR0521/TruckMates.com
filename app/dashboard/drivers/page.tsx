@@ -502,11 +502,13 @@ export default function DriversPage() {
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Link href={`/dashboard/drivers/${driver.id}/edit`}>
-                              <Button variant="ghost" size="sm" className="hover:bg-secondary/50">
-                                <Edit2 className="w-4 h-4" />
-                              </Button>
-                            </Link>
+                            {driver.id && typeof driver.id === 'string' && driver.id.trim() !== '' ? (
+                              <Link href={`/dashboard/drivers/${driver.id}/edit`}>
+                                <Button variant="ghost" size="sm" className="hover:bg-secondary/50">
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
+                              </Link>
+                            ) : null}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -614,12 +616,14 @@ export default function DriversPage() {
                           <Eye className="w-4 h-4 mr-2" />
                           View
                         </Button>
-                        <Link href={`/dashboard/drivers/${driver.id}/edit`} className="flex-1">
-                          <Button variant="outline" size="sm" className="w-full">
-                            <Edit2 className="w-4 h-4 mr-2" />
-                            Edit
-                          </Button>
-                        </Link>
+                        {driver.id && typeof driver.id === 'string' && driver.id.trim() !== '' ? (
+                          <Link href={`/dashboard/drivers/${driver.id}/edit`} className="flex-1">
+                            <Button variant="outline" size="sm" className="w-full">
+                              <Edit2 className="w-4 h-4 mr-2" />
+                              Edit
+                            </Button>
+                          </Link>
+                        ) : null}
                         <Button
                           variant="outline"
                           size="sm"

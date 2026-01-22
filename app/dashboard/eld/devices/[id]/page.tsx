@@ -270,11 +270,13 @@ export default function ELDDeviceDetailsPage() {
                         </p>
                       </div>
                     )}
-                    <Link href={`/dashboard/trucks/${device.trucks.id}`}>
-                      <Button variant="outline" size="sm">
-                        View Truck Details
-                      </Button>
-                    </Link>
+                    {device.trucks?.id && typeof device.trucks.id === 'string' && device.trucks.id.trim() !== '' ? (
+                      <Link href={`/dashboard/trucks/${device.trucks.id}`}>
+                        <Button variant="outline" size="sm">
+                          View Truck Details
+                        </Button>
+                      </Link>
+                    ) : null}
                   </div>
                 ) : (
                   <p className="text-muted-foreground">No truck assigned</p>
@@ -299,11 +301,13 @@ export default function ELDDeviceDetailsPage() {
                   <FileText className="w-5 h-5 text-primary" />
                   <h2 className="text-xl font-semibold">Recent Logs</h2>
                 </div>
-                <Link href={`/dashboard/eld/logs?device=${deviceId}`}>
-                  <Button variant="outline" size="sm">
-                    View All Logs
-                  </Button>
-                </Link>
+                {deviceId && typeof deviceId === 'string' && deviceId.trim() !== '' ? (
+                  <Link href={`/dashboard/eld/logs?device=${deviceId}`}>
+                    <Button variant="outline" size="sm">
+                      View All Logs
+                    </Button>
+                  </Link>
+                ) : null}
               </div>
               {logs.length > 0 ? (
                 <div className="space-y-4">
@@ -353,11 +357,13 @@ export default function ELDDeviceDetailsPage() {
                   <AlertCircle className="w-5 h-5 text-primary" />
                   <h2 className="text-xl font-semibold">Recent Events</h2>
                 </div>
-                <Link href={`/dashboard/eld/violations?device=${deviceId}`}>
-                  <Button variant="outline" size="sm">
-                    View All Events
-                  </Button>
-                </Link>
+                {deviceId && typeof deviceId === 'string' && deviceId.trim() !== '' ? (
+                  <Link href={`/dashboard/eld/violations?device=${deviceId}`}>
+                    <Button variant="outline" size="sm">
+                      View All Events
+                    </Button>
+                  </Link>
+                ) : null}
               </div>
               {events.length > 0 ? (
                 <div className="space-y-4">

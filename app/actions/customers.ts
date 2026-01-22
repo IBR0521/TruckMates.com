@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
-import { validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
+import { validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone, validateRequiredString, stateNameToCode } from "@/lib/validation"
 
 // Get all customers
 export async function getCustomers(filters?: {
@@ -189,10 +189,14 @@ export async function createCustomer(formData: {
 
   // Validate addresses if provided
   if (formData.city || formData.state || formData.zip) {
+    // Convert state name to code for validation
+    const stateForValidation = formData.state || formData.physical_state
+    const stateCode = stateForValidation ? (stateNameToCode(stateForValidation) || stateForValidation.toUpperCase().trim()) : undefined
+    
     const addressValidation = validateAddress({
       street: formData.address_line1 || formData.physical_address_line1,
       city: formData.city || formData.physical_city,
-      state: formData.state || formData.physical_state,
+      state: stateCode,
       zip: formData.zip || formData.physical_zip,
     })
     if (!addressValidation.valid) {
@@ -240,25 +244,9 @@ export async function createCustomer(formData: {
       address_line1: (formData.address_line1 || formData.physical_address_line1) ? sanitizeString(formData.address_line1 || formData.physical_address_line1, 200) : null,
       address_line2: (formData.address_line2 || formData.physical_address_line2) ? sanitizeString(formData.address_line2 || formData.physical_address_line2, 200) : null,
       city: (formData.city || formData.physical_city) ? sanitizeString(formData.city || formData.physical_city, 100) : null,
-      state: (formData.state || formData.physical_state) ? sanitizeString(formData.state || formData.physical_state, 2).toUpperCase() : null,
+      state: (formData.state || formData.physical_state) ? (stateNameToCode(formData.state || formData.physical_state) || sanitizeString(formData.state || formData.physical_state, 2).toUpperCase()) : null,
       zip: (formData.zip || formData.physical_zip) ? sanitizeString(formData.zip || formData.physical_zip, 10) : null,
       country: formData.country || formData.physical_country || "USA",
-      mailing_address_line1: formData.mailing_address_line1 || null,
-      mailing_address_line2: formData.mailing_address_line2 || null,
-      mailing_city: formData.mailing_city || null,
-      mailing_state: formData.mailing_state || null,
-      mailing_zip: formData.mailing_zip || null,
-      mailing_country: formData.mailing_country || "USA",
-      physical_address_line1: formData.physical_address_line1 || null,
-      physical_address_line2: formData.physical_address_line2 || null,
-      physical_city: formData.physical_city || null,
-      physical_state: formData.physical_state || null,
-      physical_zip: formData.physical_zip || null,
-      physical_country: formData.physical_country || "USA",
-      facebook_url: formData.facebook_url || null,
-      twitter_url: formData.twitter_url || null,
-      linkedin_url: formData.linkedin_url || null,
-      instagram_url: formData.instagram_url || null,
       tax_id: formData.tax_id || null,
       payment_terms: formData.payment_terms || "Net 30",
       credit_limit: formData.credit_limit || null,
@@ -267,7 +255,6 @@ export async function createCustomer(formData: {
       status: formData.status || "active",
       priority: formData.priority || "normal",
       notes: formData.notes ? sanitizeString(formData.notes, 2000) : null,
-      terms: formData.terms ? sanitizeString(formData.terms, 2000) : null,
       tags: formData.tags || [],
       primary_contact_name: formData.primary_contact_name ? sanitizeString(formData.primary_contact_name, 100) : null,
       primary_contact_email: formData.primary_contact_email ? sanitizeEmail(formData.primary_contact_email) : null,

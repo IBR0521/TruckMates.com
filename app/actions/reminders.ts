@@ -214,6 +214,11 @@ export async function completeReminder(id: string) {
     )
 
     if (nextDueDate) {
+      // Calculate reminder date for next occurrence (1 day before due date)
+      const nextReminderDate = new Date(nextDueDate)
+      nextReminderDate.setDate(nextReminderDate.getDate() - 1)
+      const nextReminderDateStr = nextReminderDate.toISOString().split('T')[0]
+
       await supabase
         .from("reminders")
         .insert({
@@ -223,7 +228,7 @@ export async function completeReminder(id: string) {
           reminder_type: reminder.reminder_type,
           due_date: nextDueDate,
           due_time: reminder.due_time,
-          reminder_date: reminder.reminder_date,
+          reminder_date: nextReminderDateStr,
           reminder_time: reminder.reminder_time,
           is_recurring: true,
           recurrence_pattern: reminder.recurrence_pattern,

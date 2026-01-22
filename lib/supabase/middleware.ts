@@ -79,7 +79,7 @@ export async function updateSession(request: NextRequest) {
     user = null
   }
 
-  // Only redirect if auth check completed AND user is null AND we're trying to access dashboard
+  // Only redirect if auth check completed AND user is null AND we're trying to access dashboard or marketplace dashboard
   // If timeout occurred, let the page handle authentication
   // This ensures users stay logged in even if there are temporary network issues
   if (
@@ -91,7 +91,8 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith('/demo') &&
     !request.nextUrl.pathname.startsWith('/privacy') &&
     !request.nextUrl.pathname.startsWith('/terms') &&
-    request.nextUrl.pathname.startsWith('/dashboard')
+    !request.nextUrl.pathname.startsWith('/marketplace') && // Public marketplace pages are allowed
+    (request.nextUrl.pathname.startsWith('/dashboard') || request.nextUrl.pathname.startsWith('/marketplace/dashboard'))
   ) {
     // Auth check completed and no user found - redirect to login
     const url = request.nextUrl.clone()

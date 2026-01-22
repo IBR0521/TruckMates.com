@@ -92,7 +92,7 @@ export default function AlertsPage() {
       case "acknowledged":
         return <Badge variant="secondary"><Info className="w-3 h-3 mr-1" />Acknowledged</Badge>
       case "resolved":
-        return <Badge variant="success"><CheckCircle2 className="w-3 h-3 mr-1" />Resolved</Badge>
+        return <Badge variant="default" className="bg-green-500/10 text-green-500 border-green-500/20"><CheckCircle2 className="w-3 h-3 mr-1" />Resolved</Badge>
       default:
         return <Badge variant="outline">{status}</Badge>
     }
@@ -224,16 +224,16 @@ export default function AlertsPage() {
                           <Clock className="w-4 h-4" />
                           {format(new Date(alert.created_at), "MMM d, yyyy h:mm a")}
                         </span>
-                        {alert.load_id && (
+                        {alert.load_id && typeof alert.load_id === 'string' && alert.load_id.trim() !== '' ? (
                           <Link href={`/dashboard/loads/${alert.load_id}`} className="text-primary hover:underline">
                             View Load
                           </Link>
-                        )}
-                        {alert.driver_id && (
+                        ) : null}
+                        {alert.driver_id && typeof alert.driver_id === 'string' && alert.driver_id.trim() !== '' ? (
                           <Link href={`/dashboard/drivers/${alert.driver_id}`} className="text-primary hover:underline">
                             View Driver
                           </Link>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">

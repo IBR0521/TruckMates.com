@@ -17,12 +17,29 @@ interface Vehicle {
   }
 }
 
+interface Geofence {
+  id: string
+  name: string
+  zone_type: string
+  center_latitude?: number
+  center_longitude?: number
+  radius_meters?: number
+  polygon_coordinates?: Array<{ lat: number; lng: number }>
+  north_bound?: number
+  south_bound?: number
+  east_bound?: number
+  west_bound?: number
+  is_active: boolean
+}
+
 interface FleetMapProps {
   vehicles: Vehicle[]
   selectedVehicle: string | null
   onVehicleClick: (vehicleId: string) => void
   center: [number, number]
   zoom: number
+  geofences?: Geofence[]
+  showGeofences?: boolean
 }
 
 declare global {
@@ -32,10 +49,11 @@ declare global {
   }
 }
 
-export function FleetMap({ vehicles, selectedVehicle, onVehicleClick, center, zoom }: FleetMapProps) {
+export function FleetMap({ vehicles, selectedVehicle, onVehicleClick, center, zoom, geofences = [], showGeofences = true }: FleetMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const markersRef = useRef<Map<string, any>>(new Map())
+  const geofenceShapesRef = useRef<Map<string, any>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -85,6 +103,18 @@ export function FleetMap({ vehicles, selectedVehicle, onVehicleClick, center, zo
       updateMarkers()
     }
   }, [vehicles, selectedVehicle])
+
+  useEffect(() => {
+    if (mapInstanceRef.current && showGeofences) {
+      updateGeofences()
+    } else if (mapInstanceRef.current && !showGeofences) {
+      // Clear geofences when hidden
+      geofenceShapesRef.current.forEach((shape) => {
+        shape.setMap(null)
+      })
+      geofenceShapesRef.current.clear()
+    }
+  }, [geofences, showGeofences])
 
   useEffect(() => {
     if (mapInstanceRef.current) {
@@ -143,9 +173,36 @@ export function FleetMap({ vehicles, selectedVehicle, onVehicleClick, center, zo
       const lng = Number(vehicle.location.longitude)
       const isSelected = selectedVehicle === vehicle.id
 
-      // Determine marker color based on status
+      // Check if vehicle is inside any geofence
+      const insideZones = geofences
+        .filter((g) => g.is_active)
+        .filter((g) => {
+          if (!g.center_latitude || !g.center_longitude || !g.radius_meters) return false
+          if (g.zone_type !== "circle") return false
+          
+          // Calculate distance using Haversine formula
+          const R = 6371000 // Earth radius in meters
+          const dLat = ((lat - g.center_latitude) * Math.PI) / 180
+          const dLon = ((lng - g.center_longitude) * Math.PI) / 180
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos((g.center_latitude * Math.PI) / 180) *
+              Math.cos((lat * Math.PI) / 180) *
+              Math.sin(dLon / 2) *
+              Math.sin(dLon / 2)
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+          const distance = R * c
+          return distance <= g.radius_meters
+        })
+        .map((g) => g.name)
+
+      const isInsideZone = insideZones.length > 0
+
+      // Determine marker color based on status and zone
       let iconColor = "#6B7280" // gray (default)
-      if (vehicle.status === "in_use" || vehicle.status === "in-use") {
+      if (isInsideZone) {
+        iconColor = "#3B82F6" // blue (inside zone)
+      } else if (vehicle.status === "in_use" || vehicle.status === "in-use") {
         iconColor = "#10B981" // green
       } else if (vehicle.status === "maintenance") {
         iconColor = "#F59E0B" // yellow
@@ -177,6 +234,7 @@ export function FleetMap({ vehicles, selectedVehicle, onVehicleClick, center, zo
           </div>
           ${vehicle.driver ? `<div style="font-size: 12px; color: #6B7280; margin-bottom: 4px;">${vehicle.driver.name}</div>` : ""}
           ${vehicle.location.speed ? `<div style="font-size: 12px; color: #6B7280;">Speed: ${vehicle.location.speed} mph</div>` : ""}
+          ${insideZones.length > 0 ? `<div style="font-size: 11px; color: #3B82F6; margin-top: 4px; font-weight: 500;">📍 Inside: ${insideZones.join(", ")}</div>` : ""}
           <div style="font-size: 11px; color: #9CA3AF; margin-top: 4px;">
             ${new Date(vehicle.location.timestamp).toLocaleTimeString()}
           </div>
@@ -199,6 +257,106 @@ export function FleetMap({ vehicles, selectedVehicle, onVehicleClick, center, zo
       })
 
       markersRef.current.set(vehicle.id, { marker, infoWindow })
+    })
+  }
+
+  const updateGeofences = () => {
+    if (!mapInstanceRef.current || !window.google) return
+
+    const map = mapInstanceRef.current
+
+    // Clear existing geofence shapes
+    geofenceShapesRef.current.forEach((shape) => {
+      shape.setMap(null)
+    })
+    geofenceShapesRef.current.clear()
+
+    // Only show active geofences
+    const activeGeofences = geofences.filter((g) => g.is_active)
+
+    activeGeofences.forEach((geofence) => {
+      if (geofence.zone_type === "circle" && geofence.center_latitude && geofence.center_longitude && geofence.radius_meters) {
+        const circle = new window.google.maps.Circle({
+          strokeColor: "#3B82F6",
+          strokeOpacity: 0.8,
+          strokeWeight: 2,
+          fillColor: "#3B82F6",
+          fillOpacity: 0.15,
+          map: map,
+          center: {
+            lat: geofence.center_latitude,
+            lng: geofence.center_longitude,
+          },
+          radius: geofence.radius_meters,
+          zIndex: 1,
+        })
+
+        // Add info window on click
+        const infoWindow = new window.google.maps.InfoWindow({
+          content: `
+            <div style="padding: 8px; min-width: 150px;">
+              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">
+                ${geofence.name}
+              </div>
+              <div style="font-size: 12px; color: #6B7280;">
+                Geofence Zone
+              </div>
+              <div style="font-size: 11px; color: #9CA3AF; margin-top: 4px;">
+                ${(geofence.radius_meters / 1000).toFixed(2)} km radius
+              </div>
+            </div>
+          `,
+        })
+
+        circle.addListener("click", () => {
+          infoWindow.setPosition({ lat: geofence.center_latitude!, lng: geofence.center_longitude! })
+          infoWindow.open(map)
+        })
+
+        geofenceShapesRef.current.set(geofence.id, { circle, infoWindow })
+      } else if (geofence.zone_type === "polygon" && geofence.polygon_coordinates && geofence.polygon_coordinates.length > 0) {
+        const polygonPath = geofence.polygon_coordinates.map((coord) => ({
+          lat: coord.lat || coord.latitude,
+          lng: coord.lng || coord.longitude,
+        }))
+
+        const polygon = new window.google.maps.Polygon({
+          paths: polygonPath,
+          strokeColor: "#3B82F6",
+          strokeOpacity: 0.8,
+          strokeWeight: 2,
+          fillColor: "#3B82F6",
+          fillOpacity: 0.15,
+          map: map,
+          zIndex: 1,
+        })
+
+        geofenceShapesRef.current.set(geofence.id, polygon)
+      } else if (
+        geofence.zone_type === "rectangle" &&
+        geofence.north_bound &&
+        geofence.south_bound &&
+        geofence.east_bound &&
+        geofence.west_bound
+      ) {
+        const rectangle = new window.google.maps.Rectangle({
+          bounds: {
+            north: geofence.north_bound,
+            south: geofence.south_bound,
+            east: geofence.east_bound,
+            west: geofence.west_bound,
+          },
+          strokeColor: "#3B82F6",
+          strokeOpacity: 0.8,
+          strokeWeight: 2,
+          fillColor: "#3B82F6",
+          fillOpacity: 0.15,
+          map: map,
+          zIndex: 1,
+        })
+
+        geofenceShapesRef.current.set(geofence.id, rectangle)
+      }
     })
   }
 

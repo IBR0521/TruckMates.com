@@ -180,7 +180,7 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
   // Get settlements
   let settlementsQuery = supabase
     .from("settlements")
-    .select("*, drivers(name)")
+    .select("*")
     .eq("company_id", companyId)
     .eq("status", "paid")
 
@@ -200,6 +200,12 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
     .from("drivers")
     .select("id, name")
     .eq("company_id", companyId)
+
+  // Create driver lookup map
+  const driverMap = new Map<string, string>()
+  drivers?.forEach((driver) => {
+    driverMap.set(driver.id, driver.name)
+  })
 
   // Get all settlements for YTD calculation
   const currentYear = new Date().getFullYear()
@@ -233,7 +239,7 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
 
   settlements?.forEach((settlement) => {
     const driverId = settlement.driver_id
-    const driverName = (settlement.drivers as any)?.name || "Unknown Driver"
+    const driverName = driverMap.get(driverId) || "Unknown Driver"
     const loads = Array.isArray(settlement.loads) ? settlement.loads.length : 0
 
     if (!paymentsByDriver[driverId]) {

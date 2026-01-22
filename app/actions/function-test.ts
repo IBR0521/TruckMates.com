@@ -22,8 +22,6 @@ import * as userActions from "./user"
 import * as companyActions from "./company"
 import * as employeesActions from "./employees"
 import * as notificationsActions from "./notifications"
-import * as subscriptionActions from "./subscriptions"
-import * as subscriptionLimitsActions from "./subscription-limits"
 import * as eldAdvancedActions from "./eld-advanced"
 import * as eldInsightsActions from "./eld-insights"
 import * as routeStopsActions from "./route-stops"
@@ -1263,90 +1261,7 @@ export async function testAllPlatformFunctions() {
       pushFailed({ function: "checkEmailConfiguration", error: error.message })
     }
 
-    // ============================================
-    // 20. SUBSCRIPTION FUNCTIONS
-    // ============================================
-    console.log(`[FUNCTION TEST] Testing Subscription functions...`)
-    try {
-      const plans = await subscriptionActions.getSubscriptionPlans()
-      pushTested("getSubscriptionPlans")
-      if (plans.data) pushPassed("getSubscriptionPlans")
-      else pushFailed({ function: "getSubscriptionPlans", error: plans.error })
-    } catch (error: any) {
-      pushFailed({ function: "getSubscriptionPlans", error: plans.error })
-    }
 
-    try {
-      const currentSub = await subscriptionActions.getCurrentSubscription()
-      pushTested("getCurrentSubscription")
-      if (currentSub.data !== undefined) pushPassed("getCurrentSubscription")
-      else pushFailed({ function: "getCurrentSubscription", error: currentSub.error })
-    } catch (error: any) {
-      pushFailed({ function: "getCurrentSubscription", error: currentSub.error })
-    }
-
-    try {
-      const billingHistory = await subscriptionActions.getBillingHistory()
-      pushTested("getBillingHistory")
-      if (billingHistory.data) pushPassed("getBillingHistory")
-      else pushFailed({ function: "getBillingHistory", error: billingHistory.error })
-    } catch (error: any) {
-      pushFailed({ function: "getBillingHistory", error: billingHistory.error })
-    }
-
-    try {
-      const limits = await subscriptionActions.checkSubscriptionLimits()
-      pushTested("checkSubscriptionLimits")
-      if (limits.data !== undefined) pushPassed("checkSubscriptionLimits")
-      else pushFailed({ function: "checkSubscriptionLimits", error: limits.error })
-    } catch (error: any) {
-      pushFailed({ function: "checkSubscriptionLimits", error: limits.error })
-    }
-
-    try {
-      const status = await subscriptionLimitsActions.getSubscriptionStatus()
-      pushTested("getSubscriptionStatus")
-      if (status.data !== undefined) pushPassed("getSubscriptionStatus")
-      else pushFailed({ function: "getSubscriptionStatus", error: status.error })
-    } catch (error: any) {
-      pushFailed({ function: "getSubscriptionStatus", error: status.error })
-    }
-
-    try {
-      const canAddUser = await subscriptionLimitsActions.canAddUser()
-      pushTested("canAddUser")
-      if (canAddUser.allowed !== undefined) pushPassed("canAddUser")
-      else pushFailed({ function: "canAddUser", error: "No result" })
-    } catch (error: any) {
-      pushFailed({ function: "canAddUser", error: error.message })
-    }
-
-    try {
-      const canAddDriver = await subscriptionLimitsActions.canAddDriver()
-      pushTested("canAddDriver")
-      if (canAddDriver.allowed !== undefined) pushPassed("canAddDriver")
-      else pushFailed({ function: "canAddDriver", error: "No result" })
-    } catch (error: any) {
-      pushFailed({ function: "canAddDriver", error: error.message })
-    }
-
-    try {
-      const canUseELD = await subscriptionLimitsActions.canUseELD()
-      pushTested("canUseELD")
-      if (canUseELD.allowed !== undefined) pushPassed("canUseELD")
-      else pushFailed({ function: "canUseELD", error: "No result" })
-    } catch (error: any) {
-      pushFailed({ function: "canUseELD", error: error.message })
-    }
-
-    try {
-      const canAccess = await subscriptionLimitsActions.canAccessFeature("drivers")
-      pushTested("canAccessFeature")
-      if (canAccess.allowed !== undefined) pushPassed("canAccessFeature")
-      else pushFailed({ function: "canAccessFeature", error: "No result" })
-    } catch (error: any) {
-      pushFailed({ function: "canAccessFeature", error: error.message })
-    }
 
     const endTime = Date.now()
     const duration = ((endTime - startTime) / 1000).toFixed(2)

@@ -23,6 +23,7 @@ export async function createCompanyAndLinkUser(data: {
   email: string
   phone: string
   userId: string
+  companyType?: 'broker' | 'carrier' | 'both' | null
 }) {
   const supabase = await createClient()
 
@@ -31,7 +32,8 @@ export async function createCompanyAndLinkUser(data: {
     p_name: data.companyName.trim(),
     p_email: data.email,
     p_phone: data.phone,
-    p_user_id: data.userId
+    p_user_id: data.userId,
+    p_company_type: data.companyType || null
   })
 
   if (functionError) {
@@ -47,7 +49,8 @@ export async function createCompanyAndLinkUser(data: {
       .insert({
         name: data.companyName.trim(),
         email: data.email,
-        phone: data.phone
+        phone: data.phone,
+        company_type: data.companyType || null
       })
       .select()
       .single()

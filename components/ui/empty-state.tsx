@@ -36,7 +36,7 @@ export function EmptyState({
         {(actionLabel || secondaryActionLabel) && (
           <div className="flex gap-3 flex-wrap justify-center">
             {actionLabel && (
-              actionHref ? (
+              actionHref && typeof actionHref === 'string' && actionHref.trim() !== '' ? (
                 <Link href={actionHref}>
                   <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
                     {actionLabel}
@@ -51,13 +51,13 @@ export function EmptyState({
                 </Button>
               ) : null
             )}
-            {secondaryActionLabel && secondaryActionHref && (
+            {secondaryActionLabel && secondaryActionHref && typeof secondaryActionHref === 'string' && secondaryActionHref.trim() !== '' ? (
               <Link href={secondaryActionHref}>
                 <Button variant="outline">
                   {secondaryActionLabel}
                 </Button>
               </Link>
-            )}
+            ) : null}
           </div>
         )}
       </div>

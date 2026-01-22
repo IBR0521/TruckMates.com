@@ -47,6 +47,8 @@ export default function AddExpensePage() {
     payment_method: "",
     has_receipt: false,
     fuel_level_after: "", // New field for fuel level after fill
+    gallons: "", // Gallons purchased
+    price_per_gallon: "", // Price per gallon
   })
 
   useEffect(() => {
@@ -73,6 +75,32 @@ export default function AddExpensePage() {
       setFormData((prev) => ({ ...prev, fuel_level_after: "" }))
     }
   }, [formData.category, formData.truck_id])
+
+  // Auto-calculate price per gallon when amount and gallons are provided
+  useEffect(() => {
+    if (formData.category === "fuel" && formData.amount && formData.gallons) {
+      const amount = parseFloat(formData.amount)
+      const gallons = parseFloat(formData.gallons)
+      if (amount > 0 && gallons > 0) {
+        const calculatedPrice = (amount / gallons).toFixed(2)
+        if (formData.price_per_gallon !== calculatedPrice) {
+          setFormData((prev) => ({ ...prev, price_per_gallon: calculatedPrice }))
+        }
+      }
+    }
+  }, [formData.category, formData.amount, formData.gallons])
+
+  // Auto-calculate amount when gallons and price per gallon are provided
+  useEffect(() => {
+    if (formData.category === "fuel" && formData.gallons && formData.price_per_gallon && !formData.amount) {
+      const gallons = parseFloat(formData.gallons)
+      const pricePerGallon = parseFloat(formData.price_per_gallon)
+      if (gallons > 0 && pricePerGallon > 0) {
+        const calculatedAmount = (gallons * pricePerGallon).toFixed(2)
+        setFormData((prev) => ({ ...prev, amount: calculatedAmount }))
+      }
+    }
+  }, [formData.category, formData.gallons, formData.price_per_gallon])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -296,6 +324,43 @@ export default function AddExpensePage() {
         {/* Additional Tab */}
         <TabsContent value="additional" className="space-y-6">
           <FormSection title="Additional Information" icon={<Calendar className="w-5 h-5" />}>
+            {/* Fuel-specific fields - Only show for fuel expenses */}
+            {formData.category === "fuel" && (
+              <FormGrid cols={2}>
+                <div>
+                  <Label>Gallons Purchased</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.gallons}
+                    onChange={(e) => setFormData({ ...formData, gallons: e.target.value })}
+                    placeholder="0.00"
+                    className="bg-background border-border"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Enter gallons purchased for accurate MPG calculation
+                  </p>
+                </div>
+                <div>
+                  <Label>Price Per Gallon ($)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.price_per_gallon}
+                    onChange={(e) => setFormData({ ...formData, price_per_gallon: e.target.value })}
+                    placeholder="0.00"
+                    className="bg-background border-border"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {formData.gallons && formData.amount
+                      ? `Auto-calculated: $${((parseFloat(formData.amount) || 0) / (parseFloat(formData.gallons) || 1)).toFixed(2)}`
+                      : "Enter price per gallon or it will be calculated from total"}
+                  </p>
+                </div>
+              </FormGrid>
+            )}
             {/* Fuel Level After Fill - Only show for fuel expenses with truck selected */}
             {formData.category === "fuel" && formData.truck_id && (
               <div>

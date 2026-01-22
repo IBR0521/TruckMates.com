@@ -160,9 +160,11 @@ export default function BOLsPage() {
                   <tr key={bol.id} className="border-b border-border/50 hover:bg-secondary/20 transition">
                     <td className="p-4">
                       <div className="font-medium text-foreground">{bol.bol_number}</div>
-                      <Link href={`/dashboard/loads/${bol.load_id}`} className="text-xs text-muted-foreground hover:text-primary">
-                        View Load
-                      </Link>
+                      {bol.load_id && typeof bol.load_id === 'string' && bol.load_id.trim() !== '' ? (
+                        <Link href={`/dashboard/loads/${bol.load_id}`} className="text-xs text-muted-foreground hover:text-primary">
+                          View Load
+                        </Link>
+                      ) : null}
                     </td>
                     <td className="p-4">
                       <div className="text-foreground">{bol.shipper_name}</div>
@@ -202,11 +204,13 @@ export default function BOLsPage() {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-end gap-2">
-                        <Link href={`/dashboard/bols/${bol.id}`}>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        </Link>
+                        {bol.id && typeof bol.id === 'string' && bol.id.trim() !== '' ? (
+                          <Link href={`/dashboard/bols/${bol.id}`}>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </Link>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

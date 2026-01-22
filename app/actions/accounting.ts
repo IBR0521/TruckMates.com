@@ -178,6 +178,127 @@ export async function getSettlements() {
   return { data: settlements, error: null }
 }
 
+export async function updateInvoice(
+  id: string,
+  formData: {
+    status?: string
+    amount?: number
+    issue_date?: string
+    due_date?: string
+    payment_terms?: string
+    description?: string
+    [key: string]: any
+  }
+) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  // Build update data
+  const updateData: any = {}
+  if (formData.status !== undefined) updateData.status = formData.status
+  if (formData.amount !== undefined) updateData.amount = formData.amount
+  if (formData.issue_date !== undefined) updateData.issue_date = formData.issue_date
+  if (formData.due_date !== undefined) updateData.due_date = formData.due_date
+  if (formData.payment_terms !== undefined) updateData.payment_terms = formData.payment_terms
+  if (formData.description !== undefined) updateData.description = formData.description
+
+  const { data, error } = await supabase
+    .from("invoices")
+    .update(updateData)
+    .eq("id", id)
+    .eq("company_id", userData.company_id)
+    .select()
+    .single()
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  revalidatePath("/dashboard/accounting/invoices")
+  revalidatePath(`/dashboard/accounting/invoices/${id}`)
+  return { data, error: null }
+}
+
+export async function duplicateInvoice(id: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  // Get the original invoice
+  const { data: originalInvoice, error: fetchError } = await supabase
+    .from("invoices")
+    .select("*")
+    .eq("id", id)
+    .eq("company_id", userData.company_id)
+    .single()
+
+  if (fetchError || !originalInvoice) {
+    return { error: "Invoice not found", data: null }
+  }
+
+  // Generate new invoice number
+  const { generateInvoiceNumber } = await import("./number-formats")
+  const numberResult = await generateInvoiceNumber()
+  if (numberResult.error || !numberResult.data) {
+    return { error: numberResult.error || "Failed to generate invoice number", data: null }
+  }
+
+  // Create duplicate with new invoice number and reset status
+  const duplicateData: any = { ...originalInvoice }
+  delete duplicateData.id
+  delete duplicateData.created_at
+  delete duplicateData.updated_at
+  duplicateData.invoice_number = numberResult.data
+  duplicateData.status = "draft" // Reset to draft
+  duplicateData.issue_date = new Date().toISOString().split("T")[0] // Today's date
+
+  const { data: newInvoice, error: createError } = await supabase
+    .from("invoices")
+    .insert(duplicateData)
+    .select()
+    .single()
+
+  if (createError) {
+    return { error: createError.message, data: null }
+  }
+
+  revalidatePath("/dashboard/accounting/invoices")
+  return { data: newInvoice, error: null }
+}
+
 export async function deleteInvoice(id: string) {
   const supabase = await createClient()
   const { error } = await supabase.from("invoices").delete().eq("id", id)
@@ -426,6 +547,8 @@ export async function createExpense(formData: {
   receipt_url?: string
   has_receipt?: boolean
   fuel_level_after?: number
+  gallons?: number
+  price_per_gallon?: number
 }) {
   const supabase = await createClient()
 
@@ -586,6 +709,8 @@ export async function createExpense(formData: {
       receipt_url: formData.receipt_url ? sanitizeString(formData.receipt_url, 500) : null,
       has_receipt: formData.has_receipt || false,
       fuel_level_after: formData.fuel_level_after ? (typeof formData.fuel_level_after === 'string' ? parseFloat(formData.fuel_level_after) : formData.fuel_level_after) : null,
+      gallons: formData.gallons ? (typeof formData.gallons === 'string' ? parseFloat(formData.gallons) : formData.gallons) : null,
+      price_per_gallon: formData.price_per_gallon ? (typeof formData.price_per_gallon === 'string' ? parseFloat(formData.price_per_gallon) : formData.price_per_gallon) : null,
       route_id: linkedRouteId,
       load_id: linkedLoadId,
     })

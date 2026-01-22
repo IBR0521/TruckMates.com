@@ -104,14 +104,14 @@ export function FeedbackWidget() {
 
   return (
     <>
-      {/* Floating Feedback Button */}
+      {/* Floating Feedback Button - Positioned higher to avoid covering form buttons */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 group"
+        className="fixed bottom-24 right-4 sm:right-6 z-10 flex items-center gap-1.5 sm:gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-2 sm:px-4 sm:py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 group text-sm"
         aria-label="Send feedback"
       >
-        <MessageSquare className="w-5 h-5" />
-        <span className="hidden sm:inline font-medium">Feedback</span>
+        <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+        <span className="hidden md:inline font-medium">Feedback</span>
       </button>
 
       {/* Feedback Modal */}

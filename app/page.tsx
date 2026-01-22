@@ -38,8 +38,8 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <Logo size="sm" />
           <div className="flex items-center gap-4">
-            <Link href="/plans">
-              <Button variant="ghost" className="hidden sm:flex">Pricing</Button>
+            <Link href="/marketplace">
+              <Button variant="ghost" className="hidden sm:flex">Marketplace</Button>
             </Link>
             <Link href="/login">
               <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">Login</Button>
@@ -83,7 +83,7 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/register">
                 <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-8">
-                  Start Free Trial <ArrowRight className="ml-2 w-5 h-5" />
+                  Get Started <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
               <Link href="/demo">
@@ -92,7 +92,6 @@ export default function Home() {
                 </Button>
               </Link>
             </div>
-            <p className="text-sm text-muted-foreground mt-4">7-day free trial • No credit card required • Cancel anytime</p>
           </div>
         </div>
       </section>
@@ -688,33 +687,16 @@ export default function Home() {
           </h2>
           <p className="text-xl text-muted-foreground mb-8 leading-relaxed">
             Join logistics companies that have streamlined their operations, reduced costs, and 
-            improved compliance with TruckMates. Start your free trial today - no credit card required.
+            improved compliance with TruckMates. Get started today.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
             <Link href="/register">
               <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-8">
-                Start Free Trial <ArrowRight className="ml-2 w-5 h-5" />
-              </Button>
-            </Link>
-            <Link href="/plans">
-              <Button size="lg" variant="outline" className="w-full sm:w-auto border-2 border-primary text-primary hover:bg-primary/10 text-lg px-8">
-                View Pricing
+                Get Started <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
           </div>
           <div className="flex items-center justify-center gap-8 text-sm text-muted-foreground flex-wrap">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-primary" />
-              <span>7-day free trial</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-primary" />
-              <span>No credit card required</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-primary" />
-              <span>Cancel anytime</span>
-            </div>
           </div>
         </div>
       </section>
@@ -732,7 +714,7 @@ export default function Home() {
             <div>
               <h4 className="font-semibold text-foreground mb-4">Product</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="/plans" className="hover:text-primary">Pricing</Link></li>
+                <li><Link href="/marketplace" className="hover:text-primary">Marketplace</Link></li>
                 <li><Link href="/demo" className="hover:text-primary">Demo</Link></li>
                 <li><Link href="/register" className="hover:text-primary">Sign Up</Link></li>
               </ul>

@@ -1,0 +1,12 @@
+# DEPLOY KEY - Add this to GitHub Deploy Keys
+# 
+# Instructions:
+# 1. Copy the key below (starts with ssh-ed25519)
+# 2. Go to: https://github.com/IBR0521/TruckMates.com/settings/keys
+# 3. Click "Add deploy key"
+# 4. Paste the key below
+# 5. Check "Allow write access"
+# 6. Click "Add key"
+#
+# After adding the key, run: ./setup-deploy.sh
+

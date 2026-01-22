@@ -29,6 +29,11 @@ CREATE TABLE IF NOT EXISTS public.company_integrations (
   google_maps_enabled BOOLEAN DEFAULT false,
   google_maps_api_key TEXT,
   
+  -- Resend Email Integration
+  resend_enabled BOOLEAN DEFAULT false,
+  resend_api_key TEXT,
+  resend_from_email TEXT,
+  
   -- Other Integrations
   custom_integrations JSONB DEFAULT '{}'::jsonb,
   

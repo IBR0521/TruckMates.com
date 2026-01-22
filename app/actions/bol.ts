@@ -212,10 +212,10 @@ export async function updateBOLSignature(
 
   const signatureField = `${signatureType}_signature`
 
-  // Get current BOL to update signature field
+  // Get current BOL to check status and signatures
   const { data: currentBOL } = await supabase
     .from("bols")
-    .select(signatureField, "status")
+    .select(`${signatureField}, status, shipper_signature, driver_signature, consignee_signature`)
     .eq("id", bolId)
     .eq("company_id", userData.company_id)
     .single()
@@ -228,16 +228,9 @@ export async function updateBOLSignature(
     [signatureField]: signatureData,
   }
 
-  // Update status to 'signed' if all required signatures are present
-  const { data: bol } = await supabase
-    .from("bols")
-    .select("shipper_signature, driver_signature, consignee_signature")
-    .eq("id", bolId)
-    .single()
-
   // Check if we should update status to 'signed'
   // At minimum, driver signature should be required
-  const hasDriverSignature = signatureType === "driver" || bol?.driver_signature
+  const hasDriverSignature = signatureType === "driver" || currentBOL.driver_signature
 
   if (hasDriverSignature && currentBOL.status === "draft") {
     updateData.status = "signed"

@@ -5,6 +5,50 @@ import { revalidatePath } from "next/cache"
 import crypto from "crypto"
 import { handleDbError } from "@/lib/db-helpers"
 
+// Helper to get Resend client (checks both env var and database)
+async function getResendClient() {
+  // First, try environment variable
+  let apiKey = process.env.RESEND_API_KEY
+  
+  // If not in env, try to get from integration settings
+  if (!apiKey) {
+    try {
+      const supabase = await createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        const { getCachedUserCompany } = await import("@/lib/query-optimizer")
+        const result = await getCachedUserCompany(user.id)
+        
+        if (result.company_id) {
+          const { data: integrations } = await supabase
+            .from("company_integrations")
+            .select("resend_enabled, resend_api_key")
+            .eq("company_id", result.company_id)
+            .single()
+
+          if (integrations?.resend_enabled && integrations.resend_api_key) {
+            apiKey = integrations.resend_api_key
+          }
+        }
+      }
+    } catch (error) {
+      // Silently fail - will return null below
+    }
+  }
+  
+  if (!apiKey) return null
+  
+  try {
+    const Resend = (await import("resend")).Resend
+    return new Resend(apiKey)
+  } catch {
+    return null
+  }
+}
+
 /**
  * Generate secure access token for customer portal
  */
@@ -122,8 +166,128 @@ export async function createCustomerPortalAccess(formData: {
     return { error: error.message, data: null }
   }
 
+  // Send email notification if enabled and customer has email
+  if (formData.email_notifications !== false && customer.email) {
+    try {
+      await sendPortalAccessEmail({
+        customerEmail: customer.email,
+        customerName: customer.name || customer.company_name || "Customer",
+        portalUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://truckmates.com"}/portal/${accessToken}`,
+        companyName: userData.company_id ? (await supabase.from("companies").select("name").eq("id", userData.company_id).single()).data?.name || "TruckMates" : "TruckMates",
+        expiresAt: expiresAt,
+      })
+    } catch (emailError) {
+      // Don't fail the whole operation if email fails
+      console.error("Failed to send portal access email:", emailError)
+    }
+  }
+
   revalidatePath("/dashboard/settings/customer-portal")
+  revalidatePath(`/dashboard/customers/${formData.customer_id}`)
   return { data, error: null }
+}
+
+/**
+ * Send portal access email to customer
+ */
+async function sendPortalAccessEmail(data: {
+  customerEmail: string
+  customerName: string
+  portalUrl: string
+  companyName: string
+  expiresAt: string | null
+}) {
+  const resend = await getResendClient()
+
+  if (!resend) {
+    console.log("[PORTAL EMAIL] Resend not configured, skipping email")
+    return { sent: false, reason: "Email service not configured" }
+  }
+
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://truckmates.com"
+
+  const expiresText = data.expiresAt
+    ? `Your access will expire on ${new Date(data.expiresAt).toLocaleDateString()}.`
+    : "Your access does not expire."
+
+  const emailHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #4F46E5; color: white; padding: 30px; border-radius: 8px 8px 0 0; text-align: center; }
+        .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+        .button { display: inline-block; padding: 14px 28px; background: #4F46E5; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; }
+        .info-box { background: white; padding: 20px; border-radius: 6px; border-left: 4px solid #4F46E5; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>Welcome to Your Customer Portal</h1>
+        </div>
+        <div class="content">
+          <p>Dear ${data.customerName},</p>
+          
+          <p>You now have access to the ${data.companyName} customer portal. From here, you can:</p>
+          
+          <ul>
+            <li>Track your loads in real-time</li>
+            <li>View and download invoices</li>
+            <li>Access delivery documents</li>
+            <li>View payment history</li>
+          </ul>
+          
+          <div class="info-box">
+            <p style="margin: 0;"><strong>Your Portal Access:</strong></p>
+            <p style="margin: 10px 0 0 0; word-break: break-all;">
+              <a href="${data.portalUrl}" style="color: #4F46E5;">${data.portalUrl}</a>
+            </p>
+          </div>
+          
+          <div style="text-align: center;">
+            <a href="${data.portalUrl}" class="button">Access Your Portal</a>
+          </div>
+          
+          <p style="font-size: 12px; color: #6b7280; margin-top: 20px;">
+            ${expiresText}
+          </p>
+          
+          <p style="margin-top: 30px;">
+            If you have any questions, please contact us directly.
+          </p>
+        </div>
+        <div class="footer">
+          <p>This is an automated message from ${data.companyName}.</p>
+          <p>Please do not reply to this email.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  try {
+    const result = await resend.emails.send({
+      from: fromEmail,
+      to: data.customerEmail,
+      subject: `Your ${data.companyName} Customer Portal Access`,
+      html: emailHtml,
+    })
+
+    if (result.error) {
+      console.error("[PORTAL EMAIL ERROR]", result.error)
+      return { sent: false, reason: result.error.message || "Failed to send email" }
+    }
+
+    return { sent: true, email: data.customerEmail, messageId: result.data?.id }
+  } catch (error: any) {
+    console.error("[PORTAL EMAIL ERROR]", error)
+    return { sent: false, reason: error?.message || "Failed to send email" }
+  }
 }
 
 /**
@@ -183,7 +347,9 @@ export async function getCustomerPortalLoads(token: string) {
   const supabase = await createClient()
 
   // Get loads for this customer
-  const { data: loads, error } = await supabase
+  // Match by customer_id if set, or by customer name in company_name field
+  const customerName = portalAccess.customer?.name || ""
+  let query = supabase
     .from("loads")
     .select(`
       *,
@@ -192,8 +358,20 @@ export async function getCustomerPortalLoads(token: string) {
       route:routes(name, origin, destination, status)
     `)
     .eq("company_id", portalAccess.company_id)
-    .or(`company_name.ilike.%${portalAccess.customer?.name}%,customer_id.eq.${portalAccess.customer_id}`)
-    .order("created_at", { ascending: false })
+
+  // Filter by customer - try customer_id first, then fallback to name matching
+  if (portalAccess.customer_id) {
+    // Use OR filter: match by customer_id OR company_name
+    if (customerName) {
+      query = query.or(`customer_id.eq.${portalAccess.customer_id},company_name.ilike.%${customerName}%`)
+    } else {
+      query = query.eq("customer_id", portalAccess.customer_id)
+    }
+  } else if (customerName) {
+    query = query.ilike("company_name", `%${customerName}%`)
+  }
+
+  const { data: loads, error } = await query.order("created_at", { ascending: false })
 
   if (error) {
     return { error: error.message, data: null }
@@ -321,13 +499,26 @@ export async function getCustomerPortalInvoices(token: string) {
   }
 
   const customerName = portalAccess.customer?.name || ""
+  const customerId = portalAccess.customer_id
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices")
     .select("*")
     .eq("company_id", portalAccess.company_id)
-    .ilike("customer_name", `%${customerName}%`)
-    .order("created_at", { ascending: false })
+
+  // Filter by customer - try customer_id first, then fallback to name matching
+  if (customerId) {
+    // Try to match by customer_id or customer_name
+    if (customerName) {
+      query = query.or(`customer_id.eq.${customerId},customer_name.ilike.%${customerName}%`)
+    } else {
+      query = query.eq("customer_id", customerId)
+    }
+  } else if (customerName) {
+    query = query.ilike("customer_name", `%${customerName}%`)
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false })
 
   if (error) {
     return { error: error.message, data: null }

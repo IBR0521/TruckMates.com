@@ -47,8 +47,60 @@ export async function getDocuments(filters?: {
 
 export async function deleteDocument(id: string) {
   const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated" }
+  }
+
+  // First, get the document to retrieve the file path
+  const { data: document, error: docError } = await supabase
+    .from("documents")
+    .select("file_url")
+    .eq("id", id)
+    .single()
+
+  if (docError || !document) {
+    return { error: docError?.message || "Document not found" }
+  }
+
+  // Extract file path from URL
+  let filePath = document.file_url
+
+  // Extract path from public URL
+  const publicUrlMatch = filePath.match(/\/storage\/v1\/object\/public\/documents\/(.+)$/)
+  if (publicUrlMatch) {
+    filePath = publicUrlMatch[1]
+  } else {
+    // Extract path from signed URL or direct path
+    const signedUrlMatch = filePath.match(/\/storage\/v1\/object\/[^/]+\/documents\/(.+?)(\?|$)/)
+    if (signedUrlMatch) {
+      filePath = signedUrlMatch[1]
+    } else if (!filePath.includes('/')) {
+      // If it's just a path without the full URL, use it as is
+      filePath = filePath.replace(/^\/+/, '')
+    }
+  }
+
+  // Delete file from storage (if path extraction was successful)
+  if (filePath && !filePath.includes('http')) {
+    const { error: storageError } = await supabase.storage
+      .from("documents")
+      .remove([filePath])
+
+    // Log storage error but don't fail if file doesn't exist
+    if (storageError && !storageError.message.includes('not found')) {
+      console.warn("Failed to delete file from storage:", storageError.message)
+    }
+  }
+
+  // Delete database record
   const { error } = await supabase.from("documents").delete().eq("id", id)
   if (error) return { error: error.message }
+  
   revalidatePath("/dashboard/documents")
   return { error: null }
 }

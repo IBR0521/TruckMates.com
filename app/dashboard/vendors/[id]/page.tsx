@@ -336,9 +336,11 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
                           <td className="p-3">{expense.description}</td>
                           <td className="p-3 font-medium">${expense.amount?.toFixed(2)}</td>
                           <td className="p-3 text-right">
-                            <Link href={`/dashboard/accounting/expenses/${expense.id}`}>
-                              <Button variant="ghost" size="sm">View</Button>
-                            </Link>
+                            {expense.id && typeof expense.id === 'string' && expense.id.trim() !== '' ? (
+                              <Link href={`/dashboard/accounting/expenses/${expense.id}`}>
+                                <Button variant="ghost" size="sm">View</Button>
+                              </Link>
+                            ) : null}
                           </td>
                         </tr>
                       ))}
@@ -386,9 +388,11 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
                             {record.actual_cost ? `$${record.actual_cost.toFixed(2)}` : record.estimated_cost ? `$${record.estimated_cost.toFixed(2)} (est.)` : "—"}
                           </td>
                           <td className="p-3 text-right">
-                            <Link href={`/dashboard/maintenance/${record.id}`}>
-                              <Button variant="ghost" size="sm">View</Button>
-                            </Link>
+                            {record.id && typeof record.id === 'string' && record.id.trim() !== '' ? (
+                              <Link href={`/dashboard/maintenance/${record.id}`}>
+                                <Button variant="ghost" size="sm">View</Button>
+                              </Link>
+                            ) : null}
                           </td>
                         </tr>
                       ))}

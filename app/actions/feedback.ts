@@ -5,10 +5,42 @@ import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
 import { sanitizeString } from "@/lib/validation"
 
-// Initialize Resend for email notifications
+// Initialize Resend for email notifications (checks both env var and database)
 async function getResendClient() {
-  const apiKey = process.env.RESEND_API_KEY
+  // First, try environment variable
+  let apiKey = process.env.RESEND_API_KEY
+  
+  // If not in env, try to get from integration settings
+  if (!apiKey) {
+    try {
+      const supabase = await createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        const { getCachedUserCompany } = await import("@/lib/query-optimizer")
+        const result = await getCachedUserCompany(user.id)
+        
+        if (result.company_id) {
+          const { data: integrations } = await supabase
+            .from("company_integrations")
+            .select("resend_enabled, resend_api_key")
+            .eq("company_id", result.company_id)
+            .single()
+
+          if (integrations?.resend_enabled && integrations.resend_api_key) {
+            apiKey = integrations.resend_api_key
+          }
+        }
+      }
+    } catch (error) {
+      // Silently fail - will return null below
+    }
+  }
+  
   if (!apiKey) return null
+  
   try {
     const { Resend } = await import("resend")
     return new Resend(apiKey)

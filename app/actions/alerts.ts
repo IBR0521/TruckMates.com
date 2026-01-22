@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { sendNotification } from "./notifications"
+import { handleDbError } from "@/lib/db-helpers"
 
 /**
  * Get alert rules

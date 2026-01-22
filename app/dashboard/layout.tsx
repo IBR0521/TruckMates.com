@@ -10,7 +10,6 @@ import Sidebar from "@/components/dashboard/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { FeedbackWidget } from "@/components/feedback-widget"
 import { NotificationsCenter } from "@/components/notifications-center"
-import { RealtimeStatusChecker } from "@/components/realtime-status-checker"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -82,7 +81,6 @@ export default function DashboardLayout({
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <RealtimeStatusChecker />
             <NotificationsCenter />
             <ThemeToggle />
             <Button 

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner"
 import { getCompany, updateCompany } from "@/app/actions/company"
 import { getCompanySettings, updateCompanySettings } from "@/app/actions/number-formats"
-import { Settings, Save } from "lucide-react"
+import { Settings as SettingsIcon, Save } from "lucide-react"
 
 export default function GeneralSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -19,6 +19,7 @@ export default function GeneralSettingsPage() {
     email: "",
     phone: "",
     address: "",
+    company_type: null as 'broker' | 'carrier' | 'both' | null,
   })
   const [settings, setSettings] = useState({
     timezone: "America/New_York",
@@ -46,6 +47,7 @@ export default function GeneralSettingsPage() {
           email: companyResult.data.email || "",
           phone: companyResult.data.phone || "",
           address: companyResult.data.address || "",
+          company_type: companyResult.data.company_type || null,
         })
       }
 
@@ -73,6 +75,7 @@ export default function GeneralSettingsPage() {
       formData.append("email", companyData.email)
       formData.append("phone", companyData.phone)
       if (companyData.address) formData.append("address", companyData.address)
+      formData.append("company_type", companyData.company_type || "regular")
 
       const [companyResult, settingsResult] = await Promise.all([
         updateCompany(formData),
@@ -128,7 +131,7 @@ export default function GeneralSettingsPage() {
           {/* Company Information */}
           <Card className="p-6">
             <div className="flex items-center gap-2 mb-6">
-              <Settings className="w-5 h-5 text-primary" />
+              <SettingsIcon className="w-5 h-5 text-primary" />
               <h2 className="text-xl font-semibold">Company Information</h2>
             </div>
             <div className="grid md:grid-cols-2 gap-6">
@@ -233,6 +236,39 @@ export default function GeneralSettingsPage() {
                     <SelectItem value="MXN">MXN ($)</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+          </Card>
+
+          {/* Company Type */}
+          <Card className="p-6">
+            <div className="flex items-center gap-2 mb-6">
+              <SettingsIcon className="w-5 h-5 text-primary" />
+              <h2 className="text-xl font-semibold">Company Type</h2>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="company_type">Marketplace Access</Label>
+                <Select 
+                  value={companyData.company_type || "regular"} 
+                  onValueChange={(value) => setCompanyData({ ...companyData, company_type: value === "regular" ? null : value as 'broker' | 'carrier' | 'both' })}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder="Select company type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="regular">Regular Company (Fleet Management Only)</SelectItem>
+                    <SelectItem value="broker">Broker (Post Loads to Marketplace)</SelectItem>
+                    <SelectItem value="carrier">Carrier (Accept Loads from Marketplace)</SelectItem>
+                    <SelectItem value="both">Both (Post & Accept Loads)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {companyData.company_type === "broker" && "You can post loads to the marketplace. Accepted loads will appear in your dashboard."}
+                  {companyData.company_type === "carrier" && "You can accept loads from the marketplace. Accepted loads will automatically appear in your loads list."}
+                  {companyData.company_type === "both" && "You can post and accept loads in the marketplace."}
+                  {(!companyData.company_type || companyData.company_type === "regular") && "Standard fleet management platform access. No marketplace access."}
+                </p>
               </div>
             </div>
           </Card>

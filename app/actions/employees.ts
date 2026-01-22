@@ -117,11 +117,6 @@ export async function createEmployeeInvitation(email: string) {
   }
 
   // Check subscription limits
-  const { canAddUser } = await import("./subscription-limits")
-  const limitCheck = await canAddUser()
-  if (!limitCheck.allowed) {
-    return { error: limitCheck.error || "User limit reached", data: null }
-  }
 
   // Check if user is a manager
   const { role: userRole, companyId, error: roleError } = await getUserRoleAndCompany(supabase, user.id)

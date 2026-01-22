@@ -65,6 +65,14 @@ export async function updateCompany(formData: FormData) {
   const name = formData.get("name") as string
   const email = formData.get("email") as string
   const phone = formData.get("phone") as string
+  const companyType = formData.get("company_type") as string | null
+
+  // Validate company_type
+  const validCompanyTypes = ['broker', 'carrier', 'both', null]
+  const normalizedCompanyType = companyType === "regular" || companyType === "" ? null : companyType
+  if (normalizedCompanyType && !validCompanyTypes.includes(normalizedCompanyType)) {
+    return { success: false, error: "Invalid company type" }
+  }
 
   // Update company
   const { error: updateError } = await supabase
@@ -73,6 +81,7 @@ export async function updateCompany(formData: FormData) {
       name,
       email,
       phone,
+      company_type: normalizedCompanyType || null,
     })
     .eq("id", userData.company_id)
 

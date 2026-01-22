@@ -138,12 +138,14 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
           </Link>
           <h1 className="text-xl md:text-2xl font-bold text-foreground">Route Details</h1>
         </div>
-        <Link href={`/dashboard/routes/${id}/edit`}>
-          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Edit2 className="w-4 h-4 mr-2" />
-            Edit Route
-          </Button>
-        </Link>
+        {id && typeof id === 'string' && id.trim() !== '' ? (
+          <Link href={`/dashboard/routes/${id}/edit`}>
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Edit2 className="w-4 h-4 mr-2" />
+              Edit Route
+            </Button>
+          </Link>
+        ) : null}
       </div>
 
       <div className="p-4 md:p-8">
@@ -389,9 +391,11 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
                 <p className="text-sm text-muted-foreground mb-4">
                   This route currently only has origin and destination. Add stops to create a multi-stop route.
                 </p>
-                <Link href={`/dashboard/routes/${id}/edit`}>
-                  <Button variant="outline">Add Stops</Button>
-                </Link>
+                {id && typeof id === 'string' && id.trim() !== '' ? (
+                  <Link href={`/dashboard/routes/${id}/edit`}>
+                    <Button variant="outline">Add Stops</Button>
+                  </Link>
+                ) : null}
               </div>
             </Card>
           )}

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getELDDevices, getELDDevice } from "./eld"
+import { mapProviderDriverId } from "./eld-driver-mapping"
 
 // Generic ELD provider interface
 interface ELDProvider {
@@ -61,12 +62,18 @@ async function syncKeepTruckinData(device: any) {
     const events = eventsData.violations || []
 
     // Store logs in database
-    // Note: log.driver_id from provider might be provider's driver ID, not internal driver ID
-    // For now, we store it as-is. In production, you'd need a mapping table.
-    const logsToInsert = logs.map((log: any) => ({
-      company_id: device.company_id,
-      eld_device_id: device.id,
-      driver_id: log.driver_id || null, // TODO: Map provider driver ID to internal driver ID
+    // Map provider driver IDs to internal driver IDs
+    const logsToInsert = await Promise.all(
+      logs.map(async (log: any) => {
+        const providerDriverId = log.driver_id || log.driverId || null
+        const internalDriverId = providerDriverId
+          ? await mapProviderDriverId(device.id, providerDriverId, "keeptruckin")
+          : null
+
+        return {
+          company_id: device.company_id,
+          eld_device_id: device.id,
+          driver_id: internalDriverId,
       truck_id: device.truck_id || null,
       log_date: log.date || log.log_date,
       log_type: mapKeepTruckinStatus(log.status),
@@ -87,9 +94,11 @@ async function syncKeepTruckinData(device: any) {
       odometer_end: log.odometer_end || log.end_odometer,
       miles_driven: log.miles_driven || (log.odometer_end && log.odometer_start ? log.odometer_end - log.odometer_start : null),
       engine_hours: log.engine_hours,
-      violations: log.violations || null,
-      raw_data: log
-    }))
+          violations: log.violations || null,
+          raw_data: log
+        }
+      })
+    )
 
     if (logsToInsert.length > 0) {
       const { error: logsError } = await supabase
@@ -102,20 +111,29 @@ async function syncKeepTruckinData(device: any) {
     }
 
     // Store locations in database
-    const locationsToInsert = locations.map((loc: any) => ({
-      company_id: device.company_id,
-      eld_device_id: device.id,
-      driver_id: loc.driver_id || null,
-      truck_id: device.truck_id || null,
-      timestamp: loc.timestamp || loc.datetime,
-      latitude: loc.latitude || loc.lat,
-      longitude: loc.longitude || loc.lng,
-      address: loc.address || loc.formatted_address,
-      speed: loc.speed || null,
-      heading: loc.heading || loc.bearing || null,
-      odometer: loc.odometer || null,
-      engine_status: loc.engine_status || (loc.engine_on ? "on" : "off")
-    }))
+    const locationsToInsert = await Promise.all(
+      locations.map(async (loc: any) => {
+        const providerDriverId = loc.driver_id || loc.driverId || null
+        const internalDriverId = providerDriverId
+          ? await mapProviderDriverId(device.id, providerDriverId, "keeptruckin")
+          : null
+
+        return {
+          company_id: device.company_id,
+          eld_device_id: device.id,
+          driver_id: internalDriverId,
+          truck_id: device.truck_id || null,
+          timestamp: loc.timestamp || loc.datetime,
+          latitude: loc.latitude || loc.lat,
+          longitude: loc.longitude || loc.lng,
+          address: loc.address || loc.formatted_address,
+          speed: loc.speed || null,
+          heading: loc.heading || loc.bearing || null,
+          odometer: loc.odometer || null,
+          engine_status: loc.engine_status || (loc.engine_on ? "on" : "off")
+        }
+      })
+    )
 
     if (locationsToInsert.length > 0) {
       const { error: locationsError } = await supabase
@@ -229,10 +247,17 @@ async function syncSamsaraData(device: any) {
     const events = eventsData.data || []
 
     // Transform and store logs
-    const logsToInsert = logs.map((log: any) => ({
-      company_id: device.company_id,
-      eld_device_id: device.id,
-      driver_id: log.driver_id || null,
+    const logsToInsert = await Promise.all(
+      logs.map(async (log: any) => {
+        const providerDriverId = log.driver_id || log.driverId || null
+        const internalDriverId = providerDriverId
+          ? await mapProviderDriverId(device.id, providerDriverId, "samsara")
+          : null
+
+        return {
+          company_id: device.company_id,
+          eld_device_id: device.id,
+          driver_id: internalDriverId,
       truck_id: device.truck_id || null,
       log_date: log.date || log.logDate || new Date().toISOString().split('T')[0],
       log_type: mapSamsaraStatus(log.status || log.dutyStatus),
@@ -253,9 +278,11 @@ async function syncSamsaraData(device: any) {
       odometer_end: log.endOdometer || log.odometerEnd,
       miles_driven: log.milesDriven || (log.endOdometer && log.startOdometer ? log.endOdometer - log.startOdometer : null),
       engine_hours: log.engineHours || null,
-      violations: log.violations || null,
-      raw_data: log
-    }))
+          violations: log.violations || null,
+          raw_data: log
+        }
+      })
+    )
 
     if (logsToInsert.length > 0) {
       const { error: logsError } = await supabase
@@ -268,10 +295,17 @@ async function syncSamsaraData(device: any) {
     }
 
     // Transform and store locations
-    const locationsToInsert = locations.map((loc: any) => ({
-      company_id: device.company_id,
-      eld_device_id: device.id,
-      driver_id: loc.driverId || loc.driver_id || null,
+    const locationsToInsert = await Promise.all(
+      locations.map(async (loc: any) => {
+        const providerDriverId = loc.driverId || loc.driver_id || null
+        const internalDriverId = providerDriverId
+          ? await mapProviderDriverId(device.id, providerDriverId, "samsara")
+          : null
+
+        return {
+          company_id: device.company_id,
+          eld_device_id: device.id,
+          driver_id: internalDriverId,
       truck_id: device.truck_id || null,
       timestamp: loc.time || loc.timestamp || loc.datetime || new Date().toISOString(),
       latitude: loc.latitude || loc.lat,
@@ -280,8 +314,10 @@ async function syncSamsaraData(device: any) {
       speed: loc.speed || loc.speedMph || null,
       heading: loc.heading || loc.bearing || null,
       odometer: loc.odometer || loc.odometerMiles || null,
-      engine_status: loc.engineState || (loc.engineOn ? "on" : "off") || "unknown"
-    }))
+          engine_status: loc.engineState || (loc.engineOn ? "on" : "off") || "unknown"
+        }
+      })
+    )
 
     if (locationsToInsert.length > 0) {
       const { error: locationsError } = await supabase
@@ -294,24 +330,33 @@ async function syncSamsaraData(device: any) {
     }
 
     // Transform and store events
-    const eventsToInsert = events.map((event: any) => ({
-      company_id: device.company_id,
-      eld_device_id: device.id,
-      driver_id: event.driverId || event.driver_id || null,
-      truck_id: device.truck_id || null,
-      event_type: mapSamsaraEventType(event.type || event.eventType),
-      severity: event.severity || event.priority || "warning",
-      title: event.title || event.name || event.eventType || "Event",
-      description: event.description || event.message || event.details,
-      event_time: event.time || event.timestamp || event.eventTime || new Date().toISOString(),
-      location: event.location ? {
-        lat: event.location.latitude || event.location.lat,
-        lng: event.location.longitude || event.location.lng,
-        address: event.location.address || event.location.formattedAddress
-      } : null,
-      resolved: false,
-      metadata: event
-    }))
+    const eventsToInsert = await Promise.all(
+      events.map(async (event: any) => {
+        const providerDriverId = event.driverId || event.driver_id || null
+        const internalDriverId = providerDriverId
+          ? await mapProviderDriverId(device.id, providerDriverId, "samsara")
+          : null
+
+        return {
+          company_id: device.company_id,
+          eld_device_id: device.id,
+          driver_id: internalDriverId,
+          truck_id: device.truck_id || null,
+          event_type: mapSamsaraEventType(event.type || event.eventType),
+          severity: event.severity || event.priority || "warning",
+          title: event.title || event.name || event.eventType || "Event",
+          description: event.description || event.message || event.details,
+          event_time: event.time || event.timestamp || event.eventTime || new Date().toISOString(),
+          location: event.location ? {
+            lat: event.location.latitude || event.location.lat,
+            lng: event.location.longitude || event.location.lng,
+            address: event.location.address || event.location.formattedAddress
+          } : null,
+          resolved: false,
+          metadata: event
+        }
+      })
+    )
 
     if (eventsToInsert.length > 0) {
       const { error: eventsError } = await supabase
@@ -436,10 +481,17 @@ async function syncGeotabData(device: any) {
     const events = eventsData.result || []
 
     // Transform and store Geotab data
-    const logsToInsert = logs.map((log: any) => ({
-      company_id: device.company_id,
-      eld_device_id: device.id,
-      driver_id: log.driver?.id || null,
+    const logsToInsert = await Promise.all(
+      logs.map(async (log: any) => {
+        const providerDriverId = log.driver?.id || log.driverId || null
+        const internalDriverId = providerDriverId
+          ? await mapProviderDriverId(device.id, providerDriverId, "geotab")
+          : null
+
+        return {
+          company_id: device.company_id,
+          eld_device_id: device.id,
+          driver_id: internalDriverId,
       truck_id: device.truck_id || null,
       log_date: log.date ? new Date(log.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       log_type: mapGeotabStatus(log.dutyStatus),
@@ -458,11 +510,13 @@ async function syncGeotabData(device: any) {
       } : null,
       odometer_start: log.startOdometer,
       odometer_end: log.endOdometer,
-      miles_driven: log.distance ? log.distance * 0.000621371 : null, // Convert meters to miles
-      engine_hours: log.engineHours || null,
-      violations: log.violations || null,
-      raw_data: log
-    }))
+          miles_driven: log.distance ? log.distance * 0.000621371 : null, // Convert meters to miles
+          engine_hours: log.engineHours || null,
+          violations: log.violations || null,
+          raw_data: log
+        }
+      })
+    )
 
     if (logsToInsert.length > 0) {
       const { error: logsError } = await supabase
@@ -474,20 +528,29 @@ async function syncGeotabData(device: any) {
       }
     }
 
-    const locationsToInsert = locations.map((loc: any) => ({
-      company_id: device.company_id,
-      eld_device_id: device.id,
-      driver_id: loc.driver?.id || null,
-      truck_id: device.truck_id || null,
-      timestamp: loc.dateTime || loc.date || new Date().toISOString(),
-      latitude: loc.latitude,
-      longitude: loc.longitude,
-      address: loc.address || null,
-      speed: loc.speed ? Math.round(loc.speed * 2.23694) : null, // Convert m/s to mph
-      heading: loc.heading || null,
-      odometer: loc.odometer || null,
-      engine_status: loc.engineStatus || "unknown"
-    }))
+    const locationsToInsert = await Promise.all(
+      locations.map(async (loc: any) => {
+        const providerDriverId = loc.driver?.id || loc.driverId || null
+        const internalDriverId = providerDriverId
+          ? await mapProviderDriverId(device.id, providerDriverId, "geotab")
+          : null
+
+        return {
+          company_id: device.company_id,
+          eld_device_id: device.id,
+          driver_id: internalDriverId,
+          truck_id: device.truck_id || null,
+          timestamp: loc.dateTime || loc.date || new Date().toISOString(),
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          address: loc.address || null,
+          speed: loc.speed ? Math.round(loc.speed * 2.23694) : null, // Convert m/s to mph
+          heading: loc.heading || null,
+          odometer: loc.odometer || null,
+          engine_status: loc.engineStatus || "unknown"
+        }
+      })
+    )
 
     if (locationsToInsert.length > 0) {
       const { error: locationsError } = await supabase

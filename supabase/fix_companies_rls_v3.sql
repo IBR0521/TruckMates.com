@@ -5,12 +5,16 @@
 DROP POLICY IF EXISTS "Authenticated users can create companies" ON public.companies;
 DROP POLICY IF EXISTS "Managers can update their company" ON public.companies;
 
+-- Drop old function if it exists (without company_type parameter)
+DROP FUNCTION IF EXISTS public.create_company_for_user(TEXT, TEXT, TEXT, UUID);
+
 -- Create a function that can create companies with elevated privileges
 CREATE OR REPLACE FUNCTION public.create_company_for_user(
   p_name TEXT,
   p_email TEXT,
   p_phone TEXT,
-  p_user_id UUID
+  p_user_id UUID,
+  p_company_type TEXT DEFAULT NULL
 )
 RETURNS UUID
 LANGUAGE plpgsql
@@ -21,8 +25,8 @@ DECLARE
   v_company_id UUID;
 BEGIN
   -- Insert company (bypasses RLS because of SECURITY DEFINER)
-  INSERT INTO public.companies (name, email, phone)
-  VALUES (p_name, p_email, p_phone)
+  INSERT INTO public.companies (name, email, phone, company_type)
+  VALUES (p_name, p_email, p_phone, p_company_type)
   RETURNING id INTO v_company_id;
 
   -- Update user record to link to company
@@ -38,8 +42,11 @@ BEGIN
 END;
 $$;
 
--- Grant execute permission to authenticated users
-GRANT EXECUTE ON FUNCTION public.create_company_for_user TO authenticated;
+-- Drop old function overload if it exists (without company_type parameter)
+DROP FUNCTION IF EXISTS public.create_company_for_user(TEXT, TEXT, TEXT, UUID);
+
+-- Grant execute permission to authenticated users (specify the function signature)
+GRANT EXECUTE ON FUNCTION public.create_company_for_user(TEXT, TEXT, TEXT, UUID, TEXT) TO authenticated;
 
 -- Also create the regular policies (as backup)
 CREATE POLICY "Authenticated users can create companies"

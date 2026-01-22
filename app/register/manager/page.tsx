@@ -2,31 +2,52 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Logo } from "@/components/logo"
 import { createClient } from "@/lib/supabase/client"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { checkCompanyNameExists, createCompanyAndLinkUser } from "@/app/actions/registration"
 
-export default function ManagerRegisterPage() {
+function ManagerRegisterForm() {
+  const searchParams = useSearchParams()
+  const accountType = searchParams.get("type") // 'manager', 'broker', 'carrier'
+  
   const [formData, setFormData] = useState({
     companyName: "",
     email: "",
     password: "",
     phone: "",
+    companyType: "" as 'broker' | 'carrier' | 'both' | '' | null,
   })
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
+  // Set company type based on URL parameter
+  useEffect(() => {
+    if (accountType === "broker") {
+      setFormData(prev => ({ ...prev, companyType: "broker" }))
+    } else if (accountType === "carrier") {
+      setFormData(prev => ({ ...prev, companyType: "carrier" }))
+    } else {
+      // manager or no type = regular company
+      setFormData(prev => ({ ...prev, companyType: null }))
+    }
+  }, [accountType])
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
+  }
+
+  const handleCompanyTypeChange = (value: string) => {
+    setFormData({ ...formData, companyType: value === "regular" ? null : value as 'broker' | 'carrier' | 'both' })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,7 +108,8 @@ export default function ManagerRegisterPage() {
         companyName: formData.companyName,
         email: formData.email,
         phone: formData.phone,
-        userId: authData.user.id
+        userId: authData.user.id,
+        companyType: formData.companyType || null
       })
 
       if (companyResult.error) {
@@ -97,9 +119,19 @@ export default function ManagerRegisterPage() {
       }
 
       toast.success("Account created successfully!")
-      setTimeout(() => {
-        router.push("/plans?type=manager")
-      }, 500)
+      
+      // Redirect based on company type
+      if (formData.companyType === "broker" || formData.companyType === "carrier" || formData.companyType === "both") {
+        // Brokers and carriers skip plans and go directly to marketplace
+        setTimeout(() => {
+          router.push("/marketplace/dashboard")
+        }, 500)
+      } else {
+        // Regular managers go to plans
+        setTimeout(() => {
+          router.push("/plans?type=manager")
+        }, 500)
+      }
     } catch (error: any) {
       console.error("Registration error:", error)
       toast.error(error?.message || "An error occurred. Please try again.")
@@ -126,8 +158,16 @@ export default function ManagerRegisterPage() {
 
         {/* Registration Card */}
         <Card className="bg-card border-border p-8">
-          <h1 className="text-2xl font-bold text-foreground mb-2 text-center">Manager Registration</h1>
-          <p className="text-center text-muted-foreground mb-8">Set up your fleet management account</p>
+          <h1 className="text-2xl font-bold text-foreground mb-2 text-center">
+            {accountType === "broker" && "Broker Registration"}
+            {accountType === "carrier" && "Carrier Registration"}
+            {(!accountType || accountType === "manager") && "Fleet Manager Registration"}
+          </h1>
+          <p className="text-center text-muted-foreground mb-8">
+            {accountType === "broker" && "Set up your broker account and start posting loads"}
+            {accountType === "carrier" && "Set up your carrier account and start accepting loads"}
+            {(!accountType || accountType === "manager") && "Set up your fleet management account"}
+          </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -163,6 +203,47 @@ export default function ManagerRegisterPage() {
                 className="mt-2 bg-input border-border text-foreground placeholder:text-muted-foreground"
               />
             </div>
+            {accountType && accountType !== "manager" ? (
+              // Show read-only company type if selected from main page
+              <div>
+                <label className="text-sm font-medium text-foreground">Account Type</label>
+                <div className="mt-2 p-3 bg-primary/10 border border-primary/20 rounded-md">
+                  <p className="text-sm font-medium text-foreground">
+                    {accountType === "broker" && "Broker Account"}
+                    {accountType === "carrier" && "Carrier Account"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {accountType === "broker" && "You can post loads to the marketplace. Accepted loads will appear in your dashboard."}
+                    {accountType === "carrier" && "You can accept loads from the marketplace. Accepted loads will automatically appear in your loads list."}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              // Show company type selector if coming from manager or direct URL
+              <div>
+                <label className="text-sm font-medium text-foreground">Company Type</label>
+                <Select 
+                  value={formData.companyType || "regular"} 
+                  onValueChange={handleCompanyTypeChange}
+                >
+                  <SelectTrigger className="mt-2 bg-input border-border text-foreground">
+                    <SelectValue placeholder="Select company type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="regular">Regular Company (Fleet Management Only)</SelectItem>
+                    <SelectItem value="broker">Broker (Post Loads to Marketplace)</SelectItem>
+                    <SelectItem value="carrier">Carrier (Accept Loads from Marketplace)</SelectItem>
+                    <SelectItem value="both">Both (Post & Accept Loads)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formData.companyType === "broker" && "You can post loads to the marketplace"}
+                  {formData.companyType === "carrier" && "You can accept loads from the marketplace"}
+                  {formData.companyType === "both" && "You can post and accept loads in the marketplace"}
+                  {(!formData.companyType || formData.companyType === "regular") && "Standard fleet management platform access"}
+                </p>
+              </div>
+            )}
             <div>
               <label className="text-sm font-medium text-foreground">Password</label>
               <Input
@@ -186,5 +267,20 @@ export default function ManagerRegisterPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function ManagerRegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
+        <div className="text-center">
+          <Logo size="lg" />
+          <p className="text-muted-foreground mt-4">Loading...</p>
+        </div>
+      </div>
+    }>
+      <ManagerRegisterForm />
+    </Suspense>
   )
 }

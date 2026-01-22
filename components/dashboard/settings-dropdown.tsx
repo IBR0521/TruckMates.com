@@ -87,7 +87,7 @@ export function SettingsDropdown() {
       icon: CreditCard,
       label: "Billing",
       href: "/dashboard/settings/billing",
-      description: "Billing and subscription settings",
+      description: "Billing settings",
     },
     {
       icon: Users,

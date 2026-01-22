@@ -44,6 +44,9 @@ export async function getIntegrationSettings() {
         paypal_client_id: "",
         google_maps_enabled: false,
         google_maps_api_key: "",
+        resend_enabled: false,
+        resend_api_key: "",
+        resend_from_email: "",
       },
       error: null,
     }
@@ -63,6 +66,9 @@ export async function updateIntegrationSettings(settings: {
   paypal_client_id?: string
   google_maps_enabled?: boolean
   google_maps_api_key?: string
+  resend_enabled?: boolean
+  resend_api_key?: string
+  resend_from_email?: string
 }) {
   const supabase = await createClient()
 

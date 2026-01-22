@@ -246,6 +246,9 @@ export async function createLoad(formData: {
   // Notes
   notes?: string
   internal_notes?: string
+  // Marketplace fields
+  source?: string
+  marketplace_load_id?: string
 }) {
   const supabase = await createClient()
 
@@ -646,6 +649,10 @@ export async function createLoad(formData: {
   if (formData.special_instructions) loadData.special_instructions = sanitizeString(formData.special_instructions, 1000)
   if (formData.pickup_instructions) loadData.pickup_instructions = sanitizeString(formData.pickup_instructions, 1000)
   if (formData.delivery_instructions) loadData.delivery_instructions = sanitizeString(formData.delivery_instructions, 1000)
+
+  // Marketplace fields
+  if (formData.source) loadData.source = formData.source
+  if (formData.marketplace_load_id) loadData.marketplace_load_id = formData.marketplace_load_id
 
   const { data, error } = await supabase
     .from("loads")

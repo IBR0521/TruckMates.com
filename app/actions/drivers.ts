@@ -101,12 +101,6 @@ export async function createDriver(formData: {
     return { error: "Not authenticated", data: null }
   }
 
-  // Check subscription limits
-  const { canAddDriver } = await import("./subscription-limits")
-  const limitCheck = await canAddDriver()
-  if (!limitCheck.allowed) {
-    return { error: limitCheck.error || "Driver limit reached", data: null }
-  }
 
   const { data: userData } = await supabase
     .from("users")

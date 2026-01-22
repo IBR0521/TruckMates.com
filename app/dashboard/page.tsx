@@ -21,7 +21,6 @@ import {
 import Link from "next/link"
 import { useMemo, useEffect, useState } from "react"
 import { getDashboardStats } from "@/app/actions/dashboard"
-import { useRealtimeDashboardStats } from "@/components/dashboard/realtime-dashboard-stats"
 import { toast } from "sonner"
 import {
   DropdownMenu,
@@ -64,16 +63,6 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   
-  // Use real-time dashboard stats hook
-  const { stats: realtimeStats, isLoading: realtimeLoading } = useRealtimeDashboardStats()
-
-  // Update dashboard data when real-time stats change
-  useEffect(() => {
-    if (realtimeStats) {
-      setDashboardData(realtimeStats)
-      setIsLoading(false)
-    }
-  }, [realtimeStats])
 
   useEffect(() => {
     let isMounted = true

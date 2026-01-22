@@ -109,7 +109,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       if (result.error) {
         toast.error(result.error)
       } else {
-        toast.success("Portal access created successfully")
+        toast.success("Portal access created successfully! Customer will receive an email with the portal link.")
         setIsPortalDialogOpen(false)
         await loadData()
       }
@@ -207,6 +207,65 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       backUrl="/dashboard/customers"
       editUrl={`/dashboard/customers/${id}/edit`}
     >
+      {/* Tabs - Moved to Top */}
+      <div className="flex gap-1 border-b border-border mb-6 overflow-x-auto -mx-4 md:-mx-8 px-4 md:px-8">
+        <button
+          onClick={() => setActiveTab("overview")}
+          className={`px-4 py-3 font-medium text-sm transition whitespace-nowrap ${
+            activeTab === "overview"
+              ? "text-primary border-b-2 border-primary bg-primary/5"
+              : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+          }`}
+        >
+          Overview
+        </button>
+        <button
+          onClick={() => setActiveTab("loads")}
+          className={`px-4 py-3 font-medium text-sm transition whitespace-nowrap ${
+            activeTab === "loads"
+              ? "text-primary border-b-2 border-primary bg-primary/5"
+              : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+          }`}
+        >
+          Loads
+          {loads.length > 0 && (
+            <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-secondary text-foreground">
+              {loads.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("invoices")}
+          className={`px-4 py-3 font-medium text-sm transition whitespace-nowrap ${
+            activeTab === "invoices"
+              ? "text-primary border-b-2 border-primary bg-primary/5"
+              : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+          }`}
+        >
+          Invoices
+          {invoices.length > 0 && (
+            <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-secondary text-foreground">
+              {invoices.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("history")}
+          className={`px-4 py-3 font-medium text-sm transition whitespace-nowrap ${
+            activeTab === "history"
+              ? "text-primary border-b-2 border-primary bg-primary/5"
+              : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+          }`}
+        >
+          History
+          {history.length > 0 && (
+            <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-secondary text-foreground">
+              {history.length}
+            </span>
+          )}
+        </button>
+      </div>
+
       <div className="space-y-6">
           {/* Overview Tab Content */}
           {activeTab === "overview" && (
@@ -566,65 +625,6 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
           </>
         )}
 
-        {/* Tabs */}
-        <div className="flex gap-1 border-b border-border mb-6 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab("overview")}
-            className={`px-4 py-3 font-medium text-sm transition whitespace-nowrap ${
-              activeTab === "overview"
-                ? "text-primary border-b-2 border-primary bg-primary/5"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-            }`}
-          >
-            Overview
-          </button>
-          <button
-            onClick={() => setActiveTab("loads")}
-            className={`px-4 py-3 font-medium text-sm transition whitespace-nowrap ${
-              activeTab === "loads"
-                ? "text-primary border-b-2 border-primary bg-primary/5"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-            }`}
-          >
-            Loads
-            {loads.length > 0 && (
-              <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-secondary text-foreground">
-                {loads.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("invoices")}
-            className={`px-4 py-3 font-medium text-sm transition whitespace-nowrap ${
-              activeTab === "invoices"
-                ? "text-primary border-b-2 border-primary bg-primary/5"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-            }`}
-          >
-            Invoices
-            {invoices.length > 0 && (
-              <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-secondary text-foreground">
-                {invoices.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("history")}
-            className={`px-4 py-3 font-medium text-sm transition whitespace-nowrap ${
-              activeTab === "history"
-                ? "text-primary border-b-2 border-primary bg-primary/5"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-            }`}
-          >
-            History
-            {history.length > 0 && (
-              <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-secondary text-foreground">
-                {history.length}
-              </span>
-            )}
-          </button>
-        </div>
-
         {/* Loads Tab */}
         {activeTab === "loads" && (
           <DetailSection
@@ -669,9 +669,11 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                           {load.load_date ? new Date(load.load_date).toLocaleDateString() : "—"}
                         </td>
                         <td className="p-3 text-right">
-                          <Link href={`/dashboard/loads/${load.id}`}>
-                            <Button variant="ghost" size="sm">View</Button>
-                          </Link>
+                          {load.id && typeof load.id === 'string' && load.id.trim() !== '' ? (
+                            <Link href={`/dashboard/loads/${load.id}`}>
+                              <Button variant="ghost" size="sm">View</Button>
+                            </Link>
+                          ) : null}
                         </td>
                       </tr>
                     ))}
@@ -735,9 +737,11 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                           {invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : "—"}
                         </td>
                         <td className="p-3 text-right">
-                          <Link href={`/dashboard/accounting/invoices/${invoice.id}`}>
-                            <Button variant="ghost" size="sm">View</Button>
-                          </Link>
+                          {invoice.id && typeof invoice.id === 'string' && invoice.id.trim() !== '' ? (
+                            <Link href={`/dashboard/accounting/invoices/${invoice.id}`}>
+                              <Button variant="ghost" size="sm">View</Button>
+                            </Link>
+                          ) : null}
                         </td>
                       </tr>
                     ))}

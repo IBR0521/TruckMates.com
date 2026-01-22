@@ -11,6 +11,7 @@ import {
   ChevronDown,
   X,
   FileText,
+  FileCheck,
   DollarSign,
   Wrench,
   FolderOpen,
@@ -243,8 +244,8 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
           {/* Dispatch Board */}
           <NavItem href="/dashboard/dispatches" icon={Radio} label="Dispatch Board" isCollapsed={shouldShowCollapsed} />
 
-          {/* Fleet Map */}
-          <NavItem href="/dashboard/fleet-map" icon={MapPin} label="Fleet Map" isCollapsed={shouldShowCollapsed} />
+          {/* Fleet Map & Geofencing */}
+          <NavItem href="/dashboard/fleet-map" icon={MapPin} label="Fleet Map & Zones" isCollapsed={shouldShowCollapsed} />
 
           {/* Address Book */}
           <NavItem href="/dashboard/address-book" icon={Contact} label="Address Book" isCollapsed={shouldShowCollapsed} />
@@ -276,6 +277,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             <NavItem href="/dashboard/accounting/invoices" label="Invoices" isSubitem isCollapsed={shouldShowCollapsed} />
             <NavItem href="/dashboard/accounting/expenses" label="Expenses" isSubitem isCollapsed={shouldShowCollapsed} />
             <NavItem href="/dashboard/accounting/settlements" label="Settlements" isSubitem isCollapsed={shouldShowCollapsed} />
+            <NavItem href="/dashboard/fuel-analytics" label="Fuel Analytics" isSubitem isCollapsed={shouldShowCollapsed} />
           </DropdownItem>
 
           {/* Maintenance Dropdown */}
@@ -290,6 +292,9 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             <NavItem href="/dashboard/maintenance" label="Schedule" isSubitem isCollapsed={shouldShowCollapsed} />
             <NavItem href="/dashboard/maintenance/add" label="Add Service" isSubitem isCollapsed={shouldShowCollapsed} />
           </DropdownItem>
+
+          {/* DVIR */}
+          <NavItem href="/dashboard/dvir" icon={FileCheck} label="DVIR Reports" isCollapsed={shouldShowCollapsed} />
 
           {/* ELD Service */}
           <NavItem href="/dashboard/eld" icon={Shield} label="ELD Service" isCollapsed={shouldShowCollapsed} />
@@ -380,6 +385,10 @@ function NavItem({ href, icon: Icon, label, isSubitem, isCollapsed }: NavItemPro
       {!isCollapsed && <span>{label}</span>}
     </div>
   )
+
+  if (!href || typeof href !== 'string' || href.trim() === '') {
+    return <div>{content}</div>
+  }
 
   if (isCollapsed) {
     return (

@@ -52,62 +52,73 @@ export function ProfitEstimator() {
 
   // Calculate profit in real-time
   const calculations = useMemo(() => {
-    const loadedMiles = parseFloat(formData.loadedMiles) || 0
-    const deadheadMiles = parseFloat(formData.deadheadMiles) || 0
+    // Parse all numeric values, handling empty strings and invalid inputs
+    const parseNumber = (value: string): number => {
+      if (!value || value.trim() === "") return 0
+      const parsed = parseFloat(value)
+      return isNaN(parsed) ? 0 : parsed
+    }
+
+    const loadedMiles = parseNumber(formData.loadedMiles)
+    const deadheadMiles = parseNumber(formData.deadheadMiles)
     const totalMiles = loadedMiles + deadheadMiles
     
     // Calculate loaded charges
     let loadedRevenue = 0
     if (formData.loadedChargeType === "flat") {
-      loadedRevenue = parseFloat(formData.loadedCharge) || 0
+      loadedRevenue = parseNumber(formData.loadedCharge)
     } else {
-      loadedRevenue = (parseFloat(formData.loadedCharge) || 0) * loadedMiles
+      const loadedChargePerMile = parseNumber(formData.loadedCharge)
+      loadedRevenue = loadedChargePerMile * loadedMiles
     }
     
     // Calculate deadhead charges
     let deadheadRevenue = 0
     if (formData.deadheadChargeType === "flat") {
-      deadheadRevenue = parseFloat(formData.deadheadCharge) || 0
+      deadheadRevenue = parseNumber(formData.deadheadCharge)
     } else {
-      deadheadRevenue = (parseFloat(formData.deadheadCharge) || 0) * deadheadMiles
+      const deadheadChargePerMile = parseNumber(formData.deadheadCharge)
+      deadheadRevenue = deadheadChargePerMile * deadheadMiles
     }
     
-    const additionalCharges = parseFloat(formData.additionalCharges) || 0
+    const additionalCharges = parseNumber(formData.additionalCharges)
     const totalRevenue = loadedRevenue + deadheadRevenue + additionalCharges
 
     // Calculate fuel cost using MPG
-    const fuelCostPerGallon = parseFloat(formData.fuelCostPerGallon) || 0
-    const truckMPG = parseFloat(formData.truckMPG) || 0
-    const fuelCost = truckMPG > 0 && totalMiles > 0
-      ? (totalMiles / truckMPG) * fuelCostPerGallon
-      : 0
+    const fuelCostPerGallon = parseNumber(formData.fuelCostPerGallon)
+    const truckMPG = parseNumber(formData.truckMPG)
+    let fuelCost = 0
+    if (truckMPG > 0 && totalMiles > 0 && fuelCostPerGallon > 0) {
+      const gallonsUsed = totalMiles / truckMPG
+      fuelCost = gallonsUsed * fuelCostPerGallon
+    }
 
     // Calculate driver pay
     let driverPayAmount = 0
-    const driverPay = parseFloat(formData.driverPay) || 0
-    const driverHours = parseFloat(formData.driverHours) || 0
+    const driverPay = parseNumber(formData.driverPay)
+    const driverHours = parseNumber(formData.driverHours)
     
-    if (formData.driverPayType === "percentage") {
+    if (formData.driverPayType === "percentage" && driverPay > 0) {
       driverPayAmount = totalRevenue * (driverPay / 100)
-    } else if (formData.driverPayType === "per-mile") {
+    } else if (formData.driverPayType === "per-mile" && driverPay > 0) {
       driverPayAmount = totalMiles * driverPay
-    } else if (formData.driverPayType === "hourly") {
+    } else if (formData.driverPayType === "hourly" && driverPay > 0 && driverHours > 0) {
       driverPayAmount = driverHours * driverPay
     }
 
     // Calculate other expenses
-    const tolls = parseFloat(formData.tolls) || 0
-    const otherExpenses = parseFloat(formData.otherExpenses) || 0
+    const tolls = parseNumber(formData.tolls)
+    const otherExpenses = parseNumber(formData.otherExpenses)
 
     const totalExpenses = fuelCost + driverPayAmount + tolls + otherExpenses
     const estimatedProfit = totalRevenue - totalExpenses
     const profitMargin = totalRevenue > 0 ? (estimatedProfit / totalRevenue) * 100 : 0
 
-    // Calculate per-mile metrics
-    const revenuePerMile = totalMiles > 0 ? totalRevenue / totalMiles : 0
-    const costPerMile = totalMiles > 0 ? totalExpenses / totalMiles : 0
-    const profitPerMile = totalMiles > 0 ? estimatedProfit / totalMiles : 0
-    const fuelCostPerMile = totalMiles > 0 ? fuelCost / totalMiles : 0
+    // Calculate per-mile metrics (round to avoid floating point errors)
+    const revenuePerMile = totalMiles > 0 ? Math.round((totalRevenue / totalMiles) * 100) / 100 : 0
+    const costPerMile = totalMiles > 0 ? Math.round((totalExpenses / totalMiles) * 100) / 100 : 0
+    const profitPerMile = totalMiles > 0 ? Math.round((estimatedProfit / totalMiles) * 100) / 100 : 0
+    const fuelCostPerMile = totalMiles > 0 ? Math.round((fuelCost / totalMiles) * 100) / 100 : 0
 
     return {
       totalRevenue,

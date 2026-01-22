@@ -246,12 +246,14 @@ export default function CustomerPortalPage() {
                     </div>
 
                     <div className="flex-shrink-0">
-                      <Link href={`/portal/${token}/loads/${load.id}`}>
-                        <Button variant="outline" className="w-full sm:w-auto">
-                          View Details
-                          <ArrowRight className="w-4 h-4 ml-2" />
-                        </Button>
-                      </Link>
+                      {token && load.id && typeof token === 'string' && typeof load.id === 'string' && token.trim() !== '' && load.id.trim() !== '' ? (
+                        <Link href={`/portal/${token}/loads/${load.id}`}>
+                          <Button variant="outline" className="w-full sm:w-auto">
+                            View Details
+                            <ArrowRight className="w-4 h-4 ml-2" />
+                          </Button>
+                        </Link>
+                      ) : null}
                     </div>
                   </div>
                 </Card>
@@ -326,12 +328,14 @@ export default function CustomerPortalPage() {
                     </div>
 
                     <div className="flex-shrink-0">
-                      <Link href={`/portal/${token}/invoices/${invoice.id}`}>
-                        <Button variant="outline" className="w-full sm:w-auto">
-                          View Invoice
-                          <ArrowRight className="w-4 h-4 ml-2" />
-                        </Button>
-                      </Link>
+                      {token && invoice.id && typeof token === 'string' && typeof invoice.id === 'string' && token.trim() !== '' && invoice.id.trim() !== '' ? (
+                        <Link href={`/portal/${token}/invoices/${invoice.id}`}>
+                          <Button variant="outline" className="w-full sm:w-auto">
+                            View Invoice
+                            <ArrowRight className="w-4 h-4 ml-2" />
+                          </Button>
+                        </Link>
+                      ) : null}
                     </div>
                   </div>
                 </Card>

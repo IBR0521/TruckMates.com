@@ -7,13 +7,14 @@ import Link from "next/link"
 import { Logo } from "@/components/logo"
 
 export default function RegisterPage() {
-  const [role, setRole] = useState<"manager" | "user" | null>(null)
+  const [role, setRole] = useState<"manager" | "broker" | "carrier" | "user" | null>(null)
 
-  const handleRoleSelect = (selectedRole: "manager" | "user") => {
+  const handleRoleSelect = (selectedRole: "manager" | "broker" | "carrier" | "user") => {
     setRole(selectedRole)
     // Redirect to appropriate registration form
-    if (selectedRole === "manager") {
-      window.location.href = "/register/manager"
+    if (selectedRole === "manager" || selectedRole === "broker" || selectedRole === "carrier") {
+      // All use manager registration form, but with different company types
+      window.location.href = `/register/manager?type=${selectedRole}`
     } else {
       window.location.href = "/register/user"
     }
@@ -39,32 +40,60 @@ export default function RegisterPage() {
         {/* Register Card */}
         <Card className="bg-card border-border p-8">
           <h1 className="text-3xl font-bold text-foreground mb-2 text-center">Create Account</h1>
-          <p className="text-center text-muted-foreground mb-10">Choose your role to get started</p>
+          <p className="text-center text-muted-foreground mb-10">Choose your account type to get started</p>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
             {/* Manager Option */}
             <button
               onClick={() => handleRoleSelect("manager")}
-              className="border-2 border-border rounded-xl p-8 hover:border-primary hover:bg-primary/5 transition group"
+              className="border-2 border-border rounded-xl p-6 hover:border-primary hover:bg-primary/5 transition group text-left"
             >
-              <div className="w-14 h-14 bg-primary/20 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary/30 transition">
+              <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary/30 transition">
                 <Logo size="sm" showText={false} />
               </div>
-              <h3 className="text-xl font-bold text-foreground mb-2">Manager</h3>
+              <h3 className="text-lg font-bold text-foreground mb-2">Fleet Manager</h3>
               <p className="text-sm text-muted-foreground">
-                Lead your team, manage drivers, track fleet, and handle subscriptions
+                Standard fleet management - manage drivers, track vehicles, and handle operations
               </p>
             </button>
 
-            {/* Simple User Option */}
+            {/* Broker Option */}
             <button
-              onClick={() => handleRoleSelect("user")}
-              className="border-2 border-border rounded-xl p-8 hover:border-primary hover:bg-primary/5 transition group"
+              onClick={() => handleRoleSelect("broker")}
+              className="border-2 border-border rounded-xl p-6 hover:border-primary hover:bg-primary/5 transition group text-left"
             >
-              <div className="w-14 h-14 bg-primary/20 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary/30 transition">
+              <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary/30 transition">
                 <Logo size="sm" showText={false} />
               </div>
-              <h3 className="text-xl font-bold text-foreground mb-2">Driver/Employee</h3>
+              <h3 className="text-lg font-bold text-foreground mb-2">Broker</h3>
+              <p className="text-sm text-muted-foreground">
+                Post loads to the marketplace and connect with carriers to move freight
+              </p>
+            </button>
+
+            {/* Carrier Option */}
+            <button
+              onClick={() => handleRoleSelect("carrier")}
+              className="border-2 border-border rounded-xl p-6 hover:border-primary hover:bg-primary/5 transition group text-left"
+            >
+              <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary/30 transition">
+                <Logo size="sm" showText={false} />
+              </div>
+              <h3 className="text-lg font-bold text-foreground mb-2">Carrier</h3>
+              <p className="text-sm text-muted-foreground">
+                Accept loads from the marketplace and automatically manage them in your dashboard
+              </p>
+            </button>
+
+            {/* Driver/Employee Option */}
+            <button
+              onClick={() => handleRoleSelect("user")}
+              className="border-2 border-border rounded-xl p-6 hover:border-primary hover:bg-primary/5 transition group text-left"
+            >
+              <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary/30 transition">
+                <Logo size="sm" showText={false} />
+              </div>
+              <h3 className="text-lg font-bold text-foreground mb-2">Driver/Employee</h3>
               <p className="text-sm text-muted-foreground">Join a team as a driver or employee and manage your tasks</p>
             </button>
           </div>

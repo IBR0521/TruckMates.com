@@ -7,8 +7,11 @@ import Link from "next/link"
 import { exportToExcel } from "@/lib/export-utils"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
-import { getInvoices, deleteInvoice } from "@/app/actions/accounting"
+import { useState, useEffect, useRef } from "react"
+import { getInvoices, deleteInvoice, updateInvoice, duplicateInvoice } from "@/app/actions/accounting"
+import { InlineStatusSelect } from "@/components/dashboard/inline-status-select"
+import { useListPageShortcuts } from "@/lib/hooks/use-keyboard-shortcuts"
+import { Copy } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +28,7 @@ export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const loadInvoices = async () => {
     setIsLoading(true)
@@ -65,6 +69,32 @@ export default function InvoicesPage() {
       await loadInvoices()
     }
   }
+
+  const handleStatusUpdate = async (id: string, status: string) => {
+    const result = await updateInvoice(id, { status })
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success("Status updated successfully")
+      await loadInvoices()
+    }
+  }
+
+  const handleDuplicate = async (id: string) => {
+    const result = await duplicateInvoice(id)
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success("Invoice duplicated successfully")
+      await loadInvoices()
+      if (result.data) {
+        router.push(`/dashboard/accounting/invoices/${result.data.id}`)
+      }
+    }
+  }
+
+  // Keyboard shortcuts
+  useListPageShortcuts(router, "/dashboard/accounting/invoices/create", searchInputRef)
 
   return (
     <div className="w-full">
@@ -166,17 +196,11 @@ export default function InvoicesPage() {
                           <td className="px-6 py-4 text-foreground font-semibold">${invoice.amount ? parseFloat(invoice.amount).toFixed(2) : "0.00"}</td>
                           <td className="px-6 py-4 text-foreground">{invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : "N/A"}</td>
                           <td className="px-6 py-4">
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                invoice.status === "paid" || invoice.status === "Paid"
-                                  ? "bg-green-500/20 text-green-400"
-                                  : invoice.status === "pending" || invoice.status === "Pending" || invoice.status === "sent"
-                                    ? "bg-blue-500/20 text-blue-400"
-                                    : "bg-red-500/20 text-red-400"
-                              }`}
-                            >
-                              {invoice.status ? invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1) : "Pending"}
-                            </span>
+                            <InlineStatusSelect
+                              currentStatus={invoice.status || "draft"}
+                              availableStatuses={["draft", "sent", "pending", "paid", "overdue", "cancelled"]}
+                              onStatusChange={(newStatus) => handleStatusUpdate(invoice.id, newStatus)}
+                            />
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
@@ -185,14 +209,25 @@ export default function InvoicesPage() {
                                 size="sm"
                                 className="hover:bg-secondary/50"
                                 onClick={() => router.push(`/dashboard/accounting/invoices/${invoice.id}`)}
+                                title="View invoice"
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
+                                className="hover:bg-blue-500/20"
+                                onClick={() => handleDuplicate(invoice.id)}
+                                title="Duplicate invoice"
+                              >
+                                <Copy className="w-4 h-4 text-blue-400" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                 className="hover:bg-secondary/50"
                                 onClick={() => toast.info("Invoice sent successfully")}
+                                title="Send invoice"
                               >
                                 <Send className="w-4 h-4" />
                               </Button>
@@ -215,17 +250,11 @@ export default function InvoicesPage() {
                           <h3 className="text-lg font-semibold text-foreground">{invoice.invoice_number || invoice.id}</h3>
                           <p className="text-sm text-muted-foreground">{invoice.customer_name || "N/A"}</p>
                         </div>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            invoice.status === "paid" || invoice.status === "Paid"
-                              ? "bg-green-500/20 text-green-400"
-                              : invoice.status === "pending" || invoice.status === "Pending" || invoice.status === "sent"
-                                ? "bg-blue-500/20 text-blue-400"
-                                : "bg-red-500/20 text-red-400"
-                          }`}
-                        >
-                          {invoice.status ? invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1) : "Pending"}
-                        </span>
+                        <InlineStatusSelect
+                          currentStatus={invoice.status || "draft"}
+                          availableStatuses={["draft", "sent", "pending", "paid", "overdue", "cancelled"]}
+                          onStatusChange={(newStatus) => handleStatusUpdate(invoice.id, newStatus)}
+                        />
                       </div>
                       
                       <div className="space-y-2 pt-2 border-t border-border/30">
@@ -248,6 +277,15 @@ export default function InvoicesPage() {
                         >
                           <Eye className="w-4 h-4 mr-2" />
                           View
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="hover:bg-blue-500/20"
+                          onClick={() => handleDuplicate(invoice.id)}
+                          title="Duplicate invoice"
+                        >
+                          <Copy className="w-4 h-4 text-blue-400" />
                         </Button>
                         <Button
                           variant="outline"
