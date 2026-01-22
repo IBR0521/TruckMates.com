@@ -22,6 +22,9 @@ const nextConfig = {
   },
   // Performance: Enable React strict mode for better development experience
   reactStrictMode: true,
+  // Externalize optional dependencies to prevent build errors
+  // These packages are dynamically imported and may not be installed
+  serverExternalPackages: ['twilio'],
 }
 
 export default nextConfig

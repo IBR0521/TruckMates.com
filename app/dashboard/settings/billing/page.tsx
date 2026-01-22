@@ -14,7 +14,6 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
-import { SubscriptionSection } from "../subscription-section"
 import { getBillingInfo, updateBillingInfo } from "@/app/actions/settings-billing"
 
 export default function BillingSettingsPage() {
@@ -107,8 +106,6 @@ export default function BillingSettingsPage() {
           </Card>
         ) : (
           <>
-            <SubscriptionSection />
-
         <Card className="p-6">
           <h2 className="text-lg font-semibold mb-4">Billing Information</h2>
           

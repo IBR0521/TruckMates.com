@@ -25,8 +25,9 @@ async function getTwilioClient() {
 
   try {
     // Dynamically import Twilio to avoid errors if not installed
-    // This will fail gracefully if twilio is not installed
-    const twilioModule = await import("twilio").catch(() => null)
+    // Use Function constructor to prevent Next.js from analyzing the import at build time
+    const dynamicImport = new Function('moduleName', 'return import(moduleName)')
+    const twilioModule = await dynamicImport("twilio").catch(() => null)
     if (!twilioModule || !twilioModule.default) {
       console.log("[SMS] Twilio SDK not installed. Run: npm install twilio")
       return null
