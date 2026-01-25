@@ -37,3 +37,4 @@ export async function getCompanyType() {
   return { data: company?.company_type || null, error: null }
 }
 
+

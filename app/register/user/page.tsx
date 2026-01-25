@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -13,7 +13,7 @@ import { Logo } from "@/components/logo"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 
-export default function UserRegisterPage() {
+function UserRegisterForm() {
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -101,8 +101,12 @@ export default function UserRegisterPage() {
 
         {/* Registration Card */}
         <Card className="bg-card border-border p-8">
-          <h1 className="text-2xl font-bold text-foreground mb-2 text-center">Employee Registration</h1>
-          <p className="text-center text-muted-foreground mb-8 text-sm">Create your account and join your team</p>
+          <h1 className="text-2xl font-bold text-foreground mb-2 text-center">
+            Employee / Driver Registration
+          </h1>
+          <p className="text-center text-muted-foreground mb-8">
+            Join an existing company
+          </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -121,7 +125,7 @@ export default function UserRegisterPage() {
               <Input
                 type="email"
                 name="email"
-                placeholder="john@company.com"
+                placeholder="you@company.com"
                 value={formData.email}
                 onChange={handleChange}
                 className="mt-2 bg-input border-border text-foreground placeholder:text-muted-foreground"
@@ -161,5 +165,17 @@ export default function UserRegisterPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function UserRegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    }>
+      <UserRegisterForm />
+    </Suspense>
   )
 }

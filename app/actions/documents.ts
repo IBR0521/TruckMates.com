@@ -105,6 +105,76 @@ export async function deleteDocument(id: string) {
   return { error: null }
 }
 
+// Bulk delete documents
+export async function deleteDocuments(ids: string[]) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated" }
+  }
+
+  if (!ids || ids.length === 0) {
+    return { error: "No documents selected" }
+  }
+
+  // Get all documents to retrieve file paths
+  const { data: documents, error: docError } = await supabase
+    .from("documents")
+    .select("id, file_url")
+    .in("id", ids)
+
+  if (docError || !documents || documents.length === 0) {
+    return { error: docError?.message || "Documents not found" }
+  }
+
+  // Extract and collect all file paths
+  const filePaths: string[] = []
+  for (const document of documents) {
+    let filePath = document.file_url
+
+    // Extract path from public URL
+    const publicUrlMatch = filePath.match(/\/storage\/v1\/object\/public\/documents\/(.+)$/)
+    if (publicUrlMatch) {
+      filePath = publicUrlMatch[1]
+    } else {
+      // Extract path from signed URL or direct path
+      const signedUrlMatch = filePath.match(/\/storage\/v1\/object\/[^/]+\/documents\/(.+?)(\?|$)/)
+      if (signedUrlMatch) {
+        filePath = signedUrlMatch[1]
+      } else if (!filePath.includes('/')) {
+        filePath = filePath.replace(/^\/+/, '')
+      }
+    }
+
+    if (filePath && !filePath.includes('http')) {
+      filePaths.push(filePath)
+    }
+  }
+
+  // Delete files from storage (batch delete)
+  if (filePaths.length > 0) {
+    const { error: storageError } = await supabase.storage
+      .from("documents")
+      .remove(filePaths)
+
+    // Log storage error but don't fail if files don't exist
+    if (storageError && !storageError.message.includes('not found')) {
+      console.warn("Failed to delete some files from storage:", storageError.message)
+    }
+  }
+
+  // Delete database records
+  const { error } = await supabase.from("documents").delete().in("id", ids)
+  if (error) return { error: error.message }
+  
+  revalidatePath("/dashboard/documents")
+  return { error: null, deletedCount: documents.length }
+}
+
 // Get signed URL for viewing/downloading a document
 export async function getDocumentUrl(documentId: string) {
   const supabase = await createClient()
@@ -169,5 +239,112 @@ export async function getDocumentUrl(documentId: string) {
 
   // Fallback to stored URL
   return { data: { url: document.file_url, name: document.name }, error: null }
+}
+
+// Upload a document
+export async function uploadDocument(
+  file: File,
+  metadata?: {
+    name?: string
+    type?: string
+    expiry_date?: string
+  }
+) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  // Get company_id
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+  const companyError = result.error
+
+  if (companyError || !company_id) {
+    return { error: companyError || "No company found", data: null }
+  }
+
+  try {
+    // Upload file to Supabase storage
+    const fileExt = file.name.split(".").pop()
+    const fileName = `${user.id}/${Date.now()}.${fileExt}`
+    const filePath = fileName
+
+    const { error: uploadError } = await supabase.storage
+      .from("documents")
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      })
+
+    if (uploadError) {
+      return { error: `Upload failed: ${uploadError.message}`, data: null }
+    }
+
+    // Create signed URL for storage
+    const { data: signedUrlData, error: signedError } = await supabase.storage
+      .from("documents")
+      .createSignedUrl(filePath, 31536000) // 1 year expiry
+
+    if (signedError || !signedUrlData?.signedUrl) {
+      // Try public URL as fallback
+      const { data: publicUrlData } = supabase.storage
+        .from("documents")
+        .getPublicUrl(filePath)
+      
+      const fileUrl = publicUrlData?.publicUrl || filePath
+
+      // Save document record
+      const { data: documentData, error: docError } = await supabase
+        .from("documents")
+        .insert({
+          company_id: company_id,
+          name: metadata?.name || file.name,
+          type: metadata?.type || "other",
+          file_url: fileUrl,
+          file_size: file.size,
+          upload_date: new Date().toISOString().split("T")[0],
+          expiry_date: metadata?.expiry_date || null,
+        })
+        .select()
+        .single()
+
+      if (docError) {
+        return { error: docError.message, data: null }
+      }
+
+      revalidatePath("/dashboard/documents")
+      return { data: documentData, error: null }
+    }
+
+    // Save document record with signed URL
+    const { data: documentData, error: docError } = await supabase
+      .from("documents")
+      .insert({
+        company_id: company_id,
+        name: metadata?.name || file.name,
+        type: metadata?.type || "other",
+        file_url: signedUrlData.signedUrl,
+        file_size: file.size,
+        upload_date: new Date().toISOString().split("T")[0],
+        expiry_date: metadata?.expiry_date || null,
+      })
+      .select()
+      .single()
+
+    if (docError) {
+      return { error: docError.message, data: null }
+    }
+
+    revalidatePath("/dashboard/documents")
+    return { data: documentData, error: null }
+  } catch (error: any) {
+    return { error: error?.message || "Upload failed", data: null }
+  }
 }
 

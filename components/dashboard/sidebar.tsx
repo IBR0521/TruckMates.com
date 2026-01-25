@@ -95,40 +95,27 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
 
   useEffect(() => {
     let isMounted = true
-    let timeoutId: NodeJS.Timeout | null = null
     
     async function checkUserRole() {
       try {
-        // Add timeout to prevent hanging (1 second max - very aggressive)
-        const timeoutPromise = new Promise((resolve) => {
-          timeoutId = setTimeout(() => {
-            resolve({ data: null, error: "Timeout" })
-          }, 1000) // 1 second timeout - very aggressive
-        })
-        
-        const result = await Promise.race([
-          getCurrentUser(),
-          timeoutPromise
-        ]) as any
+        const result = await getCurrentUser()
         
         if (!isMounted) return
         
         if (result?.data) {
-          setIsManager(result.data.role === "manager")
+          // Simple check: manager or owner = manager, everything else = user
+          const role = result.data.role
+          setIsManager(role === "manager" || role === "owner")
         } else {
-          // Default to false if error or timeout - don't block sidebar
           setIsManager(false)
         }
       } catch (error) {
         if (!isMounted) return
-        // Default to false on error - don't block sidebar
+        console.error('[Sidebar] Role check error:', error)
         setIsManager(false)
       } finally {
         if (isMounted) {
           setIsLoading(false)
-        }
-        if (timeoutId) {
-          clearTimeout(timeoutId)
         }
       }
     }
@@ -136,7 +123,6 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
     
     return () => {
       isMounted = false
-      if (timeoutId) clearTimeout(timeoutId)
     }
   }, [])
 
@@ -186,6 +172,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
 
         {/* Navigation */}
         <nav className={`flex-1 py-6 space-y-2 overflow-y-auto ${shouldShowCollapsed ? "px-2" : "px-4"}`}>
+          {/* Dashboard is always visible */}
           <NavItem href="/dashboard" icon={BarChart3} label="Dashboard" isCollapsed={shouldShowCollapsed} />
 
           {/* Drivers Dropdown */}
@@ -198,7 +185,9 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             isCollapsed={shouldShowCollapsed}
           >
             <NavItem href="/dashboard/drivers" label="Driver List" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/drivers/add" label="Add Driver" isSubitem isCollapsed={shouldShowCollapsed} />
+            {isManager && (
+              <NavItem href="/dashboard/drivers/add" label="Add Driver" isSubitem isCollapsed={shouldShowCollapsed} />
+            )}
           </DropdownItem>
 
           {/* Vehicles Dropdown */}
@@ -211,7 +200,9 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             isCollapsed={shouldShowCollapsed}
           >
             <NavItem href="/dashboard/trucks" label="Vehicle List" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/trucks/add" label="Add Vehicle" isSubitem isCollapsed={shouldShowCollapsed} />
+            {isManager && (
+              <NavItem href="/dashboard/trucks/add" label="Add Vehicle" isSubitem isCollapsed={shouldShowCollapsed} />
+            )}
           </DropdownItem>
 
           {/* Routes Dropdown */}
@@ -224,8 +215,12 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             isCollapsed={shouldShowCollapsed}
           >
             <NavItem href="/dashboard/routes" label="Route List" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/routes/add" label="Add Route" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/routes/optimize" label="Optimize Routes" isSubitem isCollapsed={shouldShowCollapsed} />
+            {isManager && (
+              <>
+                <NavItem href="/dashboard/routes/add" label="Add Route" isSubitem isCollapsed={shouldShowCollapsed} />
+                <NavItem href="/dashboard/routes/optimize" label="Optimize Routes" isSubitem isCollapsed={shouldShowCollapsed} />
+              </>
+            )}
           </DropdownItem>
 
           {/* Loads Dropdown */}
@@ -238,7 +233,9 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             isCollapsed={shouldShowCollapsed}
           >
             <NavItem href="/dashboard/loads" label="Load List" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/loads/add" label="Add Load" isSubitem isCollapsed={shouldShowCollapsed} />
+            {isManager && (
+              <NavItem href="/dashboard/loads/add" label="Add Load" isSubitem isCollapsed={shouldShowCollapsed} />
+            )}
           </DropdownItem>
 
           {/* Dispatch Board */}
@@ -260,9 +257,13 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             isCollapsed={shouldShowCollapsed}
           >
             <NavItem href="/dashboard/customers" label="Customers" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/customers/add" label="Add Customer" isSubitem isCollapsed={shouldShowCollapsed} />
+            {isManager && (
+              <NavItem href="/dashboard/customers/add" label="Add Customer" isSubitem isCollapsed={shouldShowCollapsed} />
+            )}
             <NavItem href="/dashboard/vendors" label="Vendors" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/vendors/add" label="Add Vendor" isSubitem isCollapsed={shouldShowCollapsed} />
+            {isManager && (
+              <NavItem href="/dashboard/vendors/add" label="Add Vendor" isSubitem isCollapsed={shouldShowCollapsed} />
+            )}
           </DropdownItem>
 
           {/* Accounting Dropdown */}
@@ -290,7 +291,9 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             isCollapsed={shouldShowCollapsed}
           >
             <NavItem href="/dashboard/maintenance" label="Schedule" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/maintenance/add" label="Add Service" isSubitem isCollapsed={shouldShowCollapsed} />
+            {isManager && (
+              <NavItem href="/dashboard/maintenance/add" label="Add Service" isSubitem isCollapsed={shouldShowCollapsed} />
+            )}
           </DropdownItem>
 
           {/* DVIR */}
@@ -329,13 +332,14 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
           {/* BOLs (Bill of Lading) */}
           <NavItem href="/dashboard/bols" icon={FileText} label="Bill of Lading" isCollapsed={shouldShowCollapsed} />
 
-          {/* Upload & Analyze Document */}
-          <NavItem href="/dashboard/upload-document" icon={Upload} label="Upload Document" isCollapsed={shouldShowCollapsed} />
 
-          {/* Employees - Managers Only */}
+          {/* Employees - Managers only */}
           {isManager && (
             <NavItem href="/dashboard/employees" icon={UserCog} label="Employees" isCollapsed={shouldShowCollapsed} />
           )}
+
+          {/* Marketplace */}
+          <NavItem href="/dashboard/marketplace" icon={Store} label="Marketplace" isCollapsed={shouldShowCollapsed} />
 
         </nav>
 

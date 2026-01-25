@@ -9,36 +9,122 @@ import { getCachedUserCompany } from "@/lib/query-optimizer"
  * Syncs accounting data between TruckMates and QuickBooks
  */
 
-// Get QuickBooks access token
-async function getQuickBooksAccessToken(apiKey: string, apiSecret: string, companyId: string) {
-  try {
-    // QuickBooks OAuth 2.0 flow
-    // In production, you'd use the full OAuth flow with redirects
-    // For now, we'll use API key/secret if provided
-    const response = await fetch("https://sandbox-quickbooks.api.intuit.com/oauth2/v1/tokens/bearer", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json",
-      },
-      body: new URLSearchParams({
-        grant_type: "client_credentials",
-        client_id: apiKey,
-        client_secret: apiSecret,
-        scope: "com.intuit.quickbooks.accounting",
-      }),
-    })
+// Get QuickBooks access token (with automatic refresh)
+async function getQuickBooksAccessToken(companyId: string): Promise<string> {
+  const supabase = await createClient()
 
-    if (!response.ok) {
-      throw new Error("Failed to get QuickBooks access token")
-    }
+  // Get integration settings with tokens
+  const { data: integrations } = await supabase
+    .from("company_integrations")
+    .select("quickbooks_access_token, quickbooks_refresh_token, quickbooks_token_expires_at, quickbooks_company_id, quickbooks_sandbox")
+    .eq("company_id", companyId)
+    .single()
 
-    const data = await response.json()
-    return data.access_token
-  } catch (error: any) {
-    console.error("[QuickBooks] Token error:", error)
-    throw error
+  if (!integrations?.quickbooks_enabled) {
+    throw new Error("QuickBooks integration is not enabled")
   }
+
+  // Check if we have a valid access token
+  const now = new Date()
+  const expiresAt = integrations.quickbooks_token_expires_at ? new Date(integrations.quickbooks_token_expires_at) : null
+  
+  // If token exists and is not expired (with 5 minute buffer), use it
+  if (integrations.quickbooks_access_token && expiresAt && expiresAt > new Date(now.getTime() + 5 * 60 * 1000)) {
+    return integrations.quickbooks_access_token
+  }
+
+  // Token expired or missing, refresh it
+  if (!integrations.quickbooks_refresh_token) {
+    throw new Error("QuickBooks refresh token not found. Please reconnect QuickBooks.")
+  }
+
+  // Always use platform API keys from environment variables
+  const clientId = process.env.QUICKBOOKS_CLIENT_ID || ""
+  const clientSecret = process.env.QUICKBOOKS_CLIENT_SECRET || ""
+  
+  if (!clientId || !clientSecret) {
+    throw new Error("QuickBooks API credentials not configured. Please contact support.")
+  }
+  
+  const isSandbox = integrations.quickbooks_sandbox !== false
+  const baseUrl = isSandbox 
+    ? "https://sandbox-quickbooks.api.intuit.com"
+    : "https://quickbooks.api.intuit.com"
+  const redirectUri = process.env.QUICKBOOKS_REDIRECT_URI || `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/quickbooks/callback`
+
+  // Refresh the token
+  const refreshResponse = await fetch(`${baseUrl}/oauth2/v1/tokens/bearer`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Accept": "application/json",
+      "Authorization": `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: integrations.quickbooks_refresh_token,
+    }),
+  })
+
+  if (!refreshResponse.ok) {
+    const errorData = await refreshResponse.text()
+    console.error("[QuickBooks] Token refresh error:", errorData)
+    throw new Error("Failed to refresh QuickBooks access token. Please reconnect QuickBooks.")
+  }
+
+  const tokenData = await refreshResponse.json()
+  const { access_token, refresh_token: new_refresh_token, expires_in } = tokenData
+
+  // Update tokens in database
+  const expiresAtNew = new Date(Date.now() + (expires_in * 1000)).toISOString()
+  await supabase
+    .from("company_integrations")
+    .update({
+      quickbooks_access_token: access_token,
+      quickbooks_refresh_token: new_refresh_token || integrations.quickbooks_refresh_token,
+      quickbooks_token_expires_at: expiresAtNew,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("company_id", companyId)
+
+  return access_token
+}
+
+/**
+ * Initiate QuickBooks OAuth flow
+ * Returns the authorization URL to redirect user to
+ */
+export async function initiateQuickBooksOAuth() {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
+  }
+
+  const clientId = process.env.QUICKBOOKS_CLIENT_ID || ""
+  const redirectUri = process.env.QUICKBOOKS_REDIRECT_URI || `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/quickbooks/callback`
+  const isSandbox = process.env.QUICKBOOKS_SANDBOX !== "false"
+  const authUrl = isSandbox
+    ? "https://appcenter.intuit.com/connect/oauth2"
+    : "https://appcenter.intuit.com/connect/oauth2"
+
+  // Generate state for CSRF protection (use company_id)
+  const state = result.company_id
+
+  // Build authorization URL
+  const scopes = "com.intuit.quickbooks.accounting com.intuit.quickbooks.payment"
+  const authUrlWithParams = `${authUrl}?client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${encodeURIComponent(state)}&access_type=offline`
+
+  return { data: { authUrl: authUrlWithParams }, error: null }
 }
 
 /**
@@ -63,11 +149,11 @@ export async function syncInvoiceToQuickBooks(invoiceId: string) {
   // Get integration settings
   const { data: integrations } = await supabase
     .from("company_integrations")
-    .select("quickbooks_enabled, quickbooks_api_key, quickbooks_api_secret, quickbooks_company_id")
+    .select("quickbooks_enabled, quickbooks_company_id, quickbooks_sandbox")
     .eq("company_id", result.company_id)
     .single()
 
-  if (!integrations?.quickbooks_enabled || !integrations.quickbooks_api_key) {
+  if (!integrations?.quickbooks_enabled) {
     return { error: "QuickBooks integration is not enabled or configured", data: null }
   }
 
@@ -84,14 +170,11 @@ export async function syncInvoiceToQuickBooks(invoiceId: string) {
   }
 
   try {
-    const accessToken = await getQuickBooksAccessToken(
-      integrations.quickbooks_api_key,
-      integrations.quickbooks_api_secret || "",
-      integrations.quickbooks_company_id || ""
-    )
+    const accessToken = await getQuickBooksAccessToken(result.company_id)
 
     const qbCompanyId = integrations.quickbooks_company_id || ""
-    const baseUrl = qbCompanyId.includes("sandbox")
+    const isSandbox = integrations.quickbooks_sandbox !== false
+    const baseUrl = isSandbox
       ? "https://sandbox-quickbooks.api.intuit.com"
       : "https://quickbooks.api.intuit.com"
 
@@ -180,11 +263,11 @@ export async function syncExpenseToQuickBooks(expenseId: string) {
   // Get integration settings
   const { data: integrations } = await supabase
     .from("company_integrations")
-    .select("quickbooks_enabled, quickbooks_api_key, quickbooks_api_secret, quickbooks_company_id")
+    .select("quickbooks_enabled, quickbooks_company_id, quickbooks_sandbox")
     .eq("company_id", result.company_id)
     .single()
 
-  if (!integrations?.quickbooks_enabled || !integrations.quickbooks_api_key) {
+  if (!integrations?.quickbooks_enabled) {
     return { error: "QuickBooks integration is not enabled or configured", data: null }
   }
 
@@ -201,14 +284,11 @@ export async function syncExpenseToQuickBooks(expenseId: string) {
   }
 
   try {
-    const accessToken = await getQuickBooksAccessToken(
-      integrations.quickbooks_api_key,
-      integrations.quickbooks_api_secret || "",
-      integrations.quickbooks_company_id || ""
-    )
+    const accessToken = await getQuickBooksAccessToken(result.company_id)
 
     const qbCompanyId = integrations.quickbooks_company_id || ""
-    const baseUrl = qbCompanyId.includes("sandbox")
+    const isSandbox = integrations.quickbooks_sandbox !== false
+    const baseUrl = isSandbox
       ? "https://sandbox-quickbooks.api.intuit.com"
       : "https://quickbooks.api.intuit.com"
 
@@ -307,23 +387,20 @@ export async function testQuickBooksConnection() {
   // Get integration settings
   const { data: integrations } = await supabase
     .from("company_integrations")
-    .select("quickbooks_enabled, quickbooks_api_key, quickbooks_api_secret, quickbooks_company_id")
+    .select("quickbooks_enabled, quickbooks_company_id, quickbooks_sandbox")
     .eq("company_id", result.company_id)
     .single()
 
-  if (!integrations?.quickbooks_enabled || !integrations.quickbooks_api_key) {
+  if (!integrations?.quickbooks_enabled) {
     return { error: "QuickBooks integration is not enabled or configured", data: null }
   }
 
   try {
-    const accessToken = await getQuickBooksAccessToken(
-      integrations.quickbooks_api_key,
-      integrations.quickbooks_api_secret || "",
-      integrations.quickbooks_company_id || ""
-    )
+    const accessToken = await getQuickBooksAccessToken(result.company_id)
 
     const qbCompanyId = integrations.quickbooks_company_id || ""
-    const baseUrl = qbCompanyId.includes("sandbox")
+    const isSandbox = integrations.quickbooks_sandbox !== false
+    const baseUrl = isSandbox
       ? "https://sandbox-quickbooks.api.intuit.com"
       : "https://quickbooks.api.intuit.com"
 

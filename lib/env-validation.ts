@@ -28,6 +28,10 @@ const envConfig: EnvConfig = {
     'PAYPAL_CLIENT_SECRET',
     'RESEND_API_KEY',
     'OPENAI_API_KEY',
+    'GEMINI_API_KEY',
+    'GOOGLE_MAPS_API_KEY',
+    'QUICKBOOKS_CLIENT_ID',
+    'QUICKBOOKS_CLIENT_SECRET',
     'NEXT_PUBLIC_APP_URL',
   ],
   defaults: {

@@ -17,7 +17,7 @@ import { checkCompanyNameExists, createCompanyAndLinkUser } from "@/app/actions/
 
 function ManagerRegisterForm() {
   const searchParams = useSearchParams()
-  const accountType = searchParams.get("type") // 'manager', 'broker', 'carrier'
+  const accountType = searchParams.get("type") // Legacy: 'manager', 'broker', 'carrier'
   
   const [formData, setFormData] = useState({
     companyName: "",
@@ -30,7 +30,7 @@ function ManagerRegisterForm() {
   const router = useRouter()
   const supabase = createClient()
 
-  // Set company type based on URL parameter
+  // Set company type based on URL parameter (backward compatibility)
   useEffect(() => {
     if (accountType === "broker") {
       setFormData(prev => ({ ...prev, companyType: "broker" }))
@@ -103,38 +103,28 @@ function ManagerRegisterForm() {
         return
       }
 
-      // Step 2: Create company and link user (using server action to bypass RLS)
+      // Step 2: Create company and link user (using server action)
       const companyResult = await createCompanyAndLinkUser({
-        companyName: formData.companyName,
+        companyName: formData.companyName.trim(),
         email: formData.email,
         phone: formData.phone,
         userId: authData.user.id,
-        companyType: formData.companyType || null
+        companyType: formData.companyType || null,
       })
 
       if (companyResult.error) {
-        toast.error(companyResult.error || "Failed to create company. Please try again or contact support.")
+        toast.error(companyResult.error)
         setIsLoading(false)
         return
       }
 
       toast.success("Account created successfully!")
-      
-      // Redirect based on company type
-      if (formData.companyType === "broker" || formData.companyType === "carrier" || formData.companyType === "both") {
-        // Brokers and carriers skip plans and go directly to marketplace
-        setTimeout(() => {
-          router.push("/marketplace/dashboard")
-        }, 500)
-      } else {
-        // Regular managers go to plans
-        setTimeout(() => {
-          router.push("/plans?type=manager")
-        }, 500)
-      }
-    } catch (error: any) {
+      setTimeout(() => {
+        router.push("/account-setup/manager")
+      }, 500)
+    } catch (error) {
       console.error("Registration error:", error)
-      toast.error(error?.message || "An error occurred. Please try again.")
+      toast.error("An error occurred. Please try again.")
       setIsLoading(false)
     }
   }
@@ -159,14 +149,10 @@ function ManagerRegisterForm() {
         {/* Registration Card */}
         <Card className="bg-card border-border p-8">
           <h1 className="text-2xl font-bold text-foreground mb-2 text-center">
-            {accountType === "broker" && "Broker Registration"}
-            {accountType === "carrier" && "Carrier Registration"}
-            {(!accountType || accountType === "manager") && "Fleet Manager Registration"}
+            Company Registration
           </h1>
           <p className="text-center text-muted-foreground mb-8">
-            {accountType === "broker" && "Set up your broker account and start posting loads"}
-            {accountType === "carrier" && "Set up your carrier account and start accepting loads"}
-            {(!accountType || accountType === "manager") && "Set up your fleet management account"}
+            Set up your company account
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -273,11 +259,8 @@ function ManagerRegisterForm() {
 export default function ManagerRegisterPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
-        <div className="text-center">
-          <Logo size="lg" />
-          <p className="text-muted-foreground mt-4">Loading...</p>
-        </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
       </div>
     }>
       <ManagerRegisterForm />

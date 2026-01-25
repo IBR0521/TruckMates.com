@@ -6,39 +6,42 @@ import { revalidatePath } from "next/cache"
 
 // Helper to get Resend client (checks both env var and database)
 async function getResendClient() {
-  // First, try environment variable
-  let apiKey = process.env.RESEND_API_KEY
+  // Always use platform API key from environment variables
+  const apiKey = process.env.RESEND_API_KEY
   
-  // If not in env, try to get from integration settings
   if (!apiKey) {
-    try {
-      const supabase = await createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+    console.error("[RESEND] Platform API key not configured")
+    return null
+  }
 
-      if (user) {
-        const { getCachedUserCompany } = await import("@/lib/query-optimizer")
-        const result = await getCachedUserCompany(user.id)
-        
-        if (result.company_id) {
-          const { data: integrations } = await supabase
-            .from("company_integrations")
-            .select("resend_enabled, resend_api_key")
-            .eq("company_id", result.company_id)
-            .single()
+  // Check if integration is enabled for this company
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-          if (integrations?.resend_enabled && integrations.resend_api_key) {
-            apiKey = integrations.resend_api_key
-          }
+    if (user) {
+      const { getCachedUserCompany } = await import("@/lib/query-optimizer")
+      const result = await getCachedUserCompany(user.id)
+      
+      if (result.company_id) {
+        const { data: integrations } = await supabase
+          .from("company_integrations")
+          .select("resend_enabled")
+          .eq("company_id", result.company_id)
+          .single()
+
+        if (!integrations?.resend_enabled) {
+          console.log("[RESEND] Integration not enabled for company")
+          return null
         }
       }
-    } catch (error) {
-      // Silently fail - will return null below
     }
+  } catch (error) {
+    console.error("[RESEND] Error checking integration:", error)
+    return null
   }
-  
-  if (!apiKey) return null
   
   try {
     const { Resend } = await import("resend")

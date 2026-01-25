@@ -4,12 +4,19 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
 import { validateDriverData, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
+import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
 export async function getDrivers(filters?: {
   status?: string
   limit?: number
   offset?: number
 }) {
+  // Check permission
+  const permission = await checkViewPermission("drivers")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to view drivers", data: null, count: 0 }
+  }
+
   const supabase = await createClient()
 
   // Get current user
@@ -19,7 +26,7 @@ export async function getDrivers(filters?: {
   } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+    return { error: "Not authenticated", data: null, count: 0 }
   }
 
   // Use optimized helper with caching
@@ -91,6 +98,12 @@ export async function createDriver(formData: {
   truck_id?: string | null
   [key: string]: any // Allow additional fields
 }) {
+  // Check permission
+  const permission = await checkCreatePermission("drivers")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to create drivers", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -213,6 +226,12 @@ export async function updateDriver(
     [key: string]: any
   }
 ) {
+  // Check permission
+  const permission = await checkEditPermission("drivers")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to edit drivers", data: null }
+  }
+
   const supabase = await createClient()
 
   // Build update data, only including fields that are provided
@@ -246,6 +265,12 @@ export async function updateDriver(
 }
 
 export async function deleteDriver(id: string) {
+  // Check permission
+  const permission = await checkDeletePermission("drivers")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to delete drivers" }
+  }
+
   const supabase = await createClient()
 
   const { error } = await supabase.from("drivers").delete().eq("id", id)

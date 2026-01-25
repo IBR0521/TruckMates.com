@@ -27,6 +27,9 @@ export async function getUserProfile() {
       .select("id, email, full_name, phone, role, company_id")
       .eq("id", user.id)
       .single()
+    
+    // Also get employee_role from auth metadata
+    const employeeRole = user.user_metadata?.employee_role || null
 
     const userQueryTimeout = new Promise((resolve) => {
       setTimeout(() => resolve({ data: null, error: { message: "Query timeout" } }), 1000) // 1 second timeout
@@ -41,7 +44,17 @@ export async function getUserProfile() {
       return { error: error.message, data: null }
     }
 
-    return { data: userData, error: null }
+    // Add employee_role to user data
+    // Priority: auth metadata > users table role
+    const finalEmployeeRole = employeeRole || userData?.role || null
+    
+    const userDataWithRole = {
+      ...userData,
+      employee_role: finalEmployeeRole,
+      role: userData?.role || finalEmployeeRole, // Ensure role is always set
+    }
+
+    return { data: userDataWithRole, error: null }
   } catch (error: any) {
     return { error: error?.message || "Failed to get user profile", data: null }
   }

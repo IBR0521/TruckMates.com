@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
 import { createRoute } from "./routes"
@@ -54,6 +55,12 @@ export async function getLoads(filters?: {
   limit?: number
   offset?: number
 }) {
+  // Check permission
+  const permission = await checkViewPermission("loads")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to view loads", data: null, count: 0 }
+  }
+
   try {
     const supabase = await createClient()
 
@@ -250,6 +257,12 @@ export async function createLoad(formData: {
   source?: string
   marketplace_load_id?: string
 }) {
+  // Check permission
+  const permission = await checkCreatePermission("loads")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to create loads", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -892,6 +905,12 @@ export async function updateLoad(
 }
 
 export async function deleteLoad(id: string) {
+  // Check permission
+  const permission = await checkDeletePermission("loads")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to delete loads" }
+  }
+
   const supabase = await createClient()
 
   const { error } = await supabase.from("loads").delete().eq("id", id)

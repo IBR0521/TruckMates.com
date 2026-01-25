@@ -15,7 +15,7 @@ import {
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
 import { getIntegrationSettings, updateIntegrationSettings } from "@/app/actions/settings-integration"
-import { testQuickBooksConnection } from "@/app/actions/integrations-quickbooks"
+import { testQuickBooksConnection, initiateQuickBooksOAuth } from "@/app/actions/integrations-quickbooks"
 import { Button as TestButton } from "@/components/ui/button"
 
 export default function IntegrationSettingsPage() {
@@ -151,57 +151,53 @@ export default function IntegrationSettingsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>API Key</Label>
-                  <Input
-                    type="password"
-                    value={integrations.quickbooks_api_key}
-                    onChange={(e) => setIntegrations({
-                      ...integrations,
-                      quickbooks_api_key: e.target.value
-                    })}
-                    placeholder="Enter QuickBooks API key"
-                    disabled={!integrations.quickbooks_enabled}
-                  />
-                  <Label>API Secret</Label>
-                  <Input
-                    type="password"
-                    value={integrations.quickbooks_api_secret}
-                    onChange={(e) => setIntegrations({
-                      ...integrations,
-                      quickbooks_api_secret: e.target.value
-                    })}
-                    placeholder="Enter QuickBooks API secret"
-                    disabled={!integrations.quickbooks_enabled}
-                  />
-                  <Label>Company ID</Label>
-                  <Input
-                    type="text"
-                    value={integrations.quickbooks_company_id}
-                    onChange={(e) => setIntegrations({
-                      ...integrations,
-                      quickbooks_company_id: e.target.value
-                    })}
-                    placeholder="Enter QuickBooks Company ID"
-                    disabled={!integrations.quickbooks_enabled}
-                  />
-                  <TestButton
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      setIsTesting("quickbooks")
-                      const result = await testQuickBooksConnection()
-                      setIsTesting(null)
-                      if (result.error) {
-                        toast.error(result.error)
-                      } else {
-                        toast.success(`Connected to QuickBooks: ${result.data?.company || "Success"}`)
-                      }
-                    }}
-                    disabled={!integrations.quickbooks_enabled || isTesting === "quickbooks"}
-                  >
-                    {isTesting === "quickbooks" ? "Testing..." : "Test Connection"}
-                  </TestButton>
+                  <p className="text-sm text-muted-foreground">
+                    Connect your QuickBooks account to sync invoices and expenses automatically.
+                  </p>
+                  <div className="flex gap-2">
+                    {integrations.quickbooks_company_id ? (
+                      <>
+                        <TestButton
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            setIsTesting("quickbooks")
+                            const result = await testQuickBooksConnection()
+                            setIsTesting(null)
+                            if (result.error) {
+                              toast.error(result.error)
+                            } else {
+                              toast.success(`Connected to QuickBooks: ${result.data?.company || "Success"}`)
+                            }
+                          }}
+                          disabled={!integrations.quickbooks_enabled || isTesting === "quickbooks"}
+                        >
+                          {isTesting === "quickbooks" ? "Testing..." : "Test Connection"}
+                        </TestButton>
+                      </>
+                    ) : (
+                      <TestButton
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        onClick={async () => {
+                          setIsTesting("quickbooks")
+                          const result = await initiateQuickBooksOAuth()
+                          setIsTesting(null)
+                          if (result.error) {
+                            toast.error(result.error)
+                          } else if (result.data?.authUrl) {
+                            // Redirect to QuickBooks OAuth
+                            window.location.href = result.data.authUrl
+                          }
+                        }}
+                        disabled={!integrations.quickbooks_enabled || isTesting === "quickbooks"}
+                      >
+                        {isTesting === "quickbooks" ? "Connecting..." : "Connect QuickBooks"}
+                      </TestButton>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -266,7 +262,7 @@ export default function IntegrationSettingsPage() {
                   )}
                 </div>
               </div>
-              <div className="space-y-2">
+                <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Enable Google Maps</Label>
                   <Switch
@@ -277,17 +273,9 @@ export default function IntegrationSettingsPage() {
                     })}
                   />
                 </div>
-                <Label>API Key</Label>
-                <Input
-                  type="password"
-                  value={integrations.google_maps_api_key}
-                  onChange={(e) => setIntegrations({
-                    ...integrations,
-                    google_maps_api_key: e.target.value
-                  })}
-                  placeholder="Enter Google Maps API key"
-                  disabled={!integrations.google_maps_enabled}
-                />
+                <p className="text-sm text-muted-foreground">
+                  Route optimization and mapping features powered by Google Maps.
+                </p>
               </div>
             </div>
 
@@ -317,30 +305,8 @@ export default function IntegrationSettingsPage() {
                     })}
                   />
                 </div>
-                <Label>API Key</Label>
-                <Input
-                  type="password"
-                  value={integrations.resend_api_key}
-                  onChange={(e) => setIntegrations({
-                    ...integrations,
-                    resend_api_key: e.target.value
-                  })}
-                  placeholder="Enter Resend API key (re_...)"
-                  disabled={!integrations.resend_enabled}
-                />
-                <Label>From Email</Label>
-                <Input
-                  type="email"
-                  value={integrations.resend_from_email}
-                  onChange={(e) => setIntegrations({
-                    ...integrations,
-                    resend_from_email: e.target.value
-                  })}
-                  placeholder="TruckMates <notifications@yourdomain.com>"
-                  disabled={!integrations.resend_enabled}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Use your verified domain email or onboarding@resend.dev for testing
+                <p className="text-sm text-muted-foreground">
+                  Send invoices and notifications via email using the platform's email service.
                 </p>
               </div>
             </div>

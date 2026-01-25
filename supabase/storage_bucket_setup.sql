@@ -7,6 +7,13 @@ VALUES ('documents', 'documents', false)
 ON CONFLICT (id) DO NOTHING;
 
 -- 2. Storage Policies for the documents bucket
+-- Drop existing policies if they exist (to allow re-running this script)
+DROP POLICY IF EXISTS "Users can upload documents to their own folder" ON storage.objects;
+DROP POLICY IF EXISTS "Users can view their own documents" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update their own documents" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete their own documents" ON storage.objects;
+DROP POLICY IF EXISTS "Managers can view company documents" ON storage.objects;
+
 -- Allow authenticated users to upload files to their own folder
 CREATE POLICY "Users can upload documents to their own folder"
 ON storage.objects FOR INSERT

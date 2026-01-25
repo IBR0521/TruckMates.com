@@ -2,7 +2,6 @@
 
 import { createClient } from "@/lib/supabase/server"
 
-const DEMO_EMAIL = "demo@truckmates.com"
 const DEMO_COMPANY_NAME = "Demo Logistics Company"
 
 // Setup demo company for a user
@@ -33,12 +32,16 @@ export async function setupDemoCompany(userId: string | null) {
     // Use authenticated user ID (from session) if userId not provided
     const actualUserId = userId || authUser.id
 
+    // Get user email and role from auth
+    const userEmail = authUser.email || ""
+    const finalRole = "manager" // Simple: demo users are always managers
+
     // Get user record
     let userRecord = null
     if (actualUserId) {
       const { data } = await supabase
         .from("users")
-        .select("id, company_id, role")
+        .select("id, company_id, role, email")
         .eq("id", actualUserId)
         .maybeSingle()
       userRecord = data
@@ -48,6 +51,18 @@ export async function setupDemoCompany(userId: string | null) {
 
     if (userRecord?.company_id) {
       companyId = userRecord.company_id
+      // Update role to manager for demo
+      await supabase
+        .from("users")
+        .update({ role: "manager" })
+        .eq("id", actualUserId)
+      
+      // Update auth metadata
+      await supabase.auth.updateUser({
+        data: {
+          role: "manager",
+        }
+      })
     } else if (actualUserId) {
       // Check if demo company already exists
       const { data: existingCompany } = await supabase
@@ -70,11 +85,18 @@ export async function setupDemoCompany(userId: string | null) {
         if (updateError) {
           console.error("Error linking user to existing company:", updateError)
         }
+
+        // Update auth metadata
+        await supabase.auth.updateUser({
+          data: {
+            role: "manager",
+          }
+        })
       } else {
         // Use RPC function to create company (bypasses RLS)
         const { data: newCompanyId, error: rpcError } = await supabase.rpc('create_company_for_user', {
           p_name: DEMO_COMPANY_NAME,
-          p_email: DEMO_EMAIL,
+          p_email: userEmail,
           p_phone: "+1-555-DEMO",
           p_user_id: actualUserId
         })
@@ -87,7 +109,7 @@ export async function setupDemoCompany(userId: string | null) {
             .from("companies")
             .insert({
               name: DEMO_COMPANY_NAME,
-              email: DEMO_EMAIL,
+              email: userEmail,
               phone: "+1-555-DEMO",
             })
             .select()
@@ -108,7 +130,7 @@ export async function setupDemoCompany(userId: string | null) {
               .from("users")
               .insert({
                 id: actualUserId,
-                email: DEMO_EMAIL,
+                email: userEmail,
                 full_name: "Demo User",
                 role: "manager",
                 company_id: companyId,
@@ -131,6 +153,13 @@ export async function setupDemoCompany(userId: string | null) {
               console.error("Error updating user record:", updateError)
             }
           }
+
+          // Update auth metadata
+          await supabase.auth.updateUser({
+            data: {
+              role: "manager",
+            }
+          })
         } else {
           companyId = newCompanyId
         }

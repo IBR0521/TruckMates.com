@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { 
   ArrowRight, 
   Truck, 
@@ -20,21 +21,21 @@ import {
   TrendingUp,
   Database,
   Cloud,
-  Search,
-  Bell,
-  Keyboard,
-  Layers,
+  Star,
+  Play,
+  Award,
+  Target,
+  ArrowDown,
   Sparkles
 } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
-import { Badge } from "@/components/ui/badge"
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-background/95 backdrop-blur border-b border-border">
+      <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <Logo size="sm" />
           <div className="flex items-center gap-4">
@@ -42,101 +43,165 @@ export default function Home() {
               <Button variant="ghost" className="hidden sm:flex">Marketplace</Button>
             </Link>
             <Link href="/login">
-              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">Login</Button>
+              <Button variant="ghost" className="hidden sm:flex">Login</Button>
+            </Link>
+            <Link href="/register">
+              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">Get Started</Button>
             </Link>
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
+      <section className="relative pt-32 pb-24 px-4 sm:px-6 lg:px-8 overflow-hidden">
+        {/* Background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent -z-10" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl -z-10" />
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl -z-10" />
+        
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium text-primary">All-in-One Fleet Management Platform</span>
+            </div>
+
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-foreground mb-6 leading-tight">
               Complete Fleet Management
-              <span className="block text-primary mt-2">All in One Platform</span>
+              <span className="block text-primary mt-2 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                All in One Platform
+              </span>
             </h1>
-            <p className="text-xl md:text-2xl text-muted-foreground mb-4 max-w-3xl mx-auto leading-relaxed">
+            <p className="text-xl md:text-2xl text-muted-foreground mb-6 max-w-3xl mx-auto leading-relaxed">
               TruckMates is the ultimate logistics management platform that combines fleet tracking, 
               ELD compliance, route optimization, accounting, and driver management into a single, 
               powerful solution.
             </p>
-            <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
+            <p className="text-lg text-muted-foreground mb-10 max-w-2xl mx-auto">
               Designed for modern logistics companies, TruckMates helps you streamline operations, 
               reduce costs, ensure compliance, and grow your business with intelligent automation 
               and real-time insights.
             </p>
-            <div className="flex flex-wrap justify-center gap-4 mb-8 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <TrendingUp className="w-4 h-4 text-primary" />
-                <span>Reduce operating costs by up to 30%</span>
+
+            {/* Stats */}
+            <div className="flex flex-wrap justify-center gap-6 mb-10 text-sm">
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
+                <TrendingUp className="w-5 h-5 text-primary" />
+                <span className="font-semibold text-foreground">30%</span>
+                <span className="text-muted-foreground">Cost Reduction</span>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Shield className="w-4 h-4 text-primary" />
-                <span>100% DOT compliance guarantee</span>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
+                <Shield className="w-5 h-5 text-primary" />
+                <span className="font-semibold text-foreground">100%</span>
+                <span className="text-muted-foreground">DOT Compliant</span>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Zap className="w-4 h-4 text-primary" />
-                <span>Save 15+ hours per week on admin</span>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
+                <Zap className="w-5 h-5 text-primary" />
+                <span className="font-semibold text-foreground">15+</span>
+                <span className="text-muted-foreground">Hours Saved/Week</span>
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
               <Link href="/register">
-                <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-8">
-                  Get Started <ArrowRight className="ml-2 w-5 h-5" />
+                <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-8 py-6 shadow-lg shadow-primary/25">
+                  Get Started Free <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
               <Link href="/demo">
-                <Button size="lg" variant="outline" className="w-full sm:w-auto border-2 border-primary text-primary hover:bg-primary/10 text-lg px-8">
+                <Button size="lg" variant="outline" className="w-full sm:w-auto border-2 border-primary text-primary hover:bg-primary/10 text-lg px-8 py-6">
+                  <Play className="mr-2 w-5 h-5" />
                   View Demo
                 </Button>
               </Link>
+            </div>
+
+          </div>
+
+          {/* Scroll indicator */}
+          <div className="flex justify-center mt-12">
+            <div className="flex flex-col items-center gap-2 text-muted-foreground animate-bounce">
+              <span className="text-sm">Scroll to explore</span>
+              <ArrowDown className="w-5 h-5" />
             </div>
           </div>
         </div>
       </section>
 
       {/* What is TruckMates Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-secondary/30">
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-background to-secondary/20">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
+          <div className="text-center mb-16">
+            <Badge variant="outline" className="mb-4">About TruckMates</Badge>
             <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">What is TruckMates?</h2>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
               A comprehensive cloud-based platform that revolutionizes how logistics companies manage their operations
             </p>
           </div>
           
-          <div className="grid md:grid-cols-2 gap-8 items-center">
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-2xl font-bold text-foreground mb-3">Complete Operations Management</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  TruckMates provides everything you need to run a modern logistics operation. From vehicle 
-                  tracking and driver management to route planning, load coordination, accounting, and compliance 
-                  reporting - all integrated into one intuitive platform.
-                </p>
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div className="space-y-8">
+              <div className="group">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition">
+                    <Truck className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-foreground mb-3">Complete Operations Management</h3>
+                    <p className="text-muted-foreground leading-relaxed">
+                      TruckMates provides everything you need to run a modern logistics operation. From vehicle 
+                      tracking and driver management to route planning, load coordination, accounting, and compliance 
+                      reporting - all integrated into one intuitive platform.
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h3 className="text-2xl font-bold text-foreground mb-3">ELD Integration & Compliance</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  Full Electronic Logging Device (ELD) integration ensures your fleet stays compliant with 
-                  DOT regulations. Automatic Hours of Service (HOS) tracking, violation detection, and seamless 
-                  IFTA reporting help you avoid costly fines and keep your drivers safe.
-                </p>
+              <div className="group">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition">
+                    <Shield className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-foreground mb-3">ELD Integration & Compliance</h3>
+                    <p className="text-muted-foreground leading-relaxed">
+                      Full Electronic Logging Device (ELD) integration ensures your fleet stays compliant with 
+                      DOT regulations. Automatic Hours of Service (HOS) tracking, violation detection, and seamless 
+                      IFTA reporting help you avoid costly fines and keep your drivers safe.
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h3 className="text-2xl font-bold text-foreground mb-3">Real-Time Visibility That Drives Decisions</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  See exactly where every vehicle is, what every driver is doing, and how every route is performing 
-                  - in real-time. Make instant decisions when problems arise. No more waiting for phone calls or 
-                  checking multiple systems. Everything you need to run your operation is on one dashboard that 
-                  updates automatically.
-                </p>
+              <div className="group">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition">
+                    <BarChart3 className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-foreground mb-3">Real-Time Visibility That Drives Decisions</h3>
+                    <p className="text-muted-foreground leading-relaxed">
+                      See exactly where every vehicle is, what every driver is doing, and how every route is performing 
+                      - in real-time. Make instant decisions when problems arise. No more waiting for phone calls or 
+                      checking multiple systems. Everything you need to run your operation is on one dashboard that 
+                      updates automatically.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
             <div className="hidden md:flex justify-center">
-              <div className="w-full h-96 bg-gradient-to-br from-primary/20 to-transparent rounded-2xl border border-primary/30 flex items-center justify-center">
-                <Logo size="lg" showText={false} />
+              <div className="relative w-full max-w-lg">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent rounded-3xl blur-2xl" />
+                <div className="relative w-full h-[500px] bg-gradient-to-br from-primary/10 via-primary/5 to-transparent rounded-3xl border border-primary/20 flex items-center justify-center backdrop-blur-sm">
+                  <div className="text-center space-y-4">
+                    <div className="w-24 h-24 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto">
+                      <Truck className="w-12 h-12 text-primary" />
+                    </div>
+                    <Logo size="lg" showText={false} />
+                    <p className="text-sm text-muted-foreground">Complete Fleet Management</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -144,19 +209,22 @@ export default function Home() {
       </section>
 
       {/* Core Features - Detailed */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
+      <section className="py-24 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
+            <Badge variant="outline" className="mb-4">Features</Badge>
             <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">Powerful Features</h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Everything you need to manage your fleet efficiently and profitably
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Fleet Tracking */}
-            <Card className="bg-card border-border p-6 hover:border-primary/50 transition-colors">
-              <MapPin className="w-12 h-12 text-primary mb-4" />
+            <Card className="bg-card border-border p-6 hover:border-primary/50 hover:shadow-lg transition-all group">
+              <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
+                <MapPin className="w-7 h-7 text-primary" />
+              </div>
               <h3 className="text-xl font-bold text-foreground mb-3">Real-Time Fleet Tracking</h3>
               <p className="text-muted-foreground mb-4">
                 Track all your vehicles in real-time with GPS integration. See exact locations, 
@@ -179,8 +247,10 @@ export default function Home() {
             </Card>
 
             {/* ELD & Compliance */}
-            <Card className="bg-card border-border p-6 hover:border-primary/50 transition-colors">
-              <Clock className="w-12 h-12 text-primary mb-4" />
+            <Card className="bg-card border-border p-6 hover:border-primary/50 hover:shadow-lg transition-all group">
+              <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
+                <Clock className="w-7 h-7 text-primary" />
+              </div>
               <h3 className="text-xl font-bold text-foreground mb-3">ELD & HOS Compliance</h3>
               <p className="text-muted-foreground mb-4">
                 Complete Electronic Logging Device integration with automatic Hours of Service 
@@ -203,8 +273,10 @@ export default function Home() {
             </Card>
 
             {/* Driver Management */}
-            <Card className="bg-card border-border p-6 hover:border-primary/50 transition-colors">
-              <Users className="w-12 h-12 text-primary mb-4" />
+            <Card className="bg-card border-border p-6 hover:border-primary/50 hover:shadow-lg transition-all group">
+              <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
+                <Users className="w-7 h-7 text-primary" />
+              </div>
               <h3 className="text-xl font-bold text-foreground mb-3">Driver & Employee Management</h3>
               <p className="text-muted-foreground mb-4">
                 Comprehensive driver profiles, scheduling, performance tracking, and employee 
@@ -227,8 +299,10 @@ export default function Home() {
             </Card>
 
             {/* Route Optimization */}
-            <Card className="bg-card border-border p-6 hover:border-primary/50 transition-colors">
-              <Route className="w-12 h-12 text-primary mb-4" />
+            <Card className="bg-card border-border p-6 hover:border-primary/50 hover:shadow-lg transition-all group">
+              <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
+                <Route className="w-7 h-7 text-primary" />
+              </div>
               <h3 className="text-xl font-bold text-foreground mb-3">Route Planning & Optimization</h3>
               <p className="text-muted-foreground mb-4">
                 Intelligent route planning with multi-stop optimization, real-time traffic updates, 
@@ -251,8 +325,10 @@ export default function Home() {
             </Card>
 
             {/* Load Management */}
-            <Card className="bg-card border-border p-6 hover:border-primary/50 transition-colors">
-              <Truck className="w-12 h-12 text-primary mb-4" />
+            <Card className="bg-card border-border p-6 hover:border-primary/50 hover:shadow-lg transition-all group">
+              <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
+                <Truck className="w-7 h-7 text-primary" />
+              </div>
               <h3 className="text-xl font-bold text-foreground mb-3">Load & Delivery Management</h3>
               <p className="text-muted-foreground mb-4">
                 Full lifecycle load management from creation to delivery. Track loads, manage 
@@ -275,8 +351,10 @@ export default function Home() {
             </Card>
 
             {/* Analytics & Reports */}
-            <Card className="bg-card border-border p-6 hover:border-primary/50 transition-colors">
-              <BarChart3 className="w-12 h-12 text-primary mb-4" />
+            <Card className="bg-card border-border p-6 hover:border-primary/50 hover:shadow-lg transition-all group">
+              <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
+                <BarChart3 className="w-7 h-7 text-primary" />
+              </div>
               <h3 className="text-xl font-bold text-foreground mb-3">Analytics & Reporting</h3>
               <p className="text-muted-foreground mb-4">
                 Powerful analytics and customizable reports to gain insights into your operation. 
@@ -299,8 +377,10 @@ export default function Home() {
             </Card>
 
             {/* Accounting & Finance */}
-            <Card className="bg-card border-border p-6 hover:border-primary/50 transition-colors">
-              <DollarSign className="w-12 h-12 text-primary mb-4" />
+            <Card className="bg-card border-border p-6 hover:border-primary/50 hover:shadow-lg transition-all group">
+              <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
+                <DollarSign className="w-7 h-7 text-primary" />
+              </div>
               <h3 className="text-xl font-bold text-foreground mb-3">Accounting & Finance</h3>
               <p className="text-muted-foreground mb-4">
                 Complete financial management including invoicing, expense tracking, settlements, 
@@ -323,8 +403,10 @@ export default function Home() {
             </Card>
 
             {/* Maintenance Management */}
-            <Card className="bg-card border-border p-6 hover:border-primary/50 transition-colors">
-              <Gauge className="w-12 h-12 text-primary mb-4" />
+            <Card className="bg-card border-border p-6 hover:border-primary/50 hover:shadow-lg transition-all group">
+              <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
+                <Gauge className="w-7 h-7 text-primary" />
+              </div>
               <h3 className="text-xl font-bold text-foreground mb-3">Vehicle Maintenance</h3>
               <p className="text-muted-foreground mb-4">
                 Preventive and predictive maintenance scheduling, service history tracking, 
@@ -347,8 +429,10 @@ export default function Home() {
             </Card>
 
             {/* Security & Compliance */}
-            <Card className="bg-card border-border p-6 hover:border-primary/50 transition-colors">
-              <Shield className="w-12 h-12 text-primary mb-4" />
+            <Card className="bg-card border-border p-6 hover:border-primary/50 hover:shadow-lg transition-all group">
+              <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
+                <Shield className="w-7 h-7 text-primary" />
+              </div>
               <h3 className="text-xl font-bold text-foreground mb-3">Security & Compliance</h3>
               <p className="text-muted-foreground mb-4">
                 Enterprise-grade security with role-based access control, data encryption, 
@@ -373,68 +457,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* How It Works */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-secondary/30">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">How It Works</h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Get started in minutes and see results immediately
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-primary">1</span>
-              </div>
-              <h3 className="text-xl font-bold text-foreground mb-3">Sign Up & Setup</h3>
-              <p className="text-muted-foreground">
-                Create your account and complete the quick setup wizard. Add your company information, 
-                vehicles, and drivers in minutes.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-primary">2</span>
-              </div>
-              <h3 className="text-xl font-bold text-foreground mb-3">Connect Your Fleet</h3>
-              <p className="text-muted-foreground">
-                Integrate GPS tracking devices and ELD systems. Connect via APIs or use our mobile 
-                ELD app. Everything syncs automatically.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-primary">3</span>
-              </div>
-              <h3 className="text-xl font-bold text-foreground mb-3">Manage Operations</h3>
-              <p className="text-muted-foreground">
-                Start managing routes, loads, drivers, and schedules from the unified dashboard. 
-                Get real-time visibility and automate workflows.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-primary">4</span>
-              </div>
-              <h3 className="text-xl font-bold text-foreground mb-3">Analyze & Optimize</h3>
-              <p className="text-muted-foreground">
-                Use analytics and reports to identify opportunities, reduce costs, improve efficiency, 
-                and grow your business with data-driven insights.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* ROI & Business Impact */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-background to-secondary/20">
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-secondary/20 to-background">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
+            <Badge variant="outline" className="mb-4">Results</Badge>
             <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
               Stop Losing Money on Inefficiency
             </h2>
@@ -444,10 +471,11 @@ export default function Home() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 mb-12">
-            <Card className="bg-card border-border p-8 text-center hover:border-primary/50 transition-all">
-              <div className="text-5xl font-bold text-primary mb-2">30%</div>
+            <Card className="bg-card border-border p-8 text-center hover:border-primary/50 hover:shadow-xl transition-all relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -z-10" />
+              <div className="text-6xl font-bold text-primary mb-2">30%</div>
               <h3 className="text-xl font-bold text-foreground mb-3">Reduction in Operating Costs</h3>
-              <p className="text-muted-foreground mb-4">
+              <p className="text-muted-foreground mb-6">
                 Optimize routes to reduce fuel consumption, minimize idle time, and improve fleet utilization. 
                 Average savings: $15,000+ per year for a 10-truck fleet.
               </p>
@@ -467,10 +495,11 @@ export default function Home() {
               </ul>
             </Card>
 
-            <Card className="bg-card border-border p-8 text-center hover:border-primary/50 transition-all">
-              <div className="text-5xl font-bold text-primary mb-2">$0</div>
+            <Card className="bg-card border-border p-8 text-center hover:border-primary/50 hover:shadow-xl transition-all relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -z-10" />
+              <div className="text-6xl font-bold text-primary mb-2">$0</div>
               <h3 className="text-xl font-bold text-foreground mb-3">DOT Compliance Fines</h3>
-              <p className="text-muted-foreground mb-4">
+              <p className="text-muted-foreground mb-6">
                 Automatic HOS tracking and violation alerts keep you compliant. Avoid fines that can cost 
                 $1,000-$10,000+ per violation.
               </p>
@@ -490,10 +519,11 @@ export default function Home() {
               </ul>
             </Card>
 
-            <Card className="bg-card border-border p-8 text-center hover:border-primary/50 transition-all">
-              <div className="text-5xl font-bold text-primary mb-2">15+</div>
+            <Card className="bg-card border-border p-8 text-center hover:border-primary/50 hover:shadow-xl transition-all relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -z-10" />
+              <div className="text-6xl font-bold text-primary mb-2">15+</div>
               <h3 className="text-xl font-bold text-foreground mb-3">Hours Saved Per Week</h3>
-              <p className="text-muted-foreground mb-4">
+              <p className="text-muted-foreground mb-6">
                 Automate paperwork, eliminate duplicate data entry, and streamline operations. 
                 Focus on growing your business instead of managing spreadsheets.
               </p>
@@ -513,190 +543,69 @@ export default function Home() {
               </ul>
             </Card>
           </div>
-
-          {/* Pain Points Solved */}
-          <div className="grid md:grid-cols-2 gap-8">
-            <Card className="bg-card border-border p-6">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-red-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <AlertTriangle className="w-6 h-6 text-red-500" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-foreground mb-2">The Problems You Face</h3>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li className="flex items-start gap-2">
-                      <span className="text-red-500">•</span>
-                      <span>Spending $5,000+ annually on DOT fines and violations</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-red-500">•</span>
-                      <span>Wasting 20%+ of fuel budget on inefficient routes</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-red-500">•</span>
-                      <span>Losing drivers due to payment disputes and poor scheduling</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-red-500">•</span>
-                      <span>Spending weekends compiling reports and invoices</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-red-500">•</span>
-                      <span>Missing maintenance causing costly breakdowns</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="bg-card border-border p-6 border-primary/30">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <CheckCircle2 className="w-6 h-6 text-green-500" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-foreground mb-2">How TruckMates Solves Them</h3>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li className="flex items-start gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span>Automatic compliance monitoring prevents fines</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span>AI-powered route optimization cuts fuel costs</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span>Fair payment tracking and better scheduling improve retention</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span>Automated reports and invoices save 15+ hours weekly</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span>Predictive maintenance alerts prevent breakdowns</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </Card>
-          </div>
         </div>
       </section>
 
-      {/* Technology & Integrations */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
+      {/* How It Works */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">Modern Technology</h2>
+            <Badge variant="outline" className="mb-4">Getting Started</Badge>
+            <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">How It Works</h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Built with the latest technology for reliability, speed, and scalability
+              Get started in minutes and see results immediately
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            <Card className="bg-card border-border p-6 text-center">
-              <Cloud className="w-12 h-12 text-primary mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-foreground mb-3">Cloud-Based Platform</h3>
-              <p className="text-muted-foreground">
-                Access your fleet data from anywhere, anytime. No hardware installation required. 
-                Automatic updates and backups keep your data safe and secure.
-              </p>
-            </Card>
-
-            <Card className="bg-card border-border p-6 text-center">
-              <Smartphone className="w-12 h-12 text-primary mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-foreground mb-3">Mobile-First Design</h3>
-              <p className="text-muted-foreground">
-                Responsive web interface works perfectly on desktop, tablet, and mobile devices. 
-                Plus, our dedicated mobile ELD app for drivers keeps them connected on the road.
-              </p>
-            </Card>
-
-            <Card className="bg-card border-border p-6 text-center">
-              <Database className="w-12 h-12 text-primary mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-foreground mb-3">Seamless Integrations</h3>
-              <p className="text-muted-foreground">
-                Connect with ELD providers, GPS devices, accounting software, and more through 
-                our robust API. Easy data import/export keeps your workflow smooth.
-              </p>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* Benefits Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-secondary/30">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">Why Choose TruckMates?</h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              The benefits that help you run a more efficient and profitable operation
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-4 gap-8">
             {[
-              {
-                icon: TrendingUp,
-                title: "Reduce Operating Costs",
-                desc: "Optimize routes, reduce fuel consumption, minimize idle time, and improve fleet utilization to significantly lower your operating expenses."
-              },
-              {
-                icon: Shield,
-                title: "Stay Compliant",
-                desc: "Automatic HOS tracking, violation alerts, and compliance reporting help you avoid costly DOT fines and keep your fleet legal."
-              },
-              {
-                icon: Zap,
-                title: "Save Time",
-                desc: "Automate manual tasks, streamline workflows, and eliminate paperwork. Focus on growing your business instead of managing spreadsheets."
-              },
-              {
-                icon: BarChart3,
-                title: "Make Better Decisions",
-                desc: "Access real-time data and comprehensive analytics to identify opportunities, spot problems early, and make informed business decisions."
-              },
-              {
-                icon: Users,
-                title: "Improve Driver Satisfaction",
-                desc: "Better scheduling, clear communication, fair payment tracking, and support tools help you attract and retain quality drivers."
-              },
-              {
-                icon: CheckCircle2,
-                title: "Scale Your Business",
-                desc: "As your fleet grows, TruckMates grows with you. Add vehicles, drivers, and routes without worrying about system limitations."
-              }
-            ].map((benefit, i) => (
-              <Card key={i} className="bg-card border-border p-6">
-                <benefit.icon className="w-10 h-10 text-primary mb-4" />
-                <h3 className="text-xl font-bold text-foreground mb-3">{benefit.title}</h3>
-                <p className="text-muted-foreground">{benefit.desc}</p>
-              </Card>
+              { num: "1", title: "Sign Up & Setup", desc: "Create your account and complete the quick setup wizard. Add your company information, vehicles, and drivers in minutes." },
+              { num: "2", title: "Connect Your Fleet", desc: "Integrate GPS tracking devices and ELD systems. Connect via APIs or use our mobile ELD app. Everything syncs automatically." },
+              { num: "3", title: "Manage Operations", desc: "Start managing routes, loads, drivers, and schedules from the unified dashboard. Get real-time visibility and automate workflows." },
+              { num: "4", title: "Analyze & Optimize", desc: "Use analytics and reports to identify opportunities, reduce costs, improve efficiency, and grow your business with data-driven insights." }
+            ].map((step, i) => (
+              <div key={i} className="text-center relative">
+                <div className="w-20 h-20 bg-gradient-to-br from-primary/20 to-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-primary/20">
+                  <span className="text-3xl font-bold text-primary">{step.num}</span>
+                </div>
+                {i < 3 && (
+                  <div className="hidden md:block absolute top-10 left-full w-full h-0.5 bg-gradient-to-r from-primary/20 to-transparent" style={{ width: 'calc(100% - 5rem)', marginLeft: '2.5rem' }} />
+                )}
+                <h3 className="text-xl font-bold text-foreground mb-3">{step.title}</h3>
+                <p className="text-muted-foreground">{step.desc}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent relative overflow-hidden">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5" />
+        <div className="max-w-4xl mx-auto text-center relative z-10">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
+            <Award className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium text-primary">Trusted by Logistics Companies</span>
+          </div>
           <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
             Ready to Transform Your Fleet Operations?
           </h2>
-          <p className="text-xl text-muted-foreground mb-8 leading-relaxed">
+          <p className="text-xl text-muted-foreground mb-10 leading-relaxed">
             Join logistics companies that have streamlined their operations, reduced costs, and 
             improved compliance with TruckMates. Get started today.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
             <Link href="/register">
-              <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-8">
-                Get Started <ArrowRight className="ml-2 w-5 h-5" />
+              <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-8 py-6 shadow-lg shadow-primary/25">
+                Get Started Free <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
-          </div>
-          <div className="flex items-center justify-center gap-8 text-sm text-muted-foreground flex-wrap">
+            <Link href="/demo">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto border-2 border-primary text-primary hover:bg-primary/10 text-lg px-8 py-6">
+                <Play className="mr-2 w-5 h-5" />
+                Try Demo
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
@@ -714,9 +623,9 @@ export default function Home() {
             <div>
               <h4 className="font-semibold text-foreground mb-4">Product</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="/marketplace" className="hover:text-primary">Marketplace</Link></li>
-                <li><Link href="/demo" className="hover:text-primary">Demo</Link></li>
-                <li><Link href="/register" className="hover:text-primary">Sign Up</Link></li>
+                <li><Link href="/marketplace" className="hover:text-primary transition">Marketplace</Link></li>
+                <li><Link href="/demo" className="hover:text-primary transition">Demo</Link></li>
+                <li><Link href="/register" className="hover:text-primary transition">Sign Up</Link></li>
               </ul>
             </div>
             <div>
@@ -726,15 +635,13 @@ export default function Home() {
                 <li>ELD Integration</li>
                 <li>Route Optimization</li>
                 <li>Real-Time Updates</li>
-                <li>Global Search</li>
-                <li>Bulk Operations</li>
                 <li>Analytics & Reports</li>
               </ul>
             </div>
             <div>
               <h4 className="font-semibold text-foreground mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="/login" className="hover:text-primary">Login</Link></li>
+                <li><Link href="/login" className="hover:text-primary transition">Login</Link></li>
                 <li>Support</li>
                 <li>Documentation</li>
               </ul>
@@ -743,8 +650,8 @@ export default function Home() {
           <div className="border-t border-border pt-8 flex flex-col sm:flex-row items-center justify-between">
             <p className="text-sm text-muted-foreground">© 2025 TruckMates. All rights reserved.</p>
             <div className="flex gap-6 mt-4 sm:mt-0">
-              <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary">Privacy</Link>
-              <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary">Terms</Link>
+              <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary transition">Privacy</Link>
+              <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary transition">Terms</Link>
             </div>
           </div>
         </div>

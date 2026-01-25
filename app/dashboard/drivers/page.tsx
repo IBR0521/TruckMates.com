@@ -29,8 +29,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useRouter } from "next/navigation"
 import { getDrivers, deleteDriver, bulkDeleteDrivers, bulkUpdateDriverStatus, updateDriver } from "@/app/actions/drivers"
+import { AccessGuard } from "@/components/access-guard"
 
-export default function DriversPage() {
+function DriversPageContent() {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [driversList, setDriversList] = useState<any[]>([])
@@ -663,5 +664,13 @@ export default function DriversPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+export default function DriversPage() {
+  return (
+    <AccessGuard requiredFeature="drivers">
+      <DriversPageContent />
+    </AccessGuard>
   )
 }

@@ -8,15 +8,16 @@ import { getCachedUserCompany } from "@/lib/query-optimizer"
  * Provides routing, geocoding, and distance calculations
  */
 
-// Get Google Maps API key
+// Get Google Maps API key (platform-wide, from environment)
 async function getGoogleMapsApiKey() {
+  // Always use platform API key from environment variables
   const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || ""
 
-  if (GOOGLE_MAPS_API_KEY) {
-    return GOOGLE_MAPS_API_KEY
+  if (!GOOGLE_MAPS_API_KEY) {
+    throw new Error("Google Maps API key not configured. Please contact support.")
   }
 
-  // Try to get from integration settings
+  // Check if integration is enabled for this company
   const supabase = await createClient()
   const {
     data: { user },
@@ -33,15 +34,15 @@ async function getGoogleMapsApiKey() {
 
   const { data: integrations } = await supabase
     .from("company_integrations")
-    .select("google_maps_enabled, google_maps_api_key")
+    .select("google_maps_enabled")
     .eq("company_id", result.company_id)
     .single()
 
-  if (!integrations?.google_maps_enabled || !integrations.google_maps_api_key) {
-    throw new Error("Google Maps integration is not enabled or configured")
+  if (!integrations?.google_maps_enabled) {
+    throw new Error("Google Maps integration is not enabled for your company")
   }
 
-  return integrations.google_maps_api_key
+  return GOOGLE_MAPS_API_KEY
 }
 
 /**
