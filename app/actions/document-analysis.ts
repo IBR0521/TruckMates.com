@@ -45,11 +45,14 @@ import { revalidatePath } from "next/cache"
 let pdfjsLib: any = null
 let createCanvas: any = null
 
-// Lazy load pdfjs-dist only when needed (prevents canvas from being imported)
+// Lazy load pdfjs-dist only when needed (prevents canvas from being imported at build time)
+// Use Function constructor to prevent static analysis by Turbopack
 async function getPdfjsLib() {
   if (!pdfjsLib) {
     try {
-      pdfjsLib = await import("pdfjs-dist")
+      // Use Function to make import truly dynamic (not analyzed at build time)
+      const dynamicImport = new Function('specifier', 'return import(specifier)')
+      pdfjsLib = await dynamicImport("pdfjs-dist")
     } catch (e) {
       console.error("[DOCUMENT_ANALYSIS] Failed to load pdfjs-dist:", e)
       throw e
@@ -59,10 +62,12 @@ async function getPdfjsLib() {
 }
 
 // Lazy load canvas only when needed
+// Use eval to prevent static analysis
 async function getCanvas() {
   if (createCanvas === null) {
     try {
-      const canvasModule = require("canvas")
+      // Use eval to prevent static analysis
+      const canvasModule = eval('require')("canvas")
       createCanvas = canvasModule.createCanvas
     } catch (e) {
       console.warn("[DOCUMENT_ANALYSIS] Canvas module not available, PDF to image conversion will be disabled")
