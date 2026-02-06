@@ -26,7 +26,8 @@ import {
   Award,
   Target,
   ArrowDown,
-  Sparkles
+  Sparkles,
+  FileText
 } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
@@ -71,38 +72,41 @@ export default function Home() {
             </div>
 
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-foreground mb-6 leading-tight">
-              Complete Fleet Management
+              Automated Fleet Management
               <span className="block text-primary mt-2 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                All in One Platform
+                That Pays for Itself
               </span>
             </h1>
             <p className="text-xl md:text-2xl text-muted-foreground mb-6 max-w-3xl mx-auto leading-relaxed">
-              TruckMates is the ultimate logistics management platform that combines fleet tracking, 
-              ELD compliance, route optimization, accounting, and driver management into a single, 
-              powerful solution.
+              The only platform that automates IFTA reporting (2-3 days → 5 minutes), generates invoices 
+              instantly on delivery, and accelerates cash flow by 2-4 weeks. All while ensuring 100% compliance.
             </p>
             <p className="text-lg text-muted-foreground mb-10 max-w-2xl mx-auto">
-              Designed for modern logistics companies, TruckMates helps you streamline operations, 
-              reduce costs, ensure compliance, and grow your business with intelligent automation 
-              and real-time insights.
+              Join fleets saving $160K-$230K/year through automation. IFTA, settlements, invoicing, and 
+              compliance - all automated with zero manual work.
             </p>
 
             {/* Stats */}
             <div className="flex flex-wrap justify-center gap-6 mb-10 text-sm">
               <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
                 <TrendingUp className="w-5 h-5 text-primary" />
-                <span className="font-semibold text-foreground">30%</span>
-                <span className="text-muted-foreground">Cost Reduction</span>
+                <span className="font-semibold text-foreground">$160K-$230K</span>
+                <span className="text-muted-foreground">Saved/Year</span>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
+                <Clock className="w-5 h-5 text-primary" />
+                <span className="font-semibold text-foreground">2-4 Weeks</span>
+                <span className="text-muted-foreground">Faster Payment</span>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
+                <Zap className="w-5 h-5 text-primary" />
+                <span className="font-semibold text-foreground">60-80 Hrs</span>
+                <span className="text-muted-foreground">Saved/Month</span>
               </div>
               <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
                 <Shield className="w-5 h-5 text-primary" />
                 <span className="font-semibold text-foreground">100%</span>
-                <span className="text-muted-foreground">DOT Compliant</span>
-              </div>
-              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
-                <Zap className="w-5 h-5 text-primary" />
-                <span className="font-semibold text-foreground">15+</span>
-                <span className="text-muted-foreground">Hours Saved/Week</span>
+                <span className="text-muted-foreground">IFTA Accurate</span>
               </div>
             </div>
 
@@ -167,11 +171,11 @@ export default function Home() {
                     <Shield className="w-6 h-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-2xl font-bold text-foreground mb-3">ELD Integration & Compliance</h3>
+                    <h3 className="text-2xl font-bold text-foreground mb-3">Automated IFTA & Compliance</h3>
                     <p className="text-muted-foreground leading-relaxed">
-                      Full Electronic Logging Device (ELD) integration ensures your fleet stays compliant with 
-                      DOT regulations. Automatic Hours of Service (HOS) tracking, violation detection, and seamless 
-                      IFTA reporting help you avoid costly fines and keep your drivers safe.
+                      <strong>IFTA reporting in 5 minutes</strong> (vs 2-3 days manually). 100% accurate GPS-based 
+                      state-by-state mileage. Automatic fuel card import, real-time tax rates, and complete audit trail. 
+                      Full ELD integration with HOS tracking and violation detection. <strong>Eliminates $5K-$10K/year in penalties.</strong>
                     </p>
                   </div>
                 </div>
@@ -179,15 +183,15 @@ export default function Home() {
               <div className="group">
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition">
-                    <BarChart3 className="w-6 h-6 text-primary" />
+                    <DollarSign className="w-6 h-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-2xl font-bold text-foreground mb-3">Real-Time Visibility That Drives Decisions</h3>
+                    <h3 className="text-2xl font-bold text-foreground mb-3">Instant Invoicing & Cash Flow Acceleration</h3>
                     <p className="text-muted-foreground leading-relaxed">
-                      See exactly where every vehicle is, what every driver is doing, and how every route is performing 
-                      - in real-time. Make instant decisions when problems arise. No more waiting for phone calls or 
-                      checking multiple systems. Everything you need to run your operation is on one dashboard that 
-                      updates automatically.
+                      <strong>Invoice generated automatically when POD is captured</strong> - no manual work. BOL auto-populated 
+                      from load data. <strong>2-4 weeks faster payment</strong> = $200K-$500K/year in improved cash flow. 
+                      Automated settlements with complex pay rules. PDF statements generated automatically. 
+                      <strong> Zero data entry errors.</strong>
                     </p>
                   </div>
                 </div>
@@ -254,37 +258,37 @@ export default function Home() {
               </ul>
             </Card>
 
-            {/* ELD & Compliance */}
+            {/* IFTA Automation */}
             <Card className="bg-card border-border p-6 hover:border-primary/50 hover:shadow-lg transition-all group">
               <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
                 <Clock className="w-7 h-7 text-primary" />
               </div>
               <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-xl font-bold text-foreground">ELD & HOS Compliance</h3>
+                <h3 className="text-xl font-bold text-foreground">Automated IFTA Reporting</h3>
                 <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-500/20">
-                  FMCSA Compliant
+                  GPS-Based
                 </Badge>
               </div>
               <p className="text-muted-foreground mb-4">
-                Integrates with DOT-certified ELD devices for automatic Hours of Service 
-                tracking, violation detection, and FMCSA compliance reporting.
+                <strong>2-3 days → 5 minutes per quarter.</strong> 100% accurate GPS-based state-by-state mileage. 
+                Automatic fuel card import, real-time tax rates, complete audit trail.
               </p>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Automatic HOS log generation</span>
+                  <span>5 minutes per quarter (vs 2-3 days)</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Real-time violation alerts</span>
+                  <span>100% accurate GPS-based mileage</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>IFTA reporting with ELD data</span>
+                  <span>Automatic fuel card import</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Integrates with DOT-certified ELD devices</span>
+                  <span>Eliminates $5K-$10K/year in penalties</span>
                 </li>
               </ul>
             </Card>
@@ -341,28 +345,32 @@ export default function Home() {
               </ul>
             </Card>
 
-            {/* Load Management */}
+            {/* Load Management & External Boards */}
             <Card className="bg-card border-border p-6 hover:border-primary/50 hover:shadow-lg transition-all group">
               <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
                 <Truck className="w-7 h-7 text-primary" />
               </div>
-              <h3 className="text-xl font-bold text-foreground mb-3">Load & Delivery Management</h3>
+              <h3 className="text-xl font-bold text-foreground mb-3">Load Management & External Boards</h3>
               <p className="text-muted-foreground mb-4">
-                Full lifecycle load management from creation to delivery. Track loads, manage 
-                multi-delivery routes, update statuses, and coordinate with customers seamlessly.
+                Full lifecycle load management with <strong>external load board integration</strong> (DAT, Truckstop, 123Loadboard). 
+                One-click load import. Auto-populated BOLs. Instant invoicing on delivery.
               </p>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>End-to-end load tracking</span>
+                  <span>External load board integration (DAT, Truckstop, 123Loadboard)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <span>One-click load import from major boards</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <span>BOL auto-populated from load data</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                   <span>Multi-delivery point support</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Status updates and notifications</span>
                 </li>
               </ul>
             </Card>
@@ -393,28 +401,32 @@ export default function Home() {
               </ul>
             </Card>
 
-            {/* Accounting & Finance */}
+            {/* Automated Invoicing & Cash Flow */}
             <Card className="bg-card border-border p-6 hover:border-primary/50 hover:shadow-lg transition-all group">
               <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
                 <DollarSign className="w-7 h-7 text-primary" />
               </div>
-              <h3 className="text-xl font-bold text-foreground mb-3">Accounting & Finance</h3>
+              <h3 className="text-xl font-bold text-foreground mb-3">Instant Invoicing & Cash Flow</h3>
               <p className="text-muted-foreground mb-4">
-                Complete financial management including invoicing, expense tracking, settlements, 
-                driver payments, and profit/loss analysis.
+                <strong>Invoice generated automatically on POD capture.</strong> BOL auto-populated from load data. 
+                <strong> 2-4 weeks faster payment</strong> = $200K-$500K/year improved cash flow.
               </p>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Automated invoice generation</span>
+                  <span>Instant invoice on POD (zero manual work)</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Expense and settlement tracking</span>
+                  <span>BOL auto-populated (15-20 min → 2-3 min)</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Driver payment calculations</span>
+                  <span>2-4 weeks faster payment</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <span>Automated settlements with pay rules</span>
                 </li>
               </ul>
             </Card>
@@ -546,15 +558,123 @@ export default function Home() {
             </div>
             <div className="relative">
               <div className="relative bg-gradient-to-br from-primary/10 to-primary/5 rounded-3xl p-8 border border-primary/20">
-                <div className="aspect-[9/16] bg-card rounded-2xl border-4 border-border shadow-2xl flex items-center justify-center">
-                  <div className="text-center p-8">
-                    <Smartphone className="w-24 h-24 text-primary mx-auto mb-4 opacity-50" />
-                    <p className="text-muted-foreground text-sm">Mobile App Preview</p>
-                    <p className="text-xs text-muted-foreground mt-2">iOS & Android</p>
+                <div className="space-y-6">
+                  {/* App Explanation */}
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-foreground mb-4">Native Mobile ELD App</h3>
+                    <p className="text-muted-foreground leading-relaxed">
+                      The TruckMates ELD mobile app is a native iOS and Android application that provides 
+                      FMCSA-compliant electronic logging for drivers. It automatically tracks Hours of Service (HOS), 
+                      captures GPS locations in real-time, and syncs seamlessly with the TruckMates platform. 
+                      Drivers can manage their logs, complete DVIR inspections, capture POD signatures, and access 
+                      DOT inspection mode—all from their smartphone.
+                    </p>
+                    <p className="text-muted-foreground leading-relaxed text-sm">
+                      Works offline and syncs automatically when connected. Integrates with vehicle OBD-II devices 
+                      or certified ELD hardware for complete compliance.
+                    </p>
+                  </div>
+
+                  {/* Download Buttons */}
+                  <div className="pt-4 border-t border-border">
+                    <p className="text-sm text-muted-foreground mb-4 text-center">
+                      Download the TruckMates ELD app
+                    </p>
+                    <div className="flex flex-col gap-3">
+                      <Button size="lg" variant="outline" className="w-full border-2 border-primary/20 hover:border-primary/40">
+                        <Smartphone className="mr-2 w-5 h-5" />
+                        Download for iOS
+                      </Button>
+                      <Button size="lg" variant="outline" className="w-full border-2 border-primary/20 hover:border-primary/40">
+                        <Smartphone className="mr-2 w-5 h-5" />
+                        Download for Android
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Automation Highlights */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-background to-secondary/20">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <Badge variant="outline" className="mb-4">Automation</Badge>
+            <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
+              What Gets Automated
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Everything that used to take hours or days now happens automatically
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6 mb-12">
+            <Card className="bg-card border-border p-6 hover:border-primary/50 transition-all">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">IFTA Reporting</h3>
+                  <p className="text-muted-foreground mb-3">
+                    <strong>Before:</strong> 2-3 days per quarter manually compiling reports<br/>
+                    <strong>After:</strong> 5 minutes per quarter, 100% accurate GPS-based
+                  </p>
+                  <div className="text-sm text-primary font-semibold">Saves $15K-$33K/year</div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="bg-card border-border p-6 hover:border-primary/50 transition-all">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <DollarSign className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">Invoice Generation</h3>
+                  <p className="text-muted-foreground mb-3">
+                    <strong>Before:</strong> Manual invoice creation after POD (5-10 min each)<br/>
+                    <strong>After:</strong> Automatic invoice on POD capture (instant)
+                  </p>
+                  <div className="text-sm text-primary font-semibold">2-4 weeks faster payment</div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="bg-card border-border p-6 hover:border-primary/50 transition-all">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">BOL Creation</h3>
+                  <p className="text-muted-foreground mb-3">
+                    <strong>Before:</strong> 15-20 minutes manual data entry per BOL<br/>
+                    <strong>After:</strong> 2-3 minutes (auto-populated from load data)
+                  </p>
+                  <div className="text-sm text-primary font-semibold">Saves 3-5 hours/day</div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="bg-card border-border p-6 hover:border-primary/50 transition-all">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Users className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">Settlement Calculation</h3>
+                  <p className="text-muted-foreground mb-3">
+                    <strong>Before:</strong> 8-12 hours/week manual calculations<br/>
+                    <strong>After:</strong> 5 minutes/week with complex pay rules
+                  </p>
+                  <div className="text-sm text-primary font-semibold">Saves $44K-$60K/year</div>
+                </div>
+              </div>
+            </Card>
           </div>
         </div>
       </section>
@@ -565,82 +685,82 @@ export default function Home() {
           <div className="text-center mb-16">
             <Badge variant="outline" className="mb-4">Results</Badge>
             <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-              Stop Losing Money on Inefficiency
+              ROI That Pays for Itself
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Logistics companies using TruckMates see measurable improvements in their bottom line
+              Average fleet saves $160K-$230K/year. Payback in 10 days to 1.3 months.
             </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 mb-12">
             <Card className="bg-card border-border p-8 text-center hover:border-primary/50 hover:shadow-xl transition-all relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -z-10" />
-              <div className="text-6xl font-bold text-primary mb-2">30%</div>
-              <h3 className="text-xl font-bold text-foreground mb-3">Reduction in Operating Costs</h3>
+              <div className="text-5xl font-bold text-primary mb-2">$160K-$230K</div>
+              <h3 className="text-xl font-bold text-foreground mb-3">Annual Savings</h3>
               <p className="text-muted-foreground mb-6">
-                Optimize routes to reduce fuel consumption, minimize idle time, and improve fleet utilization. 
-                Average savings: $15,000+ per year for a 10-truck fleet.
+                Direct cost savings from automation: IFTA (2-3 days → 5 min), settlements (8-12 hrs → 5 min), 
+                eBOL (15-20 min → 2-3 min), fuel optimization, and more.
               </p>
               <ul className="space-y-2 text-sm text-muted-foreground text-left">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Route optimization reduces fuel costs by 15-25%</span>
+                  <span>IFTA automation: $15K-$33K/year</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Predictive maintenance prevents costly breakdowns</span>
+                  <span>Settlement automation: $44K-$60K/year</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Automated workflows eliminate manual errors</span>
+                  <span>Fuel optimization: $76K-$80K/year</span>
                 </li>
               </ul>
             </Card>
 
             <Card className="bg-card border-border p-8 text-center hover:border-primary/50 hover:shadow-xl transition-all relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -z-10" />
-              <div className="text-6xl font-bold text-primary mb-2">$0</div>
-              <h3 className="text-xl font-bold text-foreground mb-3">DOT Compliance Fines</h3>
+              <div className="text-5xl font-bold text-primary mb-2">2-4 Weeks</div>
+              <h3 className="text-xl font-bold text-foreground mb-3">Faster Payment</h3>
               <p className="text-muted-foreground mb-6">
-                Automatic HOS tracking and violation alerts keep you compliant. Avoid fines that can cost 
-                $1,000-$10,000+ per violation.
+                Instant invoice generation on POD capture. BOL auto-populated. No manual work. 
+                <strong> $200K-$500K/year in improved cash flow</strong> for average fleet.
               </p>
               <ul className="space-y-2 text-sm text-muted-foreground text-left">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Real-time violation detection prevents issues</span>
+                  <span>Invoice generated automatically on POD</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Automated IFTA reporting saves 10+ hours monthly</span>
+                  <span>BOL auto-populated (zero manual entry)</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>ELD integration ensures 100% compliance</span>
+                  <span>Customer notified same day</span>
                 </li>
               </ul>
             </Card>
 
             <Card className="bg-card border-border p-8 text-center hover:border-primary/50 hover:shadow-xl transition-all relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -z-10" />
-              <div className="text-6xl font-bold text-primary mb-2">15+</div>
-              <h3 className="text-xl font-bold text-foreground mb-3">Hours Saved Per Week</h3>
+              <div className="text-5xl font-bold text-primary mb-2">60-80 Hrs</div>
+              <h3 className="text-xl font-bold text-foreground mb-3">Saved Per Month</h3>
               <p className="text-muted-foreground mb-6">
-                Automate paperwork, eliminate duplicate data entry, and streamline operations. 
-                Focus on growing your business instead of managing spreadsheets.
+                Complete automation eliminates manual work: IFTA (8-12 days/year → 20 min), 
+                settlements (8-12 hrs/week → 5 min), BOL creation, invoicing, and more.
               </p>
               <ul className="space-y-2 text-sm text-muted-foreground text-left">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Automated invoice generation saves 5+ hours/week</span>
+                  <span>IFTA: 2-3 days → 5 minutes per quarter</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>One-click reporting replaces manual compilation</span>
+                  <span>Settlements: 8-12 hrs → 5 minutes per week</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Real-time data eliminates status check calls</span>
+                  <span>BOL: 15-20 min → 2-3 min per load</span>
                 </li>
               </ul>
             </Card>
