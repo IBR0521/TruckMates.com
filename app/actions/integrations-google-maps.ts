@@ -32,14 +32,45 @@ async function getGoogleMapsApiKey() {
     throw new Error("No company found")
   }
 
-  const { data: integrations } = await supabase
+  // Check if integration is enabled, or auto-enable if platform key exists
+  const { data: integrations, error: integrationError } = await supabase
     .from("company_integrations")
     .select("google_maps_enabled")
     .eq("company_id", result.company_id)
     .single()
 
-  if (!integrations?.google_maps_enabled) {
-    throw new Error("Google Maps integration is not enabled for your company")
+  // Auto-enable Google Maps if platform API key exists and integration record doesn't exist or is disabled
+  if (integrationError?.code === "PGRST116" || !integrations?.google_maps_enabled) {
+    // Check if record exists
+    const { data: existing } = await supabase
+      .from("company_integrations")
+      .select("id")
+      .eq("company_id", result.company_id)
+      .single()
+
+    if (existing) {
+      // Update existing record to enable Google Maps
+      const { error: updateError } = await supabase
+        .from("company_integrations")
+        .update({ google_maps_enabled: true })
+        .eq("company_id", result.company_id)
+      
+      if (updateError) {
+        console.error("[Google Maps] Failed to enable integration:", updateError)
+      }
+    } else {
+      // Create new record with Google Maps enabled
+      const { error: insertError } = await supabase
+        .from("company_integrations")
+        .insert({
+          company_id: result.company_id,
+          google_maps_enabled: true,
+        })
+      
+      if (insertError) {
+        console.error("[Google Maps] Failed to create integration record:", insertError)
+      }
+    }
   }
 
   return GOOGLE_MAPS_API_KEY
@@ -50,6 +81,24 @@ async function getGoogleMapsApiKey() {
  */
 export async function getRouteDirections(origin: string, destination: string, waypoints?: string[]) {
   try {
+    // Check rate limit and cache
+    const { checkApiUsage, getCachedApiResult, setCachedApiResult } = await import("@/lib/api-protection")
+    const { generateCacheKey } = await import("@/lib/api-cache-utils")
+    
+    const cacheKey = generateCacheKey("google_maps_directions", { origin, destination, waypoints })
+    
+    // Check cache first
+    const cached = await getCachedApiResult<any>(cacheKey, 3600) // Cache for 1 hour
+    if (cached) {
+      return { data: cached, error: null }
+    }
+
+    // Check rate limit
+    const rateCheck = await checkApiUsage("google_maps", "directions")
+    if (!rateCheck.allowed) {
+      return { error: rateCheck.reason || "Rate limit exceeded", data: null }
+    }
+
     const apiKey = await getGoogleMapsApiKey()
 
     // Build waypoints parameter
@@ -58,7 +107,9 @@ export async function getRouteDirections(origin: string, destination: string, wa
       waypointsParam = `&waypoints=${waypoints.map(wp => encodeURIComponent(wp)).join("|")}`
     }
 
-    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}${waypointsParam}&key=${apiKey}&avoid=tolls&vehicleType=TRUCK`
+    // Add departure_time=now for real-time traffic data
+    const departureTime = Math.floor(Date.now() / 1000) // Current time in seconds
+    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}${waypointsParam}&key=${apiKey}&avoid=tolls&vehicleType=TRUCK&departure_time=${departureTime}&traffic_model=best_guess`
 
     const response = await fetch(url, {
       method: "GET",
@@ -80,22 +131,27 @@ export async function getRouteDirections(origin: string, destination: string, wa
     const route = data.routes[0]
     const leg = route.legs[0]
 
+    const result = {
+      distance: leg.distance.text,
+      distance_meters: leg.distance.value,
+      duration: leg.duration.text,
+      duration_seconds: leg.duration.value,
+      polyline: route.overview_polyline.points,
+      steps: leg.steps.map((step: any) => ({
+        instruction: step.html_instructions,
+        distance: step.distance.text,
+        duration: step.duration.text,
+        start_location: step.start_location,
+        end_location: step.end_location,
+      })),
+      bounds: route.bounds,
+    }
+
+    // Cache the result
+    await setCachedApiResult(cacheKey, result, 3600)
+
     return {
-      data: {
-        distance: leg.distance.text,
-        distance_meters: leg.distance.value,
-        duration: leg.duration.text,
-        duration_seconds: leg.duration.value,
-        polyline: route.overview_polyline.points,
-        steps: leg.steps.map((step: any) => ({
-          instruction: step.html_instructions,
-          distance: step.distance.text,
-          duration: step.duration.text,
-          start_location: step.start_location,
-          end_location: step.end_location,
-        })),
-        bounds: route.bounds,
-      },
+      data: result,
       error: null,
     }
   } catch (error: any) {
@@ -109,6 +165,11 @@ export async function getRouteDirections(origin: string, destination: string, wa
  */
 export async function geocodeAddress(address: string) {
   try {
+    // Validate address input
+    if (!address || address.trim().length < 5) {
+      return { error: "Address is too short or empty. Please provide a complete address.", data: null }
+    }
+
     const apiKey = await getGoogleMapsApiKey()
 
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
@@ -121,13 +182,36 @@ export async function geocodeAddress(address: string) {
     })
 
     if (!response.ok) {
-      throw new Error("Failed to geocode address")
+      const errorText = await response.text()
+      console.error("[Google Maps] HTTP Error:", response.status, errorText)
+      return { 
+        error: `Google Maps API returned error ${response.status}. Please check your API key and network connection.`, 
+        data: null 
+      }
     }
 
     const data = await response.json()
 
+    // Log the full response for debugging
+    if (data.status !== "OK") {
+      console.error("[Google Maps] Geocoding API Response:", JSON.stringify(data, null, 2))
+    }
+
     if (data.status !== "OK" || !data.results || data.results.length === 0) {
-      return { error: `Geocoding failed: ${data.status}`, data: null }
+      // Provide more specific error messages
+      let errorMessage = `Geocoding failed: ${data.status}`
+      if (data.status === "ZERO_RESULTS") {
+        errorMessage = `Address not found: "${address}". Please check the address format (include city, state, and zip code).`
+      } else if (data.status === "REQUEST_DENIED") {
+        errorMessage = `Google Maps API request denied: ${data.error_message || "Check API key permissions and ensure Geocoding API is enabled"}.`
+      } else if (data.status === "OVER_QUERY_LIMIT") {
+        errorMessage = "Google Maps API quota exceeded. Please try again later or contact support."
+      } else if (data.status === "INVALID_REQUEST") {
+        errorMessage = `Invalid address format: "${address}". Please provide a complete address.`
+      } else if (data.error_message) {
+        errorMessage = `Geocoding failed: ${data.error_message}`
+      }
+      return { error: errorMessage, data: null }
     }
 
     const result = data.results[0]
@@ -142,8 +226,19 @@ export async function geocodeAddress(address: string) {
       error: null,
     }
   } catch (error: any) {
-    console.error("[Google Maps] Geocoding error:", error)
-    return { error: error?.message || "Failed to geocode address", data: null }
+    console.error("[Google Maps] Geocoding exception:", error)
+    // Provide more detailed error information
+    let errorMessage = "Failed to geocode address"
+    if (error?.message) {
+      if (error.message.includes("API key")) {
+        errorMessage = "Google Maps API key error. Please contact support."
+      } else if (error.message.includes("network") || error.message.includes("fetch")) {
+        errorMessage = "Network error. Please check your internet connection and try again."
+      } else {
+        errorMessage = `Geocoding error: ${error.message}`
+      }
+    }
+    return { error: errorMessage, data: null }
   }
 }
 

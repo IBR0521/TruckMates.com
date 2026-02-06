@@ -94,6 +94,121 @@ export async function createMaintenance(formData: {
   }
 
   revalidatePath("/dashboard/maintenance")
+  
+  // Trigger webhook
+  try {
+    const { triggerWebhook } = await import("./webhooks")
+    await triggerWebhook(userData.company_id, "maintenance.scheduled", {
+      maintenance_id: data.id,
+      truck_id: formData.truck_id,
+      service_type: formData.service_type,
+      scheduled_date: formData.scheduled_date,
+    })
+  } catch (error) {
+    console.warn("[createMaintenance] Webhook trigger failed:", error)
+  }
+  
+  return { data, error: null }
+}
+
+export async function getMaintenanceById(id: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  const { data: maintenance, error } = await supabase
+    .from("maintenance")
+    .select(`
+      *,
+      truck:truck_id (
+        id,
+        truck_number,
+        make,
+        model,
+        year,
+        current_mileage
+      )
+    `)
+    .eq("id", id)
+    .eq("company_id", userData.company_id)
+    .single()
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  return { data: maintenance, error: null }
+}
+
+export async function updateMaintenanceStatus(
+  id: string,
+  status: string,
+  actualCost?: number,
+  completedDate?: string
+) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  const updateData: any = {
+    status,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (status === "completed") {
+    updateData.completed_date = completedDate || new Date().toISOString().split("T")[0]
+    if (actualCost !== undefined) {
+      updateData.actual_cost = actualCost
+    }
+  }
+
+  const { data, error } = await supabase
+    .from("maintenance")
+    .update(updateData)
+    .eq("id", id)
+    .eq("company_id", userData.company_id)
+    .select()
+    .single()
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  revalidatePath("/dashboard/maintenance")
+  revalidatePath(`/dashboard/maintenance/${id}`)
+
   return { data, error: null }
 }
 

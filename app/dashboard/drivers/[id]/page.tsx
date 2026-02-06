@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Phone, Mail, Truck, Calendar, User, FileText, MapPin, CreditCard } from "lucide-react"
+import { Phone, Mail, Truck, Calendar, User, FileText, MapPin, CreditCard, GraduationCap } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -103,6 +103,14 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
       subtitle={driver.email || undefined}
       backUrl="/dashboard/drivers"
       editUrl={`/dashboard/drivers/${id}/edit`}
+      actions={
+        <Link href={`/dashboard/drivers/${id}/onboarding`}>
+          <Button variant="outline" size="sm">
+            <GraduationCap className="w-4 h-4 mr-2" />
+            View Onboarding
+          </Button>
+        </Link>
+      }
     >
       <div className="space-y-6">
         {/* Profile Information */}

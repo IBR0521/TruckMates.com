@@ -433,9 +433,16 @@ export default function FleetMapPage() {
       if (truckIds.length > 0) {
         const { data: locationsData } = await supabase
           .from("eld_locations")
-          .select("truck_id, latitude, longitude, timestamp, speed, heading")
+          .select("truck_id, latitude, longitude, timestamp, speed, heading, engine_status")
           .in("truck_id", truckIds)
           .order("timestamp", { ascending: false })
+
+        // Get active loads for trucks
+        const { data: activeLoads } = await supabase
+          .from("loads")
+          .select("truck_id, status")
+          .in("truck_id", truckIds)
+          .in("status", ["scheduled", "in_progress", "in_transit", "arrived_at_shipper", "arrived_at_delivery"])
 
         // Get the latest location for each truck
         const latestLocations: Record<string, any> = {}
@@ -445,12 +452,44 @@ export default function FleetMapPage() {
           }
         })
 
-        // Combine truck data with locations
-        const vehiclesWithLocations = trucksData?.map((truck) => ({
-          ...truck,
-          location: latestLocations[truck.id] || null,
-          driver: Array.isArray(truck.drivers) ? truck.drivers[0] : truck.drivers,
-        })) || []
+        // Calculate availability status for each truck
+        const now = new Date()
+        const OFFLINE_THRESHOLD_MINUTES = 15 // Consider offline if no location update in 15 minutes
+
+        // Combine truck data with locations and availability status
+        const vehiclesWithLocations = trucksData?.map((truck) => {
+          const location = latestLocations[truck.id] || null
+          const hasActiveLoad = activeLoads?.some(l => l.truck_id === truck.id) || false
+          
+          // Determine availability status
+          let availabilityStatus: "available" | "loading" | "offline" = "available"
+          
+          if (!location) {
+            availabilityStatus = "offline"
+          } else {
+            const lastUpdate = new Date(location.timestamp)
+            const minutesSinceUpdate = (now.getTime() - lastUpdate.getTime()) / 60000
+            
+            if (minutesSinceUpdate > OFFLINE_THRESHOLD_MINUTES) {
+              availabilityStatus = "offline"
+            } else if (hasActiveLoad && (location.speed === 0 || location.speed < 5)) {
+              // Truck has active load and is stationary = loading
+              availabilityStatus = "loading"
+            } else if (hasActiveLoad) {
+              // Truck has active load and is moving = in transit (still available for new loads)
+              availabilityStatus = "available"
+            } else {
+              availabilityStatus = "available"
+            }
+          }
+
+          return {
+            ...truck,
+            location: location,
+            driver: Array.isArray(truck.drivers) ? truck.drivers[0] : truck.drivers,
+            availability_status: availabilityStatus,
+          }
+        }) || []
 
         setVehicles(vehiclesWithLocations)
 
@@ -899,8 +938,8 @@ export default function FleetMapPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="circle">Circle</SelectItem>
-                    <SelectItem value="rectangle" disabled>Rectangle (Coming Soon)</SelectItem>
-                    <SelectItem value="polygon" disabled>Polygon (Coming Soon)</SelectItem>
+                    <SelectItem value="rectangle">Rectangle</SelectItem>
+                    <SelectItem value="polygon">Polygon</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

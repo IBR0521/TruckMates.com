@@ -6,7 +6,37 @@ import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { validateRequiredString, sanitizeString } from "@/lib/validation"
 
 /**
- * Check if a point is inside a geofence
+ * Check if a point is inside a geofence using PostGIS (database-level)
+ * Falls back to client-side calculation if PostGIS function fails
+ */
+async function isPointInGeofencePostGIS(
+  supabase: any,
+  lat: number,
+  lng: number,
+  geofenceId: string
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc('is_point_in_geofence', {
+      point_lat: lat,
+      point_lng: lng,
+      geofence_id: geofenceId
+    })
+    
+    if (error) {
+      console.warn('PostGIS function failed, using fallback:', error)
+      return false
+    }
+    
+    return data === true
+  } catch (error) {
+    console.warn('PostGIS function error, using fallback:', error)
+    return false
+  }
+}
+
+/**
+ * Check if a point is inside a geofence (client-side fallback)
+ * Used when PostGIS is not available or as fallback
  */
 function isPointInGeofence(
   lat: number,
@@ -206,6 +236,9 @@ export async function createGeofence(formData: {
   city?: string
   state?: string
   zip_code?: string
+  auto_update_load_status?: boolean
+  entry_load_status?: string
+  exit_load_status?: string
 }) {
   const supabase = await createClient()
 
@@ -277,6 +310,9 @@ export async function createGeofence(formData: {
         dwell_time_minutes: formData.dwell_time_minutes || null,
         assigned_trucks: formData.assigned_trucks && formData.assigned_trucks.length > 0 ? formData.assigned_trucks : null,
         assigned_routes: formData.assigned_routes && formData.assigned_routes.length > 0 ? formData.assigned_routes : null,
+        auto_update_load_status: formData.auto_update_load_status || false,
+        entry_load_status: formData.entry_load_status || null,
+        exit_load_status: formData.exit_load_status || null,
         address: formData.address ? sanitizeString(formData.address, 500) : null,
         city: formData.city ? sanitizeString(formData.city, 100) : null,
         state: formData.state ? sanitizeString(formData.state, 50) : null,
@@ -375,6 +411,15 @@ export async function updateGeofence(id: string, formData: Partial<{
     }
     if (formData.zip_code !== undefined) {
       updateData.zip_code = formData.zip_code ? sanitizeString(formData.zip_code, 20) : null
+    }
+    if (formData.auto_update_load_status !== undefined) {
+      updateData.auto_update_load_status = formData.auto_update_load_status
+    }
+    if (formData.entry_load_status !== undefined) {
+      updateData.entry_load_status = formData.entry_load_status || null
+    }
+    if (formData.exit_load_status !== undefined) {
+      updateData.exit_load_status = formData.exit_load_status || null
     }
 
     const { data: geofence, error } = await supabase
@@ -494,7 +539,14 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
         }
       }
 
-      const isInside = isPointInGeofence(latitude, longitude, geofence)
+      // Try PostGIS first, fallback to client-side calculation
+      let isInside = false
+      try {
+        isInside = await isPointInGeofencePostGIS(supabase, latitude, longitude, geofence.id)
+      } catch (error) {
+        // Fallback to client-side calculation
+        isInside = isPointInGeofence(latitude, longitude, geofence)
+      }
 
       // Check for recent visit to determine entry/exit
       const { data: recentVisit } = await supabase
@@ -546,6 +598,16 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
         }
 
         events.push({ type: "entry", geofence_id: geofence.id, visit })
+        
+        // Auto-update load status if enabled
+        if (visit && geofence.auto_update_load_status && geofence.entry_load_status) {
+          try {
+            const { autoUpdateLoadStatusFromGeofence } = await import("./auto-status-updates")
+            await autoUpdateLoadStatusFromGeofence(visit.id, 'entry')
+          } catch (error) {
+            console.error("Failed to auto-update load status on entry:", error)
+          }
+        }
       } else if (!isInside && wasInside) {
         // Exit event
         const duration = recentVisit?.entry_timestamp
@@ -605,6 +667,26 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
         }
 
         events.push({ type: "exit", geofence_id: geofence.id, visit })
+        
+        // Auto-update load status if enabled
+        if (visit && geofence.auto_update_load_status && geofence.exit_load_status) {
+          try {
+            const { autoUpdateLoadStatusFromGeofence } = await import("./auto-status-updates")
+            await autoUpdateLoadStatusFromGeofence(visit.id, 'exit')
+          } catch (error) {
+            console.error("Failed to auto-update load status on exit:", error)
+          }
+        }
+        
+        // Finalize detention if detention tracking is enabled
+        if (geofence.detention_enabled && visit) {
+          try {
+            const { finalizeDetention } = await import("./detention-tracking")
+            await finalizeDetention(visit.id)
+          } catch (error) {
+            console.error("Failed to finalize detention on exit:", error)
+          }
+        }
       }
     }
 
@@ -767,5 +849,7 @@ export async function getGeofencingStats(filters?: {
     return { error: error.message || "Failed to get geofencing stats", data: null }
   }
 }
+
+
 
 

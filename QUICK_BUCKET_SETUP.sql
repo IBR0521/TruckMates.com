@@ -8,3 +8,6 @@ ON CONFLICT (id) DO NOTHING;
 -- After running the above, run the full setup from: supabase/storage_bucket_setup.sql
 -- That will add all the necessary storage policies.
 
+
+
+

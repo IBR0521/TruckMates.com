@@ -57,6 +57,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
   const [reportsOpen, setReportsOpen] = useState(false)
   const [crmOpen, setCrmOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [dvirOpen, setDvirOpen] = useState(false)
   const [isManager, setIsManager] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isDesktop, setIsDesktop] = useState(true)
@@ -90,6 +91,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
       setReportsOpen(false)
       setCrmOpen(false)
       setSettingsOpen(false)
+      setDvirOpen(false)
     }
   }, [shouldShowCollapsed])
 
@@ -233,6 +235,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             isCollapsed={shouldShowCollapsed}
           >
             <NavItem href="/dashboard/loads" label="Load List" isSubitem isCollapsed={shouldShowCollapsed} />
+            <NavItem href="/dashboard/loads/external" label="External Loads" isSubitem isCollapsed={shouldShowCollapsed} />
             {isManager && (
               <NavItem href="/dashboard/loads/add" label="Add Load" isSubitem isCollapsed={shouldShowCollapsed} />
             )}
@@ -251,11 +254,12 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
           <DropdownItem
             icon={Building2}
             label="CRM"
-            href="/dashboard/customers"
+            href="/dashboard/crm"
             isOpen={crmOpen}
             onToggle={() => setCrmOpen(!crmOpen)}
             isCollapsed={shouldShowCollapsed}
           >
+            <NavItem href="/dashboard/crm" label="CRM Dashboard" isSubitem isCollapsed={shouldShowCollapsed} />
             <NavItem href="/dashboard/customers" label="Customers" isSubitem isCollapsed={shouldShowCollapsed} />
             {isManager && (
               <NavItem href="/dashboard/customers/add" label="Add Customer" isSubitem isCollapsed={shouldShowCollapsed} />
@@ -278,6 +282,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             <NavItem href="/dashboard/accounting/invoices" label="Invoices" isSubitem isCollapsed={shouldShowCollapsed} />
             <NavItem href="/dashboard/accounting/expenses" label="Expenses" isSubitem isCollapsed={shouldShowCollapsed} />
             <NavItem href="/dashboard/accounting/settlements" label="Settlements" isSubitem isCollapsed={shouldShowCollapsed} />
+            <NavItem href="/dashboard/accounting/tax-fuel" label="Tax & Fuel" isSubitem isCollapsed={shouldShowCollapsed} />
             <NavItem href="/dashboard/fuel-analytics" label="Fuel Analytics" isSubitem isCollapsed={shouldShowCollapsed} />
           </DropdownItem>
 
@@ -294,10 +299,22 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             {isManager && (
               <NavItem href="/dashboard/maintenance/add" label="Add Service" isSubitem isCollapsed={shouldShowCollapsed} />
             )}
+            <NavItem href="/dashboard/maintenance/work-orders" label="Work Orders" isSubitem isCollapsed={shouldShowCollapsed} />
+            <NavItem href="/dashboard/maintenance/fault-code-rules" label="Fault Code Rules" isSubitem isCollapsed={shouldShowCollapsed} />
           </DropdownItem>
 
-          {/* DVIR */}
-          <NavItem href="/dashboard/dvir" icon={FileCheck} label="DVIR Reports" isCollapsed={shouldShowCollapsed} />
+          {/* DVIR Dropdown */}
+          <DropdownItem
+            icon={FileCheck}
+            label="DVIR"
+            href="/dashboard/dvir"
+            isOpen={dvirOpen}
+            onToggle={() => setDvirOpen(!dvirOpen)}
+            isCollapsed={shouldShowCollapsed}
+          >
+            <NavItem href="/dashboard/dvir" label="DVIR Reports" isSubitem isCollapsed={shouldShowCollapsed} />
+            <NavItem href="/dashboard/dvir/audit" label="Audit Reports" isSubitem isCollapsed={shouldShowCollapsed} />
+          </DropdownItem>
 
           {/* ELD Service */}
           <NavItem href="/dashboard/eld" icon={Shield} label="ELD Service" isCollapsed={shouldShowCollapsed} />
@@ -360,6 +377,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             <NavItem href="/dashboard/settings/dispatch" label="Dispatch" isSubitem isCollapsed={shouldShowCollapsed} />
             <NavItem href="/dashboard/settings/business" label="Business" isSubitem isCollapsed={shouldShowCollapsed} />
             <NavItem href="/dashboard/settings/alerts" label="Alerts" isSubitem isCollapsed={shouldShowCollapsed} />
+            <NavItem href="/dashboard/settings/webhooks" label="Webhooks" isSubitem isCollapsed={shouldShowCollapsed} />
           </DropdownItem>
         </div>
       </aside>

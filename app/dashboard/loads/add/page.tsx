@@ -44,6 +44,8 @@ import { calculateMileage } from "@/app/actions/load-mileage"
 import { LoadDeliveryPointsManager } from "@/components/load-delivery-points-manager"
 import { createLoadDeliveryPoint } from "@/app/actions/load-delivery-points"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
+import { getAddressBookEntries, incrementAddressUsage, type AddressBookEntry } from "@/app/actions/enhanced-address-book"
+import { BookOpen } from "lucide-react"
 
 export default function AddLoadPage() {
   const router = useRouter()
@@ -58,6 +60,10 @@ export default function AddLoadPage() {
   const [showAddShipper, setShowAddShipper] = useState(false)
   const [showAddConsignee, setShowAddConsignee] = useState(false)
   const [isCalculatingMiles, setIsCalculatingMiles] = useState(false)
+  const [shipperAddressBookEntries, setShipperAddressBookEntries] = useState<AddressBookEntry[]>([])
+  const [consigneeAddressBookEntries, setConsigneeAddressBookEntries] = useState<AddressBookEntry[]>([])
+  const [selectedShipperAddressBookId, setSelectedShipperAddressBookId] = useState<string>("")
+  const [selectedConsigneeAddressBookId, setSelectedConsigneeAddressBookId] = useState<string>("")
 
   const [formData, setFormData] = useState({
     // Load Info
@@ -139,16 +145,20 @@ export default function AddLoadPage() {
 
   useEffect(() => {
     async function loadData() {
-      const [driversResult, trucksResult, routesResult, customersResult] = await Promise.all([
+      const [driversResult, trucksResult, routesResult, customersResult, shipperAddressBookResult, consigneeAddressBookResult] = await Promise.all([
         getDrivers(),
         getTrucks(),
         getRoutes(),
         getCustomers(),
+        getAddressBookEntries({ category: "shipper", is_active: true }),
+        getAddressBookEntries({ category: "receiver", is_active: true }),
       ])
       if (driversResult.data) setDrivers(driversResult.data)
       if (trucksResult.data) setTrucks(trucksResult.data)
       if (routesResult.data) setRoutes(routesResult.data)
       if (customersResult.data) setCustomers(customersResult.data)
+      if (shipperAddressBookResult.data) setShipperAddressBookEntries(shipperAddressBookResult.data)
+      if (consigneeAddressBookResult.data) setConsigneeAddressBookEntries(consigneeAddressBookResult.data)
     }
     loadData()
   }, [])
@@ -201,6 +211,8 @@ export default function AddLoadPage() {
         shipment_number: formData.autoNumbering ? "" : formData.shipmentNumber,
       origin: formData.origin,
         destination: formData.deliveryType === "multi" ? "Multiple Locations" : formData.destination,
+        shipper_address_book_id: selectedShipperAddressBookId || undefined,
+        consignee_address_book_id: selectedConsigneeAddressBookId || undefined,
       weight: formData.weight || undefined,
       contents: formData.contents || undefined,
       company_name: formData.companyName || undefined,
@@ -263,6 +275,14 @@ export default function AddLoadPage() {
         toast.success(`Load created with ${deliveryPoints.length} delivery points`)
     } else {
         toast.success("Load created successfully")
+    }
+
+    // Increment address book usage
+    if (selectedShipperAddressBookId) {
+      await incrementAddressUsage(selectedShipperAddressBookId)
+    }
+    if (selectedConsigneeAddressBookId) {
+      await incrementAddressUsage(selectedConsigneeAddressBookId)
     }
 
     router.push(`/dashboard/loads/${result.data?.id || ""}`)
@@ -422,11 +442,59 @@ export default function AddLoadPage() {
                 <FormSection title="Shipper Information" icon={<Building2 className="w-5 h-5" />}>
                   <FormGrid cols={2}>
                 <div className="md:col-span-2">
+                      <Label>Select from Address Book</Label>
+                      <Select 
+                        value={selectedShipperAddressBookId} 
+                        onValueChange={(value) => {
+                          setSelectedShipperAddressBookId(value)
+                          const entry = shipperAddressBookEntries.find(e => e.id === value)
+                          if (entry) {
+                            setFormData(prev => ({
+                              ...prev,
+                              shipperName: entry.name || entry.company_name || "",
+                              shipperAddress: entry.address_line1 || "",
+                              shipperCity: entry.city || "",
+                              shipperState: entry.state || "",
+                              shipperZip: entry.zip_code || "",
+                              shipperContact: entry.contact_name || "",
+                              shipperPhone: entry.phone || "",
+                              origin: entry.coordinates 
+                                ? `${entry.coordinates.lat}, ${entry.coordinates.lng}`
+                                : `${entry.city}, ${entry.state}`.replace(/^,\s*|,\s*$/g, ''),
+                              pickupInstructions: entry.custom_fields?.loading_instructions || entry.notes || prev.pickupInstructions,
+                            }))
+                            toast.success(`Selected ${entry.name} from address book`)
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select shipper from address book (optional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">None (Manual Entry)</SelectItem>
+                          {shipperAddressBookEntries.map((entry) => (
+                            <SelectItem key={entry.id} value={entry.id}>
+                              {entry.name} {entry.company_name ? `(${entry.company_name})` : ""} - {entry.city}, {entry.state}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                </div>
+                <div className="md:col-span-2">
                       <Label>Shipper *</Label>
                       <div className="flex gap-2 mt-1">
                         <Input name="shipperName" value={formData.shipperName} onChange={handleChange} placeholder="Shipper name" />
                         <Button type="button" variant="outline" size="icon" onClick={() => setShowAddShipper(!showAddShipper)}>
                           <Plus className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="icon" 
+                          onClick={() => window.open("/dashboard/address-book", "_blank")}
+                          title="Open Address Book"
+                        >
+                          <BookOpen className="w-4 h-4" />
                         </Button>
                 </div>
                       {showAddShipper && (
@@ -505,11 +573,59 @@ export default function AddLoadPage() {
                     {formData.deliveryType === "single" ? (
                       <>
                 <div className="md:col-span-2">
+                          <Label>Select from Address Book</Label>
+                          <Select 
+                            value={selectedConsigneeAddressBookId} 
+                            onValueChange={(value) => {
+                              setSelectedConsigneeAddressBookId(value)
+                              const entry = consigneeAddressBookEntries.find(e => e.id === value)
+                              if (entry) {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  consigneeName: entry.name || entry.company_name || "",
+                                  consigneeAddress: entry.address_line1 || "",
+                                  consigneeCity: entry.city || "",
+                                  consigneeState: entry.state || "",
+                                  consigneeZip: entry.zip_code || "",
+                                  consigneeContact: entry.contact_name || "",
+                                  consigneePhone: entry.phone || "",
+                                  destination: entry.coordinates 
+                                    ? `${entry.coordinates.lat}, ${entry.coordinates.lng}`
+                                    : `${entry.city}, ${entry.state}`.replace(/^,\s*|,\s*$/g, ''),
+                                  deliveryInstructions: entry.custom_fields?.loading_instructions || entry.notes || prev.deliveryInstructions,
+                                }))
+                                toast.success(`Selected ${entry.name} from address book`)
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="mt-1">
+                              <SelectValue placeholder="Select consignee from address book (optional)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">None (Manual Entry)</SelectItem>
+                              {consigneeAddressBookEntries.map((entry) => (
+                                <SelectItem key={entry.id} value={entry.id}>
+                                  {entry.name} {entry.company_name ? `(${entry.company_name})` : ""} - {entry.city}, {entry.state}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                </div>
+                <div className="md:col-span-2">
                           <Label>Consignee *</Label>
                           <div className="flex gap-2 mt-1">
                             <Input name="consigneeName" value={formData.consigneeName} onChange={handleChange} placeholder="Consignee name" />
                             <Button type="button" variant="outline" size="icon" onClick={() => setShowAddConsignee(!showAddConsignee)}>
                               <Plus className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="icon" 
+                              onClick={() => window.open("/dashboard/address-book", "_blank")}
+                              title="Open Address Book"
+                            >
+                              <BookOpen className="w-4 h-4" />
                             </Button>
                 </div>
                           {showAddConsignee && (

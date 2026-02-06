@@ -104,3 +104,6 @@ If no rows → bucket doesn't exist ❌ (run Step 2 again)
 - `supabase/storage_bucket_setup.sql` - Full setup with comments
 - `supabase/verify_bucket.sql` - Verification SQL
 
+
+
+

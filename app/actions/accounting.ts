@@ -494,6 +494,20 @@ export async function createInvoice(formData: {
   }
 
   revalidatePath("/dashboard/accounting/invoices")
+  
+  // Trigger webhook
+  try {
+    const { triggerWebhook } = await import("./webhooks")
+    await triggerWebhook(userData.company_id, "invoice.created", {
+      invoice_id: data.id,
+      invoice_number: invoiceNumber,
+      amount: finalAmount,
+      customer_name: formData.customer_name,
+    })
+  } catch (error) {
+    console.warn("[createInvoice] Webhook trigger failed:", error)
+  }
+  
   return { data, error: null }
 }
 
@@ -884,14 +898,78 @@ export async function createSettlement(formData: {
 
   const loads = loadsResult.data || []
 
-  // Calculate gross pay if not provided
+  // Calculate gross pay using pay rules engine if not provided
   let grossPay = formData.gross_pay || 0
+  let calculationDetails: any = {}
+  let payRuleId: string | null = null
+
   if (!formData.gross_pay && loads.length > 0) {
-    // Note: pay_rate column doesn't exist in drivers table schema
-    // For now, sum load values as gross pay estimate
-    // (This is just an estimate - user should set pay rate for accurate calculations)
-    // Future: Add pay_rate column to drivers table or use a separate pay_rates table
-    grossPay = loads.reduce((sum, load) => sum + (Number(load.value) || 0), 0)
+    try {
+      // Try to use pay rules engine
+      const { calculateGrossPayFromRule } = await import("./settlement-pay-rules")
+      
+      // Get total miles from ELD data if available
+      let totalMiles: number | undefined = undefined
+      try {
+        const { getELDMileageData } = await import("./eld")
+        const { data: trucks } = await supabase
+          .from("trucks")
+          .select("id")
+          .eq("driver_id", formData.driver_id)
+          .limit(1)
+          .single()
+        
+        if (trucks) {
+          const eldResult = await getELDMileageData({
+            truck_ids: [trucks.id],
+            start_date: formData.period_start,
+            end_date: formData.period_end,
+          })
+          if (eldResult.data?.totalMiles) {
+            totalMiles = eldResult.data.totalMiles
+          }
+        }
+      } catch (error) {
+        // ELD data not available, continue without it
+      }
+
+      const payCalculation = await calculateGrossPayFromRule({
+        driverId: formData.driver_id,
+        loads: loads.map((load) => ({
+          id: load.id,
+          value: Number(load.value) || 0,
+          miles: Number(load.miles) || undefined,
+          load_type: (load as any).load_type,
+          on_time_delivery: (load as any).on_time_delivery,
+        })),
+        totalMiles,
+        periodStart: formData.period_start,
+        periodEnd: formData.period_end,
+      })
+
+      if (payCalculation.data && !payCalculation.error) {
+        grossPay = payCalculation.data.gross_pay
+        calculationDetails = payCalculation.data.calculation_details
+        payRuleId = payCalculation.data.pay_rule?.id || null
+      } else {
+        // Fallback: sum load values if pay rule not found
+        grossPay = loads.reduce((sum, load) => sum + (Number(load.value) || 0), 0)
+        calculationDetails = {
+          base_pay: grossPay,
+          method: "fallback_load_value_sum",
+          note: "Pay rule not found, using load value sum",
+        }
+      }
+    } catch (error) {
+      // Fallback: sum load values if pay rules engine fails
+      console.error("Pay rules calculation error:", error)
+      grossPay = loads.reduce((sum, load) => sum + (Number(load.value) || 0), 0)
+      calculationDetails = {
+        base_pay: grossPay,
+        method: "fallback_load_value_sum",
+        note: "Pay rules engine unavailable, using load value sum",
+      }
+    }
   }
 
   // Get fuel expenses for the period
@@ -956,12 +1034,27 @@ export async function createSettlement(formData: {
       status: "pending",
       payment_method: formData.payment_method || null,
       loads: loadsData,
+      pay_rule_id: payRuleId,
+      calculation_details: calculationDetails,
     })
     .select()
     .single()
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  // Generate PDF automatically (non-blocking)
+  if (data) {
+    try {
+      const { saveSettlementPDF } = await import("./settlement-pdf")
+      saveSettlementPDF(data.id).catch((err) =>
+        console.error("Failed to generate settlement PDF:", err)
+      )
+    } catch (error) {
+      // PDF generation is optional, don't fail settlement creation
+      console.error("PDF generation error (non-blocking):", error)
+    }
   }
 
   revalidatePath("/dashboard/accounting/settlements")

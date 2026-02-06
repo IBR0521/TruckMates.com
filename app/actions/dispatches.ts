@@ -158,7 +158,21 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
 
   revalidatePath("/dashboard/dispatches")
   revalidatePath("/dashboard/loads")
-
+  
+  // Trigger webhook
+  if (driverId) {
+    try {
+      const { triggerWebhook } = await import("./webhooks")
+      await triggerWebhook(userData.company_id, "driver.assigned", {
+        load_id: loadId,
+        driver_id: driverId,
+        truck_id: truckId,
+      })
+    } catch (error) {
+      console.warn("[quickAssignLoad] Webhook trigger failed:", error)
+    }
+  }
+  
   return { data, error: null }
 }
 
@@ -231,7 +245,21 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
 
   revalidatePath("/dashboard/dispatches")
   revalidatePath("/dashboard/routes")
-
+  
+  // Trigger webhook
+  if (driverId) {
+    try {
+      const { triggerWebhook } = await import("./webhooks")
+      await triggerWebhook(userData.company_id, "driver.assigned", {
+        route_id: routeId,
+        driver_id: driverId,
+        truck_id: truckId,
+      })
+    } catch (error) {
+      console.warn("[quickAssignRoute] Webhook trigger failed:", error)
+    }
+  }
+  
   return { data, error: null }
 }
 

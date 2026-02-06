@@ -2,13 +2,13 @@
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Download, FileText, Plus, Receipt } from "lucide-react"
+import { Download, FileText, Plus, Receipt, Settings } from "lucide-react"
 import { exportToExcel } from "@/lib/export-utils"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useState, useEffect } from "react"
-import { getIFTAReports, deleteIFTAReport } from "@/app/actions/ifta"
+import { getIFTAReports, deleteIFTAReport } from "@/app/actions/tax-fuel-reconciliation"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,6 +74,15 @@ export default function IFTAPage() {
           <p className="text-muted-foreground text-sm mt-1">International Fuel Tax Agreement reporting</p>
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/dashboard/accounting/ifta/tax-rates">
+            <Button
+              variant="outline"
+              className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Tax Rates
+            </Button>
+          </Link>
           <Button
             onClick={handleExport}
             variant="outline"

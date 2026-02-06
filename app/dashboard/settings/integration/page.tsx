@@ -2,40 +2,23 @@
 
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { 
   Plug, 
-  Save,
   CheckCircle2,
   XCircle,
+  ExternalLink,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
-import { getIntegrationSettings, updateIntegrationSettings } from "@/app/actions/settings-integration"
-import { testQuickBooksConnection, initiateQuickBooksOAuth } from "@/app/actions/integrations-quickbooks"
-import { Button as TestButton } from "@/components/ui/button"
+import Link from "next/link"
+import { getIntegrationSettings } from "@/app/actions/settings-integration"
 
 export default function IntegrationSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
-  const [isTesting, setIsTesting] = useState<string | null>(null)
   const [integrations, setIntegrations] = useState({
-    quickbooks_enabled: false,
-    quickbooks_api_key: "",
-    quickbooks_api_secret: "",
-    quickbooks_company_id: "",
-    stripe_enabled: false,
-    stripe_api_key: "",
-    paypal_enabled: false,
-    paypal_client_id: "",
-    google_maps_enabled: false,
-    google_maps_api_key: "",
-    resend_enabled: false,
-    resend_api_key: "",
-    resend_from_email: "",
+    google_maps_enabled: true, // Auto-enabled (platform API key)
+    resend_enabled: true, // Auto-enabled (platform API key)
   })
 
   useEffect(() => {
@@ -47,19 +30,8 @@ export default function IntegrationSettingsPage() {
           toast.error(result.error)
         } else if (result.data) {
           setIntegrations({
-            quickbooks_enabled: result.data.quickbooks_enabled || false,
-            quickbooks_api_key: result.data.quickbooks_api_key || "",
-            quickbooks_api_secret: result.data.quickbooks_api_secret || "",
-            quickbooks_company_id: result.data.quickbooks_company_id || "",
-            stripe_enabled: result.data.stripe_enabled || false,
-            stripe_api_key: result.data.stripe_api_key || "",
-            paypal_enabled: result.data.paypal_enabled || false,
-            paypal_client_id: result.data.paypal_client_id || "",
-            google_maps_enabled: result.data.google_maps_enabled || false,
-            google_maps_api_key: result.data.google_maps_api_key || "",
-            resend_enabled: result.data.resend_enabled || false,
-            resend_api_key: result.data.resend_api_key || "",
-            resend_from_email: result.data.resend_from_email || "",
+            google_maps_enabled: result.data.google_maps_enabled !== false, // Default to true
+            resend_enabled: result.data.resend_enabled !== false, // Default to true
           })
         }
       } catch (error) {
@@ -71,36 +43,6 @@ export default function IntegrationSettingsPage() {
     loadSettings()
   }, [])
 
-  const handleSave = async () => {
-    setIsSaving(true)
-    try {
-      const result = await updateIntegrationSettings({
-        quickbooks_enabled: integrations.quickbooks_enabled,
-        quickbooks_api_key: integrations.quickbooks_api_key,
-        quickbooks_api_secret: integrations.quickbooks_api_secret,
-        quickbooks_company_id: integrations.quickbooks_company_id,
-        stripe_enabled: integrations.stripe_enabled,
-        stripe_api_key: integrations.stripe_api_key,
-        paypal_enabled: integrations.paypal_enabled,
-        paypal_client_id: integrations.paypal_client_id,
-        google_maps_enabled: integrations.google_maps_enabled,
-        google_maps_api_key: integrations.google_maps_api_key,
-        resend_enabled: integrations.resend_enabled,
-        resend_api_key: integrations.resend_api_key,
-        resend_from_email: integrations.resend_from_email,
-      })
-
-      if (result.error) {
-        toast.error(result.error)
-      } else {
-        toast.success("Integration settings saved successfully")
-      }
-    } catch (error) {
-      toast.error("Failed to save integration settings")
-    } finally {
-      setIsSaving(false)
-    }
-  }
 
   return (
     <div className="w-full p-4 md:p-8">
@@ -121,203 +63,104 @@ export default function IntegrationSettingsPage() {
           </Card>
         ) : (
           <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">Available Integrations</h2>
+          <h2 className="text-lg font-semibold mb-4">Platform Integrations</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            These integrations are automatically available to all users. API keys are managed platform-wide.
+          </p>
           
           <div className="space-y-4">
-            {/* QuickBooks */}
-            <div className="border rounded-lg p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                <div className="flex-1">
-                  <h3 className="font-semibold">QuickBooks</h3>
-                  <p className="text-sm text-muted-foreground">Sync accounting data with QuickBooks</p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {integrations.quickbooks_enabled ? (
-                    <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  ) : (
-                    <XCircle className="w-5 h-5 text-muted-foreground" />
-                  )}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Enable QuickBooks</Label>
-                  <Switch
-                    checked={integrations.quickbooks_enabled}
-                    onCheckedChange={(checked) => setIntegrations({
-                      ...integrations,
-                      quickbooks_enabled: checked
-                    })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    Connect your QuickBooks account to sync invoices and expenses automatically.
-                  </p>
-                  <div className="flex gap-2">
-                    {integrations.quickbooks_company_id ? (
-                      <>
-                        <TestButton
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={async () => {
-                            setIsTesting("quickbooks")
-                            const result = await testQuickBooksConnection()
-                            setIsTesting(null)
-                            if (result.error) {
-                              toast.error(result.error)
-                            } else {
-                              toast.success(`Connected to QuickBooks: ${result.data?.company || "Success"}`)
-                            }
-                          }}
-                          disabled={!integrations.quickbooks_enabled || isTesting === "quickbooks"}
-                        >
-                          {isTesting === "quickbooks" ? "Testing..." : "Test Connection"}
-                        </TestButton>
-                      </>
-                    ) : (
-                      <TestButton
-                        type="button"
-                        variant="default"
-                        size="sm"
-                        onClick={async () => {
-                          setIsTesting("quickbooks")
-                          const result = await initiateQuickBooksOAuth()
-                          setIsTesting(null)
-                          if (result.error) {
-                            toast.error(result.error)
-                          } else if (result.data?.authUrl) {
-                            // Redirect to QuickBooks OAuth
-                            window.location.href = result.data.authUrl
-                          }
-                        }}
-                        disabled={!integrations.quickbooks_enabled || isTesting === "quickbooks"}
-                      >
-                        {isTesting === "quickbooks" ? "Connecting..." : "Connect QuickBooks"}
-                      </TestButton>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Stripe - Optional (requires bank account) */}
-            <div className="border rounded-lg p-4 opacity-75">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold">Stripe</h3>
-                    <Badge variant="outline" className="text-xs">Optional</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">Process payments with Stripe (requires bank account)</p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {integrations.stripe_enabled ? (
-                    <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  ) : (
-                    <XCircle className="w-5 h-5 text-muted-foreground" />
-                  )}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Enable Stripe</Label>
-                  <Switch
-                    checked={integrations.stripe_enabled}
-                    onCheckedChange={(checked) => setIntegrations({
-                      ...integrations,
-                      stripe_enabled: checked
-                    })}
-                    disabled={true}
-                  />
-                </div>
-                <Label>API Key</Label>
-                <Input
-                  type="password"
-                  value={integrations.stripe_api_key}
-                  onChange={(e) => setIntegrations({
-                    ...integrations,
-                    stripe_api_key: e.target.value
-                  })}
-                  placeholder="Enter Stripe API key (configure when bank account is ready)"
-                  disabled={true}
-                />
-                <p className="text-xs text-muted-foreground">Configure this when you have a bank account set up</p>
-              </div>
-            </div>
-
             {/* Google Maps */}
-            <div className="border rounded-lg p-4">
+            <div className="border rounded-lg p-4 bg-card">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
                 <div className="flex-1">
-                  <h3 className="font-semibold">Google Maps</h3>
-                  <p className="text-sm text-muted-foreground">Enhanced mapping and routing</p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold">Google Maps</h3>
+                    <Badge variant="outline" className="text-xs">Auto-Configured</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Route optimization and mapping features</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {integrations.google_maps_enabled ? (
-                    <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  ) : (
-                    <XCircle className="w-5 h-5 text-muted-foreground" />
-                  )}
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  <span className="text-sm text-muted-foreground">Active</span>
                 </div>
               </div>
-                <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Enable Google Maps</Label>
-                  <Switch
-                    checked={integrations.google_maps_enabled}
-                    onCheckedChange={(checked) => setIntegrations({
-                      ...integrations,
-                      google_maps_enabled: checked
-                    })}
-                  />
-                </div>
+              <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  Route optimization and mapping features powered by Google Maps.
+                  Route optimization, distance calculations, and mapping features are automatically available. 
+                  No configuration needed - API key is managed platform-wide.
                 </p>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <CheckCircle2 className="w-3 h-3 text-green-500" />
+                  <span>Route optimization enabled</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <CheckCircle2 className="w-3 h-3 text-green-500" />
+                  <span>Real-time traffic data enabled</span>
+                </div>
               </div>
             </div>
 
             {/* Resend Email */}
-            <div className="border rounded-lg p-4">
+            <div className="border rounded-lg p-4 bg-card">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
                 <div className="flex-1">
-                  <h3 className="font-semibold">Resend Email</h3>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold">Email Service</h3>
+                    <Badge variant="outline" className="text-xs">Auto-Configured</Badge>
+                  </div>
                   <p className="text-sm text-muted-foreground">Send invoices and notifications via email</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {integrations.resend_enabled ? (
-                    <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  ) : (
-                    <XCircle className="w-5 h-5 text-muted-foreground" />
-                  )}
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  <span className="text-sm text-muted-foreground">Active</span>
                 </div>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Enable Resend</Label>
-                  <Switch
-                    checked={integrations.resend_enabled}
-                    onCheckedChange={(checked) => setIntegrations({
-                      ...integrations,
-                      resend_enabled: checked
-                    })}
-                  />
-                </div>
                 <p className="text-sm text-muted-foreground">
-                  Send invoices and notifications via email using the platform's email service.
+                  Email notifications, invoice emails, and customer communications are automatically enabled. 
+                  No configuration needed - email service is managed platform-wide.
                 </p>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <CheckCircle2 className="w-3 h-3 text-green-500" />
+                  <span>Invoice emails enabled</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <CheckCircle2 className="w-3 h-3 text-green-500" />
+                  <span>Notification emails enabled</span>
+                </div>
+              </div>
+            </div>
+
+            {/* External Load Boards */}
+            <div className="border rounded-lg p-4 border-primary/20 bg-primary/5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                <div className="flex-1">
+                  <h3 className="font-semibold">External Load Boards</h3>
+                  <p className="text-sm text-muted-foreground">Connect to DAT, Truckstop, 123Loadboard to sync loads automatically</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground mb-3">
+                  Sync loads from external load boards directly into your system. Requires API credentials from the load board provider.
+                </p>
+                <Link href="/dashboard/loads/external">
+                  <Button variant="outline" className="w-full sm:w-auto">
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Manage External Load Boards
+                  </Button>
+                </Link>
               </div>
             </div>
           </div>
 
-          <div className="mt-6 flex justify-end">
-            <Button onClick={handleSave} disabled={isSaving} className="w-full sm:w-auto">
-              <Save className="w-4 h-4 mr-2" />
-              {isSaving ? "Saving..." : "Save Changes"}
-            </Button>
-          </div>
+          {/* Note about API keys */}
+          <Card className="p-4 bg-muted/50 border-dashed mt-6">
+            <p className="text-xs text-muted-foreground">
+              <strong>Note:</strong> Google Maps and Email Service integrations use platform-wide API keys 
+              configured by the administrator. Individual users don't need to configure API keys - these features are 
+              automatically available to all users.
+            </p>
+          </Card>
         </Card>
         )}
       </div>

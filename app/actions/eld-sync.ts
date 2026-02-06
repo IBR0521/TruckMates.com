@@ -562,24 +562,34 @@ async function syncGeotabData(device: any) {
       }
     }
 
-    const eventsToInsert = events.map((event: any) => ({
-      company_id: device.company_id,
-      eld_device_id: device.id,
-      driver_id: event.driver?.id || null,
-      truck_id: device.truck_id || null,
-      event_type: mapGeotabEventType(event.faultCode?.name),
-      severity: event.severity || "warning",
-      title: event.faultCode?.name || "Event",
-      description: event.description || event.faultCode?.description,
-      event_time: event.dateTime || event.date || new Date().toISOString(),
-      location: event.location ? {
-        lat: event.location.latitude,
-        lng: event.location.longitude,
-        address: event.location.address
-      } : null,
-      resolved: false,
-      metadata: event
-    }))
+    const eventsToInsert = events.map((event: any) => {
+      // Extract fault code information
+      const faultCode = event.faultCode?.code || event.faultCode?.id || event.code || null
+      const faultCodeCategory = determineFaultCodeCategory(event.faultCode?.name || event.faultCode?.code || event.title)
+      const faultCodeDescription = event.faultCode?.description || event.description || null
+      
+      return {
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: event.driver?.id || null,
+        truck_id: device.truck_id || null,
+        event_type: mapGeotabEventType(event.faultCode?.name),
+        severity: event.severity || "warning",
+        title: event.faultCode?.name || "Event",
+        description: faultCodeDescription,
+        event_time: event.dateTime || event.date || new Date().toISOString(),
+        location: event.location ? {
+          lat: event.location.latitude,
+          lng: event.location.longitude,
+          address: event.location.address
+        } : null,
+        resolved: false,
+        fault_code: faultCode,
+        fault_code_category: faultCodeCategory,
+        fault_code_description: faultCodeDescription,
+        metadata: event
+      }
+    })
 
     if (eventsToInsert.length > 0) {
       const { error: eventsError } = await supabase
@@ -610,6 +620,44 @@ async function syncGeotabData(device: any) {
     console.error("Geotab sync error:", error)
     return { error: error.message || "Failed to sync Geotab data", data: null }
   }
+}
+
+// Helper function to determine fault code category
+function determineFaultCodeCategory(faultCodeName: string | null): string | null {
+  if (!faultCodeName) return null
+  
+  const name = faultCodeName.toLowerCase()
+  
+  // Engine-related
+  if (name.includes('engine') || name.includes('misfire') || name.includes('p03') || name.includes('p01')) {
+    return 'engine'
+  }
+  // Transmission-related
+  if (name.includes('transmission') || name.includes('p07')) {
+    return 'transmission'
+  }
+  // Brake-related
+  if (name.includes('brake') || name.includes('abs') || name.includes('c12')) {
+    return 'brakes'
+  }
+  // Electrical-related
+  if (name.includes('electrical') || name.includes('voltage') || name.includes('p05')) {
+    return 'electrical'
+  }
+  // Cooling-related
+  if (name.includes('coolant') || name.includes('cooling') || name.includes('temperature') || name.includes('p01')) {
+    return 'cooling'
+  }
+  // Fuel-related
+  if (name.includes('fuel') || name.includes('p01') || name.includes('p00')) {
+    return 'fuel'
+  }
+  // Emissions-related
+  if (name.includes('emission') || name.includes('p04')) {
+    return 'emissions'
+  }
+  
+  return 'other'
 }
 
 // Helper functions

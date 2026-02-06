@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Plus, Edit2, Trash2, Eye, Download, Users, Search, Filter } from "lucide-react"
+import { Plus, Edit2, Trash2, Eye, Download, Users, Search, Filter, Trophy } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
@@ -224,6 +224,12 @@ function DriversPageContent() {
           <p className="text-xs text-muted-foreground mt-1">Press Ctrl+N for new, Ctrl+F to search, Delete to bulk delete</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          <Link href="/dashboard/drivers/leaderboard">
+            <Button variant="outline" size="sm">
+              <Trophy className="w-4 h-4 mr-2" />
+              Leaderboard
+            </Button>
+          </Link>
           {isBulkMode && selectedIds.size > 0 && (
             <>
               <DropdownMenu>

@@ -50,6 +50,7 @@ export const STORAGE_KEYS = {
   PENDING_LOCATIONS: '@eld/pending_locations',
   PENDING_LOGS: '@eld/pending_logs',
   PENDING_EVENTS: '@eld/pending_events',
+  PENDING_DVIRS: '@eld/pending_dvirs',
   LAST_SYNC: '@eld/last_sync',
 }
 

@@ -87,6 +87,21 @@ export async function sendInvoiceEmail(
     return { error: "No company found", data: null }
   }
 
+  // Check rate limit for Resend API
+  try {
+    const { checkApiUsage } = await import("@/lib/api-protection")
+    const rateCheck = await checkApiUsage("resend", "send_email")
+    if (!rateCheck.allowed) {
+      return {
+        error: rateCheck.reason || "Email rate limit exceeded. Please try again later.",
+        data: null
+      }
+    }
+  } catch (error) {
+    // If rate limit check fails, allow the call to proceed (fail open)
+    console.error("[Invoice Email] Rate limit check failed:", error)
+  }
+
   // Get invoice
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")

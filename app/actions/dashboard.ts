@@ -55,12 +55,12 @@ export async function getDashboardStats() {
       }
     }
 
-    // Get authenticated user and company_id with reasonable timeout (3 seconds)
+    // Get authenticated user and company_id with reasonable timeout (10 seconds for poor connections)
     const authPromise = getAuthContext()
     const authTimeout = new Promise((resolve) => {
       setTimeout(() => {
-        resolve({ companyId: null, error: "Auth timeout" })
-      }, 5000) // Increased to 5 seconds - more reasonable
+        resolve({ companyId: null, error: "Connection timeout. Please check your internet connection." })
+      }, 10000) // Increased to 10 seconds for poor connections
     })
 
     const { companyId, error: authError } = await Promise.race([
@@ -272,7 +272,7 @@ export async function getDashboardStats() {
     ])
     
     const cardTimeout = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("Card data timeout")), 8000) // Increased to 8 seconds
+      setTimeout(() => reject(new Error("Connection timeout. Please check your internet connection.")), 12000) // Increased to 12 seconds for poor connections
     })
     
     let recentDriversData: any = null

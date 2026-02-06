@@ -249,7 +249,7 @@ export default function CustomersPage() {
                         <div className="text-sm text-muted-foreground">{customer.phone}</div>
                       )}
                     </td>
-                    <td className="p-4">{getTypeBadge(customer.customer_type)}</td>
+                    <td className="p-4">{getTypeBadge(customer.relationship_type || customer.customer_type)}</td>
                     <td className="p-4">{getStatusBadge(customer.status)}</td>
                     <td className="p-4">
                       {customer.city && customer.state ? (

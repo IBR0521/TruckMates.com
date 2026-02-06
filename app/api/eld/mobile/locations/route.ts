@@ -112,11 +112,115 @@ export async function POST(request: NextRequest) {
       insertedCount += batch.length
     }
 
+    // Check geofences for the latest location (triggers auto-status updates)
+    if (device.truck_id && locationsToInsert.length > 0) {
+      try {
+        const latestLocation = locationsToInsert[locationsToInsert.length - 1]
+        const { checkGeofenceEntry } = await import("@/app/actions/geofencing")
+        await checkGeofenceEntry(
+          device.truck_id,
+          latestLocation.latitude,
+          latestLocation.longitude,
+          latestLocation.timestamp
+        )
+      } catch (geofenceError) {
+        // Don't fail the request if geofence check fails
+        console.error("Geofence check error (non-blocking):", geofenceError)
+      }
+    }
+
+    // Detect idle time for the latest location
+    if (device.truck_id && locationsToInsert.length > 0) {
+      try {
+        const latestLocation = locationsToInsert[locationsToInsert.length - 1]
+        const { detectIdleTime } = await import("@/app/actions/idle-time-tracking")
+        await detectIdleTime(
+          device.truck_id,
+          latestLocation.latitude,
+          latestLocation.longitude,
+          latestLocation.timestamp,
+          latestLocation.speed || 0,
+          latestLocation.engine_status || 'unknown',
+          latestLocation.driver_id || undefined
+        )
+      } catch (idleError) {
+        // Don't fail the request if idle detection fails
+        console.error("Idle time detection error (non-blocking):", idleError)
+      }
+    }
+
     // Update device last_sync_at
     await supabase
       .from("eld_devices")
       .update({ last_sync_at: new Date().toISOString() })
       .eq("id", device_id)
+
+    // Update actual route for active routes (non-blocking)
+    let activeRouteId: string | null = null
+    let activeLoadId: string | null = null
+    
+    if (device.truck_id) {
+      try {
+        const { data: activeRoute } = await supabase
+          .from("routes")
+          .select("id, load_id")
+          .eq("truck_id", device.truck_id)
+          .in("status", ["in_progress", "scheduled"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single()
+
+        if (activeRoute) {
+          activeRouteId = activeRoute.id
+          activeLoadId = activeRoute.load_id || null
+          
+          // Periodically rebuild actual route (every 10 location updates)
+          const { buildActualRoute } = await import("@/app/actions/actual-route-tracking")
+          // Only rebuild occasionally to avoid performance issues
+          if (Math.random() < 0.1) { // 10% chance per location update
+            buildActualRoute(activeRoute.id).catch(err => 
+              console.error("Failed to update actual route:", err)
+            )
+          }
+        }
+      } catch (error) {
+        // Don't fail location sync if route update fails
+        console.error("Route update error (non-blocking):", error)
+      }
+    }
+
+    // Detect state crossings for the latest location (non-blocking)
+    // Only check for state crossing on the latest location to avoid API rate limits
+    if (locationsToInsert.length > 0) {
+      try {
+        const latestLocation = locationsToInsert[locationsToInsert.length - 1]
+        const { detectStateCrossing } = await import("@/app/actions/ifta-state-crossing")
+        
+        // Only check state crossing periodically (every 5th location update) to avoid API rate limits
+        // State boundaries don't change frequently, so we don't need to check every single location
+        if (Math.random() < 0.2) { // 20% chance per location update
+          await detectStateCrossing({
+            company_id: companyId,
+            truck_id: device.truck_id,
+            driver_id: latestLocation.driver_id,
+            eld_device_id: device_id,
+            latitude: latestLocation.latitude,
+            longitude: latestLocation.longitude,
+            timestamp: latestLocation.timestamp,
+            route_id: activeRouteId,
+            load_id: activeLoadId,
+            speed: latestLocation.speed,
+            odometer: latestLocation.odometer,
+            address: latestLocation.address,
+          }).catch(err => 
+            console.error("State crossing detection error (non-blocking):", err)
+          )
+        }
+      } catch (stateError) {
+        // Don't fail the request if state crossing detection fails
+        console.error("State crossing detection error (non-blocking):", stateError)
+      }
+    }
 
     return NextResponse.json({
       success: true,

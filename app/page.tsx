@@ -39,6 +39,9 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <Logo size="sm" />
           <div className="flex items-center gap-4">
+            <Link href="/features">
+              <Button variant="ghost" className="hidden sm:flex">Features</Button>
+            </Link>
             <Link href="/marketplace">
               <Button variant="ghost" className="hidden sm:flex">Marketplace</Button>
             </Link>
@@ -214,9 +217,14 @@ export default function Home() {
           <div className="text-center mb-16">
             <Badge variant="outline" className="mb-4">Features</Badge>
             <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">Powerful Features</h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-6">
               Everything you need to manage your fleet efficiently and profitably
             </p>
+            <Link href="/features">
+              <Button variant="outline" size="lg">
+                View All Features <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+            </Link>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -251,10 +259,15 @@ export default function Home() {
               <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
                 <Clock className="w-7 h-7 text-primary" />
               </div>
-              <h3 className="text-xl font-bold text-foreground mb-3">ELD & HOS Compliance</h3>
+              <div className="flex items-center gap-2 mb-3">
+                <h3 className="text-xl font-bold text-foreground">ELD & HOS Compliance</h3>
+                <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-500/20">
+                  FMCSA Compliant
+                </Badge>
+              </div>
               <p className="text-muted-foreground mb-4">
-                Complete Electronic Logging Device integration with automatic Hours of Service 
-                tracking, violation detection, and DOT compliance reporting.
+                Integrates with DOT-certified ELD devices for automatic Hours of Service 
+                tracking, violation detection, and FMCSA compliance reporting.
               </p>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
@@ -268,6 +281,10 @@ export default function Home() {
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                   <span>IFTA reporting with ELD data</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <span>Integrates with DOT-certified ELD devices</span>
                 </li>
               </ul>
             </Card>
@@ -457,6 +474,91 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Mobile App Section */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-background to-secondary/20">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <Badge variant="outline" className="mb-4">Mobile App</Badge>
+              <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
+                ELD Compliance on Your Phone
+              </h2>
+              <p className="text-xl text-muted-foreground mb-6">
+                Our native mobile app integrates with vehicle OBD-II or certified ELD devices for HOS tracking and compliance. 
+                Available for iOS and Android.
+              </p>
+              <ul className="space-y-4 mb-8">
+                <li className="flex items-start gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg mt-0.5">
+                    <Smartphone className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-1">Real-Time GPS Tracking</h3>
+                    <p className="text-muted-foreground text-sm">
+                      Automatic location updates with 10-meter accuracy. Works offline and syncs when connected.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg mt-0.5">
+                    <Clock className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-1">Automatic HOS Logging</h3>
+                    <p className="text-muted-foreground text-sm">
+                      Detects driving, on-duty, and off-duty status automatically. FMCSA-compliant logs.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg mt-0.5">
+                    <AlertTriangle className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-1">Violation Alerts</h3>
+                    <p className="text-muted-foreground text-sm">
+                      Instant notifications for HOS violations, speeding, and safety events.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg mt-0.5">
+                    <Shield className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-1">FMCSA Compliant</h3>
+                    <p className="text-muted-foreground text-sm">
+                      Integrates with DOT-certified ELD devices for FMCSA compliance. Export logs for inspections.
+                    </p>
+                  </div>
+                </li>
+              </ul>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button size="lg" variant="outline" className="w-full sm:w-auto">
+                  <Smartphone className="mr-2 w-5 h-5" />
+                  Download for iOS
+                </Button>
+                <Button size="lg" variant="outline" className="w-full sm:w-auto">
+                  <Smartphone className="mr-2 w-5 h-5" />
+                  Download for Android
+                </Button>
+              </div>
+            </div>
+            <div className="relative">
+              <div className="relative bg-gradient-to-br from-primary/10 to-primary/5 rounded-3xl p-8 border border-primary/20">
+                <div className="aspect-[9/16] bg-card rounded-2xl border-4 border-border shadow-2xl flex items-center justify-center">
+                  <div className="text-center p-8">
+                    <Smartphone className="w-24 h-24 text-primary mx-auto mb-4 opacity-50" />
+                    <p className="text-muted-foreground text-sm">Mobile App Preview</p>
+                    <p className="text-xs text-muted-foreground mt-2">iOS & Android</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ROI & Business Impact */}
       <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-secondary/20 to-background">
         <div className="max-w-7xl mx-auto">
@@ -631,19 +733,19 @@ export default function Home() {
             <div>
               <h4 className="font-semibold text-foreground mb-4">Features</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>Fleet Tracking</li>
-                <li>ELD Integration</li>
-                <li>Route Optimization</li>
-                <li>Real-Time Updates</li>
-                <li>Analytics & Reports</li>
+                <li><Link href="/features" className="hover:text-primary transition">All Features</Link></li>
+                <li><Link href="/features/eld" className="hover:text-primary transition">ELD Compliance</Link></li>
+                <li><Link href="/features/routing" className="hover:text-primary transition">Route Optimization</Link></li>
+                <li><Link href="/features/accounting" className="hover:text-primary transition">Accounting</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="font-semibold text-foreground mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="/login" className="hover:text-primary transition">Login</Link></li>
-                <li>Support</li>
-                <li>Documentation</li>
+                <li><Link href="/about" className="hover:text-primary transition">About</Link></li>
+                <li><Link href="/partners" className="hover:text-primary transition">Partners</Link></li>
+                <li><Link href="/security" className="hover:text-primary transition">Security</Link></li>
+                <li><Link href="/compliance" className="hover:text-primary transition">Compliance</Link></li>
               </ul>
             </div>
           </div>

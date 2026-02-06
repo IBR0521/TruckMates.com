@@ -95,7 +95,82 @@ async function getRouteDistanceAndTime(
   }
 }
 
+// Get toll cost for a route (using Google Maps API if available)
+async function getTollCost(
+  origin: { lat: number; lng: number } | string,
+  destination: { lat: number; lng: number } | string
+): Promise<number> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
+  if (!apiKey) {
+    return 0 // No toll data without API
+  }
+
+  try {
+    const originStr = typeof origin === "string" ? origin : `${origin.lat},${origin.lng}`
+    const destStr = typeof destination === "string" ? destination : `${destination.lat},${destination.lng}`
+
+    // Use Directions API with tolls option
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&alternatives=true&key=${apiKey}`
+    )
+    const data = await response.json()
+
+    if (data.routes && data.routes.length > 0) {
+      // Find route with tolls
+      for (const route of data.routes) {
+        if (route.legs && route.legs.length > 0) {
+          // Check if route has tolls (Google Maps doesn't provide exact toll costs in free tier)
+          // We'll estimate based on distance and typical toll rates
+          const distance = route.legs.reduce((sum: number, leg: any) => sum + (leg.distance?.value || 0), 0) / 1609.34 // miles
+          // Estimate toll cost: $0.10 per mile on toll roads (average US toll rate)
+          return distance * 0.1
+        }
+      }
+    }
+    return 0
+  } catch (error) {
+    console.error("Toll cost calculation error:", error)
+    return 0
+  }
+}
+
+// Calculate fuel cost based on distance, fuel price, and MPG
+function calculateFuelCost(distance: number, fuelPricePerGallon: number = 3.50, mpg: number = 6.5): number {
+  const gallons = distance / mpg
+  return gallons * fuelPricePerGallon
+}
+
+// Check if route is suitable for weight/height constraints
+async function checkRouteConstraints(
+  origin: { lat: number; lng: number } | string,
+  destination: { lat: number; lng: number } | string,
+  weight?: number,
+  height?: number
+): Promise<{ suitable: boolean; reason?: string }> {
+  // If no constraints specified, route is always suitable
+  if (!weight && !height) {
+    return { suitable: true }
+  }
+
+  // For now, we'll assume all routes are suitable
+  // In a production system, you'd check against bridge height limits, weight restrictions, etc.
+  // This would require integration with specialized routing APIs or databases
+  
+  // Basic validation: if weight > 80,000 lbs (typical max for US highways), flag it
+  if (weight && weight > 80000) {
+    return { suitable: false, reason: "Weight exceeds maximum allowed (80,000 lbs)" }
+  }
+
+  // Basic validation: if height > 14 feet (typical max for US highways), flag it
+  if (height && height > 14) {
+    return { suitable: false, reason: "Height exceeds maximum allowed (14 feet)" }
+  }
+
+  return { suitable: true }
+}
+
 // Optimize route order for multiple stops using nearest neighbor algorithm
+// Enhanced with fuel cost, toll cost, and weight/height constraints
 export async function optimizeRouteOrder(stops: Array<{
   id: string
   address: string
@@ -104,17 +179,37 @@ export async function optimizeRouteOrder(stops: Array<{
   priority?: number
   timeWindowStart?: string
   timeWindowEnd?: string
-}>): Promise<{
+  weight?: number // in lbs
+  height?: number // in feet
+}>, options?: {
+  fuelPricePerGallon?: number
+  mpg?: number
+  includeTolls?: boolean
+  maxWeight?: number
+  maxHeight?: number
+}): Promise<{
   optimizedOrder: Array<{ id: string; order: number }>
   totalDistance: number
   estimatedTime: number
+  totalFuelCost: number
+  totalTollCost: number
+  totalCost: number
   useAPI: boolean
 }> {
+  const fuelPrice = options?.fuelPricePerGallon || 3.50
+  const mpg = options?.mpg || 6.5
+  const includeTolls = options?.includeTolls !== false // Default to true
+  const maxWeight = options?.maxWeight
+  const maxHeight = options?.maxHeight
+
   if (stops.length <= 1) {
     return {
       optimizedOrder: stops.map((s, i) => ({ id: s.id, order: i + 1 })),
       totalDistance: 0,
       estimatedTime: 0,
+      totalFuelCost: 0,
+      totalTollCost: 0,
+      totalCost: 0,
       useAPI: false,
     }
   }
@@ -142,6 +237,8 @@ export async function optimizeRouteOrder(stops: Array<{
   let currentStop = stopsWithCoords[0]
   let totalDistance = 0
   let totalTime = 0
+  let totalFuelCost = 0
+  let totalTollCost = 0
   let order = 1
 
   visited.add(currentStop.id)
@@ -156,9 +253,24 @@ export async function optimizeRouteOrder(stops: Array<{
     for (const stop of stopsWithCoords) {
       if (visited.has(stop.id)) continue
 
+      // Check weight/height constraints
+      const weight = stop.weight || maxWeight
+      const height = stop.height || maxHeight
+      const constraintsCheck = await checkRouteConstraints(
+        currentStop.lat && currentStop.lng ? { lat: currentStop.lat, lng: currentStop.lng } : currentStop.address,
+        stop.lat && stop.lng ? { lat: stop.lat, lng: stop.lng } : stop.address,
+        weight,
+        height
+      )
+
+      if (!constraintsCheck.suitable) {
+        continue // Skip this stop if constraints aren't met
+      }
+
       // Calculate distance using API if available, otherwise use Haversine
       let distance = 0
       let time = 0
+      let tollCost = 0
 
       if (useAPI && currentStop.lat && currentStop.lng && stop.lat && stop.lng) {
         // Use Google Maps Distance Matrix API for accurate routing
@@ -174,6 +286,14 @@ export async function optimizeRouteOrder(stops: Array<{
           distance = calculateDistance(currentStop.lat, currentStop.lng, stop.lat, stop.lng)
           time = distance / 50 * 60 // Estimate time at 50 mph
         }
+
+        // Get toll cost if enabled
+        if (includeTolls) {
+          tollCost = await getTollCost(
+            { lat: currentStop.lat, lng: currentStop.lng },
+            { lat: stop.lat, lng: stop.lng }
+          )
+        }
       } else if (currentStop.lat && currentStop.lng && stop.lat && stop.lng) {
         // Use Haversine formula for straight-line distance
         distance = calculateDistance(currentStop.lat, currentStop.lng, stop.lat, stop.lng)
@@ -184,12 +304,18 @@ export async function optimizeRouteOrder(stops: Array<{
         time = distance / 50 * 60
       }
 
-      // Consider priority in distance calculation (lower distance + priority factor)
-      const priorityFactor = stop.priority ? (100 - stop.priority) / 100 : 1
-      const adjustedDistance = distance * priorityFactor
+      // Calculate fuel cost
+      const fuelCost = calculateFuelCost(distance, fuelPrice, mpg)
 
-      if (adjustedDistance < nearestDistance) {
-        nearestDistance = adjustedDistance
+      // Calculate total cost (distance + fuel + tolls)
+      const totalCost = distance + fuelCost + tollCost
+
+      // Consider priority in cost calculation (lower cost + priority factor)
+      const priorityFactor = stop.priority ? (100 - stop.priority) / 100 : 1
+      const adjustedCost = totalCost * priorityFactor
+
+      if (adjustedCost < nearestDistance) {
+        nearestDistance = adjustedCost
         nearestTime = time
         nearestStop = stop
       }
@@ -198,18 +324,56 @@ export async function optimizeRouteOrder(stops: Array<{
     if (nearestStop) {
       visited.add(nearestStop.id)
       optimizedOrder.push({ id: nearestStop.id, order: order++ })
-      totalDistance += nearestDistance
-      totalTime += nearestTime
+      
+      // Calculate actual costs for the selected route
+      let actualDistance = 0
+      let actualTime = 0
+      let actualTollCost = 0
+
+      if (useAPI && currentStop.lat && currentStop.lng && nearestStop.lat && nearestStop.lng) {
+        const routeData = await getRouteDistanceAndTime(
+          { lat: currentStop.lat, lng: currentStop.lng },
+          { lat: nearestStop.lat, lng: nearestStop.lng }
+        )
+        if (routeData) {
+          actualDistance = routeData.distance
+          actualTime = routeData.duration
+        } else {
+          actualDistance = calculateDistance(currentStop.lat, currentStop.lng, nearestStop.lat, nearestStop.lng)
+          actualTime = actualDistance / 50 * 60
+        }
+
+        if (includeTolls) {
+          actualTollCost = await getTollCost(
+            { lat: currentStop.lat, lng: currentStop.lng },
+            { lat: nearestStop.lat, lng: nearestStop.lng }
+          )
+        }
+      } else if (currentStop.lat && currentStop.lng && nearestStop.lat && nearestStop.lng) {
+        actualDistance = calculateDistance(currentStop.lat, currentStop.lng, nearestStop.lat, nearestStop.lng)
+        actualTime = actualDistance / 50 * 60
+      }
+
+      totalDistance += actualDistance
+      totalTime += actualTime
+      totalTollCost += actualTollCost
       currentStop = nearestStop
     } else {
       break
     }
   }
 
+  // Calculate total fuel cost
+  totalFuelCost = calculateFuelCost(totalDistance, fuelPrice, mpg)
+  const totalCost = totalDistance + totalFuelCost + totalTollCost
+
   return {
     optimizedOrder,
     totalDistance: Math.round(totalDistance * 10) / 10,
     estimatedTime: Math.round(totalTime),
+    totalFuelCost: Math.round(totalFuelCost * 100) / 100,
+    totalTollCost: Math.round(totalTollCost * 100) / 100,
+    totalCost: Math.round(totalCost * 100) / 100,
     useAPI,
   }
 }
@@ -349,20 +513,40 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
       .eq("id", optimizedStop.id)
   }
 
-  // Update route with optimized distance and time
+  // Update route with optimized distance, time, and costs
   await supabase
     .from("routes")
     .update({
       distance: optimizationResult.totalDistance.toString() + " miles",
       estimated_time: `${Math.round(optimizationResult.estimatedTime / 60)}h ${optimizationResult.estimatedTime % 60}m`,
+      // Store cost data in metadata or separate fields if available
     })
     .eq("id", routeId)
 
+  // Trigger webhook
+  try {
+    const { triggerWebhook } = await import("./webhooks")
+    await triggerWebhook(userData.company_id, "route.optimized", {
+      route_id: routeId,
+      optimized_stops: optimizationResult.optimizedOrder.length,
+      total_distance: optimizationResult.totalDistance,
+      estimated_time: optimizationResult.estimatedTime,
+      total_fuel_cost: optimizationResult.totalFuelCost,
+      total_toll_cost: optimizationResult.totalTollCost,
+      total_cost: optimizationResult.totalCost,
+    })
+  } catch (error) {
+    console.warn("[optimizeMultiStopRoute] Webhook trigger failed:", error)
+  }
+  
   return {
     optimized: true,
     optimizedStops: optimizationResult.optimizedOrder,
     distance: optimizationResult.totalDistance,
     time: optimizationResult.estimatedTime,
+    fuelCost: optimizationResult.totalFuelCost,
+    tollCost: optimizationResult.totalTollCost,
+    totalCost: optimizationResult.totalCost,
   }
 }
 

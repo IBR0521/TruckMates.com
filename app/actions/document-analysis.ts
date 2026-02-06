@@ -233,6 +233,20 @@ export async function analyzeDocument(fileUrl: string, fileName: string): Promis
   data: ExtractedData | null
   error: string | null
 }> {
+  // Check rate limit for OpenAI API
+  try {
+    const { checkApiUsage } = await import("@/lib/api-protection")
+    const rateCheck = await checkApiUsage("openai", "document_analysis")
+    if (!rateCheck.allowed) {
+      return {
+        error: rateCheck.reason || "Rate limit exceeded. Please try again later.",
+        data: null
+      }
+    }
+  } catch (error) {
+    // If rate limit check fails, allow the call to proceed (fail open)
+    console.error("[Document Analysis] Rate limit check failed:", error)
+  }
   try {
     // Use OpenAI Vision API to analyze the document
     // You'll need to set OPENAI_API_KEY in your environment variables

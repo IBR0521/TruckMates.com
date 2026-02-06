@@ -113,13 +113,14 @@ export async function createAlertRule(formData: {
 }
 
 /**
- * Get active alerts
+ * Get active alerts with role-based filtering
  */
 export async function getAlerts(filters?: {
   status?: string
   priority?: string
   event_type?: string
   limit?: number
+  role_filter?: boolean // If true, filter by user role
 }) {
   const supabase = await createClient()
 
@@ -133,7 +134,7 @@ export async function getAlerts(filters?: {
 
   const { data: userData } = await supabase
     .from("users")
-    .select("company_id")
+    .select("company_id, role, driver_id")
     .eq("id", user.id)
     .single()
 
@@ -146,6 +147,33 @@ export async function getAlerts(filters?: {
     .select("*")
     .eq("company_id", userData.company_id)
     .order("created_at", { ascending: false })
+
+  // Role-based filtering (if enabled)
+  if (filters?.role_filter !== false) {
+    const userRole = userData.role || "driver"
+    
+    // Define role-based event type filters
+    const roleEventTypes: Record<string, string[]> = {
+      driver: ["hos_violation", "hos_alert", "dvir_required", "check_call", "load_assigned", "route_update"],
+      dispatcher: ["load_status_change", "driver_late", "check_call_missed", "delivery_window", "route_update"],
+      manager: ["*"], // Managers see all alerts
+      fleet_manager: ["maintenance_due", "maintenance_overdue", "insurance_expiration", "license_renewal", "dvir_required"],
+      maintenance_manager: ["maintenance_due", "maintenance_overdue", "dvir_required", "fault_code_detected"],
+      safety_manager: ["hos_violation", "dvir_required", "insurance_expiration", "license_renewal"],
+    }
+    
+    const allowedEventTypes = roleEventTypes[userRole] || roleEventTypes.driver
+    
+    // If not manager (who sees all), filter by event type
+    if (userRole !== "manager" && userRole !== "owner" && !allowedEventTypes.includes("*")) {
+      query = query.in("event_type", allowedEventTypes)
+    }
+    
+    // Drivers only see alerts for their assigned loads/routes
+    if (userRole === "driver" && userData.driver_id) {
+      query = query.or(`driver_id.eq.${userData.driver_id},driver_id.is.null`)
+    }
+  }
 
   if (filters?.status) {
     query = query.eq("status", filters.status)
@@ -244,31 +272,88 @@ export async function createAlert(formData: {
     return { error: "Table not available. Please run the SQL schema.", data: null }
   }
 
-  // Send notifications based on alert rule
+  // Send notifications based on alert rule and priority
   if (alertRule && alertRule.is_active) {
+    const priority = formData.priority || alertRule.priority || "normal"
     const notifyUserIds = alertRule.notify_users || []
     
-    // If no specific users, notify all company users
+    // If no specific users, notify all company users (filtered by role)
     if (notifyUserIds.length === 0) {
       const { data: companyUsers } = await supabase
         .from("users")
-        .select("id")
+        .select("id, role")
         .eq("company_id", userData.company_id)
       
       if (companyUsers) {
-        notifyUserIds.push(...companyUsers.map(u => u.id))
+        // Filter by role-based event type visibility
+        const roleEventTypes: Record<string, string[]> = {
+          driver: ["hos_violation", "hos_alert", "dvir_required", "check_call", "load_assigned"],
+          dispatcher: ["load_status_change", "driver_late", "check_call_missed", "delivery_window"],
+          manager: ["*"],
+          fleet_manager: ["maintenance_due", "maintenance_overdue", "insurance_expiration"],
+          maintenance_manager: ["maintenance_due", "maintenance_overdue", "dvir_required"],
+        }
+        
+        const filteredUsers = companyUsers.filter((u) => {
+          const allowedTypes = roleEventTypes[u.role || "driver"] || roleEventTypes.driver
+          return allowedTypes.includes("*") || allowedTypes.includes(formData.event_type)
+        })
+        
+        notifyUserIds.push(...filteredUsers.map(u => u.id))
       }
     }
 
+    // Determine notification channels based on priority
+    const sendPush = priority === "critical" || priority === "high"
+    const sendSMS = priority === "critical"
+    const sendEmail = priority !== "low" // All except low priority
+    const sendInApp = true // Always send in-app
+
     // Send notifications
     for (const userId of notifyUserIds) {
-      if (alertRule.send_email) {
+      // Push notification via Realtime (for critical/high priority)
+      if (sendPush && alertRule.send_in_app !== false) {
+        // Create in-app notification record for Realtime subscription
+        // Note: notifications table may not exist, that's okay
+        await supabase
+          .from("notifications")
+          .insert({
+            user_id: userId,
+            title: formData.title,
+            message: formData.message,
+            type: "alert",
+            priority: priority,
+            metadata: {
+              alert_id: alert.id,
+              event_type: formData.event_type,
+            },
+            read: false,
+          })
+          .catch(() => {
+            // Notifications table might not exist, that's okay
+          })
+      }
+      
+      // SMS (critical only)
+      if (sendSMS && alertRule.send_sms) {
+        const { sendSMSNotification } = await import("./sms")
+        await sendSMSNotification(userId, "load_update" as any, {
+          title: formData.title,
+          message: formData.message,
+        }).catch(() => {
+          // SMS might fail, continue with other channels
+        })
+      }
+      
+      // Email (all except low priority)
+      if (sendEmail && alertRule.send_email) {
         await sendNotification(userId, "load_update" as any, {
           title: formData.title,
           message: formData.message,
+        }).catch(() => {
+          // Email might fail, continue
         })
       }
-      // SMS and in-app notifications would be handled here
     }
   }
 

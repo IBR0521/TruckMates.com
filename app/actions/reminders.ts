@@ -14,54 +14,64 @@ export async function getReminders(filters?: {
   due_date_start?: string
   due_date_end?: string
 }) {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    const { data: userData } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
+
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
+
+    let query = supabase
+      .from("reminders")
+      .select("*")
+      .eq("company_id", userData.company_id)
+      .order("due_date", { ascending: true })
+
+    if (filters?.reminder_type) {
+      query = query.eq("reminder_type", filters.reminder_type)
+    }
+    if (filters?.status) {
+      query = query.eq("status", filters.status)
+    }
+    if (filters?.due_date_start) {
+      query = query.gte("due_date", filters.due_date_start)
+    }
+    if (filters?.due_date_end) {
+      query = query.lte("due_date", filters.due_date_end)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      // If table doesn't exist, return empty array instead of error
+      if (error.code === "42P01" || error.message?.includes("does not exist")) {
+        return { data: [], error: null }
+      }
+      const result = handleDbError(error, [])
+      if (result.error) return result
+      return { data: result.data, error: null }
+    }
+
+    return { data: data || [], error: null }
+  } catch (error: any) {
+    console.error("Error in getReminders:", error)
+    // Return empty array on any error to prevent server crashes
+    return { data: [], error: null }
   }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  let query = supabase
-    .from("reminders")
-    .select("*")
-    .eq("company_id", userData.company_id)
-    .order("due_date", { ascending: true })
-
-  if (filters?.reminder_type) {
-    query = query.eq("reminder_type", filters.reminder_type)
-  }
-  if (filters?.status) {
-    query = query.eq("status", filters.status)
-  }
-  if (filters?.due_date_start) {
-    query = query.gte("due_date", filters.due_date_start)
-  }
-  if (filters?.due_date_end) {
-    query = query.lte("due_date", filters.due_date_end)
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    const result = handleDbError(error, [])
-    if (result.error) return result
-    return { data: result.data, error: null }
-  }
-
-  return { data: data || [], error: null }
 }
 
 /**
@@ -154,37 +164,46 @@ export async function createReminder(formData: {
  * Complete reminder
  */
 export async function completeReminder(id: string) {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
+    const { data: userData } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
 
-  // Get reminder to check if recurring
-  const { data: reminder } = await supabase
-    .from("reminders")
-    .select("*")
-    .eq("id", id)
-    .eq("company_id", userData.company_id)
-    .single()
+    // Get reminder to check if recurring
+    const { data: reminder, error: reminderError } = await supabase
+      .from("reminders")
+      .select("*")
+      .eq("id", id)
+      .eq("company_id", userData.company_id)
+      .single()
 
-  if (!reminder) {
-    return { error: "Reminder not found", data: null }
-  }
+    if (reminderError) {
+      // If table doesn't exist, return error gracefully
+      if (reminderError.code === "42P01" || reminderError.message?.includes("does not exist")) {
+        return { error: "Reminders table not available", data: null }
+      }
+      return { error: "Reminder not found", data: null }
+    }
+
+    if (!reminder) {
+      return { error: "Reminder not found", data: null }
+    }
 
   // Update reminder
   const { data, error } = await supabase
@@ -245,8 +264,13 @@ export async function completeReminder(id: string) {
     }
   }
 
-  revalidatePath("/dashboard/reminders")
-  return { data, error: null }
+    revalidatePath("/dashboard/reminders")
+    return { data, error: null }
+  } catch (error: any) {
+    console.error("Error in completeReminder:", error)
+    // Return error gracefully to prevent server crashes
+    return { error: error?.message || "Failed to complete reminder", data: null }
+  }
 }
 
 /**
@@ -283,42 +307,52 @@ function calculateNextDueDate(
  * Get overdue reminders
  */
 export async function getOverdueReminders() {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    const { data: userData } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
+
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
+
+    const today = new Date().toISOString().split('T')[0]
+
+    const { data, error } = await supabase
+      .from("reminders")
+      .select("*")
+      .eq("company_id", userData.company_id)
+      .eq("status", "pending")
+      .lt("due_date", today)
+      .order("due_date", { ascending: true })
+
+    if (error) {
+      // If table doesn't exist, return empty array instead of error
+      if (error.code === "42P01" || error.message?.includes("does not exist")) {
+        return { data: [], error: null }
+      }
+      const result = handleDbError(error, [])
+      if (result.error) return result
+      return { data: result.data, error: null }
+    }
+
+    return { data: data || [], error: null }
+  } catch (error: any) {
+    console.error("Error in getOverdueReminders:", error)
+    // Return empty array on any error to prevent server crashes
+    return { data: [], error: null }
   }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  const today = new Date().toISOString().split('T')[0]
-
-  const { data, error } = await supabase
-    .from("reminders")
-    .select("*")
-    .eq("company_id", userData.company_id)
-    .eq("status", "pending")
-    .lt("due_date", today)
-    .order("due_date", { ascending: true })
-
-  if (error) {
-    const result = handleDbError(error, [])
-    if (result.error) return result
-    return { data: result.data, error: null }
-  }
-
-  return { data: data || [], error: null }
 }
 

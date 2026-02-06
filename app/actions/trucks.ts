@@ -346,6 +346,18 @@ export async function updateTruck(
     return { error: error.message, data: null }
   }
 
+  // Auto-schedule maintenance if mileage was updated
+  if (formData.mileage !== undefined && data) {
+    try {
+      const { autoScheduleMaintenanceFromMileage } = await import("./auto-maintenance")
+      await autoScheduleMaintenanceFromMileage(id).catch((err) => {
+        console.warn("[updateTruck] Auto-maintenance scheduling failed:", err.message)
+      })
+    } catch (error) {
+      console.warn("[updateTruck] Failed to import auto-maintenance:", error)
+    }
+  }
+
   revalidatePath("/dashboard/trucks")
   revalidatePath(`/dashboard/trucks/${id}`)
 

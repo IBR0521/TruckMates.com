@@ -30,6 +30,8 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { ExternalLink, Copy, Link as LinkIcon, X } from "lucide-react"
+import { DocumentManager } from "@/components/crm/document-manager"
+import { CommunicationTimeline } from "@/components/crm/communication-timeline"
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -39,7 +41,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const [invoices, setInvoices] = useState<any[]>([])
   const [history, setHistory] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<"overview" | "loads" | "invoices" | "history">("overview")
+  const [activeTab, setActiveTab] = useState<"overview" | "loads" | "invoices" | "history" | "documents" | "communications">("overview")
   const [portalAccess, setPortalAccess] = useState<any>(null)
   const [isPortalDialogOpen, setIsPortalDialogOpen] = useState(false)
   const [portalSettings, setPortalSettings] = useState({
@@ -263,6 +265,26 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               {history.length}
             </span>
           )}
+        </button>
+        <button
+          onClick={() => setActiveTab("documents")}
+          className={`px-4 py-3 font-medium text-sm transition whitespace-nowrap ${
+            activeTab === "documents"
+              ? "text-primary border-b-2 border-primary bg-primary/5"
+              : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+          }`}
+        >
+          Documents
+        </button>
+        <button
+          onClick={() => setActiveTab("communications")}
+          className={`px-4 py-3 font-medium text-sm transition whitespace-nowrap ${
+            activeTab === "communications"
+              ? "text-primary border-b-2 border-primary bg-primary/5"
+              : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+          }`}
+        >
+          Communications
         </button>
       </div>
 
@@ -790,6 +812,20 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               </div>
             )}
           </DetailSection>
+        )}
+
+        {/* Documents Tab */}
+        {activeTab === "documents" && (
+          <Card className="p-6">
+            <DocumentManager customerId={id} />
+          </Card>
+        )}
+
+        {/* Communications Tab */}
+        {activeTab === "communications" && (
+          <Card className="p-6">
+            <CommunicationTimeline customerId={id} />
+          </Card>
         )}
       </div>
     </DetailPageLayout>

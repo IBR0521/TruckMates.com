@@ -111,3 +111,6 @@ SELECT id, name, public FROM storage.buckets WHERE id = 'documents';
 
 **The bucket MUST be created manually in Supabase - the app cannot create it automatically.**
 
+
+
+

@@ -62,20 +62,30 @@ export async function POST(request: NextRequest) {
     // Transform and validate events
     const eventsToInsert = events
       .filter((event: any) => event.event_type && event.title) // Filter invalid events
-      .map((event: any) => ({
-        company_id: companyId,
-        eld_device_id: device_id,
-        driver_id: event.driver_id || null,
-        truck_id: device.truck_id || event.truck_id || null,
-        event_type: event.event_type || event.type, // 'hos_violation', 'speeding', etc.
-        severity: event.severity || "warning",
-        title: event.title || event.name || "Event",
-        description: event.description || event.message || null,
-        event_time: event.event_time || event.timestamp || new Date().toISOString(),
-        location: event.location || null,
-        resolved: false,
-        metadata: event.metadata || event.additional_data || null,
-      }))
+      .map((event: any) => {
+        // Extract fault code from metadata or event data
+        const faultCode = event.fault_code || event.faultCode || event.code || event.metadata?.fault_code || event.metadata?.faultCode || null
+        const faultCodeCategory = event.fault_code_category || event.faultCodeCategory || event.category || event.metadata?.fault_code_category || event.metadata?.category || null
+        const faultCodeDescription = event.fault_code_description || event.faultCodeDescription || event.metadata?.fault_code_description || null
+        
+        return {
+          company_id: companyId,
+          eld_device_id: device_id,
+          driver_id: event.driver_id || null,
+          truck_id: device.truck_id || event.truck_id || null,
+          event_type: event.event_type || event.type, // 'hos_violation', 'speeding', etc.
+          severity: event.severity || "warning",
+          title: event.title || event.name || "Event",
+          description: event.description || event.message || faultCodeDescription || null,
+          event_time: event.event_time || event.timestamp || new Date().toISOString(),
+          location: event.location || null,
+          resolved: false,
+          fault_code: faultCode,
+          fault_code_category: faultCodeCategory,
+          fault_code_description: faultCodeDescription,
+          metadata: event.metadata || event.additional_data || null,
+        }
+      })
 
     if (eventsToInsert.length === 0) {
       return NextResponse.json(

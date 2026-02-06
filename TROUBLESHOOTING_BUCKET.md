@@ -90,3 +90,6 @@ After creating the bucket, run the full setup from `supabase/storage_bucket_setu
 3. Verify your Supabase credentials in `.env.local`
 4. Make sure you're logged in to the platform when uploading
 
+
+
+

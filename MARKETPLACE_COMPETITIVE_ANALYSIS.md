@@ -597,3 +597,6 @@ After analyzing major load board platforms (DAT, Truckstop, 123Loadboard, Uber F
 *This analysis is based on publicly available information as of December 2024. Pricing and features may vary.*
 
 
+
+
+

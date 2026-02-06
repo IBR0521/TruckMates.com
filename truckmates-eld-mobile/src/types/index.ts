@@ -28,7 +28,7 @@ export interface Location {
 }
 
 // HOS Log Entry
-export type LogType = 'driving' | 'on_duty' | 'off_duty' | 'sleeper_berth'
+export type LogType = 'driving' | 'on_duty' | 'off_duty' | 'sleeper_berth' | 'personal_conveyance' | 'yard_moves'
 
 export interface HOSLog {
   id?: string
@@ -52,6 +52,9 @@ export interface HOSLog {
   miles_driven?: number
   engine_hours?: number
   violations?: string[]
+  notes?: string
+  certified?: boolean
+  certified_date?: string
 }
 
 // ELD Event/Violation
@@ -138,5 +141,50 @@ export interface LogSyncRequest {
 export interface EventSyncRequest {
   device_id: string
   events: ELDEvent[]
+}
+
+export interface DVIRSyncRequest {
+  device_id: string
+  dvirs: DVIR[]
+}
+
+// DVIR (Daily Vehicle Inspection Report)
+export type InspectionType = 'pre_trip' | 'post_trip' | 'on_road'
+export type DVIRStatus = 'pending' | 'passed' | 'failed' | 'defects_corrected'
+export type DefectSeverity = 'minor' | 'major' | 'critical'
+
+export interface DVIRDefect {
+  component: string
+  description: string
+  severity: DefectSeverity
+  corrected?: boolean
+}
+
+export interface DVIR {
+  id?: string
+  driver_id?: string
+  truck_id?: string
+  inspection_type: InspectionType
+  inspection_date: string // YYYY-MM-DD
+  inspection_time?: string // HH:mm
+  location?: string
+  mileage?: number
+  odometer_reading?: number
+  status: DVIRStatus
+  defects_found: boolean
+  safe_to_operate: boolean
+  defects?: DVIRDefect[]
+  notes?: string
+  corrective_action?: string
+  driver_signature?: string
+  driver_signature_date?: string
+  certified?: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface DVIRSyncRequest {
+  device_id: string
+  dvirs: DVIR[]
 }
 

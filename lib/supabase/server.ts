@@ -44,10 +44,10 @@ export async function createClient() {
       },
       global: {
         fetch: async (url, options = {}) => {
-          // Add timeout to fetch requests (5 seconds)
+          // Add timeout to fetch requests (10 seconds for poor connections)
           try {
             const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 5000)
+            const timeoutId = setTimeout(() => controller.abort(), 10000) // Increased to 10 seconds
             
             const response = await fetch(url, {
               ...options,

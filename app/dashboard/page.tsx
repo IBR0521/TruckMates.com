@@ -53,6 +53,14 @@ const AlertsSection = dynamic(() => import("@/components/dashboard/alerts-sectio
   ssr: false
 })
 
+const RemindersWidget = dynamic(
+  () => import("@/components/dashboard/reminders-widget").then((mod) => ({ default: mod.RemindersWidget })),
+  {
+    loading: () => <div className="h-48 animate-pulse bg-muted rounded-lg" aria-label="Loading reminders" />,
+    ssr: false,
+  }
+)
+
 const PerformanceMetrics = dynamic(() => import("@/components/dashboard/performance-metrics").then(mod => ({ default: mod.PerformanceMetrics })), {
   loading: () => <div className="h-48 animate-pulse bg-muted rounded-lg" aria-label="Loading performance metrics" />,
   ssr: false
@@ -416,16 +424,21 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Alerts Section */}
-          {dashboardData && (
-            <Suspense fallback={<div className="h-48 animate-pulse bg-muted rounded-lg" aria-label="Loading alerts" />}>
-              <AlertsSection
-                upcomingMaintenance={dashboardData.upcomingMaintenance || []}
-                overdueInvoices={dashboardData.overdueInvoices || []}
-                upcomingDeliveries={dashboardData.upcomingDeliveries || []}
-              />
+          {/* Alerts & Reminders Section */}
+          <div className="grid md:grid-cols-2 gap-6">
+            {dashboardData && (
+              <Suspense fallback={<div className="h-48 animate-pulse bg-muted rounded-lg" aria-label="Loading alerts" />}>
+                <AlertsSection
+                  upcomingMaintenance={dashboardData.upcomingMaintenance || []}
+                  overdueInvoices={dashboardData.overdueInvoices || []}
+                  upcomingDeliveries={dashboardData.upcomingDeliveries || []}
+                />
+              </Suspense>
+            )}
+            <Suspense fallback={<div className="h-48 animate-pulse bg-muted rounded-lg" aria-label="Loading reminders" />}>
+              <RemindersWidget />
             </Suspense>
-          )}
+          </div>
 
           {/* Detailed Stats Cards with Partial Info */}
           {/* First Row: Trucks and Drivers */}

@@ -3,6 +3,8 @@
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { ArrowLeft, Phone, Mail, Building2, MapPin, Edit2, DollarSign, Wrench, MessageSquare } from "lucide-react"
+import { DocumentManager } from "@/components/crm/document-manager"
+import { CommunicationTimeline } from "@/components/crm/communication-timeline"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -18,7 +20,7 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
   const [expenses, setExpenses] = useState<any[]>([])
   const [maintenance, setMaintenance] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<"overview" | "expenses" | "maintenance">("overview")
+  const [activeTab, setActiveTab] = useState<"overview" | "expenses" | "maintenance" | "documents" | "communications">("overview")
 
   useEffect(() => {
     loadData()
@@ -301,6 +303,26 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
             >
               Maintenance ({maintenance.length})
             </button>
+            <button
+              onClick={() => setActiveTab("documents")}
+              className={`px-4 py-2 font-medium transition ${
+                activeTab === "documents"
+                  ? "text-primary border-b-2 border-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Documents
+            </button>
+            <button
+              onClick={() => setActiveTab("communications")}
+              className={`px-4 py-2 font-medium transition ${
+                activeTab === "communications"
+                  ? "text-primary border-b-2 border-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Communications
+            </button>
           </div>
 
           {/* Expenses Tab */}
@@ -400,6 +422,20 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
                   </table>
                 </div>
               )}
+            </Card>
+          )}
+
+          {/* Documents Tab */}
+          {activeTab === "documents" && (
+            <Card className="border-border p-4 md:p-6">
+              <DocumentManager vendorId={id} />
+            </Card>
+          )}
+
+          {/* Communications Tab */}
+          {activeTab === "communications" && (
+            <Card className="border-border p-4 md:p-6">
+              <CommunicationTimeline vendorId={id} />
             </Card>
           )}
         </div>
