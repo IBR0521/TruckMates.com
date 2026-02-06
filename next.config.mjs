@@ -24,7 +24,14 @@ const nextConfig = {
   reactStrictMode: true,
   // Externalize optional dependencies to prevent build errors
   // These packages are dynamically imported and may not be installed
-  serverExternalPackages: ['twilio'],
+  serverExternalPackages: [
+    'twilio',
+    'canvas',
+    '@upstash/ratelimit',
+    '@upstash/redis',
+    'import-in-the-middle',
+    'require-in-the-middle',
+  ],
 }
 
 export default nextConfig

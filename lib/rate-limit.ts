@@ -45,8 +45,16 @@ export async function rateLimit(
   // Use Upstash Redis in production if configured
   if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
     try {
-      const { Ratelimit } = await import("@upstash/ratelimit")
-      const { Redis } = await import("@upstash/redis")
+      // Dynamic import with error handling - packages are optional
+      const upstashRatelimit = await import("@upstash/ratelimit").catch(() => null)
+      const upstashRedis = await import("@upstash/redis").catch(() => null)
+      
+      if (!upstashRatelimit || !upstashRedis) {
+        throw new Error("Upstash packages not available")
+      }
+      
+      const { Ratelimit } = upstashRatelimit
+      const { Redis } = upstashRedis
 
       const redis = new Redis({
         url: process.env.UPSTASH_REDIS_REST_URL,

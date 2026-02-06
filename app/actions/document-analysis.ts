@@ -41,7 +41,14 @@ if (typeof globalThis.DOMMatrix === 'undefined') {
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import * as pdfjsLib from "pdfjs-dist"
-import { createCanvas } from "canvas"
+// Canvas is optional - only used for PDF to image conversion
+let createCanvas: any = null
+try {
+  const canvasModule = require("canvas")
+  createCanvas = canvasModule.createCanvas
+} catch (e) {
+  console.warn("[DOCUMENT_ANALYSIS] Canvas module not available, PDF to image conversion will be disabled")
+}
 // Types for extracted data
 export interface ExtractedDriverData {
   type: "driver"
@@ -550,6 +557,26 @@ ACTION:
         
         // Convert PDF to image using pdfjs-dist and canvas
         try {
+          // Check if canvas is available
+          if (!createCanvas) {
+            console.warn("[DOCUMENT_ANALYSIS] Canvas not available, skipping PDF to image conversion")
+            // Return the PDF as-is without image conversion
+            return {
+              data: {
+                type: "pdf",
+                text: "",
+                extractedData: {},
+                imageBase64: null,
+                metadata: {
+                  pageCount: 0,
+                  title: "PDF Document",
+                  size: base64SizeMB
+                }
+              },
+              error: null
+            }
+          }
+          
           console.log("[DOCUMENT_ANALYSIS] Converting PDF to image...")
           
           // Load PDF document (no worker needed for server-side)
@@ -566,7 +593,6 @@ ACTION:
           const page = await pdfDocument.getPage(1)
           const viewport = page.getViewport({ scale: 2.0 }) // Scale for better quality
           
-          // Create canvas
           const canvas = createCanvas(viewport.width, viewport.height)
           const context = canvas.getContext('2d')
           

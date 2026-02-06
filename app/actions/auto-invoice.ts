@@ -6,7 +6,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
-import { createInvoice } from "./invoices"
+import { createInvoice } from "./accounting"
 import { getLoad } from "./loads"
 
 /**
