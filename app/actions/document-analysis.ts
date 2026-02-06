@@ -40,14 +40,36 @@ if (typeof globalThis.DOMMatrix === 'undefined') {
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import * as pdfjsLib from "pdfjs-dist"
+// pdfjs-dist and canvas are imported dynamically to avoid build errors
 // Canvas is optional - only used for PDF to image conversion
+let pdfjsLib: any = null
 let createCanvas: any = null
-try {
-  const canvasModule = require("canvas")
-  createCanvas = canvasModule.createCanvas
-} catch (e) {
-  console.warn("[DOCUMENT_ANALYSIS] Canvas module not available, PDF to image conversion will be disabled")
+
+// Lazy load pdfjs-dist only when needed (prevents canvas from being imported)
+async function getPdfjsLib() {
+  if (!pdfjsLib) {
+    try {
+      pdfjsLib = await import("pdfjs-dist")
+    } catch (e) {
+      console.error("[DOCUMENT_ANALYSIS] Failed to load pdfjs-dist:", e)
+      throw e
+    }
+  }
+  return pdfjsLib
+}
+
+// Lazy load canvas only when needed
+async function getCanvas() {
+  if (createCanvas === null) {
+    try {
+      const canvasModule = require("canvas")
+      createCanvas = canvasModule.createCanvas
+    } catch (e) {
+      console.warn("[DOCUMENT_ANALYSIS] Canvas module not available, PDF to image conversion will be disabled")
+      createCanvas = false // Mark as unavailable
+    }
+  }
+  return createCanvas
 }
 // Types for extracted data
 export interface ExtractedDriverData {
@@ -557,30 +579,11 @@ ACTION:
         
         // Convert PDF to image using pdfjs-dist and canvas
         try {
-          // Check if canvas is available
-          if (!createCanvas) {
-            console.warn("[DOCUMENT_ANALYSIS] Canvas not available, skipping PDF to image conversion")
-            // Return the PDF as-is without image conversion
-            return {
-              data: {
-                type: "pdf",
-                text: "",
-                extractedData: {},
-                imageBase64: null,
-                metadata: {
-                  pageCount: 0,
-                  title: "PDF Document",
-                  size: base64SizeMB
-                }
-              },
-              error: null
-            }
-          }
-          
           console.log("[DOCUMENT_ANALYSIS] Converting PDF to image...")
           
           // Load PDF document (no worker needed for server-side)
-          const loadingTask = pdfjsLib.getDocument({
+          const pdfjs = await getPdfjsLib()
+          const loadingTask = pdfjs.getDocument({
             data: Buffer.from(pdfBase64, 'base64'),
             useSystemFonts: true,
             verbosity: 0 // Suppress warnings
@@ -593,7 +596,28 @@ ACTION:
           const page = await pdfDocument.getPage(1)
           const viewport = page.getViewport({ scale: 2.0 }) // Scale for better quality
           
-          const canvas = createCanvas(viewport.width, viewport.height)
+          // Check if canvas is available
+          const canvasFn = await getCanvas()
+          if (!canvasFn) {
+            console.warn("[DOCUMENT_ANALYSIS] Canvas not available, skipping PDF to image conversion")
+            // Return the PDF as-is without image conversion
+            return {
+              data: {
+                type: "pdf",
+                text: "",
+                extractedData: {},
+                imageBase64: null,
+                metadata: {
+                  pageCount: pdfDocument.numPages,
+                  title: "PDF Document",
+                  size: base64SizeMB
+                }
+              },
+              error: null
+            }
+          }
+          
+          const canvas = canvasFn(viewport.width, viewport.height)
           const context = canvas.getContext('2d')
           
           // Render PDF page to canvas

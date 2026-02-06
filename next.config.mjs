@@ -27,6 +27,7 @@ const nextConfig = {
   serverExternalPackages: [
     'twilio',
     'canvas',
+    'pdfjs-dist',
     '@upstash/ratelimit',
     '@upstash/redis',
     'import-in-the-middle',

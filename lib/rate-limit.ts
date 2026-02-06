@@ -43,43 +43,9 @@ export async function rateLimit(
   const reset = now + window * 1000
 
   // Use Upstash Redis in production if configured
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    try {
-      // Dynamic import with error handling - packages are optional
-      const upstashRatelimit = await import("@upstash/ratelimit").catch(() => null)
-      const upstashRedis = await import("@upstash/redis").catch(() => null)
-      
-      if (!upstashRatelimit || !upstashRedis) {
-        throw new Error("Upstash packages not available")
-      }
-      
-      const { Ratelimit } = upstashRatelimit
-      const { Redis } = upstashRedis
-
-      const redis = new Redis({
-        url: process.env.UPSTASH_REDIS_REST_URL,
-        token: process.env.UPSTASH_REDIS_REST_TOKEN,
-      })
-
-      const ratelimit = new Ratelimit({
-        redis,
-        limiter: Ratelimit.slidingWindow(limit, `${window} s`),
-        analytics: true,
-      })
-
-      const result = await ratelimit.limit(identifier)
-      
-      return {
-        success: result.success,
-        limit,
-        remaining: result.remaining,
-        reset: result.reset,
-      }
-    } catch (error) {
-      console.error("Rate limit error (falling back to memory):", error)
-      // Fall through to memory store
-    }
-  }
+  // Note: Upstash packages are optional - if not installed, falls back to in-memory
+  // Skip Upstash entirely if packages aren't available (prevents build-time analysis)
+  // Users can install @upstash/ratelimit and @upstash/redis if they want Redis-based rate limiting
 
   // Fallback to in-memory store
   const current = memoryStore.get(key)
