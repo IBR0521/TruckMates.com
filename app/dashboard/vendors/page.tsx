@@ -25,11 +25,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { getVendors, deleteVendor } from "@/app/actions/vendors"
+import { getVendors, deleteVendor, updateVendor } from "@/app/actions/vendors"
 import { Badge } from "@/components/ui/badge"
+import { InlineEdit } from "@/components/dashboard/inline-edit"
+import { DefensiveDelete } from "@/components/dashboard/defensive-delete"
+import { AuditTrail } from "@/components/dashboard/audit-trail"
+import { History } from "lucide-react"
 
 export default function VendorsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
   const [vendorsList, setVendorsList] = useState<any[]>([])
   const [filteredVendors, setFilteredVendors] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -101,15 +106,52 @@ export default function VendorsPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    const result = await deleteVendor(id)
+  const handleDeleteClick = async (id: string) => {
+    setDeleteId(id)
+    try {
+      const response = await fetch(`/api/check-dependencies?resource_type=vendor&resource_id=${id}`)
+      if (response.ok) {
+        const data = await response.json()
+        setDeleteDependencies(data.dependencies || [])
+      }
+    } catch (error) {
+      console.error("Failed to check dependencies:", error)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteId) return
+    const result = await deleteVendor(deleteId)
     if (result.error) {
       toast.error(result.error)
       setDeleteId(null)
+      setDeleteDependencies([])
     } else {
       toast.success("Vendor deleted successfully")
       setDeleteId(null)
+      setDeleteDependencies([])
       await loadVendors()
+    }
+  }
+
+  const handleInlineUpdate = async (vendorId: string, field: string, value: string | number | null) => {
+    const updatedVendors = vendorsList.map(vendor => 
+      vendor.id === vendorId ? { ...vendor, [field]: value } : vendor
+    )
+    setVendorsList(updatedVendors)
+    
+    const updatedFiltered = filteredVendors.map(vendor => 
+      vendor.id === vendorId ? { ...vendor, [field]: value } : vendor
+    )
+    setFilteredVendors(updatedFiltered)
+
+    const updateData: any = { [field]: value }
+    const result = await updateVendor(vendorId, updateData)
+    
+    if (result.error) {
+      await loadVendors()
+      toast.error(result.error || "Failed to update")
+      throw new Error(result.error)
     }
   }
 
@@ -269,7 +311,22 @@ export default function VendorsPage() {
                       )}
                     </td>
                     <td className="p-4">{getTypeBadge(vendor.vendor_type)}</td>
-                    <td className="p-4">{getStatusBadge(vendor.status)}</td>
+                    <td className="p-4">
+                      <InlineEdit
+                        value={vendor.status || ""}
+                        onSave={async (value) => handleInlineUpdate(vendor.id, "status", value as string)}
+                        type="select"
+                        options={[
+                          { value: "active", label: "Active" },
+                          { value: "inactive", label: "Inactive" },
+                        ]}
+                        formatValue={(val) => {
+                          if (!val) return "N/A"
+                          return String(val).charAt(0).toUpperCase() + String(val).slice(1)
+                        }}
+                        className="w-auto"
+                      />
+                    </td>
                     <td className="p-4">
                       {vendor.city && vendor.state ? (
                         <div className="text-sm text-foreground">
@@ -301,13 +358,22 @@ export default function VendorsPage() {
                                 <Edit2 className="w-4 h-4" />
                               </Button>
                             </Link>
+                            <AuditTrail
+                              resourceType="vendor"
+                              resourceId={vendor.id}
+                              trigger={
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <History className="w-4 h-4" />
+                                </Button>
+                              }
+                            />
                           </>
                         ) : null}
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteId(vendor.id)}
+                          onClick={() => handleDeleteClick(vendor.id)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -321,26 +387,24 @@ export default function VendorsPage() {
         )}
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Vendor</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this vendor? This action cannot be undone. Related expenses and maintenance records will be preserved but the vendor link will be removed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteId && handleDelete(deleteId)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Defensive Delete Dialog */}
+      {deleteId && (
+        <DefensiveDelete
+          open={deleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDeleteId(null)
+              setDeleteDependencies([])
+            }
+          }}
+          onConfirm={handleDelete}
+          resourceType="vendor"
+          resourceName={vendorsList.find(v => v.id === deleteId)?.name || "Vendor"}
+          resourceId={deleteId}
+          dependencies={deleteDependencies}
+          warningMessage="This will permanently delete the vendor. Related expenses and maintenance records will be preserved but the vendor link will be removed."
+        />
+      )}
     </div>
   )
 }

@@ -214,3 +214,4 @@ CREATE TABLE eld_devices (
 
 **Bottom Line:** You don't need to provide ELD device credentials. Those are entered by customers when they connect their hardware. Your Google Maps and Resend API keys are already set up! ✅
 
+

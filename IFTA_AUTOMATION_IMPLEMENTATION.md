@@ -197,3 +197,4 @@ If you encounter issues:
 5. Verify PostGIS extension is enabled in Supabase
 
 
+

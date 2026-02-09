@@ -155,3 +155,4 @@ CREATE INDEX IF NOT EXISTS idx_routes_driver_date ON public.routes(driver_id, st
 WHERE driver_id IS NOT NULL AND start_date IS NOT NULL;
 
 
+

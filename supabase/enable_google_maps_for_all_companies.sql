@@ -28,3 +28,4 @@ LEFT JOIN public.company_integrations ci ON c.id = ci.company_id
 ORDER BY c.name;
 
 
+

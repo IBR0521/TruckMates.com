@@ -344,3 +344,4 @@ COMMENT ON FUNCTION public.auto_create_maintenance_reminders_from_schedule() IS
 Should be called daily via Edge Function or cron job.';
 
 
+

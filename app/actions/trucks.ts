@@ -306,34 +306,48 @@ export async function updateTruck(
 ) {
   const supabase = await createClient()
 
-  // Build update data, only including fields that are provided
+  // Get current truck data for audit trail
+  const { data: currentTruck } = await supabase
+    .from("trucks")
+    .select("*")
+    .eq("id", id)
+    .single()
+
+  if (!currentTruck) {
+    return { error: "Truck not found", data: null }
+  }
+
+  // Build update data and track changes
   const updateData: any = {}
+  const changes: Array<{ field: string; old_value: any; new_value: any }> = []
   
-  if (formData.truck_number !== undefined) updateData.truck_number = formData.truck_number
-  if (formData.make !== undefined) updateData.make = formData.make
-  if (formData.model !== undefined) updateData.model = formData.model
-  if (formData.year !== undefined) updateData.year = formData.year || null
-  if (formData.vin !== undefined) updateData.vin = formData.vin
-  if (formData.license_plate !== undefined) updateData.license_plate = formData.license_plate
-  if (formData.status !== undefined) updateData.status = formData.status
-  if (formData.current_driver_id !== undefined) updateData.current_driver_id = formData.current_driver_id || null
-  if (formData.current_location !== undefined) updateData.current_location = formData.current_location || null
-  if (formData.fuel_level !== undefined) updateData.fuel_level = formData.fuel_level || null
-  if (formData.mileage !== undefined) updateData.mileage = formData.mileage || null
-  
-  // Extended TruckLogics fields
-  if (formData.height !== undefined) updateData.height = formData.height || null
-  if (formData.serial_number !== undefined) updateData.serial_number = formData.serial_number || null
-  if (formData.gross_vehicle_weight !== undefined) updateData.gross_vehicle_weight = formData.gross_vehicle_weight || null
-  if (formData.license_expiry_date !== undefined) updateData.license_expiry_date = formData.license_expiry_date || null
-  if (formData.inspection_date !== undefined) updateData.inspection_date = formData.inspection_date || null
-  if (formData.insurance_provider !== undefined) updateData.insurance_provider = formData.insurance_provider || null
-  if (formData.insurance_policy_number !== undefined) updateData.insurance_policy_number = formData.insurance_policy_number || null
-  if (formData.insurance_expiry_date !== undefined) updateData.insurance_expiry_date = formData.insurance_expiry_date || null
-  if (formData.owner_name !== undefined) updateData.owner_name = formData.owner_name || null
-  if (formData.cost !== undefined) updateData.cost = formData.cost || null
-  if (formData.color !== undefined) updateData.color = formData.color || null
-  if (formData.documents !== undefined) updateData.documents = formData.documents || []
+  const fieldsToCheck = [
+    "truck_number", "make", "model", "year", "vin", "license_plate", "status",
+    "current_driver_id", "current_location", "fuel_level", "mileage",
+    "height", "serial_number", "gross_vehicle_weight", "license_expiry_date",
+    "inspection_date", "insurance_provider", "insurance_policy_number",
+    "insurance_expiry_date", "owner_name", "cost", "color"
+  ]
+
+  for (const field of fieldsToCheck) {
+    if (formData[field as keyof typeof formData] !== undefined) {
+      const newValue = formData[field as keyof typeof formData]
+      const oldValue = currentTruck[field]
+      if (newValue !== oldValue) {
+        updateData[field] = newValue === null || newValue === "" ? null : newValue
+        changes.push({ field, old_value: oldValue, new_value: newValue })
+      }
+    }
+  }
+
+  if (formData.documents !== undefined && JSON.stringify(formData.documents) !== JSON.stringify(currentTruck.documents)) {
+    updateData.documents = formData.documents || []
+    changes.push({ field: "documents", old_value: currentTruck.documents, new_value: formData.documents })
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return { data: currentTruck, error: null }
+  }
 
   const { data, error } = await supabase
     .from("trucks")
@@ -355,6 +369,38 @@ export async function updateTruck(
       })
     } catch (error) {
       console.warn("[updateTruck] Failed to import auto-maintenance:", error)
+    }
+  }
+
+  // Create audit log entries
+  if (changes.length > 0) {
+    try {
+      const { createAuditLog } = await import("@/lib/audit-log")
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        for (const change of changes) {
+          try {
+            await createAuditLog({
+              action: change.field === "status" ? "status_updated" : "data.updated",
+              resource_type: "truck",
+              resource_id: id,
+              details: {
+                field: change.field,
+                old_value: change.old_value,
+                new_value: change.new_value,
+              },
+            })
+            console.log("[updateTruck] ✅ Audit log created for field:", change.field)
+          } catch (err: any) {
+            console.error("[updateTruck] ❌ Audit log failed for field", change.field, ":", err.message)
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("[updateTruck] Failed to import audit log module:", err.message)
     }
   }
 

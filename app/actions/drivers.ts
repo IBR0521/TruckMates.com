@@ -234,18 +234,55 @@ export async function updateDriver(
 
   const supabase = await createClient()
 
+  // Get current driver data for audit trail
+  const { data: currentDriver } = await supabase
+    .from("drivers")
+    .select("*")
+    .eq("id", id)
+    .single()
+
+  if (!currentDriver) {
+    return { error: "Driver not found", data: null }
+  }
+
   // Build update data, only including fields that are provided
   // Only include fields that exist in the drivers table schema
   const updateData: any = {}
+  const changes: Array<{ field: string; old_value: any; new_value: any }> = []
   
-  if (formData.name !== undefined) updateData.name = formData.name
-  if (formData.email !== undefined) updateData.email = formData.email
-  if (formData.phone !== undefined) updateData.phone = formData.phone
-  if (formData.license_number !== undefined) updateData.license_number = formData.license_number
-  if (formData.license_expiry !== undefined) updateData.license_expiry = formData.license_expiry || null
-  if (formData.status !== undefined) updateData.status = formData.status
-  if (formData.truck_id !== undefined) updateData.truck_id = formData.truck_id || null
-  // Note: pay_rate column doesn't exist in drivers table schema
+  if (formData.name !== undefined && formData.name !== currentDriver.name) {
+    updateData.name = formData.name
+    changes.push({ field: "name", old_value: currentDriver.name, new_value: formData.name })
+  }
+  if (formData.email !== undefined && formData.email !== currentDriver.email) {
+    updateData.email = formData.email
+    changes.push({ field: "email", old_value: currentDriver.email, new_value: formData.email })
+  }
+  if (formData.phone !== undefined && formData.phone !== currentDriver.phone) {
+    updateData.phone = formData.phone
+    changes.push({ field: "phone", old_value: currentDriver.phone, new_value: formData.phone })
+  }
+  if (formData.license_number !== undefined && formData.license_number !== currentDriver.license_number) {
+    updateData.license_number = formData.license_number
+    changes.push({ field: "license_number", old_value: currentDriver.license_number, new_value: formData.license_number })
+  }
+  if (formData.license_expiry !== undefined && formData.license_expiry !== currentDriver.license_expiry) {
+    updateData.license_expiry = formData.license_expiry || null
+    changes.push({ field: "license_expiry", old_value: currentDriver.license_expiry, new_value: formData.license_expiry })
+  }
+  if (formData.status !== undefined && formData.status !== currentDriver.status) {
+    updateData.status = formData.status
+    changes.push({ field: "status", old_value: currentDriver.status, new_value: formData.status })
+  }
+  if (formData.truck_id !== undefined && formData.truck_id !== currentDriver.truck_id) {
+    updateData.truck_id = formData.truck_id || null
+    changes.push({ field: "truck_id", old_value: currentDriver.truck_id, new_value: formData.truck_id })
+  }
+
+  // If no changes, return early
+  if (Object.keys(updateData).length === 0) {
+    return { data: currentDriver, error: null }
+  }
 
   const { data, error } = await supabase
     .from("drivers")
@@ -256,6 +293,52 @@ export async function updateDriver(
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  // Create audit log entries for each change
+  if (changes.length > 0) {
+    try {
+      const { createAuditLog } = await import("@/lib/audit-log")
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        // Log each field change separately for better audit trail
+        for (const change of changes) {
+          try {
+            await createAuditLog({
+              action: change.field === "status" ? "status_updated" : "data.updated",
+              resource_type: "driver",
+              resource_id: id,
+              details: {
+                field: change.field,
+                old_value: change.old_value,
+                new_value: change.new_value,
+              },
+            })
+            console.log("[updateDriver] ✅ Audit log created for field:", change.field)
+          } catch (err: any) {
+            // Log error but don't fail the update
+            console.error("[updateDriver] ❌ Audit log failed for field", change.field, ":", err.message)
+            console.error("[updateDriver] Error code:", err.code)
+            // Check if it's a table missing error
+            if (err.code === "42P01" || err.message?.includes("relation") || err.message?.includes("does not exist")) {
+              console.error("[updateDriver] ⚠️ audit_logs table may not exist. Run: supabase/audit_logs_schema.sql")
+            }
+            // Check if it's an RLS policy error
+            if (err.code === "42501" || err.message?.includes("permission denied") || err.message?.includes("policy")) {
+              console.error("[updateDriver] ⚠️ RLS policy blocking audit log insert!")
+              console.error("[updateDriver] Please update supabase/audit_logs_schema.sql with INSERT policy")
+            }
+          }
+        }
+      } else {
+        console.warn("[updateDriver] No user found for audit logging")
+      }
+    } catch (err: any) {
+      console.error("[updateDriver] Failed to import audit log module:", err.message)
+    }
   }
 
   revalidatePath("/dashboard/drivers")

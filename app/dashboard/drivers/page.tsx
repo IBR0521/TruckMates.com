@@ -30,6 +30,10 @@ import {
 import { useRouter } from "next/navigation"
 import { getDrivers, deleteDriver, bulkDeleteDrivers, bulkUpdateDriverStatus, updateDriver } from "@/app/actions/drivers"
 import { AccessGuard } from "@/components/access-guard"
+import { InlineEdit } from "@/components/dashboard/inline-edit"
+import { DefensiveDelete } from "@/components/dashboard/defensive-delete"
+import { AuditTrail } from "@/components/dashboard/audit-trail"
+import { History } from "lucide-react"
 
 function DriversPageContent() {
   const router = useRouter()
@@ -42,6 +46,7 @@ function DriversPageContent() {
   const [sortBy, setSortBy] = useState("name")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isBulkMode, setIsBulkMode] = useState(false)
+  const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
 
   const loadDrivers = async () => {
     setIsLoading(true)
@@ -109,17 +114,73 @@ function DriversPageContent() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    const result = await deleteDriver(id)
+  const handleDeleteClick = async (id: string) => {
+    setDeleteId(id)
+    // Check dependencies
+    try {
+      const response = await fetch(`/api/check-dependencies?resource_type=driver&resource_id=${id}`)
+      if (response.ok) {
+        const data = await response.json()
+        setDeleteDependencies(data.dependencies || [])
+      }
+    } catch (error) {
+      console.error("Failed to check dependencies:", error)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteId) return
+    const result = await deleteDriver(deleteId)
     if (result.error) {
       toast.error(result.error)
       setDeleteId(null)
+      setDeleteDependencies([])
     } else {
       toast.success("Driver deleted successfully")
       setDeleteId(null)
+      setDeleteDependencies([])
       // Reload drivers list
       await loadDrivers()
     }
+  }
+
+  const handleInlineUpdate = async (driverId: string, field: string, value: string | number | null) => {
+    // Find the driver to get current value for revert
+    const currentDriver = driversList.find(d => d.id === driverId)
+    const oldValue = currentDriver?.[field]
+    
+    // Optimistic update - update UI immediately
+    const updatedDrivers = driversList.map(driver => 
+      driver.id === driverId ? { ...driver, [field]: value } : driver
+    )
+    setDriversList(updatedDrivers)
+    
+    // Update filtered list too
+    const updatedFiltered = filteredDrivers.map(driver => 
+      driver.id === driverId ? { ...driver, [field]: value } : driver
+    )
+    setFilteredDrivers(updatedFiltered)
+
+    // Then save to server silently
+    const updateData: any = { [field]: value }
+    const result = await updateDriver(driverId, updateData)
+    
+    if (result.error) {
+      // Revert on error - restore old value
+      const revertedDrivers = driversList.map(driver => 
+        driver.id === driverId ? { ...driver, [field]: oldValue } : driver
+      )
+      setDriversList(revertedDrivers)
+      
+      const revertedFiltered = filteredDrivers.map(driver => 
+        driver.id === driverId ? { ...driver, [field]: oldValue } : driver
+      )
+      setFilteredDrivers(revertedFiltered)
+      
+      toast.error(result.error || "Failed to update")
+      throw new Error(result.error)
+    }
+    // Success - no toast, no reload, UI already updated optimistically
   }
 
   // Bulk operations
@@ -436,68 +497,74 @@ function DriversPageContent() {
                           )}
                           <td className="px-6 py-4">
                             <div>
-                              <p className="text-foreground font-medium">{driver.name || "N/A"}</p>
-                              <p className="text-xs text-muted-foreground">{driver.email || ""}</p>
+                              <InlineEdit
+                                value={driver.name || ""}
+                                onSave={async (value) => handleInlineUpdate(driver.id, "name", value as string)}
+                                placeholder="Driver name"
+                                className="w-full"
+                              />
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <div>
-                              <p className="text-sm text-foreground">{driver.phone || "N/A"}</p>
-                              {driver.email && <p className="text-xs text-muted-foreground">{driver.email}</p>}
+                              <InlineEdit
+                                value={driver.phone || ""}
+                                onSave={async (value) => handleInlineUpdate(driver.id, "phone", value as string)}
+                                type="phone"
+                                placeholder="Phone number"
+                                className="w-full"
+                              />
+                              <InlineEdit
+                                value={driver.email || ""}
+                                onSave={async (value) => handleInlineUpdate(driver.id, "email", value as string)}
+                                type="email"
+                                placeholder="Email address"
+                                className="w-full mt-1"
+                              />
                             </div>
                           </td>
                         <td className="px-6 py-4">
                           <div>
-                            <p className="text-sm text-foreground">{driver.license_number || "N/A"}</p>
+                            <InlineEdit
+                              value={driver.license_number || ""}
+                              onSave={async (value) => handleInlineUpdate(driver.id, "license_number", value as string)}
+                              placeholder="License number"
+                              className="w-full"
+                            />
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <p className="text-sm text-foreground">
-                            {driver.license_expiry 
-                              ? new Date(driver.license_expiry).toLocaleDateString() 
-                              : "N/A"}
+                          <div className="flex items-center gap-2">
+                            <InlineEdit
+                              value={driver.license_expiry || null}
+                              onSave={async (value) => handleInlineUpdate(driver.id, "license_expiry", value)}
+                              type="date"
+                              placeholder="Set expiry date"
+                              className="flex-1"
+                            />
                             {driver.license_expiry && new Date(driver.license_expiry) < new Date() && (
-                              <span className="ml-2 text-xs text-red-400">(Expired)</span>
+                              <span className="text-xs text-red-400 whitespace-nowrap">(Expired)</span>
                             )}
-                          </p>
+                          </div>
                         </td>
                         <td className="px-6 py-4">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-7 px-2">
-                                <Badge
-                                  className={
-                                    driver.status === "on_route"
-                                      ? "bg-green-500/20 text-green-400 border-green-500/50 cursor-pointer"
-                                      : driver.status === "active"
-                                      ? "bg-blue-500/20 text-blue-400 border-blue-500/50 cursor-pointer"
-                                      : driver.status === "inactive" || driver.status === "off_duty"
-                                      ? "bg-gray-500/20 text-gray-400 border-gray-500/50 cursor-pointer"
-                                      : "bg-yellow-500/20 text-yellow-400 border-yellow-500/50 cursor-pointer"
-                                  }
-                                >
-                                  {driver.status ? driver.status.charAt(0).toUpperCase() + driver.status.slice(1).replace("_", " ") : "N/A"}
-                                </Badge>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "active")}>
-                                Active
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "on_route")}>
-                                On Route
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "off_duty")}>
-                                Off Duty
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "inactive")}>
-                                Inactive
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleQuickStatusUpdate(driver.id, "on_leave")}>
-                                On Leave
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <InlineEdit
+                            value={driver.status || ""}
+                            onSave={async (value) => handleInlineUpdate(driver.id, "status", value as string)}
+                            type="select"
+                            options={[
+                              { value: "active", label: "Active" },
+                              { value: "on_route", label: "On Route" },
+                              { value: "off_duty", label: "Off Duty" },
+                              { value: "inactive", label: "Inactive" },
+                              { value: "on_leave", label: "On Leave" },
+                            ]}
+                            formatValue={(val) => {
+                              if (!val) return "N/A"
+                              return String(val).charAt(0).toUpperCase() + String(val).slice(1).replace("_", " ")
+                            }}
+                            className="w-full"
+                          />
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
@@ -510,17 +577,28 @@ function DriversPageContent() {
                               <Eye className="w-4 h-4" />
                             </Button>
                             {driver.id && typeof driver.id === 'string' && driver.id.trim() !== '' ? (
-                              <Link href={`/dashboard/drivers/${driver.id}/edit`}>
-                                <Button variant="ghost" size="sm" className="hover:bg-secondary/50">
-                                  <Edit2 className="w-4 h-4" />
-                                </Button>
-                              </Link>
+                              <>
+                                <Link href={`/dashboard/drivers/${driver.id}/edit`}>
+                                  <Button variant="ghost" size="sm" className="hover:bg-secondary/50">
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                </Link>
+                                <AuditTrail
+                                  resourceType="driver"
+                                  resourceId={driver.id}
+                                  trigger={
+                                    <Button variant="ghost" size="sm" className="hover:bg-secondary/50">
+                                      <History className="w-4 h-4" />
+                                    </Button>
+                                  }
+                                />
+                              </>
                             ) : null}
                             <Button
                               variant="ghost"
                               size="sm"
                               className="hover:bg-red-500/20"
-                              onClick={() => setDeleteId(driver.id)}
+                              onClick={() => handleDeleteClick(driver.id)}
                             >
                               <Trash2 className="w-4 h-4 text-red-400" />
                             </Button>
@@ -635,7 +713,7 @@ function DriversPageContent() {
                           variant="outline"
                           size="sm"
                           className="flex-1 border-red-500/50 text-red-400 hover:bg-red-500/20"
-                          onClick={() => setDeleteId(driver.id)}
+                          onClick={() => handleDeleteClick(driver.id)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -649,26 +727,24 @@ function DriversPageContent() {
         </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the driver from the system.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteId && handleDelete(deleteId)}
-              className="bg-red-500 hover:bg-red-600"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Defensive Delete Dialog */}
+      {deleteId && (
+        <DefensiveDelete
+          open={deleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDeleteId(null)
+              setDeleteDependencies([])
+            }
+          }}
+          onConfirm={handleDelete}
+          resourceType="driver"
+          resourceName={driversList.find(d => d.id === deleteId)?.name || "Driver"}
+          resourceId={deleteId}
+          dependencies={deleteDependencies}
+          warningMessage="This will permanently delete the driver. All associated data will be preserved but the driver link will be removed."
+        />
+      )}
     </div>
   )
 }

@@ -20,11 +20,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { getTrucks, deleteTruck } from "@/app/actions/trucks"
+import { getTrucks, deleteTruck, updateTruck } from "@/app/actions/trucks"
+import { InlineEdit } from "@/components/dashboard/inline-edit"
+import { DefensiveDelete } from "@/components/dashboard/defensive-delete"
+import { AuditTrail } from "@/components/dashboard/audit-trail"
+import { History } from "lucide-react"
 
 export default function TrucksPage() {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
   const [trucksList, setTrucksList] = useState<any[]>([])
   const [filteredTrucks, setFilteredTrucks] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -101,15 +106,52 @@ export default function TrucksPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    const result = await deleteTruck(id)
+  const handleDeleteClick = async (id: string) => {
+    setDeleteId(id)
+    try {
+      const response = await fetch(`/api/check-dependencies?resource_type=truck&resource_id=${id}`)
+      if (response.ok) {
+        const data = await response.json()
+        setDeleteDependencies(data.dependencies || [])
+      }
+    } catch (error) {
+      console.error("Failed to check dependencies:", error)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteId) return
+    const result = await deleteTruck(deleteId)
     if (result.error) {
       toast.error(result.error)
       setDeleteId(null)
+      setDeleteDependencies([])
     } else {
       toast.success("Vehicle deleted successfully")
       setDeleteId(null)
+      setDeleteDependencies([])
       await loadTrucks()
+    }
+  }
+
+  const handleInlineUpdate = async (truckId: string, field: string, value: string | number | null) => {
+    const updatedTrucks = trucksList.map(truck => 
+      truck.id === truckId ? { ...truck, [field]: value } : truck
+    )
+    setTrucksList(updatedTrucks)
+    
+    const updatedFiltered = filteredTrucks.map(truck => 
+      truck.id === truckId ? { ...truck, [field]: value } : truck
+    )
+    setFilteredTrucks(updatedFiltered)
+
+    const updateData: any = { [field]: value }
+    const result = await updateTruck(truckId, updateData)
+    
+    if (result.error) {
+      await loadTrucks()
+      toast.error(result.error || "Failed to update")
+      throw new Error(result.error)
     }
   }
 
@@ -226,15 +268,22 @@ export default function TrucksPage() {
                     <h3 className="text-lg font-bold text-foreground">{truck.truck_number || "N/A"}</h3>
                     <p className="text-xs text-muted-foreground mt-1">{truck.make} {truck.model} {truck.year ? `(${truck.year})` : ""}</p>
                   </div>
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      truck.status === "in_use" || truck.status === "Active" ? "bg-green-500/20 text-green-400" : 
-                      truck.status === "maintenance" ? "bg-yellow-500/20 text-yellow-400" :
-                      "bg-blue-500/20 text-blue-400"
-                    }`}
-                  >
-                    {truck.status ? truck.status.charAt(0).toUpperCase() + truck.status.slice(1).replace("_", " ") : "N/A"}
-                  </span>
+                  <InlineEdit
+                    value={truck.status || ""}
+                    onSave={async (value) => handleInlineUpdate(truck.id, "status", value as string)}
+                    type="select"
+                    options={[
+                      { value: "available", label: "Available" },
+                      { value: "in_use", label: "In Use" },
+                      { value: "maintenance", label: "Maintenance" },
+                      { value: "out_of_service", label: "Out of Service" },
+                    ]}
+                    formatValue={(val) => {
+                      if (!val) return "N/A"
+                      return String(val).charAt(0).toUpperCase() + String(val).slice(1).replace("_", " ")
+                    }}
+                    className="w-auto"
+                  />
                 </div>
                 <div className="space-y-3 mb-6 border-t border-border/30 pt-4">
                   <div>
@@ -242,19 +291,31 @@ export default function TrucksPage() {
                     <p className="text-sm text-foreground">{truck.license_plate || "N/A"}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-primary" />
-                    <p className="text-sm text-foreground">{truck.current_location || "N/A"}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
                     <Fuel className="w-4 h-4 text-primary" />
                     <p className="text-sm text-foreground">{truck.fuel_level ? `${truck.fuel_level}%` : "N/A"}</p>
                   </div>
-                  {truck.mileage && (
-                    <div>
-                      <p className="text-xs text-muted-foreground font-medium mb-1">Mileage</p>
-                      <p className="text-sm text-foreground">{truck.mileage.toLocaleString()} mi</p>
-                    </div>
-                  )}
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium mb-1">Mileage</p>
+                    <InlineEdit
+                      value={truck.mileage || 0}
+                      onSave={async (value) => handleInlineUpdate(truck.id, "mileage", value as number)}
+                      type="number"
+                      placeholder="Set mileage"
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium mb-1 flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      Location
+                    </p>
+                    <InlineEdit
+                      value={truck.current_location || ""}
+                      onSave={async (value) => handleInlineUpdate(truck.id, "current_location", value as string)}
+                      placeholder="Set location"
+                      className="w-full"
+                    />
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -271,11 +332,20 @@ export default function TrucksPage() {
                       <Edit2 className="w-4 h-4" />
                     </Button>
                   </Link>
+                  <AuditTrail
+                    resourceType="truck"
+                    resourceId={truck.id}
+                    trigger={
+                      <Button variant="outline" size="sm" className="border-border/50 bg-transparent hover:bg-secondary/50">
+                        <History className="w-4 h-4" />
+                      </Button>
+                    }
+                  />
                   <Button
                     variant="outline"
                     size="sm"
                     className="border-border/50 bg-transparent hover:bg-red-500/20"
-                    onClick={() => setDeleteId(truck.id)}
+                    onClick={() => handleDeleteClick(truck.id)}
                   >
                     <Trash2 className="w-4 h-4 text-red-400" />
                   </Button>
@@ -287,26 +357,24 @@ export default function TrucksPage() {
         </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the vehicle from the system.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteId && handleDelete(deleteId)}
-              className="bg-red-500 hover:bg-red-600"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Defensive Delete Dialog */}
+      {deleteId && (
+        <DefensiveDelete
+          open={deleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDeleteId(null)
+              setDeleteDependencies([])
+            }
+          }}
+          onConfirm={handleDelete}
+          resourceType="truck"
+          resourceName={trucksList.find(t => t.id === deleteId)?.truck_number || "Truck"}
+          resourceId={deleteId}
+          dependencies={deleteDependencies}
+          warningMessage="This will permanently delete the truck. Associated loads and maintenance records will be preserved but the truck link will be removed."
+        />
+      )}
     </div>
   )
 }

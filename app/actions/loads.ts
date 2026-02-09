@@ -795,39 +795,109 @@ export async function updateLoad(
     return { error: "No company found", data: null }
   }
 
-  // Get current load to check if status is changing to "delivered"
+  // Get current load data for audit trail and status check
   const { data: currentLoad } = await supabase
     .from("loads")
-    .select("status, value, shipment_number, origin, destination, company_name")
+    .select("*")
     .eq("id", id)
     .single()
+
+  if (!currentLoad) {
+    return { error: "Load not found", data: null }
+  }
 
   const wasDelivered = currentLoad?.status === "delivered"
   const willBeDelivered = formData.status === "delivered"
 
-  // Build update data, only including fields that are provided
+  // Build update data and track changes for audit trail
   const updateData: any = {}
+  const changes: Array<{ field: string; old_value: any; new_value: any }> = []
   
-  if (formData.shipment_number !== undefined) updateData.shipment_number = formData.shipment_number
-  if (formData.origin !== undefined) updateData.origin = formData.origin
-  if (formData.destination !== undefined) updateData.destination = formData.destination
-  if (formData.weight !== undefined) updateData.weight = formData.weight
-  if (formData.weight_kg !== undefined) updateData.weight_kg = formData.weight_kg || null
-  if (formData.contents !== undefined) updateData.contents = formData.contents
-  if (formData.value !== undefined) updateData.value = formData.value || null
-  if (formData.carrier_type !== undefined) updateData.carrier_type = formData.carrier_type
-  if (formData.status !== undefined) updateData.status = formData.status
-  if (formData.driver_id !== undefined) updateData.driver_id = formData.driver_id || null
-  if (formData.truck_id !== undefined) updateData.truck_id = formData.truck_id || null
-  if (formData.route_id !== undefined) updateData.route_id = formData.route_id || null
-  if (formData.load_date !== undefined) updateData.load_date = formData.load_date || null
-  if (formData.estimated_delivery !== undefined) updateData.estimated_delivery = formData.estimated_delivery || null
-  if (formData.actual_delivery !== undefined) updateData.actual_delivery = formData.actual_delivery || null
-  if (formData.delivery_type !== undefined) updateData.delivery_type = formData.delivery_type
-  if (formData.company_name !== undefined) updateData.company_name = formData.company_name || null
-  if (formData.customer_reference !== undefined) updateData.customer_reference = formData.customer_reference || null
-  if (formData.requires_split_delivery !== undefined) updateData.requires_split_delivery = formData.requires_split_delivery
-  if (formData.total_delivery_points !== undefined) updateData.total_delivery_points = formData.total_delivery_points
+  if (formData.shipment_number !== undefined && formData.shipment_number !== currentLoad.shipment_number) {
+    updateData.shipment_number = formData.shipment_number
+    changes.push({ field: "shipment_number", old_value: currentLoad.shipment_number, new_value: formData.shipment_number })
+  }
+  if (formData.origin !== undefined && formData.origin !== currentLoad.origin) {
+    updateData.origin = formData.origin
+    changes.push({ field: "origin", old_value: currentLoad.origin, new_value: formData.origin })
+  }
+  if (formData.destination !== undefined && formData.destination !== currentLoad.destination) {
+    updateData.destination = formData.destination
+    changes.push({ field: "destination", old_value: currentLoad.destination, new_value: formData.destination })
+  }
+  if (formData.weight !== undefined && formData.weight !== currentLoad.weight) {
+    updateData.weight = formData.weight
+    changes.push({ field: "weight", old_value: currentLoad.weight, new_value: formData.weight })
+  }
+  if (formData.weight_kg !== undefined && formData.weight_kg !== currentLoad.weight_kg) {
+    updateData.weight_kg = formData.weight_kg || null
+    changes.push({ field: "weight_kg", old_value: currentLoad.weight_kg, new_value: formData.weight_kg })
+  }
+  if (formData.contents !== undefined && formData.contents !== currentLoad.contents) {
+    updateData.contents = formData.contents
+    changes.push({ field: "contents", old_value: currentLoad.contents, new_value: formData.contents })
+  }
+  if (formData.value !== undefined && formData.value !== currentLoad.value) {
+    updateData.value = formData.value || null
+    changes.push({ field: "value", old_value: currentLoad.value, new_value: formData.value })
+  }
+  if (formData.carrier_type !== undefined && formData.carrier_type !== currentLoad.carrier_type) {
+    updateData.carrier_type = formData.carrier_type
+    changes.push({ field: "carrier_type", old_value: currentLoad.carrier_type, new_value: formData.carrier_type })
+  }
+  if (formData.status !== undefined && formData.status !== currentLoad.status) {
+    updateData.status = formData.status
+    changes.push({ field: "status", old_value: currentLoad.status, new_value: formData.status })
+  }
+  if (formData.driver_id !== undefined && formData.driver_id !== currentLoad.driver_id) {
+    updateData.driver_id = formData.driver_id || null
+    changes.push({ field: "driver_id", old_value: currentLoad.driver_id, new_value: formData.driver_id })
+  }
+  if (formData.truck_id !== undefined && formData.truck_id !== currentLoad.truck_id) {
+    updateData.truck_id = formData.truck_id || null
+    changes.push({ field: "truck_id", old_value: currentLoad.truck_id, new_value: formData.truck_id })
+  }
+  if (formData.route_id !== undefined && formData.route_id !== currentLoad.route_id) {
+    updateData.route_id = formData.route_id || null
+    changes.push({ field: "route_id", old_value: currentLoad.route_id, new_value: formData.route_id })
+  }
+  if (formData.load_date !== undefined && formData.load_date !== currentLoad.load_date) {
+    updateData.load_date = formData.load_date || null
+    changes.push({ field: "load_date", old_value: currentLoad.load_date, new_value: formData.load_date })
+  }
+  if (formData.estimated_delivery !== undefined && formData.estimated_delivery !== currentLoad.estimated_delivery) {
+    updateData.estimated_delivery = formData.estimated_delivery || null
+    changes.push({ field: "estimated_delivery", old_value: currentLoad.estimated_delivery, new_value: formData.estimated_delivery })
+  }
+  if (formData.actual_delivery !== undefined && formData.actual_delivery !== currentLoad.actual_delivery) {
+    updateData.actual_delivery = formData.actual_delivery || null
+    changes.push({ field: "actual_delivery", old_value: currentLoad.actual_delivery, new_value: formData.actual_delivery })
+  }
+  if (formData.delivery_type !== undefined && formData.delivery_type !== currentLoad.delivery_type) {
+    updateData.delivery_type = formData.delivery_type
+    changes.push({ field: "delivery_type", old_value: currentLoad.delivery_type, new_value: formData.delivery_type })
+  }
+  if (formData.company_name !== undefined && formData.company_name !== currentLoad.company_name) {
+    updateData.company_name = formData.company_name || null
+    changes.push({ field: "company_name", old_value: currentLoad.company_name, new_value: formData.company_name })
+  }
+  if (formData.customer_reference !== undefined && formData.customer_reference !== currentLoad.customer_reference) {
+    updateData.customer_reference = formData.customer_reference || null
+    changes.push({ field: "customer_reference", old_value: currentLoad.customer_reference, new_value: formData.customer_reference })
+  }
+  if (formData.requires_split_delivery !== undefined && formData.requires_split_delivery !== currentLoad.requires_split_delivery) {
+    updateData.requires_split_delivery = formData.requires_split_delivery
+    changes.push({ field: "requires_split_delivery", old_value: currentLoad.requires_split_delivery, new_value: formData.requires_split_delivery })
+  }
+  if (formData.total_delivery_points !== undefined && formData.total_delivery_points !== currentLoad.total_delivery_points) {
+    updateData.total_delivery_points = formData.total_delivery_points
+    changes.push({ field: "total_delivery_points", old_value: currentLoad.total_delivery_points, new_value: formData.total_delivery_points })
+  }
+
+  // If no changes, return early
+  if (Object.keys(updateData).length === 0) {
+    return { data: currentLoad, error: null }
+  }
 
   const { data, error } = await supabase
     .from("loads")
@@ -957,6 +1027,43 @@ export async function updateLoad(
       await scheduleCheckCallsForLoad(id)
     } catch (error) {
       console.error("[AUTO-CHECK-CALLS] Failed to schedule check calls:", error)
+    }
+  }
+
+  // Create audit log entries for each change
+  if (changes.length > 0) {
+    try {
+      const { createAuditLog } = await import("@/lib/audit-log")
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        // Log each field change separately for better audit trail
+        for (const change of changes) {
+          try {
+            await createAuditLog({
+              action: change.field === "status" ? "status_updated" : "data.updated",
+              resource_type: "load",
+              resource_id: id,
+              details: {
+                field: change.field,
+                old_value: change.old_value,
+                new_value: change.new_value,
+              },
+            })
+            console.log("[updateLoad] ✅ Audit log created for field:", change.field)
+          } catch (err: any) {
+            // Log error but don't fail the update
+            console.error("[updateLoad] ❌ Audit log failed for field", change.field, ":", err.message)
+            console.error("[updateLoad] Error code:", err.code)
+          }
+        }
+      } else {
+        console.warn("[updateLoad] No user found for audit logging")
+      }
+    } catch (err: any) {
+      console.error("[updateLoad] Failed to import audit log module:", err.message)
     }
   }
 

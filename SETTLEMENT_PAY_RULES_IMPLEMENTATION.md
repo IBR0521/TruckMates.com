@@ -247,3 +247,4 @@ If you encounter issues:
 5. Verify RLS policies allow access
 
 
+

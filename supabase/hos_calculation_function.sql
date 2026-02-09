@@ -93,3 +93,4 @@ GRANT EXECUTE ON FUNCTION public.calculate_remaining_hos(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.calculate_remaining_hos(UUID) TO service_role;
 
 
+

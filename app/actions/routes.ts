@@ -289,29 +289,48 @@ export async function updateRoute(
 ) {
   const supabase = await createClient()
 
-  // Build update data, only including fields that are provided
+  // Get current route data for audit trail
+  const { data: currentRoute } = await supabase
+    .from("routes")
+    .select("*")
+    .eq("id", id)
+    .single()
+
+  if (!currentRoute) {
+    return { error: "Route not found", data: null }
+  }
+
+  // Build update data and track changes
   const updateData: any = {}
+  const changes: Array<{ field: string; old_value: any; new_value: any }> = []
   
-  if (formData.name !== undefined) updateData.name = formData.name
-  if (formData.origin !== undefined) updateData.origin = formData.origin
-  if (formData.destination !== undefined) updateData.destination = formData.destination
-  if (formData.distance !== undefined) updateData.distance = formData.distance
-  if (formData.estimated_time !== undefined) updateData.estimated_time = formData.estimated_time
-  if (formData.priority !== undefined) updateData.priority = formData.priority || "normal"
-  if (formData.status !== undefined) updateData.status = formData.status || "pending"
-  if (formData.driver_id !== undefined) updateData.driver_id = formData.driver_id || null
-  if (formData.truck_id !== undefined) updateData.truck_id = formData.truck_id || null
-  if (formData.estimated_arrival !== undefined) updateData.estimated_arrival = formData.estimated_arrival || null
-  if (formData.waypoints !== undefined) updateData.waypoints = formData.waypoints || null
-  if (formData.depot_name !== undefined) updateData.depot_name = formData.depot_name || null
-  if (formData.depot_address !== undefined) updateData.depot_address = formData.depot_address || null
-  if (formData.pre_route_time_minutes !== undefined) updateData.pre_route_time_minutes = formData.pre_route_time_minutes || null
-  if (formData.post_route_time_minutes !== undefined) updateData.post_route_time_minutes = formData.post_route_time_minutes || null
-  if (formData.route_start_time !== undefined) updateData.route_start_time = formData.route_start_time || null
-  if (formData.route_departure_time !== undefined) updateData.route_departure_time = formData.route_departure_time || null
-  if (formData.route_complete_time !== undefined) updateData.route_complete_time = formData.route_complete_time || null
-  if (formData.route_type !== undefined) updateData.route_type = formData.route_type || null
-  if (formData.scenario !== undefined) updateData.scenario = formData.scenario || null
+  const fieldsToCheck = [
+    "name", "origin", "destination", "distance", "estimated_time", "priority",
+    "status", "driver_id", "truck_id", "estimated_arrival", "depot_name",
+    "depot_address", "pre_route_time_minutes", "post_route_time_minutes",
+    "route_start_time", "route_departure_time", "route_complete_time",
+    "route_type", "scenario"
+  ]
+
+  for (const field of fieldsToCheck) {
+    if (formData[field as keyof typeof formData] !== undefined) {
+      const newValue = formData[field as keyof typeof formData]
+      const oldValue = currentRoute[field]
+      if (newValue !== oldValue) {
+        updateData[field] = newValue === null || newValue === "" ? null : newValue
+        changes.push({ field, old_value: oldValue, new_value: newValue })
+      }
+    }
+  }
+
+  if (formData.waypoints !== undefined && JSON.stringify(formData.waypoints) !== JSON.stringify(currentRoute.waypoints)) {
+    updateData.waypoints = formData.waypoints || null
+    changes.push({ field: "waypoints", old_value: currentRoute.waypoints, new_value: formData.waypoints })
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return { data: currentRoute, error: null }
+  }
 
   const { data, error } = await supabase
     .from("routes")
@@ -330,6 +349,38 @@ export async function updateRoute(
     sendNotificationsForRouteUpdate(data).catch((error) => {
       console.error("[NOTIFICATION] Failed to send route update notifications:", error)
     })
+  }
+
+  // Create audit log entries
+  if (changes.length > 0) {
+    try {
+      const { createAuditLog } = await import("@/lib/audit-log")
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        for (const change of changes) {
+          try {
+            await createAuditLog({
+              action: change.field === "status" ? "status_updated" : "data.updated",
+              resource_type: "route",
+              resource_id: id,
+              details: {
+                field: change.field,
+                old_value: change.old_value,
+                new_value: change.new_value,
+              },
+            })
+            console.log("[updateRoute] ✅ Audit log created for field:", change.field)
+          } catch (err: any) {
+            console.error("[updateRoute] ❌ Audit log failed for field", change.field, ":", err.message)
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("[updateRoute] Failed to import audit log module:", err.message)
+    }
   }
 
   revalidatePath("/dashboard/routes")

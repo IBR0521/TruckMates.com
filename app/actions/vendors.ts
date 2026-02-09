@@ -296,29 +296,48 @@ export async function updateVendor(
     return { error: "No company found", data: null }
   }
 
+  // Get current vendor data for audit trail
+  const { data: currentVendor } = await supabase
+    .from("vendors")
+    .select("*")
+    .eq("id", id)
+    .eq("company_id", userData.company_id)
+    .single()
+
+  if (!currentVendor) {
+    return { error: "Vendor not found", data: null }
+  }
+
+  // Build update data and track changes
   const updateData: any = {}
-  if (formData.name !== undefined) updateData.name = formData.name
-  if (formData.company_name !== undefined) updateData.company_name = formData.company_name || null
-  if (formData.email !== undefined) updateData.email = formData.email || null
-  if (formData.phone !== undefined) updateData.phone = formData.phone || null
-  if (formData.website !== undefined) updateData.website = formData.website || null
-  if (formData.address_line1 !== undefined) updateData.address_line1 = formData.address_line1 || null
-  if (formData.address_line2 !== undefined) updateData.address_line2 = formData.address_line2 || null
-  if (formData.city !== undefined) updateData.city = formData.city || null
-  if (formData.state !== undefined) updateData.state = formData.state || null
-  if (formData.zip !== undefined) updateData.zip = formData.zip || null
-  if (formData.country !== undefined) updateData.country = formData.country || "USA"
-  if (formData.tax_id !== undefined) updateData.tax_id = formData.tax_id || null
-  if (formData.payment_terms !== undefined) updateData.payment_terms = formData.payment_terms || "Net 30"
-  if (formData.currency !== undefined) updateData.currency = formData.currency || "USD"
-  if (formData.vendor_type !== undefined) updateData.vendor_type = formData.vendor_type || "supplier"
-  if (formData.status !== undefined) updateData.status = formData.status || "active"
-  if (formData.priority !== undefined) updateData.priority = formData.priority || "normal"
-  if (formData.notes !== undefined) updateData.notes = formData.notes || null
-  if (formData.tags !== undefined) updateData.tags = formData.tags || []
-  if (formData.primary_contact_name !== undefined) updateData.primary_contact_name = formData.primary_contact_name || null
-  if (formData.primary_contact_email !== undefined) updateData.primary_contact_email = formData.primary_contact_email || null
-  if (formData.primary_contact_phone !== undefined) updateData.primary_contact_phone = formData.primary_contact_phone || null
+  const changes: Array<{ field: string; old_value: any; new_value: any }> = []
+  
+  const fieldsToCheck = [
+    "name", "company_name", "email", "phone", "website", "address_line1", "address_line2",
+    "city", "state", "zip", "country", "tax_id", "payment_terms", "currency",
+    "vendor_type", "status", "priority", "notes", "primary_contact_name",
+    "primary_contact_email", "primary_contact_phone"
+  ]
+
+  for (const field of fieldsToCheck) {
+    if (formData[field as keyof typeof formData] !== undefined) {
+      const newValue = formData[field as keyof typeof formData]
+      const oldValue = currentVendor[field]
+      if (newValue !== oldValue) {
+        updateData[field] = newValue === null || newValue === "" ? null : newValue
+        changes.push({ field, old_value: oldValue, new_value: newValue })
+      }
+    }
+  }
+
+  if (formData.tags !== undefined && JSON.stringify(formData.tags) !== JSON.stringify(currentVendor.tags)) {
+    updateData.tags = formData.tags || []
+    changes.push({ field: "tags", old_value: currentVendor.tags, new_value: formData.tags })
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return { data: currentVendor, error: null }
+  }
 
   const { data, error } = await supabase
     .from("vendors")
@@ -330,6 +349,34 @@ export async function updateVendor(
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  // Create audit log entries
+  if (changes.length > 0) {
+    try {
+      const { createAuditLog } = await import("@/lib/audit-log")
+      if (user) {
+        for (const change of changes) {
+          try {
+            await createAuditLog({
+              action: change.field === "status" ? "status_updated" : "data.updated",
+              resource_type: "vendor",
+              resource_id: id,
+              details: {
+                field: change.field,
+                old_value: change.old_value,
+                new_value: change.new_value,
+              },
+            })
+            console.log("[updateVendor] ✅ Audit log created for field:", change.field)
+          } catch (err: any) {
+            console.error("[updateVendor] ❌ Audit log failed for field", change.field, ":", err.message)
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("[updateVendor] Failed to import audit log module:", err.message)
+    }
   }
 
   revalidatePath("/dashboard/vendors")

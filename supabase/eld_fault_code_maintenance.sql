@@ -320,3 +320,4 @@ INSERT INTO public.fault_code_maintenance_rules (
 ON CONFLICT DO NOTHING;
 
 
+

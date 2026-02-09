@@ -29,6 +29,7 @@ import {
   Bell,
   Calendar,
   MessageSquare,
+  Sparkles,
 } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"

@@ -56,7 +56,37 @@ export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
       })
 
     if (error) {
+      // Log detailed error
+      console.error("[AUDIT LOG] Failed to create audit log:", {
+        error: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        entry
+      })
+      
+      // If table doesn't exist, provide helpful message
+      if (error.code === "42P01" || error.message?.includes("does not exist") || error.message?.includes("relation")) {
+        console.error("[AUDIT LOG] ⚠️ audit_logs table does not exist!")
+        console.error("[AUDIT LOG] Please run the SQL migration: supabase/audit_logs_schema.sql")
+      }
+      
+      // If RLS policy issue
+      if (error.code === "42501" || error.message?.includes("permission denied") || error.message?.includes("policy")) {
+        console.error("[AUDIT LOG] ⚠️ RLS policy blocking insert!")
+        console.error("[AUDIT LOG] Please add INSERT policy to audit_logs table")
+        console.error("[AUDIT LOG] Run the updated SQL migration: supabase/audit_logs_schema.sql")
+      }
+      
       logger.error("Failed to create audit log", error, { entry })
+      // Re-throw so caller can see the error
+      throw error
+    } else {
+      console.log("[AUDIT LOG] ✅ Successfully created audit log:", {
+        action: entry.action,
+        resource_type: entry.resource_type,
+        resource_id: entry.resource_id
+      })
     }
   } catch (error) {
     // Don't fail the operation if audit logging fails

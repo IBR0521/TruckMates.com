@@ -66,3 +66,4 @@ CREATE TRIGGER trigger_update_load_coordinates
   EXECUTE FUNCTION update_load_coordinates_from_address_book();
 
 
+

@@ -25,13 +25,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { getCustomers, deleteCustomer } from "@/app/actions/customers"
+import { getCustomers, deleteCustomer, updateCustomer } from "@/app/actions/customers"
 import { Badge } from "@/components/ui/badge"
 import { useRouter } from "next/navigation"
+import { InlineEdit } from "@/components/dashboard/inline-edit"
+import { DefensiveDelete } from "@/components/dashboard/defensive-delete"
+import { AuditTrail } from "@/components/dashboard/audit-trail"
+import { History } from "lucide-react"
 
 export default function CustomersPage() {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
   const [customersList, setCustomersList] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -78,15 +83,47 @@ export default function CustomersPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    const result = await deleteCustomer(id)
+  const handleDeleteClick = async (id: string) => {
+    setDeleteId(id)
+    try {
+      const response = await fetch(`/api/check-dependencies?resource_type=customer&resource_id=${id}`)
+      if (response.ok) {
+        const data = await response.json()
+        setDeleteDependencies(data.dependencies || [])
+      }
+    } catch (error) {
+      console.error("Failed to check dependencies:", error)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteId) return
+    const result = await deleteCustomer(deleteId)
     if (result.error) {
       toast.error(result.error)
       setDeleteId(null)
+      setDeleteDependencies([])
     } else {
       toast.success("Customer deleted successfully")
       setDeleteId(null)
+      setDeleteDependencies([])
       await loadCustomers()
+    }
+  }
+
+  const handleInlineUpdate = async (customerId: string, field: string, value: string | number | null) => {
+    const updatedCustomers = customersList.map(customer => 
+      customer.id === customerId ? { ...customer, [field]: value } : customer
+    )
+    setCustomersList(updatedCustomers)
+
+    const updateData: any = { [field]: value }
+    const result = await updateCustomer(customerId, updateData)
+    
+    if (result.error) {
+      await loadCustomers()
+      toast.error(result.error || "Failed to update")
+      throw new Error(result.error)
     }
   }
 
@@ -250,7 +287,23 @@ export default function CustomersPage() {
                       )}
                     </td>
                     <td className="p-4">{getTypeBadge(customer.relationship_type || customer.customer_type)}</td>
-                    <td className="p-4">{getStatusBadge(customer.status)}</td>
+                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                      <InlineEdit
+                        value={customer.status || ""}
+                        onSave={async (value) => handleInlineUpdate(customer.id, "status", value as string)}
+                        type="select"
+                        options={[
+                          { value: "active", label: "Active" },
+                          { value: "inactive", label: "Inactive" },
+                          { value: "prospect", label: "Prospect" },
+                        ]}
+                        formatValue={(val) => {
+                          if (!val) return "N/A"
+                          return String(val).charAt(0).toUpperCase() + String(val).slice(1)
+                        }}
+                        className="w-auto"
+                      />
+                    </td>
                     <td className="p-4">
                       {customer.city && customer.state ? (
                         <div className="text-sm text-foreground">
@@ -282,11 +335,20 @@ export default function CustomersPage() {
                                 <Edit2 className="w-4 h-4" />
                               </Button>
                             </Link>
+                            <AuditTrail
+                              resourceType="customer"
+                              resourceId={customer.id}
+                              trigger={
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <History className="w-4 h-4" />
+                                </Button>
+                              }
+                            />
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                              onClick={() => setDeleteId(customer.id)}
+                              onClick={() => handleDeleteClick(customer.id)}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -302,26 +364,24 @@ export default function CustomersPage() {
         )}
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Customer</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this customer? This action cannot be undone. Related loads and invoices will be preserved but the customer link will be removed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteId && handleDelete(deleteId)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Defensive Delete Dialog */}
+      {deleteId && (
+        <DefensiveDelete
+          open={deleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDeleteId(null)
+              setDeleteDependencies([])
+            }
+          }}
+          onConfirm={handleDelete}
+          resourceType="customer"
+          resourceName={customersList.find(c => c.id === deleteId)?.name || "Customer"}
+          resourceId={deleteId}
+          dependencies={deleteDependencies}
+          warningMessage="This will permanently delete the customer. Related loads and invoices will be preserved but the customer link will be removed."
+        />
+      )}
     </div>
   )
 }

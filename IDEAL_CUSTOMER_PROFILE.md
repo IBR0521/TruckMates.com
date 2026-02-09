@@ -479,3 +479,4 @@
 **Target Market:** Small-to-Mid-Size Fleets (1-500 trucks)  
 **Primary Focus:** 5-100 truck carriers and owner-operators
 
+

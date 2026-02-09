@@ -174,3 +174,4 @@ function mapGeotabStatus(status: string): string {
 }
 
 
+

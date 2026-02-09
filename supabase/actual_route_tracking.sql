@@ -263,3 +263,4 @@ COMMENT ON FUNCTION compare_planned_vs_actual_route IS
   'Compares planned route with actual driven route and returns comparison metrics';
 
 
+

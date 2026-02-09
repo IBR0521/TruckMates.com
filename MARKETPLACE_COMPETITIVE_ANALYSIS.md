@@ -600,3 +600,4 @@ After analyzing major load board platforms (DAT, Truckstop, 123Loadboard, Uber F
 
 
 
+

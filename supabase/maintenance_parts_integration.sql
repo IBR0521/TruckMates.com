@@ -209,3 +209,4 @@ COMMENT ON FUNCTION auto_create_part_orders_for_low_stock IS
   'Automatically creates part orders when stock falls below minimum threshold';
 
 
+

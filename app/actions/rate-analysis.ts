@@ -413,3 +413,4 @@ function calculateProfitabilityScore(yourRate: number, marketRate: number): numb
 }
 
 
+

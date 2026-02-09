@@ -31,6 +31,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { getLoads, deleteLoad, bulkDeleteLoads, bulkUpdateLoadStatus, duplicateLoad, updateLoad } from "@/app/actions/loads"
 import { BulkActionsBar } from "@/components/bulk-actions-bar"
+import { InlineEdit } from "@/components/dashboard/inline-edit"
+import { DefensiveDelete } from "@/components/dashboard/defensive-delete"
+import { AuditTrail } from "@/components/dashboard/audit-trail"
+import { History } from "lucide-react"
 
 export default function LoadsPage() {
   const router = useRouter()
@@ -44,6 +48,7 @@ export default function LoadsPage() {
   const [sortBy, setSortBy] = useState("created_at")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isBulkMode, setIsBulkMode] = useState(false)
+  const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
 
   const loadLoads = async () => {
     setIsLoading(true)
@@ -124,19 +129,62 @@ export default function LoadsPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    const result = await deleteLoad(id)
+  const handleDeleteClick = async (id: string) => {
+    setDeleteId(id)
+    // Check dependencies
+    try {
+      const response = await fetch(`/api/check-dependencies?resource_type=load&resource_id=${id}`)
+      if (response.ok) {
+        const data = await response.json()
+        setDeleteDependencies(data.dependencies || [])
+      }
+    } catch (error) {
+      console.error("Failed to check dependencies:", error)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteId) return
+    const result = await deleteLoad(deleteId)
     if (result.error) {
       toast.error(result.error)
       setDeleteId(null)
+      setDeleteDependencies([])
     } else {
-      if (selectedLoad?.id === id) {
+      if (selectedLoad?.id === deleteId) {
         setSelectedLoad(null)
       }
       toast.success("Load deleted successfully")
       setDeleteId(null)
+      setDeleteDependencies([])
       await loadLoads()
     }
+  }
+
+  const handleInlineUpdate = async (loadId: string, field: string, value: string | number | null) => {
+    // Optimistic update - update UI immediately
+    const updatedLoads = loadsList.map(load => 
+      load.id === loadId ? { ...load, [field]: value } : load
+    )
+    setLoadsList(updatedLoads)
+    
+    // Update filtered list too
+    const updatedFiltered = filteredLoads.map(load => 
+      load.id === loadId ? { ...load, [field]: value } : load
+    )
+    setFilteredLoads(updatedFiltered)
+
+    // Then save to server
+    const updateData: any = { [field]: value }
+    const result = await updateLoad(loadId, updateData)
+    
+    if (result.error) {
+      // Revert on error
+      await loadLoads()
+      toast.error(result.error || "Failed to update")
+      throw new Error(result.error)
+    }
+    // Success - no need to reload, UI already updated
   }
 
   // Bulk operations
@@ -180,13 +228,23 @@ export default function LoadsPage() {
   }
 
   const handleQuickStatusUpdate = async (id: string, status: string) => {
+    // Optimistic update
+    const updatedLoads = loadsList.map(load => 
+      load.id === id ? { ...load, status } : load
+    )
+    setLoadsList(updatedLoads)
+    
+    const updatedFiltered = filteredLoads.map(load => 
+      load.id === id ? { ...load, status } : load
+    )
+    setFilteredLoads(updatedFiltered)
+
     const result = await updateLoad(id, { status })
     if (result.error) {
+      await loadLoads() // Revert on error
       toast.error(result.error)
-    } else {
-      toast.success("Status updated successfully")
-      await loadLoads()
     }
+    // Success - no toast, no reload
   }
 
   const toggleSelect = (id: string) => {
@@ -452,50 +510,24 @@ export default function LoadsPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-7 px-2" aria-label={`Change status for load ${load.shipment_number || load.id}`} aria-haspopup="true">
-                            <Badge
-                              className={
-                                load.status === "in_transit" || load.status === "In Transit"
-                                  ? "bg-green-500/20 text-green-400 border-green-500/50 cursor-pointer"
-                                  : load.status === "delivered" || load.status === "Delivered"
-                                  ? "bg-gray-500/20 text-gray-400 border-gray-500/50 cursor-pointer"
-                                  : load.status === "scheduled"
-                                  ? "bg-blue-500/20 text-blue-400 border-blue-500/50 cursor-pointer"
-                                  : load.status === "draft"
-                                  ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/50 cursor-pointer"
-                                  : load.status === "cancelled"
-                                  ? "bg-red-500/20 text-red-400 border-red-500/50 cursor-pointer"
-                                  : "bg-blue-500/20 text-blue-400 border-blue-500/50 cursor-pointer"
-                              }
-                              aria-label={`Current status: ${load.status || "N/A"}`}
-                            >
-                              {load.status ? load.status.charAt(0).toUpperCase() + load.status.slice(1).replace("_", " ") : "N/A"}
-                            </Badge>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleQuickStatusUpdate(load.id, "draft")}>
-                            Draft
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleQuickStatusUpdate(load.id, "pending")}>
-                            Pending
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleQuickStatusUpdate(load.id, "scheduled")}>
-                            Scheduled
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleQuickStatusUpdate(load.id, "in_transit")}>
-                            In Transit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleQuickStatusUpdate(load.id, "delivered")}>
-                            Delivered
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleQuickStatusUpdate(load.id, "cancelled")}>
-                            Cancelled
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <InlineEdit
+                        value={load.status || ""}
+                        onSave={async (value) => handleInlineUpdate(load.id, "status", value as string)}
+                        type="select"
+                        options={[
+                          { value: "draft", label: "Draft" },
+                          { value: "pending", label: "Pending" },
+                          { value: "scheduled", label: "Scheduled" },
+                          { value: "in_transit", label: "In Transit" },
+                          { value: "delivered", label: "Delivered" },
+                          { value: "cancelled", label: "Cancelled" },
+                        ]}
+                        formatValue={(val) => {
+                          if (!val) return "N/A"
+                          return String(val).charAt(0).toUpperCase() + String(val).slice(1).replace("_", " ")
+                        }}
+                        className="w-auto"
+                      />
                     </div>
                   </div>
                   <div className="space-y-2 text-sm mb-4">
@@ -522,14 +554,28 @@ export default function LoadsPage() {
                     {load.company_name && (
                       <p className="text-muted-foreground">Company: {load.company_name}</p>
                     )}
-                    <p className="text-muted-foreground">Est. Delivery: {load.estimated_delivery ? (() => {
-                      try {
-                        const date = new Date(load.estimated_delivery)
-                        return isNaN(date.getTime()) ? "N/A" : date.toISOString().split('T')[0]
-                      } catch {
-                        return "N/A"
-                      }
-                    })() : "N/A"}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Est. Delivery:</span>
+                      <InlineEdit
+                        value={load.estimated_delivery || null}
+                        onSave={async (value) => handleInlineUpdate(load.id, "estimated_delivery", value)}
+                        type="date"
+                        placeholder="Set delivery date"
+                        className="flex-1"
+                      />
+                    </div>
+                    {load.value && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Rate:</span>
+                        <InlineEdit
+                          value={load.value || 0}
+                          onSave={async (value) => handleInlineUpdate(load.id, "value", value as number)}
+                          type="currency"
+                          placeholder="Set rate"
+                          className="flex-1"
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2 pt-4 border-t border-border/30">
                     {load.id && typeof load.id === 'string' && load.id.trim() !== '' ? (
@@ -549,6 +595,15 @@ export default function LoadsPage() {
                             <Edit2 className="w-4 h-4" />
                           </Button>
                         </Link>
+                        <AuditTrail
+                          resourceType="load"
+                          resourceId={load.id}
+                          trigger={
+                            <Button variant="outline" size="sm" className="border-border/50 bg-transparent hover:bg-secondary/50">
+                              <History className="w-4 h-4" />
+                            </Button>
+                          }
+                        />
                       </>
                     ) : null}
                     <Button
@@ -564,7 +619,7 @@ export default function LoadsPage() {
                       variant="outline"
                       size="sm"
                       className="border-border/50 bg-transparent hover:bg-red-500/20"
-                      onClick={() => setDeleteId(load.id)}
+                      onClick={() => handleDeleteClick(load.id)}
                     >
                       <Trash2 className="w-4 h-4 text-red-400" />
                     </Button>
@@ -601,26 +656,24 @@ export default function LoadsPage() {
         </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the load from the system.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteId && handleDelete(deleteId)}
-              className="bg-red-500 hover:bg-red-600"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Defensive Delete Dialog */}
+      {deleteId && (
+        <DefensiveDelete
+          open={deleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDeleteId(null)
+              setDeleteDependencies([])
+            }
+          }}
+          onConfirm={handleDelete}
+          resourceType="load"
+          resourceName={loadsList.find(l => l.id === deleteId)?.shipment_number || "Load"}
+          resourceId={deleteId}
+          dependencies={deleteDependencies}
+          warningMessage="This will permanently delete the load. Associated invoices and documents will be preserved but the load link will be removed."
+        />
+      )}
 
       {/* Bulk Actions Bar */}
       <BulkActionsBar

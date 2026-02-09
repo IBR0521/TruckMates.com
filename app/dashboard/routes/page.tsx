@@ -25,11 +25,15 @@ import { getRoutes, deleteRoute, updateRoute, duplicateRoute } from "@/app/actio
 import { getRouteStops } from "@/app/actions/route-stops"
 import { InlineStatusSelect } from "@/components/dashboard/inline-status-select"
 import { useListPageShortcuts } from "@/lib/hooks/use-keyboard-shortcuts"
-import { Copy } from "lucide-react"
+import { Copy, History } from "lucide-react"
+import { InlineEdit } from "@/components/dashboard/inline-edit"
+import { DefensiveDelete } from "@/components/dashboard/defensive-delete"
+import { AuditTrail } from "@/components/dashboard/audit-trail"
 
 export default function RoutesPage() {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
   const [routesList, setRoutesList] = useState<any[]>([])
   const [filteredRoutes, setFilteredRoutes] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -114,25 +118,70 @@ export default function RoutesPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    const result = await deleteRoute(id)
+  const handleDeleteClick = async (id: string) => {
+    setDeleteId(id)
+    try {
+      const response = await fetch(`/api/check-dependencies?resource_type=route&resource_id=${id}`)
+      if (response.ok) {
+        const data = await response.json()
+        setDeleteDependencies(data.dependencies || [])
+      }
+    } catch (error) {
+      console.error("Failed to check dependencies:", error)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteId) return
+    const result = await deleteRoute(deleteId)
     if (result.error) {
       toast.error(result.error)
       setDeleteId(null)
+      setDeleteDependencies([])
     } else {
       toast.success("Route deleted successfully")
       setDeleteId(null)
+      setDeleteDependencies([])
       await loadRoutes()
     }
   }
 
   const handleStatusUpdate = async (id: string, status: string) => {
+    const updatedRoutes = routesList.map(route => 
+      route.id === id ? { ...route, status } : route
+    )
+    setRoutesList(updatedRoutes)
+    
+    const updatedFiltered = filteredRoutes.map(route => 
+      route.id === id ? { ...route, status } : route
+    )
+    setFilteredRoutes(updatedFiltered)
+
     const result = await updateRoute(id, { status })
     if (result.error) {
-      toast.error(result.error)
-    } else {
-      toast.success("Status updated successfully")
       await loadRoutes()
+      toast.error(result.error)
+    }
+  }
+
+  const handleInlineUpdate = async (routeId: string, field: string, value: string | number | null) => {
+    const updatedRoutes = routesList.map(route => 
+      route.id === routeId ? { ...route, [field]: value } : route
+    )
+    setRoutesList(updatedRoutes)
+    
+    const updatedFiltered = filteredRoutes.map(route => 
+      route.id === routeId ? { ...route, [field]: value } : route
+    )
+    setFilteredRoutes(updatedFiltered)
+
+    const updateData: any = { [field]: value }
+    const result = await updateRoute(routeId, updateData)
+    
+    if (result.error) {
+      await loadRoutes()
+      toast.error(result.error || "Failed to update")
+      throw new Error(result.error)
     }
   }
 
@@ -253,9 +302,14 @@ export default function RoutesPage() {
                   )}
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-primary" />
-                    <div>
+                    <div className="flex-1">
                       <p className="text-xs text-muted-foreground font-medium">Duration</p>
-                      <p className="text-sm text-foreground">{route.estimated_time || "N/A"}</p>
+                      <InlineEdit
+                        value={route.estimated_time || ""}
+                        onSave={async (value) => handleInlineUpdate(route.id, "estimated_time", value as string)}
+                        placeholder="Set duration"
+                        className="w-full"
+                      />
                     </div>
                   </div>
                 </div>
@@ -273,11 +327,22 @@ export default function RoutesPage() {
                     View
                   </Button>
                   {route.id && typeof route.id === 'string' && route.id.trim() !== '' ? (
-                    <Link href={`/dashboard/routes/${route.id}/edit`}>
-                      <Button variant="outline" size="sm" className="border-border/50 bg-transparent hover:bg-secondary/50">
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                    </Link>
+                    <>
+                      <Link href={`/dashboard/routes/${route.id}/edit`}>
+                        <Button variant="outline" size="sm" className="border-border/50 bg-transparent hover:bg-secondary/50">
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                      </Link>
+                      <AuditTrail
+                        resourceType="route"
+                        resourceId={route.id}
+                        trigger={
+                          <Button variant="outline" size="sm" className="border-border/50 bg-transparent hover:bg-secondary/50">
+                            <History className="w-4 h-4" />
+                          </Button>
+                        }
+                      />
+                    </>
                   ) : null}
                   <Button
                     variant="outline"
@@ -292,7 +357,7 @@ export default function RoutesPage() {
                     variant="outline"
                     size="sm"
                     className="border-border/50 bg-transparent hover:bg-red-500/20"
-                    onClick={() => setDeleteId(route.id)}
+                    onClick={() => handleDeleteClick(route.id)}
                   >
                     <Trash2 className="w-4 h-4 text-red-400" />
                   </Button>
@@ -304,26 +369,24 @@ export default function RoutesPage() {
         </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the route from the system.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteId && handleDelete(deleteId)}
-              className="bg-red-500 hover:bg-red-600"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Defensive Delete Dialog */}
+      {deleteId && (
+        <DefensiveDelete
+          open={deleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDeleteId(null)
+              setDeleteDependencies([])
+            }
+          }}
+          onConfirm={handleDelete}
+          resourceType="route"
+          resourceName={routesList.find(r => r.id === deleteId)?.name || "Route"}
+          resourceId={deleteId}
+          dependencies={deleteDependencies}
+          warningMessage="This will permanently delete the route. Associated stops and loads will be preserved but the route link will be removed."
+        />
+      )}
     </div>
   )
 }
