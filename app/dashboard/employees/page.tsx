@@ -13,7 +13,8 @@ import {
   Clock,
   Search,
   Copy,
-  Check
+  Check,
+  Key
 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -23,7 +24,8 @@ import {
   updateEmployee, 
   removeEmployee,
   getPendingInvitations,
-  cancelInvitation
+  cancelInvitation,
+  generateCompanyInvitationCode
 } from "@/app/actions/employees"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -69,6 +71,11 @@ export default function EmployeesPage() {
   const [generatedCode, setGeneratedCode] = useState("")
   const [generatedEmail, setGeneratedEmail] = useState("")
   const [codeCopied, setCodeCopied] = useState(false)
+  const [showCompanyCodeDialog, setShowCompanyCodeDialog] = useState(false)
+  const [generatedCompanyCode, setGeneratedCompanyCode] = useState("")
+  const [companyCodeExpiresAt, setCompanyCodeExpiresAt] = useState<Date | null>(null)
+  const [companyCodeCopied, setCompanyCodeCopied] = useState(false)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null)
   const [newEmployeeEmail, setNewEmployeeEmail] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -90,13 +97,17 @@ export default function EmployeesPage() {
         return
       }
 
-      if (userResult.data.role !== "manager") {
-        toast.error("Only managers can access this page")
+      const userRole = userResult.data.role
+      const isManagerOrSuperAdmin = userRole === "manager" || userRole === "super_admin"
+      
+      if (!isManagerOrSuperAdmin) {
+        toast.error("Only managers and super admins can access this page")
         router.push("/dashboard")
         return
       }
 
       setIsManager(true)
+      setIsSuperAdmin(userRole === "super_admin")
 
       // Load employees and invitations
       const [employeesResult, invitationsResult] = await Promise.all([
@@ -243,6 +254,22 @@ export default function EmployeesPage() {
     }
   }
 
+  const handleGenerateCompanyCode = async () => {
+    const result = await generateCompanyInvitationCode()
+    
+    if (result.error) {
+      toast.error(result.error)
+      return
+    }
+    
+    if (result.data) {
+      setGeneratedCompanyCode(result.data.invitation_code)
+      setCompanyCodeExpiresAt(new Date(result.data.expires_at))
+      setShowCompanyCodeDialog(true)
+      toast.success("Company invitation code generated! It expires in 15 minutes.")
+    }
+  }
+
   const filteredEmployees = employees.filter((emp) => {
     const query = searchQuery.toLowerCase()
     return (
@@ -279,13 +306,25 @@ export default function EmployeesPage() {
           <h1 className="text-2xl font-bold text-foreground">Employee Management</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage your company employees</p>
         </div>
-        <Button
-          onClick={() => setShowAddDialog(true)}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground"
-        >
-          <UserPlus className="w-4 h-4 mr-2" />
-          Add Employee
-        </Button>
+        <div className="flex items-center gap-3">
+          {isSuperAdmin && (
+            <Button
+              onClick={handleGenerateCompanyCode}
+              variant="outline"
+              className="border-primary text-primary hover:bg-primary/10"
+            >
+              <Key className="w-4 h-4 mr-2" />
+              Generate Invitation Code
+            </Button>
+          )}
+          <Button
+            onClick={() => setShowAddDialog(true)}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground"
+          >
+            <UserPlus className="w-4 h-4 mr-2" />
+            Add Employee
+          </Button>
+        </div>
       </div>
 
       {/* Content */}
@@ -708,7 +747,76 @@ export default function EmployeesPage() {
               variant="outline"
               onClick={() => {
                 setShowCodeDialog(false)
-                setCodeCopied(false)
+              }}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Company Invitation Code Dialog */}
+      <Dialog open={showCompanyCodeDialog} onOpenChange={setShowCompanyCodeDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Company Invitation Code</DialogTitle>
+            <DialogDescription>
+              Share this code with your employees. It expires in 15 minutes and can be used by anyone to join your company.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="bg-secondary/50 border-2 border-dashed border-primary/50 rounded-lg p-6 text-center">
+              <p className="text-sm text-muted-foreground mb-2">Invitation Code</p>
+              <p className="text-3xl font-bold font-mono text-primary tracking-wider">
+                {generatedCompanyCode}
+              </p>
+            </div>
+            {companyCodeExpiresAt && (
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">
+                  Expires at: <span className="font-medium text-foreground">
+                    {companyCodeExpiresAt.toLocaleString()}
+                  </span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  ({Math.round((companyCodeExpiresAt.getTime() - Date.now()) / 60000)} minutes remaining)
+                </p>
+              </div>
+            )}
+            <Button
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(generatedCompanyCode)
+                  setCompanyCodeCopied(true)
+                  setTimeout(() => setCompanyCodeCopied(false), 2000)
+                  toast.success("Code copied to clipboard!")
+                } catch (err) {
+                  console.error("Failed to copy:", err)
+                  toast.error("Failed to copy code")
+                }
+              }}
+              variant="outline"
+              className="w-full"
+            >
+              {companyCodeCopied ? (
+                <>
+                  <Check className="w-4 h-4 mr-2" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copy Code
+                </>
+              )}
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCompanyCodeDialog(false)
+                setCompanyCodeCopied(false)
               }}
             >
               Close

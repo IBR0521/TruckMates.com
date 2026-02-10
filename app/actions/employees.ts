@@ -501,3 +501,122 @@ export async function cancelInvitation(invitationId: string) {
 
 // Email sending function removed - invitations are now generated only, no emails sent
 
+// Generate a temporary company invitation code (15 minutes expiration)
+export async function generateCompanyInvitationCode() {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    // Check if user is super_admin
+    const { role: userRole, companyId, error: roleError } = await getUserRoleAndCompany(supabase, user.id)
+
+    if (roleError || !userRole) {
+      return { error: roleError || "User not found", data: null }
+    }
+
+    // Check if user is super_admin (mapped from old 'manager' role)
+    const isSuperAdmin = userRole === "super_admin" || userRole === "manager"
+
+    if (!isSuperAdmin) {
+      return { error: "Only Super Admins can generate invitation codes", data: null }
+    }
+
+    if (!companyId) {
+      return { error: "No company found", data: null }
+    }
+
+    // Generate code using database function
+    const { data: codeData, error: codeError } = await supabase.rpc("generate_company_invitation_code")
+
+    if (codeError) {
+      // Fallback: generate code manually
+      const invitationCode = `COMP-${Math.random().toString(36).substr(2, 8).toUpperCase()}`
+      
+      // Create invitation with 15 minute expiration
+      const expiresAt = new Date()
+      expiresAt.setMinutes(expiresAt.getMinutes() + 15)
+
+      const { data: invitation, error: inviteError } = await supabase
+        .from("company_invitation_codes")
+        .insert({
+          company_id: companyId,
+          invitation_code: invitationCode,
+          created_by: user.id,
+          expires_at: expiresAt.toISOString(),
+        })
+        .select()
+        .single()
+
+      if (inviteError) {
+        return { error: inviteError.message, data: null }
+      }
+
+      return { 
+        data: { 
+          ...invitation, 
+          invitation_code: invitationCode,
+          expires_at: expiresAt.toISOString()
+        }, 
+        error: null 
+      }
+    }
+
+    // Create invitation with generated code (15 minutes expiration)
+    const expiresAt = new Date()
+    expiresAt.setMinutes(expiresAt.getMinutes() + 15)
+
+    const { data: invitation, error: inviteError } = await supabase
+      .from("company_invitation_codes")
+      .insert({
+        company_id: companyId,
+        invitation_code: codeData,
+        created_by: user.id,
+        expires_at: expiresAt.toISOString(),
+      })
+      .select()
+      .single()
+
+    if (inviteError) {
+      return { error: inviteError.message, data: null }
+    }
+
+    revalidatePath("/dashboard/employees")
+    return { 
+      data: invitation, 
+      error: null 
+    }
+  } catch (error: any) {
+    console.error("[EMPLOYEES] Error in generateCompanyInvitationCode:", error)
+    return { error: error?.message || "Failed to generate invitation code", data: null }
+  }
+}
+
+// Verify and use company invitation code during registration
+export async function verifyCompanyInvitationCode(invitationCode: string, userRole: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  // Use the database function to verify and use the code
+  const { data: companyId, error } = await supabase.rpc("use_company_invitation_code", {
+    p_invitation_code: invitationCode.trim().toUpperCase(),
+    p_user_id: user.id,
+    p_user_role: userRole,
+  })
+
+  if (error) {
+    return { error: error.message || "Invalid or expired invitation code", data: null }
+  }
+
+  revalidatePath("/dashboard")
+  revalidatePath("/account-setup/user")
+  return { data: { company_id: companyId }, error: null }
+}
+

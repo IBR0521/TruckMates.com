@@ -13,6 +13,7 @@ import { Logo } from "@/components/logo"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ROLES, type EmployeeRole } from "@/lib/roles"
+import { verifyCompanyInvitationCode } from "@/app/actions/employees"
 
 function UserRegisterForm() {
   const searchParams = useSearchParams()
@@ -90,9 +91,21 @@ function UserRegisterForm() {
         return
       }
 
-      toast.success("Account created successfully!")
+      // Step 3: Verify and link to company using invitation code (if provided)
+      if (formData.managerId && formData.managerId.trim()) {
+        const verifyResult = await verifyCompanyInvitationCode(formData.managerId.trim(), selectedRole)
+        if (verifyResult.error) {
+          toast.error(verifyResult.error)
+          setIsLoading(false)
+          return
+        }
+        toast.success("Account created and linked to company successfully!")
+      } else {
+        toast.success("Account created successfully!")
+      }
+
       setTimeout(() => {
-        router.push("/account-setup/user")
+        router.push("/dashboard")
       }, 500)
     } catch (error) {
       toast.error("An error occurred. Please try again.")
