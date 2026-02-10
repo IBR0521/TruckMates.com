@@ -501,5 +501,6 @@ export default function CreateBOLPage() {
                 </div>
               </FormGrid>
             </FormSection>
+    </FormPageLayout>
   )
 }
