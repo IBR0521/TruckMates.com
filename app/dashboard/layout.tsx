@@ -69,10 +69,15 @@ export default function DashboardLayout({
   useEffect(() => {
     async function checkCompanyAccess() {
       try {
+        // Skip check if we're already on account setup page
+        if (typeof window !== "undefined" && window.location.pathname.includes("/account-setup")) {
+          return
+        }
+
         const userResult = await getCurrentUser()
         if (userResult.data) {
           const user = userResult.data
-          // Super Admin always has company (they create it), so skip check for them
+          // Super Admin and manager always have company (they create it), so skip check for them
           if (user.role === "super_admin" || user.role === "manager") {
             return
           }
@@ -87,7 +92,9 @@ export default function DashboardLayout({
       }
     }
     if (mounted) {
-      checkCompanyAccess()
+      // Add a small delay to avoid race conditions with page navigation
+      const timeoutId = setTimeout(checkCompanyAccess, 500)
+      return () => clearTimeout(timeoutId)
     }
   }, [mounted, router])
 
