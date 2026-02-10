@@ -1,70 +1,78 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { ArrowLeft, User, Building2 } from "lucide-react"
+import { ArrowLeft, Key } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Logo } from "@/components/logo"
 import { toast } from "sonner"
-import { verifyAndAcceptInvitation } from "@/app/actions/employees"
+import { Input } from "@/components/ui/input"
+import { verifyCompanyInvitationCode } from "@/app/actions/employees"
+import { createClient } from "@/lib/supabase/client"
+import { getCurrentUser } from "@/app/actions/user"
 
 export default function UserAccountSetupPage() {
-  const [workType, setWorkType] = useState<"individual" | "manager" | null>(null)
-  const [managerId, setManagerId] = useState("")
-  const [showManagerIdInput, setShowManagerIdInput] = useState(false)
+  const [invitationCode, setInvitationCode] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
   const router = useRouter()
+  const supabase = createClient()
 
-  const handleContinue = () => {
-    if (workType === "individual") {
-      // Go to subscription page
-      router.push("/plans?type=user")
-    } else if (workType === "manager" && managerId.trim()) {
-      // Verify manager ID and link account
-      handleVerifyManagerId()
-    } else if (workType === "manager") {
-      toast.error("Please enter a manager ID")
+  useEffect(() => {
+    // Check if user already has a company
+    async function checkUserCompany() {
+      const userResult = await getCurrentUser()
+      if (userResult.data?.company_id) {
+        // User already has a company, redirect to dashboard
+        router.push("/dashboard")
+        return
+      }
+      if (userResult.data?.role) {
+        setUserRole(userResult.data.role)
+      }
     }
-  }
+    checkUserCompany()
+  }, [router])
 
-  const handleVerifyManagerId = async () => {
-    if (!managerId.trim()) {
+  const handleVerifyCode = async () => {
+    if (!invitationCode.trim()) {
       toast.error("Please enter an invitation code")
       return
     }
 
+    if (!userRole) {
+      toast.error("Unable to determine your role. Please try again.")
+      return
+    }
+
+    setIsLoading(true)
+
     try {
-      // Verify and accept invitation code
-      const result = await verifyAndAcceptInvitation(managerId.trim())
+      // Verify and use company invitation code
+      const result = await verifyCompanyInvitationCode(invitationCode.trim(), userRole)
 
       if (result.error) {
         toast.error(result.error)
+        setIsLoading(false)
         return
       }
 
       // If invitation is valid, user is now linked to company
-      toast.success("Invitation accepted! Linking your account...")
+      toast.success("Invitation code accepted! Linking your account...")
       setTimeout(() => {
         router.push("/dashboard")
       }, 1500)
     } catch (error: any) {
       toast.error(error.message || "Invalid invitation code. Please check and try again.")
+      setIsLoading(false)
     }
   }
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
-      {/* Header */}
-      <Link
-        href="/register/user"
-        className="absolute top-6 left-6 flex items-center gap-2 text-muted-foreground hover:text-foreground transition"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span className="text-sm">Back</span>
-      </Link>
-
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex justify-center mb-8">
           <Logo size="lg" />
@@ -72,103 +80,44 @@ export default function UserAccountSetupPage() {
 
         {/* Setup Card */}
         <Card className="bg-card border-border p-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2 text-center">Account Setup</h1>
-          <p className="text-center text-muted-foreground mb-8">How would you like to use TruckMates?</p>
-
-          <div className="space-y-4 mb-8">
-            {/* Individual Option */}
-            <button
-              onClick={() => {
-                setWorkType("individual")
-                setShowManagerIdInput(false)
-              }}
-              className={`w-full border-2 rounded-xl p-6 text-left transition ${
-                workType === "individual"
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/50 hover:bg-primary/5"
-              }`}
-            >
-              <div className="flex items-start gap-4">
-                <div
-                  className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                    workType === "individual" ? "bg-primary/20" : "bg-secondary"
-                  }`}
-                >
-                  <User className={`w-6 h-6 ${workType === "individual" ? "text-primary" : "text-muted-foreground"}`} />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold text-foreground mb-1">Work Individually</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Manage your own operations and choose a subscription plan
-                  </p>
-                </div>
-                {workType === "individual" && (
-                  <div className="w-5 h-5 rounded-full bg-primary border-4 border-primary/20"></div>
-                )}
-              </div>
-            </button>
-
-            {/* Manager Account Option */}
-            <button
-              onClick={() => {
-                setWorkType("manager")
-                setShowManagerIdInput(true)
-              }}
-              className={`w-full border-2 rounded-xl p-6 text-left transition ${
-                workType === "manager"
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/50 hover:bg-primary/5"
-              }`}
-            >
-              <div className="flex items-start gap-4">
-                <div
-                  className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                    workType === "manager" ? "bg-primary/20" : "bg-secondary"
-                  }`}
-                >
-                  <Building2
-                    className={`w-6 h-6 ${workType === "manager" ? "text-primary" : "text-muted-foreground"}`}
-                  />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold text-foreground mb-1">Work Under Manager Account</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Join an existing company using a manager-provided ID number
-                  </p>
-                </div>
-                {workType === "manager" && (
-                  <div className="w-5 h-5 rounded-full bg-primary border-4 border-primary/20"></div>
-                )}
-              </div>
-            </button>
+          <div className="text-center mb-6">
+            <Key className="w-12 h-12 text-primary mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-foreground mb-2">Enter Invitation Code</h1>
+            <p className="text-sm text-muted-foreground">
+              You need a company invitation code to access the platform. Get one from your Super Admin.
+            </p>
           </div>
 
-          {/* Manager ID Input */}
-          {showManagerIdInput && (
-            <div className="mb-6 p-4 bg-secondary/50 rounded-lg border border-border">
+          <div className="space-y-4">
+            <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Enter Invitation Code
+                Company Invitation Code
               </label>
-              <input
+              <Input
                 type="text"
-                value={managerId}
-                onChange={(e) => setManagerId(e.target.value.toUpperCase())}
-                placeholder="Enter the invitation code (e.g., EMP-ABC123XYZ)"
-                className="w-full px-4 py-2 bg-background border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                value={invitationCode}
+                onChange={(e) => setInvitationCode(e.target.value.toUpperCase())}
+                placeholder="Enter invitation code (e.g., A1B2C3D4)"
+                className="w-full bg-input border-border text-foreground placeholder:text-muted-foreground font-mono text-lg tracking-wider"
+                onKeyPress={(e) => {
+                  if (e.key === "Enter") {
+                    handleVerifyCode()
+                  }
+                }}
               />
               <p className="text-xs text-muted-foreground mt-2">
-                Enter the invitation code sent to your email by your manager
+                The code expires in 15 minutes. Contact your Super Admin for a new code if needed.
               </p>
             </div>
-          )}
 
-          <Button
-            onClick={handleContinue}
-            disabled={!workType || (workType === "manager" && !managerId.trim())}
-            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            Continue
-          </Button>
+            <Button
+              onClick={handleVerifyCode}
+              disabled={isLoading || !invitationCode.trim()}
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              {isLoading ? "Verifying..." : "Verify & Continue"}
+            </Button>
+          </div>
         </Card>
       </div>
     </div>

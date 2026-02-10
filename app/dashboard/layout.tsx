@@ -13,6 +13,7 @@ import { NotificationsCenter } from "@/components/notifications-center"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { getCurrentUser } from "@/app/actions/user"
 // AI Widget temporarily disabled - not ready for production
 // const FloatingAIWidget = dynamic(
 //   () => import("@/components/truckmates-ai/floating-widget"),
@@ -63,6 +64,32 @@ export default function DashboardLayout({
 
     return () => window.removeEventListener("resize", handleResize)
   }, [sidebarCollapsed, mounted])
+
+  // Check if user has a company_id, redirect to account setup if not
+  useEffect(() => {
+    async function checkCompanyAccess() {
+      try {
+        const userResult = await getCurrentUser()
+        if (userResult.data) {
+          const user = userResult.data
+          // Super Admin always has company (they create it), so skip check for them
+          if (user.role === "super_admin" || user.role === "manager") {
+            return
+          }
+          // For other roles, check if they have a company_id
+          if (!user.company_id) {
+            // User doesn't have a company, redirect to account setup
+            router.push("/account-setup/user")
+          }
+        }
+      } catch (error) {
+        console.error("Error checking company access:", error)
+      }
+    }
+    if (mounted) {
+      checkCompanyAccess()
+    }
+  }, [mounted, router])
 
   return (
     <div className="flex h-screen bg-background">
