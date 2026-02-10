@@ -406,16 +406,47 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
             <div className="grid md:grid-cols-3 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Distance</p>
-                <p className="text-lg text-foreground font-bold">{route.distance || "N/A"}</p>
+                <p className="text-lg text-foreground font-bold">{route.distance || route.traffic_distance_meters ? `${(route.traffic_distance_meters / 1609.34).toFixed(1)} miles` : "N/A"}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Estimated Time</p>
-                <p className="text-lg text-foreground font-bold">{route.estimated_time || "N/A"}</p>
+                <p className="text-lg text-foreground font-bold">
+                  {route.estimated_time || route.traffic_duration_minutes ? formatDuration(route.traffic_duration_minutes) : "N/A"}
+                </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-2">Stops</p>
-                <p className="text-lg text-foreground font-bold">{stops.length}</p>
+                <p className="text-sm text-muted-foreground mb-2">Total Stops</p>
+                <p className="text-lg text-foreground font-bold">{stops.length + 2}</p>
+                <p className="text-xs text-muted-foreground mt-1">({stops.length} waypoints + origin + destination)</p>
               </div>
+            </div>
+            
+            {/* Additional Trip Details */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-border">
+              {route.estimated_fuel_cost && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Estimated Fuel Cost</p>
+                  <p className="text-sm font-medium text-foreground">${Number.parseFloat(route.estimated_fuel_cost).toFixed(2)}</p>
+                </div>
+              )}
+              {route.estimated_toll_cost && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Estimated Toll Cost</p>
+                  <p className="text-sm font-medium text-foreground">${Number.parseFloat(route.estimated_toll_cost).toFixed(2)}</p>
+                </div>
+              )}
+              {route.total_estimated_cost && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Total Estimated Cost</p>
+                  <p className="text-sm font-medium text-foreground">${Number.parseFloat(route.total_estimated_cost).toFixed(2)}</p>
+                </div>
+              )}
+              {route.route_type && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Route Type</p>
+                  <p className="text-sm font-medium text-foreground capitalize">{route.route_type.replace("_", " ")}</p>
+                </div>
+              )}
             </div>
 
             {/* Depot Timing */}

@@ -10,10 +10,20 @@ interface RevenueChartProps {
 
 export function RevenueChart({ data }: RevenueChartProps) {
   // Format data for chart
-  const chartData = data.map((item) => ({
-    date: new Date(item.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    amount: Number(item.amount),
-  }))
+  const chartData = data.map((item) => {
+    try {
+      const date = new Date(item.date)
+      return {
+        date: isNaN(date.getTime()) ? item.date : date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        amount: Number(item.amount) || 0,
+      }
+    } catch {
+      return {
+        date: item.date,
+        amount: Number(item.amount) || 0,
+      }
+    }
+  })
 
   // If no data, show empty state
   if (!data || data.length === 0) {

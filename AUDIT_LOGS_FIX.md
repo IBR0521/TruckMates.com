@@ -65,3 +65,4 @@ Check browser console for these messages:
 - ❌ `[AUDIT LOG] ⚠️ RLS policy blocking insert!` = Need to add INSERT policy
 - ❌ `[AUDIT LOG] ⚠️ audit_logs table does not exist!` = Need to create table first
 
+

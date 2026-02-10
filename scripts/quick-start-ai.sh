@@ -73,3 +73,4 @@ echo "   3. Access: http://localhost:3000/dashboard/ai"
 echo ""
 echo "🎉 You're ready to use TruckMates AI!"
 
+

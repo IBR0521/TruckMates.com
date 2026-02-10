@@ -14,3 +14,4 @@ CREATE POLICY "Users can insert audit logs for their company"
     AND user_id = auth.uid()
   );
 
+

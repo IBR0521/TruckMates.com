@@ -344,3 +344,4 @@ ollama show llama3.1:8b
 
 That's it! Once Ollama is running, TruckMates AI will automatically connect to it and start working.
 
+

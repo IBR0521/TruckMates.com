@@ -416,10 +416,8 @@ export default function DashboardPage() {
 
           {/* Charts Section */}
           <div className="grid md:grid-cols-2 gap-6">
-            {dashboardData?.revenueTrend && (
-              <RevenueChart data={dashboardData.revenueTrend} />
-            )}
-            {dashboardData?.loadStatusDistribution && (
+            <RevenueChart data={dashboardData?.revenueTrend || []} />
+            {dashboardData?.loadStatusDistribution && dashboardData.loadStatusDistribution.length > 0 && (
               <LoadStatusChart data={dashboardData.loadStatusDistribution} />
             )}
           </div>

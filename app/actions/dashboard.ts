@@ -292,12 +292,15 @@ export async function getDashboardStats() {
     }
 
     // Get financial metrics (with timeout protection)
+    // Get ALL invoices (not just paid) to match Reports logic
     const financialPromise = Promise.all([
-      supabase.from("invoices").select("amount, status, issue_date").eq("company_id", companyId).eq("status", "paid"),
+      supabase.from("invoices").select("amount, status, issue_date, created_at").eq("company_id", companyId),
       supabase.from("expenses").select("amount, date").eq("company_id", companyId),
       supabase.from("invoices").select("amount, status, due_date").eq("company_id", companyId).in("status", ["sent", "overdue"]),
+      supabase.from("loads").select("total_rate, value, created_at").eq("company_id", companyId),
     ]).catch(() => {
       return [
+        { data: [] },
         { data: [] },
         { data: [] },
         { data: [] },
@@ -310,49 +313,122 @@ export async function getDashboardStats() {
           { data: [] },
           { data: [] },
           { data: [] },
+          { data: [] },
         ])
       }, 3000)
     })
 
     const [
-      { data: paidInvoices },
+      { data: allInvoices },
       { data: expenses },
       { data: pendingInvoices },
+      { data: loads },
     ] = await Promise.race([financialPromise, financialTimeout]) as any
 
-    // Calculate financial metrics
-    const totalRevenue = paidInvoices?.reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0) || 0
+    // Calculate financial metrics - combine invoices and loads
+    let totalRevenue = allInvoices?.reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0) || 0
+    
+    // Add revenue from loads
+    if (loads) {
+      const loadRevenue = loads.reduce((sum: number, load: any) => {
+        return sum + (Number(load.total_rate) || Number(load.value) || 0)
+      }, 0)
+      totalRevenue += loadRevenue
+    }
+    
     const totalExpenses = expenses?.reduce((sum: number, exp: any) => sum + (Number(exp.amount) || 0), 0) || 0
     const netProfit = totalRevenue - totalExpenses
     const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100) : 0
     const outstandingInvoices = pendingInvoices?.reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0) || 0
 
-    // Get revenue trend data (last 30 days)
-    let revenueTrendData: any[] = []
+    // Get revenue trend data (last 7 days) - match chart title
+    let revenueTrendData: Array<{ date: string; amount: number }> = []
     try {
       const now = new Date()
-      const thirtyDaysAgo = new Date(now)
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-      const revenueTrendResult = await supabase
-        .from("invoices")
-        .select("amount, issue_date")
-        .eq("company_id", companyId)
-        .eq("status", "paid")
-        .gte("issue_date", thirtyDaysAgo.toISOString().split('T')[0])
-        .order("issue_date", { ascending: true })
+      const sevenDaysAgo = new Date(now)
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      sevenDaysAgo.setHours(0, 0, 0, 0) // Start of day
       
-      revenueTrendData = revenueTrendResult.data || []
+      // Get ALL invoices (not just paid) - use created_at for reliable date
+      const { data: invoices } = await supabase
+        .from("invoices")
+        .select("amount, created_at, issue_date")
+        .eq("company_id", companyId)
+        .gte("created_at", sevenDaysAgo.toISOString())
+        .order("created_at", { ascending: true })
+      
+      // Also get revenue from loads as fallback
+      const { data: loadsForTrend } = await supabase
+        .from("loads")
+        .select("created_at, total_rate, value")
+        .eq("company_id", companyId)
+        .gte("created_at", sevenDaysAgo.toISOString())
+        .order("created_at", { ascending: true })
+
+      // Group revenue by date
+      const revenueByDate: Record<string, number> = {}
+      
+      // Process invoices - use created_at as primary date
+      if (invoices && invoices.length > 0) {
+        invoices.forEach((inv: any) => {
+          let dateStr = ''
+          if (inv.created_at) {
+            const date = new Date(inv.created_at)
+            dateStr = date.toISOString().split('T')[0]
+          } else if (inv.issue_date) {
+            const date = new Date(inv.issue_date)
+            dateStr = date.toISOString().split('T')[0]
+          }
+          
+          if (dateStr) {
+            const amount = Number(inv.amount) || 0
+            if (amount > 0) {
+              revenueByDate[dateStr] = (revenueByDate[dateStr] || 0) + amount
+            }
+          }
+        })
+      }
+      
+      // Process loads - combine with invoice data
+      if (loadsForTrend && loadsForTrend.length > 0) {
+        loadsForTrend.forEach((load: any) => {
+          if (load.created_at) {
+            const date = new Date(load.created_at)
+            const dateStr = date.toISOString().split('T')[0]
+            const amount = Number(load.total_rate) || Number(load.value) || 0
+            if (amount > 0) {
+              // Add load revenue (invoices take priority, but loads supplement)
+              revenueByDate[dateStr] = (revenueByDate[dateStr] || 0) + amount
+            }
+          }
+        })
+      }
+
+      // Generate data for last 7 days (even if no revenue on some days)
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(now)
+        date.setDate(date.getDate() - i)
+        date.setHours(0, 0, 0, 0)
+        const dateStr = date.toISOString().split('T')[0]
+        revenueTrendData.push({
+          date: dateStr,
+          amount: revenueByDate[dateStr] || 0
+        })
+      }
     } catch (error) {
       console.error("Error fetching revenue trend:", error)
-      revenueTrendData = []
+      // Generate empty data for last 7 days if error occurs
+      const now = new Date()
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(now)
+        date.setDate(date.getDate() - i)
+        date.setHours(0, 0, 0, 0)
+        revenueTrendData.push({
+          date: date.toISOString().split('T')[0],
+          amount: 0
+        })
+      }
     }
-
-    // Group revenue by date
-    const revenueByDate: Record<string, number> = {}
-    revenueTrendData?.forEach((inv: any) => {
-      const date = inv.issue_date?.split('T')[0] || ''
-      revenueByDate[date] = (revenueByDate[date] || 0) + (Number(inv.amount) || 0)
-    })
 
     // Get load status distribution
     let allLoads: any[] = []
@@ -436,7 +512,7 @@ export async function getDashboardStats() {
       netProfit,
       profitMargin,
       outstandingInvoices,
-      revenueTrend: Object.entries(revenueByDate).map(([date, amount]) => ({ date, amount })),
+      revenueTrend: revenueTrendData,
       loadStatusDistribution: Object.entries(loadStatusCounts).map(([status, count]) => ({ status, count })),
       // Alerts
       upcomingMaintenance: upcomingMaintenance || [],

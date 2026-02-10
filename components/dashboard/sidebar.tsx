@@ -58,7 +58,6 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
   const [reportsOpen, setReportsOpen] = useState(false)
   const [crmOpen, setCrmOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [dvirOpen, setDvirOpen] = useState(false)
   const [isManager, setIsManager] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isDesktop, setIsDesktop] = useState(true)
@@ -92,7 +91,6 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
       setReportsOpen(false)
       setCrmOpen(false)
       setSettingsOpen(false)
-      setDvirOpen(false)
     }
   }, [shouldShowCollapsed])
 
@@ -304,18 +302,8 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             <NavItem href="/dashboard/maintenance/fault-code-rules" label="Fault Code Rules" isSubitem isCollapsed={shouldShowCollapsed} />
           </DropdownItem>
 
-          {/* DVIR Dropdown */}
-          <DropdownItem
-            icon={FileCheck}
-            label="DVIR"
-            href="/dashboard/dvir"
-            isOpen={dvirOpen}
-            onToggle={() => setDvirOpen(!dvirOpen)}
-            isCollapsed={shouldShowCollapsed}
-          >
-            <NavItem href="/dashboard/dvir" label="DVIR Reports" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/dvir/audit" label="Audit Reports" isSubitem isCollapsed={shouldShowCollapsed} />
-          </DropdownItem>
+          {/* DVIR */}
+          <NavItem href="/dashboard/dvir" icon={FileCheck} label="DVIR Reports" isCollapsed={shouldShowCollapsed} />
 
           {/* ELD Service */}
           <NavItem href="/dashboard/eld" icon={Shield} label="ELD Service" isCollapsed={shouldShowCollapsed} />

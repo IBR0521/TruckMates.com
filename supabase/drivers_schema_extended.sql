@@ -2,11 +2,15 @@
 -- Add missing fields for comprehensive driver management
 
 ALTER TABLE public.drivers 
+ADD COLUMN IF NOT EXISTS driver_id TEXT, -- Internal driver ID/employee number
+ADD COLUMN IF NOT EXISTS employee_type TEXT DEFAULT 'employee', -- 'employee', 'contractor', 'owner_operator'
 ADD COLUMN IF NOT EXISTS address TEXT,
 ADD COLUMN IF NOT EXISTS city TEXT,
 ADD COLUMN IF NOT EXISTS state TEXT,
 ADD COLUMN IF NOT EXISTS zip TEXT,
 ADD COLUMN IF NOT EXISTS license_state TEXT,
+ADD COLUMN IF NOT EXISTS license_type TEXT DEFAULT 'class_a', -- 'class_a', 'class_b', 'class_c'
+ADD COLUMN IF NOT EXISTS license_endorsements TEXT, -- Comma-separated list of endorsements
 ADD COLUMN IF NOT EXISTS emergency_contact_name TEXT,
 ADD COLUMN IF NOT EXISTS emergency_contact_phone TEXT,
 ADD COLUMN IF NOT EXISTS emergency_contact_relationship TEXT,

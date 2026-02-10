@@ -11,7 +11,7 @@ import { Sparkles, X, Minimize2, Maximize2 } from "lucide-react"
 import { TruckMatesAIChat } from "./chat-interface"
 import { cn } from "@/lib/utils"
 
-export function FloatingAIWidget() {
+function FloatingAIWidget() {
   const [isOpen, setIsOpen] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
 
@@ -90,4 +90,6 @@ export function FloatingAIWidget() {
     </>
   )
 }
+
+export default FloatingAIWidget
 

@@ -132,6 +132,7 @@ export default function EnhancedAddressBookPage() {
 
   useEffect(() => {
     loadEntries()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, categoryFilter, geocodingStatusFilter])
 
   async function loadEntries() {

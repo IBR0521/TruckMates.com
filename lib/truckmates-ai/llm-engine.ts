@@ -97,8 +97,24 @@ export class TruckMatesAIEngine {
     } catch (error: any) {
       // Fallback response if LLM is not available
       console.error("LLM Engine error:", error)
+      
+      // Check if it's a connection error (Ollama not configured)
+      const isConnectionError = error.message?.includes('fetch failed') || 
+                                error.message?.includes('ECONNREFUSED') ||
+                                error.message?.includes('network') ||
+                                error.code === 'ECONNREFUSED' ||
+                                !this.baseUrl ||
+                                this.baseUrl.includes('localhost')
+      
+      if (isConnectionError) {
+        return {
+          response: "I'm currently unavailable. The AI service requires Ollama to be hosted on a separate server for production. Vercel (serverless) cannot run Ollama directly. Please set up Ollama on a VPS (DigitalOcean, AWS EC2, etc.) and configure the OLLAMA_BASE_URL environment variable in Vercel. See PRODUCTION_OLLAMA_SETUP.md for detailed instructions.",
+          confidence: 0
+        }
+      }
+      
       return {
-        response: "I'm currently unavailable. Please ensure Ollama is running and the model is installed.",
+        response: "I'm currently unavailable due to a technical issue. Please try again later.",
         confidence: 0
       }
     }

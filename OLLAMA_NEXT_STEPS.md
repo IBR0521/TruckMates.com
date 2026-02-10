@@ -214,3 +214,4 @@ If you get stuck:
 
 Once Ollama is running and the model is downloaded, TruckMates AI will be fully functional!
 
+

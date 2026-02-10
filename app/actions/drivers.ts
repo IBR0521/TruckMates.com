@@ -185,19 +185,38 @@ export async function createDriver(formData: {
   }
 
   // Build insert data with professional sanitization
-  // Only include fields that exist in the drivers table schema
+  // Include all extended fields from the drivers table schema
   const driverData: any = {
     company_id: userData.company_id,
     name: sanitizeString(formData.name, 100),
     status: formData.status || "active",
   }
 
-  // Add optional fields with validation and sanitization (only fields that exist in schema)
+  // Add optional fields with validation and sanitization
   if (formData.email) driverData.email = sanitizeEmail(formData.email)
   if (formData.phone) driverData.phone = sanitizePhone(formData.phone)
   if (formData.license_number) driverData.license_number = sanitizeString(formData.license_number, 20).toUpperCase()
   if (formData.license_expiry) driverData.license_expiry = formData.license_expiry
   if (formData.truck_id) driverData.truck_id = formData.truck_id
+  
+  // Extended fields
+  if (formData.driver_id) driverData.driver_id = sanitizeString(formData.driver_id, 50)
+  if (formData.employee_type) driverData.employee_type = formData.employee_type
+  if (formData.date_of_birth) driverData.date_of_birth = formData.date_of_birth
+  if (formData.address) driverData.address = sanitizeString(formData.address, 200)
+  if (formData.city) driverData.city = sanitizeString(formData.city, 100)
+  if (formData.state) driverData.state = sanitizeString(formData.state, 2).toUpperCase()
+  if (formData.zip) driverData.zip = sanitizeString(formData.zip, 10)
+  if (formData.license_state) driverData.license_state = sanitizeString(formData.license_state, 2).toUpperCase()
+  if (formData.license_type) driverData.license_type = formData.license_type
+  if (formData.license_endorsements) driverData.license_endorsements = sanitizeString(formData.license_endorsements, 200)
+  if (formData.hire_date) driverData.hire_date = formData.hire_date
+  if (formData.pay_rate_type) driverData.pay_rate_type = formData.pay_rate_type
+  if (formData.pay_rate !== undefined && formData.pay_rate !== null) driverData.pay_rate = Number.parseFloat(String(formData.pay_rate))
+  if (formData.emergency_contact_name) driverData.emergency_contact_name = sanitizeString(formData.emergency_contact_name, 100)
+  if (formData.emergency_contact_phone) driverData.emergency_contact_phone = sanitizePhone(formData.emergency_contact_phone)
+  if (formData.emergency_contact_relationship) driverData.emergency_contact_relationship = sanitizeString(formData.emergency_contact_relationship, 50)
+  if (formData.notes) driverData.notes = sanitizeString(formData.notes, 1000)
 
   const { data, error } = await supabase
     .from("drivers")
@@ -246,38 +265,65 @@ export async function updateDriver(
   }
 
   // Build update data, only including fields that are provided
-  // Only include fields that exist in the drivers table schema
+  // Include all extended fields from the drivers table schema
   const updateData: any = {}
   const changes: Array<{ field: string; old_value: any; new_value: any }> = []
   
-  if (formData.name !== undefined && formData.name !== currentDriver.name) {
-    updateData.name = formData.name
-    changes.push({ field: "name", old_value: currentDriver.name, new_value: formData.name })
+  // Helper function to check and update field
+  const updateField = (field: string, newValue: any, oldValue: any = null) => {
+    const currentValue = oldValue !== null ? oldValue : (currentDriver[field] ?? null)
+    if (newValue !== undefined && newValue !== currentValue) {
+      updateData[field] = newValue === "" ? null : newValue
+      changes.push({ field, old_value: currentValue, new_value: newValue })
+    }
   }
-  if (formData.email !== undefined && formData.email !== currentDriver.email) {
-    updateData.email = formData.email
-    changes.push({ field: "email", old_value: currentDriver.email, new_value: formData.email })
+  
+  // Basic fields
+  updateField("name", formData.name)
+  updateField("email", formData.email)
+  updateField("phone", formData.phone)
+  updateField("license_number", formData.license_number)
+  updateField("license_expiry", formData.license_expiry || null)
+  updateField("status", formData.status)
+  updateField("truck_id", formData.truck_id || null)
+  
+  // Extended fields
+  updateField("driver_id", formData.driver_id)
+  updateField("employee_type", formData.employee_type)
+  updateField("date_of_birth", formData.date_of_birth)
+  updateField("address", formData.address)
+  updateField("city", formData.city)
+  updateField("state", formData.state)
+  updateField("zip", formData.zip)
+  updateField("license_state", formData.license_state)
+  updateField("license_type", formData.license_type)
+  updateField("license_endorsements", formData.license_endorsements)
+  updateField("hire_date", formData.hire_date)
+  updateField("pay_rate_type", formData.pay_rate_type)
+  if (formData.pay_rate !== undefined) {
+    updateField("pay_rate", formData.pay_rate ? Number.parseFloat(String(formData.pay_rate)) : null)
   }
-  if (formData.phone !== undefined && formData.phone !== currentDriver.phone) {
-    updateData.phone = formData.phone
-    changes.push({ field: "phone", old_value: currentDriver.phone, new_value: formData.phone })
-  }
-  if (formData.license_number !== undefined && formData.license_number !== currentDriver.license_number) {
-    updateData.license_number = formData.license_number
-    changes.push({ field: "license_number", old_value: currentDriver.license_number, new_value: formData.license_number })
-  }
-  if (formData.license_expiry !== undefined && formData.license_expiry !== currentDriver.license_expiry) {
-    updateData.license_expiry = formData.license_expiry || null
-    changes.push({ field: "license_expiry", old_value: currentDriver.license_expiry, new_value: formData.license_expiry })
-  }
-  if (formData.status !== undefined && formData.status !== currentDriver.status) {
-    updateData.status = formData.status
-    changes.push({ field: "status", old_value: currentDriver.status, new_value: formData.status })
-  }
-  if (formData.truck_id !== undefined && formData.truck_id !== currentDriver.truck_id) {
-    updateData.truck_id = formData.truck_id || null
-    changes.push({ field: "truck_id", old_value: currentDriver.truck_id, new_value: formData.truck_id })
-  }
+  updateField("emergency_contact_name", formData.emergency_contact_name)
+  updateField("emergency_contact_phone", formData.emergency_contact_phone)
+  updateField("emergency_contact_relationship", formData.emergency_contact_relationship)
+  updateField("notes", formData.notes)
+  
+  // Sanitize string fields
+  if (updateData.name) updateData.name = sanitizeString(updateData.name, 100)
+  if (updateData.email) updateData.email = sanitizeEmail(updateData.email)
+  if (updateData.phone) updateData.phone = sanitizePhone(updateData.phone)
+  if (updateData.license_number) updateData.license_number = sanitizeString(updateData.license_number, 20).toUpperCase()
+  if (updateData.driver_id) updateData.driver_id = sanitizeString(updateData.driver_id, 50)
+  if (updateData.address) updateData.address = sanitizeString(updateData.address, 200)
+  if (updateData.city) updateData.city = sanitizeString(updateData.city, 100)
+  if (updateData.state) updateData.state = sanitizeString(updateData.state, 2).toUpperCase()
+  if (updateData.zip) updateData.zip = sanitizeString(updateData.zip, 10)
+  if (updateData.license_state) updateData.license_state = sanitizeString(updateData.license_state, 2).toUpperCase()
+  if (updateData.license_endorsements) updateData.license_endorsements = sanitizeString(updateData.license_endorsements, 200)
+  if (updateData.emergency_contact_name) updateData.emergency_contact_name = sanitizeString(updateData.emergency_contact_name, 100)
+  if (updateData.emergency_contact_phone) updateData.emergency_contact_phone = sanitizePhone(updateData.emergency_contact_phone)
+  if (updateData.emergency_contact_relationship) updateData.emergency_contact_relationship = sanitizeString(updateData.emergency_contact_relationship, 50)
+  if (updateData.notes) updateData.notes = sanitizeString(updateData.notes, 1000)
 
   // If no changes, return early
   if (Object.keys(updateData).length === 0) {

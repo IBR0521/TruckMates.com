@@ -106,3 +106,4 @@ echo "   4. Access AI chat:"
 echo "      Navigate to /dashboard/ai in your app"
 echo ""
 
+

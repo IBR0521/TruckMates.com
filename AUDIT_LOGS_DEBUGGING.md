@@ -128,3 +128,4 @@ fetch('/api/audit-logs?resource_type=driver&resource_id=YOUR_DRIVER_ID')
 
 Replace `YOUR_DRIVER_ID` with an actual driver ID from your database.
 
+

@@ -162,6 +162,17 @@ export default function DVIRPage() {
             <Download className="w-4 h-4 sm:mr-2" />
             <span className="hidden sm:inline">Export</span>
           </Button>
+          <Link href="/dashboard/dvir/audit">
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+            >
+              <FileCheck className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Audit Reports</span>
+              <span className="sm:hidden">Audit</span>
+            </Button>
+          </Link>
           <Link href="/dashboard/dvir/add">
             <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md">
               <Plus className="w-4 h-4 sm:mr-2" />

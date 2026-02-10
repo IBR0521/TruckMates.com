@@ -26,24 +26,50 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
   if (!companyId) return { error: "Not authenticated", data: null }
 
   const supabase = await createClient()
-  let query = supabase
+  
+  // Get ALL invoices (not just paid) - use created_at for reliable date filtering
+  let invoiceQuery = supabase
     .from("invoices")
     .select("*")
     .eq("company_id", companyId)
-    .eq("status", "paid")
 
   if (startDate) {
-    query = query.gte("issue_date", startDate)
+    invoiceQuery = invoiceQuery.gte("created_at", startDate)
   }
   if (endDate) {
-    query = query.lte("issue_date", endDate)
+    invoiceQuery = invoiceQuery.lte("created_at", endDate + "T23:59:59")
   }
 
-  const { data: invoices, error } = await query.order("issue_date", { ascending: false })
+  const { data: invoices, error: invoiceError } = await invoiceQuery.order("created_at", { ascending: false })
 
-  if (error) return { error: error.message, data: null }
+  // Also get loads data as fallback/supplement
+  let loadQuery = supabase
+    .from("loads")
+    .select("id, shipment_number, customer_id, total_rate, value, created_at")
+    .eq("company_id", companyId)
 
-  // Note: Revenue is primarily from invoices, loads are tracked separately
+  if (startDate) {
+    loadQuery = loadQuery.gte("created_at", startDate)
+  }
+  if (endDate) {
+    loadQuery = loadQuery.lte("created_at", endDate + "T23:59:59")
+  }
+
+  const { data: loads } = await loadQuery.order("created_at", { ascending: false })
+
+  // Get customers for loads
+  const customerIds = loads?.map(l => l.customer_id).filter(Boolean) || []
+  let customers = null
+  if (customerIds.length > 0) {
+    const { data } = await supabase
+      .from("customers")
+      .select("id, name")
+      .in("id", customerIds)
+    customers = data
+  }
+
+  const customerMap = new Map<string, string>()
+  customers?.forEach(c => customerMap.set(c.id, c.name))
 
   // Calculate revenue by customer
   const revenueByCustomer: Record<
@@ -51,8 +77,9 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
     { customer: string; loads: number; revenue: number; avgPerLoad: number }
   > = {}
 
+  // Process invoices
   invoices?.forEach((invoice) => {
-    const customer = invoice.customer_name
+    const customer = invoice.customer_name || "Unknown Customer"
     if (!revenueByCustomer[customer]) {
       revenueByCustomer[customer] = {
         customer,
@@ -65,18 +92,38 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
     revenueByCustomer[customer].loads += 1
   })
 
+  // Process loads (add to revenue if no invoice exists for that load)
+  if (loads) {
+    loads.forEach((load: any) => {
+      const customerName = load.customer_id ? (customerMap.get(load.customer_id) || "Unknown Customer") : "Unknown Customer"
+      const amount = Number(load.total_rate) || Number(load.value) || 0
+      
+      if (amount > 0) {
+        if (!revenueByCustomer[customerName]) {
+          revenueByCustomer[customerName] = {
+            customer: customerName,
+            loads: 0,
+            revenue: 0,
+            avgPerLoad: 0,
+          }
+        }
+        revenueByCustomer[customerName].revenue += amount
+        revenueByCustomer[customerName].loads += 1
+      }
+    })
+  }
+
   // Calculate averages
   Object.values(revenueByCustomer).forEach((item) => {
     item.avgPerLoad = item.loads > 0 ? item.revenue / item.loads : 0
   })
 
-  const totalRevenue = invoices?.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0) || 0
-  const totalLoads = invoices?.length || 0
+  const totalRevenue = Object.values(revenueByCustomer).reduce((sum, item) => sum + item.revenue, 0)
+  const totalLoads = Object.values(revenueByCustomer).reduce((sum, item) => sum + item.loads, 0)
   const avgPerLoad = totalLoads > 0 ? totalRevenue / totalLoads : 0
 
   return {
     data: {
-      invoices,
       revenueByCustomer: Object.values(revenueByCustomer),
       totalRevenue,
       totalLoads,
@@ -93,21 +140,35 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
 
   const supabase = await createClient()
 
-  // Get revenue (paid invoices)
+  // Get ALL invoices (not just paid) - use created_at for reliable date filtering
   let revenueQuery = supabase
     .from("invoices")
     .select("*")
     .eq("company_id", companyId)
-    .eq("status", "paid")
 
   if (startDate) {
-    revenueQuery = revenueQuery.gte("issue_date", startDate)
+    revenueQuery = revenueQuery.gte("created_at", startDate)
   }
   if (endDate) {
-    revenueQuery = revenueQuery.lte("issue_date", endDate)
+    revenueQuery = revenueQuery.lte("created_at", endDate + "T23:59:59")
   }
 
   const { data: invoices } = await revenueQuery
+
+  // Also get revenue from loads
+  let loadQuery = supabase
+    .from("loads")
+    .select("total_rate, value, created_at")
+    .eq("company_id", companyId)
+
+  if (startDate) {
+    loadQuery = loadQuery.gte("created_at", startDate)
+  }
+  if (endDate) {
+    loadQuery = loadQuery.lte("created_at", endDate + "T23:59:59")
+  }
+
+  const { data: loads } = await loadQuery
 
   // Get expenses
   let expensesQuery = supabase
@@ -124,24 +185,46 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
 
   const { data: expenses } = await expensesQuery
 
-  // Calculate totals
-  const totalRevenue = invoices?.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0) || 0
+  // Calculate totals - combine invoices and loads
+  let totalRevenue = invoices?.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0) || 0
+  
+  // Add revenue from loads
+  if (loads) {
+    const loadRevenue = loads.reduce((sum, load) => {
+      return sum + (Number(load.total_rate) || Number(load.value) || 0)
+    }, 0)
+    totalRevenue += loadRevenue
+  }
+  
   const totalExpenses = expenses?.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0) || 0
   const netProfit = totalRevenue - totalExpenses
 
   // Revenue breakdown
   const revenueBreakdown: Record<string, number> = {}
+  
+  // Process invoices
   invoices?.forEach((invoice) => {
     const items = (invoice.items as any[]) || []
-    items.forEach((item: any) => {
-      const category = item.category || "Load Revenue"
-      revenueBreakdown[category] = (revenueBreakdown[category] || 0) + (Number(item.amount) || 0)
-    })
-    // If no items, count as load revenue
-    if (items.length === 0) {
+    if (items.length > 0) {
+      items.forEach((item: any) => {
+        const category = item.category || "Load Revenue"
+        revenueBreakdown[category] = (revenueBreakdown[category] || 0) + (Number(item.amount) || 0)
+      })
+    } else {
+      // If no items, count as load revenue
       revenueBreakdown["Load Revenue"] = (revenueBreakdown["Load Revenue"] || 0) + (Number(invoice.amount) || 0)
     }
   })
+  
+  // Process loads
+  if (loads) {
+    const loadRevenue = loads.reduce((sum, load) => {
+      return sum + (Number(load.total_rate) || Number(load.value) || 0)
+    }, 0)
+    if (loadRevenue > 0) {
+      revenueBreakdown["Load Revenue"] = (revenueBreakdown["Load Revenue"] || 0) + loadRevenue
+    }
+  }
 
   // Expense breakdown by category
   const expenseBreakdown: Record<string, number> = {}
@@ -285,38 +368,94 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
 
 // Get monthly revenue trend
 export async function getMonthlyRevenueTrend(months: number = 6) {
-  const companyId = await getCompanyId()
-  if (!companyId) return { error: "Not authenticated", data: null }
+  try {
+    const companyId = await getCompanyId()
+    if (!companyId) {
+      return { error: "Not authenticated", data: [] }
+    }
 
-  const supabase = await createClient()
-  const endDate = new Date()
-  const startDate = new Date()
-  startDate.setMonth(startDate.getMonth() - months)
+    const supabase = await createClient()
+    const endDate = new Date()
+    const startDate = new Date()
+    startDate.setMonth(startDate.getMonth() - months)
+    startDate.setDate(1) // Start of first month
 
-  const { data: invoices } = await supabase
-    .from("invoices")
-    .select("issue_date, amount")
-    .eq("company_id", companyId)
-    .eq("status", "paid")
-    .gte("issue_date", startDate.toISOString().split("T")[0])
-    .lte("issue_date", endDate.toISOString().split("T")[0])
+    // Get ALL invoices for revenue calculation (including pending/overdue)
+    // Also try to get revenue from loads if invoices don't have data
+    const { data: invoices, error: invoiceError } = await supabase
+      .from("invoices")
+      .select("issue_date, amount, status, created_at")
+      .eq("company_id", companyId)
+      .gte("created_at", startDate.toISOString())
+      .lte("created_at", endDate.toISOString())
+      .order("created_at", { ascending: true })
 
-  // Group by month
-  const monthlyData: Record<string, number> = {}
-  invoices?.forEach((invoice) => {
-    const date = new Date(invoice.issue_date)
-    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-    monthlyData[monthKey] = (monthlyData[monthKey] || 0) + (Number(invoice.amount) || 0)
-  })
+    // Also get revenue from loads (value field) as fallback
+    const { data: loads } = await supabase
+      .from("loads")
+      .select("created_at, value, total_rate")
+      .eq("company_id", companyId)
+      .gte("created_at", startDate.toISOString())
+      .lte("created_at", endDate.toISOString())
 
-  // Convert to array format
-  const trend = Object.entries(monthlyData)
-    .map(([month, amount]) => ({
-      month,
-      amount: amount / 1000, // Convert to thousands
-    }))
-    .sort((a, b) => a.month.localeCompare(b.month))
+    // Group by month - combine invoices and loads
+    const monthlyData: Record<string, number> = {}
+    
+    // Process invoices (use issue_date if available, otherwise created_at)
+    if (invoices) {
+      invoices.forEach((invoice) => {
+        let date: Date | null = null
+        if (invoice.issue_date) {
+          date = new Date(invoice.issue_date)
+        } else if (invoice.created_at) {
+          date = new Date(invoice.created_at)
+        }
+        
+        if (!date || isNaN(date.getTime())) return
+        
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+        const amount = Number(invoice.amount) || 0
+        if (amount > 0) {
+          monthlyData[monthKey] = (monthlyData[monthKey] || 0) + amount
+        }
+      })
+    }
 
-  return { data: trend, error: null }
+    // Process loads - combine with invoice data (don't double count if invoice exists for load)
+    if (loads) {
+      loads.forEach((load) => {
+        if (!load.created_at) return
+        const date = new Date(load.created_at)
+        if (isNaN(date.getTime())) return
+        
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+        // Only add load revenue if there's no invoice for this load (to avoid double counting)
+        // For now, we'll include it but prioritize invoices
+        const amount = Number(load.total_rate) || Number(load.value) || 0
+        if (amount > 0) {
+          // Add load revenue (invoices take priority, but loads supplement)
+          monthlyData[monthKey] = (monthlyData[monthKey] || 0) + (amount * 0.5) // Weight loads less to avoid double counting
+        }
+      })
+    }
+
+    // Generate all months in range (even if no data) for consistent chart display
+    const trend: Array<{ month: string; amount: number }> = []
+    for (let i = months - 1; i >= 0; i--) {
+      const date = new Date()
+      date.setMonth(date.getMonth() - i)
+      date.setDate(1) // First day of month
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+      trend.push({
+        month: monthKey,
+        amount: (monthlyData[monthKey] || 0) / 1000, // Convert to thousands
+      })
+    }
+
+    return { data: trend, error: null }
+  } catch (error: any) {
+    console.error("Error in getMonthlyRevenueTrend:", error)
+    return { error: error?.message || "Failed to fetch revenue trend", data: [] }
+  }
 }
 

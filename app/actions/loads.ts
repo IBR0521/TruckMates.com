@@ -813,86 +813,121 @@ export async function updateLoad(
   const updateData: any = {}
   const changes: Array<{ field: string; old_value: any; new_value: any }> = []
   
-  if (formData.shipment_number !== undefined && formData.shipment_number !== currentLoad.shipment_number) {
-    updateData.shipment_number = formData.shipment_number
-    changes.push({ field: "shipment_number", old_value: currentLoad.shipment_number, new_value: formData.shipment_number })
+  // Helper function to check and update field
+  const updateField = (field: string, newValue: any, oldValue: any = null) => {
+    const currentValue = oldValue !== null ? oldValue : (currentLoad[field] ?? null)
+    if (newValue !== undefined && newValue !== currentValue) {
+      updateData[field] = newValue === "" ? null : newValue
+      changes.push({ field, old_value: currentValue, new_value: newValue })
+    }
   }
-  if (formData.origin !== undefined && formData.origin !== currentLoad.origin) {
-    updateData.origin = formData.origin
-    changes.push({ field: "origin", old_value: currentLoad.origin, new_value: formData.origin })
-  }
-  if (formData.destination !== undefined && formData.destination !== currentLoad.destination) {
-    updateData.destination = formData.destination
-    changes.push({ field: "destination", old_value: currentLoad.destination, new_value: formData.destination })
-  }
-  if (formData.weight !== undefined && formData.weight !== currentLoad.weight) {
-    updateData.weight = formData.weight
-    changes.push({ field: "weight", old_value: currentLoad.weight, new_value: formData.weight })
-  }
-  if (formData.weight_kg !== undefined && formData.weight_kg !== currentLoad.weight_kg) {
-    updateData.weight_kg = formData.weight_kg || null
-    changes.push({ field: "weight_kg", old_value: currentLoad.weight_kg, new_value: formData.weight_kg })
-  }
-  if (formData.contents !== undefined && formData.contents !== currentLoad.contents) {
-    updateData.contents = formData.contents
-    changes.push({ field: "contents", old_value: currentLoad.contents, new_value: formData.contents })
-  }
-  if (formData.value !== undefined && formData.value !== currentLoad.value) {
-    updateData.value = formData.value || null
-    changes.push({ field: "value", old_value: currentLoad.value, new_value: formData.value })
-  }
-  if (formData.carrier_type !== undefined && formData.carrier_type !== currentLoad.carrier_type) {
-    updateData.carrier_type = formData.carrier_type
-    changes.push({ field: "carrier_type", old_value: currentLoad.carrier_type, new_value: formData.carrier_type })
-  }
-  if (formData.status !== undefined && formData.status !== currentLoad.status) {
-    updateData.status = formData.status
-    changes.push({ field: "status", old_value: currentLoad.status, new_value: formData.status })
-  }
-  if (formData.driver_id !== undefined && formData.driver_id !== currentLoad.driver_id) {
-    updateData.driver_id = formData.driver_id || null
-    changes.push({ field: "driver_id", old_value: currentLoad.driver_id, new_value: formData.driver_id })
-  }
-  if (formData.truck_id !== undefined && formData.truck_id !== currentLoad.truck_id) {
-    updateData.truck_id = formData.truck_id || null
-    changes.push({ field: "truck_id", old_value: currentLoad.truck_id, new_value: formData.truck_id })
-  }
-  if (formData.route_id !== undefined && formData.route_id !== currentLoad.route_id) {
-    updateData.route_id = formData.route_id || null
-    changes.push({ field: "route_id", old_value: currentLoad.route_id, new_value: formData.route_id })
-  }
-  if (formData.load_date !== undefined && formData.load_date !== currentLoad.load_date) {
-    updateData.load_date = formData.load_date || null
-    changes.push({ field: "load_date", old_value: currentLoad.load_date, new_value: formData.load_date })
-  }
-  if (formData.estimated_delivery !== undefined && formData.estimated_delivery !== currentLoad.estimated_delivery) {
-    updateData.estimated_delivery = formData.estimated_delivery || null
-    changes.push({ field: "estimated_delivery", old_value: currentLoad.estimated_delivery, new_value: formData.estimated_delivery })
-  }
-  if (formData.actual_delivery !== undefined && formData.actual_delivery !== currentLoad.actual_delivery) {
-    updateData.actual_delivery = formData.actual_delivery || null
-    changes.push({ field: "actual_delivery", old_value: currentLoad.actual_delivery, new_value: formData.actual_delivery })
-  }
-  if (formData.delivery_type !== undefined && formData.delivery_type !== currentLoad.delivery_type) {
-    updateData.delivery_type = formData.delivery_type
-    changes.push({ field: "delivery_type", old_value: currentLoad.delivery_type, new_value: formData.delivery_type })
-  }
-  if (formData.company_name !== undefined && formData.company_name !== currentLoad.company_name) {
-    updateData.company_name = formData.company_name || null
-    changes.push({ field: "company_name", old_value: currentLoad.company_name, new_value: formData.company_name })
-  }
-  if (formData.customer_reference !== undefined && formData.customer_reference !== currentLoad.customer_reference) {
-    updateData.customer_reference = formData.customer_reference || null
-    changes.push({ field: "customer_reference", old_value: currentLoad.customer_reference, new_value: formData.customer_reference })
-  }
-  if (formData.requires_split_delivery !== undefined && formData.requires_split_delivery !== currentLoad.requires_split_delivery) {
-    updateData.requires_split_delivery = formData.requires_split_delivery
-    changes.push({ field: "requires_split_delivery", old_value: currentLoad.requires_split_delivery, new_value: formData.requires_split_delivery })
-  }
-  if (formData.total_delivery_points !== undefined && formData.total_delivery_points !== currentLoad.total_delivery_points) {
-    updateData.total_delivery_points = formData.total_delivery_points
-    changes.push({ field: "total_delivery_points", old_value: currentLoad.total_delivery_points, new_value: formData.total_delivery_points })
-  }
+  
+  // Basic fields
+  updateField("shipment_number", formData.shipment_number)
+  updateField("origin", formData.origin)
+  updateField("destination", formData.destination)
+  updateField("weight", formData.weight)
+  updateField("weight_kg", formData.weight_kg || null)
+  updateField("contents", formData.contents)
+  updateField("value", formData.value || null)
+  updateField("carrier_type", formData.carrier_type)
+  updateField("status", formData.status)
+  updateField("driver_id", formData.driver_id || null)
+  updateField("truck_id", formData.truck_id || null)
+  updateField("route_id", formData.route_id || null)
+  updateField("load_date", formData.load_date || null)
+  updateField("estimated_delivery", formData.estimated_delivery || null)
+  updateField("actual_delivery", formData.actual_delivery || null)
+  updateField("delivery_type", formData.delivery_type)
+  updateField("company_name", formData.company_name || null)
+  updateField("customer_reference", formData.customer_reference || null)
+  updateField("requires_split_delivery", formData.requires_split_delivery)
+  updateField("total_delivery_points", formData.total_delivery_points)
+  
+  // Extended fields - Load details
+  updateField("load_type", formData.load_type)
+  updateField("customer_id", formData.customer_id || null)
+  updateField("bol_number", formData.bol_number)
+  
+  // Shipper fields
+  updateField("shipper_name", formData.shipper_name)
+  updateField("shipper_address", formData.shipper_address)
+  updateField("shipper_city", formData.shipper_city)
+  updateField("shipper_state", formData.shipper_state)
+  updateField("shipper_zip", formData.shipper_zip)
+  updateField("shipper_contact_name", formData.shipper_contact_name)
+  updateField("shipper_contact_phone", formData.shipper_contact_phone)
+  updateField("shipper_contact_email", formData.shipper_contact_email)
+  updateField("pickup_time", formData.pickup_time)
+  updateField("pickup_time_window_start", formData.pickup_time_window_start)
+  updateField("pickup_time_window_end", formData.pickup_time_window_end)
+  updateField("pickup_instructions", formData.pickup_instructions)
+  
+  // Consignee fields
+  updateField("consignee_name", formData.consignee_name)
+  updateField("consignee_address", formData.consignee_address)
+  updateField("consignee_city", formData.consignee_city)
+  updateField("consignee_state", formData.consignee_state)
+  updateField("consignee_zip", formData.consignee_zip)
+  updateField("consignee_contact_name", formData.consignee_contact_name)
+  updateField("consignee_contact_phone", formData.consignee_contact_phone)
+  updateField("consignee_contact_email", formData.consignee_contact_email)
+  updateField("delivery_time", formData.delivery_time)
+  updateField("delivery_time_window_start", formData.delivery_time_window_start)
+  updateField("delivery_time_window_end", formData.delivery_time_window_end)
+  updateField("delivery_instructions", formData.delivery_instructions)
+  
+  // Enhanced freight details
+  updateField("pieces", formData.pieces || null)
+  updateField("pallets", formData.pallets || null)
+  updateField("boxes", formData.boxes || null)
+  updateField("length", formData.length || null)
+  updateField("width", formData.width || null)
+  updateField("height", formData.height || null)
+  updateField("temperature", formData.temperature || null)
+  updateField("is_hazardous", formData.is_hazardous)
+  updateField("is_oversized", formData.is_oversized)
+  updateField("special_instructions", formData.special_instructions)
+  
+  // Special requirements
+  updateField("requires_liftgate", formData.requires_liftgate)
+  updateField("requires_inside_delivery", formData.requires_inside_delivery)
+  updateField("requires_appointment", formData.requires_appointment)
+  updateField("appointment_time", formData.appointment_time)
+  
+  // Pricing
+  updateField("rate", formData.rate || null)
+  updateField("rate_type", formData.rate_type)
+  updateField("fuel_surcharge", formData.fuel_surcharge || null)
+  updateField("accessorial_charges", formData.accessorial_charges || null)
+  updateField("discount", formData.discount || null)
+  updateField("advance", formData.advance || null)
+  updateField("total_rate", formData.total_rate || null)
+  updateField("estimated_miles", formData.estimated_miles || null)
+  
+  // Notes
+  updateField("notes", formData.notes)
+  updateField("internal_notes", formData.internal_notes)
+  
+  // Marketplace fields
+  updateField("source", formData.source)
+  updateField("marketplace_load_id", formData.marketplace_load_id)
+  
+  // Address Book Integration
+  updateField("shipper_address_book_id", formData.shipper_address_book_id || null)
+  updateField("consignee_address_book_id", formData.consignee_address_book_id || null)
+  
+  // Sanitize string fields
+  if (updateData.contents) updateData.contents = sanitizeString(updateData.contents, 500)
+  if (updateData.shipper_contact_email) updateData.shipper_contact_email = sanitizeEmail(updateData.shipper_contact_email)
+  if (updateData.shipper_contact_phone) updateData.shipper_contact_phone = sanitizePhone(updateData.shipper_contact_phone)
+  if (updateData.consignee_contact_email) updateData.consignee_contact_email = sanitizeEmail(updateData.consignee_contact_email)
+  if (updateData.consignee_contact_phone) updateData.consignee_contact_phone = sanitizePhone(updateData.consignee_contact_phone)
+  if (updateData.notes) updateData.notes = sanitizeString(updateData.notes, 2000)
+  if (updateData.internal_notes) updateData.internal_notes = sanitizeString(updateData.internal_notes, 2000)
+  if (updateData.special_instructions) updateData.special_instructions = sanitizeString(updateData.special_instructions, 1000)
+  if (updateData.pickup_instructions) updateData.pickup_instructions = sanitizeString(updateData.pickup_instructions, 1000)
+  if (updateData.delivery_instructions) updateData.delivery_instructions = sanitizeString(updateData.delivery_instructions, 1000)
 
   // If no changes, return early
   if (Object.keys(updateData).length === 0) {

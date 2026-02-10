@@ -66,17 +66,33 @@ export default function AnalyticsPage() {
         .select("*")
         .eq("company_id", userData.company_id)
 
-      // Get invoices for revenue
+      // Get invoices for revenue (ALL invoices, not just paid)
       const { data: invoicesData } = await supabase
         .from("invoices")
-        .select("amount, status")
+        .select("amount, status, created_at")
+        .eq("company_id", userData.company_id)
+        .gte("created_at", startDate.toISOString())
+
+      // Also get revenue from loads as fallback
+      const { data: loadsWithRevenue } = await supabase
+        .from("loads")
+        .select("total_rate, value, created_at")
         .eq("company_id", userData.company_id)
         .gte("created_at", startDate.toISOString())
 
       const totalLoads = loadsData?.length || 0
       const activeLoads = loadsData?.filter((l) => l.status === "in_transit" || l.status === "scheduled").length || 0
       const completedLoads = loadsData?.filter((l) => l.status === "delivered").length || 0
-      const totalRevenue = invoicesData?.filter((i) => i.status === "paid").reduce((sum, inv) => sum + (parseFloat(inv.amount) || 0), 0) || 0
+      
+      // Calculate revenue from ALL invoices (not just paid)
+      let totalRevenue = invoicesData?.reduce((sum, inv) => sum + (parseFloat(inv.amount) || 0), 0) || 0
+      
+      // Add revenue from loads if invoices are low/empty
+      if (totalRevenue === 0 && loadsWithRevenue) {
+        totalRevenue = loadsWithRevenue.reduce((sum, load) => {
+          return sum + (parseFloat(load.total_rate) || parseFloat(load.value) || 0)
+        }, 0)
+      }
       const activeTrucks = trucksData?.filter((t) => t.status === "in_use").length || 0
       const activeDrivers = driversData?.filter((d) => d.status === "active").length || 0
       const onTimeDeliveries = loadsData?.filter((l) => {

@@ -230,14 +230,17 @@ export function useRealtimeNotifications() {
     try {
       const { error } = await supabase
         .from("notifications")
-        .update({ read: true })
+        .update({ read: true, read_at: new Date().toISOString() })
         .eq("id", notificationId)
+        .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
 
       if (!error) {
         setNotifications((prev) =>
-          prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
+          prev.map((n) => (n.id === notificationId ? { ...n, read: true, read_at: new Date().toISOString() } : n))
         )
         setUnreadCount((prev) => Math.max(0, prev - 1))
+      } else {
+        console.error("[NOTIFICATIONS] Error marking as read:", error)
       }
     } catch (error) {
       console.error("[NOTIFICATIONS] Failed to mark as read:", error)
@@ -253,13 +256,15 @@ export function useRealtimeNotifications() {
 
       const { error } = await supabase
         .from("notifications")
-        .update({ read: true })
+        .update({ read: true, read_at: new Date().toISOString() })
         .eq("user_id", user.id)
         .eq("read", false)
 
       if (!error) {
-        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+        setNotifications((prev) => prev.map((n) => ({ ...n, read: true, read_at: new Date().toISOString() })))
         setUnreadCount(0)
+      } else {
+        console.error("[NOTIFICATIONS] Error marking all as read:", error)
       }
     } catch (error) {
       console.error("[NOTIFICATIONS] Failed to mark all as read:", error)

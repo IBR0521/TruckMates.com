@@ -67,8 +67,12 @@ export default function RevenuePage() {
 
       // Load trend data
       const trendResult = await getMonthlyRevenueTrend(6)
-      if (trendResult.data) {
-        setTrendData(trendResult.data)
+      if (trendResult.error) {
+        console.error("Error loading trend data:", trendResult.error)
+        toast.error(`Failed to load revenue trend: ${trendResult.error}`)
+        setTrendData([])
+      } else {
+        setTrendData(trendResult.data || [])
       }
     } catch (error) {
       toast.error("Failed to load revenue report")
@@ -189,6 +193,7 @@ export default function RevenuePage() {
           ) : !reportData ? (
             <Card className="p-8 text-center">
               <p className="text-muted-foreground">No revenue data available for the selected period.</p>
+              <p className="text-sm text-muted-foreground mt-2">Try selecting a different time period or create invoices/loads with revenue.</p>
             </Card>
           ) : (
             <>
@@ -250,27 +255,40 @@ export default function RevenuePage() {
               )}
 
               {/* Monthly Trend */}
-              {trendData.length > 0 && (
-                <Card className="border border-border/50 p-6 shadow-sm">
-                  <h3 className="text-lg font-semibold text-foreground mb-4">Monthly Revenue Trend (Last 6 Months)</h3>
+              <Card className="border border-border/50 p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-foreground mb-4">Monthly Revenue Trend (Last 6 Months)</h3>
+                {trendData && trendData.length > 0 ? (
                   <div className="h-64 flex items-end gap-4">
                     {trendData.map((item, i) => {
-                      const maxAmount = Math.max(...trendData.map((d) => d.amount))
+                      const amounts = trendData.map((d) => d.amount).filter(a => a > 0)
+                      const maxAmount = amounts.length > 0 ? Math.max(...amounts) : 1
                       const height = maxAmount > 0 ? (item.amount / maxAmount) * 100 : 0
                       return (
                         <div key={i} className="flex-1 flex flex-col items-center gap-2">
                           <div
                             className="w-full bg-primary/80 hover:bg-primary transition rounded-t"
-                            style={{ height: `${height}%` }}
+                            style={{ 
+                              height: `${Math.max(height, item.amount > 0 ? 5 : 2)}%`,
+                              minHeight: item.amount > 0 ? '20px' : '4px'
+                            }}
                           />
                           <p className="text-xs text-muted-foreground">{formatMonth(item.month)}</p>
-                          <p className="text-xs font-semibold text-foreground">${item.amount.toFixed(1)}k</p>
+                          <p className="text-xs font-semibold text-foreground">
+                            ${item.amount > 0 ? item.amount.toFixed(1) : '0.0'}k
+                          </p>
                         </div>
                       )
                     })}
                   </div>
-                </Card>
-              )}
+                ) : (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">
+                    <div className="text-center">
+                      <p className="mb-2">No revenue data available</p>
+                      <p className="text-sm">Revenue trend will appear once you have invoices or loads with revenue</p>
+                    </div>
+                  </div>
+                )}
+              </Card>
             </>
           )}
         </div>

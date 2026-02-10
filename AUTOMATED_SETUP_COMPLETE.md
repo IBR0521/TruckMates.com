@@ -99,3 +99,4 @@ If something doesn't work:
 3. Check browser console for errors
 4. Make sure `.env.local` has the Ollama config
 
+

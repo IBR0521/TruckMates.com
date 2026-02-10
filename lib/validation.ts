@@ -96,12 +96,17 @@ export function validateVIN(vin: string): boolean {
 
 /**
  * Validate license plate (flexible format)
+ * Supports various formats: ABC123, ABC-123, ABC 123, 123ABC, etc.
  */
 export function validateLicensePlate(plate: string): boolean {
   if (!plate) return false
-  // Allow alphanumeric, 2-8 characters
-  const plateRegex = /^[A-Z0-9]{2,8}$/i
-  return plateRegex.test(plate.trim())
+  const trimmed = plate.trim()
+  // Allow alphanumeric with optional spaces, dashes, or dots
+  // Length: 2-12 characters (to support various state formats)
+  const plateRegex = /^[A-Z0-9\s\-\.]{2,12}$/i
+  // Must contain at least one letter and one number, or be all letters/numbers
+  const hasContent = /[A-Z]/i.test(trimmed) || /[0-9]/.test(trimmed)
+  return plateRegex.test(trimmed) && hasContent && trimmed.length >= 2
 }
 
 /**

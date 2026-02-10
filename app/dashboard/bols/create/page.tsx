@@ -19,6 +19,7 @@ import { toast } from "sonner"
 import { createBOL, getBOLTemplates } from "@/app/actions/bol"
 import { getLoads } from "@/app/actions/loads"
 import { useRouter } from "next/navigation"
+import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 
 export default function CreateBOLPage() {
   const router = useRouter()
@@ -168,26 +169,16 @@ export default function CreateBOLPage() {
   ]
 
   return (
-    <div className="w-full">
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
-        <Link href="/dashboard/bols">
-          <Button variant="ghost" size="sm" className="mb-4">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to BOLs
-          </Button>
-        </Link>
-        <h1 className="text-xl md:text-2xl font-bold text-foreground">Create Bill of Lading</h1>
-      </div>
-
-      <div className="p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmit} className="space-y-6">
+    <FormPageLayout
+      title="Create Bill of Lading"
+      subtitle="Generate a bill of lading for your shipment"
+      backUrl="/dashboard/bols"
+      onSubmit={handleSubmit}
+      isSubmitting={isSubmitting}
+      submitLabel="Create BOL"
+    >
             {/* Load Selection */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Package className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Load Selection</h2>
-              </div>
+            <FormSection title="Load Selection" icon={<Package className="w-5 h-5" />}>
               <div className="grid md:grid-cols-2 gap-6">
                 <div>
                   <Label htmlFor="load_id">Select Load *</Label>
@@ -239,16 +230,12 @@ export default function CreateBOLPage() {
                     </div>
                   </div>
                 )}
-              </div>
-            </Card>
+              </FormGrid>
+            </FormSection>
 
             {/* Shipper Information */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Building2 className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Shipper Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+            <FormSection title="Shipper Information" icon={<Building2 className="w-5 h-5" />}>
+              <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="shipper_name">Shipper Name *</Label>
                   <Input
@@ -329,16 +316,12 @@ export default function CreateBOLPage() {
                     className="mt-2"
                   />
                 </div>
-              </div>
-            </Card>
+              </FormGrid>
+            </FormSection>
 
             {/* Consignee Information */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <MapPin className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Consignee Information</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+            <FormSection title="Consignee Information" icon={<MapPin className="w-5 h-5" />}>
+              <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="consignee_name">Consignee Name *</Label>
                   <Input
@@ -419,16 +402,12 @@ export default function CreateBOLPage() {
                     className="mt-2"
                   />
                 </div>
-              </div>
-            </Card>
+              </FormGrid>
+            </FormSection>
 
             {/* Carrier & Load Details */}
-            <Card className="border-border p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <FileText className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Carrier & Load Details</h2>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
+            <FormSection title="Carrier & Load Details" icon={<FileText className="w-5 h-5" />}>
+              <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="carrier_name">Carrier Name</Label>
                   <Input
@@ -520,23 +499,7 @@ export default function CreateBOLPage() {
                     rows={3}
                   />
                 </div>
-              </div>
-            </Card>
-
-            {/* Submit Button */}
-            <div className="flex justify-end gap-4">
-              <Link href="/dashboard/bols">
-                <Button type="button" variant="outline">
-                  Cancel
-                </Button>
-              </Link>
-              <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                {isSubmitting ? "Creating..." : "Create BOL"}
-              </Button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+              </FormGrid>
+            </FormSection>
   )
 }

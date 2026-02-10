@@ -10,10 +10,16 @@ import Sidebar from "@/components/dashboard/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { FeedbackWidget } from "@/components/feedback-widget"
 import { NotificationsCenter } from "@/components/notifications-center"
-import { FloatingAIWidget } from "@/components/truckmates-ai/floating-widget"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+// AI Widget temporarily disabled - not ready for production
+// const FloatingAIWidget = dynamic(
+//   () => import("@/components/truckmates-ai/floating-widget"),
+//   { 
+//     ssr: false
+//   }
+// )
 
 export default function DashboardLayout({
   children,
@@ -121,7 +127,8 @@ export default function DashboardLayout({
       <FeedbackWidget />
       
       {/* Floating AI Widget - Right side */}
-      <FloatingAIWidget />
+      {/* Temporarily disabled - AI feature not ready for production */}
+      {/* <FloatingAIWidget /> */}
     </div>
   )
 }

@@ -269,8 +269,9 @@ export async function getDriverTimelines(filters?: {
         destination,
         driver_id,
         truck_id,
-        start_date,
-        end_date,
+        estimated_arrival,
+        estimated_time,
+        created_at,
         status,
         priority,
         driver:driver_id (
@@ -285,9 +286,6 @@ export async function getDriverTimelines(filters?: {
       )
       .eq("company_id", company_id)
       .not("driver_id", "is", null)
-      .not("start_date", "is", null)
-      .gte("start_date", startDate.toISOString().split("T")[0])
-      .lte("end_date", endDate.toISOString().split("T")[0])
       .in("status", ["scheduled", "in_progress", "in_transit"])
 
     if (routesError) {
@@ -355,10 +353,26 @@ export async function getDriverTimelines(filters?: {
 
     // Process routes
     for (const route of routes || []) {
-      const startDate = route.start_date ? new Date(route.start_date) : new Date()
-      const endDate = route.end_date
-        ? new Date(route.end_date)
-        : new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
+      // Use created_at as start date, or current date if not available
+      const startDate = route.created_at ? new Date(route.created_at) : new Date()
+      
+      // Use estimated_arrival as end date, or calculate from estimated_time, or default to 24 hours later
+      let endDate: Date
+      if (route.estimated_arrival) {
+        endDate = new Date(route.estimated_arrival)
+      } else if (route.estimated_time) {
+        // Parse estimated_time (e.g., "3h 30m") and add to start date
+        const timeMatch = route.estimated_time.match(/(\d+)h\s*(\d+)?m?/)
+        if (timeMatch) {
+          const hours = parseInt(timeMatch[1]) || 0
+          const minutes = parseInt(timeMatch[2]) || 0
+          endDate = new Date(startDate.getTime() + (hours * 60 + minutes) * 60 * 1000)
+        } else {
+          endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
+        }
+      } else {
+        endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
+      }
 
       // Estimate drive time
       const driveTimeMinutes = 480 // Default 8 hours

@@ -284,6 +284,11 @@ export async function updateRoute(
     route_complete_time?: string
     route_type?: string
     scenario?: string
+    notes?: string
+    special_instructions?: string
+    estimated_fuel_cost?: number
+    estimated_toll_cost?: number
+    total_estimated_cost?: number
     [key: string]: any
   }
 ) {
@@ -309,7 +314,8 @@ export async function updateRoute(
     "status", "driver_id", "truck_id", "estimated_arrival", "depot_name",
     "depot_address", "pre_route_time_minutes", "post_route_time_minutes",
     "route_start_time", "route_departure_time", "route_complete_time",
-    "route_type", "scenario"
+    "route_type", "scenario", "notes", "special_instructions",
+    "estimated_fuel_cost", "estimated_toll_cost", "total_estimated_cost"
   ]
 
   for (const field of fieldsToCheck) {
