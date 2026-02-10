@@ -69,9 +69,17 @@ export default function DashboardLayout({
   useEffect(() => {
     async function checkCompanyAccess() {
       try {
-        // Skip check if we're already on account setup page
-        if (typeof window !== "undefined" && window.location.pathname.includes("/account-setup")) {
-          return
+        // Skip check for specific pages that should be accessible
+        if (typeof window !== "undefined") {
+          const pathname = window.location.pathname
+          // Skip check on account setup, employees, and other admin pages
+          if (
+            pathname.includes("/account-setup") ||
+            pathname.includes("/dashboard/employees") ||
+            pathname.includes("/dashboard/settings")
+          ) {
+            return
+          }
         }
 
         const userResult = await getCurrentUser()
@@ -92,8 +100,8 @@ export default function DashboardLayout({
       }
     }
     if (mounted) {
-      // Add a small delay to avoid race conditions with page navigation
-      const timeoutId = setTimeout(checkCompanyAccess, 500)
+      // Add a delay to avoid race conditions with page navigation
+      const timeoutId = setTimeout(checkCompanyAccess, 1000)
       return () => clearTimeout(timeoutId)
     }
   }, [mounted, router])
