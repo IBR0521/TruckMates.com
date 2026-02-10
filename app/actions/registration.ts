@@ -74,7 +74,7 @@ export async function createCompanyAndLinkUser(data: {
           id: data.userId,
           email: data.email,
           full_name: data.companyName.trim(),
-          role: 'manager',
+          role: 'super_admin',
           company_id: companyData.id,
           phone: data.phone
         })
@@ -88,7 +88,7 @@ export async function createCompanyAndLinkUser(data: {
         .from('users')
         .update({ 
           company_id: companyData.id, 
-          role: 'manager',
+          role: 'super_admin',
           full_name: data.companyName.trim(),
           phone: data.phone
         })

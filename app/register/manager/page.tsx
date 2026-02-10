@@ -70,7 +70,7 @@ function ManagerRegisterForm() {
         options: {
           data: {
             full_name: formData.companyName.trim(),
-            role: 'manager'
+            role: 'super_admin'
           }
         }
       })

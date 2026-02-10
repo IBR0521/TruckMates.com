@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, Suspense } from "react"
+import { useState, Suspense, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,9 +11,14 @@ import Link from "next/link"
 import { toast } from "sonner"
 import { Logo } from "@/components/logo"
 import { createClient } from "@/lib/supabase/client"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import { ROLES, type EmployeeRole } from "@/lib/roles"
 
 function UserRegisterForm() {
+  const searchParams = useSearchParams()
+  const selectedRole = searchParams.get("role") as EmployeeRole | null
+  const roleInfo = selectedRole ? ROLES[selectedRole] : null
+
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -24,6 +29,13 @@ function UserRegisterForm() {
   const router = useRouter()
   const supabase = createClient()
 
+  useEffect(() => {
+    // If no role is selected, redirect back to registration page
+    if (!selectedRole || !roleInfo) {
+      router.push("/register")
+    }
+  }, [selectedRole, roleInfo, router])
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
@@ -31,6 +43,12 @@ function UserRegisterForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+
+    if (!selectedRole) {
+      toast.error("Please select a role")
+      setIsLoading(false)
+      return
+    }
 
     try {
       // Step 1: Create auth user (trigger will automatically create public.users record)
@@ -40,7 +58,7 @@ function UserRegisterForm() {
         options: {
           data: {
             full_name: formData.fullName,
-            role: 'user'
+            role: selectedRole
           }
         }
       })
@@ -57,12 +75,12 @@ function UserRegisterForm() {
         return
       }
 
-      // Step 2: Update user record with full name
+      // Step 2: Update user record with full name and role
       const { error: userError } = await supabase
         .from('users')
         .update({ 
           full_name: formData.fullName,
-          role: 'user'
+          role: selectedRole
         })
         .eq('id', authData.user.id)
 
@@ -80,6 +98,10 @@ function UserRegisterForm() {
       toast.error("An error occurred. Please try again.")
       setIsLoading(false)
     }
+  }
+
+  if (!selectedRole || !roleInfo) {
+    return null
   }
 
   return (
@@ -102,7 +124,7 @@ function UserRegisterForm() {
         {/* Registration Card */}
         <Card className="bg-card border-border p-8">
           <h1 className="text-2xl font-bold text-foreground mb-2 text-center">
-            Employee / Driver Registration
+            {roleInfo.name} Registration
           </h1>
           <p className="text-center text-muted-foreground mb-8">
             Join an existing company
@@ -143,15 +165,18 @@ function UserRegisterForm() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground">Manager ID</label>
+              <label className="text-sm font-medium text-foreground">Company Invitation Code</label>
               <Input
                 type="text"
                 name="managerId"
-                placeholder="Enter the ID provided by your manager"
+                placeholder="Enter the invitation code provided by your company"
                 value={formData.managerId}
                 onChange={handleChange}
                 className="mt-2 bg-input border-border text-foreground placeholder:text-muted-foreground"
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                You'll be linked to the company after account creation
+              </p>
             </div>
 
             <Button 
