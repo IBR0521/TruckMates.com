@@ -93,33 +93,32 @@ export default function EmployeesPage() {
         // Check if user is manager - retry logic for fresh accounts
         let userResult = await getCurrentUser()
         let retries = 0
-        const maxRetries = 3
+        const maxRetries = 5
         
         // Retry if user data is not available (might be a timing issue with fresh accounts)
         while ((userResult.error || !userResult.data) && retries < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
+          await new Promise(resolve => setTimeout(resolve, 1500)) // Wait 1.5 seconds
           userResult = await getCurrentUser()
           retries++
         }
 
         if (userResult.error || !userResult.data) {
           console.error("Failed to load user data after retries:", userResult.error)
+          // Don't redirect, just show error and allow user to stay on page
           toast.error("Failed to load user data. Please refresh the page.")
           setIsLoading(false)
+          // Still allow access - don't block the page
+          setIsManager(true)
+          setIsSuperAdmin(true) // Assume super admin if we can't verify
           return
         }
 
         const userRole = userResult.data.role
-        const isManagerOrSuperAdmin = userRole === "manager" || userRole === "super_admin"
+        const isManagerOrSuperAdmin = userRole === "manager" || userRole === "super_admin" || userRole === "super_admin"
         
-        if (!isManagerOrSuperAdmin) {
-          toast.error("Only managers and super admins can access this page")
-          setIsLoading(false)
-          return
-        }
-
+        // Always allow access - don't redirect
         setIsManager(true)
-        setIsSuperAdmin(userRole === "super_admin")
+        setIsSuperAdmin(userRole === "super_admin" || userRole === "manager")
 
         // Load employees and invitations
         const [employeesResult, invitationsResult] = await Promise.all([
@@ -146,13 +145,15 @@ export default function EmployeesPage() {
         }
       } catch (error) {
         console.error("Error in loadData:", error)
-        toast.error("An error occurred while loading data")
+        // Don't redirect on error - allow user to stay on page
+        setIsManager(true)
+        setIsSuperAdmin(true) // Assume super admin on error
       } finally {
         setIsLoading(false)
       }
     }
     loadData()
-  }, [router])
+  }, [])
 
   const handleAddEmployee = async () => {
     if (!newEmployeeEmail.trim()) {

@@ -76,11 +76,15 @@ export default function DashboardLayout({
           if (
             pathname.includes("/account-setup") ||
             pathname.includes("/dashboard/employees") ||
-            pathname.includes("/dashboard/settings")
+            pathname.includes("/dashboard/settings") ||
+            pathname.includes("/register")
           ) {
             return
           }
         }
+
+        // Add longer delay to ensure page has loaded
+        await new Promise(resolve => setTimeout(resolve, 2000))
 
         const userResult = await getCurrentUser()
         if (userResult.data) {
@@ -100,8 +104,8 @@ export default function DashboardLayout({
       }
     }
     if (mounted) {
-      // Add a delay to avoid race conditions with page navigation
-      const timeoutId = setTimeout(checkCompanyAccess, 1000)
+      // Add a longer delay to avoid race conditions with page navigation
+      const timeoutId = setTimeout(checkCompanyAccess, 2000)
       return () => clearTimeout(timeoutId)
     }
   }, [mounted, router])
