@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { getMonthlyRevenueTrend } from "@/app/actions/reports"
 
 export default function AnalyticsPage() {
   const [stats, setStats] = useState({
@@ -21,6 +22,7 @@ export default function AnalyticsPage() {
   })
   const [isLoading, setIsLoading] = useState(true)
   const [dateRange, setDateRange] = useState("30") // days
+  const [trendData, setTrendData] = useState<Array<{ month: string; amount: number }>>([])
 
   useEffect(() => {
     loadAnalytics()
@@ -112,11 +114,26 @@ export default function AnalyticsPage() {
         onTimeDeliveries,
         averageRevenuePerLoad,
       })
+
+      // Load revenue trend data
+      const trendResult = await getMonthlyRevenueTrend(6)
+      if (trendResult.error) {
+        console.error("Error loading trend data:", trendResult.error)
+        setTrendData([])
+      } else {
+        setTrendData(trendResult.data || [])
+      }
     } catch (error) {
       toast.error("Failed to load analytics")
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const formatMonth = (monthKey: string) => {
+    const [year, month] = monthKey.split("-")
+    const date = new Date(parseInt(year), parseInt(month) - 1)
+    return date.toLocaleDateString("en-US", { month: "short", year: "numeric" })
   }
 
   const statCards = [
@@ -313,18 +330,46 @@ export default function AnalyticsPage() {
             </Card>
           </div>
 
-          {/* Placeholder for Charts */}
+          {/* Revenue Trends Chart */}
           <Card className="border-border p-6">
-            <h2 className="text-xl font-semibold text-foreground mb-4">Revenue Trends</h2>
-            <div className="h-64 flex items-center justify-center bg-secondary/20 rounded-lg border border-border">
-              <div className="text-center">
-                <BarChart3 className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
-                <p className="text-muted-foreground">Chart integration available</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Integrate with Chart.js, Recharts, or similar library for visualizations
-                </p>
-              </div>
+            <div className="flex items-center gap-2 mb-4">
+              <BarChart3 className="w-5 h-5 text-primary" />
+              <h2 className="text-xl font-semibold text-foreground">Revenue Trends (Last 6 Months)</h2>
             </div>
+            {trendData && trendData.length > 0 ? (
+              <div className="h-64 flex items-end gap-4">
+                {trendData.map((item, i) => {
+                  const amounts = trendData.map((d) => d.amount).filter(a => a > 0)
+                  const maxAmount = amounts.length > 0 ? Math.max(...amounts) : 1
+                  const height = maxAmount > 0 ? (item.amount / maxAmount) * 100 : 0
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-2">
+                      <div
+                        className="w-full bg-primary/80 hover:bg-primary transition rounded-t"
+                        style={{ 
+                          height: `${Math.max(height, item.amount > 0 ? 5 : 2)}%`,
+                          minHeight: item.amount > 0 ? '20px' : '4px'
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground text-center">{formatMonth(item.month)}</p>
+                      <p className="text-xs font-semibold text-foreground">
+                        ${item.amount > 0 ? (item.amount / 1000).toFixed(1) : '0.0'}k
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="h-64 flex items-center justify-center bg-secondary/20 rounded-lg border border-border">
+                <div className="text-center">
+                  <BarChart3 className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-muted-foreground">No revenue data available</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Revenue trend will appear once you have invoices or loads with revenue
+                  </p>
+                </div>
+              </div>
+            )}
           </Card>
         </div>
       </div>
