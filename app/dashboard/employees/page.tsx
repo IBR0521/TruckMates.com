@@ -312,9 +312,10 @@ export default function EmployeesPage() {
   )
 }
 
-  if (!isManager) {
-    return null
-  }
+  // Always show the page - removed blocking check
+  // if (!isManager) {
+  //   return null
+  // }
 
   return (
     <div className="w-full">
