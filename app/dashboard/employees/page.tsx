@@ -89,50 +89,67 @@ export default function EmployeesPage() {
 
   useEffect(() => {
     async function loadData() {
-      // Check if user is manager
-      const userResult = await getCurrentUser()
-      if (userResult.error || !userResult.data) {
-        toast.error("Failed to load user data")
-        router.push("/dashboard")
-        return
+      try {
+        // Check if user is manager - retry logic for fresh accounts
+        let userResult = await getCurrentUser()
+        let retries = 0
+        const maxRetries = 3
+        
+        // Retry if user data is not available (might be a timing issue with fresh accounts)
+        while ((userResult.error || !userResult.data) && retries < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
+          userResult = await getCurrentUser()
+          retries++
+        }
+
+        if (userResult.error || !userResult.data) {
+          console.error("Failed to load user data after retries:", userResult.error)
+          toast.error("Failed to load user data. Please refresh the page.")
+          setIsLoading(false)
+          return
+        }
+
+        const userRole = userResult.data.role
+        const isManagerOrSuperAdmin = userRole === "manager" || userRole === "super_admin"
+        
+        if (!isManagerOrSuperAdmin) {
+          toast.error("Only managers and super admins can access this page")
+          setIsLoading(false)
+          return
+        }
+
+        setIsManager(true)
+        setIsSuperAdmin(userRole === "super_admin")
+
+        // Load employees and invitations
+        const [employeesResult, invitationsResult] = await Promise.all([
+          getEmployees(),
+          getPendingInvitations(),
+        ])
+
+        if (employeesResult.error) {
+          console.error("Error loading employees:", employeesResult.error)
+          // Don't show error toast, just log it
+        } else if (employeesResult.data) {
+          setEmployees(employeesResult.data)
+        }
+
+        if (invitationsResult.error) {
+          // Log error but don't show toast (invitations are optional)
+          console.log("Invitations:", invitationsResult.error)
+          // Set empty array if error (not critical)
+          setInvitations([])
+        } else if (invitationsResult.data) {
+          setInvitations(invitationsResult.data)
+        } else {
+          setInvitations([])
+        }
+      } catch (error) {
+        console.error("Error in loadData:", error)
+        toast.error("An error occurred while loading data")
+      } finally {
+        setIsLoading(false)
       }
-
-      const userRole = userResult.data.role
-      const isManagerOrSuperAdmin = userRole === "manager" || userRole === "super_admin"
-      
-      if (!isManagerOrSuperAdmin) {
-        toast.error("Only managers and super admins can access this page")
-        router.push("/dashboard")
-        return
-      }
-
-      setIsManager(true)
-      setIsSuperAdmin(userRole === "super_admin")
-
-      // Load employees and invitations
-      const [employeesResult, invitationsResult] = await Promise.all([
-        getEmployees(),
-        getPendingInvitations(),
-      ])
-
-      if (employeesResult.error) {
-        toast.error(employeesResult.error)
-      } else if (employeesResult.data) {
-        setEmployees(employeesResult.data)
-      }
-
-      if (invitationsResult.error) {
-        // Log error but don't show toast (invitations are optional)
-        console.log("Invitations:", invitationsResult.error)
-        // Set empty array if error (not critical)
-        setInvitations([])
-      } else if (invitationsResult.data) {
-        setInvitations(invitationsResult.data)
-      } else {
-        setInvitations([])
-      }
-
-      setIsLoading(false)
     }
     loadData()
   }, [router])
