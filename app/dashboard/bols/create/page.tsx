@@ -179,7 +179,7 @@ export default function CreateBOLPage() {
     >
             {/* Load Selection */}
             <FormSection title="Load Selection" icon={<Package className="w-5 h-5" />}>
-              <div className="grid md:grid-cols-2 gap-6">
+              <FormGrid cols={2}>
                 <div>
                   <Label htmlFor="load_id">Select Load *</Label>
                   <Select
