@@ -1,216 +1,77 @@
-import { Building2, Radio, Truck, Shield, DollarSign, UserCog } from "lucide-react"
+import { Building2, Radio, Truck, Shield, DollarSign, User } from "lucide-react"
 
-export type RoleGroup = "executive" | "operations" | "field_ops" | "compliance" | "business" | "support"
-
+// Simplified 6-role system
 export type EmployeeRole =
-  | "owner"
-  | "it_admin"
+  | "super_admin"
   | "operations_manager"
-  | "warehouse_coordinator"
-  | "broker_carrier_manager"
+  | "dispatcher"
+  | "safety_compliance"
+  | "financial_controller"
   | "driver"
-  | "fleet_manager"
-  | "maintenance_manager"
-  | "safety_manager"
-  | "compliance_officer"
-  | "accounting_manager"
-  | "customer_service"
-  | "sales_rep"
-  | "hr_manager"
-  | "data_analyst"
 
 export interface RoleInfo {
   id: EmployeeRole
   name: string
   description: string
-  isManager: boolean // Can manage other employees
-  requiresCompany: boolean // Needs company setup
+  isManager: boolean
+  requiresCompany: boolean
+  dashboardType: "global" | "marketplace" | "active_loads" | "eld_violations" | "invoicing" | "mobile"
 }
 
-export interface RoleGroupInfo {
-  id: RoleGroup
-  name: string
-  description: string
-  icon: any
-  roles: RoleInfo[]
-}
-
-export const ROLE_GROUPS: Record<RoleGroup, RoleGroupInfo> = {
-  executive: {
-    id: "executive",
-    name: "Executive/Management",
-    description: "Company leadership and system administration",
-    icon: Building2,
-    roles: [
-      {
-        id: "owner",
-        name: "Owner/Company Manager",
-        description: "Full company management and strategic decisions",
-        isManager: true,
-        requiresCompany: true,
-      },
-      {
-        id: "it_admin",
-        name: "IT/System Administrator",
-        description: "System configuration and technical management",
-        isManager: true,
-        requiresCompany: true,
-      },
-    ],
+export const ROLES: Record<EmployeeRole, RoleInfo> = {
+  super_admin: {
+    id: "super_admin",
+    name: "Super Admin",
+    description: "Global visibility and full system control. The CEO role with access to all features, subscriptions, bank accounts, and user management.",
+    isManager: true,
+    requiresCompany: true,
+    dashboardType: "global",
   },
-  operations: {
-    id: "operations",
-    name: "Operations",
-    description: "Day-to-day operations and logistics coordination",
-    icon: Radio,
-    roles: [
-      {
-        id: "operations_manager",
-        name: "Operations Manager/Dispatcher",
-        description: "Day-to-day operations, driver assignments, and dispatch",
-        isManager: true,
-        requiresCompany: true,
-      },
-      {
-        id: "warehouse_coordinator",
-        name: "Warehouse/Logistics Coordinator",
-        description: "Load coordination and warehouse operations",
-        isManager: false,
-        requiresCompany: true,
-      },
-      {
-        id: "broker_carrier_manager",
-        name: "Broker/Carrier Manager",
-        description: "Marketplace operations and load management",
-        isManager: true,
-        requiresCompany: true,
-      },
-    ],
+  operations_manager: {
+    id: "operations_manager",
+    name: "Operations Manager",
+    description: "Lead dispatcher focusing on marketplace and high-level coordination. Manages loads, vehicles, drivers, and yard operations.",
+    isManager: true,
+    requiresCompany: true,
+    dashboardType: "marketplace",
   },
-  field_ops: {
-    id: "field_ops",
-    name: "Field Operations",
-    description: "On-road and vehicle operations",
-    icon: Truck,
-    roles: [
-      {
-        id: "driver",
-        name: "Driver",
-        description: "On-road operations and deliveries",
-        isManager: false,
-        requiresCompany: false,
-      },
-      {
-        id: "fleet_manager",
-        name: "Fleet Manager",
-        description: "Vehicle and fleet management",
-        isManager: false,
-        requiresCompany: true,
-      },
-      {
-        id: "maintenance_manager",
-        name: "Maintenance Manager/Mechanic",
-        description: "Vehicle maintenance and service",
-        isManager: false,
-        requiresCompany: true,
-      },
-    ],
+  dispatcher: {
+    id: "dispatcher",
+    name: "Dispatcher",
+    description: "Real-time execution role. Manages active loads, AI document processing, and driver HOS. Financial rates are view-only (masked).",
+    isManager: false,
+    requiresCompany: true,
+    dashboardType: "active_loads",
   },
-  compliance: {
-    id: "compliance",
-    name: "Compliance & Safety",
-    description: "Safety, compliance, and regulatory management",
-    icon: Shield,
-    roles: [
-      {
-        id: "safety_manager",
-        name: "Safety & Compliance Manager",
-        description: "Safety programs and compliance monitoring",
-        isManager: false,
-        requiresCompany: true,
-      },
-      {
-        id: "compliance_officer",
-        name: "Compliance Officer",
-        description: "Regulatory compliance and reporting",
-        isManager: false,
-        requiresCompany: true,
-      },
-    ],
+  safety_compliance: {
+    id: "safety_compliance",
+    name: "Safety & Compliance Officer",
+    description: "Audit role focusing on ELD service and inspections. Manages HOS violations, document expiry, and maintenance logs.",
+    isManager: false,
+    requiresCompany: true,
+    dashboardType: "eld_violations",
   },
-  business: {
-    id: "business",
-    name: "Business Operations",
-    description: "Financial and customer management",
-    icon: DollarSign,
-    roles: [
-      {
-        id: "accounting_manager",
-        name: "Accounting/Finance Manager",
-        description: "Financial management and invoicing",
-        isManager: false,
-        requiresCompany: true,
-      },
-      {
-        id: "customer_service",
-        name: "Customer Service/Account Manager",
-        description: "Customer relations and support",
-        isManager: false,
-        requiresCompany: true,
-      },
-      {
-        id: "sales_rep",
-        name: "Sales Representative",
-        description: "Business development and sales",
-        isManager: false,
-        requiresCompany: true,
-      },
-    ],
+  financial_controller: {
+    id: "financial_controller",
+    name: "Financial Controller",
+    description: "Accounting role focusing on Order-to-Cash cycle. Manages invoicing, settlements, IFTA, and financial reporting.",
+    isManager: false,
+    requiresCompany: true,
+    dashboardType: "invoicing",
   },
-  support: {
-    id: "support",
-    name: "Support Functions",
-    description: "HR, reporting, and administrative support",
-    icon: UserCog,
-    roles: [
-      {
-        id: "hr_manager",
-        name: "HR/Employee Manager",
-        description: "Employee management and HR operations",
-        isManager: true,
-        requiresCompany: true,
-      },
-      {
-        id: "data_analyst",
-        name: "Data Analyst/Reporting Specialist",
-        description: "Data analysis and reporting",
-        isManager: false,
-        requiresCompany: true,
-      },
-    ],
+  driver: {
+    id: "driver",
+    name: "Driver",
+    description: "Mobile task completion role. Views assigned loads, uploads PODs via document scanner, and manages personal ELD logs.",
+    isManager: false,
+    requiresCompany: false,
+    dashboardType: "mobile",
   },
 }
 
 // Helper functions
-export function getRoleGroup(groupId: RoleGroup): RoleGroupInfo {
-  return ROLE_GROUPS[groupId]
-}
-
 export function getRoleInfo(roleId: EmployeeRole): RoleInfo | undefined {
-  for (const group of Object.values(ROLE_GROUPS)) {
-    const role = group.roles.find((r) => r.id === roleId)
-    if (role) return role
-  }
-  return undefined
-}
-
-export function getRoleGroupByRole(roleId: EmployeeRole): RoleGroupInfo | undefined {
-  for (const group of Object.values(ROLE_GROUPS)) {
-    if (group.roles.some((r) => r.id === roleId)) {
-      return group
-    }
-  }
-  return undefined
+  return ROLES[roleId]
 }
 
 // Map old role names to new system (for backward compatibility)
@@ -218,9 +79,23 @@ export function mapLegacyRole(legacyRole: string | null | undefined): EmployeeRo
   if (!legacyRole) return "driver" // Default fallback
   
   const mapping: Record<string, EmployeeRole> = {
-    manager: "owner",
+    // Old roles map to new roles
+    manager: "super_admin",
+    owner: "super_admin",
     user: "driver",
     driver: "driver",
+    // Map old operations roles
+    operations_manager: "operations_manager",
+    warehouse_coordinator: "operations_manager",
+    broker_carrier_manager: "operations_manager",
+    // Map old compliance roles
+    safety_manager: "safety_compliance",
+    compliance_officer: "safety_compliance",
+    // Map old financial roles
+    accounting_manager: "financial_controller",
+    // Map old field ops
+    fleet_manager: "operations_manager",
+    maintenance_manager: "safety_compliance",
   }
   
   // If it's already in the mapping, use the mapped value
@@ -230,9 +105,12 @@ export function mapLegacyRole(legacyRole: string | null | undefined): EmployeeRo
   
   // Check if it's already a valid EmployeeRole
   const validRoles: EmployeeRole[] = [
-    "owner", "it_admin", "operations_manager", "warehouse_coordinator", "broker_carrier_manager",
-    "driver", "fleet_manager", "maintenance_manager", "safety_manager", "compliance_officer",
-    "accounting_manager", "customer_service", "sales_rep", "hr_manager", "data_analyst"
+    "super_admin",
+    "operations_manager",
+    "dispatcher",
+    "safety_compliance",
+    "financial_controller",
+    "driver"
   ]
   
   if (validRoles.includes(legacyRole as EmployeeRole)) {
@@ -255,3 +133,8 @@ export function isManagerRole(roleId: EmployeeRole): boolean {
   return role?.isManager ?? false
 }
 
+// Get dashboard type for role
+export function getDashboardType(roleId: EmployeeRole): RoleInfo["dashboardType"] {
+  const role = getRoleInfo(roleId)
+  return role?.dashboardType ?? "global"
+}

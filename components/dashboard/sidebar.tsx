@@ -40,6 +40,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
+import { canViewFeature, canCreateFeature } from "@/lib/feature-permissions"
 
 interface SidebarProps {
   isOpen: boolean
@@ -62,6 +64,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
   const [isLoading, setIsLoading] = useState(true)
   const [isDesktop, setIsDesktop] = useState(true)
   const [mounted, setMounted] = useState(false)
+  const [userRole, setUserRole] = useState<EmployeeRole | null>(null)
 
   // Check if we're on desktop (lg breakpoint = 1024px) - client only
   useEffect(() => {
@@ -104,16 +107,23 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
         if (!isMounted) return
         
         if (result?.data) {
-          // Simple check: manager or owner = manager, everything else = user
-          const role = result.data.role
-          setIsManager(role === "manager" || role === "owner")
+          // Get employee_role from metadata or fallback to role
+          const employeeRole = (result.data as any).employee_role || result.data.role
+          const mappedRole = mapLegacyRole(employeeRole) as EmployeeRole
+          setUserRole(mappedRole)
+          
+          // Check if role is a manager role
+          const managerRoles: EmployeeRole[] = ["super_admin", "operations_manager"]
+          setIsManager(managerRoles.includes(mappedRole))
         } else {
           setIsManager(false)
+          setUserRole(null)
         }
       } catch (error) {
         if (!isMounted) return
         console.error('[Sidebar] Role check error:', error)
         setIsManager(false)
+        setUserRole(null)
       } finally {
         if (isMounted) {
           setIsLoading(false)
@@ -176,198 +186,241 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
           {/* Dashboard is always visible */}
           <NavItem href="/dashboard" icon={BarChart3} label="Dashboard" isCollapsed={shouldShowCollapsed} />
 
-          {/* Drivers Dropdown */}
-          <DropdownItem 
-            icon={Users} 
-            label="Drivers" 
-            href="/dashboard/drivers"
-            isOpen={driversOpen} 
-            onToggle={() => setDriversOpen(!driversOpen)}
-            isCollapsed={shouldShowCollapsed}
-          >
-            <NavItem href="/dashboard/drivers" label="Driver List" isSubitem isCollapsed={shouldShowCollapsed} />
-            {isManager && (
-              <NavItem href="/dashboard/drivers/add" label="Add Driver" isSubitem isCollapsed={shouldShowCollapsed} />
-            )}
-          </DropdownItem>
+          {/* Drivers - Show if user can view drivers */}
+          {userRole && canViewFeature(userRole, "drivers") && (
+            <DropdownItem 
+              icon={Users} 
+              label="Drivers" 
+              href="/dashboard/drivers"
+              isOpen={driversOpen} 
+              onToggle={() => setDriversOpen(!driversOpen)}
+              isCollapsed={shouldShowCollapsed}
+            >
+              <NavItem href="/dashboard/drivers" label="Driver List" isSubitem isCollapsed={shouldShowCollapsed} />
+              {userRole && canCreateFeature(userRole, "drivers") && (
+                <NavItem href="/dashboard/drivers/add" label="Add Driver" isSubitem isCollapsed={shouldShowCollapsed} />
+              )}
+            </DropdownItem>
+          )}
 
-          {/* Vehicles Dropdown */}
-          <DropdownItem
-            icon={Truck}
-            label="Vehicles"
-            href="/dashboard/trucks"
-            isOpen={vehiclesOpen}
-            onToggle={() => setVehiclesOpen(!vehiclesOpen)}
-            isCollapsed={shouldShowCollapsed}
-          >
-            <NavItem href="/dashboard/trucks" label="Vehicle List" isSubitem isCollapsed={shouldShowCollapsed} />
-            {isManager && (
-              <NavItem href="/dashboard/trucks/add" label="Add Vehicle" isSubitem isCollapsed={shouldShowCollapsed} />
-            )}
-          </DropdownItem>
+          {/* Vehicles - Show if user can view vehicles */}
+          {userRole && canViewFeature(userRole, "vehicles") && (
+            <DropdownItem
+              icon={Truck}
+              label="Vehicles"
+              href="/dashboard/trucks"
+              isOpen={vehiclesOpen}
+              onToggle={() => setVehiclesOpen(!vehiclesOpen)}
+              isCollapsed={shouldShowCollapsed}
+            >
+              <NavItem href="/dashboard/trucks" label="Vehicle List" isSubitem isCollapsed={shouldShowCollapsed} />
+              {userRole && canCreateFeature(userRole, "vehicles") && (
+                <NavItem href="/dashboard/trucks/add" label="Add Vehicle" isSubitem isCollapsed={shouldShowCollapsed} />
+              )}
+            </DropdownItem>
+          )}
 
-          {/* Routes Dropdown */}
-          <DropdownItem 
-            icon={BarChart3} 
-            label="Routes" 
-            href="/dashboard/routes"
-            isOpen={routesOpen} 
-            onToggle={() => setRoutesOpen(!routesOpen)}
-            isCollapsed={shouldShowCollapsed}
-          >
-            <NavItem href="/dashboard/routes" label="Route List" isSubitem isCollapsed={shouldShowCollapsed} />
-            {isManager && (
-              <>
-                <NavItem href="/dashboard/routes/add" label="Add Route" isSubitem isCollapsed={shouldShowCollapsed} />
-                <NavItem href="/dashboard/routes/optimize" label="Optimize Routes" isSubitem isCollapsed={shouldShowCollapsed} />
-              </>
-            )}
-          </DropdownItem>
+          {/* Routes - Show if user can view routes */}
+          {userRole && canViewFeature(userRole, "routes") && (
+            <DropdownItem 
+              icon={BarChart3} 
+              label="Routes" 
+              href="/dashboard/routes"
+              isOpen={routesOpen} 
+              onToggle={() => setRoutesOpen(!routesOpen)}
+              isCollapsed={shouldShowCollapsed}
+            >
+              <NavItem href="/dashboard/routes" label="Route List" isSubitem isCollapsed={shouldShowCollapsed} />
+              {userRole && canCreateFeature(userRole, "routes") && (
+                <>
+                  <NavItem href="/dashboard/routes/add" label="Add Route" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/routes/optimize" label="Optimize Routes" isSubitem isCollapsed={shouldShowCollapsed} />
+                </>
+              )}
+            </DropdownItem>
+          )}
 
-          {/* Loads Dropdown */}
-          <DropdownItem 
-            icon={Truck} 
-            label="Loads" 
-            href="/dashboard/loads"
-            isOpen={loadsOpen} 
-            onToggle={() => setLoadsOpen(!loadsOpen)}
-            isCollapsed={shouldShowCollapsed}
-          >
-            <NavItem href="/dashboard/loads" label="Load List" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/loads/external" label="External Loads" isSubitem isCollapsed={shouldShowCollapsed} />
-            {isManager && (
-              <NavItem href="/dashboard/loads/add" label="Add Load" isSubitem isCollapsed={shouldShowCollapsed} />
-            )}
-          </DropdownItem>
+          {/* Loads - Show if user can view loads */}
+          {userRole && canViewFeature(userRole, "loads") && (
+            <DropdownItem 
+              icon={Truck} 
+              label="Loads" 
+              href="/dashboard/loads"
+              isOpen={loadsOpen} 
+              onToggle={() => setLoadsOpen(!loadsOpen)}
+              isCollapsed={shouldShowCollapsed}
+            >
+              <NavItem href="/dashboard/loads" label="Load List" isSubitem isCollapsed={shouldShowCollapsed} />
+              {userRole && canViewFeature(userRole, "marketplace") && (
+                <NavItem href="/dashboard/loads/external" label="External Loads" isSubitem isCollapsed={shouldShowCollapsed} />
+              )}
+              {userRole && canCreateFeature(userRole, "loads") && (
+                <NavItem href="/dashboard/loads/add" label="Add Load" isSubitem isCollapsed={shouldShowCollapsed} />
+              )}
+            </DropdownItem>
+          )}
 
-          {/* Dispatch Board */}
-          <NavItem href="/dashboard/dispatches" icon={Radio} label="Dispatch Board" isCollapsed={shouldShowCollapsed} />
+          {/* Dispatch Board - Show if user can view dispatch */}
+          {userRole && canViewFeature(userRole, "dispatch") && (
+            <NavItem href="/dashboard/dispatches" icon={Radio} label="Dispatch Board" isCollapsed={shouldShowCollapsed} />
+          )}
 
-          {/* Fleet Map & Geofencing */}
-          <NavItem href="/dashboard/fleet-map" icon={MapPin} label="Fleet Map & Zones" isCollapsed={shouldShowCollapsed} />
+          {/* Fleet Map - Show if user can view fleet_map */}
+          {userRole && canViewFeature(userRole, "fleet_map") && (
+            <NavItem href="/dashboard/fleet-map" icon={MapPin} label="Fleet Map & Zones" isCollapsed={shouldShowCollapsed} />
+          )}
 
-          {/* Address Book */}
-          <NavItem href="/dashboard/address-book" icon={Contact} label="Address Book" isCollapsed={shouldShowCollapsed} />
+          {/* Address Book - Show if user can view address_book */}
+          {userRole && canViewFeature(userRole, "address_book") && (
+            <NavItem href="/dashboard/address-book" icon={Contact} label="Address Book" isCollapsed={shouldShowCollapsed} />
+          )}
 
-          {/* CRM Dropdown */}
-          <DropdownItem
-            icon={Building2}
-            label="CRM"
-            href="/dashboard/crm"
-            isOpen={crmOpen}
-            onToggle={() => setCrmOpen(!crmOpen)}
-            isCollapsed={shouldShowCollapsed}
-          >
-            <NavItem href="/dashboard/crm" label="CRM Dashboard" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/customers" label="Customers" isSubitem isCollapsed={shouldShowCollapsed} />
-            {isManager && (
-              <NavItem href="/dashboard/customers/add" label="Add Customer" isSubitem isCollapsed={shouldShowCollapsed} />
-            )}
-            <NavItem href="/dashboard/vendors" label="Vendors" isSubitem isCollapsed={shouldShowCollapsed} />
-            {isManager && (
-              <NavItem href="/dashboard/vendors/add" label="Add Vendor" isSubitem isCollapsed={shouldShowCollapsed} />
-            )}
-          </DropdownItem>
+          {/* CRM - Show if user can view CRM */}
+          {userRole && canViewFeature(userRole, "crm") && (
+            <DropdownItem
+              icon={Building2}
+              label="CRM"
+              href="/dashboard/crm"
+              isOpen={crmOpen}
+              onToggle={() => setCrmOpen(!crmOpen)}
+              isCollapsed={shouldShowCollapsed}
+            >
+              <NavItem href="/dashboard/crm" label="CRM Dashboard" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/customers" label="Customers" isSubitem isCollapsed={shouldShowCollapsed} />
+              {userRole && canCreateFeature(userRole, "crm") && (
+                <NavItem href="/dashboard/customers/add" label="Add Customer" isSubitem isCollapsed={shouldShowCollapsed} />
+              )}
+              <NavItem href="/dashboard/vendors" label="Vendors" isSubitem isCollapsed={shouldShowCollapsed} />
+              {userRole && canCreateFeature(userRole, "crm") && (
+                <NavItem href="/dashboard/vendors/add" label="Add Vendor" isSubitem isCollapsed={shouldShowCollapsed} />
+              )}
+            </DropdownItem>
+          )}
 
-          {/* Accounting Dropdown */}
-          <DropdownItem
-            icon={DollarSign}
-            label="Accounting"
-            href="/dashboard/accounting/invoices"
-            isOpen={accountingOpen}
-            onToggle={() => setAccountingOpen(!accountingOpen)}
-            isCollapsed={shouldShowCollapsed}
-          >
-            <NavItem href="/dashboard/accounting/invoices" label="Invoices" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/accounting/expenses" label="Expenses" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/accounting/settlements" label="Settlements" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/accounting/tax-fuel" label="Tax & Fuel" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/fuel-analytics" label="Fuel Analytics" isSubitem isCollapsed={shouldShowCollapsed} />
-          </DropdownItem>
+          {/* Accounting - Show if user can view accounting */}
+          {userRole && canViewFeature(userRole, "accounting") && (
+            <DropdownItem
+              icon={DollarSign}
+              label="Accounting"
+              href="/dashboard/accounting/invoices"
+              isOpen={accountingOpen}
+              onToggle={() => setAccountingOpen(!accountingOpen)}
+              isCollapsed={shouldShowCollapsed}
+            >
+              <NavItem href="/dashboard/accounting/invoices" label="Invoices" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/accounting/expenses" label="Expenses" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/accounting/settlements" label="Settlements" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/accounting/tax-fuel" label="Tax & Fuel" isSubitem isCollapsed={shouldShowCollapsed} />
+              {userRole && canViewFeature(userRole, "fuel_analytics") && (
+                <NavItem href="/dashboard/fuel-analytics" label="Fuel Analytics" isSubitem isCollapsed={shouldShowCollapsed} />
+              )}
+            </DropdownItem>
+          )}
 
-          {/* Maintenance Dropdown */}
-          <DropdownItem
-            icon={Wrench}
-            label="Maintenance"
-            href="/dashboard/maintenance"
-            isOpen={maintenanceOpen}
-            onToggle={() => setMaintenanceOpen(!maintenanceOpen)}
-            isCollapsed={shouldShowCollapsed}
-          >
-            <NavItem href="/dashboard/maintenance" label="Schedule" isSubitem isCollapsed={shouldShowCollapsed} />
-            {isManager && (
-              <NavItem href="/dashboard/maintenance/add" label="Add Service" isSubitem isCollapsed={shouldShowCollapsed} />
-            )}
-            <NavItem href="/dashboard/maintenance/work-orders" label="Work Orders" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/maintenance/fault-code-rules" label="Fault Code Rules" isSubitem isCollapsed={shouldShowCollapsed} />
-          </DropdownItem>
+          {/* Maintenance - Show if user can view maintenance */}
+          {userRole && canViewFeature(userRole, "maintenance") && (
+            <DropdownItem
+              icon={Wrench}
+              label="Maintenance"
+              href="/dashboard/maintenance"
+              isOpen={maintenanceOpen}
+              onToggle={() => setMaintenanceOpen(!maintenanceOpen)}
+              isCollapsed={shouldShowCollapsed}
+            >
+              <NavItem href="/dashboard/maintenance" label="Schedule" isSubitem isCollapsed={shouldShowCollapsed} />
+              {userRole && canCreateFeature(userRole, "maintenance") && (
+                <NavItem href="/dashboard/maintenance/add" label="Add Service" isSubitem isCollapsed={shouldShowCollapsed} />
+              )}
+              <NavItem href="/dashboard/maintenance/work-orders" label="Work Orders" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/maintenance/fault-code-rules" label="Fault Code Rules" isSubitem isCollapsed={shouldShowCollapsed} />
+            </DropdownItem>
+          )}
 
-          {/* DVIR */}
-          <NavItem href="/dashboard/dvir" icon={FileCheck} label="DVIR Reports" isCollapsed={shouldShowCollapsed} />
+          {/* DVIR - Show if user can view DVIR */}
+          {userRole && canViewFeature(userRole, "dvir") && (
+            <NavItem href="/dashboard/dvir" icon={FileCheck} label="DVIR Reports" isCollapsed={shouldShowCollapsed} />
+          )}
 
-          {/* ELD Service */}
-          <NavItem href="/dashboard/eld" icon={Shield} label="ELD Service" isCollapsed={shouldShowCollapsed} />
+          {/* ELD Service - Show if user can view ELD */}
+          {userRole && canViewFeature(userRole, "eld") && (
+            <NavItem href="/dashboard/eld" icon={Shield} label="ELD Service" isCollapsed={shouldShowCollapsed} />
+          )}
 
-          {/* IFTA & Reports */}
-          <NavItem href="/dashboard/ifta" icon={Receipt} label="IFTA Reports" isCollapsed={shouldShowCollapsed} />
+          {/* IFTA - Show if user can view IFTA */}
+          {userRole && canViewFeature(userRole, "ifta") && (
+            <NavItem href="/dashboard/ifta" icon={Receipt} label="IFTA Reports" isCollapsed={shouldShowCollapsed} />
+          )}
 
-          {/* Reports Dropdown */}
-          <DropdownItem 
-            icon={BarChart3} 
-            label="Reports" 
-            href="/dashboard/reports/analytics"
-            isOpen={reportsOpen} 
-            onToggle={() => setReportsOpen(!reportsOpen)}
-            isCollapsed={shouldShowCollapsed}
-          >
-            <NavItem href="/dashboard/reports/analytics" label="Analytics" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/reports/revenue" label="Revenue" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/reports/profit-loss" label="Profit & Loss" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/reports/driver-payments" label="Driver Payments" isSubitem isCollapsed={shouldShowCollapsed} />
-          </DropdownItem>
+          {/* Reports - Show if user can view reports */}
+          {userRole && canViewFeature(userRole, "reports") && (
+            <DropdownItem 
+              icon={BarChart3} 
+              label="Reports" 
+              href="/dashboard/reports/analytics"
+              isOpen={reportsOpen} 
+              onToggle={() => setReportsOpen(!reportsOpen)}
+              isCollapsed={shouldShowCollapsed}
+            >
+              <NavItem href="/dashboard/reports/analytics" label="Analytics" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/reports/revenue" label="Revenue" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/reports/profit-loss" label="Profit & Loss" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/reports/driver-payments" label="Driver Payments" isSubitem isCollapsed={shouldShowCollapsed} />
+            </DropdownItem>
+          )}
 
-          {/* Documents */}
-          <NavItem href="/dashboard/documents" icon={FolderOpen} label="Documents" isCollapsed={shouldShowCollapsed} />
+          {/* Documents - Show if user can view documents */}
+          {userRole && canViewFeature(userRole, "documents") && (
+            <NavItem href="/dashboard/documents" icon={FolderOpen} label="Documents" isCollapsed={shouldShowCollapsed} />
+          )}
 
-          {/* Alerts */}
-          <NavItem href="/dashboard/alerts" icon={Bell} label="Alerts" isCollapsed={shouldShowCollapsed} />
+          {/* Alerts - Show if user can view alerts */}
+          {userRole && canViewFeature(userRole, "alerts") && (
+            <NavItem href="/dashboard/alerts" icon={Bell} label="Alerts" isCollapsed={shouldShowCollapsed} />
+          )}
 
-          {/* Reminders */}
-          <NavItem href="/dashboard/reminders" icon={Calendar} label="Reminders" isCollapsed={shouldShowCollapsed} />
+          {/* Reminders - Show if user can view reminders */}
+          {userRole && canViewFeature(userRole, "reminders") && (
+            <NavItem href="/dashboard/reminders" icon={Calendar} label="Reminders" isCollapsed={shouldShowCollapsed} />
+          )}
 
-          {/* BOLs (Bill of Lading) */}
-          <NavItem href="/dashboard/bols" icon={FileText} label="Bill of Lading" isCollapsed={shouldShowCollapsed} />
+          {/* BOLs - Show if user can view BOL */}
+          {userRole && canViewFeature(userRole, "bol") && (
+            <NavItem href="/dashboard/bols" icon={FileText} label="Bill of Lading" isCollapsed={shouldShowCollapsed} />
+          )}
 
-
-          {/* Employees - Managers only */}
-          {isManager && (
+          {/* Employees - Super Admin only */}
+          {userRole === "super_admin" && (
             <NavItem href="/dashboard/employees" icon={UserCog} label="Employees" isCollapsed={shouldShowCollapsed} />
           )}
 
-          {/* Marketplace */}
-          <NavItem href="/dashboard/marketplace" icon={Store} label="Marketplace" isCollapsed={shouldShowCollapsed} />
+          {/* Marketplace - Show if user can view marketplace */}
+          {userRole && canViewFeature(userRole, "marketplace") && (
+            <NavItem href="/dashboard/marketplace" icon={Store} label="Marketplace" isCollapsed={shouldShowCollapsed} />
+          )}
 
         </nav>
 
         {/* Footer */}
         <div className={`border-t border-sidebar-border ${shouldShowCollapsed ? "p-2" : "p-4"}`}>
-          {/* Settings Dropdown */}
-          <DropdownItem
-            icon={Settings}
-            label="Settings"
-            href="/dashboard/settings"
-            isOpen={settingsOpen}
-            onToggle={() => setSettingsOpen(!settingsOpen)}
-            isCollapsed={shouldShowCollapsed}
-          >
-            <NavItem href="/dashboard/settings" label="General" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/settings/invoice" label="Invoice" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/settings/load" label="Load" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/settings/dispatch" label="Dispatch" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/settings/business" label="Business" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/settings/alerts" label="Alerts" isSubitem isCollapsed={shouldShowCollapsed} />
-            <NavItem href="/dashboard/settings/webhooks" label="Webhooks" isSubitem isCollapsed={shouldShowCollapsed} />
-          </DropdownItem>
+          {/* Settings - Super Admin only */}
+          {userRole === "super_admin" && (
+            <DropdownItem
+              icon={Settings}
+              label="Settings"
+              href="/dashboard/settings"
+              isOpen={settingsOpen}
+              onToggle={() => setSettingsOpen(!settingsOpen)}
+              isCollapsed={shouldShowCollapsed}
+            >
+              <NavItem href="/dashboard/settings" label="General" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/invoice" label="Invoice" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/load" label="Load" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/dispatch" label="Dispatch" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/business" label="Business" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/alerts" label="Alerts" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/webhooks" label="Webhooks" isSubitem isCollapsed={shouldShowCollapsed} />
+            </DropdownItem>
+          )}
         </div>
       </aside>
     </TooltipProvider>

@@ -31,6 +31,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import dynamic from "next/dynamic"
 import { Suspense } from "react"
+import { RoleDashboardRouter } from "@/components/dashboard/role-dashboard-router"
+import { getCurrentUser } from "@/app/actions/user"
+import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
+import { canCreateFeature } from "@/lib/feature-permissions"
 
 // Performance: Lazy load heavy components
 const ProfitEstimator = dynamic(() => import("@/components/dashboard/profit-estimator").then(mod => ({ default: mod.ProfitEstimator })), {
@@ -70,7 +74,27 @@ export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
-  
+  const [userRole, setUserRole] = useState<EmployeeRole | null>(null)
+  const [showRoleDashboard, setShowRoleDashboard] = useState(false)
+
+  useEffect(() => {
+    // Check if user has a role that should see role-specific dashboard
+    async function checkRole() {
+      try {
+        const result = await getCurrentUser()
+        if (result?.data) {
+          const employeeRole = (result.data as any).employee_role || result.data.role
+          const mappedRole = mapLegacyRole(employeeRole) as EmployeeRole
+          setUserRole(mappedRole)
+          // Show role-specific dashboard for all roles except super_admin (who can toggle)
+          setShowRoleDashboard(true)
+        }
+      } catch (error) {
+        console.error("Error checking user role:", error)
+      }
+    }
+    checkRole()
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -357,8 +381,13 @@ export default function DashboardPage() {
       {/* Content Area */}
       <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
-          {/* Financial Overview Section */}
-          <div className="grid md:grid-cols-4 gap-4">
+          {/* Role-Specific Dashboard */}
+          {showRoleDashboard ? (
+            <RoleDashboardRouter />
+          ) : (
+            <>
+              {/* Financial Overview Section */}
+              <div className="grid md:grid-cols-4 gap-4">
             <Card className="border-border bg-card/50 p-6">
               <div className="flex items-start justify-between">
                 <div>
@@ -704,6 +733,8 @@ export default function DashboardPage() {
               </div>
             )}
           </Card>
+            </>
+          )}
         </div>
       </div>
     </div>

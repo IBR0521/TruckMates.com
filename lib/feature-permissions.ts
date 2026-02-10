@@ -26,6 +26,17 @@ export type FeatureCategory =
   | "marketplace"
   | "upload_document"
   | "fuel_analytics"
+  | "subscriptions"
+  | "bank_accounts"
+  | "user_roles"
+  | "yard_management"
+  | "ai_documents"
+  | "invoicing"
+  | "settlements"
+  | "factoring"
+
+// Permission types
+export type PermissionType = "view" | "create" | "edit" | "delete" | "manage"
 
 // Feature permissions: what each role can access
 export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
@@ -33,10 +44,11 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
   create: FeatureCategory[]
   edit: FeatureCategory[]
   delete: FeatureCategory[]
-  manage: FeatureCategory[] // Full management access
+  manage: FeatureCategory[]
+  masked?: FeatureCategory[] // Features where data is masked (view-only, no editing)
 }> = {
-  // Owner/Company Manager - Full access
-  owner: {
+  // Super Admin - Full access to everything
+  super_admin: {
     view: ["all"],
     create: ["all"],
     edit: ["all"],
@@ -44,16 +56,7 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
     manage: ["all"],
   },
 
-  // IT/System Administrator - System management
-  it_admin: {
-    view: ["dashboard", "employees", "settings", "documents", "reports"],
-    create: ["employees", "settings"],
-    edit: ["settings", "employees"],
-    delete: ["employees"],
-    manage: ["settings", "employees"],
-  },
-
-  // Operations Manager/Dispatcher
+  // Operations Manager - Marketplace & Coordination
   operations_manager: {
     view: [
       "dashboard",
@@ -63,24 +66,29 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
       "loads",
       "dispatch",
       "fleet_map",
+      "marketplace",
+      "yard_management",
       "address_book",
       "eld",
       "dvir",
-      "alerts",
-      "reminders",
       "documents",
       "bol",
       "reports",
+      "alerts",
+      "reminders",
     ],
     create: [
+      "drivers",
+      "vehicles",
       "routes",
       "loads",
       "dispatch",
+      "marketplace",
       "address_book",
       "bol",
+      "documents",
       "alerts",
       "reminders",
-      "documents",
     ],
     edit: [
       "drivers",
@@ -88,65 +96,129 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
       "routes",
       "loads",
       "dispatch",
+      "marketplace",
       "address_book",
       "bol",
     ],
-    delete: ["routes", "loads"],
-    manage: ["dispatch", "routes", "loads"],
+    delete: [
+      "routes",
+      "loads",
+      "marketplace",
+    ],
+    manage: [
+      "dispatch",
+      "routes",
+      "loads",
+      "marketplace",
+      "yard_management",
+    ],
   },
 
-  // Warehouse/Logistics Coordinator
-  warehouse_coordinator: {
+  // Dispatcher - Real-Time Execution
+  dispatcher: {
     view: [
       "dashboard",
-      "loads",
-      "routes",
-      "address_book",
-      "bol",
+      "loads", // Only active/upcoming
+      "routes", // Only assigned
+      "drivers", // Only assigned drivers
+      "dispatch",
+      "ai_documents",
+      "eld",
+      "dvir",
       "documents",
+      "bol",
       "alerts",
       "reminders",
-      "crm",
+      "accounting", // View-only, rates masked
     ],
     create: [
       "loads",
-      "address_book",
-      "bol",
       "documents",
+      "bol",
+      "upload_document",
       "alerts",
       "reminders",
     ],
-    edit: ["loads", "routes", "address_book", "bol"],
+    edit: [
+      "loads", // Status updates only
+      "documents",
+      "bol",
+    ],
     delete: [],
     manage: [],
+    masked: ["accounting"], // Financial rates are masked (view-only)
   },
 
-  // Broker/Carrier Manager
-  broker_carrier_manager: {
+  // Safety & Compliance Officer - ELD & Inspections
+  safety_compliance: {
     view: [
       "dashboard",
-      "marketplace",
-      "loads",
-      "routes",
-      "crm",
+      "eld",
+      "dvir",
+      "maintenance",
+      "vehicles",
+      "drivers",
+      "ifta",
       "documents",
-      "bol",
       "reports",
       "alerts",
+      "reminders",
     ],
     create: [
-      "marketplace",
-      "loads",
-      "crm",
+      "eld",
+      "dvir",
+      "maintenance",
       "documents",
-      "bol",
+      "alerts",
+      "reminders",
     ],
-    edit: ["marketplace", "loads", "crm", "bol"],
-    delete: ["loads"],
-    manage: ["marketplace", "loads"],
+    edit: [
+      "eld",
+      "dvir",
+      "maintenance",
+      "documents",
+    ],
+    delete: [],
+    manage: [
+      "eld",
+      "dvir",
+      "maintenance",
+    ],
   },
 
-  // Driver
+  // Financial Controller - Order-to-Cash
+  financial_controller: {
+    view: [
+      "dashboard",
+      "accounting",
+      "invoicing",
+      "settlements",
+      "factoring",
+      "ifta",
+      "reports",
+      "documents",
+      "loads", // Only delivered loads not yet invoiced
+    ],
+    create: [
+      "invoicing",
+      "settlements",
+      "factoring",
+      "documents",
+    ],
+    edit: [
+      "invoicing",
+      "settlements",
+      "factoring",
+    ],
+    delete: [],
+    manage: [
+      "invoicing",
+      "settlements",
+      "factoring",
+    ],
+  },
+
+  // Driver - Mobile Task Completion
   driver: {
     view: [
       "dashboard",
@@ -154,288 +226,80 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
       "loads", // Only assigned loads
       "eld",
       "dvir",
-      "documents", // Personal documents
-      "alerts", // Personal alerts
-      "reminders", // Personal reminders
+      "documents", // Personal documents only
+      "alerts", // Personal alerts only
+      "reminders", // Personal reminders only
     ],
     create: [
-      "eld",
       "dvir",
       "documents",
-    ],
-    edit: ["loads"], // Update status only
-    delete: [],
-    manage: [],
-  },
-
-  // Fleet Manager
-  fleet_manager: {
-    view: [
-      "dashboard",
-      "vehicles",
-      "maintenance",
-      "dvir",
-      "fleet_map",
-      "eld",
-      "fuel_analytics",
-      "reports",
-      "documents",
-      "alerts",
-      "reminders",
-    ],
-    create: [
-      "vehicles",
-      "maintenance",
-      "dvir",
-      "fleet_map",
-      "documents",
-      "alerts",
-      "reminders",
+      "upload_document", // POD uploads
     ],
     edit: [
-      "vehicles",
-      "maintenance",
-      "fleet_map",
+      "loads", // Status updates only
     ],
-    delete: ["vehicles"],
-    manage: ["vehicles", "maintenance", "fleet_map"],
-  },
-
-  // Maintenance Manager/Mechanic
-  maintenance_manager: {
-    view: [
-      "dashboard",
-      "vehicles",
-      "maintenance",
-      "dvir",
-      "fuel_analytics",
-      "documents",
-      "alerts",
-      "reminders",
-      "reports",
-    ],
-    create: [
-      "maintenance",
-      "dvir",
-      "documents",
-      "alerts",
-      "reminders",
-    ],
-    edit: [
-      "vehicles", // Maintenance info only
-      "maintenance",
-    ],
-    delete: [],
-    manage: ["maintenance"],
-  },
-
-  // Safety & Compliance Manager
-  safety_manager: {
-    view: [
-      "dashboard",
-      "drivers",
-      "eld",
-      "dvir",
-      "ifta",
-      "documents",
-      "reports",
-      "alerts",
-      "reminders",
-      "maintenance",
-    ],
-    create: [
-      "dvir",
-      "alerts",
-      "reminders",
-      "documents",
-    ],
-    edit: [],
-    delete: [],
-    manage: [],
-  },
-
-  // Compliance Officer
-  compliance_officer: {
-    view: [
-      "dashboard",
-      "eld",
-      "ifta",
-      "dvir",
-      "documents",
-      "reports",
-      "alerts",
-      "reminders",
-      "drivers",
-    ],
-    create: [
-      "ifta",
-      "documents",
-      "alerts",
-      "reminders",
-    ],
-    edit: [],
-    delete: [],
-    manage: [],
-  },
-
-  // Accounting/Finance Manager
-  accounting_manager: {
-    view: [
-      "dashboard",
-      "accounting",
-      "reports",
-      "crm",
-      "documents",
-      "bol",
-      "alerts",
-      "reminders",
-    ],
-    create: [
-      "accounting",
-      "reports",
-      "documents",
-    ],
-    edit: [
-      "accounting",
-    ],
-    delete: [],
-    manage: ["accounting"],
-  },
-
-  // Customer Service/Account Manager
-  customer_service: {
-    view: [
-      "dashboard",
-      "crm",
-      "loads",
-      "routes",
-      "documents",
-      "bol",
-      "alerts",
-      "address_book",
-      "reports",
-    ],
-    create: [
-      "crm",
-      "documents",
-      "bol",
-      "alerts",
-      "address_book",
-    ],
-    edit: [
-      "crm",
-      "loads", // Status updates
-      "bol",
-    ],
-    delete: [],
-    manage: ["crm"],
-  },
-
-  // Sales Representative
-  sales_rep: {
-    view: [
-      "dashboard",
-      "crm",
-      "loads",
-      "marketplace",
-      "documents",
-      "address_book",
-      "reports",
-      "alerts",
-    ],
-    create: [
-      "crm",
-      "loads",
-      "marketplace",
-      "documents",
-      "address_book",
-    ],
-    edit: [
-      "crm",
-      "loads",
-    ],
-    delete: [],
-    manage: [],
-  },
-
-  // HR/Employee Manager
-  hr_manager: {
-    view: [
-      "dashboard",
-      "employees",
-      "drivers",
-      "documents",
-      "alerts",
-      "reminders",
-      "settings", // Users section only
-    ],
-    create: [
-      "employees",
-      "drivers",
-      "documents",
-    ],
-    edit: [
-      "employees",
-      "drivers",
-    ],
-    delete: ["employees", "drivers"],
-    manage: ["employees"],
-  },
-
-  // Data Analyst/Reporting Specialist
-  data_analyst: {
-    view: [
-      "dashboard",
-      "reports",
-      "fuel_analytics",
-      "eld",
-      "loads",
-      "routes",
-      "drivers",
-      "vehicles",
-      "documents",
-    ],
-    create: ["reports"],
-    edit: [],
     delete: [],
     manage: [],
   },
 }
 
-// Helper functions
+// Check if role can view feature
 export function canViewFeature(role: EmployeeRole, feature: FeatureCategory): boolean {
   const permissions = ROLE_FEATURE_PERMISSIONS[role]
   if (!permissions) return false
   
-  return permissions.view.includes("all") || permissions.view.includes(feature)
+  // Super admin has all access
+  if (permissions.view.includes("all")) return true
+  
+  return permissions.view.includes(feature)
 }
 
+// Check if role can create in feature
 export function canCreateFeature(role: EmployeeRole, feature: FeatureCategory): boolean {
   const permissions = ROLE_FEATURE_PERMISSIONS[role]
   if (!permissions) return false
   
-  return permissions.create.includes("all") || permissions.create.includes(feature)
+  if (permissions.create.includes("all")) return true
+  
+  return permissions.create.includes(feature)
 }
 
+// Check if role can edit in feature
 export function canEditFeature(role: EmployeeRole, feature: FeatureCategory): boolean {
   const permissions = ROLE_FEATURE_PERMISSIONS[role]
   if (!permissions) return false
   
-  return permissions.edit.includes("all") || permissions.edit.includes(feature)
+  if (permissions.edit.includes("all")) return true
+  
+  return permissions.edit.includes(feature)
 }
 
+// Check if role can delete in feature
 export function canDeleteFeature(role: EmployeeRole, feature: FeatureCategory): boolean {
   const permissions = ROLE_FEATURE_PERMISSIONS[role]
   if (!permissions) return false
   
-  return permissions.delete.includes("all") || permissions.delete.includes(feature)
+  if (permissions.delete.includes("all")) return true
+  
+  return permissions.delete.includes(feature)
 }
 
+// Check if role can manage feature
 export function canManageFeature(role: EmployeeRole, feature: FeatureCategory): boolean {
   const permissions = ROLE_FEATURE_PERMISSIONS[role]
   if (!permissions) return false
   
-  return permissions.manage.includes("all") || permissions.manage.includes(feature)
+  if (permissions.manage.includes("all")) return true
+  
+  return permissions.manage.includes(feature)
+}
+
+// Check if feature data should be masked for role
+export function isFeatureMasked(role: EmployeeRole, feature: FeatureCategory): boolean {
+  const permissions = ROLE_FEATURE_PERMISSIONS[role]
+  if (!permissions || !permissions.masked) return false
+  
+  return permissions.masked.includes(feature)
 }
 
 // Get all accessible features for a role
@@ -445,6 +309,7 @@ export function getAccessibleFeatures(role: EmployeeRole): {
   edit: FeatureCategory[]
   delete: FeatureCategory[]
   manage: FeatureCategory[]
+  masked: FeatureCategory[]
 } {
   return ROLE_FEATURE_PERMISSIONS[role] || {
     view: [],
@@ -452,34 +317,6 @@ export function getAccessibleFeatures(role: EmployeeRole): {
     edit: [],
     delete: [],
     manage: [],
+    masked: [],
   }
 }
-
-// Map feature categories to sidebar navigation items
-export const FEATURE_TO_NAV: Record<FeatureCategory, string> = {
-  dashboard: "/dashboard",
-  drivers: "/dashboard/drivers",
-  vehicles: "/dashboard/trucks",
-  routes: "/dashboard/routes",
-  loads: "/dashboard/loads",
-  dispatch: "/dashboard/dispatches",
-  fleet_map: "/dashboard/fleet-map",
-  address_book: "/dashboard/address-book",
-  crm: "/dashboard/customers",
-  fuel_analytics: "/dashboard/fuel-analytics",
-  accounting: "/dashboard/accounting/invoices",
-  maintenance: "/dashboard/maintenance",
-  dvir: "/dashboard/dvir",
-  eld: "/dashboard/eld",
-  ifta: "/dashboard/ifta",
-  reports: "/dashboard/reports/analytics",
-  documents: "/dashboard/documents",
-  bol: "/dashboard/bols",
-  alerts: "/dashboard/alerts",
-  reminders: "/dashboard/reminders",
-  employees: "/dashboard/employees",
-  settings: "/dashboard/settings",
-  marketplace: "/dashboard/marketplace",
-  upload_document: "/dashboard/upload-document",
-}
-
