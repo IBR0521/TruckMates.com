@@ -86,11 +86,16 @@ export default function DashboardPage() {
           const employeeRole = (result.data as any).employee_role || result.data.role
           const mappedRole = mapLegacyRole(employeeRole) as EmployeeRole
           setUserRole(mappedRole)
-          // Show role-specific dashboard for all roles except super_admin (who can toggle)
+          // Always show role-specific dashboard for all roles
+          setShowRoleDashboard(true)
+        } else {
+          // If we can't get user data, still try to show role dashboard
           setShowRoleDashboard(true)
         }
       } catch (error) {
         console.error("Error checking user role:", error)
+        // On error, still show role dashboard
+        setShowRoleDashboard(true)
       }
     }
     checkRole()
