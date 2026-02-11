@@ -75,7 +75,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [userRole, setUserRole] = useState<EmployeeRole | null>(null)
-  const [showRoleDashboard, setShowRoleDashboard] = useState(false)
+  const [showRoleDashboard, setShowRoleDashboard] = useState(true) // Default to true to show role dashboard immediately
 
   useEffect(() => {
     // Check if user has a role that should see role-specific dashboard
