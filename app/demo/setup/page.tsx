@@ -86,8 +86,8 @@ function DemoSetupContent() {
               let errorMsg = signUpResult.error.message
               if (errorMsg?.includes('Database server error') || errorMsg?.includes('500')) {
                 errorMsg = "Database server is temporarily unavailable. Please try again in a few moments."
-              } else if (errorMsg?.includes('timeout') || errorMsg?.includes('ECONNREFUSED')) {
-                errorMsg = "Connection timeout. Please check your internet connection and try again."
+              } else if (errorMsg?.includes('timeout') || errorMsg?.includes('ECONNREFUSED') || errorMsg?.includes('connect')) {
+                errorMsg = "Failed to connect to server. Please check your internet connection and Supabase configuration."
               } else if (errorMsg?.includes('already registered') || errorMsg?.includes('already exists')) {
                 // User exists but sign-in failed - try sign-in again
                 console.log("User exists, retrying sign-in...")
