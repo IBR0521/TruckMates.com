@@ -121,7 +121,7 @@ export default function DashboardLayout({
     
     if (mounted) {
       // Add a delay to avoid race conditions with page navigation
-      const timeoutId = setTimeout(checkCompanyAccess, 1500)
+      const timeoutId = setTimeout(checkCompanyAccess, 300) // Reduced from 1500ms to 300ms
       return () => {
         isMounted = false
         clearTimeout(timeoutId)

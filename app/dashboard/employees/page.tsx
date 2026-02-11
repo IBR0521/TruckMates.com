@@ -77,7 +77,7 @@ export default function EmployeesPage() {
         
         // Retry if user data is not available (might be a timing issue with fresh accounts)
         while ((userResult.error || !userResult.data) && retries < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 1500)) // Wait 1.5 seconds
+          await new Promise(resolve => setTimeout(resolve, 300)) // Reduced from 1500ms to 300ms
           userResult = await getCurrentUser()
           retries++
         }

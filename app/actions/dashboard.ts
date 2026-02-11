@@ -272,7 +272,7 @@ export async function getDashboardStats() {
     ])
     
     const cardTimeout = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("Connection timeout. Please check your internet connection.")), 8000) // Reduced to 8 seconds for faster failure
+      setTimeout(() => reject(new Error("Connection timeout. Please check your internet connection.")), 5000) // Reduced to 5 seconds for faster failure
     })
     
     let recentDriversData: any = null

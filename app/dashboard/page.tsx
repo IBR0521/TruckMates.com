@@ -91,7 +91,7 @@ export default function DashboardPage() {
         const timeoutPromise = new Promise((_, reject) => {
           timeoutId = setTimeout(() => {
             reject(new Error("Dashboard timeout"))
-          }, 8000) // 8 seconds - more reasonable
+          }, 5000) // 5 seconds - fail fast
         })
         
         // Race between the actual request and timeout
