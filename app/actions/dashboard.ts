@@ -60,7 +60,7 @@ export async function getDashboardStats() {
     const authTimeout = new Promise((resolve) => {
       setTimeout(() => {
         resolve({ companyId: null, error: "Connection timeout. Please check your internet connection." })
-      }, 10000) // Increased to 10 seconds for poor connections
+      }, 5000) // Reduced to 5 seconds for faster failure detection
     })
 
     const { companyId, error: authError } = await Promise.race([
