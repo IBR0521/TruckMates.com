@@ -43,8 +43,7 @@ TruckMates now uses a simplified 6-role system designed for enterprise logistics
 1. **`lib/roles.ts`** - Updated to 6 roles only
 2. **`lib/feature-permissions.ts`** - Permission structure for 6 roles
 3. **`lib/data-masking.ts`** - Financial data masking for dispatchers
-4. **`components/dashboard/role-dashboards/`** - 6 role-specific dashboard components
-5. **`components/dashboard/role-dashboard-router.tsx`** - Routes to appropriate dashboard
+4. **Role-based dashboards** - Removed, will be reimplemented
 6. **`app/dashboard/page.tsx`** - Updated to use role-based routing
 7. **`components/dashboard/sidebar.tsx`** - Updated to show/hide features based on permissions
 

@@ -15,7 +15,6 @@ import {
   Phone, 
   MapPin,
   Settings as SettingsIcon,
-  UserPlus,
   CreditCard,
   Globe,
   Lock,
@@ -360,22 +359,16 @@ export default function SettingsPage() {
                   <Users className="w-5 h-5 text-primary" />
                   <h2 className="text-xl font-bold text-foreground">Employee Management</h2>
                 </div>
-                <Link href="/account-setup/manager">
-                  <Button variant="outline" className="border-primary text-primary hover:bg-primary/10">
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Add New Employee
-                  </Button>
-                </Link>
               </div>
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Manage your employees, generate employee IDs, and control access to your company account.
+                  Manage your employees and control access to your company account.
                 </p>
                 <div className="flex gap-3">
-                  <Link href="/account-setup/manager" className="flex-1">
+                  <Link href="/dashboard/employees" className="flex-1">
                     <Button variant="outline" className="w-full">
-                      <UserPlus className="w-4 h-4 mr-2" />
-                      Add Employees
+                      <Users className="w-4 h-4 mr-2" />
+                      View All Employees
                     </Button>
                   </Link>
                   <Link href="/dashboard/drivers" className="flex-1">

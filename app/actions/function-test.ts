@@ -1231,12 +1231,7 @@ export async function testAllPlatformFunctions() {
     }
 
     try {
-      const invitations = await employeesActions.getPendingInvitations()
-      pushTested("getPendingInvitations")
-      if (invitations.data) pushPassed("getPendingInvitations")
-      else pushFailed({ function: "getPendingInvitations", error: invitations.error })
-    } catch (error: any) {
-      pushFailed({ function: "getPendingInvitations", error: invitations.error })
+      // Invitation functions removed
     }
 
     // ============================================

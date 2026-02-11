@@ -184,12 +184,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger on crm_documents table
-DROP TRIGGER IF EXISTS trigger_crm_document_expiration_alert ON public.crm_documents;
-CREATE TRIGGER trigger_crm_document_expiration_alert
-  AFTER INSERT OR UPDATE OF expiration_date ON public.crm_documents
-  FOR EACH ROW
-  EXECUTE FUNCTION public.trigger_crm_document_expiration_alert();
+  -- Trigger on crm_documents table (only if table exists)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'crm_documents' AND table_schema = 'public') THEN
+    DROP TRIGGER IF EXISTS trigger_crm_document_expiration_alert ON public.crm_documents;
+    CREATE TRIGGER trigger_crm_document_expiration_alert
+      AFTER INSERT OR UPDATE OF expiration_date ON public.crm_documents
+      FOR EACH ROW
+      EXECUTE FUNCTION public.trigger_crm_document_expiration_alert();
+  END IF;
+END $$;
 
 -- ============================================================================
 -- 3. Maintenance Reminder Auto-Completion

@@ -1,0 +1,100 @@
+# Quick Copy-Paste List: Remaining SQL Files to Run
+# Total: 64 files remaining (4 already run)
+
+# Phase 3: Core Feature Tables
+supabase/crm_schema_complete.sql
+supabase/notifications_table.sql
+supabase/notifications_schema.sql
+supabase/audit_logs_schema.sql
+
+# Phase 4: Extended Columns
+supabase/drivers_schema_extended.sql
+supabase/trucks_schema_extended.sql
+supabase/loads_schema_extended.sql
+supabase/add_loads_pricing_columns.sql
+supabase/add_fuel_tracking_columns.sql
+supabase/add_driver_pay_rate.sql
+
+# Phase 5: Settings & Integrations
+supabase/settings_schema.sql
+supabase/add_resend_integration.sql
+supabase/filter_presets_schema.sql
+
+# Phase 6: Storage & Documents
+supabase/storage_bucket_setup.sql
+
+# Phase 7: Subscriptions
+supabase/subscriptions_schema.sql
+
+# Phase 8: DVIR
+supabase/dvir_schema.sql
+supabase/dvir_enhancements.sql
+
+# Phase 9: ELD
+supabase/eld_schema.sql
+supabase/hos_calculation_function.sql
+supabase/eld_driver_mapping_schema.sql
+supabase/eld_mobile_app_policies.sql
+supabase/eld_fault_code_maintenance.sql
+supabase/cron_hos_exception_alerts.sql
+
+# Phase 10: PostGIS & Geofencing
+supabase/postgis_migration.sql
+supabase/geofencing_schema.sql
+
+# Phase 11: Route Tracking & ETA
+supabase/enhanced_eta_traffic.sql
+supabase/realtime_eta.sql
+supabase/actual_route_tracking.sql
+supabase/backhaul_optimization.sql
+supabase/dfm_matching.sql
+supabase/proximity_dispatching.sql
+
+# Phase 12: Multi-Stop & Delivery Points
+supabase/route_stops_schema_safe.sql
+supabase/load_delivery_points_schema_safe.sql
+supabase/load_relationship_type_schema.sql
+supabase/loads_address_book_integration.sql
+supabase/enhanced_address_book.sql
+
+# Phase 13: Dispatch Board
+supabase/dispatch_board_enhancements.sql
+supabase/dispatch_timeline_functions.sql
+
+# Phase 14: Maintenance System
+supabase/work_orders_schema.sql
+supabase/maintenance_documents_schema.sql
+supabase/parts_inventory_schema.sql
+supabase/maintenance_parts_integration.sql
+supabase/predictive_maintenance_alerts.sql
+
+# Phase 15: BOL
+supabase/bol_schema.sql
+supabase/ebol_invoice_trigger.sql
+
+# Phase 16: Accounting & IFTA
+supabase/settlement_pay_rules_schema.sql
+supabase/tax_fuel_reconciliation_schema.sql
+supabase/ifta_tax_rates_schema.sql
+supabase/ifta_state_crossing_automation.sql
+supabase/invoice_three_way_matching.sql
+
+# Phase 17: Additional Features
+supabase/trucklogics_features_schema.sql
+supabase/driver_onboarding_schema.sql
+supabase/customer_portal_schema.sql
+supabase/feedback_schema.sql
+supabase/webhooks_schema.sql
+supabase/api_protection_schema.sql
+supabase/quickbooks_oauth_schema.sql
+supabase/truckmates_ai_schema.sql
+
+# Phase 18: Additional Tracking & Automation
+supabase/idle_time_tracking.sql
+supabase/detention_tracking.sql
+supabase/auto_status_updates.sql
+supabase/alerts_smart_triggers.sql
+
+# Phase 19: Performance Indexes
+supabase/performance_indexes.sql
+

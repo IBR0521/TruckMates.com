@@ -60,7 +60,7 @@ CREATE INDEX IF NOT EXISTS idx_invoices_due_date ON invoices(due_date);
 CREATE INDEX IF NOT EXISTS idx_expenses_company_id ON expenses(company_id);
 CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
 CREATE INDEX IF NOT EXISTS idx_expenses_company_created ON expenses(company_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
 
 -- ============================================
 -- Settlements Table Indexes
@@ -80,7 +80,7 @@ CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 -- Documents Table Indexes
 -- ============================================
 CREATE INDEX IF NOT EXISTS idx_documents_company_id ON documents(company_id);
-CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(document_type);
+CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(type);
 CREATE INDEX IF NOT EXISTS idx_documents_company_created ON documents(company_id, created_at DESC);
 
 -- ============================================

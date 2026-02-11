@@ -421,7 +421,6 @@
 
 - ✅ **Employees**
   - Employee management (`app/actions/employees.ts`)
-  - Invitation system
   - Employee page (`/dashboard/employees`)
 
 - ✅ **Fuel Analytics**

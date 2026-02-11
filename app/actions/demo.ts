@@ -34,7 +34,7 @@ export async function setupDemoCompany(userId: string | null) {
 
     // Get user email and role from auth
     const userEmail = authUser.email || ""
-    const finalRole = "manager" // Simple: demo users are always managers
+    const finalRole = "super_admin" // Demo users are super admins (company creators)
 
     // Get user record
     let userRecord = null
@@ -51,16 +51,16 @@ export async function setupDemoCompany(userId: string | null) {
 
     if (userRecord?.company_id) {
       companyId = userRecord.company_id
-      // Update role to manager for demo
+      // Update role to super_admin for demo
       await supabase
         .from("users")
-        .update({ role: "manager" })
+        .update({ role: "super_admin" })
         .eq("id", actualUserId)
       
       // Update auth metadata
       await supabase.auth.updateUser({
         data: {
-          role: "manager",
+          role: "super_admin",
         }
       })
     } else if (actualUserId) {
@@ -78,7 +78,7 @@ export async function setupDemoCompany(userId: string | null) {
           .from("users")
           .update({
             company_id: companyId,
-            role: "manager",
+            role: "super_admin",
           })
           .eq("id", actualUserId)
 
@@ -89,7 +89,7 @@ export async function setupDemoCompany(userId: string | null) {
         // Update auth metadata
         await supabase.auth.updateUser({
           data: {
-            role: "manager",
+            role: "super_admin",
           }
         })
       } else {
@@ -132,7 +132,7 @@ export async function setupDemoCompany(userId: string | null) {
                 id: actualUserId,
                 email: userEmail,
                 full_name: "Demo User",
-                role: "manager",
+                role: "super_admin",
                 company_id: companyId,
                 phone: "+1-555-DEMO",
               })
@@ -145,7 +145,7 @@ export async function setupDemoCompany(userId: string | null) {
               .from("users")
               .update({
                 company_id: companyId,
-                role: "manager",
+                role: "super_admin",
               })
               .eq("id", actualUserId)
 
@@ -157,7 +157,7 @@ export async function setupDemoCompany(userId: string | null) {
           // Update auth metadata
           await supabase.auth.updateUser({
             data: {
-              role: "manager",
+              role: "super_admin",
             }
           })
         } else {

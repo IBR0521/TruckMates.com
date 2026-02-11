@@ -71,7 +71,7 @@ function DemoSetupContent() {
                   emailRedirectTo: undefined,
                   data: {
                     is_demo: true,
-                    role: 'manager'
+                    role: 'super_admin'
                   }
                 }
               }),
@@ -156,7 +156,7 @@ function DemoSetupContent() {
           // Update auth metadata if missing
           await supabase.auth.updateUser({
             data: {
-              role: 'manager',
+              role: 'super_admin',
             }
           })
         }

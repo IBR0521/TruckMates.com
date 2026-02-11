@@ -67,7 +67,13 @@ export default function DashboardLayout({
 
   // Check if user has a company_id, redirect to account setup if not
   useEffect(() => {
+    let isMounted = true
+    let hasChecked = false
+    
     async function checkCompanyAccess() {
+      // Prevent multiple checks
+      if (hasChecked || !isMounted) return
+      
       try {
         // Skip check for specific pages that should be accessible
         if (typeof window !== "undefined") {
@@ -77,38 +83,51 @@ export default function DashboardLayout({
             pathname.includes("/account-setup") ||
             pathname.includes("/dashboard/employees") ||
             pathname.includes("/dashboard/settings") ||
-            pathname.includes("/register")
+            pathname.includes("/register") ||
+            pathname.includes("/login")
           ) {
+            hasChecked = true
             return
           }
         }
 
-        // Add longer delay to ensure page has loaded
-        await new Promise(resolve => setTimeout(resolve, 2000))
+        // Add delay to ensure page has loaded
+        await new Promise(resolve => setTimeout(resolve, 1500))
+
+        if (!isMounted) return
 
         const userResult = await getCurrentUser()
-        if (userResult.data) {
+        if (userResult.data && isMounted) {
           const user = userResult.data
           // Super Admin and manager always have company (they create it), so skip check for them
           if (user.role === "super_admin" || user.role === "manager") {
+            hasChecked = true
             return
           }
           // For other roles, check if they have a company_id
-          if (!user.company_id) {
-            // User doesn't have a company, redirect to account setup
-            router.push("/account-setup/user")
+          // Note: Account setup flow will be reimplemented
+          if (!user.company_id && isMounted) {
+            hasChecked = true
+            // TODO: Implement new account setup flow
+            return
           }
         }
+        hasChecked = true
       } catch (error) {
         console.error("Error checking company access:", error)
+        hasChecked = true
       }
     }
+    
     if (mounted) {
-      // Add a longer delay to avoid race conditions with page navigation
-      const timeoutId = setTimeout(checkCompanyAccess, 2000)
-      return () => clearTimeout(timeoutId)
+      // Add a delay to avoid race conditions with page navigation
+      const timeoutId = setTimeout(checkCompanyAccess, 1500)
+      return () => {
+        isMounted = false
+        clearTimeout(timeoutId)
+      }
     }
-  }, [mounted, router])
+  }, [mounted]) // Removed router from dependencies to prevent re-runs
 
   return (
     <div className="flex h-screen bg-background">

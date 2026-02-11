@@ -4,28 +4,19 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { 
   Users, 
-  UserPlus, 
   Edit2, 
   Trash2, 
-  Mail,
   CheckCircle2,
   XCircle,
   Clock,
-  Search,
-  Copy,
-  Check,
-  Key
+  Search
 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { 
   getEmployees, 
-  createEmployeeInvitation, 
   updateEmployee, 
-  removeEmployee,
-  getPendingInvitations,
-  cancelInvitation,
-  generateCompanyInvitationCode
+  removeEmployee
 } from "@/app/actions/employees"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -60,24 +51,13 @@ import { useRouter } from "next/navigation"
 export default function EmployeesPage() {
   const router = useRouter()
   const [employees, setEmployees] = useState<any[]>([])
-  const [invitations, setInvitations] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isManager, setIsManager] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const [showAddDialog, setShowAddDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [showCodeDialog, setShowCodeDialog] = useState(false)
-  const [generatedCode, setGeneratedCode] = useState("")
-  const [generatedEmail, setGeneratedEmail] = useState("")
-  const [codeCopied, setCodeCopied] = useState(false)
-  const [showCompanyCodeDialog, setShowCompanyCodeDialog] = useState(false)
-  const [generatedCompanyCode, setGeneratedCompanyCode] = useState("")
-  const [companyCodeExpiresAt, setCompanyCodeExpiresAt] = useState<Date | null>(null)
-  const [companyCodeCopied, setCompanyCodeCopied] = useState(false)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null)
-  const [newEmployeeEmail, setNewEmployeeEmail] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editFormData, setEditFormData] = useState({
     full_name: "",
@@ -120,28 +100,14 @@ export default function EmployeesPage() {
         setIsManager(true)
         setIsSuperAdmin(userRole === "super_admin" || userRole === "manager")
 
-        // Load employees and invitations
-        const [employeesResult, invitationsResult] = await Promise.all([
-          getEmployees(),
-          getPendingInvitations(),
-        ])
+        // Load employees
+        const employeesResult = await getEmployees()
 
         if (employeesResult.error) {
           console.error("Error loading employees:", employeesResult.error)
           // Don't show error toast, just log it
         } else if (employeesResult.data) {
           setEmployees(employeesResult.data)
-        }
-
-        if (invitationsResult.error) {
-          // Log error but don't show toast (invitations are optional)
-          console.log("Invitations:", invitationsResult.error)
-          // Set empty array if error (not critical)
-          setInvitations([])
-        } else if (invitationsResult.data) {
-          setInvitations(invitationsResult.data)
-        } else {
-          setInvitations([])
         }
       } catch (error) {
         console.error("Error in loadData:", error)
@@ -155,40 +121,6 @@ export default function EmployeesPage() {
     loadData()
   }, [])
 
-  const handleAddEmployee = async () => {
-    if (!newEmployeeEmail.trim()) {
-      toast.error("Please enter an email address")
-      return
-    }
-
-    setIsSubmitting(true)
-    const result = await createEmployeeInvitation(newEmployeeEmail.trim())
-
-    if (result.error) {
-      toast.error(result.error)
-      setIsSubmitting(false)
-      return
-    }
-
-    if (result.data) {
-      const invitationCode = result.data.invitation_code || "N/A"
-      const email = newEmployeeEmail.trim()
-      
-      // Store code and email, then show dialog
-      setGeneratedCode(invitationCode)
-      setGeneratedEmail(email)
-      setNewEmployeeEmail("")
-      setShowAddDialog(false)
-      setShowCodeDialog(true)
-      
-      // Reload invitations
-      const invitationsResult = await getPendingInvitations()
-      if (invitationsResult.data) {
-        setInvitations(invitationsResult.data)
-      }
-    }
-    setIsSubmitting(false)
-  }
 
   const handleEditClick = (employee: any) => {
     setSelectedEmployee(employee)
@@ -255,38 +187,6 @@ export default function EmployeesPage() {
     setIsSubmitting(false)
   }
 
-  const handleCancelInvitation = async (invitationId: string) => {
-    const result = await cancelInvitation(invitationId)
-
-    if (result.error) {
-      toast.error(result.error)
-      return
-    }
-
-    toast.success("Invitation cancelled")
-    
-    // Reload invitations
-    const invitationsResult = await getPendingInvitations()
-    if (invitationsResult.data) {
-      setInvitations(invitationsResult.data)
-    }
-  }
-
-  const handleGenerateCompanyCode = async () => {
-    const result = await generateCompanyInvitationCode()
-    
-    if (result.error) {
-      toast.error(result.error)
-      return
-    }
-    
-    if (result.data) {
-      setGeneratedCompanyCode(result.data.invitation_code)
-      setCompanyCodeExpiresAt(new Date(result.data.expires_at))
-      setShowCompanyCodeDialog(true)
-      toast.success("Company invitation code generated! It expires in 15 minutes.")
-    }
-  }
 
   const filteredEmployees = employees.filter((emp) => {
     const query = searchQuery.toLowerCase()
@@ -325,68 +225,11 @@ export default function EmployeesPage() {
           <h1 className="text-2xl font-bold text-foreground">Employee Management</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage your company employees</p>
         </div>
-        <div className="flex items-center gap-3">
-          {isSuperAdmin && (
-            <Button
-              onClick={handleGenerateCompanyCode}
-              variant="outline"
-              className="border-primary text-primary hover:bg-primary/10"
-            >
-              <Key className="w-4 h-4 mr-2" />
-              Generate Invitation Code
-            </Button>
-          )}
-          <Button
-            onClick={() => setShowAddDialog(true)}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            <UserPlus className="w-4 h-4 mr-2" />
-            Add Employee
-          </Button>
-        </div>
       </div>
 
       {/* Content */}
       <div className="p-4 md:p-8">
         <div className="max-w-6xl mx-auto space-y-6">
-          {/* Pending Invitations */}
-          {invitations.length > 0 && (
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <Mail className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-bold text-foreground">Pending Invitations</h2>
-              </div>
-              <div className="space-y-3">
-                {invitations.map((invitation) => (
-                  <div
-                    key={invitation.id}
-                    className="flex items-center justify-between p-4 bg-secondary/50 rounded-lg border border-border"
-                  >
-                    <div className="flex-1">
-                      <p className="text-foreground font-medium">{invitation.email}</p>
-                      <div className="flex items-center gap-4 mt-2">
-                        <p className="text-sm text-muted-foreground">
-                          Code: <span className="font-mono font-semibold">{invitation.invitation_code}</span>
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Expires: {new Date(invitation.expires_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleCancelInvitation(invitation.id)}
-                      className="text-red-400 border-red-400 hover:bg-red-400/10"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-
           {/* Employees List */}
           <Card className="border-border p-6">
             <div className="flex items-center justify-between mb-6">
@@ -414,15 +257,6 @@ export default function EmployeesPage() {
                 <p className="text-muted-foreground">
                   {searchQuery ? "No employees found matching your search" : "No employees yet"}
                 </p>
-                {!searchQuery && (
-                  <Button
-                    onClick={() => setShowAddDialog(true)}
-                    className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground"
-                  >
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Add First Employee
-                  </Button>
-                )}
               </div>
             ) : (
               <>
@@ -571,48 +405,6 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      {/* Add Employee Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Employee</DialogTitle>
-            <DialogDescription>
-              Enter the employee's email address. An invitation code will be generated for you to share.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="employee-email">Email Address</Label>
-              <Input
-                id="employee-email"
-                type="email"
-                placeholder="employee@example.com"
-                value={newEmployeeEmail}
-                onChange={(e) => setNewEmployeeEmail(e.target.value)}
-                className="mt-2"
-                onKeyPress={(e) => {
-                  if (e.key === "Enter") {
-                    handleAddEmployee()
-                  }
-                }}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAddEmployee}
-              disabled={isSubmitting || !newEmployeeEmail.trim()}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground"
-            >
-              {isSubmitting ? "Generating..." : "Generate Invitation Code"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Edit Employee Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent>
@@ -717,132 +509,6 @@ export default function EmployeesPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Invitation Code Dialog */}
-      <Dialog open={showCodeDialog} onOpenChange={setShowCodeDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Invitation Code Generated</DialogTitle>
-            <DialogDescription>
-              Share this code with <strong>{generatedEmail}</strong> so they can join your company.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="bg-secondary/50 border-2 border-dashed border-primary/50 rounded-lg p-6 text-center">
-              <p className="text-sm text-muted-foreground mb-2">Invitation Code</p>
-              <p className="text-3xl font-bold font-mono text-primary tracking-wider">
-                {generatedCode}
-              </p>
-            </div>
-            <Button
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(generatedCode)
-                  setCodeCopied(true)
-                  setTimeout(() => setCodeCopied(false), 2000)
-                } catch (err) {
-                  console.error("Failed to copy:", err)
-                }
-              }}
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-            >
-              {codeCopied ? (
-                <>
-                  <Check className="w-4 h-4 mr-2" />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4 mr-2" />
-                  Copy Code
-                </>
-              )}
-            </Button>
-            <p className="text-xs text-muted-foreground text-center">
-              The employee should use this code when registering or in their account setup.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowCodeDialog(false)
-              }}
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Company Invitation Code Dialog */}
-      <Dialog open={showCompanyCodeDialog} onOpenChange={setShowCompanyCodeDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Company Invitation Code</DialogTitle>
-            <DialogDescription>
-              Share this code with your employees. It expires in 15 minutes and can be used by anyone to join your company.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="bg-secondary/50 border-2 border-dashed border-primary/50 rounded-lg p-6 text-center">
-              <p className="text-sm text-muted-foreground mb-2">Invitation Code</p>
-              <p className="text-3xl font-bold font-mono text-primary tracking-wider">
-                {generatedCompanyCode}
-              </p>
-            </div>
-            {companyCodeExpiresAt && (
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground">
-                  Expires at: <span className="font-medium text-foreground">
-                    {companyCodeExpiresAt.toLocaleString()}
-                  </span>
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  ({Math.round((companyCodeExpiresAt.getTime() - Date.now()) / 60000)} minutes remaining)
-                </p>
-              </div>
-            )}
-            <Button
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(generatedCompanyCode)
-                  setCompanyCodeCopied(true)
-                  setTimeout(() => setCompanyCodeCopied(false), 2000)
-                  toast.success("Code copied to clipboard!")
-                } catch (err) {
-                  console.error("Failed to copy:", err)
-                  toast.error("Failed to copy code")
-                }
-              }}
-              variant="outline"
-              className="w-full"
-            >
-              {companyCodeCopied ? (
-                <>
-                  <Check className="w-4 h-4 mr-2" />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4 mr-2" />
-                  Copy Code
-                </>
-              )}
-            </Button>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowCompanyCodeDialog(false)
-                setCompanyCodeCopied(false)
-              }}
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

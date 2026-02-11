@@ -11,7 +11,6 @@ export default function ManagerAccountSetupPage() {
 
   useEffect(() => {
     // Super Admin account is already set up with company
-    // Just redirect to dashboard where they can generate invitation codes
     router.push("/dashboard")
   }, [router])
 
@@ -26,7 +25,7 @@ export default function ManagerAccountSetupPage() {
           <h1 className="text-2xl font-bold text-foreground mb-2">Welcome to TruckMates!</h1>
           <p className="text-muted-foreground">Redirecting to dashboard...</p>
           <p className="text-sm text-muted-foreground mt-4">
-            You can generate invitation codes for your employees from the Employee Management page.
+            Your account is set up and ready to use.
           </p>
         </Card>
       </div>

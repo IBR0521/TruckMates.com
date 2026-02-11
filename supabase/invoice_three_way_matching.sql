@@ -63,6 +63,9 @@ CREATE INDEX IF NOT EXISTS idx_invoices_matching_status ON public.invoices(match
 CREATE INDEX IF NOT EXISTS idx_invoices_requires_manual_review ON public.invoices(requires_manual_review) WHERE requires_manual_review = true;
 
 -- Step 4: Create function to perform three-way matching
+-- Drop function first to ensure clean replacement
+DROP FUNCTION IF EXISTS verify_invoice_three_way_match(UUID);
+
 CREATE OR REPLACE FUNCTION verify_invoice_three_way_match(
   p_invoice_id UUID
 )
@@ -101,16 +104,37 @@ BEGIN
   
   -- Get load details if load_id exists
   IF v_invoice.load_id IS NOT NULL THEN
-    SELECT * INTO v_load
+    -- Get load - select only columns that definitely exist
+    SELECT 
+      id,
+      company_id,
+      value,
+      company_name
+    INTO v_load
     FROM public.loads
     WHERE id = v_invoice.load_id;
     
     IF FOUND THEN
       v_load_match := true;
       
+      -- Get load amount - try to get estimated_revenue or total_rate if columns exist, otherwise use value
+      -- Check if estimated_revenue column exists
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'loads' AND column_name = 'estimated_revenue') THEN
+        SELECT estimated_revenue INTO v_load_amount FROM public.loads WHERE id = v_invoice.load_id;
+      END IF;
+      
+      -- If still null, try total_rate
+      IF v_load_amount IS NULL AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'loads' AND column_name = 'total_rate') THEN
+        SELECT total_rate INTO v_load_amount FROM public.loads WHERE id = v_invoice.load_id;
+      END IF;
+      
+      -- Fall back to value field which always exists
+      IF v_load_amount IS NULL THEN
+        v_load_amount := COALESCE(v_load.value, 0);
+      END IF;
+      
       -- Check amount match (with tolerance)
-      IF v_load.value IS NOT NULL OR v_load.total_revenue IS NOT NULL OR v_load.estimated_revenue IS NOT NULL THEN
-        v_load_amount := COALESCE(v_load.total_revenue, v_load.estimated_revenue, v_load.value, 0);
+      IF v_load_amount > 0 THEN
         v_amount_difference := ABS(v_invoice.amount - v_load_amount);
         -- Calculate tolerance as percentage of load amount (1% default)
         -- Use a temporary variable for tolerance calculation
@@ -221,7 +245,7 @@ BEGIN
     v_bol_match,
     v_amount_match,
     v_customer_match,
-    COALESCE(v_load.total_revenue, v_load.estimated_revenue, v_load.value, NULL),
+    v_load_amount,
     v_invoice.amount,
     v_amount_difference,
     v_amount_tolerance,

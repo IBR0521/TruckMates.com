@@ -13,7 +13,6 @@ import { Logo } from "@/components/logo"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ROLES, type EmployeeRole } from "@/lib/roles"
-import { verifyCompanyInvitationCode } from "@/app/actions/employees"
 
 function UserRegisterForm() {
   const searchParams = useSearchParams()
@@ -24,7 +23,6 @@ function UserRegisterForm() {
     fullName: "",
     email: "",
     password: "",
-    managerId: "",
   })
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
@@ -91,18 +89,7 @@ function UserRegisterForm() {
         return
       }
 
-      // Step 3: Verify and link to company using invitation code (if provided)
-      if (formData.managerId && formData.managerId.trim()) {
-        const verifyResult = await verifyCompanyInvitationCode(formData.managerId.trim(), selectedRole)
-        if (verifyResult.error) {
-          toast.error(verifyResult.error)
-          setIsLoading(false)
-          return
-        }
-        toast.success("Account created and linked to company successfully!")
-      } else {
-        toast.success("Account created successfully!")
-      }
+      toast.success("Account created successfully!")
 
       setTimeout(() => {
         router.push("/dashboard")
@@ -176,20 +163,6 @@ function UserRegisterForm() {
                 onChange={handleChange}
                 className="mt-2 bg-input border-border text-foreground placeholder:text-muted-foreground"
               />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground">Company Invitation Code</label>
-              <Input
-                type="text"
-                name="managerId"
-                placeholder="Enter the invitation code provided by your company"
-                value={formData.managerId}
-                onChange={handleChange}
-                className="mt-2 bg-input border-border text-foreground placeholder:text-muted-foreground"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                You'll be linked to the company after account creation
-              </p>
             </div>
 
             <Button 
