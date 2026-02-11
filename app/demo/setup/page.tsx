@@ -132,11 +132,23 @@ function DemoSetupContent() {
           return
         }
 
-        // Setup demo company
-        const result = await setupDemoCompany(userId)
+        // Setup demo company with retry
+        let result = await setupDemoCompany(userId)
+        
+        // Retry once if it fails (might be timing issue)
+        if (result.error && result.error.includes("connect") || result.error.includes("timeout")) {
+          console.log("Demo setup failed, retrying once...")
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          result = await setupDemoCompany(userId)
+        }
         
         if (result.error) {
-          setErrorMessage(result.error)
+          // Provide more helpful error message
+          let errorMsg = result.error
+          if (errorMsg.includes("connect") || errorMsg.includes("timeout") || errorMsg.includes("ECONNREFUSED")) {
+            errorMsg = "Failed to connect to database. Please check your Supabase configuration and ensure the database is accessible."
+          }
+          setErrorMessage(errorMsg)
           setStatus("error")
           return
         }

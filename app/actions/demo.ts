@@ -9,8 +9,16 @@ const DEMO_COMPANY_NAME = "Demo Logistics Company"
 // Platform is now free - no subscription needed
 export async function setupDemoCompany(userId: string | null) {
   try {
-    // Create Supabase client
-    const supabase = await createClient()
+    // Create Supabase client with timeout
+    let supabase
+    try {
+      supabase = await createClient()
+    } catch (clientError: any) {
+      return {
+        error: `Failed to connect to database: ${clientError?.message || "Connection error"}. Please check your Supabase configuration.`,
+        data: null
+      }
+    }
     
     if (!supabase) {
       return { 
@@ -19,12 +27,20 @@ export async function setupDemoCompany(userId: string | null) {
       }
     }
 
-    // Verify user is authenticated
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+    // Verify user is authenticated with timeout
+    const authPromise = supabase.auth.getUser()
+    const authTimeout = new Promise((resolve) => {
+      setTimeout(() => resolve({ data: { user: null }, error: { message: "Auth timeout" } }), 5000)
+    })
+    
+    const authResult = await Promise.race([authPromise, authTimeout]) as any
+    const { user: authUser, error: authError } = authResult.data || authResult
     
     if (authError || !authUser) {
       return {
-        error: "User not authenticated. Please sign in first.",
+        error: authError?.message?.includes("timeout") 
+          ? "Connection timeout. Please check your internet connection."
+          : "User not authenticated. Please sign in first.",
         data: null
       }
     }
@@ -93,16 +109,31 @@ export async function setupDemoCompany(userId: string | null) {
           }
         })
       } else {
-        // Use RPC function to create company (bypasses RLS)
-        const { data: newCompanyId, error: rpcError } = await supabase.rpc('create_company_for_user', {
+        // Use RPC function to create company (bypasses RLS) with timeout
+        const rpcPromise = supabase.rpc('create_company_for_user', {
           p_name: DEMO_COMPANY_NAME,
           p_email: userEmail,
           p_phone: "+1-555-DEMO",
           p_user_id: actualUserId
         })
+        
+        const rpcTimeout = new Promise((resolve) => {
+          setTimeout(() => resolve({ data: null, error: { message: "RPC timeout" } }), 10000)
+        })
+        
+        const rpcResult = await Promise.race([rpcPromise, rpcTimeout]) as any
+        const { data: newCompanyId, error: rpcError } = rpcResult
 
         if (rpcError) {
           console.error("RPC function error, trying fallback:", rpcError.message)
+          
+          // If timeout, return early with helpful error
+          if (rpcError.message?.includes("timeout")) {
+            return {
+              error: "Database connection timeout. Please check your internet connection and try again.",
+              data: null
+            }
+          }
           
           // Fallback: Try direct insert (might fail due to RLS, but worth trying)
           const { data: newCompany, error: companyError } = await supabase
