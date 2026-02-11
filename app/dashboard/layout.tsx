@@ -91,8 +91,8 @@ export default function DashboardLayout({
           }
         }
 
-        // Add delay to ensure page has loaded
-        await new Promise(resolve => setTimeout(resolve, 1500))
+        // Small delay to avoid race conditions (reduced from 1500ms to 300ms)
+        await new Promise(resolve => setTimeout(resolve, 300))
 
         if (!isMounted) return
 

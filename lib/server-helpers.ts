@@ -66,7 +66,7 @@ export async function getAuthContext() {
     // Add timeout protection (1 second max)
     const authPromise = getAuthenticatedUser()
     const timeoutPromise = new Promise<{ user: null; companyId: null; error: string }>((resolve) => {
-      setTimeout(() => resolve({ user: null, companyId: null, error: "Authentication timeout" }), 1000)
+      setTimeout(() => resolve({ user: null, companyId: null, error: "Authentication timeout" }), 2000) // Increased slightly for stability
     })
 
     const authResult = await Promise.race([authPromise, timeoutPromise])
@@ -112,7 +112,7 @@ export async function getAuthContext() {
       .single()
 
     const queryTimeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) => {
-      setTimeout(() => resolve({ data: null, error: { message: "Database query timeout" } }), 2000)
+      setTimeout(() => resolve({ data: null, error: { message: "Database query timeout" } }), 3000) // Increased slightly for stability
     })
 
     const { data: userData, error: userError } = await Promise.race([
