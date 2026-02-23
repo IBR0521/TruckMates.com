@@ -17,6 +17,8 @@ const nextConfig = {
   poweredByHeader: false,
   // Optimize production builds
   productionBrowserSourceMaps: false, // Disable source maps in production for faster builds
+  // Reduce memory usage
+  swcMinify: true, // Use SWC minification (faster, less memory)
   // Note: bodySizeLimit moved to experimental in Next.js 16
   experimental: {
     serverActions: {
@@ -34,9 +36,14 @@ const nextConfig = {
       'date-fns',
     ],
   },
-  // Enable output file tracing for better tree-shaking (moved out of experimental)
-  outputFileTracingIncludes: {
-    '/': ['./node_modules/**/*.js'],
+  // Optimize output file tracing to reduce memory usage
+  outputFileTracingExcludes: {
+    '*': [
+      'node_modules/@swc/core-linux-x64-gnu',
+      'node_modules/@swc/core-linux-x64-musl',
+      'node_modules/@esbuild/linux-x64',
+      'node_modules/webpack',
+    ],
   },
   // Configure Turbopack (Next.js 16 uses Turbopack by default)
   turbopack: {},

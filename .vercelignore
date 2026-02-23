@@ -1,0 +1,16 @@
+# Exclude large files and directories from Vercel build
+*.md
+!README.md
+docs/
+scripts/
+supabase/*.sql
+*.sh
+.env.local
+.env*.local
+node_modules/.cache
+.next/cache
+.DS_Store
+*.log
+*.sql
+!supabase/schema.sql
+
