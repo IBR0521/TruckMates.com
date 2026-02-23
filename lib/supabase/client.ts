@@ -6,8 +6,10 @@ export function createClient() {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('Missing Supabase environment variables - using fallback')
-    // Return a mock client that won't crash the app
+    console.error('Missing Supabase environment variables!')
+    console.error('Required: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY')
+    console.error('Please configure these in your Vercel project settings → Environment Variables')
+    // Return a mock client that will fail gracefully with a helpful error
     return createBrowserClient(
       'https://placeholder.supabase.co',
       'placeholder-key',
@@ -67,7 +69,11 @@ export function createClient() {
               error.message?.includes('ECONNREFUSED') ||
               error.message?.includes('network') ||
               error.code === 'ECONNREFUSED') {
-            throw new Error('Failed to connect to server. Please check your internet connection and Supabase configuration.')
+            // Check if we're using placeholder values (missing env vars)
+            if (supabaseUrl === 'https://placeholder.supabase.co') {
+              throw new Error('Supabase configuration missing. Please configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel project settings.')
+            }
+            throw new Error('Failed to connect to Supabase. Please check your internet connection and ensure your Supabase project is active.')
           }
           throw error
         }
