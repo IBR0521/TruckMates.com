@@ -251,9 +251,6 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               isCollapsed={shouldShowCollapsed}
             >
               <NavItem href="/dashboard/loads" label="Load List" isSubitem isCollapsed={shouldShowCollapsed} />
-              {userRole && canViewFeature(userRole, "marketplace") && (
-                <NavItem href="/dashboard/loads/external" label="External Loads" isSubitem isCollapsed={shouldShowCollapsed} />
-              )}
               {userRole && canCreateFeature(userRole, "loads") && (
                 <NavItem href="/dashboard/loads/add" label="Add Load" isSubitem isCollapsed={shouldShowCollapsed} />
               )}

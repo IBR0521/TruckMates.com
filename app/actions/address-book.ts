@@ -36,11 +36,15 @@ export async function getAddressBookContacts(filters?: {
     return { data: [], error: "Not authenticated" }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { data: [], error: userError.message || "Failed to fetch user data" }
+  }
 
   if (!userData?.company_id) {
     return { data: [], error: "No company found" }

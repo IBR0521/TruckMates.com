@@ -66,3 +66,9 @@ Check browser console for these messages:
 - ❌ `[AUDIT LOG] ⚠️ audit_logs table does not exist!` = Need to create table first
 
 
+
+
+
+
+
+

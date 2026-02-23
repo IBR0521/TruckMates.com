@@ -27,7 +27,7 @@ export default function FleetHealthPage() {
 
   useEffect(() => {
     loadData()
-    const interval = setInterval(loadData, 60000) // Refresh every minute
+    const interval = setInterval(loadData, 120000) // Refresh every 2 minutes for better performance
     return () => clearInterval(interval)
   }, [])
 

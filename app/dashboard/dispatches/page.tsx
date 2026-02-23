@@ -109,7 +109,7 @@ export default function DispatchesPage() {
     loadHOSData()
     
     // Refresh HOS data every 30 seconds (keep as fallback)
-    const hosInterval = setInterval(loadHOSData, 30000)
+    const hosInterval = setInterval(loadHOSData, 60000) // Reduced to 60s for better performance
     return () => clearInterval(hosInterval)
   }, [])
 

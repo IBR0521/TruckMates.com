@@ -7,11 +7,22 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { getCompanySettings, updateCompanySettings } from "@/app/actions/number-formats"
-import { Save, Package, Info, DollarSign, Settings, Route, Truck } from "lucide-react"
+import { Save, Package, Info, DollarSign, Settings, Route, Truck, Plus, Trash2, Edit2, Fuel } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
+import { getAccessorials, createAccessorial, updateAccessorial, deleteAccessorial } from "@/app/actions/settings-accessorials"
+import type { Accessorial } from "@/app/actions/settings-accessorials"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export default function LoadSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -31,6 +42,17 @@ export default function LoadSettingsPage() {
     default_rate_per_hour: 0,
     default_fuel_surcharge_percentage: 0,
     default_accessorial_charges: "",
+    
+    // Load Charge Settings
+    load_charge_type: "per-mile", // 'flat-fee', 'per-mile', 'per-ton', 'per-hundred', 'per-bushel', 'per-kilogram'
+    
+    // Miles Calculation
+    miles_calculation_method: "google-maps", // 'manual', 'google-maps', 'promiles'
+    
+    // Fuel Surcharge
+    fuel_surcharge_method: "percentage", // 'none', 'flat-fee', 'percentage', 'per-mile'
+    fuel_surcharge_flat_amount: 0,
+    fuel_surcharge_per_mile: 0,
     
     // Units
     weight_unit: "lbs", // 'lbs' or 'kg'
@@ -67,10 +89,36 @@ export default function LoadSettingsPage() {
     max_stops_per_route: 10,
   })
   const [previewNumber, setPreviewNumber] = useState("")
+  const [accessorials, setAccessorials] = useState<Accessorial[]>([])
+  const [showAccessorialDialog, setShowAccessorialDialog] = useState(false)
+  const [editingAccessorial, setEditingAccessorial] = useState<Accessorial | null>(null)
+  const [accessorialForm, setAccessorialForm] = useState({
+    name: "",
+    code: "",
+    description: "",
+    default_amount: 0,
+    charge_type: "flat" as "flat" | "per_hour" | "per_day" | "percentage",
+    is_taxable: false,
+    is_active: true,
+    is_default: false,
+    category: "other" as "pickup" | "delivery" | "transit" | "other",
+  })
 
   useEffect(() => {
     loadData()
+    loadAccessorials()
   }, [])
+
+  async function loadAccessorials() {
+    try {
+      const result = await getAccessorials()
+      if (result.data) {
+        setAccessorials(result.data)
+      }
+    } catch (error) {
+      console.error("Failed to load accessorials:", error)
+    }
+  }
 
   useEffect(() => {
     if (settings.load_number_format) {
@@ -104,6 +152,11 @@ export default function LoadSettingsPage() {
           default_rate_per_hour: result.data.default_rate_per_hour || 0,
           default_fuel_surcharge_percentage: result.data.default_fuel_surcharge_percentage || 0,
           default_accessorial_charges: result.data.default_accessorial_charges || "",
+          load_charge_type: result.data.load_charge_type || "per-mile",
+          miles_calculation_method: result.data.miles_calculation_method || "google-maps",
+          fuel_surcharge_method: result.data.fuel_surcharge_method || "percentage",
+          fuel_surcharge_flat_amount: result.data.fuel_surcharge_flat_amount || 0,
+          fuel_surcharge_per_mile: result.data.fuel_surcharge_per_mile || 0,
           weight_unit: result.data.weight_unit || "lbs",
           distance_unit: result.data.distance_unit || "miles",
           temperature_unit: result.data.temperature_unit || "fahrenheit",
@@ -346,17 +399,244 @@ export default function LoadSettingsPage() {
                 />
               </div>
 
+            </div>
+          </Card>
+
+          {/* Load Charges */}
+          <Card className="p-6">
+            <div className="flex items-center gap-2 mb-6">
+              <DollarSign className="w-5 h-5 text-primary" />
+              <h2 className="text-xl font-semibold">Load Charges</h2>
+            </div>
+            
+            <div className="space-y-4">
               <div>
-                <Label htmlFor="accessorial">Default Accessorial Charges</Label>
-                <Input
-                  id="accessorial"
-                  value={settings.default_accessorial_charges}
-                  onChange={(e) => setSettings({ ...settings, default_accessorial_charges: e.target.value })}
-                  placeholder="Lumper, Detention, etc."
-                  className="mt-2"
-                />
-                <p className="text-sm text-muted-foreground mt-1">Comma-separated list of default accessorial charges</p>
+                <Label htmlFor="load_charge_type">Default Load Charge Type</Label>
+                <Select value={settings.load_charge_type} onValueChange={(value) => setSettings({ ...settings, load_charge_type: value })}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="flat-fee">Flat Fee</SelectItem>
+                    <SelectItem value="per-mile">Per Mile</SelectItem>
+                    <SelectItem value="per-ton">Per Ton</SelectItem>
+                    <SelectItem value="per-hundred">Per Hundred (CWT)</SelectItem>
+                    <SelectItem value="per-bushel">Per Bushel</SelectItem>
+                    <SelectItem value="per-kilogram">Per Kilogram</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground mt-1">How loads will be charged by default</p>
               </div>
+            </div>
+          </Card>
+
+          {/* Miles Calculation */}
+          <Card className="p-6">
+            <div className="flex items-center gap-2 mb-6">
+              <Route className="w-5 h-5 text-primary" />
+              <h2 className="text-xl font-semibold">Miles Calculation</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="miles_calculation_method">Miles Calculation Method</Label>
+                <Select value={settings.miles_calculation_method} onValueChange={(value) => setSettings({ ...settings, miles_calculation_method: value })}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manual">Manual Entry</SelectItem>
+                    <SelectItem value="google-maps">Google Maps</SelectItem>
+                    <SelectItem value="promiles">Promiles</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Method used to calculate miles between pickup and drop-off locations
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          {/* Fuel Surcharge */}
+          <Card className="p-6">
+            <div className="flex items-center gap-2 mb-6">
+              <Fuel className="w-5 h-5 text-primary" />
+              <h2 className="text-xl font-semibold">Fuel Surcharge</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="fuel_surcharge_method">Fuel Surcharge Method</Label>
+                <Select value={settings.fuel_surcharge_method} onValueChange={(value) => setSettings({ ...settings, fuel_surcharge_method: value })}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None (Manual Calculation)</SelectItem>
+                    <SelectItem value="flat-fee">Flat Fee</SelectItem>
+                    <SelectItem value="percentage">Percentage of Hauling Fee</SelectItem>
+                    <SelectItem value="per-mile">Per Mile</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {settings.fuel_surcharge_method === "percentage" && (
+                <div>
+                  <Label htmlFor="fuel_surcharge_percentage">Fuel Surcharge Percentage (%)</Label>
+                  <Input
+                    id="fuel_surcharge_percentage"
+                    type="number"
+                    step="0.01"
+                    value={settings.default_fuel_surcharge_percentage}
+                    onChange={(e) => setSettings({ ...settings, default_fuel_surcharge_percentage: parseFloat(e.target.value) || 0 })}
+                    className="mt-2"
+                    min="0"
+                    max="100"
+                  />
+                </div>
+              )}
+
+              {settings.fuel_surcharge_method === "flat-fee" && (
+                <div>
+                  <Label htmlFor="fuel_surcharge_flat">Flat Fee Amount ($)</Label>
+                  <Input
+                    id="fuel_surcharge_flat"
+                    type="number"
+                    step="0.01"
+                    value={settings.fuel_surcharge_flat_amount}
+                    onChange={(e) => setSettings({ ...settings, fuel_surcharge_flat_amount: parseFloat(e.target.value) || 0 })}
+                    className="mt-2"
+                    min="0"
+                  />
+                </div>
+              )}
+
+              {settings.fuel_surcharge_method === "per-mile" && (
+                <div>
+                  <Label htmlFor="fuel_surcharge_per_mile">Fuel Surcharge Per Mile ($)</Label>
+                  <Input
+                    id="fuel_surcharge_per_mile"
+                    type="number"
+                    step="0.0001"
+                    value={settings.fuel_surcharge_per_mile}
+                    onChange={(e) => setSettings({ ...settings, fuel_surcharge_per_mile: parseFloat(e.target.value) || 0 })}
+                    className="mt-2"
+                    min="0"
+                  />
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Accessorials Management */}
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-primary" />
+                <h2 className="text-xl font-semibold">Accessorials</h2>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEditingAccessorial(null)
+                  setAccessorialForm({
+                    name: "",
+                    code: "",
+                    description: "",
+                    default_amount: 0,
+                    charge_type: "flat",
+                    is_taxable: false,
+                    is_active: true,
+                    is_default: false,
+                    category: "other",
+                  })
+                  setShowAccessorialDialog(true)
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Accessorial
+              </Button>
+            </div>
+            
+            <div className="space-y-2">
+              {accessorials.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No accessorials configured. Click "Add Accessorial" to create one.
+                </p>
+              ) : (
+                accessorials.map((accessorial) => (
+                  <div
+                    key={accessorial.id}
+                    className="flex items-center justify-between p-3 border rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{accessorial.name}</span>
+                        {accessorial.code && (
+                          <span className="text-xs text-muted-foreground">({accessorial.code})</span>
+                        )}
+                        {!accessorial.is_active && (
+                          <span className="text-xs px-2 py-0.5 bg-muted rounded">Inactive</span>
+                        )}
+                        {accessorial.is_default && (
+                          <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded">Default</span>
+                        )}
+                      </div>
+                      {accessorial.description && (
+                        <p className="text-sm text-muted-foreground mt-1">{accessorial.description}</p>
+                      )}
+                      <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                        <span>Type: {accessorial.charge_type.replace("_", " ")}</span>
+                        {accessorial.default_amount && (
+                          <span>Amount: ${accessorial.default_amount}</span>
+                        )}
+                        <span>Category: {accessorial.category || "Other"}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setEditingAccessorial(accessorial)
+                          setAccessorialForm({
+                            name: accessorial.name,
+                            code: accessorial.code || "",
+                            description: accessorial.description || "",
+                            default_amount: accessorial.default_amount || 0,
+                            charge_type: accessorial.charge_type,
+                            is_taxable: accessorial.is_taxable || false,
+                            is_active: accessorial.is_active !== false,
+                            is_default: accessorial.is_default || false,
+                            category: accessorial.category || "other",
+                          })
+                          setShowAccessorialDialog(true)
+                        }}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={async () => {
+                          if (accessorial.id && confirm("Are you sure you want to delete this accessorial?")) {
+                            const result = await deleteAccessorial(accessorial.id)
+                            if (result.error) {
+                              toast.error(result.error)
+                            } else {
+                              toast.success("Accessorial deleted")
+                              loadAccessorials()
+                            }
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </Card>
 
@@ -671,6 +951,162 @@ export default function LoadSettingsPage() {
           </Card>
         </div>
       </div>
+
+      {/* Accessorial Dialog */}
+      <Dialog open={showAccessorialDialog} onOpenChange={setShowAccessorialDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingAccessorial ? "Edit Accessorial" : "Add New Accessorial"}</DialogTitle>
+            <DialogDescription>
+              Create or edit an accessorial charge that can be applied to loads
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="accessorial_name">Name *</Label>
+              <Input
+                id="accessorial_name"
+                value={accessorialForm.name}
+                onChange={(e) => setAccessorialForm({ ...accessorialForm, name: e.target.value })}
+                placeholder="Lumper Fee"
+                className="mt-1"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="accessorial_code">Code</Label>
+                <Input
+                  id="accessorial_code"
+                  value={accessorialForm.code}
+                  onChange={(e) => setAccessorialForm({ ...accessorialForm, code: e.target.value })}
+                  placeholder="LMP"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="accessorial_category">Category</Label>
+                <Select
+                  value={accessorialForm.category}
+                  onValueChange={(value: any) => setAccessorialForm({ ...accessorialForm, category: value })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pickup">Pickup</SelectItem>
+                    <SelectItem value="delivery">Delivery</SelectItem>
+                    <SelectItem value="transit">Transit</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="accessorial_description">Description</Label>
+              <Input
+                id="accessorial_description"
+                value={accessorialForm.description}
+                onChange={(e) => setAccessorialForm({ ...accessorialForm, description: e.target.value })}
+                placeholder="Additional charge description"
+                className="mt-1"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="accessorial_charge_type">Charge Type *</Label>
+                <Select
+                  value={accessorialForm.charge_type}
+                  onValueChange={(value: any) => setAccessorialForm({ ...accessorialForm, charge_type: value })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="flat">Flat Fee</SelectItem>
+                    <SelectItem value="per_hour">Per Hour</SelectItem>
+                    <SelectItem value="per_day">Per Day</SelectItem>
+                    <SelectItem value="percentage">Percentage</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="accessorial_amount">Default Amount</Label>
+                <Input
+                  id="accessorial_amount"
+                  type="number"
+                  step="0.01"
+                  value={accessorialForm.default_amount}
+                  onChange={(e) => setAccessorialForm({ ...accessorialForm, default_amount: parseFloat(e.target.value) || 0 })}
+                  className="mt-1"
+                  min="0"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="accessorial_taxable"
+                    checked={accessorialForm.is_taxable}
+                    onCheckedChange={(checked) => setAccessorialForm({ ...accessorialForm, is_taxable: checked as boolean })}
+                  />
+                  <Label htmlFor="accessorial_taxable" className="cursor-pointer">Taxable</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="accessorial_default"
+                    checked={accessorialForm.is_default}
+                    onCheckedChange={(checked) => setAccessorialForm({ ...accessorialForm, is_default: checked as boolean })}
+                  />
+                  <Label htmlFor="accessorial_default" className="cursor-pointer">Auto-apply to new loads</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="accessorial_active"
+                    checked={accessorialForm.is_active}
+                    onCheckedChange={(checked) => setAccessorialForm({ ...accessorialForm, is_active: checked as boolean })}
+                  />
+                  <Label htmlFor="accessorial_active" className="cursor-pointer">Active</Label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAccessorialDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!accessorialForm.name) {
+                  toast.error("Name is required")
+                  return
+                }
+
+                const result = editingAccessorial
+                  ? await updateAccessorial(editingAccessorial.id!, accessorialForm)
+                  : await createAccessorial(accessorialForm)
+
+                if (result.error) {
+                  toast.error(result.error)
+                } else {
+                  toast.success(editingAccessorial ? "Accessorial updated" : "Accessorial created")
+                  setShowAccessorialDialog(false)
+                  loadAccessorials()
+                }
+              }}
+            >
+              {editingAccessorial ? "Update" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

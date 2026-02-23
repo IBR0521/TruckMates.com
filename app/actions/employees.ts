@@ -64,11 +64,15 @@ export async function getEmployees() {
 
   // Fallback: try direct query
   if (!userRole || !companyId) {
-    const { data: userData } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from("users")
       .select("role, company_id")
       .eq("id", user.id)
       .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
     if (userData) {
       userRole = userData.role

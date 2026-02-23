@@ -100,3 +100,9 @@ If something doesn't work:
 4. Make sure `.env.local` has the Ollama config
 
 
+
+
+
+
+
+

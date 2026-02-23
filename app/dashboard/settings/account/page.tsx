@@ -12,10 +12,13 @@ import {
   Lock,
   Eye,
   EyeOff,
+  Globe,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
 import { getAccountSettings, updateAccountSettings, changePassword } from "@/app/actions/settings-account"
+import { getCompanySettings, updateCompanySettings } from "@/app/actions/number-formats"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function AccountSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -28,23 +31,29 @@ export default function AccountSettingsPage() {
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
+    timezone: "America/New_York",
   })
 
   useEffect(() => {
     async function loadSettings() {
       setIsLoading(true)
       try {
-        const result = await getAccountSettings()
-        if (result.error) {
-          toast.error(result.error)
-        } else if (result.data) {
+        const [accountResult, companyResult] = await Promise.all([
+          getAccountSettings(),
+          getCompanySettings(),
+        ])
+        
+        if (accountResult.error) {
+          toast.error(accountResult.error)
+        } else if (accountResult.data) {
           setAccount({
-            full_name: result.data.full_name || "",
-            email: result.data.email || "",
-            phone: result.data.phone || "",
+            full_name: accountResult.data.full_name || "",
+            email: accountResult.data.email || "",
+            phone: accountResult.data.phone || "",
             currentPassword: "",
             newPassword: "",
             confirmPassword: "",
+            timezone: companyResult.data?.timezone || "America/New_York",
           })
         }
       } catch (error) {
@@ -59,13 +68,20 @@ export default function AccountSettingsPage() {
   const handleSaveProfile = async () => {
     setIsSaving(true)
     try {
-      const result = await updateAccountSettings({
-        full_name: account.full_name,
-        phone: account.phone,
-      })
+      const [accountResult, timezoneResult] = await Promise.all([
+        updateAccountSettings({
+          full_name: account.full_name,
+          phone: account.phone,
+        }),
+        updateCompanySettings({
+          timezone: account.timezone,
+        }),
+      ])
 
-      if (result.error) {
-        toast.error(result.error)
+      if (accountResult.error) {
+        toast.error(accountResult.error)
+      } else if (timezoneResult.error) {
+        toast.error(timezoneResult.error)
       } else {
         toast.success("Profile settings saved successfully")
       }
@@ -168,6 +184,40 @@ export default function AccountSettingsPage() {
             <Button onClick={handleSaveProfile} disabled={isSaving} className="w-full sm:w-auto">
               <Save className="w-4 h-4 mr-2" />
               {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Globe className="w-5 h-5" />
+            Time Zone
+          </h2>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Timezone</Label>
+              <Select value={account.timezone} onValueChange={(value) => setAccount({ ...account, timezone: value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="America/New_York">Eastern Time (ET)</SelectItem>
+                  <SelectItem value="America/Chicago">Central Time (CT)</SelectItem>
+                  <SelectItem value="America/Denver">Mountain Time (MT)</SelectItem>
+                  <SelectItem value="America/Los_Angeles">Pacific Time (PT)</SelectItem>
+                  <SelectItem value="America/Anchorage">Alaska Time (AKT)</SelectItem>
+                  <SelectItem value="Pacific/Honolulu">Hawaii Time (HST)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Your timezone preference for the platform</p>
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-end">
+            <Button onClick={handleSaveProfile} disabled={isSaving} className="w-full sm:w-auto">
+              <Save className="w-4 h-4 mr-2" />
+              {isSaving ? "Saving..." : "Save Time Zone"}
             </Button>
           </div>
         </Card>

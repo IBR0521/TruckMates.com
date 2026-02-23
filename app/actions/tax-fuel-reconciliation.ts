@@ -457,14 +457,31 @@ export async function generateIFTAReport(quarter: number, year: number) {
 
   const netTaxDue = totalTaxDue - totalTaxPaid
 
+  // Calculate period string for display
+  const quarterNames = ["", "Jan-Mar", "Apr-Jun", "Jul-Sep", "Oct-Dec"]
+  const period = `${quarterNames[quarter]} ${year}`
+  
+  // Convert integer quarter to TEXT format (1 -> 'Q1', 2 -> 'Q2', etc.)
+  const quarterText = `Q${quarter}`
+
+  // Format values for old schema compatibility (TEXT fields)
+  const totalMilesText = `${totalMiles.toLocaleString()} mi`
+  const fuelPurchasedText = `${Math.round(totalGallons).toLocaleString()} gal`
+
   // Create IFTA report
+  // Include both old schema fields (for backward compatibility) and new schema fields
   const { data: report, error: reportError } = await supabase
     .from("ifta_reports")
     .insert({
       company_id: result.company_id,
-      quarter,
+      quarter: quarterText, // Convert to TEXT format: 'Q1', 'Q2', etc.
       year,
-      total_miles: totalMiles,
+      period: period, // Required field - format: "Jan-Mar 2026"
+      // Old schema fields (TEXT, required)
+      total_miles: totalMilesText, // TEXT format: "1,234 mi"
+      fuel_purchased: fuelPurchasedText, // TEXT format: "500 gal"
+      tax_owed: totalTaxDue, // DECIMAL
+      // New schema fields (if columns exist)
       total_gallons: totalGallons,
       total_tax_due: totalTaxDue,
       total_tax_paid: totalTaxPaid,

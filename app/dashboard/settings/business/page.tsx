@@ -10,9 +10,11 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { getCompanySettings, updateCompanySettings } from "@/app/actions/number-formats"
-import { Save, Building2, FileText, Gauge, Info, Globe, DollarSign, Calendar, Image } from "lucide-react"
+import { Save, Building2, FileText, Gauge, Info, Globe, DollarSign, Calendar, Image, Sparkles, MapPin } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
+import { generateEIN } from "@/app/actions/settings-ein"
+import { geocodeAddress } from "@/app/actions/integrations-google-maps"
 
 export default function BusinessSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -51,8 +53,11 @@ export default function BusinessSettingsPage() {
     company_website: "",
     
     // Business Information
-    business_type: "llc", // 'llc', 'corporation', 'partnership', 'sole_proprietorship'
+    business_type: "SPRO", // 'SPRO', 'PART', 'CORP', 'OTHR'
+    owner_name: "",
+    dba_name: "",
     tax_id: "",
+    ein_number: "",
     license_number: "",
     dot_number: "",
     mc_number: "",
@@ -67,6 +72,8 @@ export default function BusinessSettingsPage() {
     business_country: "United States",
   })
   const [previewNumber, setPreviewNumber] = useState("")
+  const [isGeneratingEIN, setIsGeneratingEIN] = useState(false)
+  const [addressSearchValue, setAddressSearchValue] = useState("")
 
   useEffect(() => {
     loadData()
@@ -117,8 +124,11 @@ export default function BusinessSettingsPage() {
           company_name_display: result.data.company_name_display || "",
           company_tagline: result.data.company_tagline || "",
           company_website: result.data.company_website || "",
-          business_type: result.data.business_type || "llc",
+          business_type: result.data.business_type || "SPRO",
+          owner_name: result.data.owner_name || "",
+          dba_name: result.data.dba_name || "",
           tax_id: result.data.tax_id || "",
+          ein_number: result.data.ein_number || "",
           license_number: result.data.license_number || "",
           dot_number: result.data.dot_number || "",
           mc_number: result.data.mc_number || "",
@@ -151,6 +161,71 @@ export default function BusinessSettingsPage() {
       toast.error("Failed to save settings")
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function handleGenerateEIN() {
+    setIsGeneratingEIN(true)
+    try {
+      const result = await generateEIN()
+      if (result.error) {
+        toast.error(result.error)
+      } else if (result.data) {
+        setSettings({ ...settings, ein_number: result.data.ein, tax_id: result.data.ein })
+        toast.success(`EIN ${result.data.ein} generated and saved successfully`)
+      }
+    } catch (error: any) {
+      toast.error("Failed to generate EIN")
+    } finally {
+      setIsGeneratingEIN(false)
+    }
+  }
+
+  async function handleAddressSearch() {
+    if (!addressSearchValue.trim()) {
+      toast.error("Please enter an address")
+      return
+    }
+
+    try {
+      const result = await geocodeAddress(addressSearchValue)
+      if (result.error) {
+        toast.error(result.error)
+      } else if (result.data) {
+        // Parse address components
+        const components = result.data.address_components || []
+        let streetNumber = ""
+        let route = ""
+        let city = ""
+        let state = ""
+        let zip = ""
+
+        components.forEach((component: any) => {
+          const types = component.types || []
+          if (types.includes("street_number")) {
+            streetNumber = component.long_name
+          } else if (types.includes("route")) {
+            route = component.long_name
+          } else if (types.includes("locality")) {
+            city = component.long_name
+          } else if (types.includes("administrative_area_level_1")) {
+            state = component.short_name
+          } else if (types.includes("postal_code")) {
+            zip = component.long_name
+          }
+        })
+
+        setSettings({
+          ...settings,
+          business_address: `${streetNumber} ${route}`.trim() || result.data.formatted_address.split(",")[0],
+          business_city: city || "",
+          business_state: state || "",
+          business_zip: zip || "",
+        })
+        toast.success("Address found and fields populated")
+      }
+    } catch (error: any) {
+      toast.error("Failed to search address")
     }
   }
 
@@ -231,16 +306,63 @@ export default function BusinessSettingsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="llc">LLC</SelectItem>
-                    <SelectItem value="corporation">Corporation</SelectItem>
-                    <SelectItem value="partnership">Partnership</SelectItem>
-                    <SelectItem value="sole_proprietorship">Sole Proprietorship</SelectItem>
+                    <SelectItem value="SPRO">Sole Proprietorship (SPRO)</SelectItem>
+                    <SelectItem value="PART">Partnership (PART)</SelectItem>
+                    <SelectItem value="CORP">Corporation (CORP)</SelectItem>
+                    <SelectItem value="OTHR">Other (OTHR)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <Label htmlFor="tax_id">Tax ID / EIN</Label>
+                <Label htmlFor="owner_name">Owner Name</Label>
+                <Input
+                  id="owner_name"
+                  value={settings.owner_name}
+                  onChange={(e) => setSettings({ ...settings, owner_name: e.target.value })}
+                  placeholder="John Doe"
+                  className="mt-2"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="dba_name">DBA Name (Doing Business As)</Label>
+                <Input
+                  id="dba_name"
+                  value={settings.dba_name}
+                  onChange={(e) => setSettings({ ...settings, dba_name: e.target.value })}
+                  placeholder="Trading Name"
+                  className="mt-2"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="ein_number">EIN (Employer Identification Number)</Label>
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    id="ein_number"
+                    value={settings.ein_number}
+                    onChange={(e) => setSettings({ ...settings, ein_number: e.target.value, tax_id: e.target.value })}
+                    placeholder="12-3456789"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleGenerateEIN}
+                    disabled={isGeneratingEIN}
+                  >
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    {isGeneratingEIN ? "Generating..." : "Generate"}
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Generate a unique EIN number in TruckMates or enter your existing EIN
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="tax_id">Tax ID (Legacy Field)</Label>
                 <Input
                   id="tax_id"
                   value={settings.tax_id}
@@ -317,6 +439,38 @@ export default function BusinessSettingsPage() {
                 />
               </div>
 
+              <Separator />
+
+              <div>
+                <Label htmlFor="address_search">Search Address (Google Maps)</Label>
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    id="address_search"
+                    value={addressSearchValue}
+                    onChange={(e) => setAddressSearchValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        handleAddressSearch()
+                      }
+                    }}
+                    placeholder="Enter full address to auto-fill fields..."
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleAddressSearch}
+                  >
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Search
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Enter your address and we'll automatically fill the fields below
+                </p>
+              </div>
+
               <div>
                 <Label htmlFor="business_address">Business Address</Label>
                 <Input
@@ -341,13 +495,16 @@ export default function BusinessSettingsPage() {
                 </div>
                 <div>
                   <Label htmlFor="business_state">State</Label>
-                  <Input
-                    id="business_state"
-                    value={settings.business_state}
-                    onChange={(e) => setSettings({ ...settings, business_state: e.target.value })}
-                    placeholder="State"
-                    className="mt-2"
-                  />
+                  <Select value={settings.business_state} onValueChange={(value) => setSettings({ ...settings, business_state: value })}>
+                    <SelectTrigger className="mt-2">
+                      <SelectValue placeholder="Select state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"].map((state) => (
+                        <SelectItem key={state} value={state}>{state}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

@@ -25,11 +25,15 @@ export async function getReminders(filters?: {
       return { error: "Not authenticated", data: null }
     }
 
-    const { data: userData } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", user.id)
       .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
     if (!userData?.company_id) {
       return { error: "No company found", data: null }
@@ -175,11 +179,15 @@ export async function completeReminder(id: string) {
       return { error: "Not authenticated", data: null }
     }
 
-    const { data: userData } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", user.id)
       .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
     if (!userData?.company_id) {
       return { error: "No company found", data: null }
@@ -318,11 +326,15 @@ export async function getOverdueReminders() {
       return { error: "Not authenticated", data: null }
     }
 
-    const { data: userData } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", user.id)
       .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
     if (!userData?.company_id) {
       return { error: "No company found", data: null }

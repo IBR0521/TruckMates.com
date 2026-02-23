@@ -283,3 +283,9 @@ function extractRoute(query: string): { origin?: string; destination?: string } 
 }
 
 
+
+
+
+
+
+

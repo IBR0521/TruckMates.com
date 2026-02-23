@@ -23,11 +23,27 @@ SET search_path = public
 AS $$
 DECLARE
   v_company_id UUID;
+  v_has_company_type BOOLEAN;
 BEGIN
+  -- Check if company_type column exists
+  SELECT EXISTS (
+    SELECT 1 
+    FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+      AND table_name = 'companies' 
+      AND column_name = 'company_type'
+  ) INTO v_has_company_type;
+  
   -- Insert company (bypasses RLS because of SECURITY DEFINER)
-  INSERT INTO public.companies (name, email, phone, company_type)
-  VALUES (p_name, p_email, p_phone, p_company_type)
-  RETURNING id INTO v_company_id;
+  IF v_has_company_type THEN
+    INSERT INTO public.companies (name, email, phone, company_type)
+    VALUES (p_name, p_email, p_phone, p_company_type)
+    RETURNING id INTO v_company_id;
+  ELSE
+    INSERT INTO public.companies (name, email, phone)
+    VALUES (p_name, p_email, p_phone)
+    RETURNING id INTO v_company_id;
+  END IF;
 
   -- Update user record to link to company
   UPDATE public.users

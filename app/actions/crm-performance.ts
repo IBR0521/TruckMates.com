@@ -83,6 +83,11 @@ export async function getCustomerPerformanceMetrics(filters?: {
     const { data, error } = await query.order("total_revenue", { ascending: false })
 
     if (error) {
+      // If view doesn't exist, return empty data instead of error
+      if (error.message?.includes("does not exist") || error.code === "42P01" || error.message?.includes("schema cache")) {
+        console.warn("[CRM Performance] View crm_customer_performance does not exist. Please run the SQL migration.")
+        return { data: [], error: null }
+      }
       return { error: error.message, data: null }
     }
 
@@ -131,6 +136,11 @@ export async function getCustomerPerformance(customerId: string): Promise<{
       .single()
 
     if (error) {
+      // If view doesn't exist, return null data instead of error
+      if (error.message?.includes("does not exist") || error.code === "42P01" || error.message?.includes("schema cache")) {
+        console.warn("[CRM Performance] View crm_customer_performance does not exist. Please run the SQL migration.")
+        return { data: null, error: null }
+      }
       return { error: error.message, data: null }
     }
 
@@ -286,7 +296,7 @@ export async function getRelationshipInsights(): Promise<{
     
     if (customersError) {
       // If view doesn't exist, return empty data instead of error
-      if (customersError.message?.includes("does not exist") || customersError.code === "42P01") {
+      if (customersError.message?.includes("does not exist") || customersError.code === "42P01" || customersError.message?.includes("schema cache")) {
         console.warn("[CRM Performance] View crm_customer_performance does not exist. Please run the SQL migration.")
         return {
           data: {

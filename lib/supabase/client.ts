@@ -1,22 +1,30 @@
 import { createBrowserClient } from '@supabase/ssr'
 
 export function createClient() {
-  // Validate environment variables
+  // Validate environment variables - don't throw, return a mock client instead
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Missing Supabase environment variables')
-    throw new Error(
-      'Missing Supabase environment variables. Please check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY'
-    )
+    console.warn('Missing Supabase environment variables - using fallback')
+    // Return a mock client that won't crash the app
+    return createBrowserClient(
+      'https://placeholder.supabase.co',
+      'placeholder-key',
+      {}
+    ) as any
   }
 
   // Validate URL format
   try {
     new URL(supabaseUrl)
   } catch {
-    throw new Error(`Invalid Supabase URL format: ${supabaseUrl}`)
+    console.warn(`Invalid Supabase URL format: ${supabaseUrl}`)
+    return createBrowserClient(
+      'https://placeholder.supabase.co',
+      'placeholder-key',
+      {}
+    ) as any
   }
 
   // Create client with timeout settings for browser
@@ -25,7 +33,7 @@ export function createClient() {
       fetch: async (url, options = {}) => {
         // Add timeout to fetch requests (10 seconds for browser - longer than server)
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 5000) // Reduced to 5 seconds for faster failure
+        const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 seconds - faster timeout for better performance
         
         try {
           const response = await fetch(url, {

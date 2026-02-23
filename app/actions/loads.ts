@@ -10,43 +10,48 @@ import { validateLoadData, validatePricingData, sanitizeString, sanitizeEmail, s
 
 // Helper function to send notifications in background (non-blocking)
 async function sendNotificationsForLoadUpdate(loadData: any) {
-  const supabase = await createClient()
-  
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    const supabase = await createClient()
+    
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) return
+    if (!user) return
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
 
-  if (!userData?.company_id) return
+    if (userError || !userData?.company_id) return
 
-  // Get all users in the company
-  const { data: companyUsers } = await supabase
-    .from("users")
-    .select("id")
-    .eq("company_id", userData.company_id)
+    // Get all users in the company
+    const { data: companyUsers } = await supabase
+      .from("users")
+      .select("id")
+      .eq("company_id", userData.company_id)
 
-  // Send notifications to all users who want load updates
-  if (companyUsers) {
-    for (const companyUser of companyUsers) {
-      try {
-        await sendNotification(companyUser.id, "load_update", {
-          shipmentNumber: loadData.shipment_number,
-          status: loadData.status,
-          origin: loadData.origin,
-          destination: loadData.destination,
-        })
-      } catch (error) {
-        // Silently fail - don't block the main operation
-        console.error(`[NOTIFICATION] Failed to send to user ${companyUser.id}:`, error)
+    // Send notifications to all users who want load updates
+    if (companyUsers) {
+      for (const companyUser of companyUsers) {
+        try {
+          await sendNotification(companyUser.id, "load_update", {
+            shipmentNumber: loadData.shipment_number,
+            status: loadData.status,
+            origin: loadData.origin,
+            destination: loadData.destination,
+          })
+        } catch (error) {
+          // Silently fail - don't block the main operation
+          console.error(`[NOTIFICATION] Failed to send to user ${companyUser.id}:`, error)
+        }
       }
     }
+  } catch (error) {
+    // Silently fail - this is a background function, don't block main operations
+    console.error("[sendNotificationsForLoadUpdate] Error:", error)
   }
 }
 
@@ -276,11 +281,15 @@ export async function createLoad(formData: {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -785,11 +794,16 @@ export async function updateLoad(
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -1140,11 +1154,16 @@ export async function bulkDeleteLoads(ids: string[]) {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -1175,11 +1194,16 @@ export async function bulkUpdateLoadStatus(ids: string[], status: string) {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -1211,11 +1235,16 @@ export async function duplicateLoad(id: string) {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -1338,11 +1367,16 @@ export async function getLoadSuggestions(origin?: string, destination?: string) 
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }

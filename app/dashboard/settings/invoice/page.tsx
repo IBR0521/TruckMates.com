@@ -8,11 +8,22 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { getCompanySettings, updateCompanySettings } from "@/app/actions/number-formats"
-import { Save, FileText, Info, DollarSign, Mail, Receipt, Percent } from "lucide-react"
+import { Save, FileText, Info, DollarSign, Mail, Receipt, Percent, Plus, Trash2, Edit2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
+import { getInvoiceTaxes, createInvoiceTax, updateInvoiceTax, deleteInvoiceTax } from "@/app/actions/settings-invoice-taxes"
+import type { InvoiceTax } from "@/app/actions/settings-invoice-taxes"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export default function InvoiceSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -23,7 +34,7 @@ export default function InvoiceSettingsPage() {
     invoice_number_sequence: 1,
     
     // Default Settings
-    default_payment_terms: "Net 30",
+    default_payment_terms: "Due on Receipt",
     invoice_auto_send: false,
     invoice_email_template: "",
     
@@ -66,10 +77,35 @@ export default function InvoiceSettingsPage() {
     include_bol_in_invoice: false,
   })
   const [previewNumber, setPreviewNumber] = useState("")
+  const [invoiceTaxes, setInvoiceTaxes] = useState<InvoiceTax[]>([])
+  const [showTaxDialog, setShowTaxDialog] = useState(false)
+  const [editingTax, setEditingTax] = useState<InvoiceTax | null>(null)
+  const [taxForm, setTaxForm] = useState({
+    name: "",
+    rate: 0,
+    tax_type: "percentage" as "percentage" | "fixed",
+    is_default: false,
+    is_active: true,
+    applies_to: "all" as "all" | "specific_states" | "specific_customers",
+    state_codes: [] as string[],
+    customer_ids: [] as string[],
+  })
 
   useEffect(() => {
     loadData()
+    loadInvoiceTaxes()
   }, [])
+
+  async function loadInvoiceTaxes() {
+    try {
+      const result = await getInvoiceTaxes()
+      if (result.data) {
+        setInvoiceTaxes(result.data)
+      }
+    } catch (error) {
+      console.error("Failed to load invoice taxes:", error)
+    }
+  }
 
   useEffect(() => {
     if (settings.invoice_number_format) {
@@ -97,7 +133,7 @@ export default function InvoiceSettingsPage() {
         setSettings({
           invoice_number_format: result.data.invoice_number_format || "INV-{YEAR}-{MONTH}-{SEQUENCE}",
           invoice_number_sequence: result.data.invoice_number_sequence || 1,
-          default_payment_terms: result.data.default_payment_terms || "Net 30",
+          default_payment_terms: result.data.default_payment_terms || "Due on Receipt",
           invoice_auto_send: result.data.invoice_auto_send || false,
           invoice_email_template: result.data.invoice_email_template || "",
           tax_enabled: result.data.tax_enabled || false,
@@ -279,65 +315,112 @@ export default function InvoiceSettingsPage() {
             </div>
           </Card>
 
-          {/* Tax Settings */}
+          {/* Invoice Tax Management */}
           <Card className="p-6">
-            <div className="flex items-center gap-2 mb-6">
-              <Percent className="w-5 h-5 text-primary" />
-              <h2 className="text-xl font-semibold">Tax Settings</h2>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <Percent className="w-5 h-5 text-primary" />
+                <h2 className="text-xl font-semibold">Invoice Taxes</h2>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEditingTax(null)
+                  setTaxForm({
+                    name: "",
+                    rate: 0,
+                    tax_type: "percentage",
+                    is_default: false,
+                    is_active: true,
+                    applies_to: "all",
+                    state_codes: [],
+                    customer_ids: [],
+                  })
+                  setShowTaxDialog(true)
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Tax
+              </Button>
             </div>
             
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="tax_enabled">Enable Tax</Label>
-                  <p className="text-sm text-muted-foreground">Apply tax to invoices</p>
-                </div>
-                <Switch
-                  id="tax_enabled"
-                  checked={settings.tax_enabled}
-                  onCheckedChange={(checked) => setSettings({ ...settings, tax_enabled: checked })}
-                />
-              </div>
+            <Alert className="mb-4">
+              <Info className="w-4 h-4" />
+              <AlertDescription>
+                Create and manage custom taxes that can be applied to invoices. The list starts empty with no default choices.
+              </AlertDescription>
+            </Alert>
 
-              {settings.tax_enabled && (
-                <>
-                  <div>
-                    <Label htmlFor="tax_name">Tax Name</Label>
-                    <Input
-                      id="tax_name"
-                      value={settings.tax_name}
-                      onChange={(e) => setSettings({ ...settings, tax_name: e.target.value })}
-                      placeholder="Sales Tax"
-                      className="mt-2"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="tax_rate">Default Tax Rate (%)</Label>
-                    <Input
-                      id="tax_rate"
-                      type="number"
-                      step="0.01"
-                      value={settings.default_tax_rate}
-                      onChange={(e) => setSettings({ ...settings, default_tax_rate: parseFloat(e.target.value) || 0 })}
-                      className="mt-2"
-                      min="0"
-                      max="100"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="tax_inclusive">Tax Inclusive Pricing</Label>
-                      <p className="text-sm text-muted-foreground">Tax is included in the base price</p>
+            <div className="space-y-2">
+              {invoiceTaxes.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No invoice taxes configured. Click "Add Tax" to create one.
+                </p>
+              ) : (
+                invoiceTaxes.map((tax) => (
+                  <div
+                    key={tax.id}
+                    className="flex items-center justify-between p-3 border rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{tax.name}</span>
+                        {tax.is_default && (
+                          <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded">Default</span>
+                        )}
+                        {!tax.is_active && (
+                          <span className="text-xs px-2 py-0.5 bg-muted rounded">Inactive</span>
+                        )}
+                      </div>
+                      <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                        <span>
+                          Rate: {tax.tax_type === "percentage" ? `${(tax.rate * 100).toFixed(2)}%` : `$${tax.rate.toFixed(2)}`}
+                        </span>
+                        <span>Applies to: {tax.applies_to.replace("_", " ")}</span>
+                      </div>
                     </div>
-                    <Switch
-                      id="tax_inclusive"
-                      checked={settings.tax_inclusive}
-                      onCheckedChange={(checked) => setSettings({ ...settings, tax_inclusive: checked })}
-                    />
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setEditingTax(tax)
+                          setTaxForm({
+                            name: tax.name,
+                            rate: tax.rate,
+                            tax_type: tax.tax_type,
+                            is_default: tax.is_default || false,
+                            is_active: tax.is_active !== false,
+                            applies_to: tax.applies_to,
+                            state_codes: tax.state_codes || [],
+                            customer_ids: tax.customer_ids || [],
+                          })
+                          setShowTaxDialog(true)
+                        }}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={async () => {
+                          if (tax.id && confirm("Are you sure you want to delete this tax?")) {
+                            const result = await deleteInvoiceTax(tax.id)
+                            if (result.error) {
+                              toast.error(result.error)
+                            } else {
+                              toast.success("Tax deleted")
+                              loadInvoiceTaxes()
+                            }
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
-                </>
+                ))
               )}
             </div>
           </Card>
@@ -661,6 +744,142 @@ export default function InvoiceSettingsPage() {
           </Card>
         </div>
       </div>
+
+      {/* Invoice Tax Dialog */}
+      <Dialog open={showTaxDialog} onOpenChange={setShowTaxDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingTax ? "Edit Invoice Tax" : "Add New Invoice Tax"}</DialogTitle>
+            <DialogDescription>
+              Create or edit a tax that can be applied to invoices
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="tax_name">Tax Name *</Label>
+              <Input
+                id="tax_name"
+                value={taxForm.name}
+                onChange={(e) => setTaxForm({ ...taxForm, name: e.target.value })}
+                placeholder="Sales Tax"
+                className="mt-1"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="tax_type">Tax Type *</Label>
+                <Select
+                  value={taxForm.tax_type}
+                  onValueChange={(value: any) => setTaxForm({ ...taxForm, tax_type: value })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">Percentage</SelectItem>
+                    <SelectItem value="fixed">Fixed Amount</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="tax_rate">
+                  {taxForm.tax_type === "percentage" ? "Tax Rate (%) *" : "Tax Amount ($) *"}
+                </Label>
+                <Input
+                  id="tax_rate"
+                  type="number"
+                  step={taxForm.tax_type === "percentage" ? "0.0001" : "0.01"}
+                  value={taxForm.tax_type === "percentage" ? taxForm.rate * 100 : taxForm.rate}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value) || 0
+                    setTaxForm({
+                      ...taxForm,
+                      rate: taxForm.tax_type === "percentage" ? value / 100 : value,
+                    })
+                  }}
+                  className="mt-1"
+                  min="0"
+                  required
+                />
+                {taxForm.tax_type === "percentage" && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Enter as percentage (e.g., 8.25 for 8.25%)
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="tax_applies_to">Applies To</Label>
+              <Select
+                value={taxForm.applies_to}
+                onValueChange={(value: any) => setTaxForm({ ...taxForm, applies_to: value })}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Invoices</SelectItem>
+                  <SelectItem value="specific_states">Specific States</SelectItem>
+                  <SelectItem value="specific_customers">Specific Customers</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="tax_default"
+                    checked={taxForm.is_default}
+                    onCheckedChange={(checked) => setTaxForm({ ...taxForm, is_default: checked as boolean })}
+                  />
+                  <Label htmlFor="tax_default" className="cursor-pointer">Set as default tax</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="tax_active"
+                    checked={taxForm.is_active}
+                    onCheckedChange={(checked) => setTaxForm({ ...taxForm, is_active: checked as boolean })}
+                  />
+                  <Label htmlFor="tax_active" className="cursor-pointer">Active</Label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTaxDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!taxForm.name || taxForm.rate === undefined) {
+                  toast.error("Name and rate are required")
+                  return
+                }
+
+                const result = editingTax
+                  ? await updateInvoiceTax(editingTax.id!, taxForm)
+                  : await createInvoiceTax(taxForm)
+
+                if (result.error) {
+                  toast.error(result.error)
+                } else {
+                  toast.success(editingTax ? "Tax updated" : "Tax created")
+                  setShowTaxDialog(false)
+                  loadInvoiceTaxes()
+                }
+              }}
+            >
+              {editingTax ? "Update" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

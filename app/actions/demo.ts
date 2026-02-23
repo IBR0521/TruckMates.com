@@ -9,16 +9,8 @@ const DEMO_COMPANY_NAME = "Demo Logistics Company"
 // Platform is now free - no subscription needed
 export async function setupDemoCompany(userId: string | null) {
   try {
-    // Create Supabase client with timeout
-    let supabase
-    try {
-      supabase = await createClient()
-    } catch (clientError: any) {
-      return {
-        error: `Failed to connect to database: ${clientError?.message || "Connection error"}. Please check your Supabase configuration.`,
-        data: null
-      }
-    }
+    // Create Supabase client - simplified, no try-catch wrapper
+    const supabase = await createClient()
     
     if (!supabase) {
       return { 
@@ -27,41 +19,64 @@ export async function setupDemoCompany(userId: string | null) {
       }
     }
 
-    // Verify user is authenticated with timeout
-    const authPromise = supabase.auth.getUser()
-    const authTimeout = new Promise((resolve) => {
-      setTimeout(() => resolve({ data: { user: null }, error: { message: "Auth timeout" } }), 5000)
-    })
+    // Get authenticated user - simplified timeout
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
     
-    const authResult = await Promise.race([authPromise, authTimeout]) as any
-    const { user: authUser, error: authError } = authResult.data || authResult
+    // If no authenticated user but userId provided, try to proceed anyway
+    // (This handles cases where email confirmation is pending)
+    let actualUserId: string | null = userId
+    let userEmail = ""
     
-    if (authError || !authUser) {
+    if (authUser) {
+      actualUserId = userId || authUser.id
+      userEmail = authUser.email || ""
+    } else if (!userId) {
+      // No user ID and no auth - can't proceed
       return {
-        error: authError?.message?.includes("timeout") 
-          ? "Connection timeout. Please check your internet connection."
-          : "User not authenticated. Please sign in first.",
+        error: "User not authenticated. Please sign in first or wait for email confirmation.",
         data: null
       }
+    } else {
+      // userId provided but no auth session - try to get user email from users table
+      const { data: userData } = await supabase
+        .from("users")
+        .select("email")
+        .eq("id", userId)
+        .maybeSingle()
+      userEmail = userData?.email || "demo@truckmates.com"
     }
 
-    // Use authenticated user ID (from session) if userId not provided
-    const actualUserId = userId || authUser.id
-
-    // Get user email and role from auth
-    const userEmail = authUser.email || ""
-    const finalRole = "super_admin" // Demo users are super admins (company creators)
-
-    // Get user record
-    let userRecord = null
+    // Ensure user record exists in users table
     if (actualUserId) {
-      const { data } = await supabase
+      const { data: existingUser } = await supabase
         .from("users")
         .select("id, company_id, role, email")
         .eq("id", actualUserId)
         .maybeSingle()
-      userRecord = data
+      
+      // If user doesn't exist in users table, create it
+      if (!existingUser) {
+        const { error: insertError } = await supabase
+          .from("users")
+          .insert({
+            id: actualUserId,
+            email: userEmail || "demo@truckmates.com",
+            role: "super_admin",
+            full_name: "Demo User"
+          })
+        
+        if (insertError && !insertError.message.includes('duplicate')) {
+          console.error("Error creating user record:", insertError)
+        }
+      }
     }
+
+    // Get user record - simplified query
+    const { data: userRecord } = await supabase
+      .from("users")
+      .select("id, company_id, role")
+      .eq("id", actualUserId)
+      .maybeSingle()
 
     let companyId: string | null = null
 
@@ -90,114 +105,45 @@ export async function setupDemoCompany(userId: string | null) {
       if (existingCompany) {
         companyId = existingCompany.id
         // Link user to existing company
-        const { error: updateError } = await supabase
+        await supabase
           .from("users")
           .update({
             company_id: companyId,
             role: "super_admin",
           })
           .eq("id", actualUserId)
-
-        if (updateError) {
-          console.error("Error linking user to existing company:", updateError)
-        }
-
-        // Update auth metadata
-        await supabase.auth.updateUser({
-          data: {
-            role: "super_admin",
-          }
-        })
       } else {
-        // Use RPC function to create company (bypasses RLS) with timeout
-        const rpcPromise = supabase.rpc('create_company_for_user', {
+        // Use RPC function to create company (bypasses RLS)
+        const { data: newCompanyId, error: rpcError } = await supabase.rpc('create_company_for_user', {
           p_name: DEMO_COMPANY_NAME,
           p_email: userEmail,
           p_phone: "+1-555-DEMO",
-          p_user_id: actualUserId
+          p_user_id: actualUserId,
+          p_company_type: null
         })
-        
-        const rpcTimeout = new Promise((resolve) => {
-          setTimeout(() => resolve({ data: null, error: { message: "RPC timeout" } }), 10000)
-        })
-        
-        const rpcResult = await Promise.race([rpcPromise, rpcTimeout]) as any
-        const { data: newCompanyId, error: rpcError } = rpcResult
 
         if (rpcError) {
-          console.error("RPC function error, trying fallback:", rpcError.message)
-          
-          // If timeout, return early with helpful error
-          if (rpcError.message?.includes("timeout")) {
-            return {
-              error: "Database connection timeout. Please check your internet connection and try again.",
-              data: null
-            }
+          return { 
+            error: `Failed to create demo company: ${rpcError.message}. Please ensure create_company_for_user function exists in Supabase.`, 
+            data: null 
           }
-          
-          // Fallback: Try direct insert (might fail due to RLS, but worth trying)
-          const { data: newCompany, error: companyError } = await supabase
-            .from("companies")
-            .insert({
-              name: DEMO_COMPANY_NAME,
-              email: userEmail,
-              phone: "+1-555-DEMO",
-            })
-            .select()
-            .single()
-
-          if (companyError || !newCompany) {
-            return { 
-              error: `Failed to create demo company: ${companyError?.message || rpcError.message}. Please check RLS policies.`, 
-              data: null 
-            }
-          }
-
-          companyId = newCompany.id
-
-          // Link user to company
-          if (!userRecord) {
-            const { error: userError } = await supabase
-              .from("users")
-              .insert({
-                id: actualUserId,
-                email: userEmail,
-                full_name: "Demo User",
-                role: "super_admin",
-                company_id: companyId,
-                phone: "+1-555-DEMO",
-              })
-
-            if (userError) {
-              console.error("Error creating user record:", userError)
-            }
-          } else {
-            const { error: updateError } = await supabase
-              .from("users")
-              .update({
-                company_id: companyId,
-                role: "super_admin",
-              })
-              .eq("id", actualUserId)
-
-            if (updateError) {
-              console.error("Error updating user record:", updateError)
-            }
-          }
-
-          // Update auth metadata
-          await supabase.auth.updateUser({
-            data: {
-              role: "super_admin",
-            }
-          })
-        } else {
-          companyId = newCompanyId
         }
+
+        companyId = newCompanyId
       }
     }
 
     // Platform is now free - no subscription needed
+
+    // Automatically populate demo data (non-blocking - don't fail if this errors)
+    if (companyId) {
+      // Run in background - don't wait for it
+      supabase.rpc('populate_demo_data_for_company', {
+        p_company_id: companyId
+      }).catch(() => {
+        // Silently fail - company is created, data can populate later
+      })
+    }
 
     // Return success
     return { 
@@ -207,11 +153,26 @@ export async function setupDemoCompany(userId: string | null) {
       error: null 
     }
   } catch (error: any) {
-    console.error("Demo company setup error:", error)
     // Return detailed error for debugging
     const errorMessage = error?.message || String(error) || "Failed to setup demo company"
+    
+    // Provide helpful error messages
+    if (errorMessage.includes("Missing Supabase") || errorMessage.includes("NEXT_PUBLIC_SUPABASE")) {
+      return {
+        error: "Supabase configuration missing. Please check your .env.local file and ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set.",
+        data: null
+      }
+    }
+    
+    if (errorMessage.includes("connect") || errorMessage.includes("ECONNREFUSED") || errorMessage.includes("timeout")) {
+      return {
+        error: "Failed to connect to Supabase. Please check:\n1. Your internet connection\n2. Supabase project is active (not paused)\n3. Environment variables are correct",
+        data: null
+      }
+    }
+    
     return { 
-      error: `Demo company setup failed: ${errorMessage}. Please check server logs for details.`, 
+      error: `Demo setup failed: ${errorMessage}`, 
       data: null 
     }
   }

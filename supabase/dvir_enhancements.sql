@@ -205,7 +205,7 @@ BEGIN
     d.notes,
     d.driver_signature_date,
     d.certified,
-    u.name AS certified_by_name,
+    u.full_name AS certified_by_name,
     d.certified_date
   FROM public.dvir d
   LEFT JOIN public.drivers dr ON dr.id = d.driver_id

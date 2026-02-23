@@ -17,11 +17,15 @@ export async function getUnassignedLoads() {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -60,11 +64,15 @@ export async function getUnassignedRoutes() {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -103,11 +111,15 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -190,11 +202,15 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }

@@ -14,7 +14,10 @@ export async function getDashboardStats() {
     try {
       supabase = await createClient()
     } catch (clientError: any) {
-      console.error("Failed to create Supabase client:", clientError)
+      // Only log in development to improve performance
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Failed to create Supabase client:", clientError)
+      }
       const errorMessage = clientError?.message || "Failed to connect to database"
       
       // Return minimal data with connection error info
@@ -109,7 +112,7 @@ export async function getDashboardStats() {
       }
     }
 
-    // Check cache first (30 second TTL for dashboard stats)
+    // Check cache first (60 second TTL for dashboard stats - increased for better performance)
     const cacheKey = cacheKeys.dashboardStats(companyId)
     const cached = cache.get<any>(cacheKey)
     if (cached) {
@@ -133,7 +136,10 @@ export async function getDashboardStats() {
         supabase.from("maintenance").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["scheduled", "overdue"]),
       ])
     } catch (countError) {
-      console.error("Error fetching counts:", countError)
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Error fetching counts:", countError)
+      }
       // If counts fail, use zeros
       countResults = Array(10).fill({ count: 0 })
     }
@@ -288,7 +294,10 @@ export async function getDashboardStats() {
       recentLoadsData = results[3]?.data
     } catch (error) {
       // If timeout, continue with empty arrays
-      console.warn("Card data queries timed out, using empty data")
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.warn("Card data queries timed out, using empty data")
+      }
     }
 
     // Get financial metrics (with timeout protection)
@@ -315,7 +324,7 @@ export async function getDashboardStats() {
           { data: [] },
           { data: [] },
         ])
-      }, 3000)
+      }, 2000) // Reduced to 2 seconds for faster failure
     })
 
     const [
@@ -416,7 +425,10 @@ export async function getDashboardStats() {
         })
       }
     } catch (error) {
-      console.error("Error fetching revenue trend:", error)
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Error fetching revenue trend:", error)
+      }
       // Generate empty data for last 7 days if error occurs
       const now = new Date()
       for (let i = 6; i >= 0; i--) {
@@ -440,7 +452,10 @@ export async function getDashboardStats() {
       
       allLoads = loadStatusResult.data || []
     } catch (error) {
-      console.error("Error fetching load status:", error)
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Error fetching load status:", error)
+      }
       allLoads = []
     }
 
@@ -464,27 +479,33 @@ export async function getDashboardStats() {
           .in("status", ["overdue", "scheduled"])
           .lte("scheduled_date", new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
           .limit(5)
-          .catch(() => ({ data: [] })),
+          .then(res => res)
+          .catch(() => ({ data: [], error: null })),
         supabase.from("invoices")
           .select("id, invoice_number, due_date, amount, status")
           .eq("company_id", companyId)
           .eq("status", "overdue")
           .limit(5)
-          .catch(() => ({ data: [] })),
+          .then(res => res)
+          .catch(() => ({ data: [], error: null })),
         supabase.from("loads")
           .select("id, shipment_number, estimated_delivery, status")
           .eq("company_id", companyId)
           .eq("status", "in_transit")
           .lte("estimated_delivery", new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString())
           .limit(5)
-          .catch(() => ({ data: [] })),
+          .then(res => res)
+          .catch(() => ({ data: [], error: null })),
       ])
       
       upcomingMaintenance = alertsResults[0]?.data || []
       overdueInvoices = alertsResults[1]?.data || []
       upcomingDeliveries = alertsResults[2]?.data || []
     } catch (error) {
-      console.error("Error fetching alerts:", error)
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Error fetching alerts:", error)
+      }
       // Use empty arrays if alerts fail
     }
 
@@ -528,7 +549,10 @@ export async function getDashboardStats() {
       error: null,
     }
   } catch (error: any) {
-    console.error("Error in getDashboardStats:", error)
+    // Only log in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error("Error in getDashboardStats:", error)
+    }
     // Return minimal data instead of error to prevent UI blocking
     return {
         data: {

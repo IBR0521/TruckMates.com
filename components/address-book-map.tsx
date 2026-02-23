@@ -44,70 +44,87 @@ export function AddressBookMap({ entries }: AddressBookMapProps) {
     }
 
     // Load Google Maps script
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    const loadMap = async () => {
+      let apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
-    if (!apiKey) {
-      setLoadError("Google Maps API key not configured. Please set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in .env.local")
-      setIsLoading(false)
-      return
-    }
-
-    // Check if Google Maps is already loaded
-    if (window.google && window.google.maps) {
-      initializeMap()
-      return
-    }
-
-    // Set timeout for loading (30 seconds)
-    const timeoutId = setTimeout(() => {
-      if (isLoading) {
-        setLoadError("Map loading timeout. Please check your internet connection and API key.")
-        setIsLoading(false)
-      }
-    }, 30000)
-
-    // Check if script is already being loaded
-    const existingScript = document.querySelector(`script[src*="maps.googleapis.com"]`)
-    if (existingScript) {
-      // Wait for existing script to load
-      const checkGoogleMaps = setInterval(() => {
-        if (window.google && window.google.maps) {
-          clearInterval(checkGoogleMaps)
-          clearTimeout(timeoutId)
-          initializeMap()
+      // If not in env, try to fetch from API route (uses GOOGLE_MAPS_API_KEY)
+      if (!apiKey) {
+        try {
+          const response = await fetch('/api/google-maps-key')
+          if (response.ok) {
+            const data = await response.json()
+            apiKey = data.apiKey
+          }
+        } catch (error) {
+          console.warn('[AddressBookMap] Failed to fetch API key from server:', error)
         }
-      }, 100)
+      }
 
-      // Cleanup after 30 seconds
-      setTimeout(() => {
-        clearInterval(checkGoogleMaps)
+      if (!apiKey) {
+        setLoadError("Google Maps API key not configured. Please set GOOGLE_MAPS_API_KEY or NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in .env.local")
+        setIsLoading(false)
+        return
+      }
+
+      // Check if Google Maps is already loaded
+      if (window.google && window.google.maps) {
+        initializeMap()
+        return
+      }
+
+      // Set timeout for loading (30 seconds)
+      const timeoutId = setTimeout(() => {
+        if (isLoading) {
+          setLoadError("Map loading timeout. Please check your internet connection and API key.")
+          setIsLoading(false)
+        }
       }, 30000)
 
+      // Check if script is already being loaded
+      const existingScript = document.querySelector(`script[src*="maps.googleapis.com"]`)
+      if (existingScript) {
+        // Wait for existing script to load
+        const checkGoogleMaps = setInterval(() => {
+          if (window.google && window.google.maps) {
+            clearInterval(checkGoogleMaps)
+            clearTimeout(timeoutId)
+            initializeMap()
+          }
+        }, 100)
+
+        // Cleanup after 30 seconds
+        setTimeout(() => {
+          clearInterval(checkGoogleMaps)
+        }, 30000)
+
+        return () => {
+          clearInterval(checkGoogleMaps)
+          clearTimeout(timeoutId)
+        }
+      }
+
+      // Load Google Maps script
+      const script = document.createElement("script")
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`
+      script.async = true
+      script.defer = true
+      script.onload = () => {
+        clearTimeout(timeoutId)
+        initializeMap()
+      }
+      script.onerror = () => {
+        clearTimeout(timeoutId)
+        setLoadError("Failed to load Google Maps. Please check your API key and network connection.")
+        setIsLoading(false)
+      }
+      document.head.appendChild(script)
+
       return () => {
-        clearInterval(checkGoogleMaps)
         clearTimeout(timeoutId)
       }
     }
 
-    // Load Google Maps script
-    const script = document.createElement("script")
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
-    script.async = true
-    script.defer = true
-    script.onload = () => {
-      clearTimeout(timeoutId)
-      initializeMap()
-    }
-    script.onerror = () => {
-      clearTimeout(timeoutId)
-      setLoadError("Failed to load Google Maps. Please check your API key and network connection.")
-      setIsLoading(false)
-    }
-    document.head.appendChild(script)
-
-    return () => {
-      clearTimeout(timeoutId)
-    }
+    loadMap()
   }, [])
 
   useEffect(() => {

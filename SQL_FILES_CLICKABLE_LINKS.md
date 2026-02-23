@@ -69,3 +69,9 @@ Click on any file link below to open it directly:
 65. [alerts_smart_triggers.sql](supabase/alerts_smart_triggers.sql)
 66. [performance_indexes.sql](supabase/performance_indexes.sql)
 
+
+
+
+
+
+

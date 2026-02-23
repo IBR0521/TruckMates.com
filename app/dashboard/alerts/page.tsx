@@ -33,7 +33,10 @@ export default function AlertsPage() {
       if (result.data) {
         setAlerts(result.data)
       } else if (result.error) {
-        toast.error(result.error)
+        // Only show error if it's not "No company found" (user might be setting up)
+        if (result.error !== "No company found") {
+          toast.error(result.error)
+        }
       }
     } catch (error: any) {
       toast.error("Failed to load alerts")

@@ -17,11 +17,15 @@ export async function generateBOLPDF(bolId: string): Promise<{
     return { html: "", error: "Not authenticated" }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { html: "", error: userError.message || "Failed to fetch user data" }
+  }
 
   if (!userData?.company_id) {
     return { html: "", error: "No company found" }

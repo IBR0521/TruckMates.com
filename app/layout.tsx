@@ -7,6 +7,7 @@ import { QueryProvider } from "@/components/providers/query-provider"
 import { KeyboardShortcutsProvider } from "@/components/keyboard-shortcuts"
 import { GlobalSearch } from "@/components/global-search"
 import { Toaster } from "sonner"
+import { ErrorBoundary } from "@/app/error-boundary"
 import "./globals.css"
 
 // Load fonts - must be const at module scope
@@ -53,20 +54,22 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geist.variable} ${geistMono.variable} font-sans antialiased`}>
+      <body className={`${geist.variable} ${geistMono.variable} font-sans antialiased`} suppressHydrationWarning>
         {/* Accessibility: Skip to main content link */}
         <a href="#main-content" className="skip-link">
           Skip to main content
         </a>
-        <QueryProvider>
-          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-            <KeyboardShortcutsProvider>
-              {children}
-              <GlobalSearch />
-            </KeyboardShortcutsProvider>
-            <Toaster />
-          </ThemeProvider>
-        </QueryProvider>
+        <ErrorBoundary>
+          <QueryProvider>
+            <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+              <KeyboardShortcutsProvider>
+                {children}
+                <GlobalSearch />
+              </KeyboardShortcutsProvider>
+              <Toaster />
+            </ThemeProvider>
+          </QueryProvider>
+        </ErrorBoundary>
         <Analytics />
       </body>
     </html>

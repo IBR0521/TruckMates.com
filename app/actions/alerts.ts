@@ -19,11 +19,15 @@ export async function getAlertRules() {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -224,11 +228,15 @@ export async function createAlert(formData: {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -375,11 +383,15 @@ export async function acknowledgeAlert(id: string) {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -419,11 +431,15 @@ export async function resolveAlert(id: string) {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }

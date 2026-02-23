@@ -61,10 +61,12 @@ export default function CRMDashboardPage() {
           relationship_type: relationshipFilter !== "all" ? relationshipFilter : undefined,
         })
         if (customersResult.error) {
-          toast.error(customersResult.error)
-        } else {
-          setCustomerMetrics(customersResult.data || [])
+          // Only show error if it's not about missing view
+          if (!customersResult.error.includes("schema cache") && !customersResult.error.includes("does not exist")) {
+            toast.error(customersResult.error)
+          }
         }
+        setCustomerMetrics(customersResult.data || [])
       }
 
       if (activeTab === "overview" || activeTab === "vendors") {
@@ -81,17 +83,26 @@ export default function CRMDashboardPage() {
       if (activeTab === "overview") {
         const insightsResult = await getRelationshipInsights()
         if (insightsResult.error) {
-          toast.error(insightsResult.error)
-        } else {
-          setInsights(insightsResult.data)
+          // Only show error if it's not about missing view
+          if (!insightsResult.error.includes("schema cache") && !insightsResult.error.includes("does not exist")) {
+            toast.error(insightsResult.error)
+          }
         }
+        setInsights(insightsResult.data || {
+          top_customers: [],
+          top_vendors: [],
+          slow_payers: [],
+          low_performers: [],
+        })
 
         const documentsResult = await getExpiringCRMDocuments(30)
         if (documentsResult.error) {
-          toast.error(documentsResult.error)
-        } else {
-          setExpiringDocuments(documentsResult.data || [])
+          // Only show error if it's not about missing table
+          if (!documentsResult.error.includes("schema cache") && !documentsResult.error.includes("does not exist")) {
+            toast.error(documentsResult.error)
+          }
         }
+        setExpiringDocuments(documentsResult.data || [])
       }
     } catch (error) {
       toast.error("Failed to load CRM data")

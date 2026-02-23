@@ -83,7 +83,7 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
             </div>
 
             {/* Route path - dynamic based on number of stops */}
-            <svg className="absolute inset-0 w-full h-full" style={{ zIndex: 1 }}>
+            <svg className="absolute inset-0 w-full h-full" style={{ zIndex: 1 }} viewBox="0 0 100 100" preserveAspectRatio="none">
               <defs>
                 <linearGradient id="routeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" style={{ stopColor: "#3b82f6", stopOpacity: 0.8 }} />
@@ -93,24 +93,24 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
               {stops.length > 0 ? (
                 // Multi-stop route path
                 <path
-                  d={`M 25% 25% ${stops.map((_, i) => {
+                  d={`M 25 25 ${stops.map((_, i) => {
                     const x = 25 + ((i + 1) * 50) / (stops.length + 1)
                     const y = 25 + ((i + 1) * 45) / (stops.length + 1)
-                    return `L ${x}% ${y}%`
-                  }).join(' ')} L 75% 70%`}
+                    return `L ${x} ${y}`
+                  }).join(' ')} L 75 70`}
                   stroke="url(#routeGradient)"
-                  strokeWidth="3"
+                  strokeWidth="0.5"
                   fill="none"
-                  strokeDasharray="10,5"
+                  strokeDasharray="2,1"
                 />
               ) : (
                 // Simple origin-destination path
                 <path
-                  d="M 25% 25% Q 50% 40%, 75% 70%"
+                  d="M 25 25 Q 50 40, 75 70"
                   stroke="url(#routeGradient)"
-                  strokeWidth="3"
+                  strokeWidth="0.5"
                   fill="none"
-                  strokeDasharray="10,5"
+                  strokeDasharray="2,1"
                 />
               )}
             </svg>

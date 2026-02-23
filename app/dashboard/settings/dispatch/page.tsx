@@ -25,6 +25,14 @@ export default function DispatchSettingsPage() {
     require_check_call_at_milestones: false,
     check_call_timeout_minutes: 30,
     auto_escalate_missed_calls: true,
+    check_call_notify_customer: false,
+    check_call_notify_broker: false,
+    check_call_notify_on_trip_start: false,
+    check_call_notify_at_shipper: false,
+    check_call_notify_pickup_completed: false,
+    check_call_notify_enroute: false,
+    check_call_notify_at_consignee: false,
+    check_call_notify_dropoff_completed: false,
     
     // Driver Assignment
     driver_assignment_method: "manual", // 'manual', 'auto', 'smart'
@@ -85,6 +93,14 @@ export default function DispatchSettingsPage() {
           require_check_call_at_milestones: result.data.require_check_call_at_milestones || false,
           check_call_timeout_minutes: result.data.check_call_timeout_minutes || 30,
           auto_escalate_missed_calls: result.data.auto_escalate_missed_calls !== false,
+          check_call_notify_customer: result.data.check_call_notify_customer || false,
+          check_call_notify_broker: result.data.check_call_notify_broker || false,
+          check_call_notify_on_trip_start: result.data.check_call_notify_on_trip_start || false,
+          check_call_notify_at_shipper: result.data.check_call_notify_at_shipper || false,
+          check_call_notify_pickup_completed: result.data.check_call_notify_pickup_completed || false,
+          check_call_notify_enroute: result.data.check_call_notify_enroute || false,
+          check_call_notify_at_consignee: result.data.check_call_notify_at_consignee || false,
+          check_call_notify_dropoff_completed: result.data.check_call_notify_dropoff_completed || false,
           driver_assignment_method: result.data.driver_assignment_method || "manual",
           consider_driver_proximity: result.data.consider_driver_proximity !== false,
           consider_driver_hours: result.data.consider_driver_hours !== false,
@@ -279,6 +295,103 @@ export default function DispatchSettingsPage() {
                   checked={settings.auto_escalate_missed_calls}
                   onCheckedChange={(checked) => setSettings({ ...settings, auto_escalate_missed_calls: checked })}
                 />
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <h4 className="font-medium text-sm">Email Notifications to Customer/Broker</h4>
+                <p className="text-sm text-muted-foreground">
+                  Send email notifications to customers and brokers on completion of selected check call activities
+                </p>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="notify_customer">Notify Customer/Broker</Label>
+                    <p className="text-sm text-muted-foreground">Enable customer/broker email notifications</p>
+                  </div>
+                  <Switch
+                    id="notify_customer"
+                    checked={settings.check_call_notify_customer}
+                    onCheckedChange={(checked) => setSettings({ ...settings, check_call_notify_customer: checked })}
+                  />
+                </div>
+
+                {settings.check_call_notify_customer && (
+                  <div className="space-y-2 pl-4 border-l-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="notify_trip_start">Trip Starting</Label>
+                        <p className="text-sm text-muted-foreground">When trip is starting</p>
+                      </div>
+                      <Switch
+                        id="notify_trip_start"
+                        checked={settings.check_call_notify_on_trip_start}
+                        onCheckedChange={(checked) => setSettings({ ...settings, check_call_notify_on_trip_start: checked })}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="notify_at_shipper">At Shipper</Label>
+                        <p className="text-sm text-muted-foreground">When truck is at shipper</p>
+                      </div>
+                      <Switch
+                        id="notify_at_shipper"
+                        checked={settings.check_call_notify_at_shipper}
+                        onCheckedChange={(checked) => setSettings({ ...settings, check_call_notify_at_shipper: checked })}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="notify_pickup_completed">Pickup Completed</Label>
+                        <p className="text-sm text-muted-foreground">When pickup is completed</p>
+                      </div>
+                      <Switch
+                        id="notify_pickup_completed"
+                        checked={settings.check_call_notify_pickup_completed}
+                        onCheckedChange={(checked) => setSettings({ ...settings, check_call_notify_pickup_completed: checked })}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="notify_enroute">En Route</Label>
+                        <p className="text-sm text-muted-foreground">When truck is en route</p>
+                      </div>
+                      <Switch
+                        id="notify_enroute"
+                        checked={settings.check_call_notify_enroute}
+                        onCheckedChange={(checked) => setSettings({ ...settings, check_call_notify_enroute: checked })}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="notify_at_consignee">At Consignee</Label>
+                        <p className="text-sm text-muted-foreground">When truck is at consignee</p>
+                      </div>
+                      <Switch
+                        id="notify_at_consignee"
+                        checked={settings.check_call_notify_at_consignee}
+                        onCheckedChange={(checked) => setSettings({ ...settings, check_call_notify_at_consignee: checked })}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="notify_dropoff_completed">Drop-off Completed</Label>
+                        <p className="text-sm text-muted-foreground">When drop-off is completed</p>
+                      </div>
+                      <Switch
+                        id="notify_dropoff_completed"
+                        checked={settings.check_call_notify_dropoff_completed}
+                        onCheckedChange={(checked) => setSettings({ ...settings, check_call_notify_dropoff_completed: checked })}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </Card>

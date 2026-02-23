@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef, useCallback } from "react"
 import { useRealtimeSubscription } from "@/lib/hooks/use-realtime"
 import { getDashboardStats } from "@/app/actions/dashboard"
 import { toast } from "sonner"
@@ -8,10 +8,13 @@ import { toast } from "sonner"
 /**
  * Component that provides real-time updates to dashboard stats
  * Uses Supabase Realtime to listen for changes
+ * OPTIMIZED: Debounced updates to prevent cascading reloads
  */
 export function useRealtimeDashboardStats() {
   const [stats, setStats] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const pendingUpdateRef = useRef(false)
 
   // Initial load
   useEffect(() => {
@@ -25,51 +28,76 @@ export function useRealtimeDashboardStats() {
         setStats(result.data)
       }
     } catch (error) {
-      console.error("Failed to load dashboard stats:", error)
+      // Only log errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Failed to load dashboard stats:", error)
+      }
     } finally {
       setIsLoading(false)
+      pendingUpdateRef.current = false
     }
   }
 
-  // Real-time subscription for loads
+  // Debounced stats reload - prevents cascading updates
+  const debouncedLoadStats = useCallback(() => {
+    // If there's already a pending update, don't schedule another
+    if (pendingUpdateRef.current) {
+      return
+    }
+
+    // Clear existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+
+    // Mark that we have a pending update
+    pendingUpdateRef.current = true
+
+    // Schedule reload after 1 second of inactivity
+    debounceTimerRef.current = setTimeout(() => {
+      loadStats()
+    }, 1000)
+  }, [])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
+  }, [])
+
+  // Real-time subscription for loads - debounced
   useRealtimeSubscription("loads", {
     event: "*",
-    onInsert: () => {
-      // Reload stats when new load is created
-      loadStats()
-    },
-    onUpdate: () => {
-      // Reload stats when load is updated
-      loadStats()
-    },
-    onDelete: () => {
-      // Reload stats when load is deleted
-      loadStats()
-    },
+    onInsert: debouncedLoadStats,
+    onUpdate: debouncedLoadStats,
+    onDelete: debouncedLoadStats,
   })
 
-  // Real-time subscription for routes
+  // Real-time subscription for routes - debounced
   useRealtimeSubscription("routes", {
     event: "*",
-    onInsert: () => loadStats(),
-    onUpdate: () => loadStats(),
-    onDelete: () => loadStats(),
+    onInsert: debouncedLoadStats,
+    onUpdate: debouncedLoadStats,
+    onDelete: debouncedLoadStats,
   })
 
-  // Real-time subscription for drivers
+  // Real-time subscription for drivers - debounced
   useRealtimeSubscription("drivers", {
     event: "*",
-    onInsert: () => loadStats(),
-    onUpdate: () => loadStats(),
-    onDelete: () => loadStats(),
+    onInsert: debouncedLoadStats,
+    onUpdate: debouncedLoadStats,
+    onDelete: debouncedLoadStats,
   })
 
-  // Real-time subscription for trucks
+  // Real-time subscription for trucks - debounced
   useRealtimeSubscription("trucks", {
     event: "*",
-    onInsert: () => loadStats(),
-    onUpdate: () => loadStats(),
-    onDelete: () => loadStats(),
+    onInsert: debouncedLoadStats,
+    onUpdate: debouncedLoadStats,
+    onDelete: debouncedLoadStats,
   })
 
   return { stats, isLoading, refetch: loadStats }

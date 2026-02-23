@@ -59,6 +59,7 @@ function Button({
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
       aria-label={hasIconOnly && !ariaLabel ? 'Button' : ariaLabel}
+      suppressHydrationWarning
       {...props}
     />
   )

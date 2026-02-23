@@ -7,7 +7,6 @@ import {
   Plug, 
   CheckCircle2,
   XCircle,
-  ExternalLink,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
@@ -128,27 +127,6 @@ export default function IntegrationSettingsPage() {
                   <CheckCircle2 className="w-3 h-3 text-green-500" />
                   <span>Notification emails enabled</span>
                 </div>
-              </div>
-            </div>
-
-            {/* External Load Boards */}
-            <div className="border rounded-lg p-4 border-primary/20 bg-primary/5">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                <div className="flex-1">
-                  <h3 className="font-semibold">External Load Boards</h3>
-                  <p className="text-sm text-muted-foreground">Connect to DAT, Truckstop, 123Loadboard to sync loads automatically</p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground mb-3">
-                  Sync loads from external load boards directly into your system. Requires API credentials from the load board provider.
-                </p>
-                <Link href="/dashboard/loads/external">
-                  <Button variant="outline" className="w-full sm:w-auto">
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Manage External Load Boards
-                  </Button>
-                </Link>
               </div>
             </div>
           </div>

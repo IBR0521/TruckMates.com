@@ -34,7 +34,7 @@ import { Logo } from "@/components/logo"
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" suppressHydrationWarning>
       {/* Navigation */}
       <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
@@ -350,16 +350,11 @@ export default function Home() {
               <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
                 <Truck className="w-7 h-7 text-primary" />
               </div>
-              <h3 className="text-xl font-bold text-foreground mb-3">Load Management & External Boards</h3>
+              <h3 className="text-xl font-bold text-foreground mb-3">Load Management</h3>
               <p className="text-muted-foreground mb-4">
-                Full lifecycle load management with <strong>external load board integration</strong> (DAT, Truckstop, 123Loadboard). 
-                One-click load import. Auto-populated BOLs. Instant invoicing on delivery.
+                Full lifecycle load management. Auto-populated BOLs. Instant invoicing on delivery.
               </p>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>External load board integration (DAT, Truckstop, 123Loadboard)</span>
-                </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                   <span>One-click load import from major boards</span>

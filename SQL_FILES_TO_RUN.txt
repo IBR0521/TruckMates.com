@@ -65,3 +65,9 @@
 /Users/ibrohimrahmat/Desktop/logistics-saa-s-design (1)/supabase/alerts_smart_triggers.sql
 /Users/ibrohimrahmat/Desktop/logistics-saa-s-design (1)/supabase/performance_indexes.sql
 
+
+
+
+
+
+

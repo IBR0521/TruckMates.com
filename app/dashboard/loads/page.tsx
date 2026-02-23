@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
+import { useDebounce } from "@/lib/hooks/use-debounce"
 import { exportToExcel } from "@/lib/export-utils"
 import { TruckMap } from "@/components/truck-map"
 import { toast } from "sonner"
@@ -41,9 +42,9 @@ export default function LoadsPage() {
   const [selectedLoad, setSelectedLoad] = useState<any | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [loadsList, setLoadsList] = useState<any[]>([])
-  const [filteredLoads, setFilteredLoads] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const debouncedSearchTerm = useDebounce(searchTerm, 300) // Debounce search for performance
   const [statusFilter, setStatusFilter] = useState("all")
   const [sortBy, setSortBy] = useState("created_at")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -62,10 +63,8 @@ export default function LoadsPage() {
       }
       if (result.data) {
         setLoadsList(result.data)
-        setFilteredLoads(result.data)
       } else {
         setLoadsList([])
-        setFilteredLoads([])
       }
     } catch (error: any) {
       console.error("Error loading loads:", error)
@@ -81,18 +80,19 @@ export default function LoadsPage() {
   }, [])
 
 
-  // Filter and sort loads
-  useEffect(() => {
+  // Memoized filter and sort for better performance
+  const filteredLoads = useMemo(() => {
     let filtered = [...loadsList]
 
-    // Apply search filter
-    if (searchTerm) {
+    // Apply search filter (using debounced term)
+    if (debouncedSearchTerm) {
+      const searchLower = debouncedSearchTerm.toLowerCase()
       filtered = filtered.filter(
         (load) =>
-          load.shipment_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          load.origin?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          load.destination?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          load.contents?.toLowerCase().includes(searchTerm.toLowerCase())
+          load.shipment_number?.toLowerCase().includes(searchLower) ||
+          load.origin?.toLowerCase().includes(searchLower) ||
+          load.destination?.toLowerCase().includes(searchLower) ||
+          load.contents?.toLowerCase().includes(searchLower)
       )
     }
 
@@ -116,8 +116,8 @@ export default function LoadsPage() {
       }
     })
 
-    setFilteredLoads(filtered)
-  }, [loadsList, searchTerm, statusFilter, sortBy])
+    return filtered
+  }, [loadsList, debouncedSearchTerm, statusFilter, sortBy])
 
   const handleExportLoads = () => {
     try {

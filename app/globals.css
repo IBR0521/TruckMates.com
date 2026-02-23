@@ -183,8 +183,16 @@ body {
   * {
     @apply border-border outline-ring/50;
   }
+  html,
   body {
     @apply bg-background text-foreground;
+    height: 100%;
+    overflow: hidden;
+  }
+  #__next,
+  [data-nextjs-scroll-focus-boundary] {
+    height: 100%;
+    overflow: hidden;
   }
 }
 
@@ -302,5 +310,25 @@ body {
   .dark select:focus {
     border-color: var(--ring);
     box-shadow: 0 0 0 3px oklch(0.45 0.15 250 / 0.15);
+  }
+
+  /* Hide scrollbar but keep scrolling functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none !important;  /* IE and Edge */
+    scrollbar-width: none !important;  /* Firefox */
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none !important;  /* Chrome, Safari and Opera */
+    width: 0 !important;
+    height: 0 !important;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar-track {
+    display: none !important;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar-thumb {
+    display: none !important;
   }
 }

@@ -16,11 +16,15 @@ export async function getRouteStops(routeId: string) {
       return { error: "Not authenticated", data: null }
     }
 
-    const { data: userData } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", user.id)
       .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
     if (!userData?.company_id) {
       return { error: "No company found", data: null }
@@ -89,11 +93,15 @@ export async function createRouteStop(routeId: string, stopData: {
       return { error: "Not authenticated", data: null }
     }
 
-    const { data: userData } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", user.id)
       .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
     if (!userData?.company_id) {
       return { error: "No company found", data: null }
@@ -211,11 +219,15 @@ export async function updateRouteStop(stopId: string, stopData: {
       return { error: "Not authenticated", data: null }
     }
 
-    const { data: userData } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", user.id)
       .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
     if (!userData?.company_id) {
       return { error: "No company found", data: null }
@@ -289,11 +301,15 @@ export async function deleteRouteStop(stopId: string) {
       return { error: "Not authenticated", data: null }
     }
 
-    const { data: userData } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", user.id)
       .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
     if (!userData?.company_id) {
       return { error: "No company found", data: null }
@@ -343,11 +359,15 @@ export async function reorderRouteStops(routeId: string, stopIds: string[]) {
       return { error: "Not authenticated", data: null }
     }
 
-    const { data: userData } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", user.id)
       .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
     if (!userData?.company_id) {
       return { error: "No company found", data: null }

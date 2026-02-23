@@ -1,36 +1,47 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { useState } from "react"
 
-// Create a client instance with optimized defaults
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30 * 1000, // 30 seconds - data is fresh for 30s
-      gcTime: 5 * 60 * 1000, // 5 minutes - cache persists for 5 minutes
-      retry: 1, // Retry once on failure
-      refetchOnWindowFocus: true, // Refetch when user returns to tab
-      refetchOnReconnect: true, // Refetch when connection is restored
-      refetchOnMount: true, // Refetch on component mount
+// Create a client instance with optimized defaults for better performance
+function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 60 * 1000, // 60 seconds - data is fresh for 60s (reduced refetching)
+        gcTime: 10 * 60 * 1000, // 10 minutes - cache persists longer
+        retry: 1, // Retry once on failure
+        refetchOnWindowFocus: false, // Don't refetch on focus (better performance)
+        refetchOnReconnect: true, // Refetch when connection is restored
+        refetchOnMount: false, // Don't refetch on mount if data is fresh (better performance)
+        refetchInterval: false, // Disable automatic refetching (use manual intervals)
+      },
+      mutations: {
+        retry: 0, // Don't retry mutations
+      },
     },
-    mutations: {
-      retry: 0, // Don't retry mutations
-    },
-  },
-})
+  })
+}
+
+let browserQueryClient: QueryClient | undefined = undefined
+
+function getQueryClient() {
+  if (typeof window === 'undefined') {
+    // Server: always make a new query client
+    return makeQueryClient()
+  } else {
+    // Browser: use singleton pattern to keep the same query client
+    if (!browserQueryClient) browserQueryClient = makeQueryClient()
+    return browserQueryClient
+  }
+}
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // Prevent hydration mismatch
-  if (!mounted) {
-    return <>{children}</>
-  }
+  // NOTE: Avoid useState when initializing the query client if you don't
+  //       have a suspense boundary between this and the code that may
+  //       suspend because React will throw away the client on the initial
+  //       render if it suspends and there is no boundary
+  const queryClient = useState(() => getQueryClient())[0]
 
   return (
     <QueryClientProvider client={queryClient}>

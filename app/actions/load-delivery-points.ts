@@ -16,11 +16,15 @@ export async function getLoadDeliveryPoints(loadId: string) {
       return { error: "Not authenticated", data: null }
     }
 
-    const { data: userData } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", user.id)
       .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
     if (!userData?.company_id) {
       return { error: "No company found", data: null }
@@ -92,11 +96,15 @@ export async function createLoadDeliveryPoint(loadId: string, deliveryPointData:
       return { error: "Not authenticated", data: null }
     }
 
-    const { data: userData } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", user.id)
       .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
     if (!userData?.company_id) {
       return { error: "No company found", data: null }
@@ -232,11 +240,15 @@ export async function updateLoadDeliveryPoint(deliveryPointId: string, deliveryP
       return { error: "Not authenticated", data: null }
     }
 
-    const { data: userData } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", user.id)
       .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
     if (!userData?.company_id) {
       return { error: "No company found", data: null }
@@ -314,11 +326,15 @@ export async function deleteLoadDeliveryPoint(deliveryPointId: string) {
       return { error: "Not authenticated", data: null }
     }
 
-    const { data: userData } = await supabase
+    const { data: userData, error: userError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", user.id)
       .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
     if (!userData?.company_id) {
       return { error: "No company found", data: null }

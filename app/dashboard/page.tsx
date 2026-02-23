@@ -19,9 +19,9 @@ import {
   ChevronDown,
 } from "lucide-react"
 import Link from "next/link"
-import { useMemo, useEffect, useState } from "react"
-import { getDashboardStats } from "@/app/actions/dashboard"
+import { useMemo } from "react"
 import { toast } from "sonner"
+import { useDashboardStats } from "@/lib/hooks/use-dashboard-stats"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,132 +68,8 @@ const PerformanceMetrics = dynamic(() => import("@/components/dashboard/performa
 })
 
 export default function DashboardPage() {
-  const [dashboardData, setDashboardData] = useState<any>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-
-  useEffect(() => {
-    let isMounted = true
-    let timeoutId: NodeJS.Timeout | null = null
-    
-    async function loadStats() {
-      try {
-        // Only set loading state if we don't have data yet (first load)
-        // This prevents data from disappearing during reloads
-        if (isMounted && !dashboardData) {
-          setIsLoading(true)
-        }
-        if (isMounted) {
-          setError(null)
-        }
-        
-        // Increased timeout to 8 seconds for better reliability
-        const timeoutPromise = new Promise((_, reject) => {
-          timeoutId = setTimeout(() => {
-            reject(new Error("Dashboard timeout"))
-          }, 5000) // 5 seconds - fail fast
-        })
-        
-        // Race between the actual request and timeout
-        const result = await Promise.race([
-          getDashboardStats(),
-          timeoutPromise
-        ]) as any
-        
-        // Clear timeout if request completed
-        if (timeoutId) {
-          clearTimeout(timeoutId)
-          timeoutId = null
-        }
-        
-        // Only update state if component is still mounted
-        if (!isMounted) return
-        
-        // Check for connection errors in result
-        if (result?.error) {
-          const errorMsg = result.error
-          // Only show connection-related errors
-          if (errorMsg.includes('Connection') || 
-              errorMsg.includes('timeout') || 
-              errorMsg.includes('ECONNREFUSED') ||
-              errorMsg.includes('Database configuration') ||
-              errorMsg.includes('Connection failed')) {
-            setError(new Error(errorMsg))
-          }
-        }
-        
-        // Always use data if available, even if there's an error
-        // Only update if we got new data - preserve existing data on timeout/error
-        if (result?.data) {
-          setDashboardData(result.data)
-        }
-        // Don't clear data if result is empty - keep showing existing data
-      } catch (err: any) {
-        if (!isMounted) return
-        
-        // Clear timeout if it was set
-        if (timeoutId) {
-          clearTimeout(timeoutId)
-          timeoutId = null
-        }
-        
-        // Don't clear existing data on error - keep showing what we have
-        // Only set minimal data if we don't have any data yet
-        if (!dashboardData) {
-          setDashboardData({
-            totalDrivers: 0,
-            activeDrivers: 0,
-            totalTrucks: 0,
-            activeTrucks: 0,
-            totalRoutes: 0,
-            activeRoutes: 0,
-            totalLoads: 0,
-            inTransitLoads: 0,
-            totalMaintenance: 0,
-            scheduledMaintenance: 0,
-            fleetUtilization: 0,
-            recentActivity: [],
-            recentDrivers: [],
-            recentTrucks: [],
-            recentRoutes: [],
-            recentLoads: [],
-            totalRevenue: 0,
-            totalExpenses: 0,
-            netProfit: 0,
-            profitMargin: 0,
-            outstandingInvoices: 0,
-            revenueTrend: [],
-            loadStatusDistribution: [],
-            upcomingMaintenance: [],
-            overdueInvoices: [],
-            upcomingDeliveries: [],
-          })
-        }
-        setError(null) // Don't set error to prevent UI blocking
-      } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-        if (timeoutId) {
-          clearTimeout(timeoutId)
-        }
-      }
-    }
-    
-    // Load stats immediately
-    loadStats()
-    
-    // Refresh every 60 seconds for real-time updates (cached, so fast)
-    const interval = setInterval(loadStats, 60000)
-    
-    return () => {
-      isMounted = false
-      clearInterval(interval)
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
-    }
-  }, []) // Load once on mount
+  // Use React Query for automatic caching, deduplication, and background refetching
+  const { data: dashboardData, isLoading, error } = useDashboardStats()
 
   // Memoize stats to prevent unnecessary recalculations
   const stats = useMemo(() => {
@@ -230,21 +106,17 @@ export default function DashboardPage() {
     return dashboardData?.recentActivity || []
   }, [dashboardData?.recentActivity])
 
-  // Handle errors with toast (only show once)
-  useEffect(() => {
-    if (error && error instanceof Error) {
-      const errorMessage = error.message || "Failed to load dashboard data"
-      // Show connection errors more prominently
-      if (errorMessage.includes('Connection') || errorMessage.includes('timeout') || errorMessage.includes('ECONNREFUSED')) {
-        toast.error(errorMessage, {
-          duration: 5000,
-          description: "Please check your internet connection and try refreshing the page."
-        })
-      } else {
-        toast.error(errorMessage)
-      }
+  // Handle errors with toast (React Query handles retries automatically)
+  if (error) {
+    const errorMessage = error.message || "Failed to load dashboard data"
+    // Show connection errors more prominently
+    if (errorMessage.includes('Connection') || errorMessage.includes('timeout') || errorMessage.includes('ECONNREFUSED')) {
+      toast.error(errorMessage, {
+        duration: 5000,
+        description: "Please check your internet connection and try refreshing the page."
+      })
     }
-  }, [error])
+  }
 
   // Show loading skeleton immediately if no data yet
   if (isLoading && !dashboardData) {

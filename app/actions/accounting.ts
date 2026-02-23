@@ -71,11 +71,15 @@ export async function getInvoice(id: string) {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -115,11 +119,15 @@ export async function getExpenses() {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -149,11 +157,15 @@ export async function getSettlements() {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -200,11 +212,15 @@ export async function updateInvoice(
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -247,11 +263,15 @@ export async function duplicateInvoice(id: string) {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -344,11 +364,15 @@ export async function createInvoice(formData: {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -523,11 +547,15 @@ export async function getLoadForInvoice(loadId: string) {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -574,11 +602,15 @@ export async function createExpense(formData: {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -768,11 +800,15 @@ export async function getDriverLoadsForPeriod(driverId: string, periodStart: str
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -823,11 +859,15 @@ export async function getDriverFuelExpensesForPeriod(driverId: string, periodSta
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -875,11 +915,15 @@ export async function createSettlement(formData: {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }

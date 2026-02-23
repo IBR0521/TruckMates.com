@@ -7,7 +7,7 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { use } from "react"
-import { TruckMap } from "@/components/truck-map"
+import { GoogleMapsRoute } from "@/components/google-maps-route"
 import { getLoad } from "@/app/actions/loads"
 import { getRoutes } from "@/app/actions/routes"
 import { getTrucks } from "@/app/actions/trucks"
@@ -1225,16 +1225,18 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           </DetailSection>
           )}
 
-          {/* Truck Map with Navigation */}
+          {/* Real Google Maps Route */}
           {load.origin && load.destination && (
           <DetailSection
             title="Route Map"
             icon={<MapPin className="w-5 h-5" />}
-            description="Visual route representation"
+            description="Real-time route from origin to destination"
           >
-              <TruckMap
+              <GoogleMapsRoute
                 origin={load.origin}
                 destination={load.destination}
+                originCoordinates={load.origin_coordinates as { lat: number; lng: number } | undefined}
+                destinationCoordinates={load.destination_coordinates as { lat: number; lng: number } | undefined}
                 weight={weightKg}
                 truckHeight={truck ? 4.2 : 4.0}
                 contents={load.contents}

@@ -14,7 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ArrowLeft, Route, MapPin, Clock, Fuel, DollarSign, User, FileText, Building2, Truck as TruckIcon } from "lucide-react"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import { Route, MapPin, Clock, DollarSign, User, FileText, Building2 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -246,132 +252,189 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       isSubmitting={isSubmitting}
       submitLabel="Update Route"
     >
-      <div className="space-y-6">
-        {/* Basic Information Section */}
-        <FormSection title="Basic Information" icon={<Route className="w-5 h-5" />}>
-          <FormGrid cols={2}>
-                <div className="md:col-span-2">
-                  <Label htmlFor="name">Route Name *</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    type="text"
-                    placeholder="NY-PA Route"
-                    value={formData.name}
-                    onChange={handleChange}
-                    className="mt-2"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="origin">Origin *</Label>
-                  <Input
-                    id="origin"
-                    name="origin"
-                    type="text"
-                    placeholder="New York, NY"
-                    value={formData.origin}
-                    onChange={handleChange}
-                    className="mt-2"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="destination">Destination *</Label>
-                  <Input
-                    id="destination"
-                    name="destination"
-                    type="text"
-                    placeholder="Pennsylvania, PA"
-                    value={formData.destination}
-                    onChange={handleChange}
-                    className="mt-2"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="distance">Distance</Label>
-                  <Input
-                    id="distance"
-                    name="distance"
-                    type="text"
-                    placeholder="180 mi"
-                    value={formData.distance}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="estimatedTime">Estimated Time</Label>
-                  <Input
-                    id="estimatedTime"
-                    name="estimatedTime"
-                    type="text"
-                    placeholder="3h 30m"
-                    value={formData.estimatedTime}
-                    onChange={handleChange}
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="priority">Priority</Label>
-                  <Select value={formData.priority} onValueChange={(value) => handleSelectChange("priority", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="status">Status *</Label>
-                  <Select value={formData.status} onValueChange={(value) => handleSelectChange("status", value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="scheduled">Scheduled</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-          </FormGrid>
-        </FormSection>
+      <Tabs defaultValue="basic" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="basic">Basic Info</TabsTrigger>
+          <TabsTrigger value="stops">Stops</TabsTrigger>
+          <TabsTrigger value="assignment">Assignment</TabsTrigger>
+          <TabsTrigger value="timing">Timing</TabsTrigger>
+          <TabsTrigger value="financial">Financial</TabsTrigger>
+          <TabsTrigger value="details">Details</TabsTrigger>
+        </TabsList>
 
-            {/* Route Stops Section */}
-            <RouteStopsManager stops={stops} onStopsChange={setStops} />
+        {/* Basic Information Tab */}
+        <TabsContent value="basic" className="space-y-6">
+          <FormSection title="Basic Information" icon={<Route className="w-5 h-5" />}>
+            <FormGrid cols={2}>
+              <div className="md:col-span-2">
+                <Label htmlFor="name">Route Name *</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  type="text"
+                  placeholder="NY-PA Route"
+                  value={formData.name}
+                  onChange={handleChange}
+                  className="mt-1"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="origin">Origin *</Label>
+                <Input
+                  id="origin"
+                  name="origin"
+                  type="text"
+                  placeholder="New York, NY"
+                  value={formData.origin}
+                  onChange={handleChange}
+                  className="mt-1"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="destination">Destination *</Label>
+                <Input
+                  id="destination"
+                  name="destination"
+                  type="text"
+                  placeholder="Pennsylvania, PA"
+                  value={formData.destination}
+                  onChange={handleChange}
+                  className="mt-1"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="distance">Distance</Label>
+                <Input
+                  id="distance"
+                  name="distance"
+                  type="text"
+                  placeholder="180 mi"
+                  value={formData.distance}
+                  onChange={handleChange}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="estimatedTime">Estimated Time</Label>
+                <Input
+                  id="estimatedTime"
+                  name="estimatedTime"
+                  type="text"
+                  placeholder="3h 30m"
+                  value={formData.estimatedTime}
+                  onChange={handleChange}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="priority">Priority</Label>
+                <Select value={formData.priority} onValueChange={(value) => handleSelectChange("priority", value)}>
+                  <SelectTrigger className="mt-1 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="status">Status *</Label>
+                <Select value={formData.status} onValueChange={(value) => handleSelectChange("status", value)}>
+                  <SelectTrigger className="mt-1 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="scheduled">Scheduled</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </FormGrid>
+          </FormSection>
+        </TabsContent>
 
-            {/* Depot Information Section */}
-            <FormSection title="Depot Information (Optional)" icon={<Building2 className="w-5 h-5" />}>
-              <FormGrid cols={2}>
-                <div>
-                  <Label htmlFor="depotName">Depot Name</Label>
-                  <Input
-                    id="depotName"
-                    name="depotName"
-                    value={formData.depotName}
-                    onChange={handleChange}
-                    placeholder="e.g., DPT - MAIN"
-                    className="mt-2"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="depotAddress">Depot Address</Label>
-                  <Input
-                    id="depotAddress"
-                    name="depotAddress"
-                    value={formData.depotAddress}
-                    onChange={handleChange}
-                    placeholder="123 Depot Street, City, State ZIP"
-                    className="mt-2"
-                  />
-                </div>
+        {/* Route Stops Tab */}
+        <TabsContent value="stops" className="space-y-6">
+          <RouteStopsManager stops={stops} onStopsChange={setStops} />
+        </TabsContent>
+
+        {/* Assignment Tab */}
+        <TabsContent value="assignment" className="space-y-6">
+          <FormSection title="Assignment" icon={<User className="w-5 h-5" />}>
+            <FormGrid cols={2}>
+              <div>
+                <Label htmlFor="driver">Assigned Driver</Label>
+                <Select value={formData.driver || "none"} onValueChange={(value) => handleSelectChange("driver", value === "none" ? "" : value)}>
+                  <SelectTrigger className="mt-1 w-full">
+                    <SelectValue placeholder="Select a driver (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {drivers.map((driver) => (
+                      <SelectItem key={driver.id} value={driver.id}>
+                        {driver.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="truck">Assigned Truck</Label>
+                <Select value={formData.truck || "none"} onValueChange={(value) => handleSelectChange("truck", value === "none" ? "" : value)}>
+                  <SelectTrigger className="mt-1 w-full">
+                    <SelectValue placeholder="Select a truck (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {trucks.map((truck) => (
+                      <SelectItem key={truck.id} value={truck.id}>
+                        {truck.truck_number} - {truck.make} {truck.model}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </FormGrid>
+          </FormSection>
+        </TabsContent>
+
+        {/* Timing Tab */}
+        <TabsContent value="timing" className="space-y-6">
+          <FormSection title="Depot Information (Optional)" icon={<Building2 className="w-5 h-5" />}>
+            <FormGrid cols={2}>
+              <div>
+                <Label htmlFor="depotName">Depot Name</Label>
+                <Input
+                  id="depotName"
+                  name="depotName"
+                  value={formData.depotName}
+                  onChange={handleChange}
+                  placeholder="e.g., DPT - MAIN"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="depotAddress">Depot Address</Label>
+                <Input
+                  id="depotAddress"
+                  name="depotAddress"
+                  value={formData.depotAddress}
+                  onChange={handleChange}
+                  placeholder="Depot address"
+                  className="mt-1"
+                />
+              </div>
+            </FormGrid>
+            <div className="mt-4">
+              <FormGrid cols={3}>
                 <div>
                   <Label htmlFor="preRouteTime">Pre-Route Time (minutes)</Label>
                   <Input
@@ -380,8 +443,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                     type="number"
                     value={formData.preRouteTime}
                     onChange={handleChange}
-                    placeholder="15"
-                    className="mt-2"
+                    className="mt-1"
                   />
                 </div>
                 <div>
@@ -392,8 +454,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                     type="number"
                     value={formData.postRouteTime}
                     onChange={handleChange}
-                    placeholder="15"
-                    className="mt-2"
+                    className="mt-1"
                   />
                 </div>
                 <div>
@@ -404,7 +465,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                     type="time"
                     value={formData.routeStartTime}
                     onChange={handleChange}
-                    className="mt-2"
+                    className="mt-1"
                   />
                 </div>
                 <div>
@@ -415,7 +476,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                     type="time"
                     value={formData.routeDepartureTime}
                     onChange={handleChange}
-                    className="mt-2"
+                    className="mt-1"
                   />
                 </div>
                 <div>
@@ -426,7 +487,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                     type="time"
                     value={formData.routeCompleteTime}
                     onChange={handleChange}
-                    className="mt-2"
+                    className="mt-1"
                   />
                 </div>
                 <div>
@@ -437,84 +498,147 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                     value={formData.scenario}
                     onChange={handleChange}
                     placeholder="e.g., Morning Delivery"
-                    className="mt-2"
+                    className="mt-1"
                   />
                 </div>
               </FormGrid>
-            </FormSection>
+            </div>
+          </FormSection>
+        </TabsContent>
 
-            {/* Assignment Section */}
-            <FormSection title="Assignment" icon={<User className="w-5 h-5" />}>
-              <FormGrid cols={2}>
-                <div>
-                  <Label htmlFor="driver">Driver</Label>
-                  <Select value={formData.driver || "none"} onValueChange={(value) => handleSelectChange("driver", value === "none" ? "" : value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue placeholder="Select driver" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {drivers.map((driver) => (
-                        <SelectItem key={driver.id} value={driver.id}>
-                          {driver.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="truck">Truck</Label>
-                  <Select value={formData.truck || "none"} onValueChange={(value) => handleSelectChange("truck", value === "none" ? "" : value)}>
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue placeholder="Select truck" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {trucks.map((truck) => (
-                        <SelectItem key={truck.id} value={truck.id}>
-                          {truck.unit_number || truck.vin || `Truck ${truck.id}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-          </FormGrid>
-        </FormSection>
+        {/* Financial Tab */}
+        <TabsContent value="financial" className="space-y-6">
+          <FormSection title="Financial Information" icon={<DollarSign className="w-5 h-5" />}>
+            <FormGrid cols={2}>
+              <div>
+                <Label htmlFor="estimatedFuelCost">Estimated Fuel Cost ($)</Label>
+                <Input
+                  id="estimatedFuelCost"
+                  name="estimatedFuelCost"
+                  type="number"
+                  placeholder="450.00"
+                  value={formData.estimatedFuelCost}
+                  onChange={handleChange}
+                  className="mt-1"
+                  step="0.01"
+                />
+              </div>
+              <div>
+                <Label htmlFor="estimatedTollCost">Estimated Toll Cost ($)</Label>
+                <Input
+                  id="estimatedTollCost"
+                  name="estimatedTollCost"
+                  type="number"
+                  placeholder="35.50"
+                  value={formData.estimatedTollCost}
+                  onChange={handleChange}
+                  className="mt-1"
+                  step="0.01"
+                />
+              </div>
+              <div>
+                <Label htmlFor="totalEstimatedCost">Total Estimated Cost ($)</Label>
+                <Input
+                  id="totalEstimatedCost"
+                  name="totalEstimatedCost"
+                  type="number"
+                  placeholder="485.50"
+                  value={formData.totalEstimatedCost}
+                  onChange={handleChange}
+                  className="mt-1"
+                  step="0.01"
+                />
+              </div>
+            </FormGrid>
+          </FormSection>
+        </TabsContent>
 
-            {/* Additional Information Section */}
-            <Card className="border-border p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <FileText className="w-5 h-5 text-primary" />
-                <h2 className="text-xl font-semibold text-foreground">Additional Information</h2>
+        {/* Details Tab */}
+        <TabsContent value="details" className="space-y-6">
+          <FormSection title="Route Details" icon={<Route className="w-5 h-5" />}>
+            <FormGrid cols={2}>
+              <div>
+                <Label htmlFor="routeType">Route Type</Label>
+                <Select value={formData.routeType} onValueChange={(value) => handleSelectChange("routeType", value)}>
+                  <SelectTrigger className="mt-1 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="express">Express</SelectItem>
+                    <SelectItem value="local">Local</SelectItem>
+                    <SelectItem value="long-haul">Long Haul</SelectItem>
+                    <SelectItem value="regional">Regional</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="specialInstructions">Special Instructions</Label>
-                  <Textarea
-                    id="specialInstructions"
-                    name="specialInstructions"
-                    value={formData.specialInstructions}
-                    onChange={handleChange}
-                    placeholder="Any special instructions for this route..."
-                    className="mt-2 min-h-24"
-                    rows={4}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea
-                    id="notes"
-                    name="notes"
-                    value={formData.notes}
-                    onChange={handleChange}
-                    placeholder="Any additional notes about this route..."
-                    className="mt-2 min-h-24"
-                    rows={4}
-                  />
-                </div>
+              <div>
+                <Label htmlFor="requiresPermits">Requires Permits</Label>
+                <Select value={formData.requiresPermits} onValueChange={(value) => handleSelectChange("requiresPermits", value)}>
+                  <SelectTrigger className="mt-1 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yes">Yes</SelectItem>
+                    <SelectItem value="no">No</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            </Card>
-      </div>
+              <div>
+                <Label htmlFor="hasRestStops">Has Rest Stops</Label>
+                <Select value={formData.hasRestStops} onValueChange={(value) => handleSelectChange("hasRestStops", value)}>
+                  <SelectTrigger className="mt-1 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yes">Yes</SelectItem>
+                    <SelectItem value="no">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="md:col-span-2">
+                <Label htmlFor="restStopLocations">Rest Stop Locations</Label>
+                <Textarea
+                  id="restStopLocations"
+                  name="restStopLocations"
+                  placeholder="List rest stop locations along the route..."
+                  value={formData.restStopLocations}
+                  onChange={handleChange}
+                  className="mt-1 min-h-20"
+                  rows={2}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Label htmlFor="specialInstructions">Special Instructions</Label>
+                <Textarea
+                  id="specialInstructions"
+                  name="specialInstructions"
+                  placeholder="Any special route instructions, restrictions, or requirements..."
+                  value={formData.specialInstructions}
+                  onChange={handleChange}
+                  className="mt-1 min-h-24"
+                  rows={3}
+                />
+              </div>
+            </FormGrid>
+          </FormSection>
+
+          <FormSection title="Additional Information" icon={<FileText className="w-5 h-5" />}>
+            <div>
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                name="notes"
+                placeholder="Any additional information about the route..."
+                value={formData.notes}
+                onChange={handleChange}
+                className="mt-1 min-h-24"
+                rows={4}
+              />
+            </div>
+          </FormSection>
+        </TabsContent>
+      </Tabs>
     </FormPageLayout>
   )
 }

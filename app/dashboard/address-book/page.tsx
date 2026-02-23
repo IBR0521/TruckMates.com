@@ -516,7 +516,28 @@ export default function EnhancedAddressBookPage() {
             </Button>
           </Card>
         ) : viewMode === "map" ? (
-          <AddressBookMap entries={entries.filter(e => e.coordinates && e.geocoding_status === "verified")} />
+          (() => {
+            const verifiedEntries = entries.filter(e => e.coordinates && e.geocoding_status === "verified")
+            if (verifiedEntries.length === 0) {
+              return (
+                <Card className="border border-border/50 p-8 text-center">
+                  <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground mb-2">No addresses to display</p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {entries.length > 0
+                      ? `${entries.length} address${entries.length !== 1 ? "es" : ""} found, but none are verified with coordinates. Verify addresses to see them on the map.`
+                      : "Add addresses to see them on the map."}
+                  </p>
+                  {entries.length > 0 && (
+                    <Button onClick={() => setViewMode("list")} variant="outline">
+                      Switch to List View
+                    </Button>
+                  )}
+                </Card>
+              )
+            }
+            return <AddressBookMap entries={verifiedEntries} />
+          })()
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {entries.map((entry) => {
@@ -626,8 +647,21 @@ export default function EnhancedAddressBookPage() {
           <div className="mt-6 p-4 bg-secondary/30 rounded-lg border border-border">
             <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-                Showing {entries.length} address{entries.length !== 1 ? "es" : ""}
-                {categoryFilter !== "all" && ` (${CATEGORY_LABELS[categoryFilter]} only)`}
+                {viewMode === "map" ? (
+                  <>
+                    Showing {entries.filter(e => e.coordinates && e.geocoding_status === "verified").length} of {entries.length} address{entries.length !== 1 ? "es" : ""} on map
+                    {entries.filter(e => e.coordinates && e.geocoding_status === "verified").length < entries.length && (
+                      <span className="text-xs text-muted-foreground ml-2">
+                        ({entries.length - entries.filter(e => e.coordinates && e.geocoding_status === "verified").length} need verification)
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    Showing {entries.length} address{entries.length !== 1 ? "es" : ""}
+                    {categoryFilter !== "all" && ` (${CATEGORY_LABELS[categoryFilter]} only)`}
+                  </>
+                )}
               </p>
               <div className="flex items-center gap-4 text-xs text-muted-foreground">
                 <span>

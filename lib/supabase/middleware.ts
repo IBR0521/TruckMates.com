@@ -10,7 +10,7 @@ export async function updateSession(request: NextRequest) {
     if (!supabaseUrl || !supabaseAnonKey) {
       // If env vars are missing, just continue without auth check
       // This allows the app to load even if Supabase isn't configured
-      console.warn("[MIDDLEWARE] Missing Supabase environment variables")
+      console.warn("[MIDDLEWARE] Missing Supabase environment variables - allowing request to continue")
       return NextResponse.next({ request })
     }
 

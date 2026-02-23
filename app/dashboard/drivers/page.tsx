@@ -10,7 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
 import { exportToExcel } from "@/lib/export-utils"
 import { toast } from "sonner"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
+import { useDebounce } from "@/lib/hooks/use-debounce"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,9 +40,9 @@ function DriversPageContent() {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [driversList, setDriversList] = useState<any[]>([])
-  const [filteredDrivers, setFilteredDrivers] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const debouncedSearchTerm = useDebounce(searchTerm, 300) // Debounce search for performance
   const [statusFilter, setStatusFilter] = useState("all")
   const [sortBy, setSortBy] = useState("name")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -58,7 +59,6 @@ function DriversPageContent() {
     }
     if (result.data) {
       setDriversList(result.data)
-      setFilteredDrivers(result.data)
     }
     setIsLoading(false)
   }
@@ -67,18 +67,19 @@ function DriversPageContent() {
     loadDrivers()
   }, [])
 
-  // Filter and sort drivers
-  useEffect(() => {
+  // Memoized filter and sort for better performance
+  const filteredDrivers = useMemo(() => {
     let filtered = [...driversList]
 
-    // Apply search filter
-    if (searchTerm) {
+    // Apply search filter (using debounced term)
+    if (debouncedSearchTerm) {
+      const searchLower = debouncedSearchTerm.toLowerCase()
       filtered = filtered.filter(
         (driver) =>
-          driver.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          driver.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          driver.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          driver.license_number?.toLowerCase().includes(searchTerm.toLowerCase())
+          driver.name?.toLowerCase().includes(searchLower) ||
+          driver.email?.toLowerCase().includes(searchLower) ||
+          driver.phone?.toLowerCase().includes(searchLower) ||
+          driver.license_number?.toLowerCase().includes(searchLower)
       )
     }
 
@@ -101,8 +102,8 @@ function DriversPageContent() {
       }
     })
 
-    setFilteredDrivers(filtered)
-  }, [driversList, searchTerm, statusFilter, sortBy])
+    return filtered
+  }, [driversList, debouncedSearchTerm, statusFilter, sortBy])
 
   const handleExportDrivers = () => {
     try {
@@ -150,16 +151,11 @@ function DriversPageContent() {
     const oldValue = currentDriver?.[field]
     
     // Optimistic update - update UI immediately
+    // Update the source list - filteredDrivers will update automatically via useMemo
     const updatedDrivers = driversList.map(driver => 
       driver.id === driverId ? { ...driver, [field]: value } : driver
     )
     setDriversList(updatedDrivers)
-    
-    // Update filtered list too
-    const updatedFiltered = filteredDrivers.map(driver => 
-      driver.id === driverId ? { ...driver, [field]: value } : driver
-    )
-    setFilteredDrivers(updatedFiltered)
 
     // Then save to server silently
     const updateData: any = { [field]: value }
@@ -175,7 +171,7 @@ function DriversPageContent() {
       const revertedFiltered = filteredDrivers.map(driver => 
         driver.id === driverId ? { ...driver, [field]: oldValue } : driver
       )
-      setFilteredDrivers(revertedFiltered)
+      // Filtered drivers will update automatically via useMemo
       
       toast.error(result.error || "Failed to update")
       throw new Error(result.error)

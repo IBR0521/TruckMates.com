@@ -1,10 +1,37 @@
 /**
- * Performance utilities for optimizing component loading and rendering
+ * Performance monitoring and optimization utilities
  */
 
-import React from 'react'
+/**
+ * Measure execution time of async functions
+ */
+export async function measurePerformance<T>(
+  name: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  const start = performance.now()
+  try {
+    const result = await fn()
+    const end = performance.now()
+    const duration = end - start
+    
+    // Log slow operations in development
+    if (process.env.NODE_ENV === 'development' && duration > 1000) {
+      console.warn(`[Performance] ${name} took ${duration.toFixed(2)}ms`)
+    }
+    
+    return result
+  } catch (error) {
+    const end = performance.now()
+    const duration = end - start
+    console.error(`[Performance] ${name} failed after ${duration.toFixed(2)}ms:`, error)
+    throw error
+  }
+}
 
-// Debounce function for performance
+/**
+ * Debounce function calls
+ */
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number
@@ -24,64 +51,52 @@ export function debounce<T extends (...args: any[]) => any>(
   }
 }
 
-// Throttle function for performance
+/**
+ * Throttle function calls
+ */
 export function throttle<T extends (...args: any[]) => any>(
   func: T,
   limit: number
 ): (...args: Parameters<T>) => void {
-  let inThrottle: boolean
+  let inThrottle: boolean = false
   
   return function executedFunction(...args: Parameters<T>) {
     if (!inThrottle) {
       func(...args)
       inThrottle = true
-      setTimeout(() => (inThrottle = false), limit)
+      setTimeout(() => {
+        inThrottle = false
+      }, limit)
     }
   }
 }
 
-// Memoize expensive calculations
-export function memoize<Args extends any[], Return>(
-  fn: (...args: Args) => Return,
-  getKey?: (...args: Args) => string
-): (...args: Args) => Return {
-  const cache = new Map<string, Return>()
+/**
+ * Batch multiple async operations
+ */
+export async function batchOperations<T, R>(
+  items: T[],
+  batchSize: number,
+  operation: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = []
   
-  return (...args: Args): Return => {
-    const key = getKey ? getKey(...args) : JSON.stringify(args)
-    
-    if (cache.has(key)) {
-      return cache.get(key)!
-    }
-    
-    const result = fn(...args)
-    cache.set(key, result)
-    return result
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize)
+    const batchResults = await Promise.all(batch.map(operation))
+    results.push(...batchResults)
   }
+  
+  return results
 }
 
-// Intersection Observer for lazy loading
-export function useIntersectionObserver(
-  elementRef: React.RefObject<Element>,
-  options: IntersectionObserverInit = {}
-) {
-  const [isIntersecting, setIsIntersecting] = React.useState(false)
-  
-  React.useEffect(() => {
-    const element = elementRef.current
-    if (!element) return
-    
-    const observer = new IntersectionObserver(([entry]) => {
-      setIsIntersecting(entry.isIntersecting)
-    }, options)
-    
-    observer.observe(element)
-    
-    return () => {
-      observer.disconnect()
-    }
-  }, [elementRef, options])
-  
-  return isIntersecting
+/**
+ * Create a request deduplication key
+ */
+export function createRequestKey(prefix: string, params: Record<string, any>): string {
+  const sortedParams = Object.keys(params)
+    .sort()
+    .map(key => `${key}:${params[key]}`)
+    .join('|')
+  return `${prefix}:${sortedParams}`
 }
-

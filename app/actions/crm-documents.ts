@@ -172,6 +172,11 @@ export async function getCRMDocuments(filters?: {
     const { data, error } = await query.order("created_at", { ascending: false })
 
     if (error) {
+      // If table doesn't exist, return empty array instead of error
+      if (error.message?.includes("does not exist") || error.code === "42P01" || error.message?.includes("schema cache")) {
+        console.warn("[CRM Documents] Table crm_documents does not exist. Please run the SQL migration.")
+        return { data: [], error: null }
+      }
       return { error: error.message, data: null }
     }
 
@@ -215,6 +220,12 @@ export async function getExpiringCRMDocuments(
     })
 
     if (error) {
+      // If table doesn't exist, return empty array
+      if (error.message?.includes("does not exist") || error.code === "42P01" || error.message?.includes("schema cache")) {
+        console.warn("[CRM Documents] Table crm_documents does not exist. Please run the SQL migration.")
+        return { data: [], error: null }
+      }
+      
       // Fallback: Query directly if RPC function doesn't exist
       console.warn("[CRM Documents] RPC function error, using direct query:", error.message)
       
@@ -235,6 +246,11 @@ export async function getExpiringCRMDocuments(
         .order("expiration_date", { ascending: true })
 
       if (directError) {
+        // If table doesn't exist, return empty array instead of error
+        if (directError.message?.includes("does not exist") || directError.code === "42P01" || directError.message?.includes("schema cache")) {
+          console.warn("[CRM Documents] Table crm_documents does not exist. Please run the SQL migration.")
+          return { data: [], error: null }
+        }
         return { error: directError.message, data: null }
       }
 
@@ -291,7 +307,15 @@ export async function deleteCRMDocument(documentId: string): Promise<{
       .eq("company_id", company_id)
       .single()
 
-    if (fetchError || !document) {
+    if (fetchError) {
+      // If table doesn't exist, return error
+      if (fetchError.message?.includes("does not exist") || fetchError.code === "42P01" || fetchError.message?.includes("schema cache")) {
+        return { error: "CRM documents table does not exist. Please run the SQL migration.", data: null }
+      }
+      return { error: "Document not found", data: null }
+    }
+    
+    if (!document) {
       return { error: "Document not found", data: null }
     }
 
@@ -305,6 +329,10 @@ export async function deleteCRMDocument(documentId: string): Promise<{
     const { error: deleteError } = await supabase.from("crm_documents").delete().eq("id", documentId)
 
     if (deleteError) {
+      // If table doesn't exist, return error
+      if (deleteError.message?.includes("does not exist") || deleteError.code === "42P01" || deleteError.message?.includes("schema cache")) {
+        return { error: "CRM documents table does not exist. Please run the SQL migration.", data: null }
+      }
       return { error: deleteError.message, data: null }
     }
 

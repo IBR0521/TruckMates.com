@@ -130,7 +130,7 @@ export default function DashboardLayout({
   }, [mounted]) // Removed router from dependencies to prevent re-runs
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar 
         isOpen={sidebarOpen} 
         onToggle={() => setSidebarOpen(!sidebarOpen)}
@@ -139,9 +139,9 @@ export default function DashboardLayout({
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Top Navigation - Shared across all dashboard pages */}
-        <header className="border-b border-border bg-gradient-to-r from-card to-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center justify-between shadow-sm">
+        <header className="border-b border-border bg-gradient-to-r from-card to-card/50 backdrop-blur px-4 md:px-8 py-4 flex items-center justify-between shadow-sm flex-shrink-0">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -183,7 +183,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Page Content */}
-        <main id="main-content" className="flex-1 overflow-auto bg-background/50" role="main" tabIndex={-1}>
+        <main id="main-content" className="flex-1 overflow-y-auto bg-background/50 min-h-0" role="main" tabIndex={-1}>
           {children}
         </main>
       </div>

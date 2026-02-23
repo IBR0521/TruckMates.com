@@ -11,11 +11,15 @@ async function getCompanyId() {
 
   if (!user) return null
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return null
+  }
 
   return userData?.company_id || null
 }

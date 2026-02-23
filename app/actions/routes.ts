@@ -8,43 +8,48 @@ import { sendNotification } from "./notifications"
 
 // Helper function to send notifications in background (non-blocking)
 async function sendNotificationsForRouteUpdate(routeData: any) {
-  const supabase = await createClient()
-  
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    const supabase = await createClient()
+    
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) return
+    if (!user) return
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
 
-  if (!userData?.company_id) return
+    if (userError || !userData?.company_id) return
 
-  // Get all users in the company
-  const { data: companyUsers } = await supabase
-    .from("users")
-    .select("id")
-    .eq("company_id", userData.company_id)
+    // Get all users in the company
+    const { data: companyUsers } = await supabase
+      .from("users")
+      .select("id")
+      .eq("company_id", userData.company_id)
 
-  // Send notifications to all users who want route updates
-  if (companyUsers) {
-    for (const companyUser of companyUsers) {
-      try {
-        await sendNotification(companyUser.id, "route_update", {
-          routeName: routeData.name,
-          status: routeData.status,
-          origin: routeData.origin,
-          destination: routeData.destination,
-        })
-      } catch (error) {
-        // Silently fail - don't block the main operation
-        console.error(`[NOTIFICATION] Failed to send to user ${companyUser.id}:`, error)
+    // Send notifications to all users who want route updates
+    if (companyUsers) {
+      for (const companyUser of companyUsers) {
+        try {
+          await sendNotification(companyUser.id, "route_update", {
+            routeName: routeData.name,
+            status: routeData.status,
+            origin: routeData.origin,
+            destination: routeData.destination,
+          })
+        } catch (error) {
+          // Silently fail - don't block the main operation
+          console.error(`[NOTIFICATION] Failed to send to user ${companyUser.id}:`, error)
+        }
       }
     }
+  } catch (error) {
+    // Silently fail - this is a background function, don't block main operations
+    console.error("[sendNotificationsForRouteUpdate] Error:", error)
   }
 }
 
@@ -109,11 +114,15 @@ export async function getRoute(id: string) {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }

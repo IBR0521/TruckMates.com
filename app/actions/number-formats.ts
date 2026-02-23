@@ -36,11 +36,15 @@ export async function getCompanySettings() {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -215,6 +219,26 @@ export async function updateCompanySettings(settings: {
   odometer_validation_enabled?: boolean
   max_odometer_increase_per_day?: number
   odometer_auto_sync_from_eld?: boolean
+  // Business Information
+  owner_name?: string
+  dba_name?: string
+  ein_number?: string
+  business_type?: string
+  // Load Settings
+  load_charge_type?: string
+  miles_calculation_method?: string
+  fuel_surcharge_method?: string
+  fuel_surcharge_flat_amount?: number
+  fuel_surcharge_per_mile?: number
+  // Dispatch Settings
+  check_call_notify_customer?: boolean
+  check_call_notify_broker?: boolean
+  check_call_notify_on_trip_start?: boolean
+  check_call_notify_at_shipper?: boolean
+  check_call_notify_pickup_completed?: boolean
+  check_call_notify_enroute?: boolean
+  check_call_notify_at_consignee?: boolean
+  check_call_notify_dropoff_completed?: boolean
   [key: string]: any
 }) {
   const supabase = await createClient()
@@ -269,11 +293,15 @@ export async function generateLoadNumber(): Promise<{ data: string | null; error
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -327,11 +355,15 @@ export async function generateInvoiceNumber(): Promise<{ data: string | null; er
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -376,11 +408,15 @@ export async function generateDispatchNumber(): Promise<{ data: string | null; e
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
@@ -425,11 +461,15 @@ export async function generateBOLNumber(): Promise<{ data: string | null; error:
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
     .single()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
