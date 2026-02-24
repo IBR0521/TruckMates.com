@@ -1046,6 +1046,11 @@ CREATE POLICY "Users can update their own profile"
 -- COMPANY_INTEGRATIONS TABLE (if exists)
 -- ============================================================================
 -- Drop all existing policies
+DROP POLICY IF EXISTS "Users can view company integrations" ON public.company_integrations;
+DROP POLICY IF EXISTS "Managers can manage company integrations" ON public.company_integrations;
+DROP POLICY IF EXISTS "Managers can insert company integrations" ON public.company_integrations;
+DROP POLICY IF EXISTS "Managers can update company integrations" ON public.company_integrations;
+DROP POLICY IF EXISTS "Managers can delete company integrations" ON public.company_integrations;
 
 CREATE POLICY "Users can view company integrations"
   ON public.company_integrations FOR SELECT
