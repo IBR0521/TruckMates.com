@@ -44,8 +44,9 @@ BEGIN
   BEGIN
     ALTER TABLE public.spatial_ref_sys ENABLE ROW LEVEL SECURITY;
     
-    -- If that worked, create a policy
-    CREATE POLICY IF NOT EXISTS "Allow public read access to spatial_ref_sys"
+    -- If that worked, create a policy (drop first if exists)
+    DROP POLICY IF EXISTS "Allow public read access to spatial_ref_sys" ON public.spatial_ref_sys;
+    CREATE POLICY "Allow public read access to spatial_ref_sys"
     ON public.spatial_ref_sys
     FOR SELECT
     TO public
