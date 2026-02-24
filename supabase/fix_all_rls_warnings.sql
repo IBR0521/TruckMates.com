@@ -109,6 +109,12 @@ CREATE POLICY "Users can view performance scores from their company"
 -- IFTA_TAX_RATES TABLE
 -- ============================================================================
 -- Drop all existing policies
+DROP POLICY IF EXISTS "Users can view tax rates in their company" ON public.ifta_tax_rates;
+DROP POLICY IF EXISTS "Users can manage tax rates in their company" ON public.ifta_tax_rates;
+DROP POLICY IF EXISTS "Users can insert tax rates in their company" ON public.ifta_tax_rates;
+DROP POLICY IF EXISTS "Users can update tax rates in their company" ON public.ifta_tax_rates;
+DROP POLICY IF EXISTS "Users can delete tax rates in their company" ON public.ifta_tax_rates;
+DROP POLICY IF EXISTS "Managers can manage tax rates in their company" ON public.ifta_tax_rates;
 
 -- Consolidated: Single SELECT policy
 CREATE POLICY "Users can view tax rates in their company"
@@ -134,6 +140,10 @@ CREATE POLICY "Users can delete tax rates in their company"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view EIN numbers from their company" ON public.company_ein_numbers;
+DROP POLICY IF EXISTS "Managers can insert EIN numbers" ON public.company_ein_numbers;
+DROP POLICY IF EXISTS "Managers can update EIN numbers" ON public.company_ein_numbers;
+DROP POLICY IF EXISTS "Managers can delete EIN numbers" ON public.company_ein_numbers;
 CREATE POLICY "Users can view EIN numbers from their company"
   ON public.company_ein_numbers FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -168,6 +178,10 @@ CREATE POLICY "Managers can delete EIN numbers"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view accessorials from their company" ON public.company_accessorials;
+DROP POLICY IF EXISTS "Managers can insert accessorials" ON public.company_accessorials;
+DROP POLICY IF EXISTS "Managers can update accessorials" ON public.company_accessorials;
+DROP POLICY IF EXISTS "Managers can delete accessorials" ON public.company_accessorials;
 CREATE POLICY "Users can view accessorials from their company"
   ON public.company_accessorials FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -202,6 +216,10 @@ CREATE POLICY "Managers can delete accessorials"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view invoice taxes from their company" ON public.company_invoice_taxes;
+DROP POLICY IF EXISTS "Managers can insert invoice taxes" ON public.company_invoice_taxes;
+DROP POLICY IF EXISTS "Managers can update invoice taxes" ON public.company_invoice_taxes;
+DROP POLICY IF EXISTS "Managers can delete invoice taxes" ON public.company_invoice_taxes;
 CREATE POLICY "Users can view invoice taxes from their company"
   ON public.company_invoice_taxes FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -236,6 +254,7 @@ CREATE POLICY "Managers can delete invoice taxes"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view subscriptions from their company" ON public.company_subscriptions;
 CREATE POLICY "Users can view subscriptions from their company"
   ON public.company_subscriptions FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -245,6 +264,7 @@ CREATE POLICY "Users can view subscriptions from their company"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view payment history from their company" ON public.company_payment_history;
 CREATE POLICY "Users can view payment history from their company"
   ON public.company_payment_history FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -254,6 +274,10 @@ CREATE POLICY "Users can view payment history from their company"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view payment methods from their company" ON public.company_payment_methods;
+DROP POLICY IF EXISTS "Managers can insert payment methods" ON public.company_payment_methods;
+DROP POLICY IF EXISTS "Managers can update payment methods" ON public.company_payment_methods;
+DROP POLICY IF EXISTS "Managers can delete payment methods" ON public.company_payment_methods;
 CREATE POLICY "Users can view payment methods from their company"
   ON public.company_payment_methods FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -288,6 +312,10 @@ CREATE POLICY "Managers can delete payment methods"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view alert rules in their company" ON public.alert_rules;
+DROP POLICY IF EXISTS "Managers can insert alert rules" ON public.alert_rules;
+DROP POLICY IF EXISTS "Managers can update alert rules" ON public.alert_rules;
+DROP POLICY IF EXISTS "Managers can delete alert rules" ON public.alert_rules;
 CREATE POLICY "Users can view alert rules in their company"
   ON public.alert_rules FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -322,6 +350,10 @@ CREATE POLICY "Managers can delete alert rules"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can read cache" ON public.api_cache;
+DROP POLICY IF EXISTS "System can insert cache" ON public.api_cache;
+DROP POLICY IF EXISTS "System can update cache" ON public.api_cache;
+DROP POLICY IF EXISTS "System can delete cache" ON public.api_cache;
 -- Consolidated: Everyone can read, system can write
 CREATE POLICY "Users can read cache"
   ON public.api_cache FOR SELECT
@@ -346,6 +378,10 @@ CREATE POLICY "System can delete cache"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Public token-based portal access" ON public.customer_portal_access;
+DROP POLICY IF EXISTS "Managers can insert portal access" ON public.customer_portal_access;
+DROP POLICY IF EXISTS "Managers can update portal access" ON public.customer_portal_access;
+DROP POLICY IF EXISTS "Managers can delete portal access" ON public.customer_portal_access;
 -- Consolidated SELECT policy: Public token-based access OR users can view their company
 CREATE POLICY "Public token-based portal access"
   ON public.customer_portal_access FOR SELECT
@@ -385,6 +421,10 @@ CREATE POLICY "Managers can delete portal access"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view documents in their company" ON public.documents;
+DROP POLICY IF EXISTS "Managers can insert documents" ON public.documents;
+DROP POLICY IF EXISTS "Managers can update documents" ON public.documents;
+DROP POLICY IF EXISTS "Managers can delete documents" ON public.documents;
 CREATE POLICY "Users can view documents in their company"
   ON public.documents FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -419,6 +459,10 @@ CREATE POLICY "Managers can delete documents"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view their company driver onboarding" ON public.driver_onboarding;
+DROP POLICY IF EXISTS "Managers can insert their company driver onboarding" ON public.driver_onboarding;
+DROP POLICY IF EXISTS "Managers can update their company driver onboarding" ON public.driver_onboarding;
+DROP POLICY IF EXISTS "Managers can delete their company driver onboarding" ON public.driver_onboarding;
 CREATE POLICY "Users can view their company driver onboarding"
   ON public.driver_onboarding FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -453,6 +497,10 @@ CREATE POLICY "Managers can delete their company driver onboarding"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view drivers in their company" ON public.drivers;
+DROP POLICY IF EXISTS "Managers can insert drivers" ON public.drivers;
+DROP POLICY IF EXISTS "Managers can update drivers" ON public.drivers;
+DROP POLICY IF EXISTS "Managers can delete drivers" ON public.drivers;
 CREATE POLICY "Users can view drivers in their company"
   ON public.drivers FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -487,6 +535,10 @@ CREATE POLICY "Managers can delete drivers"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view ELD devices in their company" ON public.eld_devices;
+DROP POLICY IF EXISTS "Users can insert ELD devices for mobile app" ON public.eld_devices;
+DROP POLICY IF EXISTS "Users can update their own mobile ELD device" ON public.eld_devices;
+DROP POLICY IF EXISTS "Managers can delete ELD devices" ON public.eld_devices;
 CREATE POLICY "Users can view ELD devices in their company"
   ON public.eld_devices FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -541,6 +593,10 @@ CREATE POLICY "Managers can delete ELD devices"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view expenses in their company" ON public.expenses;
+DROP POLICY IF EXISTS "Managers can insert expenses" ON public.expenses;
+DROP POLICY IF EXISTS "Managers can update expenses" ON public.expenses;
+DROP POLICY IF EXISTS "Managers can delete expenses" ON public.expenses;
 CREATE POLICY "Users can view expenses in their company"
   ON public.expenses FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -575,6 +631,10 @@ CREATE POLICY "Managers can delete expenses"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view invoices in their company" ON public.invoices;
+DROP POLICY IF EXISTS "Managers can insert invoices" ON public.invoices;
+DROP POLICY IF EXISTS "Managers can update invoices" ON public.invoices;
+DROP POLICY IF EXISTS "Managers can delete invoices" ON public.invoices;
 CREATE POLICY "Users can view invoices in their company"
   ON public.invoices FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -609,6 +669,10 @@ CREATE POLICY "Managers can delete invoices"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view delivery points in their company" ON public.load_delivery_points;
+DROP POLICY IF EXISTS "Managers can insert delivery points" ON public.load_delivery_points;
+DROP POLICY IF EXISTS "Managers can update delivery points" ON public.load_delivery_points;
+DROP POLICY IF EXISTS "Managers can delete delivery points" ON public.load_delivery_points;
 CREATE POLICY "Users can view delivery points in their company"
   ON public.load_delivery_points FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -643,6 +707,10 @@ CREATE POLICY "Managers can delete delivery points"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view loads in their company" ON public.loads;
+DROP POLICY IF EXISTS "Managers can insert loads" ON public.loads;
+DROP POLICY IF EXISTS "Managers can update loads" ON public.loads;
+DROP POLICY IF EXISTS "Managers can delete loads" ON public.loads;
 CREATE POLICY "Users can view loads in their company"
   ON public.loads FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -677,6 +745,10 @@ CREATE POLICY "Managers can delete loads"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view maintenance in their company" ON public.maintenance;
+DROP POLICY IF EXISTS "Managers can insert maintenance" ON public.maintenance;
+DROP POLICY IF EXISTS "Managers can update maintenance" ON public.maintenance;
+DROP POLICY IF EXISTS "Managers can delete maintenance" ON public.maintenance;
 CREATE POLICY "Users can view maintenance in their company"
   ON public.maintenance FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -711,6 +783,10 @@ CREATE POLICY "Managers can delete maintenance"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view their company onboarding templates" ON public.onboarding_checklist_templates;
+DROP POLICY IF EXISTS "Managers can insert their company onboarding templates" ON public.onboarding_checklist_templates;
+DROP POLICY IF EXISTS "Managers can update their company onboarding templates" ON public.onboarding_checklist_templates;
+DROP POLICY IF EXISTS "Managers can delete their company onboarding templates" ON public.onboarding_checklist_templates;
 CREATE POLICY "Users can view their company onboarding templates"
   ON public.onboarding_checklist_templates FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -745,6 +821,10 @@ CREATE POLICY "Managers can delete their company onboarding templates"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view route stops in their company" ON public.route_stops;
+DROP POLICY IF EXISTS "Managers can insert route stops" ON public.route_stops;
+DROP POLICY IF EXISTS "Managers can update route stops" ON public.route_stops;
+DROP POLICY IF EXISTS "Managers can delete route stops" ON public.route_stops;
 CREATE POLICY "Users can view route stops in their company"
   ON public.route_stops FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -779,6 +859,10 @@ CREATE POLICY "Managers can delete route stops"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view routes in their company" ON public.routes;
+DROP POLICY IF EXISTS "Managers can insert routes" ON public.routes;
+DROP POLICY IF EXISTS "Managers can update routes" ON public.routes;
+DROP POLICY IF EXISTS "Managers can delete routes" ON public.routes;
 CREATE POLICY "Users can view routes in their company"
   ON public.routes FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -813,6 +897,10 @@ CREATE POLICY "Managers can delete routes"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view settlements in their company" ON public.settlements;
+DROP POLICY IF EXISTS "Managers can insert settlements" ON public.settlements;
+DROP POLICY IF EXISTS "Managers can update settlements" ON public.settlements;
+DROP POLICY IF EXISTS "Managers can delete settlements" ON public.settlements;
 CREATE POLICY "Users can view settlements in their company"
   ON public.settlements FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -847,6 +935,10 @@ CREATE POLICY "Managers can delete settlements"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view their company's subscription" ON public.subscriptions;
+DROP POLICY IF EXISTS "Managers can insert subscriptions" ON public.subscriptions;
+DROP POLICY IF EXISTS "Managers can update subscriptions" ON public.subscriptions;
+DROP POLICY IF EXISTS "Managers can delete subscriptions" ON public.subscriptions;
 CREATE POLICY "Users can view their company's subscription"
   ON public.subscriptions FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -881,6 +973,10 @@ CREATE POLICY "Managers can delete subscriptions"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view trucks in their company" ON public.trucks;
+DROP POLICY IF EXISTS "Managers can insert trucks" ON public.trucks;
+DROP POLICY IF EXISTS "Managers can update trucks" ON public.trucks;
+DROP POLICY IF EXISTS "Managers can delete trucks" ON public.trucks;
 CREATE POLICY "Users can view trucks in their company"
   ON public.trucks FOR SELECT
   USING (company_id = (select get_user_company_id()));
@@ -915,6 +1011,8 @@ CREATE POLICY "Managers can delete trucks"
 -- ============================================================================
 -- Drop all existing policies
 
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.users;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
 -- Consolidated SELECT policy: Users can view their own profile OR managers can view employees
 CREATE POLICY "Users can view their own profile"
   ON public.users FOR SELECT
