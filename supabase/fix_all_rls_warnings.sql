@@ -42,11 +42,15 @@ GRANT EXECUTE ON FUNCTION is_user_manager() TO authenticated, anon;
 -- ============================================================================
 -- IFTA_REPORTS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view IFTA reports in their company" ON public.ifta_reports;
-DROP POLICY IF EXISTS "Users can insert IFTA reports in their company" ON public.ifta_reports;
-DROP POLICY IF EXISTS "Users can update IFTA reports in their company" ON public.ifta_reports;
-DROP POLICY IF EXISTS "Users can delete IFTA reports in their company" ON public.ifta_reports;
-DROP POLICY IF EXISTS "Managers can manage IFTA reports" ON public.ifta_reports;
+-- Drop all existing policies (including any that might have been created from previous runs)
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'ifta_reports') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.ifta_reports', r.policyname);
+  END LOOP;
+END $$;
 
 -- Consolidated: Single SELECT policy for all users
 CREATE POLICY "Users can view IFTA reports in their company"
@@ -83,7 +87,15 @@ CREATE POLICY "Managers can delete IFTA reports"
 -- ============================================================================
 -- DRIVER_BADGES TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view driver badges from their company" ON public.driver_badges;
+-- Drop all existing policies for ifta_reports
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'ifta_reports') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.ifta_reports', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view driver badges from their company"
   ON public.driver_badges FOR SELECT
@@ -92,7 +104,15 @@ CREATE POLICY "Users can view driver badges from their company"
 -- ============================================================================
 -- DRIVER_PERFORMANCE_SCORES TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view performance scores from their company" ON public.driver_performance_scores;
+-- Drop all existing policies for driver_performance_scores
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'driver_performance_scores') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.driver_performance_scores', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view performance scores from their company"
   ON public.driver_performance_scores FOR SELECT
@@ -101,8 +121,15 @@ CREATE POLICY "Users can view performance scores from their company"
 -- ============================================================================
 -- IFTA_TAX_RATES TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view tax rates in their company" ON public.ifta_tax_rates;
-DROP POLICY IF EXISTS "Users can manage tax rates in their company" ON public.ifta_tax_rates;
+-- Drop all existing policies for ifta_tax_rates
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'ifta_tax_rates') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.ifta_tax_rates', r.policyname);
+  END LOOP;
+END $$;
 
 -- Consolidated: Single SELECT policy
 CREATE POLICY "Users can view tax rates in their company"
@@ -126,8 +153,15 @@ CREATE POLICY "Users can delete tax rates in their company"
 -- ============================================================================
 -- COMPANY_EIN_NUMBERS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view EIN numbers from their company" ON public.company_ein_numbers;
-DROP POLICY IF EXISTS "Managers can manage EIN numbers" ON public.company_ein_numbers;
+-- Drop all existing policies for company_ein_numbers
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'company_ein_numbers') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.company_ein_numbers', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view EIN numbers from their company"
   ON public.company_ein_numbers FOR SELECT
@@ -161,8 +195,15 @@ CREATE POLICY "Managers can delete EIN numbers"
 -- ============================================================================
 -- COMPANY_ACCESSORIALS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view accessorials from their company" ON public.company_accessorials;
-DROP POLICY IF EXISTS "Managers can manage accessorials" ON public.company_accessorials;
+-- Drop all existing policies for company_accessorials
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'company_accessorials') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.company_accessorials', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view accessorials from their company"
   ON public.company_accessorials FOR SELECT
@@ -196,8 +237,15 @@ CREATE POLICY "Managers can delete accessorials"
 -- ============================================================================
 -- COMPANY_INVOICE_TAXES TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view invoice taxes from their company" ON public.company_invoice_taxes;
-DROP POLICY IF EXISTS "Managers can manage invoice taxes" ON public.company_invoice_taxes;
+-- Drop all existing policies for company_invoice_taxes
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'company_invoice_taxes') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.company_invoice_taxes', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view invoice taxes from their company"
   ON public.company_invoice_taxes FOR SELECT
@@ -231,7 +279,15 @@ CREATE POLICY "Managers can delete invoice taxes"
 -- ============================================================================
 -- COMPANY_SUBSCRIPTIONS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view subscriptions from their company" ON public.company_subscriptions;
+-- Drop all existing policies for company_subscriptions
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'company_subscriptions') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.company_subscriptions', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view subscriptions from their company"
   ON public.company_subscriptions FOR SELECT
@@ -240,7 +296,15 @@ CREATE POLICY "Users can view subscriptions from their company"
 -- ============================================================================
 -- COMPANY_PAYMENT_HISTORY TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view payment history from their company" ON public.company_payment_history;
+-- Drop all existing policies for company_payment_history
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'company_payment_history') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.company_payment_history', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view payment history from their company"
   ON public.company_payment_history FOR SELECT
@@ -249,8 +313,15 @@ CREATE POLICY "Users can view payment history from their company"
 -- ============================================================================
 -- COMPANY_PAYMENT_METHODS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view payment methods from their company" ON public.company_payment_methods;
-DROP POLICY IF EXISTS "Managers can manage payment methods" ON public.company_payment_methods;
+-- Drop all existing policies for company_payment_methods
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'company_payment_methods') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.company_payment_methods', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view payment methods from their company"
   ON public.company_payment_methods FOR SELECT
@@ -284,8 +355,15 @@ CREATE POLICY "Managers can delete payment methods"
 -- ============================================================================
 -- ALERT_RULES TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view alert rules in their company" ON public.alert_rules;
-DROP POLICY IF EXISTS "Managers can manage alert rules" ON public.alert_rules;
+-- Drop all existing policies for alert_rules
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'alert_rules') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.alert_rules', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view alert rules in their company"
   ON public.alert_rules FOR SELECT
@@ -319,8 +397,15 @@ CREATE POLICY "Managers can delete alert rules"
 -- ============================================================================
 -- API_CACHE TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can read cache" ON public.api_cache;
-DROP POLICY IF EXISTS "System can write cache" ON public.api_cache;
+-- Drop all existing policies for api_cache
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'api_cache') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.api_cache', r.policyname);
+  END LOOP;
+END $$;
 
 -- Consolidated: Everyone can read, system can write
 CREATE POLICY "Users can read cache"
@@ -344,9 +429,15 @@ CREATE POLICY "System can delete cache"
 -- ============================================================================
 -- CUSTOMER_PORTAL_ACCESS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view portal access in their company" ON public.customer_portal_access;
-DROP POLICY IF EXISTS "Managers can manage portal access" ON public.customer_portal_access;
-DROP POLICY IF EXISTS "Public token-based portal access" ON public.customer_portal_access;
+-- Drop all existing policies for customer_portal_access
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'customer_portal_access') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.customer_portal_access', r.policyname);
+  END LOOP;
+END $$;
 
 -- Consolidated SELECT policy: Public token-based access OR users can view their company
 CREATE POLICY "Public token-based portal access"
@@ -385,8 +476,15 @@ CREATE POLICY "Managers can delete portal access"
 -- ============================================================================
 -- DOCUMENTS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view documents in their company" ON public.documents;
-DROP POLICY IF EXISTS "Managers can manage documents" ON public.documents;
+-- Drop all existing policies for documents
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'documents') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.documents', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view documents in their company"
   ON public.documents FOR SELECT
@@ -420,8 +518,15 @@ CREATE POLICY "Managers can delete documents"
 -- ============================================================================
 -- DRIVER_ONBOARDING TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view their company driver onboarding" ON public.driver_onboarding;
-DROP POLICY IF EXISTS "Managers can manage their company driver onboarding" ON public.driver_onboarding;
+-- Drop all existing policies for driver_onboarding
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'driver_onboarding') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.driver_onboarding', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view their company driver onboarding"
   ON public.driver_onboarding FOR SELECT
@@ -455,8 +560,15 @@ CREATE POLICY "Managers can delete their company driver onboarding"
 -- ============================================================================
 -- DRIVERS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view drivers in their company" ON public.drivers;
-DROP POLICY IF EXISTS "Managers can manage drivers" ON public.drivers;
+-- Drop all existing policies for drivers
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'drivers') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.drivers', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view drivers in their company"
   ON public.drivers FOR SELECT
@@ -490,10 +602,15 @@ CREATE POLICY "Managers can delete drivers"
 -- ============================================================================
 -- ELD_DEVICES TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view ELD devices in their company" ON public.eld_devices;
-DROP POLICY IF EXISTS "Users can insert ELD devices for mobile app" ON public.eld_devices;
-DROP POLICY IF EXISTS "Users can update their own mobile ELD device" ON public.eld_devices;
-DROP POLICY IF EXISTS "Managers can manage ELD devices" ON public.eld_devices;
+-- Drop all existing policies for eld_devices
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'eld_devices') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.eld_devices', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view ELD devices in their company"
   ON public.eld_devices FOR SELECT
@@ -547,8 +664,15 @@ CREATE POLICY "Managers can delete ELD devices"
 -- ============================================================================
 -- EXPENSES TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view expenses in their company" ON public.expenses;
-DROP POLICY IF EXISTS "Managers can manage expenses" ON public.expenses;
+-- Drop all existing policies for expenses
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'expenses') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.expenses', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view expenses in their company"
   ON public.expenses FOR SELECT
@@ -582,8 +706,15 @@ CREATE POLICY "Managers can delete expenses"
 -- ============================================================================
 -- INVOICES TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view invoices in their company" ON public.invoices;
-DROP POLICY IF EXISTS "Managers can manage invoices" ON public.invoices;
+-- Drop all existing policies for invoices
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'invoices') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.invoices', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view invoices in their company"
   ON public.invoices FOR SELECT
@@ -617,8 +748,15 @@ CREATE POLICY "Managers can delete invoices"
 -- ============================================================================
 -- LOAD_DELIVERY_POINTS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view delivery points in their company" ON public.load_delivery_points;
-DROP POLICY IF EXISTS "Managers can manage delivery points" ON public.load_delivery_points;
+-- Drop all existing policies for load_delivery_points
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'load_delivery_points') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.load_delivery_points', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view delivery points in their company"
   ON public.load_delivery_points FOR SELECT
@@ -652,8 +790,15 @@ CREATE POLICY "Managers can delete delivery points"
 -- ============================================================================
 -- LOADS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view loads in their company" ON public.loads;
-DROP POLICY IF EXISTS "Managers can manage loads" ON public.loads;
+-- Drop all existing policies for loads
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'loads') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.loads', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view loads in their company"
   ON public.loads FOR SELECT
@@ -687,8 +832,15 @@ CREATE POLICY "Managers can delete loads"
 -- ============================================================================
 -- MAINTENANCE TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view maintenance in their company" ON public.maintenance;
-DROP POLICY IF EXISTS "Managers can manage maintenance" ON public.maintenance;
+-- Drop all existing policies for maintenance
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'maintenance') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.maintenance', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view maintenance in their company"
   ON public.maintenance FOR SELECT
@@ -722,8 +874,15 @@ CREATE POLICY "Managers can delete maintenance"
 -- ============================================================================
 -- ONBOARDING_CHECKLIST_TEMPLATES TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view their company onboarding templates" ON public.onboarding_checklist_templates;
-DROP POLICY IF EXISTS "Managers can manage their company onboarding templates" ON public.onboarding_checklist_templates;
+-- Drop all existing policies for onboarding_checklist_templates
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'onboarding_checklist_templates') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.onboarding_checklist_templates', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view their company onboarding templates"
   ON public.onboarding_checklist_templates FOR SELECT
@@ -757,8 +916,15 @@ CREATE POLICY "Managers can delete their company onboarding templates"
 -- ============================================================================
 -- ROUTE_STOPS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view route stops in their company" ON public.route_stops;
-DROP POLICY IF EXISTS "Managers can manage route stops" ON public.route_stops;
+-- Drop all existing policies for route_stops
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'route_stops') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.route_stops', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view route stops in their company"
   ON public.route_stops FOR SELECT
@@ -792,8 +958,15 @@ CREATE POLICY "Managers can delete route stops"
 -- ============================================================================
 -- ROUTES TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view routes in their company" ON public.routes;
-DROP POLICY IF EXISTS "Managers can manage routes" ON public.routes;
+-- Drop all existing policies for routes
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'routes') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.routes', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view routes in their company"
   ON public.routes FOR SELECT
@@ -827,8 +1000,15 @@ CREATE POLICY "Managers can delete routes"
 -- ============================================================================
 -- SETTLEMENTS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view settlements in their company" ON public.settlements;
-DROP POLICY IF EXISTS "Managers can manage settlements" ON public.settlements;
+-- Drop all existing policies for settlements
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'settlements') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.settlements', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view settlements in their company"
   ON public.settlements FOR SELECT
@@ -862,8 +1042,15 @@ CREATE POLICY "Managers can delete settlements"
 -- ============================================================================
 -- SUBSCRIPTIONS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view their company's subscription" ON public.subscriptions;
-DROP POLICY IF EXISTS "Managers can manage subscriptions" ON public.subscriptions;
+-- Drop all existing policies for subscriptions
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'subscriptions') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.subscriptions', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view their company's subscription"
   ON public.subscriptions FOR SELECT
@@ -897,8 +1084,15 @@ CREATE POLICY "Managers can delete subscriptions"
 -- ============================================================================
 -- TRUCKS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view trucks in their company" ON public.trucks;
-DROP POLICY IF EXISTS "Managers can manage trucks" ON public.trucks;
+-- Drop all existing policies for trucks
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'trucks') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.trucks', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view trucks in their company"
   ON public.trucks FOR SELECT
@@ -932,10 +1126,15 @@ CREATE POLICY "Managers can delete trucks"
 -- ============================================================================
 -- USERS TABLE
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view their own profile" ON public.users;
-DROP POLICY IF EXISTS "Managers can view employees in their company" ON public.users;
-DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
-DROP POLICY IF EXISTS "Managers can update employees in their company" ON public.users;
+-- Drop all existing policies for users
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'users') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.users', r.policyname);
+  END LOOP;
+END $$;
 
 -- Consolidated SELECT policy: Users can view their own profile OR managers can view employees
 CREATE POLICY "Users can view their own profile"
@@ -969,8 +1168,15 @@ CREATE POLICY "Users can update their own profile"
 -- ============================================================================
 -- COMPANY_INTEGRATIONS TABLE (if exists)
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view company integrations" ON public.company_integrations;
-DROP POLICY IF EXISTS "Managers can manage company integrations" ON public.company_integrations;
+-- Drop all existing policies for company_integrations
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'company_integrations') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.company_integrations', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view company integrations"
   ON public.company_integrations FOR SELECT
@@ -1004,8 +1210,15 @@ CREATE POLICY "Managers can delete company integrations"
 -- ============================================================================
 -- COMPANY_PORTAL_SETTINGS TABLE (if exists)
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view portal settings" ON public.company_portal_settings;
-DROP POLICY IF EXISTS "Managers can manage portal settings" ON public.company_portal_settings;
+-- Drop all existing policies for company_portal_settings
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'company_portal_settings') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.company_portal_settings', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view portal settings"
   ON public.company_portal_settings FOR SELECT
@@ -1039,8 +1252,15 @@ CREATE POLICY "Managers can delete portal settings"
 -- ============================================================================
 -- COMPANY_REMINDER_SETTINGS TABLE (if exists)
 -- ============================================================================
-DROP POLICY IF EXISTS "Users can view reminder settings" ON public.company_reminder_settings;
-DROP POLICY IF EXISTS "Managers can manage reminder settings" ON public.company_reminder_settings;
+-- Drop all existing policies for company_reminder_settings
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'company_reminder_settings') LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.company_reminder_settings', r.policyname);
+  END LOOP;
+END $$;
 
 CREATE POLICY "Users can view reminder settings"
   ON public.company_reminder_settings FOR SELECT
