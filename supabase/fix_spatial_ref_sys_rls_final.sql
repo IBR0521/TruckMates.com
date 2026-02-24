@@ -24,10 +24,14 @@ REVOKE ALL ON TABLE public.spatial_ref_sys FROM authenticated;
 GRANT SELECT ON TABLE public.spatial_ref_sys TO postgres;
 
 -- Method 2: If clients need spatial reference data, create a view with limited access
--- This creates a read-only view that can have RLS enabled
+-- This creates a read-only view WITHOUT SECURITY DEFINER (uses SECURITY INVOKER)
+-- SECURITY INVOKER means the view runs with the permissions of the querying user
 DROP VIEW IF EXISTS public.spatial_ref_sys_public CASCADE;
 
-CREATE VIEW public.spatial_ref_sys_public AS
+-- Create view explicitly with SECURITY INVOKER (not SECURITY DEFINER)
+-- This ensures the view runs with the querying user's permissions, not the creator's
+CREATE VIEW public.spatial_ref_sys_public
+WITH (security_invoker=true) AS
 SELECT 
   srid,
   auth_name,
@@ -47,9 +51,9 @@ WHERE srid IN (
 GRANT SELECT ON public.spatial_ref_sys_public TO anon;
 GRANT SELECT ON public.spatial_ref_sys_public TO authenticated;
 
--- Note: If you need all SRIDs accessible, use this instead:
--- CREATE VIEW public.spatial_ref_sys_public AS SELECT * FROM public.spatial_ref_sys;
--- GRANT SELECT ON public.spatial_ref_sys_public TO anon, authenticated;
+-- Note: If you don't need clients to access spatial reference data at all,
+-- you can comment out or remove Method 2 entirely. The main fix is Method 1
+-- (revoking access from the original table).
 
 -- ============================================================================
 -- Verification
