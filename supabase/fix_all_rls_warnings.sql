@@ -348,15 +348,13 @@ DROP POLICY IF EXISTS "Users can view portal access in their company" ON public.
 DROP POLICY IF EXISTS "Managers can manage portal access" ON public.customer_portal_access;
 DROP POLICY IF EXISTS "Public token-based portal access" ON public.customer_portal_access;
 
--- Public token-based access (for unauthenticated portal access)
+-- Consolidated SELECT policy: Public token-based access OR users can view their company
 CREATE POLICY "Public token-based portal access"
   ON public.customer_portal_access FOR SELECT
-  USING (true);
-
--- Users can view (for authenticated users)
-CREATE POLICY "Users can view portal access in their company"
-  ON public.customer_portal_access FOR SELECT
-  USING (company_id = (select get_user_company_id()));
+  USING (
+    true  -- Public token-based access (for unauthenticated portal access)
+    OR company_id = (select get_user_company_id())  -- Authenticated users can view their company
+  );
 
 -- Managers can manage (INSERT/UPDATE/DELETE only)
 CREATE POLICY "Managers can insert portal access"
@@ -501,40 +499,42 @@ CREATE POLICY "Users can view ELD devices in their company"
   ON public.eld_devices FOR SELECT
   USING (company_id = (select get_user_company_id()));
 
+-- Consolidated INSERT policy: Users can insert mobile app devices OR managers can insert any
 CREATE POLICY "Users can insert ELD devices for mobile app"
   ON public.eld_devices FOR INSERT
   WITH CHECK (
-    company_id = (select get_user_company_id())
-    AND provider = 'truckmates_mobile'
+    (
+      company_id = (select get_user_company_id())
+      AND provider = 'truckmates_mobile'
+    )
+    OR (
+      company_id = (select get_user_company_id())
+      AND (select is_user_manager())
+    )
   );
 
+-- Consolidated UPDATE policy: Users can update their own mobile device OR managers can update any
 CREATE POLICY "Users can update their own mobile ELD device"
   ON public.eld_devices FOR UPDATE
   USING (
-    company_id = (select get_user_company_id())
-    AND provider = 'truckmates_mobile'
+    (
+      company_id = (select get_user_company_id())
+      AND provider = 'truckmates_mobile'
+    )
+    OR (
+      company_id = (select get_user_company_id())
+      AND (select is_user_manager())
+    )
   )
   WITH CHECK (
-    company_id = (select get_user_company_id())
-    AND provider = 'truckmates_mobile'
-  );
-
-CREATE POLICY "Managers can insert ELD devices"
-  ON public.eld_devices FOR INSERT
-  WITH CHECK (
-    company_id = (select get_user_company_id())
-    AND (select is_user_manager())
-  );
-
-CREATE POLICY "Managers can update ELD devices"
-  ON public.eld_devices FOR UPDATE
-  USING (
-    company_id = (select get_user_company_id())
-    AND (select is_user_manager())
-  )
-  WITH CHECK (
-    company_id = (select get_user_company_id())
-    AND (select is_user_manager())
+    (
+      company_id = (select get_user_company_id())
+      AND provider = 'truckmates_mobile'
+    )
+    OR (
+      company_id = (select get_user_company_id())
+      AND (select is_user_manager())
+    )
   );
 
 CREATE POLICY "Managers can delete ELD devices"
@@ -948,22 +948,22 @@ CREATE POLICY "Users can view their own profile"
     )
   );
 
--- Users can update their own profile
+-- Consolidated UPDATE policy: Users can update their own profile OR managers can update employees
 CREATE POLICY "Users can update their own profile"
   ON public.users FOR UPDATE
-  USING ((select auth.uid()) = id)
-  WITH CHECK ((select auth.uid()) = id);
-
--- Managers can update employees (separate policy for UPDATE)
-CREATE POLICY "Managers can update employees in their company"
-  ON public.users FOR UPDATE
   USING (
-    company_id = (select get_user_company_id())
-    AND (select is_user_manager())
+    (select auth.uid()) = id
+    OR (
+      company_id = (select get_user_company_id())
+      AND (select is_user_manager())
+    )
   )
   WITH CHECK (
-    company_id = (select get_user_company_id())
-    AND (select is_user_manager())
+    (select auth.uid()) = id
+    OR (
+      company_id = (select get_user_company_id())
+      AND (select is_user_manager())
+    )
   );
 
 -- ============================================================================
