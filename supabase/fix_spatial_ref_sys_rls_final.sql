@@ -23,37 +23,38 @@ REVOKE ALL ON TABLE public.spatial_ref_sys FROM authenticated;
 -- This allows PostGIS functions to work, but blocks API access
 GRANT SELECT ON TABLE public.spatial_ref_sys TO postgres;
 
--- Method 2: If clients need spatial reference data, create a view with limited access
--- This creates a read-only view WITHOUT SECURITY DEFINER (uses SECURITY INVOKER)
--- SECURITY INVOKER means the view runs with the permissions of the querying user
+-- Method 2: Remove any existing views we may have created (optional cleanup)
+-- If you created a view earlier, remove it to avoid SECURITY DEFINER warnings
 DROP VIEW IF EXISTS public.spatial_ref_sys_public CASCADE;
+DROP VIEW IF EXISTS public.spatial_ref_sys_view CASCADE;
+DROP VIEW IF EXISTS public.spatial_ref_sys_secure CASCADE;
 
--- Create view explicitly with SECURITY INVOKER (not SECURITY DEFINER)
--- This ensures the view runs with the querying user's permissions, not the creator's
-CREATE VIEW public.spatial_ref_sys_public
-WITH (security_invoker=true) AS
-SELECT 
-  srid,
-  auth_name,
-  auth_srid,
-  srtext,
-  proj4text
-FROM public.spatial_ref_sys
-WHERE srid IN (
-  -- Only expose commonly used SRIDs (WGS84, Web Mercator, etc.)
-  4326,  -- WGS 84 (most common)
-  3857,  -- Web Mercator
-  4269,  -- NAD83
-  4267   -- NAD27
-);
-
--- Grant SELECT on the view to anon and authenticated roles
-GRANT SELECT ON public.spatial_ref_sys_public TO anon;
-GRANT SELECT ON public.spatial_ref_sys_public TO authenticated;
-
--- Note: If you don't need clients to access spatial reference data at all,
--- you can comment out or remove Method 2 entirely. The main fix is Method 1
--- (revoking access from the original table).
+-- ============================================================================
+-- IMPORTANT NOTE ABOUT THE WARNING
+-- ============================================================================
+-- After running this script, the security scanner may STILL show the warning
+-- "Table public.spatial_ref_sys is public, but RLS has not been enabled."
+--
+-- This is EXPECTED and can be SAFELY IGNORED because:
+--
+-- 1. We have REVOKED all access from anon/authenticated roles
+--    - The table is NOT accessible via PostgREST API
+--    - Clients cannot read or modify the table
+--
+-- 2. We CANNOT enable RLS on the table because:
+--    - It's owned by the PostGIS extension (not your user)
+--    - You'll get "must be owner" error if you try
+--
+-- 3. The security scanner checks for RLS, but doesn't check for revoked privileges
+--    - This is a limitation of the scanner
+--    - The table is actually secure (no API access)
+--
+-- 4. To fully resolve the warning, you would need to:
+--    - Contact Supabase support to move the table to a different schema, OR
+--    - Have them add an exception for PostGIS system tables
+--
+-- The table is secure - the warning is a false positive after revoking access.
+-- ============================================================================
 
 -- ============================================================================
 -- Verification

@@ -73,9 +73,25 @@ FROM pg_tables
 WHERE tablename = 'spatial_ref_sys';
 ```
 
+## Important: Warning May Persist
+
+**Even after running the fix script, the warning may still appear.** This is expected and can be safely ignored because:
+
+1. **Access is revoked**: The table is NOT accessible via PostgREST API (anon/authenticated roles have no privileges)
+2. **RLS cannot be enabled**: We cannot enable RLS because the table is owned by PostGIS extension
+3. **Scanner limitation**: The security scanner checks for RLS but doesn't verify revoked privileges
+4. **Table is secure**: Even though RLS isn't enabled, the table is protected because API roles can't access it
+
 ## Conclusion
 
-**For most users**: This warning can be safely ignored. The `spatial_ref_sys` table is a PostGIS system table with read-only reference data that poses no security risk.
+**The warning is a false positive after revoking access.** The table is secure because:
+- ✅ No API access (privileges revoked from anon/authenticated)
+- ✅ Only postgres role can access (for PostGIS functions)
+- ✅ Contains only read-only reference data (no sensitive information)
 
-If the warning bothers you, contact Supabase support to have PostGIS system tables moved to a different schema.
+**To fully remove the warning**, you would need to contact Supabase support to:
+- Move PostGIS system tables to a non-public schema, OR
+- Add an exception for PostGIS system tables in their security scanner
+
+**For practical purposes**: The warning can be safely ignored - your database is secure.
 
