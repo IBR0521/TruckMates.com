@@ -72,8 +72,8 @@ export function FleetMap({
       console.log('[FleetMap] Container ref attached', node)
       mapRef.current = node
       containerReadyRef.current = true
-      // Try to initialize if Google Maps is already loaded
-      if (window.google && window.google.maps && !mapInstanceRef.current) {
+      // Try to initialize if Google Maps is already loaded and Map constructor is available
+      if (window.google?.maps?.Map && typeof window.google.maps.Map === 'function' && !mapInstanceRef.current) {
         console.log('[FleetMap] Google Maps already loaded, initializing...')
         setTimeout(() => initializeMap(), 100)
       }
@@ -109,8 +109,8 @@ export function FleetMap({
         return
       }
 
-      // Check if already loaded
-      if (window.google && window.google.maps) {
+      // Check if already loaded and Map constructor is available
+      if (window.google?.maps?.Map && typeof window.google.maps.Map === 'function') {
         // Wait for container to be ready
         if (containerReadyRef.current && mapRef.current) {
             initializeMap()
@@ -121,9 +121,9 @@ export function FleetMap({
       // Check if script is already being loaded or already exists
       const existingScript = document.querySelector(`script[src*="maps.googleapis.com"]`)
       if (existingScript) {
-        // Wait for it to load
+        // Wait for it to load and Map constructor to be available
           const checkInterval = setInterval(() => {
-          if (window.google && window.google.maps) {
+          if (window.google?.maps?.Map && typeof window.google.maps.Map === 'function') {
               clearInterval(checkInterval)
             if (containerReadyRef.current && mapRef.current) {
               initializeMap()
@@ -146,19 +146,38 @@ export function FleetMap({
       
       script.onload = () => {
         script.removeAttribute("data-loading")
-        if (window.google && window.google.maps) {
-          // Wait for container to be ready
-          if (containerReadyRef.current && mapRef.current) {
-            initializeMap()
-          } else {
-            // Wait a bit for container
+        console.log('[FleetMap] Google Maps script loaded')
+        // Wait for Google Maps to fully initialize (check for Map constructor)
+        const checkGoogleMaps = setInterval(() => {
+          if (window.google?.maps?.Map && typeof window.google.maps.Map === 'function') {
+            clearInterval(checkGoogleMaps)
+            console.log('[FleetMap] Google Maps fully initialized')
+            // Wait a bit more to ensure everything is ready
             setTimeout(() => {
-              if (mapRef.current) {
+              if (containerReadyRef.current && mapRef.current) {
                 initializeMap()
+              } else {
+                // Container not ready yet, wait for it
+                const checkContainer = setInterval(() => {
+                  if (containerReadyRef.current && mapRef.current) {
+                    clearInterval(checkContainer)
+                    initializeMap()
+                  }
+                }, 100)
+                setTimeout(() => clearInterval(checkContainer), 5000)
               }
-            }, 200)
+            }, 100)
           }
-        }
+        }, 100)
+        
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          clearInterval(checkGoogleMaps)
+          if (!window.google?.maps?.Map || typeof window.google.maps.Map !== 'function') {
+            setLoadError("Google Maps failed to initialize. Please check your API key and refresh the page.")
+            setIsLoading(false)
+          }
+        }, 10000)
       }
       
       script.onerror = () => {
@@ -195,13 +214,28 @@ export function FleetMap({
     console.log('[FleetMap] initializeMap called', {
       hasGoogle: !!window.google,
       hasMaps: !!(window.google && window.google.maps),
+      hasMapConstructor: !!(window.google?.maps?.Map),
       containerReady: containerReadyRef.current,
       hasMapRef: !!mapRef.current,
       mapInstance: !!mapInstanceRef.current
     })
 
-    if (!window.google || !window.google.maps) {
-      console.warn('[FleetMap] Google Maps not loaded yet')
+    // Check if Google Maps is fully loaded with Map constructor
+    if (!window.google || !window.google.maps || typeof window.google.maps.Map !== 'function') {
+      console.warn('[FleetMap] Google Maps not fully loaded yet', {
+        hasGoogle: !!window.google,
+        hasMaps: !!(window.google?.maps),
+        hasMapConstructor: typeof window.google?.maps?.Map
+      })
+      // Retry after a short delay
+      setTimeout(() => {
+        if (window.google?.maps?.Map && typeof window.google.maps.Map === 'function') {
+          initializeMap()
+        } else {
+          setLoadError("Google Maps failed to load. Please check your API key and refresh the page.")
+          setIsLoading(false)
+        }
+      }, 500)
       return
     }
 
