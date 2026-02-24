@@ -18,14 +18,27 @@ ERROR: 42501: must be owner of table spatial_ref_sys
 
 ## Solutions
 
-### Option 1: Try the Actual Fix Script (Try This First)
+### Option 1: Restrict Access (Recommended - Use This!)
 
-Run `supabase/fix_spatial_ref_sys_rls_actual.sql` which attempts multiple methods:
-1. Moves the table to `postgis` schema (removes it from public schema)
+Run `supabase/fix_spatial_ref_sys_rls_final.sql` which:
+1. **Revokes access from PostgREST roles** (anon/authenticated) - This prevents API access
+2. Creates an optional view with limited SRIDs if clients need spatial reference data
+3. This is the safest approach since we can't alter the PostGIS-owned table
+
+**This is the preferred solution** because:
+- We don't need to alter the system table
+- We simply restrict who can access it via the API
+- PostGIS functions still work (they use postgres role)
+- The security warning will be resolved
+
+### Option 2: Try Moving the Table (Alternative)
+
+Run `supabase/fix_spatial_ref_sys_rls_actual.sql` which attempts to:
+1. Move the table to `postgis` schema (removes it from public schema)
 2. If that fails, creates a view in `postgis` schema
 3. As a last resort, tries to enable RLS directly
 
-**Note**: Moving the table requires appropriate permissions. If it fails, you'll need to contact Supabase support.
+**Note**: Moving the table requires appropriate permissions. If it fails, use Option 1 instead.
 
 ### Option 2: Safely Ignore the Warning (If Fix Doesn't Work)
 
