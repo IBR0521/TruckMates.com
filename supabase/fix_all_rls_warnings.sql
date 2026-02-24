@@ -1085,6 +1085,11 @@ CREATE POLICY "Managers can delete company integrations"
 -- COMPANY_PORTAL_SETTINGS TABLE (if exists)
 -- ============================================================================
 -- Drop all existing policies
+DROP POLICY IF EXISTS "Users can view portal settings" ON public.company_portal_settings;
+DROP POLICY IF EXISTS "Managers can manage portal settings" ON public.company_portal_settings;
+DROP POLICY IF EXISTS "Managers can insert portal settings" ON public.company_portal_settings;
+DROP POLICY IF EXISTS "Managers can update portal settings" ON public.company_portal_settings;
+DROP POLICY IF EXISTS "Managers can delete portal settings" ON public.company_portal_settings;
 
 CREATE POLICY "Users can view portal settings"
   ON public.company_portal_settings FOR SELECT
@@ -1119,6 +1124,11 @@ CREATE POLICY "Managers can delete portal settings"
 -- COMPANY_REMINDER_SETTINGS TABLE (if exists)
 -- ============================================================================
 -- Drop all existing policies
+DROP POLICY IF EXISTS "Users can view reminder settings" ON public.company_reminder_settings;
+DROP POLICY IF EXISTS "Managers can manage reminder settings" ON public.company_reminder_settings;
+DROP POLICY IF EXISTS "Managers can insert reminder settings" ON public.company_reminder_settings;
+DROP POLICY IF EXISTS "Managers can update reminder settings" ON public.company_reminder_settings;
+DROP POLICY IF EXISTS "Managers can delete reminder settings" ON public.company_reminder_settings;
 
 CREATE POLICY "Users can view reminder settings"
   ON public.company_reminder_settings FOR SELECT
