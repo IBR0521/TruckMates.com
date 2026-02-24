@@ -6,8 +6,20 @@ export async function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  if (!supabaseUrl || !supabaseAnonKey) {
+  // Check for missing or placeholder values
+  const isPlaceholder = !supabaseUrl || 
+                        !supabaseAnonKey || 
+                        supabaseUrl.includes('placeholder') || 
+                        supabaseUrl === '' ||
+                        supabaseAnonKey.includes('placeholder') ||
+                        supabaseAnonKey === ''
+
+  if (isPlaceholder) {
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1'
     console.warn('Missing Supabase environment variables - app will work in limited mode')
+    if (isProduction) {
+      console.warn('Production environment detected. Please configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel project settings → Environment Variables → Production, then redeploy.')
+    }
     // Return a mock client that won't crash the app
     const cookieStore = await cookies()
     return createServerClient(

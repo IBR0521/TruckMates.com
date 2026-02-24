@@ -3,19 +3,32 @@
 import { createClient } from "@/lib/supabase/server"
 
 export async function checkCompanyNameExists(companyName: string) {
-  const supabase = await createClient()
-  
-  const { data, error } = await supabase
-    .from('companies')
-    .select('id, name')
-    .eq('name', companyName.trim())
-    .maybeSingle()
+  try {
+    const supabase = await createClient()
+    
+    const { data, error } = await supabase
+      .from('companies')
+      .select('id, name')
+      .eq('name', companyName.trim())
+      .maybeSingle()
 
-  if (error) {
-    return { exists: false, error: error.message }
+    if (error) {
+      // Check if it's a connection error
+      if (error.message?.includes('fetch') || error.message?.includes('ECONNREFUSED') || error.message?.includes('timeout')) {
+        return { exists: false, error: "Connection failed. Please check your Supabase configuration." }
+      }
+      return { exists: false, error: error.message }
+    }
+
+    return { exists: !!data, error: null }
+  } catch (err: any) {
+    // Ensure we always return JSON, never throw
+    const errorMessage = err?.message || String(err) || "Unknown error"
+    if (errorMessage.includes('Missing Supabase') || errorMessage.includes('configuration')) {
+      return { exists: false, error: "Supabase configuration missing. Please check environment variables in Vercel settings." }
+    }
+    return { exists: false, error: errorMessage }
   }
-
-  return { exists: !!data, error: null }
 }
 
 export async function createCompanyAndLinkUser(data: {
@@ -25,7 +38,8 @@ export async function createCompanyAndLinkUser(data: {
   userId: string
   companyType?: 'broker' | 'carrier' | 'both' | null
 }) {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
   // Use the database function to create company (bypasses RLS)
   const { data: companyId, error: functionError } = await supabase.rpc('create_company_for_user', {
@@ -114,5 +128,16 @@ export async function createCompanyAndLinkUser(data: {
   }
 
   return { data: companyData, error: null }
+  } catch (err: any) {
+    // Ensure we always return JSON, never throw
+    const errorMessage = err?.message || String(err) || "Unknown error"
+    if (errorMessage.includes('Missing Supabase') || errorMessage.includes('configuration')) {
+      return { error: "Supabase configuration missing. Please check environment variables in Vercel settings.", data: null }
+    }
+    if (errorMessage.includes('fetch') || errorMessage.includes('ECONNREFUSED') || errorMessage.includes('timeout')) {
+      return { error: "Connection failed. Please check your Supabase configuration and ensure your project is active.", data: null }
+    }
+    return { error: errorMessage, data: null }
+  }
 }
 
