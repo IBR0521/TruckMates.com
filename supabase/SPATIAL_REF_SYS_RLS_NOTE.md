@@ -18,7 +18,16 @@ ERROR: 42501: must be owner of table spatial_ref_sys
 
 ## Solutions
 
-### Option 1: Safely Ignore the Warning (Recommended)
+### Option 1: Try the Actual Fix Script (Try This First)
+
+Run `supabase/fix_spatial_ref_sys_rls_actual.sql` which attempts multiple methods:
+1. Moves the table to `postgis` schema (removes it from public schema)
+2. If that fails, creates a view in `postgis` schema
+3. As a last resort, tries to enable RLS directly
+
+**Note**: Moving the table requires appropriate permissions. If it fails, you'll need to contact Supabase support.
+
+### Option 2: Safely Ignore the Warning (If Fix Doesn't Work)
 
 This warning can be **safely ignored** because:
 - `spatial_ref_sys` contains only read-only reference data (spatial reference system definitions)
