@@ -229,16 +229,16 @@ CREATE POLICY "Managers can manage alert rules"
 DROP POLICY IF EXISTS "Users can read cache" ON public.api_cache;
 DROP POLICY IF EXISTS "System can write cache" ON public.api_cache;
 
--- System can write (for service role)
+-- Consolidated: Everyone can read, system can write
+CREATE POLICY "Users can read cache"
+  ON public.api_cache FOR SELECT
+  USING (true);
+
+-- System can write (for service role) - INSERT/UPDATE/DELETE only
 CREATE POLICY "System can write cache"
   ON public.api_cache FOR INSERT, UPDATE, DELETE
   USING (true)
   WITH CHECK (true);
-
--- Users can read (for authenticated users)
-CREATE POLICY "Users can read cache"
-  ON public.api_cache FOR SELECT
-  USING (true);
 
 -- ============================================================================
 -- CUSTOMER_PORTAL_ACCESS TABLE
