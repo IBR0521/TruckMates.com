@@ -72,13 +72,10 @@ GRANT SELECT ON public.spatial_ref_sys_view TO public;
 -- Note: Views don't support RLS policies, but the security_barrier might help
 -- The real solution is to move the table out of public schema
 
--- ============================================================================
--- Verification Queries
--- ============================================================================
+-- Verification Queries:
 -- Check if table was moved:
 -- SELECT schemaname, tablename FROM pg_tables WHERE tablename = 'spatial_ref_sys';
 --
 -- Check if view exists:
 -- SELECT schemaname, viewname FROM pg_views WHERE viewname LIKE '%spatial_ref_sys%';
--- ============================================================================
 
