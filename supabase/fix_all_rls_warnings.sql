@@ -43,14 +43,15 @@ GRANT EXECUTE ON FUNCTION is_user_manager() TO authenticated, anon;
 -- IFTA_REPORTS TABLE
 -- ============================================================================
 -- Drop all existing policies (including any that might have been created from previous runs)
-DO $$
-DECLARE
-  r RECORD;
-BEGIN
-  FOR r IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'ifta_reports') LOOP
-    EXECUTE format('DROP POLICY IF EXISTS %I ON public.ifta_reports', r.policyname);
-  END LOOP;
-END $$;
+-- Use explicit DROP statements to ensure all policies are removed
+DROP POLICY IF EXISTS "Users can view IFTA reports in their company" ON public.ifta_reports;
+DROP POLICY IF EXISTS "Users can insert IFTA reports in their company" ON public.ifta_reports;
+DROP POLICY IF EXISTS "Users can update IFTA reports in their company" ON public.ifta_reports;
+DROP POLICY IF EXISTS "Users can delete IFTA reports in their company" ON public.ifta_reports;
+DROP POLICY IF EXISTS "Managers can manage IFTA reports" ON public.ifta_reports;
+DROP POLICY IF EXISTS "Managers can insert IFTA reports" ON public.ifta_reports;
+DROP POLICY IF EXISTS "Managers can update IFTA reports" ON public.ifta_reports;
+DROP POLICY IF EXISTS "Managers can delete IFTA reports" ON public.ifta_reports;
 
 -- Consolidated: Single SELECT policy for all users
 CREATE POLICY "Users can view IFTA reports in their company"
