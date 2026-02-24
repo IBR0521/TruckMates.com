@@ -113,8 +113,12 @@ export default function DashboardLayout({
           }
         }
         hasChecked = true
-      } catch (error) {
-        console.error("Error checking company access:", error)
+      } catch (error: any) {
+        // Only log errors that aren't related to missing configuration
+        const errorMessage = error?.message || String(error)
+        if (!errorMessage.includes("Missing Supabase") && !errorMessage.includes("configuration")) {
+          console.error("Error checking company access:", error)
+        }
         hasChecked = true
       }
     }

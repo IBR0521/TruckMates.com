@@ -76,6 +76,20 @@ function ManagerRegisterForm() {
       })
 
       if (authError) {
+        // Handle rate limiting (429 errors)
+        if (authError.message.includes("429") || authError.message.includes("Too Many Requests") || authError.status === 429) {
+          toast.error("Too many requests. Please wait a few minutes and try again. If this persists, check your Supabase configuration.")
+          setIsLoading(false)
+          return
+        }
+        
+        // Check if it's a configuration error
+        if (authError.message.includes("Invalid API key") || authError.message.includes("configuration") || authError.message.includes("Missing")) {
+          toast.error("Supabase configuration error. Please check environment variables in Vercel settings.")
+          setIsLoading(false)
+          return
+        }
+        
         // Check if it's an email already exists error
         if (authError.message.includes("already registered") || authError.message.includes("already exists") || authError.message.includes("User already registered")) {
           // Check if user exists in public.users and has a company
