@@ -149,7 +149,7 @@ CREATE EXTENSION IF NOT EXISTS "postgis";
 
 ## Notes
 
-1. **RLS Warning on `spatial_ref_sys`**: This is normal - it's a PostGIS system table and doesn't need RLS. You can ignore this warning.
+1. **RLS Warning on `spatial_ref_sys`**: This can be fixed by running `supabase/fix_spatial_ref_sys_rls.sql`. The table is a PostGIS system table with read-only reference data, so enabling RLS with public read access is safe.
 
 2. **If a file fails**: Check the error message. Most files use `IF NOT EXISTS` so they're safe to re-run, but some may need dependencies from earlier phases.
 

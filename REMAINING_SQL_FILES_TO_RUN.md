@@ -172,5 +172,5 @@ Then open each file in order from the list above.
 - Run files in the order listed above
 - Most files use `IF NOT EXISTS` so they're safe to re-run
 - If a file fails, check error messages - it may need a dependency from an earlier phase
-- The RLS warning on `spatial_ref_sys` is normal and can be ignored
+- The RLS warning on `spatial_ref_sys` can be fixed by running `supabase/fix_spatial_ref_sys_rls.sql`
 
