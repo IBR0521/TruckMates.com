@@ -36,20 +36,20 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background" suppressHydrationWarning>
       {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
+      <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b border-border/50" suppressHydrationWarning>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <Logo size="sm" />
           <div className="flex items-center gap-4">
-            <Link href="/features">
+            <Link href="/features" suppressHydrationWarning>
               <Button variant="ghost" className="hidden sm:flex">Features</Button>
             </Link>
-            <Link href="/marketplace">
+            <Link href="/marketplace" suppressHydrationWarning>
               <Button variant="ghost" className="hidden sm:flex">Marketplace</Button>
             </Link>
-            <Link href="/login">
+            <Link href="/login" suppressHydrationWarning>
               <Button variant="ghost" className="hidden sm:flex">Login</Button>
             </Link>
-            <Link href="/register">
+            <Link href="/register" suppressHydrationWarning>
               <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">Get Started</Button>
             </Link>
           </div>
@@ -112,12 +112,12 @@ export default function Home() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-              <Link href="/register">
+              <Link href="/register" suppressHydrationWarning>
                 <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-8 py-6 shadow-lg shadow-primary/25">
                   Get Started Free <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
-              <Link href="/demo">
+              <Link href="/demo" suppressHydrationWarning>
                 <Button size="lg" variant="outline" className="w-full sm:w-auto border-2 border-primary text-primary hover:bg-primary/10 text-lg px-8 py-6">
                   <Play className="mr-2 w-5 h-5" />
                   View Demo
@@ -224,7 +224,7 @@ export default function Home() {
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-6">
               Everything you need to manage your fleet efficiently and profitably
             </p>
-            <Link href="/features">
+            <Link href="/features" suppressHydrationWarning>
               <Button variant="outline" size="lg">
                 View All Features <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
@@ -812,12 +812,12 @@ export default function Home() {
             improved compliance with TruckMates. Get started today.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-            <Link href="/register">
+            <Link href="/register" suppressHydrationWarning>
               <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-8 py-6 shadow-lg shadow-primary/25">
                 Get Started Free <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
-            <Link href="/demo">
+            <Link href="/demo" suppressHydrationWarning>
               <Button size="lg" variant="outline" className="w-full sm:w-auto border-2 border-primary text-primary hover:bg-primary/10 text-lg px-8 py-6">
                 <Play className="mr-2 w-5 h-5" />
                 Try Demo
@@ -842,7 +842,7 @@ export default function Home() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><Link href="/marketplace" className="hover:text-primary transition">Marketplace</Link></li>
                 <li><Link href="/demo" className="hover:text-primary transition">Demo</Link></li>
-                <li><Link href="/register" className="hover:text-primary transition">Sign Up</Link></li>
+                <li><Link href="/register" className="hover:text-primary transition" suppressHydrationWarning>Sign Up</Link></li>
               </ul>
             </div>
             <div>

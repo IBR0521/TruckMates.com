@@ -10,14 +10,23 @@ export async function GET() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-    if (!supabaseUrl || !supabaseAnonKey) {
+    // Check for missing or placeholder values
+    const isPlaceholder = supabaseUrl?.includes('placeholder') || 
+                          supabaseUrl === '' || 
+                          supabaseAnonKey?.includes('placeholder') ||
+                          supabaseAnonKey === ''
+
+    if (!supabaseUrl || !supabaseAnonKey || isPlaceholder) {
       return NextResponse.json(
         {
           status: 'error',
-          message: 'Missing Supabase environment variables',
+          message: 'Missing or invalid Supabase environment variables',
           details: {
-            hasUrl: !!supabaseUrl,
-            hasKey: !!supabaseAnonKey,
+            hasUrl: !!supabaseUrl && !supabaseUrl.includes('placeholder'),
+            hasKey: !!supabaseAnonKey && !supabaseAnonKey.includes('placeholder'),
+            isPlaceholder,
+            environment: process.env.NODE_ENV,
+            hint: 'Please configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your Vercel project settings → Environment Variables'
           },
         },
         { status: 500 }
@@ -74,6 +83,7 @@ export async function GET() {
     )
   }
 }
+
 
 
 
