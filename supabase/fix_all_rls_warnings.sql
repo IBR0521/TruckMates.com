@@ -612,18 +612,15 @@ DROP POLICY IF EXISTS "Managers can view employees in their company" ON public.u
 DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
 DROP POLICY IF EXISTS "Managers can update employees in their company" ON public.users;
 
--- Users can view their own profile
+-- Consolidated SELECT policy: Users can view their own profile OR managers can view employees
 CREATE POLICY "Users can view their own profile"
   ON public.users FOR SELECT
-  USING ((select auth.uid()) = id);
-
--- Managers can view employees (separate policy, but both are SELECT so they'll both be checked)
--- Note: PostgreSQL RLS evaluates all permissive policies with OR, so this is fine
-CREATE POLICY "Managers can view employees in their company"
-  ON public.users FOR SELECT
   USING (
-    company_id = (select get_user_company_id())
-    AND (select is_user_manager())
+    (select auth.uid()) = id
+    OR (
+      company_id = (select get_user_company_id())
+      AND (select is_user_manager())
+    )
   );
 
 -- Users can update their own profile
