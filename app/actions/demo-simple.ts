@@ -14,11 +14,27 @@ export async function createDemoAndSignIn() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-    if (!supabaseUrl || !serviceRoleKey) {
-      return { error: "Supabase configuration missing" }
+    // Check for missing environment variables
+    const isProduction = process.env.NODE_ENV === 'production' || 
+                         process.env.VERCEL === '1'
+    
+    if (!supabaseUrl) {
+      const errorMsg = isProduction
+        ? "Supabase configuration missing. Please add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to Vercel project settings → Environment Variables → Production, then redeploy."
+        : "Supabase configuration missing. Please add NEXT_PUBLIC_SUPABASE_URL to your .env.local file."
+      return { error: errorMsg }
+    }
+    
+    // For demo setup, we need service role key to create users via admin API
+    // Admin operations require service role key - anon key won't work
+    if (!serviceRoleKey) {
+      const errorMsg = isProduction
+        ? "Supabase service role key missing. Please add SUPABASE_SERVICE_ROLE_KEY to Vercel project settings → Environment Variables → Production, then redeploy. Note: Service role key is required for demo setup."
+        : "Supabase service role key missing. Please add SUPABASE_SERVICE_ROLE_KEY to your .env.local file."
+      return { error: errorMsg }
     }
 
-    // Create admin client with service role
+    // Create admin client with service role key
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,

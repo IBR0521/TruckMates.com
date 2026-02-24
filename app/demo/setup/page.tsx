@@ -73,6 +73,12 @@ function DemoSetupContent() {
   }, [router])
 
   if (status === "error") {
+    const isProduction = typeof window !== 'undefined' && 
+                         !window.location.hostname.includes('localhost') &&
+                         !window.location.hostname.includes('127.0.0.1')
+    const isConfigError = errorMessage.toLowerCase().includes('supabase configuration') || 
+                         errorMessage.toLowerCase().includes('missing')
+
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
         <div className="w-full max-w-md text-center">
@@ -80,12 +86,41 @@ function DemoSetupContent() {
           <div className="mt-8 p-6 bg-destructive/10 border border-destructive/20 rounded-lg">
             <h2 className="text-xl font-bold text-destructive mb-2">Demo Setup Failed</h2>
             <p className="text-sm text-muted-foreground mb-4">{errorMessage}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="text-sm text-primary hover:underline"
-            >
-              Try Again
-            </button>
+            
+            {isConfigError && isProduction && (
+              <div className="mt-4 p-4 bg-secondary/50 rounded-lg text-left">
+                <p className="text-sm font-semibold mb-2">To fix this issue:</p>
+                <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside mb-3">
+                  <li>Go to Vercel Dashboard → Your Project</li>
+                  <li>Settings → Environment Variables</li>
+                  <li>Add <code className="bg-background px-1 rounded">NEXT_PUBLIC_SUPABASE_URL</code></li>
+                  <li>Add <code className="bg-background px-1 rounded">NEXT_PUBLIC_SUPABASE_ANON_KEY</code></li>
+                  <li>Select <strong>Production</strong> environment</li>
+                  <li>Redeploy your application</li>
+                </ol>
+                <a
+                  href="/diagnostics"
+                  className="text-xs text-primary hover:underline"
+                >
+                  Check connection status →
+                </a>
+              </div>
+            )}
+            
+            <div className="flex gap-2 justify-center mt-4">
+              <button
+                onClick={() => window.location.reload()}
+                className="text-sm px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition"
+              >
+                Try Again
+              </button>
+              <a
+                href="/"
+                className="text-sm px-4 py-2 border border-border rounded-md hover:bg-secondary transition"
+              >
+                Go Home
+              </a>
+            </div>
           </div>
         </div>
       </div>
