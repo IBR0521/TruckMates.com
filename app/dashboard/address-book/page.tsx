@@ -686,7 +686,16 @@ export default function EnhancedAddressBookPage() {
           resetForm()
         }
       }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent 
+          className="max-w-3xl max-h-[90vh] overflow-y-auto"
+          onInteractOutside={(e) => {
+            // Prevent dialog from closing when clicking on Google Places dropdown
+            const target = e.target as HTMLElement
+            if (target.closest('.pac-container') || target.closest('.pac-item')) {
+              e.preventDefault()
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>
               {showEditDialog ? "Edit Address Book Entry" : "Create Address Book Entry"}
