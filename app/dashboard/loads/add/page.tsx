@@ -444,26 +444,30 @@ export default function AddLoadPage() {
                 <div className="md:col-span-2">
                       <Label>Select from Address Book</Label>
                       <Select 
-                        value={selectedShipperAddressBookId} 
+                        value={selectedShipperAddressBookId || "none"} 
                         onValueChange={(value) => {
-                          setSelectedShipperAddressBookId(value)
-                          const entry = shipperAddressBookEntries.find(e => e.id === value)
-                          if (entry) {
-                            setFormData(prev => ({
-                              ...prev,
-                              shipperName: entry.name || entry.company_name || "",
-                              shipperAddress: entry.address_line1 || "",
-                              shipperCity: entry.city || "",
-                              shipperState: entry.state || "",
-                              shipperZip: entry.zip_code || "",
-                              shipperContact: entry.contact_name || "",
-                              shipperPhone: entry.phone || "",
-                              origin: entry.coordinates 
-                                ? `${entry.coordinates.lat}, ${entry.coordinates.lng}`
-                                : `${entry.city}, ${entry.state}`.replace(/^,\s*|,\s*$/g, ''),
-                              pickupInstructions: entry.custom_fields?.loading_instructions || entry.notes || prev.pickupInstructions,
-                            }))
-                            toast.success(`Selected ${entry.name} from address book`)
+                          if (value === "none") {
+                            setSelectedShipperAddressBookId("")
+                          } else {
+                            setSelectedShipperAddressBookId(value)
+                            const entry = shipperAddressBookEntries.find(e => e.id === value)
+                            if (entry) {
+                              setFormData(prev => ({
+                                ...prev,
+                                shipperName: entry.name || entry.company_name || "",
+                                shipperAddress: entry.address_line1 || "",
+                                shipperCity: entry.city || "",
+                                shipperState: entry.state || "",
+                                shipperZip: entry.zip_code || "",
+                                shipperContact: entry.contact_name || "",
+                                shipperPhone: entry.phone || "",
+                                origin: entry.coordinates 
+                                  ? `${entry.coordinates.lat}, ${entry.coordinates.lng}`
+                                  : `${entry.city}, ${entry.state}`.replace(/^,\s*|,\s*$/g, ''),
+                                pickupInstructions: entry.custom_fields?.loading_instructions || entry.notes || prev.pickupInstructions,
+                              }))
+                              toast.success(`Selected ${entry.name} from address book`)
+                            }
                           }
                         }}
                       >
@@ -471,7 +475,7 @@ export default function AddLoadPage() {
                           <SelectValue placeholder="Select shipper from address book (optional)" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">None (Manual Entry)</SelectItem>
+                          <SelectItem value="none">None (Manual Entry)</SelectItem>
                           {shipperAddressBookEntries.map((entry) => (
                             <SelectItem key={entry.id} value={entry.id}>
                               {entry.name} {entry.company_name ? `(${entry.company_name})` : ""} - {entry.city}, {entry.state}
@@ -575,26 +579,30 @@ export default function AddLoadPage() {
                 <div className="md:col-span-2">
                           <Label>Select from Address Book</Label>
                           <Select 
-                            value={selectedConsigneeAddressBookId} 
+                            value={selectedConsigneeAddressBookId || "none"} 
                             onValueChange={(value) => {
-                              setSelectedConsigneeAddressBookId(value)
-                              const entry = consigneeAddressBookEntries.find(e => e.id === value)
-                              if (entry) {
-                                setFormData(prev => ({
-                                  ...prev,
-                                  consigneeName: entry.name || entry.company_name || "",
-                                  consigneeAddress: entry.address_line1 || "",
-                                  consigneeCity: entry.city || "",
-                                  consigneeState: entry.state || "",
-                                  consigneeZip: entry.zip_code || "",
-                                  consigneeContact: entry.contact_name || "",
-                                  consigneePhone: entry.phone || "",
-                                  destination: entry.coordinates 
-                                    ? `${entry.coordinates.lat}, ${entry.coordinates.lng}`
-                                    : `${entry.city}, ${entry.state}`.replace(/^,\s*|,\s*$/g, ''),
-                                  deliveryInstructions: entry.custom_fields?.loading_instructions || entry.notes || prev.deliveryInstructions,
-                                }))
-                                toast.success(`Selected ${entry.name} from address book`)
+                              if (value === "none") {
+                                setSelectedConsigneeAddressBookId("")
+                              } else {
+                                setSelectedConsigneeAddressBookId(value)
+                                const entry = consigneeAddressBookEntries.find(e => e.id === value)
+                                if (entry) {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    consigneeName: entry.name || entry.company_name || "",
+                                    consigneeAddress: entry.address_line1 || "",
+                                    consigneeCity: entry.city || "",
+                                    consigneeState: entry.state || "",
+                                    consigneeZip: entry.zip_code || "",
+                                    consigneeContact: entry.contact_name || "",
+                                    consigneePhone: entry.phone || "",
+                                    destination: entry.coordinates 
+                                      ? `${entry.coordinates.lat}, ${entry.coordinates.lng}`
+                                      : `${entry.city}, ${entry.state}`.replace(/^,\s*|,\s*$/g, ''),
+                                    deliveryInstructions: entry.custom_fields?.loading_instructions || entry.notes || prev.deliveryInstructions,
+                                  }))
+                                  toast.success(`Selected ${entry.name} from address book`)
+                                }
                               }
                             }}
                           >
@@ -602,7 +610,7 @@ export default function AddLoadPage() {
                               <SelectValue placeholder="Select consignee from address book (optional)" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">None (Manual Entry)</SelectItem>
+                              <SelectItem value="none">None (Manual Entry)</SelectItem>
                               {consigneeAddressBookEntries.map((entry) => (
                                 <SelectItem key={entry.id} value={entry.id}>
                                   {entry.name} {entry.company_name ? `(${entry.company_name})` : ""} - {entry.city}, {entry.state}
