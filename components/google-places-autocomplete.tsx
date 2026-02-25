@@ -134,41 +134,62 @@ export function GooglePlacesAutocomplete({
 
       autocompleteRef.current = autocomplete
 
-      // Fix z-index and click handling for Google Places dropdown
-      // The dropdown is created by Google as a direct child of body
-      // We need to ensure it's above dialogs and clickable
+      // Aggressively fix z-index and click handling
       const applyStyles = () => {
         const pacContainers = document.querySelectorAll('.pac-container') as NodeListOf<HTMLElement>
+        const hasDropdown = pacContainers.length > 0
+        
+        // Disable ALL overlays when dropdown is visible
+        if (hasDropdown) {
+          // Disable dialog overlays
+          document.querySelectorAll('[data-slot="dialog-overlay"]').forEach((el: any) => {
+            el.style.pointerEvents = 'none'
+            el.style.zIndex = '1'
+          })
+          // Disable any other overlays
+          document.querySelectorAll('[role="dialog"] > div:first-child').forEach((el: any) => {
+            if (el.style.position === 'fixed' && el.style.inset === '0px') {
+              el.style.pointerEvents = 'none'
+            }
+          })
+        }
+        
         pacContainers.forEach((pacContainer) => {
-          // Move to body if not already there (in case it's inside a dialog)
+          // Force move to body
           if (pacContainer.parentElement !== document.body) {
             document.body.appendChild(pacContainer)
           }
           
-          pacContainer.style.zIndex = '99999'
-          pacContainer.style.position = 'fixed' // Use fixed instead of absolute
-          pacContainer.style.pointerEvents = 'auto'
-          pacContainer.style.cursor = 'default'
+          // Aggressive styling
+          pacContainer.style.cssText = `
+            z-index: 99999 !important;
+            position: fixed !important;
+            pointer-events: auto !important;
+            cursor: default !important;
+          `
           
-          // Make sure overlay doesn't block it
-          const dialogOverlays = document.querySelectorAll('[data-slot="dialog-overlay"]') as NodeListOf<HTMLElement>
-          dialogOverlays.forEach((overlay) => {
-            overlay.style.pointerEvents = 'none' // Allow clicks through overlay
-          })
-          
-          // Fix all items inside
+          // Fix all items - use mousedown instead of click
           const items = pacContainer.querySelectorAll('.pac-item') as NodeListOf<HTMLElement>
-          items.forEach((item) => {
-            item.style.pointerEvents = 'auto'
-            item.style.cursor = 'pointer'
-            item.style.userSelect = 'none'
+          items.forEach((item, index) => {
+            item.style.cssText = `
+              pointer-events: auto !important;
+              cursor: pointer !important;
+              user-select: none !important;
+            `
             
-            // Add click handler as backup
-            item.onclick = (e) => {
+            // Remove all existing handlers
+            const newItem = item.cloneNode(true) as HTMLElement
+            item.parentNode?.replaceChild(newItem, item)
+            
+            // Add mousedown handler (fires before click, harder to block)
+            newItem.addEventListener('mousedown', (e) => {
               e.stopPropagation()
-              // Trigger the click on the item
-              item.click()
-            }
+              e.preventDefault()
+              // Trigger the actual selection
+              setTimeout(() => {
+                newItem.click()
+              }, 10)
+            }, true)
           })
         })
       }
@@ -194,7 +215,7 @@ export function GooglePlacesAutocomplete({
         clearInterval(styleInterval)
       }
 
-      // Also add global styles with very high z-index
+      // Add global styles - aggressive overrides
       const styleId = 'google-places-autocomplete-styles'
       if (!document.getElementById(styleId)) {
         const style = document.createElement('style')
@@ -202,7 +223,7 @@ export function GooglePlacesAutocomplete({
         style.textContent = `
           .pac-container {
             z-index: 99999 !important;
-            position: absolute !important;
+            position: fixed !important;
             pointer-events: auto !important;
             cursor: default !important;
             border-radius: 0.375rem;
@@ -216,7 +237,7 @@ export function GooglePlacesAutocomplete({
             pointer-events: auto !important;
             border-bottom: 1px solid hsl(var(--border));
             color: hsl(var(--foreground)) !important;
-            user-select: none;
+            user-select: none !important;
           }
           .pac-item:hover {
             background-color: hsl(var(--accent)) !important;
@@ -224,14 +245,12 @@ export function GooglePlacesAutocomplete({
           .pac-item-selected {
             background-color: hsl(var(--accent)) !important;
           }
-          .pac-item-selected:hover {
-            background-color: hsl(var(--accent)) !important;
+          /* Force overlay to not block */
+          [data-slot="dialog-overlay"] {
+            pointer-events: none !important;
           }
-          .pac-icon {
-            margin-right: 0.5rem;
-          }
-          .pac-matched {
-            font-weight: 600;
+          body:has(.pac-container) [data-slot="dialog-overlay"] {
+            pointer-events: none !important;
           }
         `
         document.head.appendChild(style)
