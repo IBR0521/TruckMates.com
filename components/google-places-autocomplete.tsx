@@ -181,30 +181,24 @@ export function GooglePlacesAutocomplete({
             item.style.cursor = 'pointer'
             item.style.userSelect = 'none'
             
-            // Prevent all events from bubbling up to dialog (which would close it)
-            const stopAllEvents = (e: Event) => {
-              e.stopPropagation()
-              e.stopImmediatePropagation()
-            }
-            
-            // Add handlers for all event types that could close the dialog
-            item.addEventListener('mousedown', stopAllEvents, { capture: true })
-            item.addEventListener('click', stopAllEvents, { capture: true })
-            item.addEventListener('mouseup', stopAllEvents, { capture: true })
+            // Only stop propagation AFTER Google Places handles the click
+            // Don't prevent default or stop immediate propagation - let Google handle it first
+            item.addEventListener('click', (e) => {
+              // Let Google Places handle the click first, then stop bubbling to dialog
+              setTimeout(() => {
+                e.stopPropagation()
+              }, 0)
+            }, { capture: false }) // Use bubble phase, not capture
             
             fixedItems.add(item)
           })
           
-          // Also prevent clicks on the container itself from closing dialog
-          pacContainer.addEventListener('mousedown', (e) => {
-            e.stopPropagation()
-            e.stopImmediatePropagation()
-          }, { capture: true })
-          
+          // Also prevent clicks on the container from closing dialog (but after Google handles it)
           pacContainer.addEventListener('click', (e) => {
-            e.stopPropagation()
-            e.stopImmediatePropagation()
-          }, { capture: true })
+            setTimeout(() => {
+              e.stopPropagation()
+            }, 0)
+          }, { capture: false })
         })
       }
 
