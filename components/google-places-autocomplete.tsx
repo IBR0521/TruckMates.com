@@ -181,13 +181,30 @@ export function GooglePlacesAutocomplete({
             item.style.cursor = 'pointer'
             item.style.userSelect = 'none'
             
-            // Add mousedown handler (only once)
-            item.addEventListener('mousedown', (e) => {
+            // Prevent all events from bubbling up to dialog (which would close it)
+            const stopAllEvents = (e: Event) => {
               e.stopPropagation()
-            }, { capture: true, once: false })
+              e.stopImmediatePropagation()
+            }
+            
+            // Add handlers for all event types that could close the dialog
+            item.addEventListener('mousedown', stopAllEvents, { capture: true })
+            item.addEventListener('click', stopAllEvents, { capture: true })
+            item.addEventListener('mouseup', stopAllEvents, { capture: true })
             
             fixedItems.add(item)
           })
+          
+          // Also prevent clicks on the container itself from closing dialog
+          pacContainer.addEventListener('mousedown', (e) => {
+            e.stopPropagation()
+            e.stopImmediatePropagation()
+          }, { capture: true })
+          
+          pacContainer.addEventListener('click', (e) => {
+            e.stopPropagation()
+            e.stopImmediatePropagation()
+          }, { capture: true })
         })
       }
 
