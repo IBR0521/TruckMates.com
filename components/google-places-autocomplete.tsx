@@ -135,18 +135,29 @@ export function GooglePlacesAutocomplete({
       autocompleteRef.current = autocomplete
 
       // Fix z-index for Google Places dropdown to appear above modals
-      // Google Places creates a dropdown with class 'pac-container'
-      // Use a MutationObserver to ensure styles are applied when dropdown appears
+      // Google Places creates the dropdown as a direct child of body
+      // Dialog uses z-50, so we need much higher
       const applyStyles = () => {
-        const pacContainer = document.querySelector('.pac-container') as HTMLElement
-        if (pacContainer) {
-          pacContainer.style.zIndex = '9999'
+        const pacContainers = document.querySelectorAll('.pac-container') as NodeListOf<HTMLElement>
+        pacContainers.forEach((pacContainer) => {
+          pacContainer.style.zIndex = '99999'
           pacContainer.style.position = 'absolute'
           pacContainer.style.pointerEvents = 'auto'
-        }
+          pacContainer.style.cursor = 'default'
+          
+          // Also fix all items inside
+          const items = pacContainer.querySelectorAll('.pac-item') as NodeListOf<HTMLElement>
+          items.forEach((item) => {
+            item.style.pointerEvents = 'auto'
+            item.style.cursor = 'pointer'
+          })
+        })
       }
 
-      // Apply styles immediately and watch for dropdown creation
+      // Apply styles immediately
+      applyStyles()
+
+      // Watch for dropdown creation and updates
       observer = new MutationObserver(() => {
         applyStyles()
       })
@@ -154,35 +165,42 @@ export function GooglePlacesAutocomplete({
       observer.observe(document.body, {
         childList: true,
         subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class'],
       })
 
-      // Also add global styles
+      // Also add global styles with very high z-index
       const styleId = 'google-places-autocomplete-styles'
       if (!document.getElementById(styleId)) {
         const style = document.createElement('style')
         style.id = styleId
         style.textContent = `
           .pac-container {
-            z-index: 9999 !important;
+            z-index: 99999 !important;
             position: absolute !important;
             pointer-events: auto !important;
+            cursor: default !important;
             border-radius: 0.375rem;
             border: 1px solid hsl(var(--border));
             background-color: hsl(var(--popover));
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
           }
           .pac-item {
-            padding: 0.5rem;
+            padding: 0.5rem !important;
             cursor: pointer !important;
             pointer-events: auto !important;
             border-bottom: 1px solid hsl(var(--border));
-            color: hsl(var(--foreground));
+            color: hsl(var(--foreground)) !important;
+            user-select: none;
           }
           .pac-item:hover {
-            background-color: hsl(var(--accent));
+            background-color: hsl(var(--accent)) !important;
           }
           .pac-item-selected {
-            background-color: hsl(var(--accent));
+            background-color: hsl(var(--accent)) !important;
+          }
+          .pac-item-selected:hover {
+            background-color: hsl(var(--accent)) !important;
           }
           .pac-icon {
             margin-right: 0.5rem;
