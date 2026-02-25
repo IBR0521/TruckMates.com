@@ -299,8 +299,28 @@ export async function getDashboardStats() {
     }
 
     // Sort by time (most recent first) and limit to 5
-    recentActivity.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-    const sortedRecentActivity = recentActivity.slice(0, 5)
+    // Filter out invalid dates before sorting
+    const validActivities = recentActivity.filter((activity) => {
+      if (!activity.time) return false
+      try {
+        const date = new Date(activity.time)
+        return !isNaN(date.getTime())
+      } catch {
+        return false
+      }
+    })
+    
+    validActivities.sort((a, b) => {
+      try {
+        const timeA = new Date(a.time).getTime()
+        const timeB = new Date(b.time).getTime()
+        return timeB - timeA // Most recent first
+      } catch {
+        return 0
+      }
+    })
+    
+    const sortedRecentActivity = validActivities.slice(0, 5)
 
     // Get sample data for dashboard cards - fetch in parallel for speed (with timeout)
     const cardQueries = Promise.all([

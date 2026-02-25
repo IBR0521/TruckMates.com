@@ -542,17 +542,33 @@ export default function DashboardPage() {
               <div className="space-y-3">
                 {recentActivity.map((activity: any, index: number) => {
                   const timeAgo = (() => {
-                    const now = new Date()
-                    const activityTime = new Date(activity.time)
-                    const diffMs = now.getTime() - activityTime.getTime()
-                    const diffMins = Math.floor(diffMs / 60000)
-                    const diffHours = Math.floor(diffMs / 3600000)
-                    const diffDays = Math.floor(diffMs / 86400000)
+                    if (!activity?.time) return "Unknown time"
+                    
+                    try {
+                      const now = new Date()
+                      const activityTime = new Date(activity.time)
+                      
+                      // Check if date is valid
+                      if (isNaN(activityTime.getTime())) {
+                        return "Invalid date"
+                      }
+                      
+                      const diffMs = now.getTime() - activityTime.getTime()
+                      
+                      // Handle negative differences (future dates)
+                      if (diffMs < 0) return "Just now"
+                      
+                      const diffMins = Math.floor(diffMs / 60000)
+                      const diffHours = Math.floor(diffMs / 3600000)
+                      const diffDays = Math.floor(diffMs / 86400000)
 
-                    if (diffMins < 1) return "Just now"
-                    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`
-                    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`
-                    return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`
+                      if (diffMins < 1) return "Just now"
+                      if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`
+                      if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`
+                      return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`
+                    } catch (error) {
+                      return "Unknown time"
+                    }
                   })()
 
                   const typeColors = {
