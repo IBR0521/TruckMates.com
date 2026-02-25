@@ -166,6 +166,7 @@ export function GooglePlacesAutocomplete({
             position: fixed !important;
             pointer-events: auto !important;
             cursor: default !important;
+            background-color: white !important;
           `
           
           // Fix all items - use mousedown instead of click
@@ -228,22 +229,23 @@ export function GooglePlacesAutocomplete({
             cursor: default !important;
             border-radius: 0.375rem;
             border: 1px solid hsl(var(--border));
-            background-color: hsl(var(--popover));
+            background-color: white !important;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
           }
           .pac-item {
             padding: 0.5rem !important;
             cursor: pointer !important;
             pointer-events: auto !important;
-            border-bottom: 1px solid hsl(var(--border));
-            color: hsl(var(--foreground)) !important;
+            border-bottom: 1px solid #e5e7eb !important;
+            color: #111827 !important;
+            background-color: white !important;
             user-select: none !important;
           }
           .pac-item:hover {
-            background-color: hsl(var(--accent)) !important;
+            background-color: #f3f4f6 !important;
           }
           .pac-item-selected {
-            background-color: hsl(var(--accent)) !important;
+            background-color: #e5e7eb !important;
           }
           /* Force overlay to not block */
           [data-slot="dialog-overlay"] {
