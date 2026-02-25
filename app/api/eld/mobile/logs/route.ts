@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { getAuthContext } from "@/lib/server-helpers"
+import { getAuthContext } from "@/lib/auth/server"
 
 /**
  * Receive HOS (Hours of Service) log entries from mobile app

@@ -60,3 +60,4 @@ CREATE POLICY "Users can delete IFTA reports in their company"
 -- Grant necessary permissions
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.ifta_reports TO authenticated;
 
+

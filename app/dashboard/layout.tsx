@@ -13,7 +13,7 @@ import { NotificationsCenter } from "@/components/notifications-center"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { getCurrentUser } from "@/app/actions/user"
+import { getCurrentUser } from "@/lib/auth/server"
 // AI Widget temporarily disabled - not ready for production
 // const FloatingAIWidget = dynamic(
 //   () => import("@/components/truckmates-ai/floating-widget"),

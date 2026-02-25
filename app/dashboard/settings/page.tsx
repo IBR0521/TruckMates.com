@@ -24,7 +24,7 @@ import {
 import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { getCompany, updateCompany } from "@/app/actions/company"
-import { getUserProfile } from "@/app/actions/user"
+import { getCurrentUser, updateUserProfile, updateUserPassword } from "@/lib/auth/server"
 import { getNotificationPreferences, updateNotificationPreferences, sendTestEmail, checkEmailConfiguration } from "@/app/actions/notifications"
 import Link from "next/link"
 import { Switch } from "@/components/ui/switch"
@@ -80,7 +80,7 @@ export default function SettingsPage() {
     async function loadData() {
       const [companyResult, userResult, notificationResult, emailConfigResult] = await Promise.all([
         getCompany(),
-        getUserProfile(),
+        getCurrentUser(),
         getNotificationPreferences(),
         checkEmailConfiguration(),
       ])

@@ -90,3 +90,4 @@ CREATE POLICY "Users can view performance scores from their company"
 COMMENT ON TABLE public.driver_badges IS 'Driver achievements and badges for gamification';
 COMMENT ON TABLE public.driver_performance_scores IS 'Driver performance scores for leaderboards and rankings';
 
+

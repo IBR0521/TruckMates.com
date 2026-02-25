@@ -45,7 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { getCurrentUser } from "@/app/actions/user"
+import { getCurrentUser } from "@/lib/auth/server"
 import { useRouter } from "next/navigation"
 
 export default function EmployeesPage() {

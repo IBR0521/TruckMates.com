@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { getCurrentUser } from "@/app/actions/user"
+import { getCurrentUser } from "@/lib/auth/server"
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import { canViewFeature, type FeatureCategory } from "@/lib/feature-permissions"
 import { Card } from "@/components/ui/card"

@@ -128,3 +128,4 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.ifta_tax_rates TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_ifta_tax_rate(UUID, TEXT, INTEGER, INTEGER) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_ifta_tax_rates_for_quarter(UUID, INTEGER, INTEGER) TO authenticated;
 
+

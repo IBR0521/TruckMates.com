@@ -33,7 +33,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
-import { getCurrentUser } from "@/app/actions/user"
+import { getCurrentUser } from "@/lib/auth/server"
 import {
   Tooltip,
   TooltipContent,

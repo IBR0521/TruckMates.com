@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getAuthContext } from "@/lib/server-helpers"
+import { getAuthContext } from "@/lib/auth/server"
 import { cache, cacheKeys } from "@/lib/cache"
 
 /**

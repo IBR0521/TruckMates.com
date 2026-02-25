@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { getCurrentUser } from "@/app/actions/user"
+import { getCurrentUser } from "@/lib/auth/server"
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import { canViewFeature, type FeatureCategory } from "@/lib/feature-permissions"
 

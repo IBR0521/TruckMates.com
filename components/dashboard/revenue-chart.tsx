@@ -21,17 +21,26 @@ export function RevenueChart({ data: initialData }: RevenueChartProps) {
   useEffect(() => {
     async function fetchData() {
       setIsLoading(true)
-      const result = await getRevenueTrend(period)
-      if (result.data) {
-        setData(result.data)
+      try {
+        const result = await getRevenueTrend(period)
+        if (result.data) {
+          setData(result.data)
+        } else if (result.error) {
+          console.error("[RevenueChart] Error fetching data:", result.error)
+          setData([])
+        }
+      } catch (error) {
+        console.error("[RevenueChart] Unexpected error:", error)
+        setData([])
+      } finally {
+        setIsLoading(false)
       }
-      setIsLoading(false)
     }
     fetchData()
   }, [period])
 
   // Format data for chart based on period
-  const chartData = data.map((item) => {
+  const chartData = (data || []).map((item) => {
     try {
       if (period === 'weekly') {
         const date = new Date(item.date)

@@ -83,3 +83,4 @@ After adding the environment variables:
 **Issue**: "Unauthorized" errors
 - **Solution**: Make sure you copied the `anon` key, not the `service_role` key
 
+

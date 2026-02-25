@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -25,29 +23,19 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      // Check if user exists by trying to sign in
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
       if (error) {
-        // If user doesn't exist or wrong password, redirect to sign up
-        if (error.message.includes("Invalid login credentials") || error.message.includes("User not found")) {
-          toast.info("Account not found. Redirecting to sign up...")
-          setTimeout(() => {
-            router.push("/register")
-          }, 1000)
-        } else {
-          toast.error(error.message || "Login failed")
-        }
+        toast.error(error.message || "Login failed")
         setIsLoading(false)
         return
       }
 
       if (data.user) {
         toast.success("Login successful")
-        // Refresh router to ensure session is properly established
         router.refresh()
         
         // Get company type and redirect accordingly
@@ -55,33 +43,23 @@ export default function LoginPage() {
           const response = await fetch("/api/get-company-type")
           const result = await response.json()
           
-          // Brokers and carriers go to marketplace dashboard, regular managers go to platform dashboard
           if (result.data === "broker" || result.data === "carrier" || result.data === "both") {
-            setTimeout(() => {
-              router.push("/marketplace/dashboard")
-            }, 500)
+            router.push("/marketplace/dashboard")
           } else {
-            setTimeout(() => {
-              router.push("/dashboard")
-            }, 500)
-          }
-        } catch (error) {
-          // If API fails, default to dashboard
-          console.error("Error getting company type:", error)
-          setTimeout(() => {
             router.push("/dashboard")
-          }, 500)
+          }
+        } catch {
+          router.push("/dashboard")
         }
       }
-    } catch (error) {
-      toast.error("An error occurred. Please try again.")
+    } catch (error: any) {
+      toast.error(error?.message || "An error occurred. Please try again.")
       setIsLoading(false)
     }
   }
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
-      {/* Header */}
       <Link
         href="/"
         className="absolute top-6 left-6 flex items-center gap-2 text-muted-foreground hover:text-foreground transition"
@@ -91,15 +69,17 @@ export default function LoginPage() {
       </Link>
 
       <div className="w-full max-w-md">
-        {/* Logo */}
         <div className="flex justify-center mb-8">
           <Logo size="lg" />
         </div>
 
-        {/* Login Card */}
         <Card className="bg-card border-border p-8">
-          <h1 className="text-2xl font-bold text-foreground mb-2 text-center">Welcome Back</h1>
-          <p className="text-center text-muted-foreground mb-8">Sign in to your TruckMates account</p>
+          <h1 className="text-2xl font-bold text-foreground mb-2 text-center">
+            Welcome Back
+          </h1>
+          <p className="text-center text-muted-foreground mb-8">
+            Sign in to your TruckMates account
+          </p>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -110,6 +90,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="mt-2 bg-input border-border text-foreground placeholder:text-muted-foreground"
+                required
               />
             </div>
             <div>
@@ -120,6 +101,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-2 bg-input border-border text-foreground placeholder:text-muted-foreground"
+                required
               />
             </div>
 
@@ -145,3 +127,4 @@ export default function LoginPage() {
     </div>
   )
 }
+

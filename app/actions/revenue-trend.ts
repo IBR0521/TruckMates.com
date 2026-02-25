@@ -74,20 +74,28 @@ export async function getRevenueTrend(period: Period = 'weekly') {
     }
 
     // Fetch invoices
-    const { data: invoices } = await supabase
+    const { data: invoices, error: invoicesError } = await supabase
       .from("invoices")
       .select("amount, created_at, issue_date")
       .eq("company_id", companyId)
       .gte("created_at", startDate.toISOString())
       .order("created_at", { ascending: true })
 
+    if (invoicesError) {
+      console.error("[getRevenueTrend] Error fetching invoices:", invoicesError)
+    }
+
     // Fetch loads as fallback
-    const { data: loads } = await supabase
+    const { data: loads, error: loadsError } = await supabase
       .from("loads")
       .select("created_at, total_rate, value")
       .eq("company_id", companyId)
       .gte("created_at", startDate.toISOString())
       .order("created_at", { ascending: true })
+
+    if (loadsError) {
+      console.error("[getRevenueTrend] Error fetching loads:", loadsError)
+    }
 
     // Group revenue by period
     const revenueByPeriod: Record<string, number> = {}

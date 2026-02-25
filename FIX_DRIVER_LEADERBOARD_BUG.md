@@ -25,3 +25,4 @@ After running this, the Driver Leaderboard page should work correctly.
 ## Alternative
 You can also run the full gamification SQL file `supabase/gamification.sql` which includes additional functions for calculating performance scores.
 
+
