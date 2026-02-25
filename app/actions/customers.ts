@@ -83,7 +83,7 @@ export async function getCustomer(id: string) {
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -98,10 +98,14 @@ export async function getCustomer(id: string) {
     .select("*")
     .eq("id", id)
     .eq("company_id", userData.company_id)
-    .single()
+    .maybeSingle()
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  if (!data) {
+    return { error: "Customer not found", data: null }
   }
 
   return { data, error: null }

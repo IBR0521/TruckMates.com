@@ -98,10 +98,14 @@ export async function getVendor(id: string) {
     .select("*")
     .eq("id", id)
     .eq("company_id", userData.company_id)
-    .single()
+    .maybeSingle()
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  if (!data) {
+    return { error: "Vendor not found", data: null }
   }
 
   return { data, error: null }

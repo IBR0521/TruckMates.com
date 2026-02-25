@@ -39,7 +39,12 @@ export default function DashboardLayout({
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("sidebarCollapsed")
       if (saved !== null && window.innerWidth >= 1024) {
-        setSidebarCollapsed(JSON.parse(saved))
+        try {
+          setSidebarCollapsed(JSON.parse(saved))
+        } catch (error) {
+          console.error("[DashboardLayout] Error parsing sidebar state:", error)
+          // Use default value on parse error
+        }
       }
     }
   }, [])

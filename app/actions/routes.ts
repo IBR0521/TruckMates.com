@@ -133,10 +133,14 @@ export async function getRoute(id: string) {
     .select("*")
     .eq("id", id)
     .eq("company_id", userData.company_id)
-    .single()
+    .maybeSingle()
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  if (!route) {
+    return { error: "Route not found", data: null }
   }
 
   return { data: route, error: null }

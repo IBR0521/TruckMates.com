@@ -261,11 +261,15 @@ export async function getAddressBookContact(
     return { data: null, error: "Not authenticated" }
   }
 
-  const { data: userData } = await supabase
+  const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
+
+  if (userError) {
+    return { data: null, error: userError.message || "Failed to fetch user data" }
+  }
 
   if (!userData?.company_id) {
     return { data: null, error: "No company found" }
@@ -314,7 +318,7 @@ export async function getAddressBookContact(
           .select("*")
           .eq("id", id)
           .eq("company_id", userData.company_id)
-          .single()
+          .maybeSingle()
 
         if (error || !data) break
 
@@ -347,7 +351,7 @@ export async function getAddressBookContact(
           .select("*")
           .eq("id", id)
           .eq("company_id", userData.company_id)
-          .single()
+          .maybeSingle()
 
         if (error || !data) break
 
@@ -376,7 +380,7 @@ export async function getAddressBookContact(
           .select("id, name, email, phone, role, company_id")
           .eq("id", id)
           .eq("company_id", userData.company_id)
-          .single()
+          .maybeSingle()
 
         if (error || !data) break
 

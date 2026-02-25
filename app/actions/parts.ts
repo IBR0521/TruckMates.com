@@ -74,10 +74,14 @@ export async function getPart(id: string) {
     .select("*")
     .eq("id", id)
     .eq("company_id", result.company_id)
-    .single()
+    .maybeSingle()
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  if (!data) {
+    return { error: "Part not found", data: null }
   }
 
   return { data, error: null }

@@ -75,14 +75,24 @@ export async function getDriver(id: string) {
     return { error: "Not authenticated", data: null }
   }
 
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
+  }
+
   const { data: driver, error } = await supabase
     .from("drivers")
     .select("*")
     .eq("id", id)
-    .single()
+    .eq("company_id", result.company_id)
+    .maybeSingle()
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  if (!driver) {
+    return { error: "Driver not found", data: null }
   }
 
   return { data: driver, error: null }

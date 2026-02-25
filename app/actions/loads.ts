@@ -160,7 +160,7 @@ export async function getLoad(id: string) {
       .select("*")
       .eq("id", id)
       .eq("company_id", userData.company_id)
-      .single()
+      .maybeSingle()
 
     if (error) {
       // Check if table doesn't exist
@@ -170,6 +170,10 @@ export async function getLoad(id: string) {
       }
       console.error("[getLoad] Error fetching load:", error)
       return { error: error.message, data: null }
+    }
+
+    if (!load) {
+      return { error: "Load not found", data: null }
     }
 
     return { data: load, error: null }

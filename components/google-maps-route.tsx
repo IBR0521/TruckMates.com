@@ -182,14 +182,26 @@ export function GoogleMapsRoute({
             directionsRenderer.setDirections(result)
 
             // Extract route information
+            if (!result.routes || result.routes.length === 0) {
+              setError("No routes found")
+              setIsLoading(false)
+              return
+            }
+            
             const route = result.routes[0]
+            if (!route.legs || route.legs.length === 0) {
+              setError("No route legs found")
+              setIsLoading(false)
+              return
+            }
+            
             const leg = route.legs[0]
             const totalDistance = route.legs.reduce(
-              (sum: number, leg: any) => sum + leg.distance.value,
+              (sum: number, leg: any) => sum + (leg.distance?.value || 0),
               0
             )
             const totalDuration = route.legs.reduce(
-              (sum: number, leg: any) => sum + leg.duration.value,
+              (sum: number, leg: any) => sum + (leg.duration?.value || 0),
               0
             )
 
@@ -210,11 +222,13 @@ export function GoogleMapsRoute({
             })
 
             // Fit map to show entire route
-            const bounds = new window.google.maps.LatLngBounds()
-            result.routes[0].bounds.forEach((bound: any) => {
-              bounds.extend(bound)
-            })
-            map.fitBounds(bounds)
+            if (result.routes[0].bounds) {
+              const bounds = new window.google.maps.LatLngBounds()
+              result.routes[0].bounds.forEach((bound: any) => {
+                bounds.extend(bound)
+              })
+              map.fitBounds(bounds)
+            }
 
             setIsLoading(false)
           } else {

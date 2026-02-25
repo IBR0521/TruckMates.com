@@ -85,10 +85,14 @@ export async function getTruck(id: string) {
     .select("*")
     .eq("id", id)
     .eq("company_id", userData.company_id)
-    .single()
+    .maybeSingle()
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  if (!truck) {
+    return { error: "Truck not found", data: null }
   }
 
   return { data: truck, error: null }

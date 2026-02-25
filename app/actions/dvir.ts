@@ -138,10 +138,14 @@ export async function getDVIR(id: string) {
       `)
       .eq("id", id)
       .eq("company_id", company_id)
-      .single()
+      .maybeSingle()
 
     if (error) {
       return { error: error.message, data: null }
+    }
+
+    if (!dvir) {
+      return { error: "DVIR not found", data: null }
     }
 
     return { data: dvir, error: null }
