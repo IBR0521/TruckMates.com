@@ -186,12 +186,14 @@ body {
   html,
   body {
     @apply bg-background text-foreground;
-    height: 100%;
-    overflow: hidden;
+    /* Allow scrolling by default - pages can override if needed */
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
   }
-  #__next,
-  [data-nextjs-scroll-focus-boundary] {
-    height: 100%;
+  /* Only apply overflow hidden to dashboard layout wrapper */
+  [data-dashboard-layout] {
+    height: 100vh;
     overflow: hidden;
   }
 }

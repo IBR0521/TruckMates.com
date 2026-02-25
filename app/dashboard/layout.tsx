@@ -139,7 +139,7 @@ export default function DashboardLayout({
   }, [mounted]) // Removed router from dependencies to prevent re-runs
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex h-screen bg-background overflow-hidden" data-dashboard-layout>
       <Sidebar 
         isOpen={sidebarOpen} 
         onToggle={() => setSidebarOpen(!sidebarOpen)}
