@@ -266,6 +266,7 @@ export function GooglePlacesAutocomplete({
         const place = autocomplete.getPlace()
         
         console.log('[GooglePlacesAutocomplete] Place selected:', place)
+        console.log('[GooglePlacesAutocomplete] Address components:', place.address_components)
 
         if (!place.geometry) {
           console.warn('[GooglePlacesAutocomplete] Place has no geometry')
@@ -298,6 +299,7 @@ export function GooglePlacesAutocomplete({
         // Parse address components - iterate through all components
         place.address_components.forEach((component: any) => {
           const types = component.types
+          console.log('[GooglePlacesAutocomplete] Processing component:', component.long_name, 'types:', types)
 
           // Street number (e.g., "123")
           if (types.includes('street_number')) {
@@ -315,12 +317,16 @@ export function GooglePlacesAutocomplete({
           if (types.includes('premise') && !addressComponents.address_line2) {
             addressComponents.address_line2 = component.long_name
           }
-          // City
+          // City - check multiple types
           if (types.includes('locality')) {
             addressComponents.city = component.long_name
           }
           // Postal town (used in some countries instead of locality)
           if (types.includes('postal_town') && !addressComponents.city) {
+            addressComponents.city = component.long_name
+          }
+          // Neighborhood as fallback for city
+          if (types.includes('neighborhood') && !addressComponents.city) {
             addressComponents.city = component.long_name
           }
           // State/Province
@@ -336,6 +342,15 @@ export function GooglePlacesAutocomplete({
             addressComponents.country = component.short_name
           }
         })
+        
+        // If address_line1 is still empty, try to extract from formatted_address
+        if (!addressComponents.address_line1 && place.formatted_address) {
+          // Try to extract street address from formatted address
+          const parts = place.formatted_address.split(',')
+          if (parts.length > 0) {
+            addressComponents.address_line1 = parts[0].trim()
+          }
+        }
 
         // Use the parsed street address for address_line1, fallback to formatted if parsing failed
         const streetAddress = addressComponents.address_line1?.trim() || place.formatted_address || value
