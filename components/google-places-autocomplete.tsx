@@ -356,17 +356,22 @@ export function GooglePlacesAutocomplete({
         const streetAddress = addressComponents.address_line1?.trim() || place.formatted_address || value
 
         console.log('[GooglePlacesAutocomplete] Parsed address components:', addressComponents)
+        console.log('[GooglePlacesAutocomplete] Street address:', streetAddress)
 
-        // Update the input value with just the street address (not the full formatted address)
-        onChange(streetAddress)
-
-        // Call the callback with parsed address components - this will fill all fields
+        // IMPORTANT: Call onPlaceSelect FIRST before onChange
+        // This ensures all fields are filled before the input value changes
         if (onPlaceSelect) {
           console.log('[GooglePlacesAutocomplete] Calling onPlaceSelect with:', addressComponents)
-          onPlaceSelect(addressComponents)
+          // Use setTimeout to ensure state updates happen
+          setTimeout(() => {
+            onPlaceSelect(addressComponents)
+          }, 0)
         } else {
           console.warn('[GooglePlacesAutocomplete] onPlaceSelect callback not provided')
         }
+
+        // Update the input value with just the street address (not the full formatted address)
+        onChange(streetAddress)
       })
     } catch (error) {
       console.error('[GooglePlacesAutocomplete] Error initializing autocomplete:', error)
