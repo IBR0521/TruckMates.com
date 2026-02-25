@@ -270,8 +270,20 @@ export function GooglePlacesAutocomplete({
       // Handle place selection
       autocomplete.addListener('place_changed', () => {
         const place = autocomplete.getPlace()
+        
+        console.log('[GooglePlacesAutocomplete] Place selected:', place)
 
-        if (!place.geometry || !place.address_components) {
+        if (!place.geometry) {
+          console.warn('[GooglePlacesAutocomplete] Place has no geometry')
+          return
+        }
+        
+        if (!place.address_components || place.address_components.length === 0) {
+          console.warn('[GooglePlacesAutocomplete] Place has no address_components')
+          // Still try to use formatted_address if available
+          if (place.formatted_address) {
+            onChange(place.formatted_address)
+          }
           return
         }
 
@@ -334,12 +346,17 @@ export function GooglePlacesAutocomplete({
         // Use the parsed street address for address_line1, fallback to formatted if parsing failed
         const streetAddress = addressComponents.address_line1?.trim() || place.formatted_address || value
 
+        console.log('[GooglePlacesAutocomplete] Parsed address components:', addressComponents)
+
         // Update the input value with just the street address (not the full formatted address)
         onChange(streetAddress)
 
         // Call the callback with parsed address components - this will fill all fields
         if (onPlaceSelect) {
+          console.log('[GooglePlacesAutocomplete] Calling onPlaceSelect with:', addressComponents)
           onPlaceSelect(addressComponents)
+        } else {
+          console.warn('[GooglePlacesAutocomplete] onPlaceSelect callback not provided')
         }
       })
     } catch (error) {
