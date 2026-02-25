@@ -118,6 +118,8 @@ export function GooglePlacesAutocomplete({
       return
     }
 
+    let observer: MutationObserver | null = null
+
     try {
       const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
         types: ['address'], // Restrict to addresses
@@ -131,6 +133,66 @@ export function GooglePlacesAutocomplete({
       })
 
       autocompleteRef.current = autocomplete
+
+      // Fix z-index for Google Places dropdown to appear above modals
+      // Google Places creates a dropdown with class 'pac-container'
+      // Use a MutationObserver to ensure styles are applied when dropdown appears
+      const applyStyles = () => {
+        const pacContainer = document.querySelector('.pac-container') as HTMLElement
+        if (pacContainer) {
+          pacContainer.style.zIndex = '9999'
+          pacContainer.style.position = 'absolute'
+          pacContainer.style.pointerEvents = 'auto'
+        }
+      }
+
+      // Apply styles immediately and watch for dropdown creation
+      observer = new MutationObserver(() => {
+        applyStyles()
+      })
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      })
+
+      // Also add global styles
+      const styleId = 'google-places-autocomplete-styles'
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style')
+        style.id = styleId
+        style.textContent = `
+          .pac-container {
+            z-index: 9999 !important;
+            position: absolute !important;
+            pointer-events: auto !important;
+            border-radius: 0.375rem;
+            border: 1px solid hsl(var(--border));
+            background-color: hsl(var(--popover));
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+          }
+          .pac-item {
+            padding: 0.5rem;
+            cursor: pointer !important;
+            pointer-events: auto !important;
+            border-bottom: 1px solid hsl(var(--border));
+            color: hsl(var(--foreground));
+          }
+          .pac-item:hover {
+            background-color: hsl(var(--accent));
+          }
+          .pac-item-selected {
+            background-color: hsl(var(--accent));
+          }
+          .pac-icon {
+            margin-right: 0.5rem;
+          }
+          .pac-matched {
+            font-weight: 600;
+          }
+        `
+        document.head.appendChild(style)
+      }
 
       // Handle place selection
       autocomplete.addListener('place_changed', () => {
@@ -189,12 +251,22 @@ export function GooglePlacesAutocomplete({
 
     // Cleanup
     return () => {
+      if (observer) {
+        observer.disconnect()
+      }
       if (autocompleteRef.current) {
         window.google?.maps?.event?.clearInstanceListeners?.(autocompleteRef.current)
         autocompleteRef.current = null
       }
     }
   }, [isGoogleMapsLoaded, onChange, onPlaceSelect, value])
+
+  // Ensure input is not disabled when Google Maps loads
+  useEffect(() => {
+    if (isGoogleMapsLoaded && inputRef.current && inputRef.current.disabled) {
+      inputRef.current.disabled = false
+    }
+  }, [isGoogleMapsLoaded])
 
   return (
     <div className={className}>
