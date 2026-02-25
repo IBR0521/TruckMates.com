@@ -143,6 +143,132 @@ export function GooglePlacesAutocomplete({
 
       autocompleteElementRef.current = autocomplete
 
+      // Fix z-index and click handling for the dropdown
+      const fixedItems = new WeakSet<HTMLElement>()
+      
+      const applyStyles = () => {
+        const pacContainers = document.querySelectorAll('.pac-container') as NodeListOf<HTMLElement>
+        
+        pacContainers.forEach((pacContainer) => {
+          // Move to body if needed
+          if (pacContainer.parentElement !== document.body) {
+            document.body.appendChild(pacContainer)
+          }
+          
+          // Apply container styles
+          if (!pacContainer.dataset.styled) {
+            pacContainer.style.cssText = `
+              z-index: 99999 !important;
+              position: fixed !important;
+              pointer-events: auto !important;
+              cursor: default !important;
+              background-color: white !important;
+              border-radius: 0.375rem;
+              border: 1px solid hsl(var(--border));
+              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            `
+            pacContainer.dataset.styled = 'true'
+          }
+          
+          // Fix items - only process new ones
+          const items = pacContainer.querySelectorAll('.pac-item') as NodeListOf<HTMLElement>
+          items.forEach((item) => {
+            if (fixedItems.has(item)) return
+            
+            item.style.cssText = `
+              padding: 0.5rem !important;
+              cursor: pointer !important;
+              pointer-events: auto !important;
+              border-bottom: 1px solid #e5e7eb !important;
+              color: #111827 !important;
+              background-color: white !important;
+              user-select: none !important;
+            `
+            
+            // Prevent clicks from closing dialog - stop all event propagation
+            const stopEvents = (e: Event) => {
+              e.stopPropagation()
+              e.stopImmediatePropagation()
+            }
+            
+            item.addEventListener('mousedown', stopEvents, { capture: true })
+            item.addEventListener('click', stopEvents, { capture: true })
+            item.addEventListener('mouseup', stopEvents, { capture: true })
+            
+            fixedItems.add(item)
+          })
+        })
+        
+        // Disable dialog overlay when dropdown is visible
+        const hasDropdown = pacContainers.length > 0 && 
+          Array.from(pacContainers).some(c => c.offsetParent !== null && c.style.display !== 'none')
+        
+        if (hasDropdown) {
+          document.querySelectorAll('[data-slot="dialog-overlay"]').forEach((el: any) => {
+            el.style.pointerEvents = 'none'
+          })
+        } else {
+          document.querySelectorAll('[data-slot="dialog-overlay"]').forEach((el: any) => {
+            el.style.pointerEvents = ''
+          })
+        }
+      }
+
+      // Apply styles immediately
+      applyStyles()
+
+      // Watch for dropdown creation
+      let debounceTimeout: NodeJS.Timeout | null = null
+      const observer = new MutationObserver(() => {
+        if (debounceTimeout) clearTimeout(debounceTimeout)
+        debounceTimeout = setTimeout(() => {
+          applyStyles()
+        }, 50)
+      })
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: false,
+      })
+
+      // Add global styles
+      const styleId = 'google-places-autocomplete-styles'
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style')
+        style.id = styleId
+        style.textContent = `
+          .pac-container {
+            z-index: 99999 !important;
+            position: fixed !important;
+            pointer-events: auto !important;
+            cursor: default !important;
+            border-radius: 0.375rem;
+            border: 1px solid hsl(var(--border));
+            background-color: white !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+          }
+          .pac-item {
+            padding: 0.5rem !important;
+            cursor: pointer !important;
+            pointer-events: auto !important;
+            border-bottom: 1px solid #e5e7eb !important;
+            color: #111827 !important;
+            background-color: white !important;
+            user-select: none !important;
+          }
+          .pac-item:hover {
+            background-color: #f3f4f6 !important;
+          }
+          .pac-item-selected {
+            background-color: #e5e7eb !important;
+          }
+          body:has(.pac-container) [data-slot="dialog-overlay"] {
+            pointer-events: none !important;
+          }
+        `
+        document.head.appendChild(style)
+      }
+
       // Handle place selection
       autocomplete.addListener('place_changed', () => {
         const place = autocomplete.getPlace()
@@ -258,11 +384,22 @@ export function GooglePlacesAutocomplete({
     }
 
     // Cleanup
+    let debounceTimeout: NodeJS.Timeout | null = null
     return () => {
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout)
+      }
+      if (observer) {
+        observer.disconnect()
+      }
       if (autocompleteElementRef.current) {
         window.google?.maps?.event?.clearInstanceListeners?.(autocompleteElementRef.current)
         autocompleteElementRef.current = null
       }
+      // Restore dialog overlay pointer events
+      document.querySelectorAll('[data-slot="dialog-overlay"]').forEach((overlay: any) => {
+        overlay.style.pointerEvents = ''
+      })
     }
   }, [isGoogleMapsLoaded, onChange, onPlaceSelect, value])
 

@@ -691,8 +691,32 @@ export default function EnhancedAddressBookPage() {
           onInteractOutside={(e) => {
             // Prevent dialog from closing when clicking on Google Places dropdown
             const target = e.target as HTMLElement
-            if (target.closest('.pac-container') || target.closest('.pac-item')) {
+            // Check if click is on any Google Places autocomplete element
+            if (
+              target.closest('.pac-container') || 
+              target.closest('.pac-item') ||
+              target.classList.contains('pac-container') ||
+              target.classList.contains('pac-item') ||
+              target.closest('[class*="pac-"]')
+            ) {
               e.preventDefault()
+              e.stopPropagation()
+              return false
+            }
+          }}
+          onPointerDownOutside={(e) => {
+            // Also prevent on pointer down
+            const target = e.target as HTMLElement
+            if (
+              target.closest('.pac-container') || 
+              target.closest('.pac-item') ||
+              target.classList.contains('pac-container') ||
+              target.classList.contains('pac-item') ||
+              target.closest('[class*="pac-"]')
+            ) {
+              e.preventDefault()
+              e.stopPropagation()
+              return false
             }
           }}
         >
