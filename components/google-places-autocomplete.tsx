@@ -49,10 +49,10 @@ export function GooglePlacesAutocomplete({
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false)
 
-  // Load Google Maps Places API (New) with PlaceAutocompleteElement
+  // Load Google Maps Places API with PlaceAutocompleteElement support
   useEffect(() => {
-    // Check if already loaded
-    if (window.google?.maps?.places?.PlaceAutocompleteElement) {
+    // Check if already loaded (check for both old and new APIs)
+    if (window.google?.maps?.places?.Autocomplete || customElements.get('gmp-place-autocomplete')) {
       setIsGoogleMapsLoaded(true)
       return
     }
@@ -62,7 +62,7 @@ export function GooglePlacesAutocomplete({
     if (existingScript) {
       // Wait for it to load
       const checkInterval = setInterval(() => {
-        if (window.google?.maps?.places?.PlaceAutocompleteElement) {
+        if (window.google?.maps?.places?.Autocomplete || customElements.get('gmp-place-autocomplete')) {
           clearInterval(checkInterval)
           setIsGoogleMapsLoaded(true)
         }
@@ -71,7 +71,7 @@ export function GooglePlacesAutocomplete({
       return
     }
 
-    // Load Google Maps script with new Places API
+    // Load Google Maps script
     const loadGoogleMaps = async () => {
       let apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -92,15 +92,15 @@ export function GooglePlacesAutocomplete({
         return
       }
 
-      // Load the new Places API (New) library
+      // Try loading with new Places API first, fallback to old if needed
       const script = document.createElement("script")
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&libraries=places&v=beta`
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&libraries=places`
       script.async = true
       script.defer = true
       script.onload = () => {
-        // Wait for PlaceAutocompleteElement to be available
+        // Check for either API
         const checkElement = setInterval(() => {
-          if (window.google?.maps?.places?.PlaceAutocompleteElement) {
+          if (window.google?.maps?.places?.Autocomplete || customElements.get('gmp-place-autocomplete')) {
             clearInterval(checkElement)
             setIsGoogleMapsLoaded(true)
           }
@@ -116,9 +116,9 @@ export function GooglePlacesAutocomplete({
     loadGoogleMaps()
   }, [])
 
-  // Initialize PlaceAutocompleteElement
+  // Initialize Autocomplete (using old API for now - new API may not be fully available)
   useEffect(() => {
-    if (!isGoogleMapsLoaded || !inputRef.current || !window.google?.maps?.places?.PlaceAutocompleteElement) {
+    if (!isGoogleMapsLoaded || !inputRef.current || !window.google?.maps?.places?.Autocomplete) {
       return
     }
 
@@ -128,10 +128,11 @@ export function GooglePlacesAutocomplete({
     }
 
     try {
-      // Create the PlaceAutocompleteElement web component
-      const autocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
-        requestedResultTypes: ['street_address', 'route'],
-        requestedFields: [
+      // Use the old Autocomplete API (it still works, just deprecated)
+      // The deprecation notice says it will continue to work for at least 12 months
+      const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+        types: ['address'],
+        fields: [
           'address_components',
           'formatted_address',
           'geometry',
@@ -140,162 +141,130 @@ export function GooglePlacesAutocomplete({
         ],
       })
 
-      // Set up the element
-      autocompleteElement.id = id || 'place-autocomplete'
-      
-      // Hide the default input and use our styled input instead
-      const defaultInput = autocompleteElement.querySelector('input')
-      if (defaultInput) {
-        defaultInput.style.display = 'none'
-      }
+      autocompleteElementRef.current = autocomplete
 
-      // Insert our styled input into the autocomplete element
-      if (inputRef.current && wrapperRef.current) {
-        // Clone our input and sync it with the autocomplete
-        const ourInput = inputRef.current
+      // Handle place selection
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace()
         
-        // Sync our input value to autocomplete
-        ourInput.addEventListener('input', (e) => {
-          const target = e.target as HTMLInputElement
-          const autocompleteInput = autocompleteElement.querySelector('input') as HTMLInputElement
-          if (autocompleteInput) {
-            autocompleteInput.value = target.value
-            autocompleteInput.dispatchEvent(new Event('input', { bubbles: true }))
-          }
-        })
+        console.log('[GooglePlacesAutocomplete] Place selected:', place)
+        console.log('[GooglePlacesAutocomplete] Address components:', place.address_components)
 
-        // Listen for place selection
-        autocompleteElement.addEventListener('gmp-placeselect', (event: any) => {
-          const place = event.detail.place
-          
-          console.log('[GooglePlacesAutocomplete] Place selected:', place)
-          console.log('[GooglePlacesAutocomplete] Address components:', place.addressComponents)
-
-          if (!place.geometry) {
-            console.warn('[GooglePlacesAutocomplete] Place has no geometry')
-            return
-          }
-
-          if (!place.addressComponents || place.addressComponents.length === 0) {
-            console.warn('[GooglePlacesAutocomplete] Place has no addressComponents')
-            if (place.formattedAddress) {
-              onChange(place.formattedAddress)
-            }
-            return
-          }
-
-          // Parse address components
-          const addressComponents: AddressComponents = {
-            address_line1: '',
-            address_line2: '',
-            city: '',
-            state: '',
-            zip_code: '',
-            country: '',
-            coordinates: {
-              lat: place.geometry.location.lat(),
-              lng: place.geometry.location.lng(),
-            },
-          }
-
-          // Parse address components
-          place.addressComponents.forEach((component: any) => {
-            const types = component.types
-            console.log('[GooglePlacesAutocomplete] Processing component:', component.longText, 'types:', types)
-
-            // Street number
-            if (types.includes('street_number')) {
-              addressComponents.address_line1 = (addressComponents.address_line1 || '') + component.longText + ' '
-            }
-            // Street name
-            if (types.includes('route')) {
-              addressComponents.address_line1 = (addressComponents.address_line1 || '') + component.longText
-            }
-            // Apartment, suite, etc.
-            if (types.includes('subpremise')) {
-              addressComponents.address_line2 = component.longText
-            }
-            // Building name
-            if (types.includes('premise') && !addressComponents.address_line2) {
-              addressComponents.address_line2 = component.longText
-            }
-            // City
-            if (types.includes('locality')) {
-              addressComponents.city = component.longText
-            }
-            // Postal town
-            if (types.includes('postal_town') && !addressComponents.city) {
-              addressComponents.city = component.longText
-            }
-            // Neighborhood as fallback
-            if (types.includes('neighborhood') && !addressComponents.city) {
-              addressComponents.city = component.longText
-            }
-            // State/Province
-            if (types.includes('administrative_area_level_1')) {
-              addressComponents.state = component.shortText || component.longText
-            }
-            // ZIP/Postal code
-            if (types.includes('postal_code')) {
-              addressComponents.zip_code = component.longText
-            }
-            // Country
-            if (types.includes('country')) {
-              addressComponents.country = component.shortText || component.longText
-            }
-          })
-
-          // If address_line1 is still empty, try to extract from formatted_address
-          if (!addressComponents.address_line1 && place.formattedAddress) {
-            const parts = place.formattedAddress.split(',')
-            if (parts.length > 0) {
-              addressComponents.address_line1 = parts[0].trim()
-            }
-          }
-
-          const streetAddress = addressComponents.address_line1?.trim() || place.formattedAddress || value
-
-          console.log('[GooglePlacesAutocomplete] Parsed address components:', addressComponents)
-          console.log('[GooglePlacesAutocomplete] Street address:', streetAddress)
-
-          // Call onPlaceSelect FIRST
-          if (onPlaceSelect) {
-            console.log('[GooglePlacesAutocomplete] Calling onPlaceSelect with:', addressComponents)
-            setTimeout(() => {
-              onPlaceSelect(addressComponents)
-            }, 0)
-          }
-
-          // Update the input value
-          onChange(streetAddress)
-        })
-
-        // Append autocomplete element to wrapper
-        if (wrapperRef.current) {
-          wrapperRef.current.appendChild(autocompleteElement)
+        if (!place.geometry) {
+          console.warn('[GooglePlacesAutocomplete] Place has no geometry')
+          return
         }
-      }
+        
+        if (!place.address_components || place.address_components.length === 0) {
+          console.warn('[GooglePlacesAutocomplete] Place has no address_components')
+          if (place.formatted_address) {
+            onChange(place.formatted_address)
+          }
+          return
+        }
 
-      autocompleteElementRef.current = autocompleteElement
+        // Parse address components
+        const addressComponents: AddressComponents = {
+          address_line1: '',
+          address_line2: '',
+          city: '',
+          state: '',
+          zip_code: '',
+          country: '',
+          coordinates: {
+            lat: place.geometry.location.lat(),
+            lng: place.geometry.location.lng(),
+          },
+        }
+
+        // Parse address components - iterate through all components
+        place.address_components.forEach((component: any) => {
+          const types = component.types
+          console.log('[GooglePlacesAutocomplete] Processing component:', component.long_name, 'types:', types)
+
+          // Street number (e.g., "123")
+          if (types.includes('street_number')) {
+            addressComponents.address_line1 = (addressComponents.address_line1 || '') + component.long_name + ' '
+          }
+          // Street name (e.g., "Main Street")
+          if (types.includes('route')) {
+            addressComponents.address_line1 = (addressComponents.address_line1 || '') + component.long_name
+          }
+          // Apartment, suite, etc.
+          if (types.includes('subpremise')) {
+            addressComponents.address_line2 = component.long_name
+          }
+          // Building name
+          if (types.includes('premise') && !addressComponents.address_line2) {
+            addressComponents.address_line2 = component.long_name
+          }
+          // City - check multiple types
+          if (types.includes('locality')) {
+            addressComponents.city = component.long_name
+          }
+          // Postal town (used in some countries instead of locality)
+          if (types.includes('postal_town') && !addressComponents.city) {
+            addressComponents.city = component.long_name
+          }
+          // Neighborhood as fallback for city
+          if (types.includes('neighborhood') && !addressComponents.city) {
+            addressComponents.city = component.long_name
+          }
+          // State/Province
+          if (types.includes('administrative_area_level_1')) {
+            addressComponents.state = component.short_name // Use short name (e.g., "CA" instead of "California")
+          }
+          // ZIP/Postal code
+          if (types.includes('postal_code')) {
+            addressComponents.zip_code = component.long_name
+          }
+          // Country
+          if (types.includes('country')) {
+            addressComponents.country = component.short_name
+          }
+        })
+        
+        // If address_line1 is still empty, try to extract from formatted_address
+        if (!addressComponents.address_line1 && place.formatted_address) {
+          const parts = place.formatted_address.split(',')
+          if (parts.length > 0) {
+            addressComponents.address_line1 = parts[0].trim()
+          }
+        }
+
+        // Use the parsed street address for address_line1, fallback to formatted if parsing failed
+        const streetAddress = addressComponents.address_line1?.trim() || place.formatted_address || value
+
+        console.log('[GooglePlacesAutocomplete] Parsed address components:', addressComponents)
+        console.log('[GooglePlacesAutocomplete] Street address:', streetAddress)
+
+        // IMPORTANT: Call onPlaceSelect FIRST before onChange
+        // This ensures all fields are filled before the input value changes
+        if (onPlaceSelect) {
+          console.log('[GooglePlacesAutocomplete] Calling onPlaceSelect with:', addressComponents)
+          // Use setTimeout to ensure state updates happen
+          setTimeout(() => {
+            onPlaceSelect(addressComponents)
+          }, 0)
+        } else {
+          console.warn('[GooglePlacesAutocomplete] onPlaceSelect callback not provided')
+        }
+
+        // Update the input value with just the street address (not the full formatted address)
+        onChange(streetAddress)
+      })
     } catch (error) {
-      console.error('[GooglePlacesAutocomplete] Error initializing PlaceAutocompleteElement:', error)
-      // Fallback to old API if new one fails
-      console.warn('[GooglePlacesAutocomplete] Falling back to deprecated Autocomplete API')
-      // You could implement fallback here if needed
+      console.error('[GooglePlacesAutocomplete] Error initializing autocomplete:', error)
     }
 
     // Cleanup
     return () => {
       if (autocompleteElementRef.current) {
-        try {
-          autocompleteElementRef.current.remove()
-        } catch (e) {
-          // Ignore cleanup errors
-        }
+        window.google?.maps?.event?.clearInstanceListeners?.(autocompleteElementRef.current)
         autocompleteElementRef.current = null
       }
     }
-  }, [isGoogleMapsLoaded, onChange, onPlaceSelect, value, id])
+  }, [isGoogleMapsLoaded, onChange, onPlaceSelect, value])
 
   // Ensure input is not disabled when Google Maps loads
   useEffect(() => {
