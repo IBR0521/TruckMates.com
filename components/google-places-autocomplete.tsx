@@ -134,87 +134,79 @@ export function GooglePlacesAutocomplete({
 
       autocompleteRef.current = autocomplete
 
-      // Aggressively fix z-index and click handling
+      // Track which items we've already fixed to avoid re-processing
+      const fixedItems = new WeakSet<HTMLElement>()
+      
+      // Fix z-index and click handling - only when dropdown appears
       const applyStyles = () => {
         const pacContainers = document.querySelectorAll('.pac-container') as NodeListOf<HTMLElement>
-        const hasDropdown = pacContainers.length > 0
+        const hasDropdown = pacContainers.length > 0 && 
+          Array.from(pacContainers).some(c => c.offsetParent !== null && c.style.display !== 'none')
         
-        // Disable ALL overlays when dropdown is visible
+        // Disable overlays only when dropdown is actually visible
         if (hasDropdown) {
-          // Disable dialog overlays
           document.querySelectorAll('[data-slot="dialog-overlay"]').forEach((el: any) => {
             el.style.pointerEvents = 'none'
-            el.style.zIndex = '1'
           })
-          // Disable any other overlays
-          document.querySelectorAll('[role="dialog"] > div:first-child').forEach((el: any) => {
-            if (el.style.position === 'fixed' && el.style.inset === '0px') {
-              el.style.pointerEvents = 'none'
-            }
+        } else {
+          // Restore when dropdown is hidden
+          document.querySelectorAll('[data-slot="dialog-overlay"]').forEach((el: any) => {
+            el.style.pointerEvents = ''
           })
         }
         
         pacContainers.forEach((pacContainer) => {
-          // Force move to body
+          // Move to body if needed (only once)
           if (pacContainer.parentElement !== document.body) {
             document.body.appendChild(pacContainer)
           }
           
-          // Aggressive styling
-          pacContainer.style.cssText = `
-            z-index: 99999 !important;
-            position: fixed !important;
-            pointer-events: auto !important;
-            cursor: default !important;
-            background-color: white !important;
-          `
+          // Apply container styles (only if not already set)
+          if (!pacContainer.dataset.styled) {
+            pacContainer.style.zIndex = '99999'
+            pacContainer.style.position = 'fixed'
+            pacContainer.style.pointerEvents = 'auto'
+            pacContainer.style.cursor = 'default'
+            pacContainer.style.backgroundColor = 'white'
+            pacContainer.dataset.styled = 'true'
+          }
           
-          // Fix all items - use mousedown instead of click
+          // Fix items - only process new ones
           const items = pacContainer.querySelectorAll('.pac-item') as NodeListOf<HTMLElement>
-          items.forEach((item, index) => {
-            item.style.cssText = `
-              pointer-events: auto !important;
-              cursor: pointer !important;
-              user-select: none !important;
-            `
+          items.forEach((item) => {
+            // Skip if already processed
+            if (fixedItems.has(item)) return
             
-            // Remove all existing handlers
-            const newItem = item.cloneNode(true) as HTMLElement
-            item.parentNode?.replaceChild(newItem, item)
+            item.style.pointerEvents = 'auto'
+            item.style.cursor = 'pointer'
+            item.style.userSelect = 'none'
             
-            // Add mousedown handler (fires before click, harder to block)
-            newItem.addEventListener('mousedown', (e) => {
+            // Add mousedown handler (only once)
+            item.addEventListener('mousedown', (e) => {
               e.stopPropagation()
-              e.preventDefault()
-              // Trigger the actual selection
-              setTimeout(() => {
-                newItem.click()
-              }, 10)
-            }, true)
+            }, { capture: true, once: false })
+            
+            fixedItems.add(item)
           })
         })
       }
 
-      // Apply styles immediately and repeatedly
+      // Apply styles immediately
       applyStyles()
-      const styleInterval = setInterval(applyStyles, 100)
 
-      // Watch for dropdown creation and updates
+      // Watch for dropdown creation - debounced to avoid performance issues
+      let debounceTimeout: NodeJS.Timeout | null = null
       observer = new MutationObserver(() => {
-        applyStyles()
+        if (debounceTimeout) clearTimeout(debounceTimeout)
+        debounceTimeout = setTimeout(() => {
+          applyStyles()
+        }, 50) // Debounce to 50ms instead of running constantly
       })
 
       observer.observe(document.body, {
         childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['style', 'class'],
+        subtree: false, // Only watch direct children, not entire subtree
       })
-
-      // Cleanup interval
-      return () => {
-        clearInterval(styleInterval)
-      }
 
       // Add global styles - aggressive overrides
       const styleId = 'google-places-autocomplete-styles'
@@ -314,10 +306,10 @@ export function GooglePlacesAutocomplete({
     }
 
     // Cleanup
-    let styleInterval: NodeJS.Timeout | null = null
+    let debounceTimeout: NodeJS.Timeout | null = null
     return () => {
-      if (styleInterval) {
-        clearInterval(styleInterval)
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout)
       }
       if (observer) {
         observer.disconnect()
@@ -327,8 +319,7 @@ export function GooglePlacesAutocomplete({
         autocompleteRef.current = null
       }
       // Restore dialog overlay pointer events
-      const dialogOverlays = document.querySelectorAll('[data-slot="dialog-overlay"]') as NodeListOf<HTMLElement>
-      dialogOverlays.forEach((overlay) => {
+      document.querySelectorAll('[data-slot="dialog-overlay"]').forEach((overlay: any) => {
         overlay.style.pointerEvents = ''
       })
     }
