@@ -166,7 +166,11 @@ export async function getDashboardStats() {
       supabase.from("routes").select("name, created_at, status, updated_at").eq("company_id", companyId).order("updated_at", { ascending: false }).limit(2),
       supabase.from("invoices").select("invoice_number, created_at, status, amount").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
       supabase.from("settlements").select("created_at, status, net_pay, drivers(name)").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
-    ]).catch(() => {
+    ]).catch((error) => {
+      // Log error in development
+      if (process.env.NODE_ENV === 'development') {
+        console.warn("Recent activities query failed:", error)
+      }
       // Return empty arrays if query fails
       return [
         { data: [] },
@@ -206,6 +210,18 @@ export async function getDashboardStats() {
       recentRoutes = results[3]?.data || []
       recentInvoices = results[4]?.data || []
       recentSettlements = results[5]?.data || []
+      
+      // Log in development for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Recent activities data:", {
+          loads: recentLoads.length,
+          drivers: recentDrivers.length,
+          maintenance: recentMaintenance.length,
+          routes: recentRoutes.length,
+          invoices: recentInvoices.length,
+          settlements: recentSettlements.length,
+        })
+      }
     } catch (error) {
       // If there's an error, use empty arrays
       if (process.env.NODE_ENV === 'development') {
