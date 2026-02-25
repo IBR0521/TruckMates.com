@@ -134,28 +134,48 @@ export function GooglePlacesAutocomplete({
 
       autocompleteRef.current = autocomplete
 
-      // Fix z-index for Google Places dropdown to appear above modals
-      // Google Places creates the dropdown as a direct child of body
-      // Dialog uses z-50, so we need much higher
+      // Fix z-index and click handling for Google Places dropdown
+      // The dropdown is created by Google as a direct child of body
+      // We need to ensure it's above dialogs and clickable
       const applyStyles = () => {
         const pacContainers = document.querySelectorAll('.pac-container') as NodeListOf<HTMLElement>
         pacContainers.forEach((pacContainer) => {
+          // Move to body if not already there (in case it's inside a dialog)
+          if (pacContainer.parentElement !== document.body) {
+            document.body.appendChild(pacContainer)
+          }
+          
           pacContainer.style.zIndex = '99999'
-          pacContainer.style.position = 'absolute'
+          pacContainer.style.position = 'fixed' // Use fixed instead of absolute
           pacContainer.style.pointerEvents = 'auto'
           pacContainer.style.cursor = 'default'
           
-          // Also fix all items inside
+          // Make sure overlay doesn't block it
+          const dialogOverlays = document.querySelectorAll('[data-slot="dialog-overlay"]') as NodeListOf<HTMLElement>
+          dialogOverlays.forEach((overlay) => {
+            overlay.style.pointerEvents = 'none' // Allow clicks through overlay
+          })
+          
+          // Fix all items inside
           const items = pacContainer.querySelectorAll('.pac-item') as NodeListOf<HTMLElement>
           items.forEach((item) => {
             item.style.pointerEvents = 'auto'
             item.style.cursor = 'pointer'
+            item.style.userSelect = 'none'
+            
+            // Add click handler as backup
+            item.onclick = (e) => {
+              e.stopPropagation()
+              // Trigger the click on the item
+              item.click()
+            }
           })
         })
       }
 
-      // Apply styles immediately
+      // Apply styles immediately and repeatedly
       applyStyles()
+      const styleInterval = setInterval(applyStyles, 100)
 
       // Watch for dropdown creation and updates
       observer = new MutationObserver(() => {
@@ -168,6 +188,11 @@ export function GooglePlacesAutocomplete({
         attributes: true,
         attributeFilter: ['style', 'class'],
       })
+
+      // Cleanup interval
+      return () => {
+        clearInterval(styleInterval)
+      }
 
       // Also add global styles with very high z-index
       const styleId = 'google-places-autocomplete-styles'
@@ -268,7 +293,11 @@ export function GooglePlacesAutocomplete({
     }
 
     // Cleanup
+    let styleInterval: NodeJS.Timeout | null = null
     return () => {
+      if (styleInterval) {
+        clearInterval(styleInterval)
+      }
       if (observer) {
         observer.disconnect()
       }
@@ -276,6 +305,11 @@ export function GooglePlacesAutocomplete({
         window.google?.maps?.event?.clearInstanceListeners?.(autocompleteRef.current)
         autocompleteRef.current = null
       }
+      // Restore dialog overlay pointer events
+      const dialogOverlays = document.querySelectorAll('[data-slot="dialog-overlay"]') as NodeListOf<HTMLElement>
+      dialogOverlays.forEach((overlay) => {
+        overlay.style.pointerEvents = ''
+      })
     }
   }, [isGoogleMapsLoaded, onChange, onPlaceSelect, value])
 
