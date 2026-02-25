@@ -289,23 +289,44 @@ export function GooglePlacesAutocomplete({
           },
         }
 
-        // Parse address components
+        // Parse address components - iterate through all components
         place.address_components.forEach((component: any) => {
           const types = component.types
 
+          // Street number (e.g., "123")
           if (types.includes('street_number')) {
-            addressComponents.address_line1 = component.long_name + ' '
-          } else if (types.includes('route')) {
+            addressComponents.address_line1 = (addressComponents.address_line1 || '') + component.long_name + ' '
+          }
+          // Street name (e.g., "Main Street")
+          if (types.includes('route')) {
             addressComponents.address_line1 = (addressComponents.address_line1 || '') + component.long_name
-          } else if (types.includes('subpremise') || types.includes('premise')) {
+          }
+          // Apartment, suite, etc.
+          if (types.includes('subpremise')) {
             addressComponents.address_line2 = component.long_name
-          } else if (types.includes('locality') || types.includes('postal_town')) {
+          }
+          // Building name
+          if (types.includes('premise') && !addressComponents.address_line2) {
+            addressComponents.address_line2 = component.long_name
+          }
+          // City
+          if (types.includes('locality')) {
             addressComponents.city = component.long_name
-          } else if (types.includes('administrative_area_level_1')) {
-            addressComponents.state = component.short_name // Use short name for state (e.g., "CA" instead of "California")
-          } else if (types.includes('postal_code')) {
+          }
+          // Postal town (used in some countries instead of locality)
+          if (types.includes('postal_town') && !addressComponents.city) {
+            addressComponents.city = component.long_name
+          }
+          // State/Province
+          if (types.includes('administrative_area_level_1')) {
+            addressComponents.state = component.short_name // Use short name (e.g., "CA" instead of "California")
+          }
+          // ZIP/Postal code
+          if (types.includes('postal_code')) {
             addressComponents.zip_code = component.long_name
-          } else if (types.includes('country')) {
+          }
+          // Country
+          if (types.includes('country')) {
             addressComponents.country = component.short_name
           }
         })
