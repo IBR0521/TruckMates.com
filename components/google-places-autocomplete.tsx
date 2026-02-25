@@ -386,7 +386,6 @@ export function GooglePlacesAutocomplete({
     }
 
     // Cleanup
-    let debounceTimeout: NodeJS.Timeout | null = null
     return () => {
       if (debounceTimeout) {
         clearTimeout(debounceTimeout)
