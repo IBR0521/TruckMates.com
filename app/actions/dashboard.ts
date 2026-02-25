@@ -158,41 +158,44 @@ export async function getDashboardStats() {
     // Calculate fleet utilization
     const fleetUtilization = totalTrucks > 0 ? Math.round((activeTrucks / totalTrucks) * 100) : 0
 
-    // Get recent activity - fetch all in parallel with timeout protection
+    // Get recent activity - fetch ALL platform activities in parallel with timeout protection
     const activityPromise = Promise.all([
-      supabase.from("loads").select("shipment_number, created_at, status").eq("company_id", companyId).order("created_at", { ascending: false }).limit(3),
+      // Existing activities
+      supabase.from("loads").select("shipment_number, created_at, status").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
       supabase.from("drivers").select("name, created_at, status").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
       supabase.from("maintenance").select("service_type, scheduled_date, status, created_at").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
       supabase.from("routes").select("name, created_at, status, updated_at").eq("company_id", companyId).order("updated_at", { ascending: false }).limit(2),
       supabase.from("invoices").select("invoice_number, created_at, status, amount").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
       supabase.from("settlements").select("created_at, status, net_pay, drivers(name)").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
+      // New activities - Address Book
+      supabase.from("address_book").select("name, created_at, category").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
+      // Trucks/Vehicles
+      supabase.from("trucks").select("truck_number, created_at, status, make, model").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
+      // Customers
+      supabase.from("customers").select("name, created_at, status").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
+      // Vendors
+      supabase.from("vendors").select("name, created_at, status").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
+      // Documents
+      supabase.from("documents").select("name, created_at, document_type").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
+      // BOLs
+      supabase.from("bols").select("bol_number, created_at, status").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
+      // DVIR
+      supabase.from("dvir").select("id, created_at, status").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
+      // Geofences
+      supabase.from("geofences").select("name, created_at, is_active").eq("company_id", companyId).order("created_at", { ascending: false }).limit(2),
     ]).catch((error) => {
       // Log error in development
       if (process.env.NODE_ENV === 'development') {
         console.warn("Recent activities query failed:", error)
       }
       // Return empty arrays if query fails
-      return [
-        { data: [] },
-        { data: [] },
-        { data: [] },
-        { data: [] },
-        { data: [] },
-        { data: [] },
-      ]
+      return Array(14).fill({ data: [] })
     })
 
     const activityTimeout = new Promise((resolve) => {
       setTimeout(() => {
-        resolve([
-          { data: [] },
-          { data: [] },
-          { data: [] },
-          { data: [] },
-          { data: [] },
-          { data: [] },
-        ])
-      }, 5000) // Increased to 5 seconds
+        resolve(Array(14).fill({ data: [] }))
+      }, 5000) // 5 seconds timeout
     })
 
     let recentLoads: any[] = []
@@ -201,6 +204,14 @@ export async function getDashboardStats() {
     let recentRoutes: any[] = []
     let recentInvoices: any[] = []
     let recentSettlements: any[] = []
+    let recentAddressBook: any[] = []
+    let recentTrucks: any[] = []
+    let recentCustomers: any[] = []
+    let recentVendors: any[] = []
+    let recentDocuments: any[] = []
+    let recentBols: any[] = []
+    let recentDvir: any[] = []
+    let recentGeofences: any[] = []
 
     try {
       const results = await Promise.race([activityPromise, activityTimeout]) as any[]
@@ -210,6 +221,14 @@ export async function getDashboardStats() {
       recentRoutes = results[3]?.data || []
       recentInvoices = results[4]?.data || []
       recentSettlements = results[5]?.data || []
+      recentAddressBook = results[6]?.data || []
+      recentTrucks = results[7]?.data || []
+      recentCustomers = results[8]?.data || []
+      recentVendors = results[9]?.data || []
+      recentDocuments = results[10]?.data || []
+      recentBols = results[11]?.data || []
+      recentDvir = results[12]?.data || []
+      recentGeofences = results[13]?.data || []
       
       // Log in development for debugging
       if (process.env.NODE_ENV === 'development') {
@@ -220,6 +239,14 @@ export async function getDashboardStats() {
           routes: recentRoutes.length,
           invoices: recentInvoices.length,
           settlements: recentSettlements.length,
+          addressBook: recentAddressBook.length,
+          trucks: recentTrucks.length,
+          customers: recentCustomers.length,
+          vendors: recentVendors.length,
+          documents: recentDocuments.length,
+          bols: recentBols.length,
+          dvir: recentDvir.length,
+          geofences: recentGeofences.length,
         })
       }
     } catch (error) {
@@ -309,6 +336,123 @@ export async function getDashboardStats() {
             action: `Settlement for ${driverName} ($${netPay}) was ${settlement.status === "paid" ? "paid" : "created"}`,
             time: settlement.created_at,
             type: settlement.status === "paid" ? "success" : "info",
+          })
+        }
+      })
+    }
+
+    // Process address book entries
+    if (Array.isArray(recentAddressBook) && recentAddressBook.length > 0) {
+      recentAddressBook.forEach((entry) => {
+        if (entry && entry.created_at) {
+          const categoryLabels: Record<string, string> = {
+            shipper: "Shipper",
+            receiver: "Receiver",
+            vendor: "Vendor",
+            broker: "Broker",
+            driver: "Driver",
+            warehouse: "Warehouse",
+            repair_shop: "Repair Shop",
+            fuel_station: "Fuel Station",
+            other: "Address",
+          }
+          const categoryLabel = categoryLabels[entry.category] || "Address"
+          recentActivity.push({
+            action: `${categoryLabel} address "${entry.name || 'Unknown'}" was added to address book`,
+            time: entry.created_at,
+            type: "success",
+          })
+        }
+      })
+    }
+
+    // Process trucks/vehicles
+    if (Array.isArray(recentTrucks) && recentTrucks.length > 0) {
+      recentTrucks.forEach((truck) => {
+        if (truck && truck.created_at) {
+          const truckInfo = truck.make && truck.model ? `${truck.make} ${truck.model}` : truck.truck_number || 'Unknown'
+          recentActivity.push({
+            action: `Truck ${truck.truck_number || truckInfo} was ${truck.status === "active" ? "added" : "updated"}`,
+            time: truck.created_at,
+            type: truck.status === "active" || truck.status === "available" ? "success" : "info",
+          })
+        }
+      })
+    }
+
+    // Process customers
+    if (Array.isArray(recentCustomers) && recentCustomers.length > 0) {
+      recentCustomers.forEach((customer) => {
+        if (customer && customer.created_at) {
+          recentActivity.push({
+            action: `Customer "${customer.name || 'Unknown'}" was ${customer.status === "active" ? "added" : "updated"}`,
+            time: customer.created_at,
+            type: customer.status === "active" ? "success" : "info",
+          })
+        }
+      })
+    }
+
+    // Process vendors
+    if (Array.isArray(recentVendors) && recentVendors.length > 0) {
+      recentVendors.forEach((vendor) => {
+        if (vendor && vendor.created_at) {
+          recentActivity.push({
+            action: `Vendor "${vendor.name || 'Unknown'}" was ${vendor.status === "active" ? "added" : "updated"}`,
+            time: vendor.created_at,
+            type: vendor.status === "active" ? "success" : "info",
+          })
+        }
+      })
+    }
+
+    // Process documents
+    if (Array.isArray(recentDocuments) && recentDocuments.length > 0) {
+      recentDocuments.forEach((doc) => {
+        if (doc && doc.created_at) {
+          recentActivity.push({
+            action: `Document "${doc.name || 'Unknown'}" (${doc.document_type || 'file'}) was uploaded`,
+            time: doc.created_at,
+            type: "info",
+          })
+        }
+      })
+    }
+
+    // Process BOLs
+    if (Array.isArray(recentBols) && recentBols.length > 0) {
+      recentBols.forEach((bol) => {
+        if (bol && bol.created_at) {
+          recentActivity.push({
+            action: `BOL ${bol.bol_number || 'N/A'} was ${bol.status === "completed" ? "completed" : bol.status === "sent" ? "sent" : "created"}`,
+            time: bol.created_at,
+            type: bol.status === "completed" ? "success" : bol.status === "sent" ? "info" : "default",
+          })
+        }
+      })
+    }
+
+    // Process DVIR
+    if (Array.isArray(recentDvir) && recentDvir.length > 0) {
+      recentDvir.forEach((dvir) => {
+        if (dvir && dvir.created_at) {
+          recentActivity.push({
+            action: `DVIR inspection was ${dvir.status === "completed" ? "completed" : dvir.status === "submitted" ? "submitted" : "created"}`,
+            time: dvir.created_at,
+            type: dvir.status === "completed" ? "success" : dvir.status === "needs_repair" ? "warning" : "info",
+          })
+        }
+      })
+    }
+
+    // Process geofences
+    if (Array.isArray(recentGeofences) && recentGeofences.length > 0) {
+      recentGeofences.forEach((geofence) => {
+        if (geofence && geofence.created_at) {
+          recentActivity.push({
+            action: `Geofence "${geofence.name || 'Unknown'}" was ${geofence.is_active ? "created" : "deactivated"}`,
+            time: geofence.created_at,
+            type: geofence.is_active ? "success" : "warning",
           })
         }
       })
