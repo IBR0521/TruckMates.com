@@ -191,77 +191,110 @@ export async function getDashboardStats() {
       }, 5000) // Increased to 5 seconds
     })
 
-    const [
-      { data: recentLoads },
-      { data: recentDrivers },
-      { data: recentMaintenance },
-      { data: recentRoutes },
-      { data: recentInvoices },
-      { data: recentSettlements },
-    ] = await Promise.race([activityPromise, activityTimeout]) as any
+    let recentLoads: any[] = []
+    let recentDrivers: any[] = []
+    let recentMaintenance: any[] = []
+    let recentRoutes: any[] = []
+    let recentInvoices: any[] = []
+    let recentSettlements: any[] = []
+
+    try {
+      const results = await Promise.race([activityPromise, activityTimeout]) as any[]
+      recentLoads = results[0]?.data || []
+      recentDrivers = results[1]?.data || []
+      recentMaintenance = results[2]?.data || []
+      recentRoutes = results[3]?.data || []
+      recentInvoices = results[4]?.data || []
+      recentSettlements = results[5]?.data || []
+    } catch (error) {
+      // If there's an error, use empty arrays
+      if (process.env.NODE_ENV === 'development') {
+        console.warn("Recent activities query failed:", error)
+      }
+    }
 
     // Build recent activity array
     const recentActivity: Array<{ action: string; time: string; type: string }> = []
 
-    if (recentLoads) {
+    // Process loads
+    if (Array.isArray(recentLoads) && recentLoads.length > 0) {
       recentLoads.forEach((load) => {
-        recentActivity.push({
-          action: `Load ${load.shipment_number} ${load.status === "in_transit" ? "is in transit" : load.status === "delivered" ? "was delivered" : "was created"}`,
-          time: load.created_at,
-          type: load.status === "delivered" ? "success" : load.status === "in_transit" ? "info" : "default",
-        })
+        if (load && load.created_at) {
+          recentActivity.push({
+            action: `Load ${load.shipment_number || 'N/A'} ${load.status === "in_transit" ? "is in transit" : load.status === "delivered" ? "was delivered" : "was created"}`,
+            time: load.created_at,
+            type: load.status === "delivered" ? "success" : load.status === "in_transit" ? "info" : "default",
+          })
+        }
       })
     }
 
-    if (recentDrivers) {
+    // Process drivers
+    if (Array.isArray(recentDrivers) && recentDrivers.length > 0) {
       recentDrivers.forEach((driver) => {
-        recentActivity.push({
-          action: `Driver ${driver.name} was ${driver.status === "active" ? "added" : "updated"}`,
-          time: driver.created_at,
-          type: "success",
-        })
+        if (driver && driver.created_at) {
+          recentActivity.push({
+            action: `Driver ${driver.name || 'Unknown'} was ${driver.status === "active" ? "added" : "updated"}`,
+            time: driver.created_at,
+            type: "success",
+          })
+        }
       })
     }
 
-    if (recentMaintenance) {
+    // Process maintenance
+    if (Array.isArray(recentMaintenance) && recentMaintenance.length > 0) {
       recentMaintenance.forEach((maint) => {
-        const date = maint.scheduled_date ? new Date(maint.scheduled_date).toLocaleDateString() : "TBD"
-        recentActivity.push({
-          action: `Maintenance for ${maint.service_type} scheduled for ${date}`,
-          time: maint.created_at,
-          type: maint.status === "overdue" ? "error" : maint.status === "completed" ? "success" : "warning",
-        })
+        if (maint && maint.created_at) {
+          const date = maint.scheduled_date ? new Date(maint.scheduled_date).toLocaleDateString() : "TBD"
+          recentActivity.push({
+            action: `Maintenance for ${maint.service_type || 'Unknown'} scheduled for ${date}`,
+            time: maint.created_at,
+            type: maint.status === "overdue" ? "error" : maint.status === "completed" ? "success" : "warning",
+          })
+        }
       })
     }
 
-    if (recentRoutes) {
+    // Process routes
+    if (Array.isArray(recentRoutes) && recentRoutes.length > 0) {
       recentRoutes.forEach((route) => {
-        recentActivity.push({
-          action: `Route ${route.name} was ${route.status === "completed" ? "completed" : route.status === "in_progress" ? "started" : "created"}`,
-          time: route.updated_at || route.created_at,
-          type: route.status === "completed" ? "success" : route.status === "in_progress" ? "info" : "default",
-        })
+        if (route && (route.created_at || route.updated_at)) {
+          recentActivity.push({
+            action: `Route ${route.name || 'Unknown'} was ${route.status === "completed" ? "completed" : route.status === "in_progress" ? "started" : "created"}`,
+            time: route.updated_at || route.created_at,
+            type: route.status === "completed" ? "success" : route.status === "in_progress" ? "info" : "default",
+          })
+        }
       })
     }
 
-    if (recentInvoices) {
+    // Process invoices
+    if (Array.isArray(recentInvoices) && recentInvoices.length > 0) {
       recentInvoices.forEach((invoice) => {
-        recentActivity.push({
-          action: `Invoice ${invoice.invoice_number} for $${Number(invoice.amount).toFixed(2)} was ${invoice.status === "paid" ? "paid" : invoice.status === "sent" ? "sent" : "created"}`,
-          time: invoice.created_at,
-          type: invoice.status === "paid" ? "success" : invoice.status === "overdue" ? "error" : "info",
-        })
+        if (invoice && invoice.created_at) {
+          const amount = invoice.amount ? Number(invoice.amount).toFixed(2) : "0.00"
+          recentActivity.push({
+            action: `Invoice ${invoice.invoice_number || 'N/A'} for $${amount} was ${invoice.status === "paid" ? "paid" : invoice.status === "sent" ? "sent" : "created"}`,
+            time: invoice.created_at,
+            type: invoice.status === "paid" ? "success" : invoice.status === "overdue" ? "error" : "info",
+          })
+        }
       })
     }
 
-    if (recentSettlements) {
+    // Process settlements
+    if (Array.isArray(recentSettlements) && recentSettlements.length > 0) {
       recentSettlements.forEach((settlement: any) => {
-        const driverName = settlement.drivers?.name || "Driver"
-        recentActivity.push({
-          action: `Settlement for ${driverName} ($${Number(settlement.net_pay).toFixed(2)}) was ${settlement.status === "paid" ? "paid" : "created"}`,
-          time: settlement.created_at,
-          type: settlement.status === "paid" ? "success" : "info",
-        })
+        if (settlement && settlement.created_at) {
+          const driverName = settlement.drivers?.name || "Driver"
+          const netPay = settlement.net_pay ? Number(settlement.net_pay).toFixed(2) : "0.00"
+          recentActivity.push({
+            action: `Settlement for ${driverName} ($${netPay}) was ${settlement.status === "paid" ? "paid" : "created"}`,
+            time: settlement.created_at,
+            type: settlement.status === "paid" ? "success" : "info",
+          })
+        }
       })
     }
 
