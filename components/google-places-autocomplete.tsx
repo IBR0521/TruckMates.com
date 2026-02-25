@@ -127,6 +127,9 @@ export function GooglePlacesAutocomplete({
       return
     }
 
+    let observer: MutationObserver | null = null
+    let debounceTimeout: NodeJS.Timeout | null = null
+
     try {
       // Use the old Autocomplete API (it still works, just deprecated)
       // The deprecation notice says it will continue to work for at least 12 months
@@ -218,8 +221,7 @@ export function GooglePlacesAutocomplete({
       applyStyles()
 
       // Watch for dropdown creation
-      let debounceTimeout: NodeJS.Timeout | null = null
-      const observer = new MutationObserver(() => {
+      observer = new MutationObserver(() => {
         if (debounceTimeout) clearTimeout(debounceTimeout)
         debounceTimeout = setTimeout(() => {
           applyStyles()
