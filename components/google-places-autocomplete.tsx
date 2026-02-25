@@ -310,10 +310,13 @@ export function GooglePlacesAutocomplete({
           }
         })
 
-        // Update the input value
-        onChange(place.formatted_address || value)
+        // Use the parsed street address for address_line1, fallback to formatted if parsing failed
+        const streetAddress = addressComponents.address_line1?.trim() || place.formatted_address || value
 
-        // Call the callback with parsed address components
+        // Update the input value with just the street address (not the full formatted address)
+        onChange(streetAddress)
+
+        // Call the callback with parsed address components - this will fill all fields
         if (onPlaceSelect) {
           onPlaceSelect(addressComponents)
         }

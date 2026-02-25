@@ -803,13 +803,16 @@ export default function EnhancedAddressBookPage() {
                     onPlaceSelect={(address) => {
                       setFormData(prev => ({
                         ...prev,
-                        address_line1: address.address_line1 || prev.address_line1,
-                        address_line2: address.address_line2 || prev.address_line2,
-                        city: address.city || prev.city,
-                        state: address.state || prev.state,
-                        zip_code: address.zip_code || prev.zip_code,
-                        country: address.country || prev.country,
+                        // Use parsed address_line1, or keep existing if not available
+                        address_line1: address.address_line1?.trim() || prev.address_line1,
+                        address_line2: address.address_line2?.trim() || prev.address_line2 || '',
+                        city: address.city?.trim() || prev.city || '',
+                        state: address.state?.trim() || prev.state || '',
+                        zip_code: address.zip_code?.trim() || prev.zip_code || '',
+                        country: address.country?.trim() || prev.country || 'USA',
                       }))
+                      // Show success message
+                      toast.success("Address fields auto-filled")
                     }}
                     placeholder="Enter address (auto-fills city, state, zip)"
                     label="Address Line 1"
