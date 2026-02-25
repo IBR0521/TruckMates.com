@@ -129,3 +129,4 @@ GRANT EXECUTE ON FUNCTION public.get_ifta_tax_rate(UUID, TEXT, INTEGER, INTEGER)
 GRANT EXECUTE ON FUNCTION public.get_ifta_tax_rates_for_quarter(UUID, INTEGER, INTEGER) TO authenticated;
 
 
+

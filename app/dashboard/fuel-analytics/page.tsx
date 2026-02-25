@@ -235,7 +235,7 @@ export default function FuelAnalyticsPage() {
                       {truckAnalytics.map((truck: any) => (
                         <TableRow key={truck.truck_id}>
                           <TableCell className="font-medium">{truck.truck_number}</TableCell>
-                          <TableCell>${truck.total_fuel_cost.toFixed(2)}</TableCell>
+                          <TableCell>${(truck.total_fuel_cost || 0).toFixed(2)}</TableCell>
                           <TableCell>{truck.total_fuel_expenses}</TableCell>
                           <TableCell>{truck.total_miles ? truck.total_miles.toLocaleString() : "0"}</TableCell>
                           <TableCell>

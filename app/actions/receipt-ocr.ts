@@ -152,8 +152,13 @@ Return ONLY the JSON object, no other text.`,
         const dateMatch = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/) || dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})/)
         if (dateMatch) {
           if (dateMatch[0].includes("/")) {
-            const [month, day, year] = dateMatch[0].split("/")
-            result.purchase_date = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
+            const parts = dateMatch[0].split("/")
+            if (parts.length === 3) {
+              const [month, day, year] = parts
+              result.purchase_date = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
+            } else {
+              result.purchase_date = dateMatch[0]
+            }
           } else {
             result.purchase_date = dateMatch[0]
           }

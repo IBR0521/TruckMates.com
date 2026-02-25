@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { updateUserProfile, updateUserPassword } from "./user"
+import { updateUserProfile, updateUserPassword } from "@/lib/auth/server"
 
 export async function getAccountSettings() {
   const supabase = await createClient()

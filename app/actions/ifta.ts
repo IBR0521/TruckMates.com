@@ -19,7 +19,7 @@ export async function getIFTAReports() {
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -77,7 +77,7 @@ export async function createIFTAReport(formData: {
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }

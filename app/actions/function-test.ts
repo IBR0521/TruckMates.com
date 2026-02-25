@@ -18,7 +18,7 @@ import * as dispatchesActions from "./dispatches"
 import * as addressBookActions from "./address-book"
 import * as documentsActions from "./documents"
 import * as dashboardActions from "./dashboard"
-import * as userActions from "./user"
+import { getCurrentUser } from "@/lib/auth/server"
 import * as companyActions from "./company"
 import * as employeesActions from "./employees"
 import * as notificationsActions from "./notifications"
@@ -144,17 +144,9 @@ export async function testAllPlatformFunctions() {
     // 2. USER FUNCTIONS
     // ============================================
     console.log(`[FUNCTION TEST] Testing User functions...`)
+    // getUserProfile removed - functionality merged into getCurrentUser
     try {
-      const userProfile = await userActions.getUserProfile()
-      pushTested("getUserProfile")
-      if (userProfile.data) pushPassed("getUserProfile")
-      else pushFailed({ function: "getUserProfile", error: userProfile.error })
-    } catch (error: any) {
-      pushFailed({ function: "getUserProfile", error: error.message })
-    }
-
-    try {
-      const currentUser = await userActions.getCurrentUser()
+      const currentUser = await getCurrentUser()
       pushTested("getCurrentUser")
       if (currentUser.data) pushPassed("getCurrentUser")
       else pushFailed({ function: "getCurrentUser", error: currentUser.error })

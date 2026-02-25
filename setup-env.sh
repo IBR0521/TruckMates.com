@@ -87,3 +87,4 @@ echo ""
 echo "🔒 Security reminder: .env.local is in .gitignore and won't be committed"
 echo ""
 
+

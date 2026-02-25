@@ -104,7 +104,7 @@ export function FleetMap({
       }
 
       if (!apiKey) {
-        setLoadError("Google Maps API key not configured")
+        setLoadError("Google Maps API key not configured. Please set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in Vercel environment variables and redeploy.")
         setIsLoading(false)
         return
       }
@@ -180,9 +180,10 @@ export function FleetMap({
         }, 10000)
       }
       
-      script.onerror = () => {
+      script.onerror = (error) => {
         script.removeAttribute("data-loading")
-        setLoadError("Failed to load Google Maps. Please check your API key.")
+        console.error('[FleetMap] Script load error:', error)
+        setLoadError("Failed to load Google Maps. Please check: 1) API key is set in Vercel, 2) Domain restrictions allow your production domain, 3) Maps JavaScript API is enabled in Google Cloud Console.")
         setIsLoading(false)
       }
       

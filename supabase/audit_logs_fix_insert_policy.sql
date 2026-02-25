@@ -22,3 +22,4 @@ CREATE POLICY "Users can insert audit logs for their company"
 
 
 
+

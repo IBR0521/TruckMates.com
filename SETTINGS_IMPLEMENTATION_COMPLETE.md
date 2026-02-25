@@ -297,3 +297,4 @@ Check that all 6 new tables exist:
 All features from the TruckLogics analysis have been successfully implemented and are ready for production use!
 
 
+

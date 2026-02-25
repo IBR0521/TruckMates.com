@@ -19,7 +19,14 @@ export const exportToExcel = (data: any[], fileName: string, allFields?: boolean
           value = value.toLocaleDateString()
         } else if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}/)) {
           // ISO date string
-          value = new Date(value).toLocaleDateString()
+          try {
+            const date = new Date(value)
+            if (!isNaN(date.getTime())) {
+              value = date.toLocaleDateString()
+            }
+          } catch {
+            // Keep original value if date parsing fails
+          }
         }
         
         // Handle null/undefined
@@ -45,17 +52,19 @@ export const exportToExcel = (data: any[], fileName: string, allFields?: boolean
     
     // Auto-size columns
     const maxWidth = 50 // Maximum column width
-    const colWidths = Object.keys(cleanedData[0] || {}).map((key) => {
-      const maxLength = Math.max(
-        key.length,
-        ...cleanedData.map((row) => {
-          const cellValue = String(row[key] || '')
-          return cellValue.length
-        })
-      )
-      return { wch: Math.min(maxLength + 2, maxWidth) }
-    })
-    worksheet['!cols'] = colWidths
+    if (cleanedData.length > 0 && cleanedData[0]) {
+      const colWidths = Object.keys(cleanedData[0]).map((key) => {
+        const maxLength = Math.max(
+          key.length,
+          ...cleanedData.map((row) => {
+            const cellValue = String(row[key] || '')
+            return cellValue.length
+          })
+        )
+        return { wch: Math.min(maxLength + 2, maxWidth) }
+      })
+      worksheet['!cols'] = colWidths
+    }
     
     // Add worksheet to workbook
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1')

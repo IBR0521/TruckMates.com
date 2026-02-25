@@ -88,21 +88,25 @@ export async function importComdataFuelData(
       return { error: "CSV file must have at least a header row and one data row", data: null }
     }
 
-    const headerRow = rows[0].map((h) => h.toLowerCase().trim())
+    const headerRow = (rows[0] || []).map((h) => (h || "").toLowerCase().trim())
     const dataRows = rows.slice(1)
 
+    if (headerRow.length === 0) {
+      return { error: "Invalid CSV format: missing header row", data: null }
+    }
+
     // Find column indices
-    const dateIndex = headerRow.findIndex((h) => h.includes("date") || h.includes("transaction date"))
+    const dateIndex = headerRow.findIndex((h) => h && (h.includes("date") || h.includes("transaction date")))
     const truckIndex = headerRow.findIndex(
-      (h) => h.includes("truck") || h.includes("unit") || h.includes("vehicle")
+      (h) => h && (h.includes("truck") || h.includes("unit") || h.includes("vehicle"))
     )
-    const locationIndex = headerRow.findIndex((h) => h.includes("location") || h.includes("station"))
-    const stateIndex = headerRow.findIndex((h) => h.includes("state") || h.includes("st"))
-    const gallonsIndex = headerRow.findIndex((h) => h.includes("gallon") || h.includes("quantity"))
+    const locationIndex = headerRow.findIndex((h) => h && (h.includes("location") || h.includes("station")))
+    const stateIndex = headerRow.findIndex((h) => h && (h.includes("state") || h.includes("st")))
+    const gallonsIndex = headerRow.findIndex((h) => h && (h.includes("gallon") || h.includes("quantity")))
     const priceIndex = headerRow.findIndex(
-      (h) => h.includes("price") || h.includes("rate") || h.includes("per gallon")
+      (h) => h && (h.includes("price") || h.includes("rate") || h.includes("per gallon"))
     )
-    const totalIndex = headerRow.findIndex((h) => h.includes("total") || h.includes("amount"))
+    const totalIndex = headerRow.findIndex((h) => h && (h.includes("total") || h.includes("amount")))
 
     if (dateIndex === -1 || gallonsIndex === -1 || totalIndex === -1) {
       return {
@@ -152,11 +156,20 @@ export async function importComdataFuelData(
         if (dateStr.includes("/")) {
           // MM/DD/YYYY or M/D/YYYY
           const parts = dateStr.split("/")
-          purchaseDate = new Date(
-            parseInt(parts[2]),
-            parseInt(parts[0]) - 1,
-            parseInt(parts[1])
-          )
+          if (parts.length !== 3) {
+            importResult.failed++
+            importResult.errors.push({ row: i + 2, error: `Invalid date format: ${dateStr}` })
+            continue
+          }
+          const year = parseInt(parts[2])
+          const month = parseInt(parts[0]) - 1
+          const day = parseInt(parts[1])
+          if (isNaN(year) || isNaN(month) || isNaN(day)) {
+            importResult.failed++
+            importResult.errors.push({ row: i + 2, error: `Invalid date values: ${dateStr}` })
+            continue
+          }
+          purchaseDate = new Date(year, month, day)
         } else {
           purchaseDate = new Date(dateStr)
         }
@@ -193,9 +206,11 @@ export async function importComdataFuelData(
         if (!state && locationIndex !== -1) {
           // Try to extract state from location
           const location = row[locationIndex]?.trim() || ""
-          const stateMatch = location.match(/\b([A-Z]{2})\b/)
-          if (stateMatch) {
-            state = stateMatch[1]
+          if (location && typeof location === 'string') {
+            const stateMatch = location.match(/\b([A-Z]{2})\b/)
+            if (stateMatch && stateMatch[1]) {
+              state = stateMatch[1]
+            }
           }
         }
 

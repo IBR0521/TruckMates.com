@@ -84,3 +84,4 @@ After adding the environment variables:
 - **Solution**: Make sure you copied the `anon` key, not the `service_role` key
 
 
+

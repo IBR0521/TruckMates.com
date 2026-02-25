@@ -94,3 +94,4 @@ Run `supabase/auth_schema.sql` in Supabase SQL Editor to set up:
 - RLS policies for security
 - Indexes for performance
 
+

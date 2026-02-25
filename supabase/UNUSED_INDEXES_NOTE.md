@@ -87,3 +87,4 @@ Consider:
 - Setting up alerts for slow queries that might benefit from new indexes
 - Reviewing indexes quarterly rather than removing them immediately
 
+

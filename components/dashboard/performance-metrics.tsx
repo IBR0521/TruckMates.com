@@ -69,8 +69,8 @@ export function PerformanceMetrics({
             <p className="text-sm text-muted-foreground">On-Time Rate</p>
             <Clock className="w-4 h-4 text-blue-500" />
           </div>
-          <p className={`text-2xl font-bold ${onTimeDeliveryRate >= 90 ? "text-green-400" : onTimeDeliveryRate >= 70 ? "text-yellow-400" : "text-red-400"}`}>
-            {onTimeDeliveryRate.toFixed(1)}%
+          <p className={`text-2xl font-bold ${(onTimeDeliveryRate || 0) >= 90 ? "text-green-400" : (onTimeDeliveryRate || 0) >= 70 ? "text-yellow-400" : "text-red-400"}`}>
+            {(onTimeDeliveryRate || 0).toFixed(1)}%
           </p>
           <p className="text-xs text-muted-foreground mt-2">Delivery performance</p>
         </div>
@@ -82,7 +82,7 @@ export function PerformanceMetrics({
             <TrendingUp className="w-4 h-4 text-green-500" />
           </div>
           <p className="text-2xl font-bold text-foreground">
-            ${averageLoadValue > 0 ? averageLoadValue.toLocaleString() : "0"}
+            ${(averageLoadValue || 0) > 0 ? (averageLoadValue || 0).toLocaleString() : "0"}
           </p>
           <p className="text-xs text-muted-foreground mt-2">Per load</p>
         </div>

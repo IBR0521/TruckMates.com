@@ -58,18 +58,53 @@ export function GoogleMapsRoute({
       return
     }
 
-    const script = document.createElement("script")
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`
-    script.async = true
-    script.defer = true
-    script.onload = () => {
-      setMapLoaded(true)
+    // Get API key - try env first, then fetch from API route
+    let apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    
+    const loadScript = async () => {
+      // If no API key in env, try to fetch from API route
+      if (!apiKey) {
+        try {
+          const response = await fetch('/api/google-maps-key')
+          if (response.ok) {
+            const data = await response.json()
+            apiKey = data.apiKey
+          } else {
+            const errorData = await response.json().catch(() => ({}))
+            setError(errorData.error || "Google Maps API key not configured. Please set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in Vercel environment variables.")
+            setIsLoading(false)
+            return
+          }
+        } catch (error) {
+          console.error('[GoogleMapsRoute] Failed to fetch API key:', error)
+          setError("Failed to load Google Maps API key. Please check your environment variables.")
+          setIsLoading(false)
+          return
+        }
+      }
+
+      if (!apiKey) {
+        setError("Google Maps API key not configured. Please set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in Vercel environment variables.")
+        setIsLoading(false)
+        return
+      }
+
+      const script = document.createElement("script")
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`
+      script.async = true
+      script.defer = true
+      script.onload = () => {
+        setMapLoaded(true)
+      }
+      script.onerror = (error) => {
+        console.error('[GoogleMapsRoute] Script load error:', error)
+        setError("Failed to load Google Maps. Please check: 1) API key is set in Vercel, 2) Domain restrictions allow your production domain, 3) Maps JavaScript API is enabled in Google Cloud Console.")
+        setIsLoading(false)
+      }
+      document.head.appendChild(script)
     }
-    script.onerror = () => {
-      setError("Failed to load Google Maps")
-      setIsLoading(false)
-    }
-    document.head.appendChild(script)
+
+    loadScript()
 
     return () => {
       // Cleanup

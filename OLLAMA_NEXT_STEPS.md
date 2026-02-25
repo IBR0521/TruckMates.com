@@ -222,3 +222,4 @@ Once Ollama is running and the model is downloaded, TruckMates AI will be fully 
 
 
 
+

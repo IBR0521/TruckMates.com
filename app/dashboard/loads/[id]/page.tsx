@@ -363,7 +363,11 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
       const date = new Date(dateString)
       if (isNaN(date.getTime())) return "N/A"
       // Use a consistent format
-      return date.toISOString().split('T')[0] + (dateString.includes('T') ? ' ' + dateString.split('T')[1].substring(0, 5) : '')
+      const dateParts = date.toISOString().split('T')
+      const timePart = dateString && dateString.includes('T') && dateString.split('T')[1] 
+        ? dateString.split('T')[1].substring(0, 5) 
+        : ''
+      return dateParts[0] + (timePart ? ' ' + timePart : '')
     } catch {
       return "N/A"
     }
@@ -528,7 +532,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Total Weight (kg)</p>
-                  <p className="text-xl md:text-2xl font-bold text-foreground">{loadSummary.total_weight_kg.toFixed(2)}</p>
+                  <p className="text-xl md:text-2xl font-bold text-foreground">{(loadSummary.total_weight_kg || 0).toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Total Pieces</p>
@@ -1015,7 +1019,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                   {load.estimated_miles && (
                     <div>
                       <p className="text-sm text-muted-foreground mb-2">Estimated Miles</p>
-                      <p className="text-foreground font-medium">{load.estimated_miles.toLocaleString()} miles</p>
+                      <p className="text-foreground font-medium">{(load.estimated_miles || 0).toLocaleString()} miles</p>
                     </div>
                   )}
                   {(load.estimated_revenue || load.estimated_profit) && (
@@ -1076,7 +1080,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
               {load.driver_id ? (
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Driver</p>
-                  <p className="text-foreground font-medium">Assigned (ID: {load.driver_id.substring(0, 8)}...)</p>
+                  <p className="text-foreground font-medium">Assigned (ID: {load.driver_id ? load.driver_id.substring(0, 8) : 'N/A'}...)</p>
                 </div>
               ) : (
                 <div>
@@ -1105,7 +1109,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
               ) : load.truck_id ? (
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">Vehicle</p>
-                  <p className="text-foreground font-medium">Assigned (ID: {load.truck_id.substring(0, 8)}...)</p>
+                  <p className="text-foreground font-medium">Assigned (ID: {load.truck_id ? load.truck_id.substring(0, 8) : 'N/A'}...)</p>
                 </div>
               ) : (
                 <div>

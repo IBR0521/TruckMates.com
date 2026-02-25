@@ -112,13 +112,13 @@ export default function CRMDashboardPage() {
   }
 
   const filteredCustomers = customerMetrics.filter((c) =>
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.company_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    (c.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (c.company_name || "").toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const filteredVendors = vendorMetrics.filter((v) =>
-    v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    v.company_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    (v.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (v.company_name || "").toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   return (

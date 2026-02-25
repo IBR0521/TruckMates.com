@@ -91,3 +91,4 @@ COMMENT ON TABLE public.driver_badges IS 'Driver achievements and badges for gam
 COMMENT ON TABLE public.driver_performance_scores IS 'Driver performance scores for leaderboards and rankings';
 
 
+

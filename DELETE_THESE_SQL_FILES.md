@@ -38,3 +38,4 @@ These files contain old authentication logic that conflicts with the new clean s
 2. Run `supabase/auth_schema.sql` in Supabase SQL Editor
 3. The new schema will create/update users and companies tables cleanly
 
+

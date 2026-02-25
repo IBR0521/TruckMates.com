@@ -135,9 +135,9 @@ export async function getFuelAnalytics(filters?: {
           gallons = previousFuelCost / estimatedPricePerGallon
         }
 
-        if (gallons > 0 && gallons < 200) { // Reasonable check: max 200 gallons per fill
+        if (gallons > 0 && gallons < 200 && miles > 0) { // Reasonable check: max 200 gallons per fill
           const mpg = miles / gallons
-          const costPerMile = previousFuelCost / miles
+          const costPerMile = miles > 0 ? previousFuelCost / miles : 0
 
           // Only include reasonable MPG values (between 3 and 15 MPG for trucks)
           if (mpg >= 3 && mpg <= 15) {
@@ -180,9 +180,10 @@ export async function getFuelAnalytics(filters?: {
     const allTruckAnalytics = Object.values(truckAnalytics)
     const fleetTotalMiles = allTruckAnalytics.reduce((sum, t) => sum + (t.total_miles || 0), 0)
     const fleetTotalCost = allTruckAnalytics.reduce((sum, t) => sum + (t.total_fuel_cost || 0), 0)
-    const fleetAvgMPG = allTruckAnalytics
-      .filter(t => t.avg_mpg !== null)
-      .reduce((sum, t, _, arr) => sum + (t.avg_mpg || 0) / arr.length, 0)
+    const filteredTrucks = allTruckAnalytics.filter(t => t.avg_mpg !== null && t.avg_mpg > 0)
+    const fleetAvgMPG = filteredTrucks.length > 0
+      ? filteredTrucks.reduce((sum, t) => sum + (t.avg_mpg || 0), 0) / filteredTrucks.length
+      : 0
     const fleetAvgCostPerMile = fleetTotalMiles > 0 && fleetTotalCost > 0
       ? Math.round((fleetTotalCost / fleetTotalMiles) * 100) / 100
       : null
@@ -224,7 +225,9 @@ export async function getFuelAnalytics(filters?: {
         // Otherwise use a rough estimate
         if (mpgEntriesForMonth.length > 0) {
           // Estimate: average MPG * estimated gallons per fill
-          const avgMPG = mpgEntriesForMonth.reduce((sum: number, mpg: any) => sum + mpg.mpg, 0) / mpgEntriesForMonth.length
+          const avgMPG = mpgEntriesForMonth.length > 0 
+            ? mpgEntriesForMonth.reduce((sum: number, mpg: any) => sum + mpg.mpg, 0) / mpgEntriesForMonth.length
+            : 0
           const estimatedGallons = parseFloat(expense.amount) / 3.50 // Rough estimate
           monthlyTruckMiles[monthKey] = (monthlyTruckMiles[monthKey] || 0) + (avgMPG * estimatedGallons)
         } else {
@@ -348,7 +351,7 @@ export async function getFuelCostPerRoute(filters?: {
       if (routeExpenses.length > 0) {
         routeFuelCosts[route.id] = {
           route_id: route.id,
-          route_number: route.name || `Route ${route.id.substring(0, 8)}`,
+          route_number: route.name || `Route ${route.id ? route.id.substring(0, 8) : 'Unknown'}`,
           origin: route.origin || "N/A",
           destination: route.destination || "N/A",
           total_fuel_cost: Math.round(totalCost * 100) / 100,

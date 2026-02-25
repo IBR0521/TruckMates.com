@@ -362,11 +362,15 @@ export async function getDriverTimelines(filters?: {
         endDate = new Date(route.estimated_arrival)
       } else if (route.estimated_time) {
         // Parse estimated_time (e.g., "3h 30m") and add to start date
-        const timeMatch = route.estimated_time.match(/(\d+)h\s*(\d+)?m?/)
-        if (timeMatch) {
-          const hours = parseInt(timeMatch[1]) || 0
-          const minutes = parseInt(timeMatch[2]) || 0
-          endDate = new Date(startDate.getTime() + (hours * 60 + minutes) * 60 * 1000)
+        if (route.estimated_time && typeof route.estimated_time === 'string') {
+          const timeMatch = route.estimated_time.match(/(\d+)h\s*(\d+)?m?/)
+          if (timeMatch) {
+            const hours = parseInt(timeMatch[1]) || 0
+            const minutes = parseInt(timeMatch[2]) || 0
+            endDate = new Date(startDate.getTime() + (hours * 60 + minutes) * 60 * 1000)
+          } else {
+            endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
+          }
         } else {
           endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
         }

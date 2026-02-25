@@ -50,8 +50,22 @@ export function RevenueChart({ data: initialData }: RevenueChartProps) {
         }
       } else if (period === 'monthly') {
         // Format: "2024-01" -> "Jan 2024"
-        const [year, month] = item.date.split('-')
-        const date = new Date(parseInt(year), parseInt(month) - 1)
+        const parts = item.date.split('-')
+        if (parts.length !== 2) {
+          return {
+            date: item.date,
+            amount: Number(item.amount) || 0,
+          }
+        }
+        const year = parseInt(parts[0])
+        const month = parseInt(parts[1])
+        if (isNaN(year) || isNaN(month)) {
+          return {
+            date: item.date,
+            amount: Number(item.amount) || 0,
+          }
+        }
+        const date = new Date(year, month - 1)
         return {
           date: date.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
           amount: Number(item.amount) || 0,

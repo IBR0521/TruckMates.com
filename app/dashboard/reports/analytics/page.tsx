@@ -131,8 +131,14 @@ export default function AnalyticsPage() {
   }
 
   const formatMonth = (monthKey: string) => {
-    const [year, month] = monthKey.split("-")
-    const date = new Date(parseInt(year), parseInt(month) - 1)
+    if (!monthKey || typeof monthKey !== 'string') return monthKey
+    const parts = monthKey.split("-")
+    if (parts.length !== 2) return monthKey
+    const year = parseInt(parts[0])
+    const month = parseInt(parts[1])
+    if (isNaN(year) || isNaN(month)) return monthKey
+    const date = new Date(year, month - 1)
+    if (isNaN(date.getTime())) return monthKey
     return date.toLocaleDateString("en-US", { month: "short", year: "numeric" })
   }
 
@@ -265,7 +271,7 @@ export default function AnalyticsPage() {
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm text-muted-foreground">Average Revenue per Load</span>
                     <span className="text-sm font-medium text-foreground">
-                      ${stats.averageRevenuePerLoad.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ${(stats.averageRevenuePerLoad || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>
@@ -353,7 +359,7 @@ export default function AnalyticsPage() {
                       />
                       <p className="text-xs text-muted-foreground text-center">{formatMonth(item.month)}</p>
                       <p className="text-xs font-semibold text-foreground">
-                        ${item.amount > 0 ? (item.amount / 1000).toFixed(1) : '0.0'}k
+                        ${(item.amount || 0) > 0 ? ((item.amount || 0) / 1000).toFixed(1) : '0.0'}k
                       </p>
                     </div>
                   )

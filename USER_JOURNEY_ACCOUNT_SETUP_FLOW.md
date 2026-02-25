@@ -362,3 +362,4 @@ When account setup flow is implemented:
 - **Setup wizard** will guide Super Admin through company configuration
 - **Better onboarding** experience for new company owners
 
+

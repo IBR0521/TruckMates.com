@@ -75,7 +75,7 @@ export async function getInvoice(id: string) {
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -127,7 +127,7 @@ export async function getExpenses() {
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -165,7 +165,7 @@ export async function getSettlements() {
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -220,7 +220,7 @@ export async function updateInvoice(
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -271,7 +271,7 @@ export async function duplicateInvoice(id: string) {
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -372,7 +372,7 @@ export async function createInvoice(formData: {
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -460,12 +460,14 @@ export async function createInvoice(formData: {
   if (!calculatedDueDate && formData.issue_date) {
     const issueDate = new Date(formData.issue_date)
     let days = 30 // default
-    if (paymentTerms.includes("Net 7")) days = 7
-    else if (paymentTerms.includes("Net 15")) days = 15
-    else if (paymentTerms.includes("Net 45")) days = 45
-    else if (paymentTerms.includes("Net 60")) days = 60
-    else if (paymentTerms.includes("Net 90")) days = 90
-    else if (paymentTerms.includes("Due on Receipt")) days = 0
+    if (paymentTerms && typeof paymentTerms === 'string') {
+      if (paymentTerms.includes("Net 7")) days = 7
+      else if (paymentTerms.includes("Net 15")) days = 15
+      else if (paymentTerms.includes("Net 45")) days = 45
+      else if (paymentTerms.includes("Net 60")) days = 60
+      else if (paymentTerms.includes("Net 90")) days = 90
+      else if (paymentTerms.includes("Due on Receipt")) days = 0
+    }
     issueDate.setDate(issueDate.getDate() + days)
     calculatedDueDate = issueDate.toISOString().split('T')[0]
   }
@@ -509,8 +511,8 @@ export async function createInvoice(formData: {
       await sendInvoiceEmail(data.id, {
         subject: settings.invoice_email_subject || "Invoice {INVOICE_NUMBER} from {COMPANY_NAME}",
         body: settings.invoice_email_body || "",
-        cc_emails: settings.cc_emails ? settings.cc_emails.split(',').map(e => e.trim()) : [],
-        bcc_emails: settings.bcc_emails ? settings.bcc_emails.split(',').map(e => e.trim()) : [],
+        cc_emails: settings.cc_emails ? settings.cc_emails.split(',').map(e => e.trim()).filter(e => e.length > 0) : [],
+        bcc_emails: settings.bcc_emails ? settings.bcc_emails.split(',').map(e => e.trim()).filter(e => e.length > 0) : [],
         send_copy_to_company: settings.send_copy_to_company || false,
         include_bol: settings.include_bol_in_invoice || false,
         auto_attach_documents: settings.auto_attach_documents || false,
@@ -555,7 +557,7 @@ export async function getLoadForInvoice(loadId: string) {
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -610,7 +612,7 @@ export async function createExpense(formData: {
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -808,7 +810,7 @@ export async function getDriverLoadsForPeriod(driverId: string, periodStart: str
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -867,7 +869,7 @@ export async function getDriverFuelExpensesForPeriod(driverId: string, periodSta
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -923,7 +925,7 @@ export async function createSettlement(formData: {
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
