@@ -46,6 +46,7 @@ import { createLoadDeliveryPoint } from "@/app/actions/load-delivery-points"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { getAddressBookEntries, incrementAddressUsage, type AddressBookEntry } from "@/app/actions/enhanced-address-book"
 import { BookOpen } from "lucide-react"
+import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
 export default function AddLoadPage() {
   const router = useRouter()
@@ -505,7 +506,23 @@ export default function AddLoadPage() {
                         <Card className="mt-2 p-4 border-primary/20">
                           <div className="grid md:grid-cols-2 gap-3">
                             <Input placeholder="Name *" value={newShipper.name} onChange={(e) => setNewShipper(prev => ({ ...prev, name: e.target.value }))} />
-                            <Input placeholder="Address" value={newShipper.address} onChange={(e) => setNewShipper(prev => ({ ...prev, address: e.target.value }))} />
+                            <div className="md:col-span-2">
+                              <GooglePlacesAutocomplete
+                                value={newShipper.address}
+                                onChange={(value) => setNewShipper(prev => ({ ...prev, address: value }))}
+                                onPlaceSelect={(address) => {
+                                  setNewShipper(prev => ({
+                                    ...prev,
+                                    address: address.address_line1 || prev.address,
+                                    city: address.city || prev.city,
+                                    state: address.state || prev.state,
+                                    zip: address.zip_code || prev.zip,
+                                  }))
+                                }}
+                                placeholder="Enter shipper address (auto-fills city, state, zip)"
+                                label="Address"
+                              />
+                            </div>
                             <Input placeholder="City" value={newShipper.city} onChange={(e) => setNewShipper(prev => ({ ...prev, city: e.target.value }))} />
                             <Input placeholder="State" value={newShipper.state} onChange={(e) => setNewShipper(prev => ({ ...prev, state: e.target.value }))} />
                             <Input placeholder="ZIP" value={newShipper.zip} onChange={(e) => setNewShipper(prev => ({ ...prev, zip: e.target.value }))} />
@@ -536,8 +553,26 @@ export default function AddLoadPage() {
                       )}
                 </div>
                 <div className="md:col-span-2">
-                      <Label>Pickup Location *</Label>
-                      <Input name="origin" value={formData.origin} onChange={handleChange} className="mt-1" required />
+                      <GooglePlacesAutocomplete
+                        value={formData.origin}
+                        onChange={(value) => setFormData(prev => ({ ...prev, origin: value }))}
+                        onPlaceSelect={(address) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            origin: address.address_line1 
+                              ? `${address.address_line1}, ${address.city}, ${address.state} ${address.zip_code}`.trim()
+                              : prev.origin,
+                            shipperAddress: address.address_line1 || prev.shipperAddress,
+                            shipperCity: address.city || prev.shipperCity,
+                            shipperState: address.state || prev.shipperState,
+                            shipperZip: address.zip_code || prev.shipperZip,
+                          }))
+                        }}
+                        placeholder="Enter pickup location (auto-fills address details)"
+                        label="Pickup Location"
+                        required
+                        id="origin"
+                      />
                 </div>
                 <div>
                       <Label>Pickup Date</Label>
@@ -640,7 +675,23 @@ export default function AddLoadPage() {
                             <Card className="mt-2 p-4 border-primary/20">
                               <div className="grid md:grid-cols-2 gap-3">
                                 <Input placeholder="Name *" value={newConsignee.name} onChange={(e) => setNewConsignee(prev => ({ ...prev, name: e.target.value }))} />
-                                <Input placeholder="Address" value={newConsignee.address} onChange={(e) => setNewConsignee(prev => ({ ...prev, address: e.target.value }))} />
+                                <div className="md:col-span-2">
+                                  <GooglePlacesAutocomplete
+                                    value={newConsignee.address}
+                                    onChange={(value) => setNewConsignee(prev => ({ ...prev, address: value }))}
+                                    onPlaceSelect={(address) => {
+                                      setNewConsignee(prev => ({
+                                        ...prev,
+                                        address: address.address_line1 || prev.address,
+                                        city: address.city || prev.city,
+                                        state: address.state || prev.state,
+                                        zip: address.zip_code || prev.zip,
+                                      }))
+                                    }}
+                                    placeholder="Enter consignee address (auto-fills city, state, zip)"
+                                    label="Address"
+                                  />
+                                </div>
                                 <Input placeholder="City" value={newConsignee.city} onChange={(e) => setNewConsignee(prev => ({ ...prev, city: e.target.value }))} />
                                 <Input placeholder="State" value={newConsignee.state} onChange={(e) => setNewConsignee(prev => ({ ...prev, state: e.target.value }))} />
                                 <Input placeholder="ZIP" value={newConsignee.zip} onChange={(e) => setNewConsignee(prev => ({ ...prev, zip: e.target.value }))} />
@@ -671,8 +722,26 @@ export default function AddLoadPage() {
                           )}
                 </div>
                 <div className="md:col-span-2">
-                          <Label>Drop Off Location *</Label>
-                          <Input name="destination" value={formData.destination} onChange={handleChange} className="mt-1" required />
+                      <GooglePlacesAutocomplete
+                        value={formData.destination}
+                        onChange={(value) => setFormData(prev => ({ ...prev, destination: value }))}
+                        onPlaceSelect={(address) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            destination: address.address_line1 
+                              ? `${address.address_line1}, ${address.city}, ${address.state} ${address.zip_code}`.trim()
+                              : prev.destination,
+                            consigneeAddress: address.address_line1 || prev.consigneeAddress,
+                            consigneeCity: address.city || prev.consigneeCity,
+                            consigneeState: address.state || prev.consigneeState,
+                            consigneeZip: address.zip_code || prev.consigneeZip,
+                          }))
+                        }}
+                        placeholder="Enter drop off location (auto-fills address details)"
+                        label="Drop Off Location"
+                        required
+                        id="destination"
+                      />
                 </div>
                 <div>
                           <Label>Delivery Date</Label>

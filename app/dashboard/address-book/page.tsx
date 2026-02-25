@@ -29,6 +29,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
+import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 import {
   Search,
   Plus,
@@ -787,12 +788,24 @@ export default function EnhancedAddressBookPage() {
 
               <TabsContent value="address" className="space-y-4">
                 <div>
-                  <Label htmlFor="address_line1">Address Line 1 *</Label>
-                  <Input
-                    id="address_line1"
-                    value={formData.address_line1}
-                    onChange={(e) => setFormData({ ...formData, address_line1: e.target.value })}
+                  <GooglePlacesAutocomplete
+                    value={formData.address_line1 || ""}
+                    onChange={(value) => setFormData({ ...formData, address_line1: value })}
+                    onPlaceSelect={(address) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        address_line1: address.address_line1 || prev.address_line1,
+                        address_line2: address.address_line2 || prev.address_line2,
+                        city: address.city || prev.city,
+                        state: address.state || prev.state,
+                        zip_code: address.zip_code || prev.zip_code,
+                        country: address.country || prev.country,
+                      }))
+                    }}
+                    placeholder="Enter address (auto-fills city, state, zip)"
+                    label="Address Line 1"
                     required
+                    id="address_line1"
                   />
                 </div>
                 <div>
