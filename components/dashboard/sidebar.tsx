@@ -60,6 +60,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
   const [reportsOpen, setReportsOpen] = useState(false)
   const [crmOpen, setCrmOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [eldOpen, setEldOpen] = useState(false)
   const [isManager, setIsManager] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isDesktop, setIsDesktop] = useState(true)
@@ -94,6 +95,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
       setReportsOpen(false)
       setCrmOpen(false)
       setSettingsOpen(false)
+      setEldOpen(false)
     }
   }, [shouldShowCollapsed])
 
@@ -340,7 +342,18 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
 
           {/* ELD Service - Show if user can view ELD */}
           {userRole && canViewFeature(userRole, "eld") && (
-            <NavItem href="/dashboard/eld" icon={Shield} label="ELD Service" isCollapsed={shouldShowCollapsed} />
+            <DropdownItem
+              icon={Shield}
+              label="ELD Service"
+              href="/dashboard/eld"
+              isOpen={eldOpen}
+              onToggle={() => setEldOpen(!eldOpen)}
+              isCollapsed={shouldShowCollapsed}
+            >
+              <NavItem href="/dashboard/eld" label="ELD Dashboard" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/eld/devices" label="Devices" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/eld/simulator" label="Device Simulator" isSubitem isCollapsed={shouldShowCollapsed} />
+            </DropdownItem>
           )}
 
           {/* IFTA - Show if user can view IFTA */}
