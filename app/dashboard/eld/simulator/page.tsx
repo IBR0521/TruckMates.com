@@ -205,15 +205,15 @@ export default function ELDSimulatorPage() {
             <div>
               <Label>Select Existing Device</Label>
               <Select
-                value={deviceId}
-                onValueChange={setDeviceId}
+                value={deviceId || "none"}
+                onValueChange={(value) => setDeviceId(value === "none" ? "" : value)}
                 disabled={isRunning}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Create New Device" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Create New Device</SelectItem>
+                  <SelectItem value="none">Create New Device</SelectItem>
                   {devices.map((device) => (
                     <SelectItem key={device.id} value={device.id}>
                       {device.device_name} ({device.device_serial_number})
@@ -232,15 +232,15 @@ export default function ELDSimulatorPage() {
             <div>
               <Label>Assign to Truck (Optional)</Label>
               <Select
-                value={truckId}
-                onValueChange={setTruckId}
+                value={truckId || "none"}
+                onValueChange={(value) => setTruckId(value === "none" ? "" : value)}
                 disabled={isRunning}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="No Truck" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No Truck</SelectItem>
+                  <SelectItem value="none">No Truck</SelectItem>
                   {trucks.map((truck) => (
                     <SelectItem key={truck.id} value={truck.id}>
                       {truck.truck_number} - {truck.make} {truck.model}
@@ -253,15 +253,15 @@ export default function ELDSimulatorPage() {
             <div>
               <Label>Assign to Driver (Optional)</Label>
               <Select
-                value={driverId}
-                onValueChange={setDriverId}
+                value={driverId || "none"}
+                onValueChange={(value) => setDriverId(value === "none" ? "" : value)}
                 disabled={isRunning}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="No Driver" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No Driver</SelectItem>
+                  <SelectItem value="none">No Driver</SelectItem>
                   {drivers.map((driver) => (
                     <SelectItem key={driver.id} value={driver.id}>
                       {driver.name}
