@@ -405,7 +405,7 @@ export default function BusinessSettingsPage() {
                       business_city: address.city?.trim() ?? prev.business_city,
                       business_state: address.state?.trim() ?? prev.business_state,
                       business_zip: address.zip_code?.trim() ?? prev.business_zip,
-                      business_country: address.country?.trim() ?? prev.business_country || 'USA',
+                      business_country: address.country?.trim() ?? prev.business_country ?? 'USA',
                     }))
                     toast.success("Address fields auto-filled")
                   }}

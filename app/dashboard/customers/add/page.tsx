@@ -269,7 +269,7 @@ export default function AddCustomerPage() {
                         physical_city: address.city?.trim() ?? prev.physical_city,
                         physical_state: address.state?.trim() ?? prev.physical_state,
                         physical_zip: address.zip_code?.trim() ?? prev.physical_zip,
-                        physical_country: address.country?.trim() ?? prev.physical_country || 'USA',
+                        physical_country: address.country?.trim() ?? prev.physical_country ?? 'USA',
                       }))
                       toast.success("Address fields auto-filled")
                     }}

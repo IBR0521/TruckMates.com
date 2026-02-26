@@ -834,7 +834,7 @@ export default function EnhancedAddressBookPage() {
                         city: address.city?.trim() ?? prev.city,
                         state: address.state?.trim() ?? prev.state,
                         zip_code: address.zip_code?.trim() ?? prev.zip_code,
-                        country: address.country?.trim() ?? prev.country || 'USA',
+                        country: address.country?.trim() ?? prev.country ?? 'USA',
                       }))
                       // Show success message
                       toast.success("Address fields auto-filled")

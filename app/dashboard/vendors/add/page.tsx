@@ -229,7 +229,7 @@ export default function AddVendorPage() {
                         city: address.city?.trim() ?? prev.city,
                         state: address.state?.trim() ?? prev.state,
                         zip: address.zip_code?.trim() ?? prev.zip,
-                        country: address.country?.trim() ?? prev.country || 'USA',
+                        country: address.country?.trim() ?? prev.country ?? 'USA',
                       }))
                       toast.success("Address fields auto-filled")
                     }}
