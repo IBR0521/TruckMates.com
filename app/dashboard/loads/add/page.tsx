@@ -513,10 +513,11 @@ export default function AddLoadPage() {
                                 onPlaceSelect={(address) => {
                                   setNewShipper(prev => ({
                                     ...prev,
-                                    address: address.address_line1 || prev.address,
-                                    city: address.city || prev.city,
-                                    state: address.state || prev.state,
-                                    zip: address.zip_code || prev.zip,
+                                    // Use parsed value if it exists, otherwise keep previous value
+                                    address: address.address_line1?.trim() ?? prev.address,
+                                    city: address.city?.trim() ?? prev.city,
+                                    state: address.state?.trim() ?? prev.state,
+                                    zip: address.zip_code?.trim() ?? prev.zip,
                                   }))
                                 }}
                                 placeholder="Enter shipper address (auto-fills city, state, zip)"
@@ -683,10 +684,11 @@ export default function AddLoadPage() {
                                     onPlaceSelect={(address) => {
                                       setNewConsignee(prev => ({
                                         ...prev,
-                                        address: address.address_line1 || prev.address,
-                                        city: address.city || prev.city,
-                                        state: address.state || prev.state,
-                                        zip: address.zip_code || prev.zip,
+                                        // Use parsed value if it exists, otherwise keep previous value
+                                        address: address.address_line1?.trim() ?? prev.address,
+                                        city: address.city?.trim() ?? prev.city,
+                                        state: address.state?.trim() ?? prev.state,
+                                        zip: address.zip_code?.trim() ?? prev.zip,
                                       }))
                                     }}
                                     placeholder="Enter consignee address (auto-fills city, state, zip)"
@@ -730,12 +732,13 @@ export default function AddLoadPage() {
                           setFormData(prev => ({
                             ...prev,
                             destination: address.address_line1 
-                              ? `${address.address_line1}, ${address.city}, ${address.state} ${address.zip_code}`.trim()
+                              ? `${address.address_line1}, ${address.city || ''}, ${address.state || ''} ${address.zip_code || ''}`.trim()
                               : prev.destination,
-                            consigneeAddress: address.address_line1 || prev.consigneeAddress,
-                            consigneeCity: address.city || prev.consigneeCity,
-                            consigneeState: address.state || prev.consigneeState,
-                            consigneeZip: address.zip_code || prev.consigneeZip,
+                            // Use parsed value if it exists, otherwise keep previous value
+                            consigneeAddress: address.address_line1?.trim() ?? prev.consigneeAddress,
+                            consigneeCity: address.city?.trim() ?? prev.consigneeCity,
+                            consigneeState: address.state?.trim() ?? prev.consigneeState,
+                            consigneeZip: address.zip_code?.trim() ?? prev.consigneeZip,
                           }))
                         }}
                         placeholder="Enter drop off location (auto-fills address details)"
