@@ -829,11 +829,12 @@ export default function EnhancedAddressBookPage() {
                         ...prev,
                         // Use parsed address_line1, or keep existing if not available
                         address_line1: address.address_line1?.trim() || prev.address_line1,
-                        address_line2: address.address_line2?.trim() || prev.address_line2 || '',
-                        city: address.city?.trim() || prev.city || '',
-                        state: address.state?.trim() || prev.state || '',
-                        zip_code: address.zip_code?.trim() || prev.zip_code || '',
-                        country: address.country?.trim() || prev.country || 'USA',
+                        address_line2: address.address_line2?.trim() ?? prev.address_line2,
+                        // Use parsed value if it exists, otherwise keep previous value
+                        city: address.city?.trim() ?? prev.city,
+                        state: address.state?.trim() ?? prev.state,
+                        zip_code: address.zip_code?.trim() ?? prev.zip_code,
+                        country: address.country?.trim() ?? prev.country || 'USA',
                       }))
                       // Show success message
                       toast.success("Address fields auto-filled")

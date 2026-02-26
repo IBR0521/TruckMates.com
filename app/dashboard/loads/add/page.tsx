@@ -560,12 +560,13 @@ export default function AddLoadPage() {
                           setFormData(prev => ({
                             ...prev,
                             origin: address.address_line1 
-                              ? `${address.address_line1}, ${address.city}, ${address.state} ${address.zip_code}`.trim()
+                              ? `${address.address_line1}, ${address.city || ''}, ${address.state || ''} ${address.zip_code || ''}`.trim()
                               : prev.origin,
-                            shipperAddress: address.address_line1 || prev.shipperAddress,
-                            shipperCity: address.city || prev.shipperCity,
-                            shipperState: address.state || prev.shipperState,
-                            shipperZip: address.zip_code || prev.shipperZip,
+                            // Use parsed value if it exists, otherwise keep previous value
+                            shipperAddress: address.address_line1?.trim() ?? prev.shipperAddress,
+                            shipperCity: address.city?.trim() ?? prev.shipperCity,
+                            shipperState: address.state?.trim() ?? prev.shipperState,
+                            shipperZip: address.zip_code?.trim() ?? prev.shipperZip,
                           }))
                         }}
                         placeholder="Enter pickup location (auto-fills address details)"

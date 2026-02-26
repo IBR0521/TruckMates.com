@@ -282,11 +282,12 @@ export default function EditVendorPage({ params }: { params: Promise<{ id: strin
                     setFormData(prev => ({
                       ...prev,
                       address_line1: address.address_line1?.trim() || prev.address_line1,
-                      address_line2: address.address_line2?.trim() || prev.address_line2 || '',
-                      city: address.city?.trim() || prev.city || '',
-                      state: address.state?.trim() || prev.state || '',
-                      zip: address.zip_code?.trim() || prev.zip || '',
-                      country: address.country?.trim() || prev.country || 'USA',
+                      address_line2: address.address_line2?.trim() ?? prev.address_line2,
+                      // Use parsed value if it exists, otherwise keep previous value
+                      city: address.city?.trim() ?? prev.city,
+                      state: address.state?.trim() ?? prev.state,
+                      zip: address.zip_code?.trim() ?? prev.zip,
+                      country: address.country?.trim() ?? prev.country || 'USA',
                     }))
                     toast.success("Address fields auto-filled")
                   }}

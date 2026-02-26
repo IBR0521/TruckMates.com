@@ -264,11 +264,12 @@ export default function AddCustomerPage() {
                       setFormData(prev => ({
                         ...prev,
                         physical_address_line1: address.address_line1?.trim() || prev.physical_address_line1,
-                        physical_address_line2: address.address_line2?.trim() || prev.physical_address_line2 || '',
-                        physical_city: address.city?.trim() || prev.physical_city || '',
-                        physical_state: address.state?.trim() || prev.physical_state || '',
-                        physical_zip: address.zip_code?.trim() || prev.physical_zip || '',
-                        physical_country: address.country?.trim() || prev.physical_country || 'USA',
+                        physical_address_line2: address.address_line2?.trim() ?? prev.physical_address_line2,
+                        // Use parsed value if it exists, otherwise keep previous value
+                        physical_city: address.city?.trim() ?? prev.physical_city,
+                        physical_state: address.state?.trim() ?? prev.physical_state,
+                        physical_zip: address.zip_code?.trim() ?? prev.physical_zip,
+                        physical_country: address.country?.trim() ?? prev.physical_country || 'USA',
                       }))
                       toast.success("Address fields auto-filled")
                     }}

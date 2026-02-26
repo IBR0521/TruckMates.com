@@ -326,8 +326,12 @@ export function GooglePlacesAutocomplete({
           if (types.includes('premise') && !addressComponents.address_line2) {
             addressComponents.address_line2 = component.long_name
           }
-          // City - check multiple types
-          if (types.includes('locality')) {
+          // City - check multiple types (priority order matters)
+          if (types.includes('locality') && !addressComponents.city) {
+            addressComponents.city = component.long_name
+          }
+          // Administrative area level 2 (county/city in some regions)
+          if (types.includes('administrative_area_level_2') && !addressComponents.city) {
             addressComponents.city = component.long_name
           }
           // Postal town (used in some countries instead of locality)
@@ -338,25 +342,64 @@ export function GooglePlacesAutocomplete({
           if (types.includes('neighborhood') && !addressComponents.city) {
             addressComponents.city = component.long_name
           }
-          // State/Province
-          if (types.includes('administrative_area_level_1')) {
+          // State/Province - check multiple levels
+          if (types.includes('administrative_area_level_1') && !addressComponents.state) {
             addressComponents.state = component.short_name // Use short name (e.g., "CA" instead of "California")
           }
-          // ZIP/Postal code
-          if (types.includes('postal_code')) {
+          // ZIP/Postal code - check both postal_code and postal_code_prefix
+          if (types.includes('postal_code') && !addressComponents.zip_code) {
+            addressComponents.zip_code = component.long_name
+          }
+          // Some addresses have postal_code_prefix instead
+          if (types.includes('postal_code_prefix') && !addressComponents.zip_code) {
             addressComponents.zip_code = component.long_name
           }
           // Country
-          if (types.includes('country')) {
+          if (types.includes('country') && !addressComponents.country) {
             addressComponents.country = component.short_name
           }
         })
         
-        // If address_line1 is still empty, try to extract from formatted_address
-        if (!addressComponents.address_line1 && place.formatted_address) {
-          const parts = place.formatted_address.split(',')
-          if (parts.length > 0) {
-            addressComponents.address_line1 = parts[0].trim()
+        // Fallback: Parse from formatted_address if components are missing
+        if (place.formatted_address) {
+          const formattedParts = place.formatted_address.split(',').map(p => p.trim())
+          
+          // If address_line1 is still empty, use first part
+          if (!addressComponents.address_line1 && formattedParts.length > 0) {
+            addressComponents.address_line1 = formattedParts[0]
+          }
+          
+          // Try to extract city from formatted_address if not found in components
+          if (!addressComponents.city && formattedParts.length >= 2) {
+            // Usually city is the second-to-last or third-to-last part
+            // Format is typically: "Street, City, State ZIP, Country"
+            const cityCandidate = formattedParts[formattedParts.length - 3] || formattedParts[formattedParts.length - 2]
+            // Check if it's not a state abbreviation (2-3 letters) or zip code (numbers)
+            if (cityCandidate && !/^[A-Z]{2,3}$/.test(cityCandidate) && !/^\d+/.test(cityCandidate)) {
+              addressComponents.city = cityCandidate
+            }
+          }
+          
+          // Try to extract zip code from formatted_address if not found in components
+          if (!addressComponents.zip_code) {
+            // Look for 5-digit or 9-digit zip code pattern in formatted_address
+            const zipMatch = place.formatted_address.match(/\b(\d{5}(?:-\d{4})?)\b/)
+            if (zipMatch) {
+              addressComponents.zip_code = zipMatch[1]
+            }
+          }
+          
+          // Try to extract state from formatted_address if not found in components
+          if (!addressComponents.state && formattedParts.length >= 2) {
+            // State is usually before the zip code
+            const stateZipPart = formattedParts[formattedParts.length - 2]
+            if (stateZipPart) {
+              // Extract state abbreviation (2 letters) from "State ZIP" format
+              const stateMatch = stateZipPart.match(/\b([A-Z]{2})\b/)
+              if (stateMatch) {
+                addressComponents.state = stateMatch[1]
+              }
+            }
           }
         }
 
@@ -365,6 +408,10 @@ export function GooglePlacesAutocomplete({
 
         console.log('[GooglePlacesAutocomplete] Parsed address components:', addressComponents)
         console.log('[GooglePlacesAutocomplete] Street address:', streetAddress)
+        console.log('[GooglePlacesAutocomplete] City found:', addressComponents.city)
+        console.log('[GooglePlacesAutocomplete] State found:', addressComponents.state)
+        console.log('[GooglePlacesAutocomplete] Zip found:', addressComponents.zip_code)
+        console.log('[GooglePlacesAutocomplete] Formatted address:', place.formatted_address)
 
         // IMPORTANT: Call onPlaceSelect FIRST before onChange
         // This ensures all fields are filled before the input value changes

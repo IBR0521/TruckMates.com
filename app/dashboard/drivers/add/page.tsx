@@ -222,9 +222,10 @@ export default function AddDriverPage() {
                           setFormData(prev => ({
                             ...prev,
                             address: address.address_line1?.trim() || prev.address,
-                            city: address.city?.trim() || prev.city || '',
-                            state: address.state?.trim() || prev.state || '',
-                            zip: address.zip_code?.trim() || prev.zip || '',
+                            // Only update if we have new data, otherwise keep existing
+                            city: address.city?.trim() || prev.city,
+                            state: address.state?.trim() || prev.state,
+                            zip: address.zip_code?.trim() || prev.zip,
                           }))
                           toast.success("Address fields auto-filled")
                         }}

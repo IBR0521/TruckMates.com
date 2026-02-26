@@ -401,10 +401,11 @@ export default function BusinessSettingsPage() {
                     setSettings(prev => ({
                       ...prev,
                       business_address: address.address_line1?.trim() || prev.business_address,
-                      business_city: address.city?.trim() || prev.business_city || '',
-                      business_state: address.state?.trim() || prev.business_state || '',
-                      business_zip: address.zip_code?.trim() || prev.business_zip || '',
-                      business_country: address.country?.trim() || prev.business_country || 'USA',
+                      // Use parsed value if it exists, otherwise keep previous value
+                      business_city: address.city?.trim() ?? prev.business_city,
+                      business_state: address.state?.trim() ?? prev.business_state,
+                      business_zip: address.zip_code?.trim() ?? prev.business_zip,
+                      business_country: address.country?.trim() ?? prev.business_country || 'USA',
                     }))
                     toast.success("Address fields auto-filled")
                   }}
