@@ -25,6 +25,7 @@ import { toast } from "sonner"
 import { createCustomer } from "@/app/actions/customers"
 import { useRouter } from "next/navigation"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
+import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
 export default function AddCustomerPage() {
   const router = useRouter()
@@ -256,15 +257,24 @@ export default function AddCustomerPage() {
             <FormSection title="Physical Address" icon={<MapPin className="w-5 h-5" />}>
               <FormGrid cols={2}>
                 <div className="md:col-span-2">
-                  <Label htmlFor="physical_address_line1">Address Line 1</Label>
-                  <Input
+                  <GooglePlacesAutocomplete
+                    value={formData.physical_address_line1 || ""}
+                    onChange={(value) => setFormData({ ...formData, physical_address_line1: value })}
+                    onPlaceSelect={(address) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        physical_address_line1: address.address_line1?.trim() || prev.physical_address_line1,
+                        physical_address_line2: address.address_line2?.trim() || prev.physical_address_line2 || '',
+                        physical_city: address.city?.trim() || prev.physical_city || '',
+                        physical_state: address.state?.trim() || prev.physical_state || '',
+                        physical_zip: address.zip_code?.trim() || prev.physical_zip || '',
+                        physical_country: address.country?.trim() || prev.physical_country || 'USA',
+                      }))
+                      toast.success("Address fields auto-filled")
+                    }}
+                    placeholder="Enter address (auto-fills city, state, zip)"
+                    label="Address Line 1"
                     id="physical_address_line1"
-                    name="physical_address_line1"
-                    type="text"
-                    placeholder="123 Main Street"
-                    value={formData.physical_address_line1}
-                    onChange={handleChange}
-                    className="mt-2"
                   />
                 </div>
                 <div className="md:col-span-2">

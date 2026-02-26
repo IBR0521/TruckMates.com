@@ -26,6 +26,7 @@ import { getVendor, updateVendor } from "@/app/actions/vendors"
 import { useRouter } from "next/navigation"
 import { use } from "react"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
+import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
 export default function EditVendorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -274,15 +275,24 @@ export default function EditVendorPage({ params }: { params: Promise<{ id: strin
           <FormSection title="Address" icon={<MapPin className="w-5 h-5" />}>
             <FormGrid cols={2}>
               <div className="md:col-span-2">
-                <Label htmlFor="address_line1">Address Line 1</Label>
-                <Input
+                <GooglePlacesAutocomplete
+                  value={formData.address_line1 || ""}
+                  onChange={(value) => setFormData({ ...formData, address_line1: value })}
+                  onPlaceSelect={(address) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      address_line1: address.address_line1?.trim() || prev.address_line1,
+                      address_line2: address.address_line2?.trim() || prev.address_line2 || '',
+                      city: address.city?.trim() || prev.city || '',
+                      state: address.state?.trim() || prev.state || '',
+                      zip: address.zip_code?.trim() || prev.zip || '',
+                      country: address.country?.trim() || prev.country || 'USA',
+                    }))
+                    toast.success("Address fields auto-filled")
+                  }}
+                  placeholder="Enter address (auto-fills city, state, zip)"
+                  label="Address Line 1"
                   id="address_line1"
-                  name="address_line1"
-                  type="text"
-                  placeholder="123 Main Street"
-                  value={formData.address_line1}
-                  onChange={handleChange}
-                  className="mt-1"
                 />
               </div>
               <div className="md:col-span-2">

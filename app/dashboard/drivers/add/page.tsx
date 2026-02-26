@@ -28,6 +28,7 @@ import { createDriver } from "@/app/actions/drivers"
 import { useRouter } from "next/navigation"
 import { getTrucks } from "@/app/actions/trucks"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
+import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
 export default function AddDriverPage() {
   const router = useRouter()
@@ -214,13 +215,22 @@ export default function AddDriverPage() {
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <Label>Address</Label>
-                      <Input
-                        name="address"
-                        value={formData.address}
-                        onChange={handleChange}
-                        className="mt-1"
-                        placeholder="Street address"
+                      <GooglePlacesAutocomplete
+                        value={formData.address || ""}
+                        onChange={(value) => setFormData({ ...formData, address: value })}
+                        onPlaceSelect={(address) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            address: address.address_line1?.trim() || prev.address,
+                            city: address.city?.trim() || prev.city || '',
+                            state: address.state?.trim() || prev.state || '',
+                            zip: address.zip_code?.trim() || prev.zip || '',
+                          }))
+                          toast.success("Address fields auto-filled")
+                        }}
+                        placeholder="Enter address (auto-fills city, state, zip)"
+                        label="Address"
+                        id="address"
                       />
                     </div>
                     <div>

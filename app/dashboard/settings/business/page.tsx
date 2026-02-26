@@ -14,7 +14,7 @@ import { Save, Building2, FileText, Gauge, Info, Globe, DollarSign, Calendar, Im
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { generateEIN } from "@/app/actions/settings-ein"
-import { geocodeAddress } from "@/app/actions/integrations-google-maps"
+import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
 export default function BusinessSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -73,7 +73,6 @@ export default function BusinessSettingsPage() {
   })
   const [previewNumber, setPreviewNumber] = useState("")
   const [isGeneratingEIN, setIsGeneratingEIN] = useState(false)
-  const [addressSearchValue, setAddressSearchValue] = useState("")
 
   useEffect(() => {
     loadData()
@@ -181,53 +180,6 @@ export default function BusinessSettingsPage() {
     }
   }
 
-  async function handleAddressSearch() {
-    if (!addressSearchValue.trim()) {
-      toast.error("Please enter an address")
-      return
-    }
-
-    try {
-      const result = await geocodeAddress(addressSearchValue)
-      if (result.error) {
-        toast.error(result.error)
-      } else if (result.data) {
-        // Parse address components
-        const components = result.data.address_components || []
-        let streetNumber = ""
-        let route = ""
-        let city = ""
-        let state = ""
-        let zip = ""
-
-        components.forEach((component: any) => {
-          const types = component.types || []
-          if (types.includes("street_number")) {
-            streetNumber = component.long_name
-          } else if (types.includes("route")) {
-            route = component.long_name
-          } else if (types.includes("locality")) {
-            city = component.long_name
-          } else if (types.includes("administrative_area_level_1")) {
-            state = component.short_name
-          } else if (types.includes("postal_code")) {
-            zip = component.long_name
-          }
-        })
-
-        setSettings({
-          ...settings,
-          business_address: `${streetNumber} ${route}`.trim() || result.data.formatted_address.split(",")[0],
-          business_city: city || "",
-          business_state: state || "",
-          business_zip: zip || "",
-        })
-        toast.success("Address found and fields populated")
-      }
-    } catch (error: any) {
-      toast.error("Failed to search address")
-    }
-  }
 
   if (isLoading) {
     return (
@@ -442,43 +394,23 @@ export default function BusinessSettingsPage() {
               <Separator />
 
               <div>
-                <Label htmlFor="address_search">Search Address (Google Maps)</Label>
-                <div className="flex gap-2 mt-2">
-                  <Input
-                    id="address_search"
-                    value={addressSearchValue}
-                    onChange={(e) => setAddressSearchValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault()
-                        handleAddressSearch()
-                      }
-                    }}
-                    placeholder="Enter full address to auto-fill fields..."
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleAddressSearch}
-                  >
-                    <MapPin className="w-4 h-4 mr-2" />
-                    Search
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Enter your address and we'll automatically fill the fields below
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="business_address">Business Address</Label>
-                <Input
+                <GooglePlacesAutocomplete
+                  value={settings.business_address || ""}
+                  onChange={(value) => setSettings({ ...settings, business_address: value })}
+                  onPlaceSelect={(address) => {
+                    setSettings(prev => ({
+                      ...prev,
+                      business_address: address.address_line1?.trim() || prev.business_address,
+                      business_city: address.city?.trim() || prev.business_city || '',
+                      business_state: address.state?.trim() || prev.business_state || '',
+                      business_zip: address.zip_code?.trim() || prev.business_zip || '',
+                      business_country: address.country?.trim() || prev.business_country || 'USA',
+                    }))
+                    toast.success("Address fields auto-filled")
+                  }}
+                  placeholder="Enter business address (auto-fills city, state, zip)"
+                  label="Business Address"
                   id="business_address"
-                  value={settings.business_address}
-                  onChange={(e) => setSettings({ ...settings, business_address: e.target.value })}
-                  placeholder="123 Main Street"
-                  className="mt-2"
                 />
               </div>
 

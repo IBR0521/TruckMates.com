@@ -20,6 +20,7 @@ import { createBOL, getBOLTemplates } from "@/app/actions/bol"
 import { getLoads } from "@/app/actions/loads"
 import { useRouter } from "next/navigation"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
+import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
 export default function CreateBOLPage() {
   const router = useRouter()
@@ -258,13 +259,22 @@ export default function CreateBOLPage() {
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <Label htmlFor="shipper_address">Address</Label>
-                  <Input
+                  <GooglePlacesAutocomplete
+                    value={formData.shipper_address || ""}
+                    onChange={(value) => setFormData({ ...formData, shipper_address: value })}
+                    onPlaceSelect={(address) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        shipper_address: address.address_line1?.trim() || prev.shipper_address,
+                        shipper_city: address.city?.trim() || prev.shipper_city || '',
+                        shipper_state: address.state?.trim() || prev.shipper_state || '',
+                        shipper_zip: address.zip_code?.trim() || prev.shipper_zip || '',
+                      }))
+                      toast.success("Shipper address fields auto-filled")
+                    }}
+                    placeholder="Enter shipper address (auto-fills city, state, zip)"
+                    label="Address"
                     id="shipper_address"
-                    name="shipper_address"
-                    value={formData.shipper_address}
-                    onChange={handleChange}
-                    className="mt-2"
                   />
                 </div>
                 <div>
@@ -344,13 +354,22 @@ export default function CreateBOLPage() {
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <Label htmlFor="consignee_address">Address</Label>
-                  <Input
+                  <GooglePlacesAutocomplete
+                    value={formData.consignee_address || ""}
+                    onChange={(value) => setFormData({ ...formData, consignee_address: value })}
+                    onPlaceSelect={(address) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        consignee_address: address.address_line1?.trim() || prev.consignee_address,
+                        consignee_city: address.city?.trim() || prev.consignee_city || '',
+                        consignee_state: address.state?.trim() || prev.consignee_state || '',
+                        consignee_zip: address.zip_code?.trim() || prev.consignee_zip || '',
+                      }))
+                      toast.success("Consignee address fields auto-filled")
+                    }}
+                    placeholder="Enter consignee address (auto-fills city, state, zip)"
+                    label="Address"
                     id="consignee_address"
-                    name="consignee_address"
-                    value={formData.consignee_address}
-                    onChange={handleChange}
-                    className="mt-2"
                   />
                 </div>
                 <div>
