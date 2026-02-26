@@ -6,6 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { 
   Play, 
   Square, 
@@ -197,19 +204,23 @@ export default function ELDSimulatorPage() {
 
             <div>
               <Label>Select Existing Device</Label>
-              <select
-                className="w-full p-2 border rounded-md bg-background"
+              <Select
                 value={deviceId}
-                onChange={(e) => setDeviceId(e.target.value)}
+                onValueChange={setDeviceId}
                 disabled={isRunning}
               >
-                <option value="">Create New Device</option>
-                {devices.map((device) => (
-                  <option key={device.id} value={device.id}>
-                    {device.device_name} ({device.device_serial_number})
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger>
+                  <SelectValue placeholder="Create New Device" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Create New Device</SelectItem>
+                  {devices.map((device) => (
+                    <SelectItem key={device.id} value={device.id}>
+                      {device.device_name} ({device.device_serial_number})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {!deviceId && (
@@ -220,36 +231,44 @@ export default function ELDSimulatorPage() {
 
             <div>
               <Label>Assign to Truck (Optional)</Label>
-              <select
-                className="w-full p-2 border rounded-md bg-background"
+              <Select
                 value={truckId}
-                onChange={(e) => setTruckId(e.target.value)}
+                onValueChange={setTruckId}
                 disabled={isRunning}
               >
-                <option value="">No Truck</option>
-                {trucks.map((truck) => (
-                  <option key={truck.id} value={truck.id}>
-                    {truck.truck_number} - {truck.make} {truck.model}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger>
+                  <SelectValue placeholder="No Truck" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No Truck</SelectItem>
+                  {trucks.map((truck) => (
+                    <SelectItem key={truck.id} value={truck.id}>
+                      {truck.truck_number} - {truck.make} {truck.model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
               <Label>Assign to Driver (Optional)</Label>
-              <select
-                className="w-full p-2 border rounded-md bg-background"
+              <Select
                 value={driverId}
-                onChange={(e) => setDriverId(e.target.value)}
+                onValueChange={setDriverId}
                 disabled={isRunning}
               >
-                <option value="">No Driver</option>
-                {drivers.map((driver) => (
-                  <option key={driver.id} value={driver.id}>
-                    {driver.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger>
+                  <SelectValue placeholder="No Driver" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No Driver</SelectItem>
+                  {drivers.map((driver) => (
+                    <SelectItem key={driver.id} value={driver.id}>
+                      {driver.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </Card>
