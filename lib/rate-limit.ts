@@ -3,6 +3,15 @@
  * 
  * Provides rate limiting for API routes and server actions
  * Uses in-memory store for development, Upstash Redis for production
+ * 
+ * ⚠️ IMPORTANT: In-memory rate limiting resets on every serverless cold start
+ * 
+ * In Vercel serverless environments, each function invocation can start a fresh instance,
+ * meaning the rate limit counter resets constantly and provides essentially no protection
+ * in production. This is only a real problem if your API routes are being abused.
+ * 
+ * For production-grade rate limiting, swap to Upstash Redis (free tier available).
+ * See the comments below for Upstash integration instructions.
  */
 
 interface RateLimitOptions {
@@ -19,6 +28,7 @@ interface RateLimitResult {
 }
 
 // In-memory store for development
+// ⚠️ WARNING: This resets on every serverless cold start in production
 const memoryStore = new Map<string, { count: number; reset: number }>()
 
 // Clean up expired entries every minute

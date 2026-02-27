@@ -112,7 +112,11 @@ export async function getInvoice(id: string) {
   return { data: invoice, error: null }
 }
 
-export async function getExpenses() {
+export async function getExpenses(filters?: {
+  category?: string
+  limit?: number
+  offset?: number
+}) {
   const supabase = await createClient()
 
   const {
@@ -123,31 +127,39 @@ export async function getExpenses() {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
+  // Use optimized helper with caching
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+  const companyError = result.error
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
+  if (companyError || !company_id) {
+    return { error: companyError || "No company found", data: null }
   }
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  const { data: expenses, error } = await supabase
+  // Build query with selective columns and pagination
+  let query = supabase
     .from("expenses")
-    .select("*")
-    .eq("company_id", userData.company_id)
+    .select("id, category, description, amount, date, driver_id, truck_id, vendor, payment_method, created_at", { count: "exact" })
+    .eq("company_id", company_id)
     .order("created_at", { ascending: false })
 
-  if (error) {
-    return { error: error.message, data: null }
+  // Apply filters
+  if (filters?.category) {
+    query = query.eq("category", filters.category)
   }
 
-  return { data: expenses, error: null }
+  // Apply pagination (default limit 25 for faster initial loads, max 100)
+  const limit = Math.min(filters?.limit || 25, 100)
+  const offset = filters?.offset || 0
+  query = query.range(offset, offset + limit - 1)
+
+  const { data: expenses, error, count } = await query
+
+  if (error) {
+    return { error: error.message, data: null, count: 0 }
+  }
+
+  return { data: expenses || [], error: null, count: count || 0 }
 }
 
 export async function getSettlements() {

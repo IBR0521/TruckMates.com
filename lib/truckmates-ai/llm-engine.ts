@@ -107,8 +107,17 @@ export class TruckMatesAIEngine {
                                 this.baseUrl.includes('localhost')
       
       if (isConnectionError) {
+        // Log technical details server-side only
+        console.error("[LLM Engine] Connection error - Ollama unavailable:", {
+          baseUrl: this.baseUrl,
+          error: error.message,
+          code: error.code,
+          suggestion: "Set up Ollama on a VPS and configure OLLAMA_BASE_URL in Vercel. See PRODUCTION_OLLAMA_SETUP.md for details."
+        })
+        
+        // Return user-friendly message
         return {
-          response: "I'm currently unavailable. The AI service requires Ollama to be hosted on a separate server for production. Vercel (serverless) cannot run Ollama directly. Please set up Ollama on a VPS (DigitalOcean, AWS EC2, etc.) and configure the OLLAMA_BASE_URL environment variable in Vercel. See PRODUCTION_OLLAMA_SETUP.md for detailed instructions.",
+          response: "I'm sorry, the AI assistant is temporarily unavailable. Please try again in a few minutes.",
           confidence: 0
         }
       }
