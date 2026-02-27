@@ -179,7 +179,7 @@ export class TruckMatesRAG {
     companyId: string,
     limit: number
   ): Promise<any[]> {
-    const supabase = await this.getSupabase()
+    const supabase = await createClient()
 
     try {
       // Generate query embedding (using local embedding model)
