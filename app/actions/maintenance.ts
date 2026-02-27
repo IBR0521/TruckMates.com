@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { sanitizeString, validateRequiredString, validateDate, validatePositiveNumber } from "@/lib/validation"
 
 export async function getMaintenance() {
   const supabase = await createClient()
@@ -49,7 +50,7 @@ export async function createMaintenance(formData: {
   priority?: string
   estimated_cost?: number
   notes?: string
-  vendor_id?: string
+  vendor?: string // Changed from vendor_id to vendor (TEXT field, not UUID)
 }) {
   const supabase = await createClient()
 
@@ -75,23 +76,50 @@ export async function createMaintenance(formData: {
     return { error: "No company found", data: null }
   }
 
-  // Validate required fields
-  if (!formData.truck_id || !formData.service_type || !formData.scheduled_date) {
-    return { error: "Truck, service type, and scheduled date are required", data: null }
+  // Validate and sanitize input
+  if (!validateRequiredString(formData.truck_id, 1, 100)) {
+    return { error: "Truck ID is required", data: null }
+  }
+
+  if (!validateRequiredString(formData.service_type, 1, 100)) {
+    return { error: "Service type is required and must be between 1 and 100 characters", data: null }
+  }
+
+  if (!validateDate(formData.scheduled_date)) {
+    return { error: "Invalid scheduled date format (use YYYY-MM-DD)", data: null }
+  }
+
+  // Sanitize string inputs
+  const sanitizedServiceType = sanitizeString(formData.service_type, 1, 100)
+  const sanitizedPriority = formData.priority ? sanitizeString(formData.priority, 1, 20) : "normal"
+  const sanitizedNotes = formData.notes ? sanitizeString(formData.notes, 0, 2000) : null
+  const sanitizedVendor = formData.vendor_id ? sanitizeString(formData.vendor_id, 1, 200) : null
+
+  // Validate numeric fields
+  if (formData.current_mileage !== undefined && formData.current_mileage !== null) {
+    if (!validatePositiveNumber(formData.current_mileage)) {
+      return { error: "Current mileage must be a positive number", data: null }
+    }
+  }
+
+  if (formData.estimated_cost !== undefined && formData.estimated_cost !== null) {
+    if (!validatePositiveNumber(formData.estimated_cost)) {
+      return { error: "Estimated cost must be a positive number", data: null }
+    }
   }
 
   const { data, error } = await supabase
     .from("maintenance")
     .insert({
       company_id: userData.company_id,
-      truck_id: formData.truck_id,
-      service_type: formData.service_type,
+      truck_id: sanitizeString(formData.truck_id, 1, 100),
+      service_type: sanitizedServiceType,
       scheduled_date: formData.scheduled_date,
       current_mileage: formData.current_mileage ? Number(formData.current_mileage) : null,
-      priority: formData.priority || "normal",
+      priority: sanitizedPriority,
       estimated_cost: formData.estimated_cost ? Number(formData.estimated_cost) : null,
-      notes: formData.notes || null,
-      vendor_id: formData.vendor_id || null,
+      notes: sanitizedNotes,
+      vendor: sanitizedVendor, // Schema has 'vendor' TEXT, not 'vendor_id' UUID
       status: "scheduled",
     })
     .select()

@@ -19,21 +19,10 @@ export interface RAGContext {
  * Retrieves relevant context from knowledge base and platform data
  */
 export class TruckMatesRAG {
-  private supabase: any
   private knowledgeBase: LogisticsKnowledgeBase
 
   constructor() {
     this.knowledgeBase = new LogisticsKnowledgeBase()
-  }
-
-  /**
-   * Initialize Supabase client
-   */
-  private async getSupabase() {
-    if (!this.supabase) {
-      this.supabase = await createClient()
-    }
-    return this.supabase
   }
 
   /**
@@ -45,7 +34,8 @@ export class TruckMatesRAG {
     companyId: string,
     maxResults: number = 5
   ): Promise<RAGContext> {
-    const supabase = await this.getSupabase()
+    // Create fresh Supabase client per request to avoid cross-user data leaks
+    const supabase = await createClient()
 
     // Step 1: Search logistics knowledge base
     const knowledgeResults = this.knowledgeBase.search(query)
@@ -84,7 +74,7 @@ export class TruckMatesRAG {
     companyId: string,
     limit: number
   ): Promise<any[]> {
-    const supabase = await this.getSupabase()
+    const supabase = await createClient()
     
     const { data, error } = await supabase
       .from("loads")
@@ -110,7 +100,7 @@ export class TruckMatesRAG {
     companyId: string,
     limit: number
   ): Promise<any[]> {
-    const supabase = await this.getSupabase()
+    const supabase = await createClient()
     
     const { data, error } = await supabase
       .from("drivers")
@@ -136,7 +126,7 @@ export class TruckMatesRAG {
     companyId: string,
     limit: number
   ): Promise<any[]> {
-    const supabase = await this.getSupabase()
+    const supabase = await createClient()
     
     const { data, error } = await supabase
       .from("trucks")
@@ -162,7 +152,7 @@ export class TruckMatesRAG {
     companyId: string,
     limit: number
   ): Promise<any[]> {
-    const supabase = await this.getSupabase()
+    const supabase = await createClient()
     
     const { data, error } = await supabase
       .from("routes")

@@ -29,13 +29,12 @@ class SimpleCache {
     }
 
     // Cleanup expired entries periodically (less frequent for speed)
+    // Note: In serverless environments, cache is per-request, so cleanup happens naturally
+    // Removed setImmediate to avoid Edge Runtime compatibility issues
     const now = Date.now()
     if (now - this.lastCleanup > this.cleanupInterval) {
-      // Async cleanup to not block
-      setImmediate(() => {
-        this.cleanup()
-        this.lastCleanup = now
-      })
+      this.cleanup()
+      this.lastCleanup = now
     }
 
     return entry.data as T
