@@ -1,7 +1,7 @@
-\"use server\"
+"use server"
 
-import { createClient } from \"@/lib/supabase/server\"
-import type { EmployeeRole } from \"@/lib/roles\"
+import { createClient } from "@/lib/supabase/server"
+import type { EmployeeRole } from "@/lib/roles"
 
 /**
  * Check if company name is available
