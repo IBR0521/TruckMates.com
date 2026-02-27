@@ -15,21 +15,31 @@ import { ROLES, type EmployeeRole } from "@/lib/roles"
 
 function EmployeeRegisterForm() {
   const searchParams = useSearchParams()
-  const roleParam = searchParams.get('role') as EmployeeRole
-  const defaultRole = roleParam && ROLES[roleParam] ? roleParam : 'driver'
+  const roleParam = searchParams.get("role") as EmployeeRole | null
+
+  // Roles that are allowed for self-registration (no managers or super admins)
+  const selfRegisterRoles: EmployeeRole[] = [
+    "dispatcher",
+    "safety_compliance",
+    "financial_controller",
+    "driver",
+  ]
+
+  const defaultRole: EmployeeRole =
+    roleParam && selfRegisterRoles.includes(roleParam) ? roleParam : "driver"
 
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
     password: "",
-    role: defaultRole as EmployeeRole,
+    role: defaultRole,
     companyId: "",
   })
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
-    if (roleParam && ROLES[roleParam]) {
+    if (roleParam && selfRegisterRoles.includes(roleParam)) {
       setFormData(prev => ({ ...prev, role: roleParam }))
     }
   }, [roleParam])
@@ -125,11 +135,13 @@ function EmployeeRegisterForm() {
                   <SelectValue placeholder="Select your role" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.values(ROLES).map((role) => (
-                    <SelectItem key={role.id} value={role.id}>
-                      {role.name}
-                    </SelectItem>
-                  ))}
+                  {Object.values(ROLES)
+                    .filter(role => selfRegisterRoles.includes(role.id))
+                    .map((role) => (
+                      <SelectItem key={role.id} value={role.id}>
+                        {role.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               {formData.role && ROLES[formData.role] && (

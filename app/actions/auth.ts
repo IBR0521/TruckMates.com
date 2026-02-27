@@ -1,6 +1,7 @@
-"use server"
+\"use server\"
 
-import { createClient } from "@/lib/supabase/server"
+import { createClient } from \"@/lib/supabase/server\"
+import type { EmployeeRole } from \"@/lib/roles\"
 
 /**
  * Check if company name is available
@@ -148,6 +149,35 @@ export async function registerEmployee(data: {
   try {
     const supabase = await createClient()
 
+    const role = data.role as EmployeeRole
+
+    // Disallow self-registration for high-privilege roles
+    const disallowedSelfRegisterRoles: EmployeeRole[] = ["super_admin", "operations_manager"]
+    if (disallowedSelfRegisterRoles.includes(role)) {
+      return {
+        data: null,
+        error: "You cannot self-register as a manager or super admin. Please contact your company administrator.",
+      }
+    }
+
+    // If a companyId was provided, verify that the company exists
+    if (data.companyId) {
+      const { data: company, error: companyError } = await supabase
+        .from("companies")
+        .select("id")
+        .eq("id", data.companyId)
+        .maybeSingle()
+
+      if (companyError) {
+        const errorMsg = companyError.message || String(companyError) || "Failed to verify company"
+        return { data: null, error: errorMsg.substring(0, 200) }
+      }
+
+      if (!company) {
+        return { data: null, error: "Invalid company ID. Please use a valid invitation or contact your administrator." }
+      }
+    }
+
     // Create auth user with employee_role in metadata
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
@@ -155,8 +185,8 @@ export async function registerEmployee(data: {
       options: {
         data: {
           full_name: data.fullName.trim(),
-          role: data.role,
-          employee_role: data.role // Set in auth metadata for role-based access
+          role,
+          employee_role: role, // Set in auth metadata for role-based access
         }
       }
     })
@@ -169,7 +199,7 @@ export async function registerEmployee(data: {
     // Update user record
     const updateData: any = {
       full_name: data.fullName.trim(),
-      role: data.role
+      role,
     }
 
     if (data.companyId) {

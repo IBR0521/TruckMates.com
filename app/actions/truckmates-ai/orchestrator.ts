@@ -81,18 +81,11 @@ export async function processAIRequest(
       needsInternet ? fetchInternetData(request.message, internetAccess) : Promise.resolve(null)
     ])
 
-    // Step 3: Get relevant logistics knowledge
-    const logisticsKnowledge = ragSystem.retrieveContext(
-      request.message,
-      user.id,
-      userData.company_id
-    ).then(ctx => ctx.knowledgeBase)
-
-    // Step 4: Combine internal + internet context
+    // Step 3 & 4: Combine internal + internet context and expose knowledge base
     const combinedContext = {
       ...internalContext,
       internet: internetData,
-      logisticsKnowledge: await logisticsKnowledge
+      logisticsKnowledge: internalContext.knowledgeBase,
     }
 
     // Step 5: Get available functions

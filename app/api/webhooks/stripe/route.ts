@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { headers } from "next/headers"
 import Stripe from "stripe"
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 
 function getStripe() {
   const secretKey = process.env.STRIPE_SECRET_KEY
@@ -41,7 +41,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 })
   }
 
-  const supabase = await createClient()
+  // Use service-role Supabase client for webhook writes (no user session / bypass RLS)
+  const supabase = createAdminClient()
 
   try {
     switch (event.type) {
