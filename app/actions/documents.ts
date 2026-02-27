@@ -56,6 +56,17 @@ export async function deleteDocument(id: string) {
     return { error: "Not authenticated" }
   }
 
+  // SECURITY: Get user's company_id and verify document belongs to it
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found" }
+  }
+
   // First, get the document to retrieve the file path
   const { data: document, error: docError } = await supabase
     .from("documents")
@@ -121,11 +132,23 @@ export async function deleteDocuments(ids: string[]) {
     return { error: "No documents selected" }
   }
 
-  // Get all documents to retrieve file paths
+  // SECURITY: Get user's company_id first
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found" }
+  }
+
+  // Get all documents to retrieve file paths (with company filter)
   const { data: documents, error: docError } = await supabase
     .from("documents")
     .select("id, file_url")
     .in("id", ids)
+    .eq("company_id", userData.company_id)
 
   if (docError || !documents || documents.length === 0) {
     return { error: docError?.message || "Documents not found" }
@@ -167,8 +190,13 @@ export async function deleteDocuments(ids: string[]) {
     }
   }
 
-  // Delete database records
-  const { error } = await supabase.from("documents").delete().in("id", ids)
+  // SECURITY: Delete database records with company_id filter
+  const { error } = await supabase
+    .from("documents")
+    .delete()
+    .in("id", ids)
+    .eq("company_id", userData.company_id)
+  
   if (error) return { error: error.message }
   
   revalidatePath("/dashboard/documents")

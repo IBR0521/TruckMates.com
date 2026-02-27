@@ -29,10 +29,11 @@ export default function TrackingPage({ params }: { params: Promise<{ id: string 
     try {
       const supabase = createClient()
 
+      // SECURITY: Only return limited public fields, not full load data
       // Search for shipment by tracking number or shipment number
       const { data: loads, error: loadsError } = await supabase
         .from("loads")
-        .select("*")
+        .select("id, shipment_number, status, origin, destination, estimated_delivery, created_at")
         .or(`shipment_number.ilike.%${trackId}%,id.eq.${trackId}`)
         .limit(1)
 

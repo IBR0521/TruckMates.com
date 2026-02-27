@@ -337,24 +337,111 @@ export async function duplicateInvoice(id: string) {
 
 export async function deleteInvoice(id: string) {
   const supabase = await createClient()
-  const { error } = await supabase.from("invoices").delete().eq("id", id)
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated" }
+  }
+
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data" }
+  }
+
+  if (!userData?.company_id) {
+    return { error: "No company found" }
+  }
+
+  const { error } = await supabase
+    .from("invoices")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", userData.company_id)
+
   if (error) return { error: error.message }
+
   revalidatePath("/dashboard/accounting/invoices")
   return { error: null }
 }
 
 export async function deleteExpense(id: string) {
   const supabase = await createClient()
-  const { error } = await supabase.from("expenses").delete().eq("id", id)
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated" }
+  }
+
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data" }
+  }
+
+  if (!userData?.company_id) {
+    return { error: "No company found" }
+  }
+
+  const { error } = await supabase
+    .from("expenses")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", userData.company_id)
+
   if (error) return { error: error.message }
+
   revalidatePath("/dashboard/accounting/expenses")
   return { error: null }
 }
 
 export async function deleteSettlement(id: string) {
   const supabase = await createClient()
-  const { error } = await supabase.from("settlements").delete().eq("id", id)
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated" }
+  }
+
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data" }
+  }
+
+  if (!userData?.company_id) {
+    return { error: "No company found" }
+  }
+
+  const { error } = await supabase
+    .from("settlements")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", userData.company_id)
+
   if (error) return { error: error.message }
+
   revalidatePath("/dashboard/accounting/settlements")
   return { error: null }
 }

@@ -40,7 +40,9 @@ export async function POST(request: NextRequest) {
     }
     
     const data = JSON.parse(body)
-    const supabase = await createClient()
+    // SECURITY: Use admin client for webhooks (no user session)
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const supabase = createAdminClient()
     
     // Samsara webhooks include vehicle_id
     const vehicleId = data.vehicle?.id || data.vehicle_id

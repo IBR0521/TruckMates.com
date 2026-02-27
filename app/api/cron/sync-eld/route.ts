@@ -4,11 +4,19 @@ import { syncAllELDDevices } from "@/app/actions/eld-sync"
 // This endpoint can be called by Vercel Cron or external cron service
 // To set up in Vercel: Add to vercel.json or use Vercel Cron Jobs
 export async function GET(request: Request) {
-  // Verify request is from authorized source (optional but recommended)
+  // SECURITY: Fail-closed - require CRON_SECRET if set
   const authHeader = request.headers.get("authorization")
   const cronSecret = process.env.CRON_SECRET
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret) {
+    console.error("[Cron] CRON_SECRET not configured - endpoint disabled")
+    return NextResponse.json(
+      { error: "Cron endpoint is not configured. Set CRON_SECRET environment variable." },
+      { status: 503 }
+    )
+  }
+
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

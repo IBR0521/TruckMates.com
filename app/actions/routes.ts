@@ -411,7 +411,33 @@ export async function updateRoute(
 export async function deleteRoute(id: string) {
   const supabase = await createClient()
 
-  const { error } = await supabase.from("routes").delete().eq("id", id)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated" }
+  }
+
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data" }
+  }
+
+  if (!userData?.company_id) {
+    return { error: "No company found" }
+  }
+
+  const { error } = await supabase
+    .from("routes")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", userData.company_id)
 
   if (error) {
     return { error: error.message }

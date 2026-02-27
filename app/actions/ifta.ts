@@ -45,7 +45,33 @@ export async function getIFTAReports() {
 export async function deleteIFTAReport(id: string) {
   const supabase = await createClient()
 
-  const { error } = await supabase.from("ifta_reports").delete().eq("id", id)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated" }
+  }
+
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data" }
+  }
+
+  if (!userData?.company_id) {
+    return { error: "No company found" }
+  }
+
+  const { error } = await supabase
+    .from("ifta_reports")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", userData.company_id)
 
   if (error) {
     return { error: error.message }
@@ -179,7 +205,9 @@ export async function createIFTAReport(formData: {
 
       const taxRate = STATE_FUEL_TAX_RATES[stateCode] || 0.25
       const fuelGallons = fuelByState[stateCode] || Math.round(miles / 6.5) // Estimate if no fuel data
-      const taxDue = miles * (taxRate / 100)
+      // FIXED: Tax rate is in $/gallon, not percentage. Calculate: gallons * rate
+      const avgMpg = 6.5 // Average MPG for semi-trucks
+      const taxDue = (miles / avgMpg) * taxRate
 
       return {
         state: stateData.state_name || stateCode,

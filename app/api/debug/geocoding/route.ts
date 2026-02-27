@@ -1,11 +1,24 @@
 import { NextResponse } from "next/server"
 import { geocodeAddress } from "@/app/actions/integrations-google-maps"
+import { createClient } from "@/lib/supabase/server"
 
 /**
  * Debug endpoint to test geocoding
+ * SECURITY: Requires authentication to prevent abuse
  * Usage: GET /api/debug/geocoding?address=123 Main St, New York, NY 10001
  */
 export async function GET(request: Request) {
+  // SECURITY: Require authentication
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 }
+    )
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const address = searchParams.get("address") || "1600 Amphitheatre Parkway, Mountain View, CA"

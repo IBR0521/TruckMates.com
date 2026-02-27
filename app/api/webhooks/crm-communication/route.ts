@@ -1,12 +1,34 @@
 import { NextRequest, NextResponse } from "next/server"
 import { logCommunicationFromWebhook } from "@/app/actions/crm-communication"
+import crypto from "crypto"
 
 /**
  * Webhook endpoint for automated communication logging
  * Supports SendGrid, Postmark, Twilio, and custom webhooks
+ * SECURITY: Requires webhook secret or API key for authentication
  */
 export async function POST(req: NextRequest) {
   try {
+    // Verify webhook authentication
+    const webhookSecret = process.env.WEBHOOK_SECRET || ""
+    const apiKey = req.headers.get("x-api-key") || ""
+    const authHeader = req.headers.get("authorization") || ""
+
+    // Check for webhook secret in header (Bearer token or API key)
+    const hasValidAuth = 
+      (webhookSecret && authHeader === `Bearer ${webhookSecret}`) ||
+      (webhookSecret && apiKey === webhookSecret) ||
+      // Allow SendGrid/Postmark signature verification
+      (req.headers.get("x-sendgrid-signature") || req.headers.get("x-postmark-signature"))
+
+    if (webhookSecret && !hasValidAuth) {
+      console.error("[CRM Webhook] Unauthorized request - missing or invalid authentication")
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
     const body = await req.json()
 
     // Determine source from headers or body

@@ -1,13 +1,42 @@
 import { NextRequest, NextResponse } from "next/server"
 import { processAIRequest } from "@/app/actions/truckmates-ai/orchestrator"
+import { createClient } from "@/lib/supabase/server"
+import { rateLimit } from "@/lib/rate-limit"
 
 /**
  * TruckMates AI Chat API
  * POST /api/truckmates-ai/chat
  * Supports streaming for faster perceived response time
+ * SECURITY: Requires authentication and rate limiting
  */
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY: Require authentication
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      )
+    }
+
+    // SECURITY: Rate limit (10 requests per minute per user)
+    const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown"
+    const rateLimitResult = await rateLimit({
+      limit: 10,
+      window: 60,
+      identifier: `ai-chat-${user.id}`,
+    })
+
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded. Please try again later." },
+        { status: 429 }
+      )
+    }
+
     const body = await request.json()
     const { message, conversationHistory, threadId, stream } = body
 
@@ -20,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     // If streaming requested, use streaming response
     if (stream) {
-      return streamAIResponse(message, conversationHistory, threadId)
+      return streamAIResponse(message, conversationHistory, threadId, user.id)
     }
 
     // Process AI request (non-streaming)
@@ -60,17 +89,18 @@ export async function POST(request: NextRequest) {
 async function streamAIResponse(
   message: string,
   conversationHistory: any[],
-  threadId: string
+  threadId: string,
+  userId: string
 ) {
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Process request
+        // Process request (orchestrator will handle auth internally)
         const result = await processAIRequest({
           message,
           conversationHistory: conversationHistory || [],
-          context: {}
+          context: { userId } // Pass userId for auth context
         })
 
         if (result.error) {

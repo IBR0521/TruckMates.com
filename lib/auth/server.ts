@@ -95,6 +95,7 @@ export async function getAuthContext() {
         email: String(user.email || ""),
         role: String(userData.role),
       },
+      userId: String(userData.id), // Add userId for mobile API compatibility
       companyId: userData.company_id ? String(userData.company_id) : null,
       error: null
     }

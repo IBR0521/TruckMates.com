@@ -62,7 +62,7 @@ export async function updateUserRole(userId: string, newRole: string) {
     return { error: "Only managers can update user roles", success: false }
   }
 
-  // Update user role
+  // Update user role in database
   const { error } = await supabase
     .from("users")
     .update({ role: newRole })
@@ -71,6 +71,28 @@ export async function updateUserRole(userId: string, newRole: string) {
 
   if (error) {
     return { error: error.message, success: false }
+  }
+
+  // SECURITY: Also update auth metadata to keep role in sync (requires admin client)
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const adminSupabase = createAdminClient()
+    
+    const { error: authError } = await adminSupabase.auth.admin.updateUserById(userId, {
+      user_metadata: {
+        employee_role: newRole,
+        role: newRole, // Keep both for compatibility
+      }
+    })
+
+    if (authError) {
+      console.error("[updateUserRole] Failed to update auth metadata:", authError)
+      // Don't fail the request, but log the error
+      // The role is still updated in the database
+    }
+  } catch (error) {
+    console.error("[updateUserRole] Failed to import admin client:", error)
+    // Continue - role is still updated in database
   }
 
   revalidatePath("/dashboard/settings/users")

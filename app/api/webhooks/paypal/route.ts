@@ -42,7 +42,9 @@ export async function POST(request: NextRequest) {
     // Verify webhook signature (simplified - in production use proper verification)
     const webhookId = process.env.PAYPAL_WEBHOOK_ID || ""
 
-    const supabase = await createClient()
+    // SECURITY: Use admin client for webhooks (no user session)
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const supabase = createAdminClient()
 
     switch (eventType) {
       case "BILLING.SUBSCRIPTION.CREATED":

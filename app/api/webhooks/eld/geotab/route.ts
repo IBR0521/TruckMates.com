@@ -10,7 +10,9 @@ import { createClient } from "@/lib/supabase/server"
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
-    const supabase = await createClient()
+    // SECURITY: Use admin client for webhooks (no user session)
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const supabase = createAdminClient()
     
     // Geotab webhooks include entityType and entity
     const entityType = data.entityType || data.type

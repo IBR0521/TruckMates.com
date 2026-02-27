@@ -108,11 +108,38 @@ export async function createWebhook(formData: {
     return { error: result.error || "No company found", data: null }
   }
 
-  // Validate URL
+  // Validate URL format and security (SSRF protection)
+  let parsedUrl: URL
   try {
-    new URL(formData.url)
+    parsedUrl = new URL(formData.url)
   } catch {
     return { error: "Invalid URL format", data: null }
+  }
+
+  // SECURITY: Enforce HTTPS only (prevent SSRF via HTTP)
+  if (parsedUrl.protocol !== "https:") {
+    return { error: "Webhook URL must use HTTPS protocol", data: null }
+  }
+
+  // SECURITY: Block private/internal IP addresses (SSRF protection)
+  const hostname = parsedUrl.hostname.toLowerCase()
+  const privateIpPatterns = [
+    /^127\./,           // 127.0.0.0/8 (localhost)
+    /^10\./,            // 10.0.0.0/8 (private)
+    /^192\.168\./,      // 192.168.0.0/16 (private)
+    /^172\.(1[6-9]|2\d|3[01])\./, // 172.16.0.0/12 (private)
+    /^169\.254\./,      // 169.254.0.0/16 (link-local, AWS metadata)
+    /^localhost$/,     // localhost
+    /^0\.0\.0\.0$/,     // 0.0.0.0
+  ]
+
+  if (privateIpPatterns.some(pattern => pattern.test(hostname))) {
+    return { error: "Webhook URL cannot point to private or internal addresses", data: null }
+  }
+
+  // Block cloud metadata endpoints
+  if (hostname.includes("metadata") || hostname.includes("169.254.169.254")) {
+    return { error: "Webhook URL cannot point to cloud metadata endpoints", data: null }
   }
 
   // Validate events

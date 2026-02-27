@@ -1,10 +1,22 @@
 import { NextResponse } from 'next/server'
+import { createClient } from "@/lib/supabase/server"
 
 /**
  * Diagnostic endpoint to check if environment variables are loaded
+ * SECURITY: Requires authentication to prevent information disclosure
  * This helps verify if Vercel environment variables are properly configured
  */
 export async function GET() {
+  // SECURITY: Require authentication
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 }
+    )
+  }
   // Check environment variables (without exposing sensitive values)
   const hasUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL
   const hasAnonKey = !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY

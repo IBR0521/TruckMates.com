@@ -4,10 +4,19 @@ import { retryWebhookDelivery } from "@/app/actions/webhooks"
 // Retry failed webhook deliveries
 // This endpoint can be called by a cron job to retry failed webhook deliveries
 export async function POST(request: NextRequest) {
+  // SECURITY: Fail-closed - require CRON_SECRET if set
   const authHeader = request.headers.get("authorization")
   const cronSecret = process.env.CRON_SECRET
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret) {
+    console.error("[Cron] CRON_SECRET not configured - endpoint disabled")
+    return NextResponse.json(
+      { error: "Cron endpoint is not configured. Set CRON_SECRET environment variable." },
+      { status: 503 }
+    )
+  }
+
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
