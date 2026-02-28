@@ -8,8 +8,18 @@ export const API_BASE_URL =
   process.env.API_BASE_URL || 'http://localhost:3000/api'
 
 // Supabase Configuration
-// Note: In React Native, we use direct values since env vars aren't automatically loaded
-// These values will be visible in the app bundle (which is normal for mobile apps)
+// SECURITY NOTE: These values are hardcoded and visible in the app bundle.
+// This is acceptable for Supabase anon keys (they're meant to be public),
+// but they are now permanently in git history.
+// 
+// For future builds, consider using:
+// - react-native-config for environment variables
+// - Or build-time environment injection
+// - Or a config file that's gitignored (but requires manual setup per developer)
+//
+// Note: In React Native, we use direct values since env vars aren't automatically loaded.
+// These values will be visible in the app bundle (which is normal for mobile apps).
+// The anon key is designed to be public, but the URL should ideally be configurable.
 export const SUPABASE_URL = 'https://arzecjrilongtnlzmaty.supabase.co'
 export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFyemVjanJpbG9uZ3RubHptYXR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUxNjc1MTUsImV4cCI6MjA4MDc0MzUxNX0.harBa_RmeVKk0er9KYeyGXgbfCBxxqCgqtIqq0bshLQ'
 

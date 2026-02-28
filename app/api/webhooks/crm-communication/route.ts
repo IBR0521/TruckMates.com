@@ -21,7 +21,15 @@ export async function POST(req: NextRequest) {
       // Allow SendGrid/Postmark signature verification
       (req.headers.get("x-sendgrid-signature") || req.headers.get("x-postmark-signature"))
 
-    if (webhookSecret && !hasValidAuth) {
+    // SECURITY: Fail-closed - require authentication if WEBHOOK_SECRET is set
+    if (!webhookSecret || !hasValidAuth) {
+      if (!webhookSecret) {
+        console.error("[CRM Webhook] WEBHOOK_SECRET not configured - endpoint disabled")
+        return NextResponse.json(
+          { error: "Webhook endpoint is not configured. Set WEBHOOK_SECRET environment variable." },
+          { status: 503 }
+        )
+      }
       console.error("[CRM Webhook] Unauthorized request - missing or invalid authentication")
       return NextResponse.json(
         { error: "Unauthorized" },

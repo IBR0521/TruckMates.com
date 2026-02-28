@@ -687,6 +687,12 @@ export async function createLoad(formData: {
   if (formData.shipper_address_book_id) loadData.shipper_address_book_id = formData.shipper_address_book_id
   if (formData.consignee_address_book_id) loadData.consignee_address_book_id = formData.consignee_address_book_id
 
+  // SECURITY: Generate public tracking token for secure public tracking
+  // This prevents enumeration attacks by requiring a unique token per load
+  const crypto = await import("crypto")
+  const trackingToken = crypto.randomBytes(32).toString("hex")
+  loadData.public_tracking_token = trackingToken
+
   const { data, error } = await supabase
     .from("loads")
     .insert(loadData)
@@ -1324,6 +1330,10 @@ export async function duplicateLoad(id: string) {
   if (originalLoad.load_type !== undefined && originalLoad.hasOwnProperty('load_type')) {
     duplicateData.load_type = originalLoad.load_type || null
   }
+
+  // SECURITY: Generate new tracking token for duplicate load
+  const crypto = await import("crypto")
+  duplicateData.public_tracking_token = crypto.randomBytes(32).toString("hex")
 
   const { data: newLoad, error: createError } = await supabase
     .from("loads")

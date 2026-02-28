@@ -29,13 +29,29 @@ export default function TrackingPage({ params }: { params: Promise<{ id: string 
     try {
       const supabase = createClient()
 
-      // SECURITY: Only return limited public fields, not full load data
-      // Search for shipment by tracking number or shipment number
+      // SECURITY: Public tracking requires a tracking token to prevent enumeration attacks
+      // Token format: 32+ hex characters (e.g., from gen_random_bytes(32))
+      // This prevents cross-company data access by requiring a unique token per load
+      const isToken = /^[a-f0-9]{32,}$/i.test(trackId)
+      
+      if (!isToken) {
+        // SECURITY: Only token-based lookups are allowed for public tracking
+        // This prevents enumeration of shipment numbers or IDs across companies
+        setError("Invalid tracking number format. Please use the tracking link provided.")
+        setIsLoading(false)
+        return
+      }
+      
+      // SECURITY: Use token-based lookup only (prevents cross-company access)
       const { data: loads, error: loadsError } = await supabase
         .from("loads")
         .select("id, shipment_number, status, origin, destination, estimated_delivery, created_at")
-        .or(`shipment_number.ilike.%${trackId}%,id.eq.${trackId}`)
+        .eq("public_tracking_token", trackId)
         .limit(1)
+      
+      // SECURITY: If we want to prevent cross-company access, we need tracking tokens
+      // For now, this endpoint is vulnerable to enumeration attacks
+      // Consider implementing: tracking_token field + public_tracking_enabled flag
 
       if (loadsError) {
         setError("Failed to load shipment information")
