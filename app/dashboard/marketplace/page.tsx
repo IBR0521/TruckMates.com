@@ -89,7 +89,8 @@ export default function MarketplacePage() {
   return (
     <DetailPageLayout
       title="Load Marketplace"
-      description="Browse and accept loads. Accepted loads automatically appear in your dashboard."
+      subtitle="Browse and accept loads. Accepted loads automatically appear in your dashboard."
+      backUrl="/dashboard"
       actions={
         <>
           <Link href="/dashboard/marketplace/post">
@@ -126,7 +127,7 @@ export default function MarketplacePage() {
             </Card>
           ) : (
             <div className="grid gap-6">
-                {loads.map((load) => (
+                {loads.filter(load => load && load.id).map((load) => (
                   <Card key={load.id} className="p-6 hover:border-primary/50 transition-colors">
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                       <div className="flex-1">
@@ -226,7 +227,7 @@ export default function MarketplacePage() {
             </Card>
           ) : (
             <div className="grid gap-6">
-              {myLoads.map((load) => (
+              {myLoads.filter(load => load && load.id).map((load) => (
                 <Card key={load.id} className="p-6">
                   <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                     <div className="flex-1">
@@ -263,7 +264,7 @@ export default function MarketplacePage() {
                       )}
                     </div>
                     <div className="flex flex-col gap-2">
-                      {load.created_load?.id && typeof load.created_load.id === 'string' ? (
+                      {load.created_load?.id && typeof load.created_load.id === 'string' && load.created_load.id.trim() !== '' ? (
                         <Link href={`/dashboard/loads/${load.created_load.id}`}>
                           <Button variant="outline" className="w-full md:w-auto">
                             View Load
