@@ -30,6 +30,7 @@ import DVIRScreen from './screens/DVIRScreen'
 import SettingsScreen from './screens/SettingsScreen'
 import DOTInspectionScreen from './screens/DOTInspectionScreen'
 import SettlementsScreen from './screens/SettlementsScreen'
+import BOLSignatureScreen from './screens/BOLSignatureScreen'
 
 export type RootStackParamList = {
   Login: undefined
@@ -38,6 +39,11 @@ export type RootStackParamList = {
   Settings: undefined
   DOTInspection: undefined
   Settlements: undefined
+  BOLSignature: {
+    bolId: string
+    signatureType?: 'shipper' | 'driver' | 'consignee'
+    loadId?: string
+  }
 }
 
 export type MainTabParamList = {
@@ -268,6 +274,18 @@ function App(): JSX.Element {
                       options={{
                         headerShown: true,
                         title: 'DOT Inspection',
+                        headerStyle: {
+                          backgroundColor: COLORS.card,
+                        },
+                        headerTintColor: COLORS.foreground,
+                      }}
+                    />
+                    <Stack.Screen 
+                      name="BOLSignature" 
+                      component={BOLSignatureScreen}
+                      options={{
+                        headerShown: true,
+                        title: 'Sign BOL',
                         headerStyle: {
                           backgroundColor: COLORS.card,
                         },

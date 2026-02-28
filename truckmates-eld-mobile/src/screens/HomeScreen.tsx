@@ -367,6 +367,48 @@ export default function HomeScreen() {
               One-tap access for DOT officers
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => {
+              // For now, prompt for BOL ID. Can be enhanced to auto-fetch from active load
+              Alert.prompt(
+                'Sign BOL',
+                'Enter BOL ID to sign:',
+                [
+                  {
+                    text: 'Cancel',
+                    style: 'cancel',
+                  },
+                  {
+                    text: 'Sign',
+                    onPress: (bolId) => {
+                      if (bolId && bolId.trim()) {
+                        navigation.navigate('BOLSignature', {
+                          bolId: bolId.trim(),
+                          signatureType: 'driver',
+                        })
+                      }
+                    },
+                  },
+                ],
+                'plain-text'
+              )
+            }}
+          >
+            <Text style={styles.actionButtonText}>✍️ Sign BOL</Text>
+            <Text style={styles.dotInspectionSubtext}>
+              Digital BOL signature
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('Settlements')}
+          >
+            <Text style={styles.actionButtonText}>💰 Settlements</Text>
+            <Text style={styles.dotInspectionSubtext}>
+              View pay history
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 

@@ -14,7 +14,7 @@ import { getTrucks } from "@/app/actions/trucks"
 import { getLoadDeliveryPoints, getLoadSummary } from "@/app/actions/load-delivery-points"
 import { getInvoices } from "@/app/actions/accounting"
 import { toast } from "sonner"
-import { Building2, FileText, DollarSign } from "lucide-react"
+import { Building2, FileText, DollarSign, Share2 } from "lucide-react"
 import {
   DetailPageLayout,
   DetailSection,
@@ -22,6 +22,14 @@ import {
   InfoField,
   StatusBadge,
 } from "@/components/dashboard/detail-page-layout"
+import { createCustomerPortalAccess } from "@/app/actions/customer-portal"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export default function LoadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -35,6 +43,9 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   const [relatedInvoice, setRelatedInvoice] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false)
+  const [portalUrl, setPortalUrl] = useState<string>("")
+  const [isCreatingPortal, setIsCreatingPortal] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -416,12 +427,71 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     : invoiceStatus === "Invoiced" ? "info"
     : "warning"
 
+  // Handle share tracking link
+  async function handleShareTrackingLink() {
+    if (!load.customer_id) {
+      toast.error("This load is not associated with a customer. Please assign a customer first.")
+      return
+    }
+
+    setIsCreatingPortal(true)
+    try {
+      const result = await createCustomerPortalAccess({
+        customer_id: load.customer_id,
+        can_view_location: true,
+        can_view_loads: true,
+        email_notifications: true,
+        expires_days: 90, // 90 days expiration
+      })
+
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+
+      // Get portal URL
+      const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
+      const token = result.data?.access_token
+      if (token) {
+        const url = `${baseUrl}/portal/${token}`
+        setPortalUrl(url)
+        setIsShareDialogOpen(true)
+        toast.success("Portal access created! Share the link with your customer.")
+      }
+    } catch (error: any) {
+      toast.error("Failed to create portal access: " + (error.message || "Unknown error"))
+    } finally {
+      setIsCreatingPortal(false)
+    }
+  }
+
+  function handleCopyPortalUrl() {
+    if (portalUrl) {
+      navigator.clipboard.writeText(portalUrl)
+      toast.success("Portal URL copied to clipboard!")
+    }
+  }
+
   return (
     <DetailPageLayout
       title={load.shipment_number || "Load Details"}
       subtitle={load.origin && load.destination ? `${load.origin} → ${load.destination}` : undefined}
       backUrl="/dashboard/loads"
       editUrl={`/dashboard/loads/${id}/edit`}
+      actions={
+        load.customer_id ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={handleShareTrackingLink}
+            disabled={isCreatingPortal}
+          >
+            <Share2 className="w-4 h-4 mr-2" />
+            {isCreatingPortal ? "Creating..." : "Share Tracking Link"}
+          </Button>
+        ) : null
+      }
     >
       <div className="space-y-6">
         {/* Status Indicators - TruckLogics Style */}
@@ -1255,6 +1325,39 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           </DetailSection>
           )}
       </div>
+
+      {/* Share Tracking Link Dialog */}
+      <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Share Tracking Link</DialogTitle>
+            <DialogDescription>
+              Share this link with your customer to give them access to track this load in real-time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-muted rounded-lg">
+              <p className="text-sm font-medium mb-2">Portal URL:</p>
+              <p className="text-sm text-muted-foreground break-all font-mono">{portalUrl}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleCopyPortalUrl} className="flex-1">
+                <Share2 className="w-4 h-4 mr-2" />
+                Copy Link
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsShareDialogOpen(false)}
+              >
+                Close
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The customer will receive an email with this link. The access expires in 90 days.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DetailPageLayout>
   )
 }
