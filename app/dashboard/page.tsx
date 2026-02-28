@@ -19,7 +19,7 @@ import {
   ChevronDown,
 } from "lucide-react"
 import Link from "next/link"
-import { useMemo } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { toast } from "sonner"
 import { useDashboardStats } from "@/lib/hooks/use-dashboard-stats"
 import {
@@ -66,6 +66,55 @@ const PerformanceMetrics = dynamic(() => import("@/components/dashboard/performa
   loading: () => <div className="h-48 animate-pulse bg-muted rounded-lg" aria-label="Loading performance metrics" />,
   ssr: false
 })
+
+// Helper component to calculate time ago (prevents hydration mismatch)
+function TimeAgo({ timestamp }: { timestamp: string | null | undefined }) {
+  const [timeAgo, setTimeAgo] = useState<string>("")
+  
+  useEffect(() => {
+    if (!timestamp) {
+      setTimeAgo("Unknown time")
+      return
+    }
+    
+    try {
+      const now = new Date()
+      const activityTime = new Date(timestamp)
+      
+      // Check if date is valid
+      if (isNaN(activityTime.getTime())) {
+        setTimeAgo("Invalid date")
+        return
+      }
+      
+      const diffMs = now.getTime() - activityTime.getTime()
+      
+      // Handle negative differences (future dates)
+      if (diffMs < 0) {
+        setTimeAgo("Just now")
+        return
+      }
+      
+      const diffMins = Math.floor(diffMs / 60000)
+      const diffHours = Math.floor(diffMs / 3600000)
+      const diffDays = Math.floor(diffMs / 86400000)
+
+      if (diffMins < 1) {
+        setTimeAgo("Just now")
+      } else if (diffMins < 60) {
+        setTimeAgo(`${diffMins} minute${diffMins > 1 ? "s" : ""} ago`)
+      } else if (diffHours < 24) {
+        setTimeAgo(`${diffHours} hour${diffHours > 1 ? "s" : ""} ago`)
+      } else {
+        setTimeAgo(`${diffDays} day${diffDays > 1 ? "s" : ""} ago`)
+      }
+    } catch (error) {
+      setTimeAgo("Unknown time")
+    }
+  }, [timestamp])
+  
+  return <span>{timeAgo || "..."}</span>
+}
 
 export default function DashboardPage() {
   // Use React Query for automatic caching, deduplication, and background refetching
@@ -541,35 +590,6 @@ export default function DashboardPage() {
             ) : (
               <div className="space-y-3">
                 {recentActivity.map((activity: any, index: number) => {
-                  const timeAgo = (() => {
-                    if (!activity?.time) return "Unknown time"
-                    
-                    try {
-                      const now = new Date()
-                      const activityTime = new Date(activity.time)
-                      
-                      // Check if date is valid
-                      if (isNaN(activityTime.getTime())) {
-                        return "Invalid date"
-                      }
-                      
-                      const diffMs = now.getTime() - activityTime.getTime()
-                      
-                      // Handle negative differences (future dates)
-                      if (diffMs < 0) return "Just now"
-                      
-                      const diffMins = Math.floor(diffMs / 60000)
-                      const diffHours = Math.floor(diffMs / 3600000)
-                      const diffDays = Math.floor(diffMs / 86400000)
-
-                      if (diffMins < 1) return "Just now"
-                      if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`
-                      if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`
-                      return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`
-                    } catch (error) {
-                      return "Unknown time"
-                    }
-                  })()
 
                   const typeColors = {
                     success: "bg-green-500/20 text-green-400",
@@ -584,7 +604,7 @@ export default function DashboardPage() {
                       <div className={`w-2 h-2 rounded-full mt-2 ${typeColors[activity.type as keyof typeof typeColors] || typeColors.default}`}></div>
                       <div className="flex-1">
                         <p className="text-sm text-foreground">{activity.action}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{timeAgo}</p>
+                        <p className="text-xs text-muted-foreground mt-1"><TimeAgo timestamp={activity.time} /></p>
                       </div>
                     </div>
                   )
