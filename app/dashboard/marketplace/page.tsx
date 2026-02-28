@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,15 +21,7 @@ export default function MarketplacePage() {
   const [loading, setLoading] = useState(true)
   const [acceptingLoadId, setAcceptingLoadId] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (activeTab === "browse") {
-      loadMarketplaceLoads()
-    } else {
-      loadMyLoads()
-    }
-  }, [activeTab])
-
-  const loadMarketplaceLoads = async () => {
+  const loadMarketplaceLoads = useCallback(async () => {
     setLoading(true)
     try {
       const result = await getMarketplaceLoads({ limit: 50 })
@@ -43,9 +35,9 @@ export default function MarketplacePage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const loadMyLoads = async () => {
+  const loadMyLoads = useCallback(async () => {
     setLoading(true)
     try {
       const result = await getBrokerMarketplaceLoads()
@@ -59,7 +51,15 @@ export default function MarketplacePage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === "browse") {
+      loadMarketplaceLoads()
+    } else {
+      loadMyLoads()
+    }
+  }, [activeTab, loadMarketplaceLoads, loadMyLoads])
 
   const handleAcceptLoad = async (loadId: string) => {
     setAcceptingLoadId(loadId)
