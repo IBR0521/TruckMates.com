@@ -158,14 +158,14 @@ export default function PostLoadPage() {
                 <div>
                   <Label>Equipment Type (Optional)</Label>
                   <Select
-                    value={formData.equipment_type}
-                    onValueChange={(value) => setFormData({ ...formData, equipment_type: value })}
+                    value={formData.equipment_type || undefined}
+                    onValueChange={(value) => setFormData({ ...formData, equipment_type: value === "any" ? "" : value })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select equipment" />
+                      <SelectValue placeholder="Any Equipment" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Any Equipment</SelectItem>
+                      <SelectItem value="any">Any Equipment</SelectItem>
                       <SelectItem value="dry_van">Dry Van</SelectItem>
                       <SelectItem value="reefer">Reefer</SelectItem>
                       <SelectItem value="flatbed">Flatbed</SelectItem>
