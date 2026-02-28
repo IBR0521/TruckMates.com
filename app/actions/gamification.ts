@@ -219,3 +219,65 @@ export async function checkAndAwardBadges(
   }
 }
 
+/**
+ * Get driver performance score
+ */
+export async function getDriverPerformanceScore(
+  driverId: string,
+  periodType: 'weekly' | 'monthly' | 'yearly' = 'monthly'
+) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+
+  if (!company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  try {
+    // Get current period
+    const now = new Date()
+    let periodStart: Date
+    let periodEnd: Date = new Date(now)
+
+    if (periodType === 'weekly') {
+      periodStart = new Date(now)
+      periodStart.setDate(now.getDate() - 7)
+    } else if (periodType === 'monthly') {
+      periodStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    } else {
+      periodStart = new Date(now.getFullYear(), 0, 1)
+    }
+
+    const { data: score, error } = await supabase
+      .from("driver_performance_scores")
+      .select("*")
+      .eq("driver_id", driverId)
+      .eq("company_id", company_id)
+      .eq("period_type", periodType)
+      .gte("period_end", periodStart.toISOString().split('T')[0])
+      .lte("period_start", periodEnd.toISOString().split('T')[0])
+      .order("overall_score", { ascending: false })
+      .limit(1)
+      .single()
+
+    if (error && error.code !== "PGRST116") {
+      return { error: error.message, data: null }
+    }
+
+    return { data: score || null, error: null }
+  } catch (error: any) {
+    return { error: error.message || "Failed to get performance score", data: null }
+  }
+}
+

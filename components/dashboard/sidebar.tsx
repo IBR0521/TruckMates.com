@@ -199,6 +199,8 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               isCollapsed={shouldShowCollapsed}
             >
               <NavItem href="/dashboard/drivers" label="Driver List" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/drivers/leaderboard" label="Leaderboard" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/drivers/achievements" label="Achievements" isSubitem isCollapsed={shouldShowCollapsed} />
               {userRole && canCreateFeature(userRole, "drivers") && (
                 <NavItem href="/dashboard/drivers/add" label="Add Driver" isSubitem isCollapsed={shouldShowCollapsed} />
               )}
@@ -394,9 +396,13 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             <NavItem href="/dashboard/documents" icon={FolderOpen} label="Documents" isCollapsed={shouldShowCollapsed} />
           )}
 
-          {/* Alerts - Show if user can view alerts */}
+          {/* Notifications - Show if user can view alerts */}
           {userRole && canViewFeature(userRole, "alerts") && (
-            <NavItem href="/dashboard/alerts" icon={Bell} label="Alerts" isCollapsed={shouldShowCollapsed} />
+            <NavItem href="/dashboard/notifications" icon={Bell} label="Notifications" isCollapsed={shouldShowCollapsed} />
+          )}
+          {/* Alerts - Show if user can view alerts (legacy, redirects to notifications) */}
+          {userRole && canViewFeature(userRole, "alerts") && (
+            <NavItem href="/dashboard/alerts" icon={AlertTriangle} label="Alerts" isCollapsed={shouldShowCollapsed} />
           )}
 
           {/* Reminders - Show if user can view reminders */}
