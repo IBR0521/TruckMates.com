@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation"
 import { use } from "react"
 import { getRoute } from "@/app/actions/routes"
 import { getRouteStops, getRouteSummary } from "@/app/actions/route-stops"
-import { TruckMap } from "@/components/truck-map"
+import { GoogleMapsRoute } from "@/components/google-maps-route"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 
@@ -194,9 +194,11 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
           {route.origin && route.destination && (
             <Card className="border-border p-4 md:p-8">
               <h2 className="text-xl font-bold text-foreground mb-6">Route Map</h2>
-              <TruckMap
+              <GoogleMapsRoute
                 origin={route.origin}
                 destination={route.destination}
+                originCoordinates={route.origin_coordinates as { lat: number; lng: number } | undefined}
+                destinationCoordinates={route.destination_coordinates as { lat: number; lng: number } | undefined}
                 weight={0}
                 truckHeight={4.0}
                 stops={stops.map((stop) => ({
