@@ -360,12 +360,9 @@ export function GoogleMapsRoute({
             })
 
             // Fit map to show entire route
+            // result.routes[0].bounds is already a LatLngBounds object, not an array
             if (result.routes[0].bounds) {
-              const bounds = new window.google.maps.LatLngBounds()
-              result.routes[0].bounds.forEach((bound: any) => {
-                bounds.extend(bound)
-              })
-              map.fitBounds(bounds)
+              map.fitBounds(result.routes[0].bounds)
             }
 
             setIsLoading(false)
