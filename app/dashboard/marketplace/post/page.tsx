@@ -49,7 +49,7 @@ export default function PostLoadPage() {
         contents: formData.contents || undefined,
         pickup_date: formData.pickup_date || undefined,
         delivery_date: formData.delivery_date || undefined,
-        equipment_type: formData.equipment_type || undefined,
+        equipment_type: formData.equipment_type && formData.equipment_type !== "any" ? formData.equipment_type : undefined,
         notes: formData.notes || undefined,
       })
 
