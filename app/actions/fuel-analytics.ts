@@ -371,3 +371,278 @@ export async function getFuelCostPerRoute(filters?: {
   }
 }
 
+/**
+ * Get fuel efficiency report with MPG by truck and driver
+ */
+export async function getFuelEfficiencyReport(filters?: {
+  start_date?: string
+  end_date?: string
+  truck_id?: string
+  driver_id?: string
+}) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+
+  if (!company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  try {
+    // Get fuel expenses with truck and driver info
+    let fuelQuery = supabase
+      .from("expenses")
+      .select(`
+        id,
+        amount,
+        date,
+        mileage,
+        truck_id,
+        driver_id,
+        gallons,
+        price_per_gallon,
+        trucks:truck_id(id, truck_number),
+        drivers:driver_id(id, name)
+      `)
+      .eq("company_id", company_id)
+      .eq("category", "fuel")
+      .order("date", { ascending: false })
+
+    if (filters?.truck_id) {
+      fuelQuery = fuelQuery.eq("truck_id", filters.truck_id)
+    }
+    if (filters?.driver_id) {
+      fuelQuery = fuelQuery.eq("driver_id", filters.driver_id)
+    }
+    if (filters?.start_date) {
+      fuelQuery = fuelQuery.gte("date", filters.start_date)
+    }
+    if (filters?.end_date) {
+      fuelQuery = fuelQuery.lte("date", filters.end_date)
+    }
+
+    const { data: fuelExpenses, error: fuelError } = await fuelQuery
+
+    if (fuelError) {
+      return { error: fuelError.message, data: null }
+    }
+
+    const expenses = fuelExpenses || []
+
+    // Calculate by truck
+    const truckEfficiency: Record<string, any> = {}
+    const driverEfficiency: Record<string, any> = {}
+
+    // Group expenses by truck
+    expenses.forEach((expense: any) => {
+      if (!expense.truck_id) return
+
+      const truckId = expense.truck_id
+      if (!truckEfficiency[truckId]) {
+        truckEfficiency[truckId] = {
+          truck_id: truckId,
+          truck_number: expense.trucks?.truck_number || "Unknown",
+          expenses: [],
+          total_cost: 0,
+          total_gallons: 0,
+          total_miles: 0,
+        }
+      }
+
+      truckEfficiency[truckId].expenses.push(expense)
+      truckEfficiency[truckId].total_cost += parseFloat(expense.amount) || 0
+
+      if (expense.gallons) {
+        truckEfficiency[truckId].total_gallons += parseFloat(expense.gallons)
+      }
+    })
+
+    // Group expenses by driver
+    expenses.forEach((expense: any) => {
+      if (!expense.driver_id) return
+
+      const driverId = expense.driver_id
+      if (!driverEfficiency[driverId]) {
+        driverEfficiency[driverId] = {
+          driver_id: driverId,
+          driver_name: expense.drivers?.name || "Unknown",
+          expenses: [],
+          total_cost: 0,
+          total_gallons: 0,
+          total_miles: 0,
+        }
+      }
+
+      driverEfficiency[driverId].expenses.push(expense)
+      driverEfficiency[driverId].total_cost += parseFloat(expense.amount) || 0
+
+      if (expense.gallons) {
+        driverEfficiency[driverId].total_gallons += parseFloat(expense.gallons)
+      }
+    })
+
+    // Calculate MPG for each truck (using consecutive fills)
+    Object.values(truckEfficiency).forEach((truck: any) => {
+      const sortedExpenses = [...truck.expenses].sort((a: any, b: any) =>
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      )
+
+      let totalMiles = 0
+      let totalGallons = 0
+
+      for (let i = 1; i < sortedExpenses.length; i++) {
+        const prev = sortedExpenses[i - 1]
+        const curr = sortedExpenses[i]
+
+        const prevMileage = prev.mileage
+        const currMileage = curr.mileage
+
+        if (!prevMileage || !currMileage) continue
+
+        const miles = currMileage - prevMileage
+        if (miles <= 0 || miles > 10000) continue
+
+        let gallons = 0
+        if (prev.gallons && prev.gallons > 0) {
+          gallons = parseFloat(prev.gallons)
+        } else if (prev.price_per_gallon && prev.price_per_gallon > 0) {
+          gallons = (parseFloat(prev.amount) || 0) / parseFloat(prev.price_per_gallon)
+        } else {
+          gallons = (parseFloat(prev.amount) || 0) / 3.50 // Fallback
+        }
+
+        if (gallons > 0 && gallons < 200 && miles > 0) {
+          const mpg = miles / gallons
+          if (mpg >= 3 && mpg <= 15) {
+            totalMiles += miles
+            totalGallons += gallons
+          }
+        }
+      }
+
+      truck.total_miles = totalMiles
+      truck.avg_mpg = totalMiles > 0 && totalGallons > 0
+        ? Math.round((totalMiles / totalGallons) * 10) / 10
+        : null
+      truck.avg_cost_per_mile = totalMiles > 0 && truck.total_cost > 0
+        ? Math.round((truck.total_cost / totalMiles) * 100) / 100
+        : null
+    })
+
+    // Calculate MPG for each driver (using consecutive fills)
+    Object.values(driverEfficiency).forEach((driver: any) => {
+      const sortedExpenses = [...driver.expenses].sort((a: any, b: any) =>
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      )
+
+      let totalMiles = 0
+      let totalGallons = 0
+
+      for (let i = 1; i < sortedExpenses.length; i++) {
+        const prev = sortedExpenses[i - 1]
+        const curr = sortedExpenses[i]
+
+        const prevMileage = prev.mileage
+        const currMileage = curr.mileage
+
+        if (!prevMileage || !currMileage) continue
+
+        const miles = currMileage - prevMileage
+        if (miles <= 0 || miles > 10000) continue
+
+        let gallons = 0
+        if (prev.gallons && prev.gallons > 0) {
+          gallons = parseFloat(prev.gallons)
+        } else if (prev.price_per_gallon && prev.price_per_gallon > 0) {
+          gallons = (parseFloat(prev.amount) || 0) / parseFloat(prev.price_per_gallon)
+        } else {
+          gallons = (parseFloat(prev.amount) || 0) / 3.50 // Fallback
+        }
+
+        if (gallons > 0 && gallons < 200 && miles > 0) {
+          const mpg = miles / gallons
+          if (mpg >= 3 && mpg <= 15) {
+            totalMiles += miles
+            totalGallons += gallons
+          }
+        }
+      }
+
+      driver.total_miles = totalMiles
+      driver.avg_mpg = totalMiles > 0 && totalGallons > 0
+        ? Math.round((totalMiles / totalGallons) * 10) / 10
+        : null
+      driver.avg_cost_per_mile = totalMiles > 0 && driver.total_cost > 0
+        ? Math.round((driver.total_cost / totalMiles) * 100) / 100
+        : null
+    })
+
+    // Sort and format results
+    const truckResults = Object.values(truckEfficiency)
+      .filter((t: any) => t.avg_mpg !== null)
+      .sort((a: any, b: any) => (b.avg_mpg || 0) - (a.avg_mpg || 0))
+      .map((t: any) => ({
+        truck_id: t.truck_id,
+        truck_number: t.truck_number,
+        total_cost: Math.round(t.total_cost * 100) / 100,
+        total_gallons: Math.round(t.total_gallons * 100) / 100,
+        total_miles: Math.round(t.total_miles),
+        avg_mpg: t.avg_mpg,
+        avg_cost_per_mile: t.avg_cost_per_mile,
+        expense_count: t.expenses.length,
+      }))
+
+    const driverResults = Object.values(driverEfficiency)
+      .filter((d: any) => d.avg_mpg !== null)
+      .sort((a: any, b: any) => (b.avg_mpg || 0) - (a.avg_mpg || 0))
+      .map((d: any) => ({
+        driver_id: d.driver_id,
+        driver_name: d.driver_name,
+        total_cost: Math.round(d.total_cost * 100) / 100,
+        total_gallons: Math.round(d.total_gallons * 100) / 100,
+        total_miles: Math.round(d.total_miles),
+        avg_mpg: d.avg_mpg,
+        avg_cost_per_mile: d.avg_cost_per_mile,
+        expense_count: d.expenses.length,
+      }))
+
+    // Calculate fleet summary
+    const fleetTotalCost = truckResults.reduce((sum, t) => sum + t.total_cost, 0)
+    const fleetTotalMiles = truckResults.reduce((sum, t) => sum + t.total_miles, 0)
+    const fleetTotalGallons = truckResults.reduce((sum, t) => sum + t.total_gallons, 0)
+    const fleetAvgMPG = fleetTotalGallons > 0 && fleetTotalMiles > 0
+      ? Math.round((fleetTotalMiles / fleetTotalGallons) * 10) / 10
+      : null
+    const fleetAvgCostPerMile = fleetTotalMiles > 0 && fleetTotalCost > 0
+      ? Math.round((fleetTotalCost / fleetTotalMiles) * 100) / 100
+      : null
+
+    return {
+      data: {
+        summary: {
+          fleet_avg_mpg: fleetAvgMPG,
+          fleet_avg_cost_per_mile: fleetAvgCostPerMile,
+          fleet_total_cost: Math.round(fleetTotalCost * 100) / 100,
+          fleet_total_miles: Math.round(fleetTotalMiles),
+          fleet_total_gallons: Math.round(fleetTotalGallons * 100) / 100,
+        },
+        by_truck: truckResults,
+        by_driver: driverResults,
+      },
+      error: null,
+    }
+  } catch (error: any) {
+    return { error: error.message || "Failed to get fuel efficiency report", data: null }
+  }
+}
+

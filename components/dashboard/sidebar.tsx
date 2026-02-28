@@ -383,6 +383,9 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               <NavItem href="/dashboard/reports/revenue" label="Revenue" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/reports/profit-loss" label="Profit & Loss" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/reports/driver-payments" label="Driver Payments" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/reports/detention" label="Detention Time" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/reports/fuel-efficiency" label="Fuel Efficiency" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/reports/on-time-delivery" label="On-Time Delivery" isSubitem isCollapsed={shouldShowCollapsed} />
             </DropdownItem>
           )}
 

@@ -453,5 +453,132 @@ export async function updateGeofenceDetentionSettings(
   }
 }
 
+/**
+ * Get detention analytics - Top customers by detention cost
+ */
+export async function getDetentionAnalytics(filters?: {
+  start_date?: string
+  end_date?: string
+  limit?: number
+}) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+
+  if (!company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  try {
+    // Build query to get detention records with customer info
+    let query = supabase
+      .from("detention_tracking")
+      .select(`
+        id,
+        total_fee,
+        detention_minutes,
+        entry_timestamp,
+        loads!inner(
+          id,
+          customer_id,
+          customers:customer_id(
+            id,
+            name,
+            company_name
+          )
+        )
+      `)
+      .eq("company_id", company_id)
+      .eq("status", "completed")
+      .not("total_fee", "is", null)
+      .gt("total_fee", 0)
+
+    if (filters?.start_date) {
+      query = query.gte("entry_timestamp", filters.start_date)
+    }
+    if (filters?.end_date) {
+      query = query.lte("entry_timestamp", filters.end_date)
+    }
+
+    const { data: detentions, error } = await query
+
+    if (error) {
+      return { error: error.message || "Failed to get detention analytics", data: null }
+    }
+
+    // Aggregate by customer
+    const customerMap = new Map<string, {
+      customer_id: string
+      customer_name: string
+      total_fee: number
+      total_minutes: number
+      detention_count: number
+      average_fee: number
+    }>()
+
+    detentions?.forEach((detention: any) => {
+      const customer = detention.loads?.customers
+      if (!customer || !customer.id) return
+
+      const customerId = customer.id
+      const customerName = customer.name || customer.company_name || "Unknown Customer"
+      const fee = parseFloat(detention.total_fee) || 0
+      const minutes = parseInt(detention.detention_minutes) || 0
+
+      if (customerMap.has(customerId)) {
+        const existing = customerMap.get(customerId)!
+        existing.total_fee += fee
+        existing.total_minutes += minutes
+        existing.detention_count += 1
+        existing.average_fee = existing.total_fee / existing.detention_count
+      } else {
+        customerMap.set(customerId, {
+          customer_id: customerId,
+          customer_name: customerName,
+          total_fee: fee,
+          total_minutes: minutes,
+          detention_count: 1,
+          average_fee: fee,
+        })
+      }
+    })
+
+    // Convert to array and sort by total_fee
+    const topCustomers = Array.from(customerMap.values())
+      .sort((a, b) => b.total_fee - a.total_fee)
+      .slice(0, filters?.limit || 10)
+
+    // Calculate totals
+    const totalDetentionFee = topCustomers.reduce((sum, c) => sum + c.total_fee, 0)
+    const totalDetentionMinutes = topCustomers.reduce((sum, c) => sum + c.total_minutes, 0)
+    const totalDetentionCount = topCustomers.reduce((sum, c) => sum + c.detention_count, 0)
+
+    return {
+      data: {
+        top_customers: topCustomers,
+        summary: {
+          total_fee: totalDetentionFee,
+          total_minutes: totalDetentionMinutes,
+          total_count: totalDetentionCount,
+          average_fee_per_customer: topCustomers.length > 0 ? totalDetentionFee / topCustomers.length : 0,
+        },
+      },
+      error: null,
+    }
+  } catch (error: any) {
+    return { error: error.message || "Failed to get detention analytics", data: null }
+  }
+}
+
 
 
