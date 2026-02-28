@@ -250,7 +250,8 @@ export function GoogleMapsRoute({
         const directionsService = new window.google.maps.DirectionsService()
         const directionsRenderer = new window.google.maps.DirectionsRenderer({
           map,
-          suppressMarkers: false,
+          suppressMarkers: true, // Use our custom markers instead
+          suppressInfoWindows: true, // Suppress default info windows to prevent unwanted popups
           polylineOptions: {
             strokeColor: "#3b82f6",
             strokeWeight: 4,
