@@ -59,6 +59,7 @@ export function GoogleMapsRoute({
 
     // Get API key - try env first, then fetch from API route
     let apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    let script: HTMLScriptElement | null = null
     
     const loadScript = async () => {
       // If no API key in env, try to fetch from API route
@@ -88,7 +89,7 @@ export function GoogleMapsRoute({
         return
       }
 
-      const script = document.createElement("script")
+      script = document.createElement("script")
       script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`
       script.async = true
       script.defer = true
@@ -124,8 +125,8 @@ export function GoogleMapsRoute({
     loadScript()
 
     return () => {
-      // Cleanup
-      if (document.head.contains(script)) {
+      // Cleanup - remove script if it exists
+      if (script && document.head.contains(script)) {
         document.head.removeChild(script)
       }
     }
