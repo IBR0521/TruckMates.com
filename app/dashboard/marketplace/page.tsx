@@ -1,9 +1,19 @@
 "use client"
 
-import { MarketplaceComingSoon } from "@/components/marketplace-coming-soon"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { DetailPageLayout } from "@/components/dashboard/detail-page-layout"
+import { Plus, Settings, Truck, MapPin, Calendar } from "lucide-react"
+import { getMarketplaceLoads, getBrokerMarketplaceLoads, acceptMarketplaceLoad } from "@/app/actions/marketplace"
+import { toast } from "sonner"
+import { format } from "date-fns"
+import Link from "next/link"
 
 export default function MarketplacePage() {
-  return <MarketplaceComingSoon />
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<"browse" | "my-loads">("browse")
   const [loads, setLoads] = useState<any[]>([])
