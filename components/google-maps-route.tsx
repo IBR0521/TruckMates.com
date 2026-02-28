@@ -192,10 +192,23 @@ export function GoogleMapsRoute({
           try {
             const originResult = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
               geocoder.geocode({ address: origin }, (results, status) => {
-                if (status === window.google.maps.GeocoderStatus.OK && results) {
+                if (status === window.google.maps.GeocoderStatus.OK && results && results.length > 0) {
                   resolve(results)
                 } else {
-                  reject(new Error(`Geocoding failed: ${status}`))
+                  // Provide specific error messages
+                  let errorMsg = `Geocoding failed: ${status}`
+                  if (status === window.google.maps.GeocoderStatus.ERROR) {
+                    errorMsg = "Geocoding service error. Please check your API key and try again."
+                  } else if (status === window.google.maps.GeocoderStatus.INVALID_REQUEST) {
+                    errorMsg = `Invalid address format: "${origin}". Please provide a complete address.`
+                  } else if (status === window.google.maps.GeocoderStatus.OVER_QUERY_LIMIT) {
+                    errorMsg = "Geocoding quota exceeded. Please try again later."
+                  } else if (status === window.google.maps.GeocoderStatus.REQUEST_DENIED) {
+                    errorMsg = "Geocoding API access denied. Please check your API key permissions."
+                  } else if (status === window.google.maps.GeocoderStatus.ZERO_RESULTS) {
+                    errorMsg = `Address not found: "${origin}". Please check the address and try again.`
+                  }
+                  reject(new Error(errorMsg))
                 }
               })
             })
@@ -214,10 +227,23 @@ export function GoogleMapsRoute({
           try {
             const destResult = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
               geocoder.geocode({ address: destination }, (results, status) => {
-                if (status === window.google.maps.GeocoderStatus.OK && results) {
+                if (status === window.google.maps.GeocoderStatus.OK && results && results.length > 0) {
                   resolve(results)
                 } else {
-                  reject(new Error(`Geocoding failed: ${status}`))
+                  // Provide specific error messages
+                  let errorMsg = `Geocoding failed: ${status}`
+                  if (status === window.google.maps.GeocoderStatus.ERROR) {
+                    errorMsg = "Geocoding service error. Please check your API key and try again."
+                  } else if (status === window.google.maps.GeocoderStatus.INVALID_REQUEST) {
+                    errorMsg = `Invalid address format: "${destination}". Please provide a complete address.`
+                  } else if (status === window.google.maps.GeocoderStatus.OVER_QUERY_LIMIT) {
+                    errorMsg = "Geocoding quota exceeded. Please try again later."
+                  } else if (status === window.google.maps.GeocoderStatus.REQUEST_DENIED) {
+                    errorMsg = "Geocoding API access denied. Please check your API key permissions."
+                  } else if (status === window.google.maps.GeocoderStatus.ZERO_RESULTS) {
+                    errorMsg = `Address not found: "${destination}". Please check the address and try again.`
+                  }
+                  reject(new Error(errorMsg))
                 }
               })
             })
