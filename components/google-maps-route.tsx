@@ -336,7 +336,24 @@ export function GoogleMapsRoute({
 
             setIsLoading(false)
           } else {
-            setError(`Directions request failed: ${status}`)
+            // Provide specific error messages for common issues
+            let errorMessage = `Directions request failed: ${status}`
+            
+            if (status === window.google.maps.DirectionsStatus.REQUEST_DENIED) {
+              errorMessage = `Google Maps Directions API access denied. Please check:
+1. Directions API is enabled in Google Cloud Console
+2. API key has proper restrictions configured
+3. API key has permission to use Directions Service
+Visit: https://console.cloud.google.com/google/maps-apis`
+            } else if (status === window.google.maps.DirectionsStatus.OVER_QUERY_LIMIT) {
+              errorMessage = "Google Maps API quota exceeded. Please try again later or contact support."
+            } else if (status === window.google.maps.DirectionsStatus.ZERO_RESULTS) {
+              errorMessage = "No route found between the specified locations. Please check the addresses."
+            } else if (status === window.google.maps.DirectionsStatus.INVALID_REQUEST) {
+              errorMessage = "Invalid route request. Please check the origin and destination addresses."
+            }
+            
+            setError(errorMessage)
             setIsLoading(false)
           }
         })
