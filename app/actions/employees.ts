@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { sendNotification } from "./notifications"
 
+// Manager roles that can manage employees
+const MANAGER_ROLES = ["super_admin", "operations_manager"]
+
 // Helper function to get user role and company_id (bypasses RLS)
 async function getUserRoleAndCompany(supabase: any, userId: string) {
   let userRole: string | null = null
@@ -80,7 +83,6 @@ export async function getEmployees() {
     }
   }
 
-  const MANAGER_ROLES = ["super_admin", "operations_manager"]
   if (!userRole || !MANAGER_ROLES.includes(userRole)) {
     return { error: "Only managers can view employees", data: null }
   }
@@ -133,7 +135,6 @@ export async function updateEmployee(
   // Check if user is a manager
   const { role: userRole, companyId, error: roleError } = await getUserRoleAndCompany(supabase, user.id)
 
-  const MANAGER_ROLES = ["super_admin", "operations_manager"]
   if (roleError || !userRole || !MANAGER_ROLES.includes(userRole)) {
     return { error: roleError || "Only managers can update employees", data: null }
   }
@@ -157,7 +158,6 @@ export async function updateEmployee(
     return { error: "Employee does not belong to your company", data: null }
   }
 
-  const MANAGER_ROLES = ["super_admin", "operations_manager"]
   if (MANAGER_ROLES.includes(employee.role)) {
     return { error: "Cannot update manager accounts", data: null }
   }
@@ -191,7 +191,6 @@ export async function removeEmployee(employeeId: string) {
   // Check if user is a manager
   const { role: userRole, companyId, error: roleError } = await getUserRoleAndCompany(supabase, user.id)
 
-  const MANAGER_ROLES = ["super_admin", "operations_manager"]
   if (roleError || !userRole || !MANAGER_ROLES.includes(userRole)) {
     return { error: roleError || "Only managers can remove employees", data: null }
   }
@@ -215,7 +214,6 @@ export async function removeEmployee(employeeId: string) {
     return { error: "Employee does not belong to your company", data: null }
   }
 
-  const MANAGER_ROLES = ["super_admin", "operations_manager"]
   if (MANAGER_ROLES.includes(employee.role)) {
     return { error: "Cannot remove manager accounts", data: null }
   }
