@@ -1,26 +1,9 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { postLoadToMarketplace } from "@/app/actions/marketplace"
-import { toast } from "sonner"
-import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { ArrowLeft } from "lucide-react"
-import Link from "next/link"
+import { MarketplaceComingSoon } from "@/components/marketplace-coming-soon"
 
 export default function PostLoadPage() {
+  return <MarketplaceComingSoon />
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
