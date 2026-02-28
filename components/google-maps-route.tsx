@@ -448,9 +448,19 @@ Visit: https://console.cloud.google.com/google/maps-apis`
         )}
         {error && (
           <div className="absolute inset-0 flex items-center justify-center bg-secondary/30 z-10">
-            <div className="text-center p-4">
+            <div className="text-center p-4 max-w-md">
               <AlertTriangle className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
-              <p className="text-sm text-foreground">{error}</p>
+              <p className="text-sm text-foreground whitespace-pre-line">{error}</p>
+              {error.includes("Directions API") && (
+                <div className="mt-4 text-xs text-muted-foreground">
+                  <p className="mb-2">Required APIs to enable in Google Cloud Console:</p>
+                  <ul className="list-disc list-inside space-y-1 text-left">
+                    <li>Maps JavaScript API</li>
+                    <li>Directions API</li>
+                    <li>Geocoding API</li>
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
         )}
