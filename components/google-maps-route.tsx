@@ -93,7 +93,25 @@ export function GoogleMapsRoute({
       script.async = true
       script.defer = true
       script.onload = () => {
-        setMapLoaded(true)
+        // Wait for Google Maps API to be fully initialized
+        const checkReady = setInterval(() => {
+          if (window.google?.maps?.Geocoder && typeof window.google.maps.Geocoder === 'function' && 
+              window.google.maps.Map && typeof window.google.maps.Map === 'function') {
+            clearInterval(checkReady)
+            setMapLoaded(true)
+          }
+        }, 100)
+        
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          clearInterval(checkReady)
+          if (window.google?.maps?.Geocoder && typeof window.google.maps.Geocoder === 'function') {
+            setMapLoaded(true)
+          } else {
+            setError("Google Maps API loaded but Geocoder is not available. Please check your API key permissions.")
+            setIsLoading(false)
+          }
+        }, 10000)
       }
       script.onerror = (error) => {
         console.error('[GoogleMapsRoute] Script load error:', error)
@@ -121,6 +139,11 @@ export function GoogleMapsRoute({
       try {
         setIsLoading(true)
         setError(null)
+
+        // Verify Google Maps API is fully loaded
+        if (!window.google?.maps?.Geocoder || typeof window.google.maps.Geocoder !== 'function') {
+          throw new Error("Google Maps Geocoder API is not available. Please ensure the Google Maps JavaScript API is fully loaded.")
+        }
 
         // Get coordinates for origin and destination
         let originCoords: { lat: number; lng: number }
@@ -215,8 +238,14 @@ export function GoogleMapsRoute({
               })
             } else {
               try {
+                // Verify Geocoder is still available
+                if (!window.google?.maps?.Geocoder || typeof window.google.maps.Geocoder !== 'function') {
+                  console.warn(`Geocoder not available for stop "${stop.address || stop.location_name}"`)
+                  return
+                }
+                const stopGeocoder = new window.google.maps.Geocoder()
                 const stopResult = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
-                  geocoder.geocode({ address: stop.address || stop.location_name }, (results, status) => {
+                  stopGeocoder.geocode({ address: stop.address || stop.location_name }, (results, status) => {
                     if (status === window.google.maps.GeocoderStatus.OK && results) {
                       resolve(results)
                     } else {
