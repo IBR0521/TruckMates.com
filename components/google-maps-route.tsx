@@ -250,8 +250,8 @@ export function GoogleMapsRoute({
         const directionsService = new window.google.maps.DirectionsService()
         const directionsRenderer = new window.google.maps.DirectionsRenderer({
           map,
-          suppressMarkers: true, // Use our custom markers instead
-          suppressInfoWindows: true, // Suppress default info windows to prevent unwanted popups
+          suppressMarkers: false, // Keep default DirectionsRenderer markers
+          suppressInfoWindows: false, // Keep default info windows
           polylineOptions: {
             strokeColor: "#3b82f6",
             strokeWeight: 4,
@@ -390,51 +390,8 @@ Visit: https://console.cloud.google.com/google/maps-apis`
           }
         })
 
-        // Add custom markers for origin and destination
-        const originMarker = new window.google.maps.Marker({
-          position: originCoords,
-          map,
-          icon: {
-            path: window.google.maps.SymbolPath.CIRCLE,
-            scale: 8,
-            fillColor: "#10b981",
-            fillOpacity: 1,
-            strokeColor: "#ffffff",
-            strokeWeight: 2,
-          },
-          title: `Origin: ${origin}`,
-        })
-
-        const destMarker = new window.google.maps.Marker({
-          position: destCoords,
-          map,
-          icon: {
-            path: window.google.maps.SymbolPath.CIRCLE,
-            scale: 8,
-            fillColor: "#ef4444",
-            fillOpacity: 1,
-            strokeColor: "#ffffff",
-            strokeWeight: 2,
-          },
-          title: `Destination: ${destination}`,
-        })
-
-        markersRef.current = [originMarker, destMarker]
-
-        // Add info windows
-        const originInfoWindow = new window.google.maps.InfoWindow({
-          content: `<div class="p-2"><strong>Origin</strong><br/>${origin}</div>`,
-        })
-        const destInfoWindow = new window.google.maps.InfoWindow({
-          content: `<div class="p-2"><strong>Destination</strong><br/>${destination}</div>`,
-        })
-
-        originMarker.addListener("click", () => {
-          originInfoWindow.open(map, originMarker)
-        })
-        destMarker.addListener("click", () => {
-          destInfoWindow.open(map, destMarker)
-        })
+        // Use default DirectionsRenderer markers and info windows
+        // No custom markers needed
       } catch (err: any) {
         console.error("Map initialization error:", err)
         setError(err.message || "Failed to initialize map")
