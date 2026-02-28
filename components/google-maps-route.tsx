@@ -5,7 +5,6 @@ import { MapPin, Navigation, AlertTriangle } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { getRouteDirections } from "@/app/actions/integrations-google-maps"
-import { geocodeAddress } from "@/app/actions/integrations-google-maps"
 
 interface GoogleMapsRouteProps {
   origin: string
@@ -127,24 +126,51 @@ export function GoogleMapsRoute({
         let originCoords: { lat: number; lng: number }
         let destCoords: { lat: number; lng: number }
 
+        // Use Google Maps Geocoder service directly (client-side)
+        const geocoder = new window.google.maps.Geocoder()
+
         if (originCoordinates) {
           originCoords = originCoordinates
         } else {
-          const originGeocode = await geocodeAddress(origin)
-          if (originGeocode.error || !originGeocode.data) {
-            throw new Error(`Failed to geocode origin: ${origin}`)
+          try {
+            const originResult = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+              geocoder.geocode({ address: origin }, (results, status) => {
+                if (status === window.google.maps.GeocoderStatus.OK && results) {
+                  resolve(results)
+                } else {
+                  reject(new Error(`Geocoding failed: ${status}`))
+                }
+              })
+            })
+            originCoords = {
+              lat: originResult[0].geometry.location.lat(),
+              lng: originResult[0].geometry.location.lng(),
+            }
+          } catch (err: any) {
+            throw new Error(`Failed to geocode origin "${origin}": ${err.message || "Unknown error"}`)
           }
-          originCoords = { lat: originGeocode.data.lat, lng: originGeocode.data.lng }
         }
 
         if (destinationCoordinates) {
           destCoords = destinationCoordinates
         } else {
-          const destGeocode = await geocodeAddress(destination)
-          if (destGeocode.error || !destGeocode.data) {
-            throw new Error(`Failed to geocode destination: ${destination}`)
+          try {
+            const destResult = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+              geocoder.geocode({ address: destination }, (results, status) => {
+                if (status === window.google.maps.GeocoderStatus.OK && results) {
+                  resolve(results)
+                } else {
+                  reject(new Error(`Geocoding failed: ${status}`))
+                }
+              })
+            })
+            destCoords = {
+              lat: destResult[0].geometry.location.lat(),
+              lng: destResult[0].geometry.location.lng(),
+            }
+          } catch (err: any) {
+            throw new Error(`Failed to geocode destination "${destination}": ${err.message || "Unknown error"}`)
           }
-          destCoords = { lat: destGeocode.data.lat, lng: destGeocode.data.lng }
         }
 
         // Initialize map
@@ -188,12 +214,26 @@ export function GoogleMapsRoute({
                 stopover: true,
               })
             } else {
-              const stopGeocode = await geocodeAddress(stop.address || stop.location_name)
-              if (stopGeocode.data) {
+              try {
+                const stopResult = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+                  geocoder.geocode({ address: stop.address || stop.location_name }, (results, status) => {
+                    if (status === window.google.maps.GeocoderStatus.OK && results) {
+                      resolve(results)
+                    } else {
+                      reject(new Error(`Geocoding failed: ${status}`))
+                    }
+                  })
+                })
                 waypoints.push({
-                  location: new window.google.maps.LatLng(stopGeocode.data.lat, stopGeocode.data.lng),
+                  location: new window.google.maps.LatLng(
+                    stopResult[0].geometry.location.lat(),
+                    stopResult[0].geometry.location.lng()
+                  ),
                   stopover: true,
                 })
+              } catch (err) {
+                console.warn(`Failed to geocode stop "${stop.address || stop.location_name}":`, err)
+                // Continue without this waypoint
               }
             }
           }
