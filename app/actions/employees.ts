@@ -80,7 +80,8 @@ export async function getEmployees() {
     }
   }
 
-  if (!userRole || userRole !== "manager") {
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!userRole || !MANAGER_ROLES.includes(userRole)) {
     return { error: "Only managers can view employees", data: null }
   }
 
@@ -132,7 +133,8 @@ export async function updateEmployee(
   // Check if user is a manager
   const { role: userRole, companyId, error: roleError } = await getUserRoleAndCompany(supabase, user.id)
 
-  if (roleError || !userRole || userRole !== "manager") {
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (roleError || !userRole || !MANAGER_ROLES.includes(userRole)) {
     return { error: roleError || "Only managers can update employees", data: null }
   }
 
@@ -155,7 +157,8 @@ export async function updateEmployee(
     return { error: "Employee does not belong to your company", data: null }
   }
 
-  if (employee.role === "manager") {
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (MANAGER_ROLES.includes(employee.role)) {
     return { error: "Cannot update manager accounts", data: null }
   }
 
@@ -188,7 +191,8 @@ export async function removeEmployee(employeeId: string) {
   // Check if user is a manager
   const { role: userRole, companyId, error: roleError } = await getUserRoleAndCompany(supabase, user.id)
 
-  if (roleError || !userRole || userRole !== "manager") {
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (roleError || !userRole || !MANAGER_ROLES.includes(userRole)) {
     return { error: roleError || "Only managers can remove employees", data: null }
   }
 
@@ -211,7 +215,8 @@ export async function removeEmployee(employeeId: string) {
     return { error: "Employee does not belong to your company", data: null }
   }
 
-  if (employee.role === "manager") {
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (MANAGER_ROLES.includes(employee.role)) {
     return { error: "Cannot remove manager accounts", data: null }
   }
 

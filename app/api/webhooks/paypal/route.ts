@@ -30,17 +30,59 @@ async function getPayPalAccessToken() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    // Get raw body for signature verification
+    const rawBody = await request.text()
+    const body = JSON.parse(rawBody)
     const eventType = body.event_type
 
-    // Verify webhook (in production, verify with PayPal)
+    // SECURITY: Verify webhook signature with PayPal
     const accessToken = await getPayPalAccessToken()
     const baseUrl = PAYPAL_MODE === "live"
       ? "https://api-m.paypal.com"
       : "https://api-m.sandbox.paypal.com"
 
-    // Verify webhook signature (simplified - in production use proper verification)
     const webhookId = process.env.PAYPAL_WEBHOOK_ID || ""
+    
+    // Get signature headers
+    const transmissionId = request.headers.get("paypal-transmission-id")
+    const transmissionTime = request.headers.get("paypal-transmission-time")
+    const certUrl = request.headers.get("paypal-cert-url")
+    const authAlgo = request.headers.get("paypal-auth-algo")
+    const transmissionSig = request.headers.get("paypal-transmission-sig")
+
+    if (!transmissionId || !transmissionTime || !certUrl || !authAlgo || !transmissionSig) {
+      console.error("[PayPal Webhook] Missing signature headers")
+      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
+    }
+
+    // Verify webhook signature with PayPal
+    const verifyResponse = await fetch(`${baseUrl}/v1/notifications/verify-webhook-signature`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        transmission_id: transmissionId,
+        transmission_time: transmissionTime,
+        cert_url: certUrl,
+        auth_algo: authAlgo,
+        transmission_sig: transmissionSig,
+        webhook_id: webhookId,
+        webhook_event: body,
+      }),
+    })
+
+    if (!verifyResponse.ok) {
+      console.error("[PayPal Webhook] Signature verification failed")
+      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
+    }
+
+    const verifyResult = await verifyResponse.json()
+    if (verifyResult.verification_status !== "SUCCESS") {
+      console.error("[PayPal Webhook] Signature verification failed:", verifyResult.verification_status)
+      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
+    }
 
     // SECURITY: Use admin client for webhooks (no user session)
     const { createAdminClient } = await import("@/lib/supabase/admin")

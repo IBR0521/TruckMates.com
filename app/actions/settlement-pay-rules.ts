@@ -328,8 +328,32 @@ export async function deletePayRule(ruleId: string) {
     return { error: "Not authenticated", data: null }
   }
 
+  // Check if user is manager
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role, company_id")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (!userData) {
+    return { error: "User not found", data: null }
+  }
+
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!MANAGER_ROLES.includes(userData.role)) {
+    return { error: "Only managers can delete pay rules", data: null }
+  }
+
+  if (!userData.company_id) {
+    return { error: "No company found", data: null }
+  }
+
   try {
-    const { error } = await supabase.from("driver_pay_rules").delete().eq("id", ruleId)
+    const { error } = await supabase
+      .from("driver_pay_rules")
+      .delete()
+      .eq("id", ruleId)
+      .eq("company_id", userData.company_id)
 
     if (error) {
       return { error: error.message, data: null }

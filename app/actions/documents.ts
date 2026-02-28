@@ -67,11 +67,12 @@ export async function deleteDocument(id: string) {
     return { error: "No company found" }
   }
 
-  // First, get the document to retrieve the file path
+  // First, get the document to retrieve the file path (with company_id check)
   const { data: document, error: docError } = await supabase
     .from("documents")
     .select("file_url")
     .eq("id", id)
+    .eq("company_id", userData.company_id)
     .single()
 
   if (docError || !document) {
@@ -108,8 +109,12 @@ export async function deleteDocument(id: string) {
     }
   }
 
-  // Delete database record
-  const { error } = await supabase.from("documents").delete().eq("id", id)
+  // Delete database record (with company_id check)
+  const { error } = await supabase
+    .from("documents")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", userData.company_id)
   if (error) return { error: error.message }
   
   revalidatePath("/dashboard/documents")

@@ -58,7 +58,8 @@ export async function updateUserRole(userId: string, newRole: string) {
     .eq("id", user.id)
     .single()
 
-  if (currentUser?.role !== "manager") {
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!currentUser || !MANAGER_ROLES.includes(currentUser.role)) {
     return { error: "Only managers can update user roles", success: false }
   }
 
@@ -117,7 +118,8 @@ export async function removeUser(userId: string) {
     .eq("id", user.id)
     .single()
 
-  if (currentUser?.role !== "manager") {
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!currentUser || !MANAGER_ROLES.includes(currentUser.role)) {
     return { error: "Only managers can remove users", success: false }
   }
 
@@ -138,10 +140,12 @@ export async function removeUser(userId: string) {
   }
 
   // Delete user (this will cascade delete related records)
+  // Defense-in-depth: Add company_id to DELETE query
   const { error } = await supabase
     .from("users")
     .delete()
     .eq("id", userId)
+    .eq("company_id", currentUser.company_id)
 
   if (error) {
     return { error: error.message, success: false }

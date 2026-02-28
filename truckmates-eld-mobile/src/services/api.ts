@@ -5,7 +5,7 @@
 // Import URL polyfill for React Native compatibility
 import 'react-native-url-polyfill/auto'
 
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as SecureStore from 'expo-secure-store'
 import { createClient } from '@supabase/supabase-js'
 import { API_BASE_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/constants/config'
 import type {
@@ -24,10 +24,17 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error('Supabase URL and Anon Key must be configured')
 }
 
-// Initialize Supabase client
+// Secure storage adapter for Supabase
+const ExpoSecureStoreAdapter = {
+  getItem: (key: string) => SecureStore.getItemAsync(key),
+  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
+  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+}
+
+// Initialize Supabase client with secure storage
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    storage: AsyncStorage,
+    storage: ExpoSecureStoreAdapter,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,

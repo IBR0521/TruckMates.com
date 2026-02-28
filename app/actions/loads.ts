@@ -1142,7 +1142,24 @@ export async function deleteLoad(id: string) {
 
   const supabase = await createClient()
 
-  const { error } = await supabase.from("loads").delete().eq("id", id)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated" }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found" }
+  }
+
+  const { error } = await supabase
+    .from("loads")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", result.company_id)
 
   if (error) {
     return { error: error.message }

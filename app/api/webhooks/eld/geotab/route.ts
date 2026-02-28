@@ -9,7 +9,35 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const data = await request.json()
+    // SECURITY: Verify Geotab webhook signature
+    const webhookSecret = process.env.GEOTAB_WEBHOOK_SECRET
+    if (!webhookSecret) {
+      console.error("[Geotab Webhook] GEOTAB_WEBHOOK_SECRET not configured")
+      return NextResponse.json({ error: "Webhook not configured" }, { status: 503 })
+    }
+
+    const signature = request.headers.get("x-geotab-signature")
+    if (!signature) {
+      console.error("[Geotab Webhook] Missing signature header")
+      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
+    }
+
+    // Get raw body for HMAC verification
+    const rawBody = await request.text()
+    const body = JSON.parse(rawBody)
+
+    // Verify HMAC SHA256 signature
+    const crypto = await import("crypto")
+    const expectedSignature = crypto
+      .createHmac("sha256", webhookSecret)
+      .update(rawBody)
+      .digest("hex")
+
+    if (signature !== expectedSignature) {
+      console.error("[Geotab Webhook] Invalid signature")
+      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
+    }
+
     // SECURITY: Use admin client for webhooks (no user session)
     const { createAdminClient } = await import("@/lib/supabase/admin")
     const supabase = createAdminClient()

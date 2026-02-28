@@ -17,19 +17,14 @@ export async function GET() {
                           supabaseAnonKey === ''
 
     if (!supabaseUrl || !supabaseAnonKey || isPlaceholder) {
+      // Don't leak environment details
+      console.error('[Health Check] Missing Supabase environment variables')
       return NextResponse.json(
         {
           status: 'error',
-          message: 'Missing or invalid Supabase environment variables',
-          details: {
-            hasUrl: !!supabaseUrl && !supabaseUrl.includes('placeholder'),
-            hasKey: !!supabaseAnonKey && !supabaseAnonKey.includes('placeholder'),
-            isPlaceholder,
-            environment: process.env.NODE_ENV,
-            hint: 'Please configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your Vercel project settings → Environment Variables'
-          },
+          message: 'Service unavailable',
         },
-        { status: 500 }
+        { status: 503 }
       )
     }
 
@@ -39,16 +34,14 @@ export async function GET() {
       const { data, error } = await supabase.from('users').select('count').limit(1)
 
       if (error) {
+        // Don't leak error details - log server-side only
+        console.error('[Health Check] Database error:', error)
         return NextResponse.json(
           {
             status: 'error',
-            message: 'Database connection failed',
-            details: {
-              error: error.message,
-              code: error.code,
-            },
+            message: 'Service unavailable',
           },
-          { status: 500 }
+          { status: 503 }
         )
       }
 
@@ -58,28 +51,25 @@ export async function GET() {
         timestamp: new Date().toISOString(),
       })
     } catch (dbError: any) {
+      // Don't leak error details
+      console.error('[Health Check] Database connection error:', dbError)
       return NextResponse.json(
         {
           status: 'error',
-          message: 'Database connection error',
-          details: {
-            error: dbError.message,
-            type: dbError.name,
-          },
+          message: 'Service unavailable',
         },
-        { status: 500 }
+        { status: 503 }
       )
     }
   } catch (error: any) {
+    // Don't leak error details
+    console.error('[Health Check] Unexpected error:', error)
     return NextResponse.json(
       {
         status: 'error',
-        message: 'Health check failed',
-        details: {
-          error: error.message,
-        },
+        message: 'Service unavailable',
       },
-      { status: 500 }
+      { status: 503 }
     )
   }
 }
