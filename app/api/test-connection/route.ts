@@ -1,10 +1,27 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+/**
+ * Test connection endpoint - requires authentication
+ * SECURITY: Protected to prevent leaking DB error details publicly
+ */
 export async function GET() {
+  const supabase = await createClient()
+  
+  // Require authentication
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 }
+    )
+  }
+
   try {
-    const supabase = await createClient()
-    
     // Test basic connection
     const { data, error } = await supabase
       .from('users')
@@ -12,13 +29,12 @@ export async function GET() {
       .limit(1)
     
     if (error) {
+      // Don't leak error details - just return generic message
+      console.error('[Test Connection] Database error:', error)
       return NextResponse.json(
         { 
           success: false, 
-          error: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint
+          error: 'Database connection failed'
         },
         { status: 500 }
       )
@@ -30,12 +46,12 @@ export async function GET() {
       timestamp: new Date().toISOString()
     })
   } catch (error: any) {
+    // Don't leak error details
+    console.error('[Test Connection] Unexpected error:', error)
     return NextResponse.json(
       { 
         success: false, 
-        error: error.message || 'Unknown error',
-        type: error.name || 'Error',
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        error: 'Connection test failed'
       },
       { status: 500 }
     )

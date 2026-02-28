@@ -43,16 +43,17 @@ try {
 // In-memory fallback store
 const memoryStore = new Map<string, { count: number; reset: number }>()
 
-// Clean up expired entries every minute
-if (typeof global !== 'undefined' && !redis) {
-  setInterval(() => {
-    const now = Date.now()
-    for (const [key, value] of memoryStore.entries()) {
-      if (value.reset < now) {
-        memoryStore.delete(key)
-      }
+/**
+ * Clean up expired entries from memory store
+ * Called during rate limit checks (not via setInterval, which doesn't work in serverless)
+ */
+function cleanupExpiredEntries() {
+  const now = Date.now()
+  for (const [key, value] of memoryStore.entries()) {
+    if (value.reset < now) {
+      memoryStore.delete(key)
     }
-  }, 60000)
+  }
 }
 
 /**
@@ -91,6 +92,9 @@ export async function rateLimitRedis(
   }
 
   // Fallback to in-memory store
+  // Clean up expired entries before checking (serverless-compatible)
+  cleanupExpiredEntries()
+  
   const current = memoryStore.get(key)
   
   if (!current || current.reset < now) {
