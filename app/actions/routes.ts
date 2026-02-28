@@ -146,6 +146,9 @@ export async function getRoute(id: string) {
   return { data: route, error: null }
 }
 
+// Manager roles that can create routes
+const MANAGER_ROLES = ["super_admin", "operations_manager"]
+
 export async function createRoute(formData: {
   name: string
   origin: string
@@ -178,12 +181,17 @@ export async function createRoute(formData: {
 
   const { data: userData } = await supabase
     .from("users")
-    .select("company_id")
+    .select("company_id, role")
     .eq("id", user.id)
     .single()
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
+  }
+
+  // Check if user has manager role
+  if (!userData.role || !MANAGER_ROLES.includes(userData.role)) {
+    return { error: "Only managers can create routes", data: null }
   }
 
   // Professional validation
