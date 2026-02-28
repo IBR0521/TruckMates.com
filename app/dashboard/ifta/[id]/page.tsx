@@ -9,7 +9,6 @@ import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { getIFTAReport } from "@/app/actions/tax-fuel-reconciliation"
-import { generateIFTAReportPDF } from "@/app/actions/ifta-pdf"
 
 export default function IFTADetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -68,16 +67,20 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
 
   const handleDownload = async () => {
     try {
-      const result = await generateIFTAReportPDF(id)
-      if (result.error) {
-        toast.error(result.error)
+      // Fetch PDF from API route
+      const response = await fetch(`/api/ifta/${id}/pdf`)
+      if (!response.ok) {
+        const error = await response.json()
+        toast.error(error.error || "Failed to generate PDF")
         return
       }
+
+      const html = await response.text()
 
       // Open PDF in new window for printing/downloading
       const printWindow = window.open("", "_blank")
       if (printWindow) {
-        printWindow.document.write(result.html)
+        printWindow.document.write(html)
         printWindow.document.close()
         // Auto-trigger print dialog
         setTimeout(() => {
