@@ -819,11 +819,12 @@ export async function updateLoad(
     return { error: "No company found", data: null }
   }
 
-  // Get current load data for audit trail and status check
+  // Get current load data for audit trail and status check (with company_id verification)
   const { data: currentLoad } = await supabase
     .from("loads")
     .select("*")
     .eq("id", id)
+    .eq("company_id", userData.company_id)
     .single()
 
   if (!currentLoad) {
@@ -962,6 +963,7 @@ export async function updateLoad(
     .from("loads")
     .update(updateData)
     .eq("id", id)
+    .eq("company_id", userData.company_id)
     .select()
     .single()
 

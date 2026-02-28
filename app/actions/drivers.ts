@@ -267,11 +267,25 @@ export async function updateDriver(
 
   const supabase = await createClient()
 
-  // Get current driver data for audit trail
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
+  }
+
+  // Get current driver data for audit trail (with company_id verification)
   const { data: currentDriver } = await supabase
     .from("drivers")
     .select("*")
     .eq("id", id)
+    .eq("company_id", result.company_id)
     .single()
 
   if (!currentDriver) {
@@ -348,6 +362,7 @@ export async function updateDriver(
     .from("drivers")
     .update(updateData)
     .eq("id", id)
+    .eq("company_id", result.company_id)
     .select()
     .single()
 

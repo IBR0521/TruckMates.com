@@ -256,7 +256,12 @@ export async function deleteMaintenanceDocument(documentId: string) {
     }
 
     // Delete from database (trigger will remove from maintenance.documents)
-    const { error: deleteError } = await supabase.from("maintenance_documents").delete().eq("id", documentId)
+    // Defense-in-depth: Add company_id to DELETE query
+    const { error: deleteError } = await supabase
+      .from("maintenance_documents")
+      .delete()
+      .eq("id", documentId)
+      .eq("company_id", result.company_id)
 
     if (deleteError) {
       return { error: deleteError.message, data: null }

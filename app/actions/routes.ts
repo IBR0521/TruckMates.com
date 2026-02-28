@@ -307,11 +307,25 @@ export async function updateRoute(
 ) {
   const supabase = await createClient()
 
-  // Get current route data for audit trail
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
+  }
+
+  // Get current route data for audit trail (with company_id verification)
   const { data: currentRoute } = await supabase
     .from("routes")
     .select("*")
     .eq("id", id)
+    .eq("company_id", result.company_id)
     .single()
 
   if (!currentRoute) {
@@ -355,6 +369,7 @@ export async function updateRoute(
     .from("routes")
     .update(updateData)
     .eq("id", id)
+    .eq("company_id", result.company_id)
     .select()
     .single()
 

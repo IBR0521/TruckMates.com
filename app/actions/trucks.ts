@@ -318,11 +318,25 @@ export async function updateTruck(
 ) {
   const supabase = await createClient()
 
-  // Get current truck data for audit trail
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
+  }
+
+  // Get current truck data for audit trail (with company_id verification)
   const { data: currentTruck } = await supabase
     .from("trucks")
     .select("*")
     .eq("id", id)
+    .eq("company_id", result.company_id)
     .single()
 
   if (!currentTruck) {
@@ -365,6 +379,7 @@ export async function updateTruck(
     .from("trucks")
     .update(updateData)
     .eq("id", id)
+    .eq("company_id", result.company_id)
     .select()
     .single()
 

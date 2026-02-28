@@ -6,6 +6,7 @@
  */
 
 import { useState, useRef, useEffect } from "react"
+import DOMPurify from "dompurify"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -324,7 +325,7 @@ export function TruckMatesAIChat({ threadId, className }: ChatInterfaceProps) {
                     <div 
                       className="markdown-content"
                       dangerouslySetInnerHTML={{ 
-                        __html: formatMarkdown(message.content) 
+                        __html: DOMPurify.sanitize(formatMarkdown(message.content))
                       }}
                     />
                     {message.isStreaming && (

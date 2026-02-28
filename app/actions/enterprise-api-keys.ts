@@ -164,8 +164,12 @@ export async function revokeAPIKey(id: string) {
     return { error: "API key not found" }
   }
 
-  // Delete the API key
-  const { error } = await supabase.from("api_keys").delete().eq("id", id)
+  // Delete the API key (with company_id for defense-in-depth)
+  const { error } = await supabase
+    .from("api_keys")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", result.company_id)
 
   if (error) {
     return { error: error.message }
