@@ -52,14 +52,45 @@ export function GoogleMapsRoute({
 
   // Load Google Maps script
   useEffect(() => {
-    if (window.google && window.google.maps) {
+    // Check if Google Maps is already loaded
+    if (window.google?.maps?.Geocoder && typeof window.google.maps.Geocoder === 'function' && 
+        window.google.maps.Map && typeof window.google.maps.Map === 'function') {
       setMapLoaded(true)
       return
+    }
+
+    // Check if script is already being loaded
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
+    if (existingScript) {
+      // Wait for existing script to load
+      const checkReady = setInterval(() => {
+        if (window.google?.maps?.Geocoder && typeof window.google.maps.Geocoder === 'function' && 
+            window.google.maps.Map && typeof window.google.maps.Map === 'function') {
+          clearInterval(checkReady)
+          setMapLoaded(true)
+        }
+      }, 100)
+      
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        clearInterval(checkReady)
+        if (window.google?.maps?.Geocoder && typeof window.google.maps.Geocoder === 'function') {
+          setMapLoaded(true)
+        } else {
+          setError("Google Maps API failed to initialize. Please refresh the page.")
+          setIsLoading(false)
+        }
+      }, 10000)
+      
+      return () => {
+        clearInterval(checkReady)
+      }
     }
 
     // Get API key - try env first, then fetch from API route
     let apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     let script: HTMLScriptElement | null = null
+    let checkReadyInterval: NodeJS.Timeout | null = null
     
     const loadScript = async () => {
       // If no API key in env, try to fetch from API route
@@ -95,17 +126,17 @@ export function GoogleMapsRoute({
       script.defer = true
       script.onload = () => {
         // Wait for Google Maps API to be fully initialized
-        const checkReady = setInterval(() => {
+        checkReadyInterval = setInterval(() => {
           if (window.google?.maps?.Geocoder && typeof window.google.maps.Geocoder === 'function' && 
               window.google.maps.Map && typeof window.google.maps.Map === 'function') {
-            clearInterval(checkReady)
+            if (checkReadyInterval) clearInterval(checkReadyInterval)
             setMapLoaded(true)
           }
         }, 100)
         
         // Timeout after 10 seconds
         setTimeout(() => {
-          clearInterval(checkReady)
+          if (checkReadyInterval) clearInterval(checkReadyInterval)
           if (window.google?.maps?.Geocoder && typeof window.google.maps.Geocoder === 'function') {
             setMapLoaded(true)
           } else {
@@ -125,10 +156,12 @@ export function GoogleMapsRoute({
     loadScript()
 
     return () => {
-      // Cleanup - remove script if it exists
-      if (script && document.head.contains(script)) {
-        document.head.removeChild(script)
+      // Cleanup intervals
+      if (checkReadyInterval) {
+        clearInterval(checkReadyInterval)
       }
+      // Don't remove script - other components might be using it
+      // The browser will handle cleanup when the page unloads
     }
   }, [])
 
