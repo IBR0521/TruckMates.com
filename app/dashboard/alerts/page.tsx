@@ -10,12 +10,27 @@ import { getAlerts, acknowledgeAlert, resolveAlert } from "@/app/actions/alerts"
 import { Bell, AlertTriangle, CheckCircle2, XCircle, Info, Clock } from "lucide-react"
 import { format } from "date-fns"
 import Link from "next/link"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<any[]>([])
+  const [allAlerts, setAllAlerts] = useState<any[]>([]) // FIXED: Store unfiltered alerts for summary cards
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState("active") // active, acknowledged, resolved, all
   const [priorityFilter, setPriorityFilter] = useState("all") // all, low, normal, high, critical
+  // FIXED: Add confirmation dialog state
+  const [acknowledgeDialogOpen, setAcknowledgeDialogOpen] = useState(false)
+  const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
+  const [selectedAlert, setSelectedAlert] = useState<any>(null)
 
   useEffect(() => {
     loadAlerts()
@@ -24,18 +39,28 @@ export default function AlertsPage() {
   async function loadAlerts() {
     setIsLoading(true)
     try {
-      const result = await getAlerts({
+      // FIXED: Fetch unfiltered alerts for summary cards
+      const allResult = await getAlerts({
+        limit: 1000, // Get all for accurate counts
+      })
+
+      // Fetch filtered alerts for the list
+      const filteredResult = await getAlerts({
         status: filter === "all" ? undefined : filter,
         priority: priorityFilter === "all" ? undefined : priorityFilter,
         limit: 100,
       })
 
-      if (result.data) {
-        setAlerts(result.data)
-      } else if (result.error) {
+      if (allResult.data) {
+        setAllAlerts(allResult.data) // Store for summary cards
+      }
+      
+      if (filteredResult.data) {
+        setAlerts(filteredResult.data) // Store for list view
+      } else if (filteredResult.error) {
         // Only show error if it's not "No company found" (user might be setting up)
-        if (result.error !== "No company found") {
-          toast.error(result.error)
+        if (filteredResult.error !== "No company found") {
+          toast.error(filteredResult.error)
         }
       }
     } catch (error: any) {
@@ -45,13 +70,27 @@ export default function AlertsPage() {
     }
   }
 
-  async function handleAcknowledge(id: string) {
+  // FIXED: Add confirmation dialogs before actions
+  function handleAcknowledgeClick(alert: any) {
+    setSelectedAlert(alert)
+    setAcknowledgeDialogOpen(true)
+  }
+
+  function handleResolveClick(alert: any) {
+    setSelectedAlert(alert)
+    setResolveDialogOpen(true)
+  }
+
+  async function handleAcknowledge() {
+    if (!selectedAlert) return
     try {
-      const result = await acknowledgeAlert(id)
+      const result = await acknowledgeAlert(selectedAlert.id)
       if (result.error) {
         toast.error(result.error)
       } else {
         toast.success("Alert acknowledged")
+        setAcknowledgeDialogOpen(false)
+        setSelectedAlert(null)
         loadAlerts()
       }
     } catch (error: any) {
@@ -59,13 +98,16 @@ export default function AlertsPage() {
     }
   }
 
-  async function handleResolve(id: string) {
+  async function handleResolve() {
+    if (!selectedAlert) return
     try {
-      const result = await resolveAlert(id)
+      const result = await resolveAlert(selectedAlert.id)
       if (result.error) {
         toast.error(result.error)
       } else {
         toast.success("Alert resolved")
+        setResolveDialogOpen(false)
+        setSelectedAlert(null)
         loadAlerts()
       }
     } catch (error: any) {
@@ -105,8 +147,11 @@ export default function AlertsPage() {
     return type.split("_").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ")
   }
 
-  const activeAlerts = alerts.filter(a => a.status === "active")
-  const criticalAlerts = alerts.filter(a => a.priority === "critical" && a.status === "active")
+  // FIXED: Use allAlerts for summary cards (unfiltered counts)
+  const activeAlerts = allAlerts.filter(a => a.status === "active")
+  const criticalAlerts = allAlerts.filter(a => a.priority === "critical" && a.status === "active")
+  const acknowledgedAlerts = allAlerts.filter(a => a.status === "acknowledged")
+  const resolvedAlerts = allAlerts.filter(a => a.status === "resolved")
 
   return (
     <div className="w-full">
@@ -147,7 +192,7 @@ export default function AlertsPage() {
                 <div>
                   <p className="text-sm text-muted-foreground">Acknowledged</p>
                   <p className="text-2xl font-bold">
-                    {alerts.filter(a => a.status === "acknowledged").length}
+                    {acknowledgedAlerts.length}
                   </p>
                 </div>
                 <Info className="w-8 h-8 text-blue-500" />
@@ -158,7 +203,7 @@ export default function AlertsPage() {
                 <div>
                   <p className="text-sm text-muted-foreground">Resolved</p>
                   <p className="text-2xl font-bold">
-                    {alerts.filter(a => a.status === "resolved").length}
+                    {resolvedAlerts.length}
                   </p>
                 </div>
                 <CheckCircle2 className="w-8 h-8 text-green-500" />
@@ -245,14 +290,14 @@ export default function AlertsPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleAcknowledge(alert.id)}
+                            onClick={() => handleAcknowledgeClick(alert)}
                           >
                             Acknowledge
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleResolve(alert.id)}
+                            onClick={() => handleResolveClick(alert)}
                           >
                             Resolve
                           </Button>
@@ -262,7 +307,7 @@ export default function AlertsPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleResolve(alert.id)}
+                          onClick={() => handleResolveClick(alert)}
                         >
                           Resolve
                         </Button>
@@ -275,6 +320,51 @@ export default function AlertsPage() {
           )}
         </div>
       </div>
+
+      {/* FIXED: Confirmation dialogs */}
+      <AlertDialog open={acknowledgeDialogOpen} onOpenChange={setAcknowledgeDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Acknowledge Alert</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to acknowledge "{selectedAlert?.title}"?
+              {selectedAlert?.priority === "critical" || selectedAlert?.priority === "high" ? (
+                <span className="block mt-2 text-red-600 font-semibold">
+                  This is a {selectedAlert?.priority} priority alert. This action cannot be undone.
+                </span>
+              ) : (
+                <span className="block mt-2 text-muted-foreground">This action cannot be undone.</span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAcknowledge}>Acknowledge</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={resolveDialogOpen} onOpenChange={setResolveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Resolve Alert</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to resolve "{selectedAlert?.title}"?
+              {selectedAlert?.priority === "critical" || selectedAlert?.priority === "high" ? (
+                <span className="block mt-2 text-red-600 font-semibold">
+                  This is a {selectedAlert?.priority} priority alert. This action cannot be undone.
+                </span>
+              ) : (
+                <span className="block mt-2 text-muted-foreground">This action cannot be undone.</span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResolve}>Resolve</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

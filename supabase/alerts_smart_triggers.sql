@@ -15,6 +15,17 @@ DECLARE
   v_alert_message TEXT;
   v_priority TEXT;
 BEGIN
+  -- FIXED: Add NULL guard - don't process if expiration_date is NULL
+  IF NEW.expiration_date IS NULL THEN
+    RETURN NEW;
+  END IF;
+  
+  -- FIXED: Only process on UPDATE, not INSERT (to avoid firing on new records with future dates)
+  -- Check if this is an INSERT with a future expiration date
+  IF TG_OP = 'INSERT' AND (NEW.expiration_date::DATE - CURRENT_DATE)::INTEGER > 60 THEN
+    RETURN NEW; -- Don't create alert for new records with expiration > 60 days away
+  END IF;
+  
   -- Calculate days until expiration
   v_days_until_expiry := (NEW.expiration_date::DATE - CURRENT_DATE)::INTEGER;
   
@@ -239,7 +250,8 @@ CREATE TRIGGER trigger_auto_complete_maintenance_reminders
 -- ============================================================================
 
 -- Function to auto-create maintenance reminders based on mileage
-CREATE OR REPLACE FUNCTION public.auto_create_maintenance_reminders_from_schedule()
+-- MEDIUM FIX 4: Accept company_id parameter to prevent cross-company data writes
+CREATE OR REPLACE FUNCTION public.auto_create_maintenance_reminders_from_schedule(p_company_id UUID DEFAULT NULL)
 RETURNS INTEGER AS $$
 DECLARE
   v_truck RECORD;
@@ -247,12 +259,14 @@ DECLARE
   v_current_mileage INTEGER;
   v_reminder_created INTEGER := 0;
   v_days_until_due INTEGER;
+  v_avg_daily_miles DECIMAL := 300.0; -- FIXED: Declare at function level
 BEGIN
-  -- Loop through all active trucks
+  -- Loop through active trucks (filtered by company_id if provided)
   FOR v_truck IN
     SELECT id, company_id, current_mileage, truck_number
     FROM public.trucks
     WHERE status = 'active'
+      AND (p_company_id IS NULL OR company_id = p_company_id)
   LOOP
     v_current_mileage := COALESCE(v_truck.current_mileage, 0);
     
@@ -283,8 +297,27 @@ BEGIN
       ) THEN
         -- Calculate due date
         IF v_maintenance.next_service_mileage IS NOT NULL THEN
-          -- Estimate date based on average daily miles (assume 300 miles/day)
-          v_days_until_due := GREATEST(1, (v_maintenance.next_service_mileage - v_current_mileage) / 300);
+          -- FIXED: Calculate average daily miles from actual mileage history
+          -- Fall back to 300 only if no history exists
+          -- Reset to default for each truck
+          v_avg_daily_miles := 300.0;
+          
+          -- Try to get average daily miles from mileage log
+          SELECT COALESCE(AVG(daily_miles), 300.0) INTO v_avg_daily_miles
+          FROM (
+            SELECT 
+              DATE(recorded_at) as day,
+              MAX(mileage) - MIN(mileage) as daily_miles
+            FROM public.truck_mileage_log
+            WHERE truck_id = v_truck.id
+              AND recorded_at >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY DATE(recorded_at)
+            HAVING MAX(mileage) - MIN(mileage) > 0
+          ) daily_stats
+          WHERE daily_miles > 0;
+          
+          -- Estimate date based on calculated average daily miles
+          v_days_until_due := GREATEST(1, (v_maintenance.next_service_mileage - v_current_mileage) / NULLIF(v_avg_daily_miles, 0));
         ELSE
           v_days_until_due := (v_maintenance.next_service_date::DATE - CURRENT_DATE)::INTEGER;
         END IF;

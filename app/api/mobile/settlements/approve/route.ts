@@ -77,22 +77,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
-    // Send notification to company (optional)
+    // Send notification to company (optional) - with opt-in check
     try {
       const { sendSMS } = await import("@/app/actions/sms")
-      // Get company admin users to notify
+      // Get company admin users to notify - check SMS notification preferences
       const { data: admins } = await supabase
         .from("users")
-        .select("phone")
+        .select("id, phone, full_name, sms_notifications_enabled")
         .eq("company_id", companyId)
         .eq("role", "manager")
+        .eq("sms_notifications_enabled", true) // Only users who opted in
+        .not("phone", "is", null)
         .limit(5)
 
-      // Send SMS to first admin (if phone exists)
+      // Get driver name for notification
+      const { data: driverData } = await supabase
+        .from("drivers")
+        .select("name")
+        .eq("id", driver.id)
+        .single()
+
+      const driverName = driverData?.name || `Driver ${driver.id.substring(0, 8)}`
+
+      // Send SMS to first admin who opted in (if phone exists)
       if (admins && admins.length > 0 && admins[0].phone) {
         await sendSMS({
           to: admins[0].phone,
-          message: `Driver ${driver.id} approved settlement ${settlement_id.substring(0, 8)}. Net pay: $${updatedSettlement.net_pay}`,
+          message: `${driverName} approved settlement ${settlement_id.substring(0, 8)}. Status: ${updatedSettlement.status}`,
+          // Don't include net pay amount in SMS for privacy
         }).catch((err) => console.error("SMS notification error:", err))
       }
     } catch (notificationError) {

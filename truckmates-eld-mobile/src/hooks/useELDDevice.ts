@@ -128,7 +128,20 @@ export function useELDDevice(): UseELDDeviceReturn {
       }
 
       // Generate new serial based on device ID
-      const uniqueId = DeviceInfo.getUniqueId()
+      // CRITICAL FIX: getUniqueId() is async in newer versions - must await
+      let uniqueId: string
+      try {
+        // Try async version first
+        uniqueId = await DeviceInfo.getUniqueId()
+      } catch (error) {
+        // Fallback to sync version if available
+        try {
+          uniqueId = DeviceInfo.getUniqueIdSync()
+        } catch (syncError) {
+          // Final fallback
+          uniqueId = `${Platform.OS}-${Date.now()}`
+        }
+      }
       const serial = `MOBILE-${Platform.OS.toUpperCase()}-${uniqueId.substring(0, 12)}`
       await AsyncStorage.setItem(STORAGE_KEYS.DEVICE_SERIAL, serial)
       return serial

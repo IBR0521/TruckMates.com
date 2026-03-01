@@ -72,10 +72,35 @@ export async function updateBillingInfo(billing: {
     return { error: "Not authenticated", success: false }
   }
 
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", success: false }
+  // HIGH FIX 1: Add RBAC check - only managers can update billing info
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role, company_id")
+    .eq("id", user.id)
+    .single()
+
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!userData || !MANAGER_ROLES.includes(userData.role)) {
+    return { error: "Only managers can update billing information", success: false }
   }
+
+  if (!userData.company_id) {
+    return { error: "No company found", success: false }
+  }
+
+  const result = { company_id: userData.company_id }
+
+  // MEDIUM FIX 17: Build explicit updateData object to prevent column injection
+  const updateData: any = {}
+  if (billing.billing_company_name !== undefined) updateData.billing_company_name = billing.billing_company_name
+  if (billing.billing_email !== undefined) updateData.billing_email = billing.billing_email
+  if (billing.billing_phone !== undefined) updateData.billing_phone = billing.billing_phone
+  if (billing.billing_address !== undefined) updateData.billing_address = billing.billing_address
+  if (billing.tax_id !== undefined) updateData.tax_id = billing.tax_id
+  if (billing.tax_exempt !== undefined) updateData.tax_exempt = billing.tax_exempt
+  if (billing.payment_method !== undefined) updateData.payment_method = billing.payment_method
+  if (billing.payment_terms !== undefined) updateData.payment_terms = billing.payment_terms
+  if (billing.billing_notes !== undefined) updateData.billing_notes = billing.billing_notes
 
   // Check if billing info exists
   const { data: existing } = await supabase
@@ -88,7 +113,7 @@ export async function updateBillingInfo(billing: {
     // Update existing
     const { error } = await supabase
       .from("company_billing_info")
-      .update(billing)
+      .update(updateData)
       .eq("company_id", result.company_id)
 
     if (error) {
@@ -100,7 +125,7 @@ export async function updateBillingInfo(billing: {
       .from("company_billing_info")
       .insert({
         company_id: result.company_id,
-        ...billing,
+        ...updateData,
       })
 
     if (error) {

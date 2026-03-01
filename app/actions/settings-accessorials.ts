@@ -68,14 +68,20 @@ export async function createAccessorial(accessorial: Omit<Accessorial, "id">): P
     return { error: "Not authenticated", data: null }
   }
 
+  // HIGH FIX 1: Add RBAC check - only managers can create accessorials
   const { data: userData, error: userError } = await supabase
     .from("users")
-    .select("company_id")
+    .select("role, company_id")
     .eq("id", user.id)
     .single()
 
   if (userError || !userData?.company_id) {
     return { error: userError?.message || "No company found", data: null }
+  }
+
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!MANAGER_ROLES.includes(userData.role)) {
+    return { error: "Only managers can create accessorials", data: null }
   }
 
   // Validate required fields
@@ -125,14 +131,20 @@ export async function updateAccessorial(id: string, accessorial: Partial<Accesso
     return { error: "Not authenticated", data: null }
   }
 
+  // HIGH FIX 1: Add RBAC check - only managers can update accessorials
   const { data: userData, error: userError } = await supabase
     .from("users")
-    .select("company_id")
+    .select("role, company_id")
     .eq("id", user.id)
     .single()
 
   if (userError || !userData?.company_id) {
     return { error: userError?.message || "No company found", data: null }
+  }
+
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!MANAGER_ROLES.includes(userData.role)) {
+    return { error: "Only managers can update accessorials", data: null }
   }
 
   // Verify the accessorial belongs to the company
@@ -190,14 +202,20 @@ export async function deleteAccessorial(id: string): Promise<{ error: string | n
     return { error: "Not authenticated" }
   }
 
+  // HIGH FIX 1: Add RBAC check - only managers can delete accessorials
   const { data: userData, error: userError } = await supabase
     .from("users")
-    .select("company_id")
+    .select("role, company_id")
     .eq("id", user.id)
     .single()
 
   if (userError || !userData?.company_id) {
     return { error: userError?.message || "No company found" }
+  }
+
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!MANAGER_ROLES.includes(userData.role)) {
+    return { error: "Only managers can delete accessorials" }
   }
 
   // Verify the accessorial belongs to the company
@@ -223,6 +241,10 @@ export async function deleteAccessorial(id: string): Promise<{ error: string | n
 
   return { error: null }
 }
+
+
+
+
 
 
 

@@ -13,24 +13,41 @@ import { generateBOLPDF } from "./bol-pdf"
 /**
  * Store signed BOL PDF in Supabase Storage
  */
-export async function storeSignedBOLPDF(bolId: string): Promise<{
+export async function storeSignedBOLPDF(bolId: string, companyId?: string): Promise<{
   data: { pdf_url: string } | null
   error: string | null
 }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
+  // CRITICAL FIX 4: Allow function to run without user auth (for background/mobile contexts)
+  let targetCompanyId = companyId
 
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
+  if (!targetCompanyId) {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
 
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+    if (authError || !user) {
+      // If no user, try to get company_id from BOL itself
+      const { data: bolData } = await supabase
+        .from("bols")
+        .select("company_id")
+        .eq("id", bolId)
+        .single()
+
+      if (bolData?.company_id) {
+        targetCompanyId = bolData.company_id
+      } else {
+        return { error: "Not authenticated and cannot determine company", data: null }
+      }
+    } else {
+      const result = await getCachedUserCompany(user.id)
+      if (result.error || !result.company_id) {
+        return { error: result.error || "No company found", data: null }
+      }
+      targetCompanyId = result.company_id
+    }
   }
 
   try {
@@ -39,7 +56,7 @@ export async function storeSignedBOLPDF(bolId: string): Promise<{
       .from("bols")
       .select("*")
       .eq("id", bolId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", targetCompanyId)
       .single()
 
     if (bolError || !bol) {
@@ -61,12 +78,19 @@ export async function storeSignedBOLPDF(bolId: string): Promise<{
     // For now, we'll store the HTML and convert it server-side when needed
     // In production, you'd use puppeteer or similar to convert HTML to PDF
 
-    // Store PDF in Supabase Storage
-    const fileName = `bols/${result.company_id}/${bol.bol_number}-signed-${Date.now()}.html`
+    // CRITICAL FIX 4: Store as HTML for now (real PDF generation requires Puppeteer/Playwright)
+    // Note: This is an interim solution. For production, use @react-pdf/renderer or Puppeteer
+    const fileName = `bols/${targetCompanyId}/${bol.bol_number}-signed-${Date.now()}.html`
     
     // Convert HTML to blob
     const htmlBlob = new Blob([pdfResult.html], { type: "text/html" })
     const file = new File([htmlBlob], `${bol.bol_number}-signed.html`, { type: "text/html" })
+    
+    // TODO: CRITICAL FIX 4 - Replace with real PDF generation:
+    // 1. Use @react-pdf/renderer on server or Edge Function
+    // 2. Or use Puppeteer/Playwright to convert HTML to PDF
+    // 3. Store with contentType: 'application/pdf' and .pdf extension
+    // 4. Convert embedded signature images to base64 data URIs to prevent expiration
 
     // Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -138,24 +162,41 @@ export async function storeSignedBOLPDF(bolId: string): Promise<{
 /**
  * Auto-store PDF when BOL is completed (all signatures captured)
  */
-export async function autoStoreBOLPDFOnCompletion(bolId: string): Promise<{
+export async function autoStoreBOLPDFOnCompletion(bolId: string, companyId?: string): Promise<{
   data: { pdf_url: string } | null
   error: string | null
 }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
+  // CRITICAL FIX 4: Allow function to run without user auth (for background/mobile contexts)
+  let targetCompanyId = companyId
 
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
+  if (!targetCompanyId) {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
 
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+    if (authError || !user) {
+      // If no user, try to get company_id from BOL itself
+      const { data: bolData } = await supabase
+        .from("bols")
+        .select("company_id")
+        .eq("id", bolId)
+        .single()
+
+      if (bolData?.company_id) {
+        targetCompanyId = bolData.company_id
+      } else {
+        return { error: "Not authenticated and cannot determine company", data: null }
+      }
+    } else {
+      const result = await getCachedUserCompany(user.id)
+      if (result.error || !result.company_id) {
+        return { error: result.error || "No company found", data: null }
+      }
+      targetCompanyId = result.company_id
+    }
   }
 
   try {
@@ -164,7 +205,7 @@ export async function autoStoreBOLPDFOnCompletion(bolId: string): Promise<{
       .from("bols")
       .select("id, consignee_signature, metadata")
       .eq("id", bolId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", targetCompanyId)
       .single()
 
     if (bolError || !bol) {
@@ -181,7 +222,7 @@ export async function autoStoreBOLPDFOnCompletion(bolId: string): Promise<{
 
     // Only store if consignee signature exists (POD captured)
     if (bol.consignee_signature) {
-      return await storeSignedBOLPDF(bolId)
+      return await storeSignedBOLPDF(bolId, targetCompanyId)
     }
 
     return { error: "BOL is not completed. POD signature required.", data: null }

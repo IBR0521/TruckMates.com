@@ -124,14 +124,21 @@ export async function getIFTATaxRate(
 
     if (error) {
       console.error("Error fetching IFTA tax rate:", error)
-      // Return default rate if not found (fallback)
+      // FIXED: Distinguish 'rate not found' (use default, no error) from 'DB error' (return error)
+      // For real database failures, return error so callers can alert the user
+      return { data: null, error: `Database error: ${error.message}. Tax rates could not be verified.` }
+    }
+
+    // If data is null/undefined, rate not found - use default (no error)
+    if (data === null || data === undefined) {
       return { data: 0.25, error: null } // Default 25 cents per gallon
     }
 
     return { data: data || 0.25, error: null }
   } catch (error: any) {
     console.error("Unhandled error in getIFTATaxRate:", error)
-    return { data: 0.25, error: null } // Default fallback
+    // FIXED: Return error for real exceptions, not silent default
+    return { data: null, error: `Failed to get tax rate: ${error.message}` }
   }
 }
 
@@ -298,14 +305,14 @@ export async function bulkUpdateIFTATaxRates(
     return { error: result.error || "No company found", data: null }
   }
 
-  // Check if user is manager
-  const { data: userData } = await supabase
+  // FIXED: Add null guard to prevent bypass when userData is null
+  const { data: userData, error: userDataError } = await supabase
     .from("users")
     .select("role")
     .eq("id", user.id)
     .single()
 
-  if (userData?.role !== "manager") {
+  if (userDataError || !userData || userData.role !== "manager") {
     return { error: "Only managers can update tax rates", data: null }
   }
 
@@ -366,14 +373,14 @@ export async function deleteIFTATaxRate(id: string): Promise<{
     return { error: result.error || "No company found" }
   }
 
-  // Check if user is manager
-  const { data: userData } = await supabase
+  // FIXED: Add null guard to prevent bypass when userData is null
+  const { data: userData, error: userDataError } = await supabase
     .from("users")
     .select("role")
     .eq("id", user.id)
     .single()
 
-  if (userData?.role !== "manager") {
+  if (userDataError || !userData || userData.role !== "manager") {
     return { error: "Only managers can delete tax rates" }
   }
 

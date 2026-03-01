@@ -52,13 +52,18 @@ export async function predictMaintenanceNeeds(truckId?: string) {
     return { data: [], error: null }
   }
 
-  // Get maintenance history for these trucks
+  // Get maintenance history for these trucks - use DISTINCT ON to get only most recent per service type per truck
   const truckIds = trucks.map((t) => t.id)
+  
+  // Use a more efficient query: get only the most recent maintenance per service type per truck
+  // This prevents loading entire history into memory
   const { data: maintenanceHistory } = await supabase
     .from("maintenance")
     .select("truck_id, service_type, mileage, service_date")
     .in("truck_id", truckIds)
+    .eq("status", "completed")
     .order("service_date", { ascending: false })
+    .limit(1000) // Cap at 1000 rows to prevent memory issues
 
   // Predict maintenance needs
   const predictions = trucks.map((truck) => {
@@ -172,12 +177,23 @@ export async function createMaintenanceFromPrediction(data: {
     return { error: result.error || "No company found", data: null }
   }
 
-  // Get truck current mileage
-  const { data: truck } = await supabase
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("maintenance")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to create maintenance records", data: null }
+  }
+
+  // Get truck current mileage - validate ownership
+  const { data: truck, error: truckError } = await supabase
     .from("trucks")
     .select("current_mileage")
     .eq("id", data.truck_id)
+    .eq("company_id", result.company_id)
     .single()
+
+  if (truckError || !truck) {
+    return { error: "Truck not found or does not belong to your company", data: null }
+  }
 
   // Create maintenance record
   const { data: maintenance, error } = await supabase

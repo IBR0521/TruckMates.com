@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { sanitizeString, validateRequiredString, validateDate, validatePositiveNumber } from "@/lib/validation"
+import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
 export async function getMaintenance() {
   const supabase = await createClient()
@@ -76,6 +77,24 @@ export async function createMaintenance(formData: {
     return { error: "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("maintenance")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to create maintenance records", data: null }
+  }
+
+  // Validate truck_id ownership
+  const { data: truck, error: truckError } = await supabase
+    .from("trucks")
+    .select("id")
+    .eq("id", formData.truck_id)
+    .eq("company_id", userData.company_id)
+    .single()
+
+  if (truckError || !truck) {
+    return { error: "Truck not found or does not belong to your company", data: null }
+  }
+
   // Validate and sanitize input
   if (!validateRequiredString(formData.truck_id, 1, 100)) {
     return { error: "Truck ID is required", data: null }
@@ -89,11 +108,11 @@ export async function createMaintenance(formData: {
     return { error: "Invalid scheduled date format (use YYYY-MM-DD)", data: null }
   }
 
-  // Sanitize string inputs
-  const sanitizedServiceType = sanitizeString(formData.service_type, 1, 100)
-  const sanitizedPriority = formData.priority ? sanitizeString(formData.priority, 1, 20) : "normal"
-  const sanitizedNotes = formData.notes ? sanitizeString(formData.notes, 0, 2000) : null
-  const sanitizedVendor = formData.vendor_id ? sanitizeString(formData.vendor_id, 1, 200) : null
+  // Sanitize string inputs (sanitizeString takes maxLength only, not minLength)
+  const sanitizedServiceType = sanitizeString(formData.service_type, 100)
+  const sanitizedPriority = formData.priority ? sanitizeString(formData.priority, 20) : "normal"
+  const sanitizedNotes = formData.notes ? sanitizeString(formData.notes, 2000) : null
+  const sanitizedVendor = formData.vendor ? sanitizeString(formData.vendor, 200) : null
 
   // Validate numeric fields
   if (formData.current_mileage !== undefined && formData.current_mileage !== null) {
@@ -226,6 +245,18 @@ export async function updateMaintenanceStatus(
     return { error: "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkEditPermission("maintenance")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to update maintenance records", data: null }
+  }
+
+  // Validate status enum
+  const validStatuses = ["scheduled", "in_progress", "completed", "cancelled"]
+  if (!validStatuses.includes(status)) {
+    return { error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`, data: null }
+  }
+
   const updateData: any = {
     status,
     updated_at: new Date().toISOString(),
@@ -279,6 +310,12 @@ export async function deleteMaintenance(id: string) {
 
   if (!userData?.company_id) {
     return { error: "No company found" }
+  }
+
+  // RBAC check
+  const permissionCheck = await checkDeletePermission("maintenance")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to delete maintenance records" }
   }
 
   const { error } = await supabase

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { validateRequiredString, sanitizeString } from "@/lib/validation"
+import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
 /**
  * Check if a point is inside a geofence using PostGIS (database-level)
@@ -90,15 +91,21 @@ function isPointInGeofence(
       return false
     }
     // Ray casting algorithm for point in polygon
+    // Correct axes: x = longitude, y = latitude
     let inside = false
     for (let i = 0, j = geofence.polygon_coordinates.length - 1; i < geofence.polygon_coordinates.length; j = i++) {
-      const xi = geofence.polygon_coordinates[i].lat || geofence.polygon_coordinates[i].latitude
-      const yi = geofence.polygon_coordinates[i].lng || geofence.polygon_coordinates[i].longitude
-      const xj = geofence.polygon_coordinates[j].lat || geofence.polygon_coordinates[j].latitude
-      const yj = geofence.polygon_coordinates[j].lng || geofence.polygon_coordinates[j].longitude
+      // Handle both {lat, lng} and [lat, lng] formats
+      const coordI = geofence.polygon_coordinates[i]
+      const coordJ = geofence.polygon_coordinates[j]
+      
+      const xi = (typeof coordI === 'object' && 'lng' in coordI) ? coordI.lng : (Array.isArray(coordI) ? coordI[1] : coordI.longitude)
+      const yi = (typeof coordI === 'object' && 'lat' in coordI) ? coordI.lat : (Array.isArray(coordI) ? coordI[0] : coordI.latitude)
+      const xj = (typeof coordJ === 'object' && 'lng' in coordJ) ? coordJ.lng : (Array.isArray(coordJ) ? coordJ[1] : coordJ.longitude)
+      const yj = (typeof coordJ === 'object' && 'lat' in coordJ) ? coordJ.lat : (Array.isArray(coordJ) ? coordJ[0] : coordJ.latitude)
 
+      // Ray casting: x = longitude, y = latitude
       const intersect =
-        yi > lng !== yj > lng && lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi
+        yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi
       if (intersect) inside = !inside
     }
     return inside
@@ -144,27 +151,24 @@ export async function getGeofences(filters?: {
       query = query.eq("is_active", filters.is_active)
     }
 
+    // Use database-level JSONB contains operator for array filtering (more efficient)
+    if (filters?.truck_id) {
+      // Filter: assigned_trucks is null OR assigned_trucks contains truck_id
+      query = query.or(`assigned_trucks.is.null,assigned_trucks.cs.{${filters.truck_id}}`)
+    }
+
+    if (filters?.route_id) {
+      // Filter: assigned_routes is null OR assigned_routes contains route_id
+      query = query.or(`assigned_routes.is.null,assigned_routes.cs.{${filters.route_id}}`)
+    }
+
     const { data: geofences, error } = await query
 
     if (error) {
       return { error: error.message, data: null }
     }
 
-    // Filter by truck_id if provided
-    let filteredGeofences = geofences || []
-    if (filters?.truck_id) {
-      filteredGeofences = filteredGeofences.filter(
-        (g) => !g.assigned_trucks || g.assigned_trucks.includes(filters.truck_id!)
-      )
-    }
-
-    if (filters?.route_id) {
-      filteredGeofences = filteredGeofences.filter(
-        (g) => !g.assigned_routes || g.assigned_routes.includes(filters.route_id!)
-      )
-    }
-
-    return { data: filteredGeofences, error: null }
+    return { data: geofences || [], error: null }
   } catch (error: any) {
     return { error: error.message || "Failed to get geofences", data: null }
   }
@@ -240,6 +244,12 @@ export async function createGeofence(formData: {
   entry_load_status?: string
   exit_load_status?: string
 }) {
+  // Check permission
+  const permission = await checkCreatePermission("geofences")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to create geofences", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -350,6 +360,12 @@ export async function updateGeofence(id: string, formData: Partial<{
   state: string
   zip_code: string
 }>) {
+  // Check permission
+  const permission = await checkEditPermission("geofences")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to edit geofences", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -446,6 +462,12 @@ export async function updateGeofence(id: string, formData: Partial<{
  * Delete geofence
  */
 export async function deleteGeofence(id: string) {
+  // Check permission
+  const permission = await checkDeletePermission("geofences")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to delete geofences", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -531,6 +553,25 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
 
     const events: any[] = []
 
+    // Batch fetch all recent visits for this truck across all geofences
+    const geofenceIds = geofences.map(g => g.id)
+    const { data: allRecentVisits } = await supabase
+      .from("zone_visits")
+      .select("*")
+      .eq("truck_id", truckId)
+      .in("geofence_id", geofenceIds)
+      .order("timestamp", { ascending: false })
+
+    // Group visits by geofence_id (get most recent per geofence)
+    const visitsByGeofence = new Map<string, any>()
+    if (allRecentVisits) {
+      allRecentVisits.forEach(visit => {
+        if (!visitsByGeofence.has(visit.geofence_id)) {
+          visitsByGeofence.set(visit.geofence_id, visit)
+        }
+      })
+    }
+
     for (const geofence of geofences) {
       // Check if truck is assigned to this geofence (if assignments exist)
       if (geofence.assigned_trucks && geofence.assigned_trucks.length > 0) {
@@ -548,15 +589,8 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
         isInside = isPointInGeofence(latitude, longitude, geofence)
       }
 
-      // Check for recent visit to determine entry/exit
-      const { data: recentVisit } = await supabase
-        .from("zone_visits")
-        .select("*")
-        .eq("geofence_id", geofence.id)
-        .eq("truck_id", truckId)
-        .order("timestamp", { ascending: false })
-        .limit(1)
-        .single()
+      // Get recent visit from batched data
+      const recentVisit = visitsByGeofence.get(geofence.id)
 
       const wasInside = recentVisit?.event_type === "entry" && !recentVisit.exit_timestamp
 

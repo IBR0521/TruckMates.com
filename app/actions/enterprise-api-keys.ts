@@ -37,9 +37,10 @@ export async function getAPIKeys() {
     return { error: result.error || "No company found", data: null }
   }
 
+  // MEDIUM FIX 8: Select only safe fields - never return key_hash to client
   const { data: keys, error } = await supabase
     .from("api_keys")
-    .select("*")
+    .select("id, name, key_prefix, is_active, expires_at, created_at, last_used_at, rate_limit_per_minute, rate_limit_per_day, allowed_ips, scopes, created_by")
     .eq("company_id", result.company_id)
     .order("created_at", { ascending: false })
 
@@ -231,12 +232,22 @@ export async function updateAPIKey(
     return { error: "API key not found", data: null }
   }
 
+  // MEDIUM FIX 9: Build explicit updateData object to prevent overwriting key_hash, company_id, etc.
+  const updateData: any = {}
+  if (updates.name !== undefined) updateData.name = updates.name
+  if (updates.is_active !== undefined) updateData.is_active = updates.is_active
+  if (updates.rate_limit_per_minute !== undefined) updateData.rate_limit_per_minute = updates.rate_limit_per_minute
+  if (updates.rate_limit_per_day !== undefined) updateData.rate_limit_per_day = updates.rate_limit_per_day
+  if (updates.allowed_ips !== undefined) updateData.allowed_ips = updates.allowed_ips
+  if (updates.scopes !== undefined) updateData.scopes = updates.scopes
+
   // Update the API key
   const { data: apiKey, error } = await supabase
     .from("api_keys")
-    .update(updates)
+    .update(updateData)
     .eq("id", id)
-    .select()
+    .eq("company_id", result.company_id) // Defense-in-depth
+    .select("id, name, key_prefix, is_active, expires_at, created_at, last_used_at, rate_limit_per_minute, rate_limit_per_day, allowed_ips, scopes")
     .single()
 
   if (error) {

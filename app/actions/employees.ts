@@ -91,10 +91,10 @@ export async function getEmployees() {
     return { error: "No company found", data: null }
   }
 
-  // Get all users in the company (excluding the manager themselves)
+  // HIGH FIX 1: Select only necessary columns to prevent exposing sensitive internal fields
   const { data: employees, error } = await supabase
     .from("users")
-    .select("*")
+    .select("id, full_name, email, phone, position, employee_status, role, created_at")
     .eq("company_id", companyId)
     .neq("id", user.id) // Exclude the manager
     .order("created_at", { ascending: false })
@@ -162,14 +162,48 @@ export async function updateEmployee(
     return { error: "Cannot update manager accounts", data: null }
   }
 
-  // Update employee
+  // HIGH FIX 3: Build explicit updateData object with only allowed fields to prevent arbitrary column injection
+  const updateData: any = {}
+  if (updates.full_name !== undefined) updateData.full_name = updates.full_name
+  if (updates.email !== undefined) updateData.email = updates.email
+  if (updates.phone !== undefined) updateData.phone = updates.phone
+  if (updates.position !== undefined) updateData.position = updates.position
+  if (updates.employee_status !== undefined) updateData.employee_status = updates.employee_status
+
+  // MEDIUM FIX 9: Sync email update with auth.users
+  let emailUpdated = false
+  if (updates.email !== undefined && updates.email !== employee.email) {
+    emailUpdated = true
+  }
+
+  // HIGH FIX 2: Add company_id filter to update query for defense-in-depth
   const { error: updateError } = await supabase
     .from("users")
-    .update(updates)
+    .update(updateData)
     .eq("id", employeeId)
+    .eq("company_id", companyId)
 
   if (updateError) {
     return { error: updateError.message, data: null }
+  }
+
+  // MEDIUM FIX 9: Sync email with auth.users when email is updated
+  if (emailUpdated && updates.email) {
+    try {
+      const { createAdminClient } = await import("@/lib/supabase/admin")
+      const adminSupabase = createAdminClient()
+      
+      const { error: authError } = await adminSupabase.auth.admin.updateUserById(employeeId, {
+        email: updates.email,
+      })
+
+      if (authError) {
+        console.error("[updateEmployee] Failed to sync email with auth.users:", authError)
+        // Don't fail the request, but log the error
+      }
+    } catch (error) {
+      console.error("[updateEmployee] Failed to import admin client:", error)
+    }
   }
 
   revalidatePath("/dashboard/employees")
@@ -227,6 +261,25 @@ export async function removeEmployee(employeeId: string) {
     .from("users")
     .update({ company_id: null })
     .eq("id", employeeId)
+    .eq("company_id", companyId) // Defense-in-depth
+
+  // HIGH FIX 7: Revoke all active sessions for the removed employee
+  if (!removeError) {
+    try {
+      const { createAdminClient } = await import("@/lib/supabase/admin")
+      const adminSupabase = createAdminClient()
+      
+      // Sign out the user from all sessions
+      const { error: signOutError } = await adminSupabase.auth.admin.signOut(employeeId, "others")
+      
+      if (signOutError) {
+        console.error("[removeEmployee] Failed to revoke sessions:", signOutError)
+        // Don't fail the request, but log the error
+      }
+    } catch (error) {
+      console.error("[removeEmployee] Failed to import admin client:", error)
+    }
+  }
 
   if (removeError) {
     return { error: removeError.message, data: null }

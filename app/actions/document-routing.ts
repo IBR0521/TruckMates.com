@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { checkEditPermission, checkViewPermission } from "@/lib/server-permissions"
 
 /**
  * Link a document to an existing record
@@ -11,6 +12,12 @@ export async function linkDocumentToRecord(
   recordType: "driver" | "vehicle" | "load" | "route" | "invoice" | "expense" | "maintenance",
   recordId: string
 ): Promise<{ success: boolean; error: string | null }> {
+  // FIXED: Add RBAC check - linking documents requires edit permission
+  const permissionCheck = await checkEditPermission("documents")
+  if (!permissionCheck.allowed) {
+    return { success: false, error: permissionCheck.error || "You don't have permission to link documents" }
+  }
+
   try {
     const supabase = await createClient()
 
@@ -39,13 +46,85 @@ export async function linkDocumentToRecord(
     // Verify document belongs to company
     const { data: document, error: docError } = await supabase
       .from("documents")
-      .select("id, company_id")
+      .select("id, company_id, type") // FIXED: Include type to check if it should be preserved
       .eq("id", documentId)
       .eq("company_id", userData.company_id)
       .single()
 
     if (docError || !document) {
       return { success: false, error: "Document not found" }
+    }
+
+    // FIXED: Verify record belongs to company before linking
+    let recordBelongsToCompany = false
+    switch (recordType) {
+      case "driver":
+        const { data: driverCheck } = await supabase
+          .from("drivers")
+          .select("id")
+          .eq("id", recordId)
+          .eq("company_id", userData.company_id)
+          .single()
+        recordBelongsToCompany = !!driverCheck
+        break
+      case "vehicle":
+        const { data: truckCheck } = await supabase
+          .from("trucks")
+          .select("id")
+          .eq("id", recordId)
+          .eq("company_id", userData.company_id)
+          .single()
+        recordBelongsToCompany = !!truckCheck
+        break
+      case "load":
+        const { data: loadCheck } = await supabase
+          .from("loads")
+          .select("id")
+          .eq("id", recordId)
+          .eq("company_id", userData.company_id)
+          .single()
+        recordBelongsToCompany = !!loadCheck
+        break
+      case "route":
+        const { data: routeCheck } = await supabase
+          .from("routes")
+          .select("id")
+          .eq("id", recordId)
+          .eq("company_id", userData.company_id)
+          .single()
+        recordBelongsToCompany = !!routeCheck
+        break
+      case "invoice":
+        const { data: invoiceCheck } = await supabase
+          .from("invoices")
+          .select("id")
+          .eq("id", recordId)
+          .eq("company_id", userData.company_id)
+          .single()
+        recordBelongsToCompany = !!invoiceCheck
+        break
+      case "expense":
+        const { data: expenseCheck } = await supabase
+          .from("expenses")
+          .select("id")
+          .eq("id", recordId)
+          .eq("company_id", userData.company_id)
+          .single()
+        recordBelongsToCompany = !!expenseCheck
+        break
+      case "maintenance":
+        const { data: maintenanceCheck } = await supabase
+          .from("maintenance")
+          .select("id")
+          .eq("id", recordId)
+          .eq("company_id", userData.company_id)
+          .single()
+        recordBelongsToCompany = !!maintenanceCheck
+        break
+    }
+
+    if (!recordBelongsToCompany) {
+      return { success: false, error: "Record not found or does not belong to your company" }
     }
 
     // Update document with appropriate foreign key
@@ -58,30 +137,47 @@ export async function linkDocumentToRecord(
         break
       case "vehicle":
         updateData.truck_id = recordId
-        updateData.type = "insurance" // Default type for vehicle documents
+        // FIXED: Don't hardcode type to "insurance" - preserve existing type or use "other"
+        // Only set type if document doesn't already have a meaningful type
+        if (!document.type || document.type === "other") {
+          updateData.type = "insurance" // Only default if no type set
+        }
         break
       case "load":
-        // Documents table might need load_id column - for now, we'll use a JSONB field or add it
-        // Check if load_id column exists, if not we'll store in metadata
-        updateData.type = "other"
-        // Note: You may need to add load_id, route_id, invoice_id, expense_id columns to documents table
+        // FIXED: Set load_id foreign key (migration: supabase/add_documents_foreign_keys.sql)
+        updateData.load_id = recordId
+        // Preserve existing type if meaningful, otherwise set to "bol" or "pod_photo" based on document type
+        if (!document.type || document.type === "other") {
+          updateData.type = "bol" // Default for load documents
+        }
         break
       case "route":
-        updateData.type = "other"
+        // FIXED: Set route_id foreign key (migration: supabase/add_documents_foreign_keys.sql)
+        updateData.route_id = recordId
+        if (!document.type || document.type === "other") {
+          updateData.type = "route_document"
+        }
         break
       case "invoice":
+        // FIXED: Set invoice_id foreign key (migration: supabase/add_documents_foreign_keys.sql)
+        updateData.invoice_id = recordId
         updateData.type = "invoice"
         break
       case "expense":
-        updateData.type = "other"
+        // FIXED: Set expense_id foreign key (migration: supabase/add_documents_foreign_keys.sql)
+        updateData.expense_id = recordId
+        if (!document.type || document.type === "other") {
+          updateData.type = "expense_receipt"
+        }
         break
       case "maintenance":
         updateData.type = "maintenance"
-        // Maintenance documents should link to truck_id
+        // FIXED: Maintenance lookup with company_id filter
         const { data: maintenanceRecord } = await supabase
           .from("maintenance")
           .select("truck_id")
           .eq("id", recordId)
+          .eq("company_id", userData.company_id) // FIXED: Add company_id filter
           .single()
         if (maintenanceRecord?.truck_id) {
           updateData.truck_id = maintenanceRecord.truck_id
@@ -89,10 +185,12 @@ export async function linkDocumentToRecord(
         break
     }
 
+    // FIXED: Add company_id filter to update query for defense-in-depth
     const { error: updateError } = await supabase
       .from("documents")
       .update(updateData)
       .eq("id", documentId)
+      .eq("company_id", userData.company_id) // FIXED: Add company_id filter
 
     if (updateError) {
       return { success: false, error: updateError.message }
@@ -111,6 +209,12 @@ export async function linkDocumentToRecord(
 export async function getRecordsForRouting(
   recordType: "driver" | "vehicle" | "load" | "route" | "invoice" | "expense" | "maintenance"
 ): Promise<{ data: Array<{ id: string; name: string; [key: string]: any }> | null; error: string | null }> {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkViewPermission("documents")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to view records", data: null }
+  }
+
   try {
     const supabase = await createClient()
 

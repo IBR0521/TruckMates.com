@@ -212,6 +212,10 @@ CREATE TABLE IF NOT EXISTS public.documents (
   expiry_date DATE,
   truck_id UUID REFERENCES public.trucks(id),
   driver_id UUID REFERENCES public.drivers(id),
+  load_id UUID REFERENCES public.loads(id) ON DELETE SET NULL,
+  route_id UUID REFERENCES public.routes(id) ON DELETE SET NULL,
+  invoice_id UUID REFERENCES public.invoices(id) ON DELETE SET NULL,
+  expense_id UUID REFERENCES public.expenses(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
@@ -228,6 +232,10 @@ CREATE INDEX IF NOT EXISTS idx_settlements_company_id ON public.settlements(comp
 CREATE INDEX IF NOT EXISTS idx_maintenance_company_id ON public.maintenance(company_id);
 CREATE INDEX IF NOT EXISTS idx_ifta_reports_company_id ON public.ifta_reports(company_id);
 CREATE INDEX IF NOT EXISTS idx_documents_company_id ON public.documents(company_id);
+CREATE INDEX IF NOT EXISTS idx_documents_load_id ON public.documents(load_id) WHERE load_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_documents_route_id ON public.documents(route_id) WHERE route_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_documents_invoice_id ON public.documents(invoice_id) WHERE invoice_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_documents_expense_id ON public.documents(expense_id) WHERE expense_id IS NOT NULL;
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
@@ -244,6 +252,13 @@ ALTER TABLE public.ifta_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies: Users can only see their own company's data
+-- Drop existing policies first to avoid conflicts
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.users;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
+DROP POLICY IF EXISTS "Users can view their company" ON public.companies;
+DROP POLICY IF EXISTS "Authenticated users can create companies" ON public.companies;
+DROP POLICY IF EXISTS "Managers can update their company" ON public.companies;
+
 CREATE POLICY "Users can view their own profile"
   ON public.users FOR SELECT
   USING (auth.uid() = id);
@@ -277,6 +292,11 @@ CREATE POLICY "Managers can update their company"
   );
 
 -- Drivers policies
+DROP POLICY IF EXISTS "Users can view drivers in their company" ON public.drivers;
+DROP POLICY IF EXISTS "Managers can insert drivers" ON public.drivers;
+DROP POLICY IF EXISTS "Managers can update drivers" ON public.drivers;
+DROP POLICY IF EXISTS "Managers can delete drivers" ON public.drivers;
+
 CREATE POLICY "Users can view drivers in their company"
   ON public.drivers FOR SELECT
   USING (
@@ -317,6 +337,9 @@ CREATE POLICY "Managers can delete drivers"
 -- You can apply similar patterns to other tables
 
 -- Trucks policies
+DROP POLICY IF EXISTS "Users can view trucks in their company" ON public.trucks;
+DROP POLICY IF EXISTS "Managers can manage trucks" ON public.trucks;
+
 CREATE POLICY "Users can view trucks in their company"
   ON public.trucks FOR SELECT
   USING (
@@ -335,6 +358,9 @@ CREATE POLICY "Managers can manage trucks"
   );
 
 -- Routes policies
+DROP POLICY IF EXISTS "Users can view routes in their company" ON public.routes;
+DROP POLICY IF EXISTS "Managers can manage routes" ON public.routes;
+
 CREATE POLICY "Users can view routes in their company"
   ON public.routes FOR SELECT
   USING (
@@ -353,6 +379,9 @@ CREATE POLICY "Managers can manage routes"
   );
 
 -- Loads policies
+DROP POLICY IF EXISTS "Users can view loads in their company" ON public.loads;
+DROP POLICY IF EXISTS "Managers can manage loads" ON public.loads;
+
 CREATE POLICY "Users can view loads in their company"
   ON public.loads FOR SELECT
   USING (
@@ -371,6 +400,9 @@ CREATE POLICY "Managers can manage loads"
   );
 
 -- Invoices policies
+DROP POLICY IF EXISTS "Users can view invoices in their company" ON public.invoices;
+DROP POLICY IF EXISTS "Managers can manage invoices" ON public.invoices;
+
 CREATE POLICY "Users can view invoices in their company"
   ON public.invoices FOR SELECT
   USING (
@@ -389,6 +421,9 @@ CREATE POLICY "Managers can manage invoices"
   );
 
 -- Expenses policies
+DROP POLICY IF EXISTS "Users can view expenses in their company" ON public.expenses;
+DROP POLICY IF EXISTS "Managers can manage expenses" ON public.expenses;
+
 CREATE POLICY "Users can view expenses in their company"
   ON public.expenses FOR SELECT
   USING (
@@ -407,6 +442,9 @@ CREATE POLICY "Managers can manage expenses"
   );
 
 -- Settlements policies
+DROP POLICY IF EXISTS "Users can view settlements in their company" ON public.settlements;
+DROP POLICY IF EXISTS "Managers can manage settlements" ON public.settlements;
+
 CREATE POLICY "Users can view settlements in their company"
   ON public.settlements FOR SELECT
   USING (
@@ -425,6 +463,9 @@ CREATE POLICY "Managers can manage settlements"
   );
 
 -- Maintenance policies
+DROP POLICY IF EXISTS "Users can view maintenance in their company" ON public.maintenance;
+DROP POLICY IF EXISTS "Managers can manage maintenance" ON public.maintenance;
+
 CREATE POLICY "Users can view maintenance in their company"
   ON public.maintenance FOR SELECT
   USING (
@@ -443,6 +484,9 @@ CREATE POLICY "Managers can manage maintenance"
   );
 
 -- IFTA Reports policies
+DROP POLICY IF EXISTS "Users can view IFTA reports in their company" ON public.ifta_reports;
+DROP POLICY IF EXISTS "Managers can manage IFTA reports" ON public.ifta_reports;
+
 CREATE POLICY "Users can view IFTA reports in their company"
   ON public.ifta_reports FOR SELECT
   USING (
@@ -461,6 +505,9 @@ CREATE POLICY "Managers can manage IFTA reports"
   );
 
 -- Documents policies
+DROP POLICY IF EXISTS "Users can view documents in their company" ON public.documents;
+DROP POLICY IF EXISTS "Managers can manage documents" ON public.documents;
+
 CREATE POLICY "Users can view documents in their company"
   ON public.documents FOR SELECT
   USING (
@@ -488,6 +535,20 @@ END;
 $$ language 'plpgsql';
 
 -- Create triggers for updated_at
+-- Drop existing triggers first to avoid conflicts
+DROP TRIGGER IF EXISTS update_users_updated_at ON public.users;
+DROP TRIGGER IF EXISTS update_companies_updated_at ON public.companies;
+DROP TRIGGER IF EXISTS update_drivers_updated_at ON public.drivers;
+DROP TRIGGER IF EXISTS update_trucks_updated_at ON public.trucks;
+DROP TRIGGER IF EXISTS update_routes_updated_at ON public.routes;
+DROP TRIGGER IF EXISTS update_loads_updated_at ON public.loads;
+DROP TRIGGER IF EXISTS update_invoices_updated_at ON public.invoices;
+DROP TRIGGER IF EXISTS update_expenses_updated_at ON public.expenses;
+DROP TRIGGER IF EXISTS update_settlements_updated_at ON public.settlements;
+DROP TRIGGER IF EXISTS update_maintenance_updated_at ON public.maintenance;
+DROP TRIGGER IF EXISTS update_ifta_reports_updated_at ON public.ifta_reports;
+DROP TRIGGER IF EXISTS update_documents_updated_at ON public.documents;
+
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON public.users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

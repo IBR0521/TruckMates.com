@@ -18,6 +18,8 @@ class LocationTrackingService {
   private syncInterval: NodeJS.Timeout | null = null
   private onLocationUpdateCallback?: (location: Location) => void
   private subscribers: Set<(location: Location) => void> = new Set()
+  private restartCount: number = 0 // Track restart attempts to prevent infinite loops
+  private readonly MAX_RESTARTS = 5 // Maximum restart attempts before giving up
 
   /**
    * Start continuous location tracking
@@ -50,10 +52,14 @@ class LocationTrackingService {
 
       // Start watching location
       this.watchId = watchLocation(
-        (location) => this.handleLocationUpdate(location),
+        (location) => {
+          // Reset restart count on successful location update
+          this.restartCount = 0
+          this.handleLocationUpdate(location)
+        },
         (error) => {
           console.error('Location tracking error:', error)
-          // Try to restart tracking on error
+          // Try to restart tracking on error (with limit)
           this.restartTracking()
         }
       )
@@ -65,6 +71,7 @@ class LocationTrackingService {
       this.startAutoSync()
 
       this.isTracking = true
+      this.restartCount = 0 // Reset restart count on successful start
       console.log('Location tracking started')
       return true
     } catch (error) {
@@ -102,17 +109,37 @@ class LocationTrackingService {
 
   /**
    * Restart tracking if it stops
+   * CRITICAL FIX: Add restart limit and exponential backoff to prevent infinite loops
    */
   private async restartTracking(): Promise<void> {
     if (!this.deviceId || !this.isTracking) return
 
-    console.log('Restarting location tracking...')
+    this.restartCount++
+    
+    // Prevent infinite restart loop
+    if (this.restartCount >= this.MAX_RESTARTS) {
+      console.error(`Location tracking failed after ${this.MAX_RESTARTS} restart attempts. Stopping tracking.`)
+      this.stopTracking()
+      // Notify user via Alert (import Alert from react-native)
+      const { Alert } = require('react-native')
+      Alert.alert(
+        'Location Tracking Stopped',
+        'Location tracking encountered repeated errors and has been stopped. Please restart the app or check your location permissions.',
+        [{ text: 'OK' }]
+      )
+      return
+    }
+
+    console.log(`Restarting location tracking... (attempt ${this.restartCount}/${this.MAX_RESTARTS})`)
     this.stopTracking()
     
-    // Wait a bit before restarting
+    // Exponential backoff: 5s, 10s, 20s, 40s, 80s
+    const backoffDelay = 5000 * Math.pow(2, this.restartCount - 1)
+    
+    // Wait with exponential backoff before restarting
     setTimeout(async () => {
       await this.startTracking(this.deviceId!, this.onLocationUpdateCallback)
-    }, 5000)
+    }, backoffDelay)
   }
 
   /**

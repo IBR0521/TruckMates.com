@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { getDVIRsForAudit } from "./dvir-enhanced"
+import { escapeHtml } from "@/lib/html-escape"
 
 /**
  * Generate DVIR Audit PDF HTML
@@ -56,10 +57,24 @@ export async function generateDVIRAuditPDF(filters?: {
       })
     }
 
-    // Format time
+    // Format time - convert HH:MM:SS to 12-hour AM/PM format
     const formatTime = (time: string | null) => {
       if (!time) return "N/A"
-      return time
+      try {
+        // Parse time string (HH:MM:SS or HH:MM)
+        const parts = time.split(':')
+        if (parts.length >= 2) {
+          let hours = parseInt(parts[0], 10)
+          const minutes = parts[1]
+          const ampm = hours >= 12 ? 'PM' : 'AM'
+          hours = hours % 12
+          hours = hours ? hours : 12 // 0 should be 12
+          return `${hours}:${minutes} ${ampm}`
+        }
+        return time
+      } catch {
+        return time
+      }
     }
 
     // Generate HTML for PDF
@@ -219,7 +234,7 @@ export async function generateDVIRAuditPDF(filters?: {
       <div class="header">
         <h1>DRIVER VEHICLE INSPECTION REPORT (DVIR)</h1>
         <p>Audit Report</p>
-        <p>${company?.name || "Company Name"}</p>
+        <p>${escapeHtml(company?.name || "Company Name")}</p>
         <p>Generated: ${formatDate(new Date())}</p>
       </div>
 
@@ -250,15 +265,15 @@ export async function generateDVIRAuditPDF(filters?: {
             </div>
             <div class="info-item">
               <div class="info-label">Driver</div>
-              <div class="info-value">${dvir.driver_name || 'N/A'}</div>
+              <div class="info-value">${escapeHtml(dvir.driver_name || 'N/A')}</div>
             </div>
             <div class="info-item">
               <div class="info-label">Truck</div>
-              <div class="info-value">${dvir.truck_number || 'N/A'}</div>
+              <div class="info-value">${escapeHtml(dvir.truck_number || 'N/A')}</div>
             </div>
             <div class="info-item">
               <div class="info-label">Location</div>
-              <div class="info-value">${dvir.location || 'N/A'}</div>
+              <div class="info-value">${escapeHtml(dvir.location || 'N/A')}</div>
             </div>
             <div class="info-item">
               <div class="info-label">Mileage</div>
@@ -293,10 +308,10 @@ export async function generateDVIRAuditPDF(filters?: {
                 <tbody>
                   ${(dvir.defects as any[]).map((defect: any) => `
                     <tr>
-                      <td>${defect.component || 'N/A'}</td>
-                      <td>${defect.description || 'N/A'}</td>
+                      <td>${escapeHtml(defect.component || 'N/A')}</td>
+                      <td>${escapeHtml(defect.description || 'N/A')}</td>
                       <td class="severity-${defect.severity || 'minor'}">
-                        ${(defect.severity || 'minor').toUpperCase()}
+                        ${escapeHtml((defect.severity || 'minor').toUpperCase())}
                       </td>
                       <td>${defect.corrected ? 'Yes' : 'No'}</td>
                     </tr>
@@ -313,7 +328,7 @@ export async function generateDVIRAuditPDF(filters?: {
           ${dvir.notes ? `
             <div style="margin-top: 15px;">
               <div class="info-label">Notes:</div>
-              <div class="info-value" style="margin-top: 5px;">${dvir.notes}</div>
+              <div class="info-value" style="margin-top: 5px;">${escapeHtml(dvir.notes)}</div>
             </div>
           ` : ''}
 
@@ -334,7 +349,7 @@ export async function generateDVIRAuditPDF(filters?: {
               <div class="signature-box">
                 <div class="signature-label">Certified By</div>
                 <div class="signature-line">
-                  <div class="signature-label">${dvir.certified_by_name || 'N/A'}</div>
+                  <div class="signature-label">${escapeHtml(dvir.certified_by_name || 'N/A')}</div>
                   <div class="signature-label">Date: ${dvir.certified_date ? formatDate(dvir.certified_date) : 'N/A'}</div>
                 </div>
               </div>

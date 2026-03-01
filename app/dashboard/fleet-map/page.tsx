@@ -106,13 +106,43 @@ export default function FleetMapPage() {
   const loadFleetData = async () => {
     try {
       setIsLoading(true)
-      const result = await getTrucks()
-      if (result.error) {
-        toast.error(result.error)
-        return
+      // Fetch vehicles with GPS data from eld_locations instead of just trucks table
+      try {
+        const { getVehiclesInViewport } = await import("@/app/actions/map-optimization")
+        const result = await getVehiclesInViewport(90, -90, 180, -180)
+        if (result.data) {
+          // Transform to Vehicle format with location data
+          const vehiclesWithLocation = result.data.map((loc: any) => ({
+            id: loc.truck_id,
+            truck_number: loc.trucks?.truck_number || "Unknown",
+            status: loc.trucks?.status,
+            driver: loc.trucks?.drivers ? { name: loc.trucks.drivers.name } : undefined,
+            location: {
+              latitude: loc.latitude,
+              longitude: loc.longitude,
+              speed: loc.speed,
+              heading: loc.heading,
+              timestamp: loc.timestamp,
+            }
+          }))
+          setVehicles(vehiclesWithLocation)
+        } else if (result.error) {
+          // Fallback to trucks if map-optimization fails
+          const trucksResult = await getTrucks()
+          if (trucksResult.data) {
+            setVehicles(trucksResult.data || [])
+          }
+        }
+      } catch (error) {
+        // Fallback to trucks if getVehiclesInViewport doesn't exist
+        const result = await getTrucks()
+        if (result.error) {
+          toast.error(result.error)
+          return
+        }
+        setVehicles(result.data || [])
       }
-      setVehicles(result.data || [])
-        } catch (error: any) {
+    } catch (error: any) {
       toast.error(error.message || "Failed to load vehicles")
     } finally {
       setIsLoading(false)
@@ -159,9 +189,20 @@ export default function FleetMapPage() {
         setMapCenter([Number(geofence.center_latitude), Number(geofence.center_longitude)])
         setZoom(geofence.radius_meters ? Math.max(12, 20 - Math.log10(geofence.radius_meters / 1000)) : 15)
       } else if (geofence.zone_type === "polygon" && geofence.polygon_coordinates && geofence.polygon_coordinates.length > 0) {
-        // Calculate center of polygon
-        const lats = geofence.polygon_coordinates.map((coord: number[]) => coord[0])
-        const lngs = geofence.polygon_coordinates.map((coord: number[]) => coord[1])
+        // Calculate center of polygon (handle both {lat, lng} and [lat, lng] formats)
+        const coords = geofence.polygon_coordinates.map((coord: any) => {
+          if (typeof coord === 'object' && 'lat' in coord && 'lng' in coord) {
+            return { lat: coord.lat, lng: coord.lng }
+          } else if (Array.isArray(coord) && coord.length >= 2) {
+            return { lat: coord[0], lng: coord[1] }
+          }
+          return null
+        }).filter((c: any) => c !== null)
+        
+        if (coords.length === 0) return
+        
+        const lats = coords.map((c: any) => c.lat)
+        const lngs = coords.map((c: any) => c.lng)
         const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2
         const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2
         setMapCenter([centerLat, centerLng])
@@ -918,7 +959,7 @@ function GeofenceDrawingMap({
     if (!mapRef.current) return
 
     const initMap = () => {
-      if (mapInstanceRef.current) {
+      if (localMapInstanceRef.current) {
         return // Already initialized
       }
 
@@ -935,7 +976,11 @@ function GeofenceDrawingMap({
         zoom: 10,
       })
 
-      mapInstanceRef.current = map
+      localMapInstanceRef.current = map
+      // Only set parent ref if it's not already set (to avoid overwriting main map)
+      if (!mapInstanceRef.current) {
+        mapInstanceRef.current = map
+      }
 
       const drawingManager = new window.google.maps.drawing.DrawingManager({
         drawingMode: null,
@@ -960,7 +1005,7 @@ function GeofenceDrawingMap({
         },
       })
 
-      drawingManager.setMap(map)
+      drawingManager.setMap(localMapInstanceRef.current)
       drawingManagerRef.current = drawingManager
 
       drawingManager.addListener("circlecomplete", (circle: any) => {
@@ -974,6 +1019,14 @@ function GeofenceDrawingMap({
         onShapeComplete(polygon)
         drawingManager.setDrawingMode(null)
       })
+    }
+    
+    // Cleanup: restore parent mapInstanceRef when dialog closes
+    return () => {
+      if (localMapInstanceRef.current && mapInstanceRef.current === localMapInstanceRef.current) {
+        mapInstanceRef.current = null
+      }
+      localMapInstanceRef.current = null
     }
 
     // If Google Maps is already loaded, initialize immediately

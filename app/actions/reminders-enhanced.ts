@@ -33,8 +33,10 @@ export async function autoCreateMaintenanceReminders(): Promise<{
   }
 
   try {
-    // Call the database function
-    const { data, error } = await supabase.rpc("auto_create_maintenance_reminders_from_schedule")
+    // MEDIUM FIX 4: Pass company_id to RPC to prevent cross-company data writes
+    const { data, error } = await supabase.rpc("auto_create_maintenance_reminders_from_schedule", {
+      p_company_id: result.company_id,
+    })
 
     if (error) {
       console.error("Error auto-creating maintenance reminders:", error)

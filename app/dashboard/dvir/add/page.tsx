@@ -87,9 +87,9 @@ export default function AddDVIRPage() {
       return
     }
 
-    // Validate defects if defects_found is true
+    // Validate defects if defects_found is true - must have at least one defect
     if (formData.defects_found && formData.defects.length === 0) {
-      toast.error("Please add at least one defect or mark as no defects found")
+      toast.error("If defects are found, you must add at least one defect. Otherwise, uncheck 'Defects found'.")
       setIsSubmitting(false)
       return
     }
@@ -112,8 +112,8 @@ export default function AddDVIRPage() {
       inspection_date: formData.inspection_date,
       inspection_time: formData.inspection_time,
       location: formData.location || undefined,
-      mileage: formData.mileage ? parseInt(formData.mileage) : undefined,
-      odometer_reading: formData.odometer_reading ? parseInt(formData.odometer_reading) : undefined,
+      mileage: formData.mileage ? (formData.mileage.includes('.') ? Math.round(parseFloat(formData.mileage)) : parseInt(formData.mileage)) : undefined,
+      odometer_reading: formData.odometer_reading ? (formData.odometer_reading.includes('.') ? Math.round(parseFloat(formData.odometer_reading)) : parseInt(formData.odometer_reading)) : undefined,
       defects_found: formData.defects_found,
       safe_to_operate: formData.safe_to_operate,
       defects: formData.defects_found && formData.defects.length > 0 ? formData.defects : undefined,
@@ -271,10 +271,11 @@ export default function AddDVIRPage() {
                 id="defects_found"
                 checked={formData.defects_found}
                 onCheckedChange={(checked) => {
-                  setFormData({ ...formData, defects_found: checked as boolean })
-                  if (!checked) {
-                    setFormData({ ...formData, defects_found: false, defects: [] })
-                  }
+                  setFormData((prev) => ({
+                    ...prev,
+                    defects_found: !!checked,
+                    defects: checked ? prev.defects : [],
+                  }))
                 }}
               />
               <Label htmlFor="defects_found" className="cursor-pointer">

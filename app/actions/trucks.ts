@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
 import { validateTruckData, sanitizeString } from "@/lib/validation"
+import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
 export async function getTrucks(filters?: {
   status?: string
@@ -125,6 +126,12 @@ export async function createTruck(formData: {
   documents?: any[]
   [key: string]: any
 }) {
+  // Check permission
+  const permission = await checkCreatePermission("vehicles")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to create trucks", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -219,7 +226,7 @@ export async function createTruck(formData: {
       return { error: "Cannot assign inactive driver to truck", data: null }
     }
 
-    if (driver.truck_id && driver.truck_id !== formData.current_driver_id) {
+    if (driver.truck_id) {
       return { error: "Driver is already assigned to another truck", data: null }
     }
   }
@@ -316,6 +323,12 @@ export async function updateTruck(
     [key: string]: any
   }
 ) {
+  // Check permission
+  const permission = await checkEditPermission("vehicles")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to edit trucks", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -438,6 +451,12 @@ export async function updateTruck(
 }
 
 export async function deleteTruck(id: string) {
+  // Check permission
+  const permission = await checkDeletePermission("vehicles")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to delete trucks" }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -478,6 +497,12 @@ export async function deleteTruck(id: string) {
 
 // Bulk operations for workflow optimization
 export async function bulkDeleteTrucks(ids: string[]) {
+  // Check permission
+  const permission = await checkDeletePermission("vehicles")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to delete trucks", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -517,6 +542,18 @@ export async function bulkDeleteTrucks(ids: string[]) {
 }
 
 export async function bulkUpdateTruckStatus(ids: string[], status: string) {
+  // Check permission
+  const permission = await checkEditPermission("vehicles")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to edit trucks", data: null }
+  }
+
+  // Validate status value
+  const validStatuses = ["available", "in-use", "maintenance", "out_of_service"]
+  if (!validStatuses.includes(status)) {
+    return { error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`, data: null }
+  }
+
   const supabase = await createClient()
 
   const {

@@ -16,14 +16,31 @@ export async function generateEIN(): Promise<{ data: { ein: string; id: string }
     return { error: "Not authenticated", data: null }
   }
 
+  // HIGH FIX 1: Add RBAC check - only managers can generate EINs
   const { data: userData, error: userError } = await supabase
     .from("users")
-    .select("company_id")
+    .select("role, company_id")
     .eq("id", user.id)
     .single()
 
   if (userError || !userData?.company_id) {
     return { error: userError?.message || "No company found", data: null }
+  }
+
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!MANAGER_ROLES.includes(userData.role)) {
+    return { error: "Only managers can generate EIN numbers", data: null }
+  }
+
+  // MEDIUM FIX 12: Check if company already has an active EIN
+  const { data: existingEIN } = await supabase
+    .from("company_settings")
+    .select("ein_number")
+    .eq("company_id", userData.company_id)
+    .single()
+
+  if (existingEIN?.ein_number) {
+    return { error: "Company already has an active EIN. Please delete the existing EIN before generating a new one.", data: null }
   }
 
   try {
@@ -34,9 +51,10 @@ export async function generateEIN(): Promise<{ data: { ein: string; id: string }
     const maxAttempts = 10
 
     while (exists && attempts < maxAttempts) {
-      // Generate EIN: XX-XXXXXXX format (9 digits total)
-      const prefix = Math.floor(Math.random() * 90 + 10).toString().padStart(2, '0')
-      const suffix = Math.floor(Math.random() * 9999999 + 1).toString().padStart(7, '0')
+      // MEDIUM FIX 11: Use crypto.randomInt() instead of Math.random() for cryptographically secure EIN generation
+      const cryptoModule = await import("crypto")
+      const prefix = cryptoModule.randomInt(10, 99).toString().padStart(2, '0')
+      const suffix = cryptoModule.randomInt(1000000, 9999999).toString().padStart(7, '0')
       newEIN = `${prefix}-${suffix}`
 
       // Check if EIN already exists
@@ -54,7 +72,9 @@ export async function generateEIN(): Promise<{ data: { ein: string; id: string }
       return { error: "Failed to generate unique EIN after multiple attempts", data: null }
     }
 
-    // Save the generated EIN to the database
+    // MEDIUM FIX 13: Use RPC function or transaction for atomic EIN creation
+    // For now, we'll use a single RPC call if available, otherwise we'll do both operations
+    // and handle rollback manually
     const { data: savedEIN, error: saveError } = await supabase
       .from("company_ein_numbers")
       .insert({
@@ -69,11 +89,22 @@ export async function generateEIN(): Promise<{ data: { ein: string; id: string }
       return { error: saveError.message || "Failed to save EIN", data: null }
     }
 
-    // Update company_settings with the EIN
-    await supabase
+    // Update company_settings with the EIN (atomic operation would be better)
+    const { error: updateError } = await supabase
       .from("company_settings")
       .update({ ein_number: newEIN })
       .eq("company_id", userData.company_id)
+
+    // MEDIUM FIX 13: If update fails, delete the EIN record to prevent orphan
+    if (updateError) {
+      // Rollback: delete the EIN record we just created
+      await supabase
+        .from("company_ein_numbers")
+        .delete()
+        .eq("id", savedEIN.id)
+      
+      return { error: updateError.message || "Failed to update company settings with EIN", data: null }
+    }
 
     return {
       data: {
@@ -139,14 +170,20 @@ export async function deleteEINNumber(einId: string): Promise<{ error: string | 
     return { error: "Not authenticated" }
   }
 
+  // HIGH FIX 1: Add RBAC check - only managers can delete EINs
   const { data: userData, error: userError } = await supabase
     .from("users")
-    .select("company_id")
+    .select("role, company_id")
     .eq("id", user.id)
     .single()
 
   if (userError || !userData?.company_id) {
     return { error: userError?.message || "No company found" }
+  }
+
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!MANAGER_ROLES.includes(userData.role)) {
+    return { error: "Only managers can delete EIN numbers" }
   }
 
   // Verify the EIN belongs to the company

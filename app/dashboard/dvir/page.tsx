@@ -34,18 +34,33 @@ export default function DVIRPage() {
   const [typeFilter, setTypeFilter] = useState("all")
   const [stats, setStats] = useState<any>(null)
 
-  const loadDVIRs = async () => {
+  const loadDVIRs = async (filters?: { status?: string; inspection_type?: string; search?: string; offset?: number }) => {
     setIsLoading(true)
     const [dvirResult, statsResult] = await Promise.all([
-      getDVIRs(),
+      getDVIRs({
+        status: filters?.status !== "all" ? filters?.status : undefined,
+        inspection_type: filters?.inspection_type !== "all" ? filters?.inspection_type : undefined,
+        limit: 25,
+        offset: filters?.offset || 0,
+      }),
       getDVIRStats(),
     ])
     
     if (dvirResult.error) {
       toast.error(dvirResult.error)
     } else if (dvirResult.data) {
-      setDvirRecords(dvirResult.data)
-      setFilteredDvirs(dvirResult.data)
+      // Apply client-side search filter only (server handles status/type)
+      let filtered = dvirResult.data
+      if (filters?.search) {
+        filtered = filtered.filter(
+          (dvir) =>
+            dvir.drivers?.name?.toLowerCase().includes(filters.search!.toLowerCase()) ||
+            dvir.trucks?.truck_number?.toLowerCase().includes(filters.search!.toLowerCase()) ||
+            dvir.location?.toLowerCase().includes(filters.search!.toLowerCase())
+        )
+      }
+      setDvirRecords(filtered)
+      setFilteredDvirs(filtered)
     }
 
     if (statsResult.data) {
@@ -56,42 +71,11 @@ export default function DVIRPage() {
   }
 
   useEffect(() => {
-    loadDVIRs()
-  }, [])
+    loadDVIRs({ status: statusFilter, inspection_type: typeFilter, search: searchTerm })
+  }, [statusFilter, typeFilter, searchTerm])
 
-  // Filter DVIRs
-  useEffect(() => {
-    let filtered = [...dvirRecords]
-
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (dvir) =>
-          dvir.drivers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          dvir.trucks?.truck_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          dvir.location?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    }
-
-    // Apply status filter
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((dvir) => dvir.status === statusFilter)
-    }
-
-    // Apply type filter
-    if (typeFilter !== "all") {
-      filtered = filtered.filter((dvir) => dvir.inspection_type === typeFilter)
-    }
-
-    // Sort by date (newest first)
-    filtered.sort((a, b) => {
-      const dateA = new Date(a.inspection_date || 0).getTime()
-      const dateB = new Date(b.inspection_date || 0).getTime()
-      return dateB - dateA
-    })
-
-    setFilteredDvirs(filtered)
-  }, [dvirRecords, searchTerm, statusFilter, typeFilter])
+  // Note: Server-side filtering is now handled in loadDVIRs
+  // Client-side filtering only applies to search term on the fetched page
 
   const handleExport = () => {
     try {

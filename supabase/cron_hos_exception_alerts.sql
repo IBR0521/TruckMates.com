@@ -66,7 +66,8 @@ BEGIN
       v_alerts_count := v_alerts_count + 1;
     END IF;
 
-    -- Alert 3: Driving limit reached (0 hours remaining)
+    -- FIXED: Prioritize alerts - if driving limit reached, don't also fire on-duty limit
+    -- Alert 3: Driving limit reached (0 hours remaining) - highest priority
     IF v_hos_data.remaining_driving <= 0 THEN
       RETURN QUERY SELECT
         v_driver.id,
@@ -77,23 +78,8 @@ BEGIN
                 v_driver.name)::TEXT,
         0::DECIMAL(10, 2);
       v_alerts_count := v_alerts_count + 1;
-    END IF;
-
-    -- Alert 4: On-duty limit approaching (< 1 hour remaining)
-    IF v_hos_data.remaining_on_duty < 1 AND v_hos_data.remaining_on_duty > 0 THEN
-      RETURN QUERY SELECT
-        v_driver.id,
-        v_driver.name,
-        v_driver.company_id,
-        'approaching_limit'::TEXT,
-        format('%s has %.1f hours of on-duty time remaining.', 
-                v_driver.name, v_hos_data.remaining_on_duty)::TEXT,
-        v_hos_data.remaining_on_duty;
-      v_alerts_count := v_alerts_count + 1;
-    END IF;
-
-    -- Alert 5: On-duty limit reached
-    IF v_hos_data.remaining_on_duty <= 0 THEN
+    ELSIF v_hos_data.remaining_on_duty <= 0 THEN
+      -- Alert 5: On-duty limit reached (only if driving limit not reached)
       RETURN QUERY SELECT
         v_driver.id,
         v_driver.name,
@@ -102,6 +88,17 @@ BEGIN
         format('%s has reached the 14-hour on-duty limit. Must take 10-hour break.', 
                 v_driver.name)::TEXT,
         0::DECIMAL(10, 2);
+      v_alerts_count := v_alerts_count + 1;
+    ELSIF v_hos_data.remaining_on_duty < 1 AND v_hos_data.remaining_on_duty > 0 THEN
+      -- Alert 4: On-duty limit approaching (< 1 hour remaining, only if driving limit not reached)
+      RETURN QUERY SELECT
+        v_driver.id,
+        v_driver.name,
+        v_driver.company_id,
+        'approaching_limit'::TEXT,
+        format('%s has %.1f hours of on-duty time remaining.', 
+                v_driver.name, v_hos_data.remaining_on_duty)::TEXT,
+        v_hos_data.remaining_on_duty;
       v_alerts_count := v_alerts_count + 1;
     END IF;
   END LOOP;
@@ -158,7 +155,8 @@ BEGIN
       )
     FROM public.users u
     WHERE u.company_id = v_alert.company_id
-      AND u.role = 'manager'
+      -- FIXED: Include all relevant roles for HOS alerts (safety-critical)
+      AND u.role IN ('manager', 'safety_manager', 'owner', 'dispatcher')
       AND u.id NOT IN (
         -- Avoid duplicate notifications (check if similar notification exists in last hour)
         SELECT user_id

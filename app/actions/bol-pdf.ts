@@ -43,13 +43,26 @@ export async function generateBOLPDF(bolId: string): Promise<{
     return { html: "", error: "BOL not found" }
   }
 
+  // SECURITY FIX 1: HTML escape function to prevent XSS
+  function escapeHtml(text: string | null | undefined): string {
+    if (!text) return ''
+    const map: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;',
+    }
+    return text.replace(/[&<>"']/g, (m) => map[m])
+  }
+
   // Generate HTML for PDF
   const html = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="UTF-8">
-      <title>BOL ${bol.bol_number}</title>
+      <title>BOL ${escapeHtml(bol.bol_number)}</title>
       <style>
         body {
           font-family: Arial, sans-serif;
@@ -156,8 +169,8 @@ export async function generateBOLPDF(bolId: string): Promise<{
     <body>
       <div class="header">
         <h1>BILL OF LADING</h1>
-        <p>BOL Number: ${bol.bol_number}</p>
-        ${bol.created_at ? `<p>Date: ${new Date(bol.created_at).toLocaleDateString()}</p>` : ''}
+        <p>BOL Number: ${escapeHtml(bol.bol_number)}</p>
+        ${bol.created_at ? `<p>Date: ${escapeHtml(new Date(bol.created_at).toLocaleDateString())}</p>` : ''}
       </div>
 
       <div class="section two-column">
@@ -165,24 +178,24 @@ export async function generateBOLPDF(bolId: string): Promise<{
           <div class="section-title">SHIPPER</div>
           <div class="info-row">
             <div class="info-label">Name:</div>
-            <div class="info-value">${bol.shipper_name || '—'}</div>
+            <div class="info-value">${escapeHtml(bol.shipper_name) || '—'}</div>
           </div>
           ${bol.shipper_address ? `
           <div class="info-row">
             <div class="info-label">Address:</div>
-            <div class="info-value">${bol.shipper_address}${bol.shipper_city ? `, ${bol.shipper_city}` : ''}${bol.shipper_state ? `, ${bol.shipper_state}` : ''} ${bol.shipper_zip || ''}</div>
+            <div class="info-value">${escapeHtml(bol.shipper_address)}${bol.shipper_city ? `, ${escapeHtml(bol.shipper_city)}` : ''}${bol.shipper_state ? `, ${escapeHtml(bol.shipper_state)}` : ''} ${escapeHtml(bol.shipper_zip) || ''}</div>
           </div>
           ` : ''}
           ${bol.shipper_phone ? `
           <div class="info-row">
             <div class="info-label">Phone:</div>
-            <div class="info-value">${bol.shipper_phone}</div>
+            <div class="info-value">${escapeHtml(bol.shipper_phone)}</div>
           </div>
           ` : ''}
           ${bol.shipper_email ? `
           <div class="info-row">
             <div class="info-label">Email:</div>
-            <div class="info-value">${bol.shipper_email}</div>
+            <div class="info-value">${escapeHtml(bol.shipper_email)}</div>
           </div>
           ` : ''}
         </div>
@@ -191,24 +204,24 @@ export async function generateBOLPDF(bolId: string): Promise<{
           <div class="section-title">CONSIGNEE</div>
           <div class="info-row">
             <div class="info-label">Name:</div>
-            <div class="info-value">${bol.consignee_name || '—'}</div>
+            <div class="info-value">${escapeHtml(bol.consignee_name) || '—'}</div>
           </div>
           ${bol.consignee_address ? `
           <div class="info-row">
             <div class="info-label">Address:</div>
-            <div class="info-value">${bol.consignee_address}${bol.consignee_city ? `, ${bol.consignee_city}` : ''}${bol.consignee_state ? `, ${bol.consignee_state}` : ''} ${bol.consignee_zip || ''}</div>
+            <div class="info-value">${escapeHtml(bol.consignee_address)}${bol.consignee_city ? `, ${escapeHtml(bol.consignee_city)}` : ''}${bol.consignee_state ? `, ${escapeHtml(bol.consignee_state)}` : ''} ${escapeHtml(bol.consignee_zip) || ''}</div>
           </div>
           ` : ''}
           ${bol.consignee_phone ? `
           <div class="info-row">
             <div class="info-label">Phone:</div>
-            <div class="info-value">${bol.consignee_phone}</div>
+            <div class="info-value">${escapeHtml(bol.consignee_phone)}</div>
           </div>
           ` : ''}
           ${bol.consignee_email ? `
           <div class="info-row">
             <div class="info-label">Email:</div>
-            <div class="info-value">${bol.consignee_email}</div>
+            <div class="info-value">${escapeHtml(bol.consignee_email)}</div>
           </div>
           ` : ''}
         </div>
@@ -221,19 +234,19 @@ export async function generateBOLPDF(bolId: string): Promise<{
             ${bol.carrier_name ? `
             <div class="info-row">
               <div class="info-label">Carrier Name:</div>
-              <div class="info-value">${bol.carrier_name}</div>
+              <div class="info-value">${escapeHtml(bol.carrier_name)}</div>
             </div>
             ` : ''}
             ${bol.carrier_mc_number ? `
             <div class="info-row">
               <div class="info-label">MC Number:</div>
-              <div class="info-value">${bol.carrier_mc_number}</div>
+              <div class="info-value">${escapeHtml(bol.carrier_mc_number)}</div>
             </div>
             ` : ''}
             ${bol.carrier_dot_number ? `
             <div class="info-row">
               <div class="info-label">DOT Number:</div>
-              <div class="info-value">${bol.carrier_dot_number}</div>
+              <div class="info-value">${escapeHtml(bol.carrier_dot_number)}</div>
             </div>
             ` : ''}
           </div>
@@ -241,25 +254,25 @@ export async function generateBOLPDF(bolId: string): Promise<{
             ${bol.pickup_date ? `
             <div class="info-row">
               <div class="info-label">Pickup Date:</div>
-              <div class="info-value">${new Date(bol.pickup_date).toLocaleDateString()}</div>
+              <div class="info-value">${escapeHtml(new Date(bol.pickup_date).toLocaleDateString())}</div>
             </div>
             ` : ''}
             ${bol.delivery_date ? `
             <div class="info-row">
               <div class="info-label">Delivery Date:</div>
-              <div class="info-value">${new Date(bol.delivery_date).toLocaleDateString()}</div>
+              <div class="info-value">${escapeHtml(new Date(bol.delivery_date).toLocaleDateString())}</div>
             </div>
             ` : ''}
             ${bol.freight_charges ? `
             <div class="info-row">
               <div class="info-label">Freight Charges:</div>
-              <div class="info-value">$${bol.freight_charges.toFixed(2)}</div>
+              <div class="info-value">$${escapeHtml(bol.freight_charges.toFixed(2))}</div>
             </div>
             ` : ''}
             ${bol.payment_terms ? `
             <div class="info-row">
               <div class="info-label">Payment Terms:</div>
-              <div class="info-value">${bol.payment_terms}</div>
+              <div class="info-value">${escapeHtml(bol.payment_terms)}</div>
             </div>
             ` : ''}
           </div>
@@ -269,7 +282,7 @@ export async function generateBOLPDF(bolId: string): Promise<{
       ${bol.special_instructions ? `
       <div class="section">
         <div class="section-title">SPECIAL INSTRUCTIONS</div>
-        <div class="info-value">${bol.special_instructions.replace(/\n/g, '<br>')}</div>
+        <div class="info-value">${escapeHtml(bol.special_instructions).replace(/\n/g, '<br>')}</div>
       </div>
       ` : ''}
 
@@ -281,11 +294,11 @@ export async function generateBOLPDF(bolId: string): Promise<{
           ` : ''}
           <div class="signature-line">
             <div class="signature-label">
-              ${bol.shipper_signature?.signed_by || 'Signature'}
+              ${escapeHtml(bol.shipper_signature?.signed_by) || 'Signature'}
             </div>
             ${bol.shipper_signature?.signed_at ? `
             <div class="signature-label" style="font-size: 10px; margin-top: 5px;">
-              ${new Date(bol.shipper_signature.signed_at).toLocaleString()}
+              ${escapeHtml(new Date(bol.shipper_signature.signed_at).toLocaleString())}
             </div>
             ` : ''}
           </div>
@@ -294,15 +307,15 @@ export async function generateBOLPDF(bolId: string): Promise<{
         <div class="signature-box">
           <div class="section-title">DRIVER SIGNATURE</div>
           ${bol.driver_signature?.signature_url ? `
-            <img src="${bol.driver_signature.signature_url}" class="signature-image" alt="Driver signature" />
+            <img src="${escapeHtml(bol.driver_signature.signature_url)}" class="signature-image" alt="Driver signature" />
           ` : ''}
           <div class="signature-line">
             <div class="signature-label">
-              ${bol.driver_signature?.signed_by || 'Signature'}
+              ${escapeHtml(bol.driver_signature?.signed_by) || 'Signature'}
             </div>
             ${bol.driver_signature?.signed_at ? `
             <div class="signature-label" style="font-size: 10px; margin-top: 5px;">
-              ${new Date(bol.driver_signature.signed_at).toLocaleString()}
+              ${escapeHtml(new Date(bol.driver_signature.signed_at).toLocaleString())}
             </div>
             ` : ''}
           </div>
@@ -314,15 +327,15 @@ export async function generateBOLPDF(bolId: string): Promise<{
         <div class="signature-box">
           <div class="section-title">CONSIGNEE SIGNATURE</div>
           ${bol.consignee_signature.signature_url ? `
-            <img src="${bol.consignee_signature.signature_url}" class="signature-image" alt="Consignee signature" />
+            <img src="${escapeHtml(bol.consignee_signature.signature_url)}" class="signature-image" alt="Consignee signature" />
           ` : ''}
           <div class="signature-line">
             <div class="signature-label">
-              ${bol.consignee_signature.signed_by || 'Signature'}
+              ${escapeHtml(bol.consignee_signature.signed_by) || 'Signature'}
             </div>
             ${bol.consignee_signature.signed_at ? `
             <div class="signature-label" style="font-size: 10px; margin-top: 5px;">
-              ${new Date(bol.consignee_signature.signed_at).toLocaleString()}
+              ${escapeHtml(new Date(bol.consignee_signature.signed_at).toLocaleString())}
             </div>
             ` : ''}
           </div>

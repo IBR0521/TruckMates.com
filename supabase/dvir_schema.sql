@@ -7,7 +7,7 @@
 -- DVIR table
 CREATE TABLE IF NOT EXISTS public.dvir (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  company_id UUID REFERENCES public.companies(id),
+  company_id UUID REFERENCES public.companies(id) NOT NULL,
   driver_id UUID REFERENCES public.drivers(id) NOT NULL,
   truck_id UUID REFERENCES public.trucks(id) NOT NULL,
   inspection_type TEXT NOT NULL DEFAULT 'pre_trip', -- 'pre_trip', 'post_trip', 'on_road'

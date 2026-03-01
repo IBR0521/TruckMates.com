@@ -47,16 +47,18 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     loadNotifications()
-  }, [filters.type, filters.read, filters.priority])
+  }, [filters.type, filters.read, filters.priority, filters.search]) // FIXED: Include search in deps
 
   async function loadNotifications() {
     setIsLoading(true)
     try {
+      // FIXED: Pass search term to server-side query
       const result = await getUnifiedNotifications({
         type: filters.type,
         read: filters.read,
         priority: filters.priority === "all" ? undefined : filters.priority,
         limit: 100,
+        search: filters.search || undefined, // FIXED: Pass search to server
       })
 
       if (result.error) {
@@ -150,15 +152,8 @@ export default function NotificationsPage() {
     return null
   }
 
-  // Filter by search term
-  const filteredNotifications = notifications.filter((n) => {
-    if (!filters.search) return true
-    const searchLower = filters.search.toLowerCase()
-    return (
-      n.title?.toLowerCase().includes(searchLower) ||
-      n.message?.toLowerCase().includes(searchLower)
-    )
-  })
+  // FIXED: Search is now handled server-side, no need for client-side filtering
+  const filteredNotifications = notifications
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
@@ -338,7 +333,8 @@ export default function NotificationsPage() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() =>
-                                  handleMarkAsRead(notification.id, notification.source as "notification" | "alert")
+                                  // FIXED: Use correct type mapping - source "system" = "notification", source "alerts" = "alert"
+                                  handleMarkAsRead(notification.id, notification.source === "system" ? "notification" : "alert")
                                 }
                                 className="shrink-0"
                               >

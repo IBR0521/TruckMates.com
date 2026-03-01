@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Download, FileText, Plus, Receipt, Settings } from "lucide-react"
+import { Download, FileText, Plus, Receipt, Settings, Trash2 } from "lucide-react"
 import { exportToExcel } from "@/lib/export-utils"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -189,6 +189,15 @@ export default function IFTAPage() {
                               onClick={() => router.push(`/dashboard/ifta/${report.id}`)}
                             >
                               <FileText className="w-4 h-4" />
+                            </Button>
+                            {/* FIXED: Add delete button that triggers the dialog */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="hover:bg-red-500/20 text-red-400"
+                              onClick={() => setDeleteId(report.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
                         </td>

@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getELDMileageData } from "./eld"
+import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 
 export async function getIFTAReports() {
   const supabase = await createClient()
@@ -67,6 +68,12 @@ export async function deleteIFTAReport(id: string) {
     return { error: "No company found" }
   }
 
+  // RBAC check
+  const permissionCheck = await checkDeletePermission("ifta")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to delete IFTA reports" }
+  }
+
   const { error } = await supabase
     .from("ifta_reports")
     .delete()
@@ -113,7 +120,31 @@ export async function createIFTAReport(formData: {
     return { error: "No company found", data: null }
   }
 
-  // Calculate quarter dates
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("ifta")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to create IFTA reports", data: null }
+  }
+
+  // Validate all truck_ids belong to company
+  if (formData.truck_ids && formData.truck_ids.length > 0) {
+    const { data: ownedTrucks, error: trucksError } = await supabase
+      .from("trucks")
+      .select("id")
+      .eq("company_id", userData.company_id)
+      .in("id", formData.truck_ids)
+
+    if (trucksError) {
+      return { error: "Failed to validate trucks", data: null }
+    }
+
+    const validTruckIds = ownedTrucks?.map(t => t.id) || []
+    if (validTruckIds.length !== formData.truck_ids.length) {
+      return { error: "One or more trucks do not belong to your company", data: null }
+    }
+  }
+
+  // FIXED: Validate quarter value before proceeding
   const year = formData.year
   const quarter = formData.quarter
   let periodStart = ""
@@ -136,6 +167,14 @@ export async function createIFTAReport(formData: {
     periodStart = `${year}-10-01`
     periodEnd = `${year}-12-31`
     period = `Oct-Dec ${year}`
+  } else {
+    // Invalid quarter value - return error
+    return { error: "Invalid quarter value. Must be Q1, Q2, Q3, or Q4.", data: null }
+  }
+
+  // Validate dates are set
+  if (!periodStart || !periodEnd) {
+    return { error: "Failed to calculate period dates. Please check quarter and year values.", data: null }
   }
 
   // Override with custom dates if provided
@@ -144,8 +183,9 @@ export async function createIFTAReport(formData: {
 
   // Try to get state-by-state mileage from actual state crossings (PostGIS automation)
   const { getStateMileageBreakdown } = await import("./ifta-state-crossing")
+  const validTruckIds = formData.truck_ids && formData.truck_ids.length > 0 ? formData.truck_ids : undefined
   const stateMileageResult = await getStateMileageBreakdown({
-    truck_ids: formData.truck_ids.length > 0 ? formData.truck_ids : undefined,
+    truck_ids: validTruckIds,
     start_date: periodStart,
     end_date: periodEnd,
   })
@@ -204,7 +244,8 @@ export async function createIFTAReport(formData: {
       totalMiles += miles
 
       const taxRate = STATE_FUEL_TAX_RATES[stateCode] || 0.25
-      const fuelGallons = fuelByState[stateCode] || Math.round(miles / 6.5) // Estimate if no fuel data
+      // FIXED: Zero gallons is valid data, not missing data. Use explicit undefined check.
+      const fuelGallons = fuelByState[stateCode] !== undefined ? fuelByState[stateCode] : Math.round(miles / 6.5)
       // FIXED: Tax rate is in $/gallon, not percentage. Calculate: gallons * rate
       const avgMpg = 6.5 // Average MPG for semi-trucks
       const taxDue = (miles / avgMpg) * taxRate
@@ -212,8 +253,11 @@ export async function createIFTAReport(formData: {
       return {
         state: stateData.state_name || stateCode,
         miles: Math.round(miles),
-        fuel: `${fuelGallons.toLocaleString()} gal`,
-        tax: `$${taxDue.toFixed(2)}`,
+        fuel: fuelGallons, // Store as number, format only in UI
+        fuelFormatted: `${fuelGallons.toLocaleString()} gal`, // Formatted version for display
+        tax: taxDue, // Store as number, not formatted string
+        taxFormatted: `$${taxDue.toFixed(2)}`, // Keep formatted version for display
+        taxRate: taxRate, // Store tax rate for detail page
       }
     })
   } else {
@@ -231,15 +275,56 @@ export async function createIFTAReport(formData: {
       }
     }
 
-    // If no ELD data or ELD data is insufficient, fall back to routes
-    if (totalMiles === 0) {
-      const { data: routes } = await supabase
+    // FIXED: Use route_start_time or route_departure_time instead of created_at for trip date filtering
+    // created_at is when the route was created in the system, not when the trip occurred
+    if (totalMiles === 0 && validTruckIds && validTruckIds.length > 0) {
+      // Try to get routes by trip date (route_start_time or route_departure_time)
+      let routesQuery = supabase
         .from("routes")
-        .select("distance, truck_id")
+        .select("distance, truck_id, route_start_time, route_departure_time, created_at")
         .eq("company_id", userData.company_id)
-        .in("truck_id", formData.truck_ids)
-        .gte("created_at", periodStart)
-        .lte("created_at", periodEnd)
+        .in("truck_id", validTruckIds)
+      
+      // Filter by trip date if available, otherwise fall back to created_at
+      // First try route_start_time, then route_departure_time, then created_at
+      let routes: any[] = []
+      
+      // Try route_start_time first
+      const { data: routesByStartTime } = await routesQuery
+        .gte("route_start_time", periodStart)
+        .lte("route_start_time", periodEnd)
+      
+      if (routesByStartTime && routesByStartTime.length > 0) {
+        routes = routesByStartTime
+      } else {
+        // Try route_departure_time
+        const { data: routesByDeparture } = await supabase
+          .from("routes")
+          .select("distance, truck_id, route_start_time, route_departure_time, created_at")
+          .eq("company_id", userData.company_id)
+          .in("truck_id", validTruckIds)
+          .gte("route_departure_time", periodStart)
+          .lte("route_departure_time", periodEnd)
+        
+        if (routesByDeparture && routesByDeparture.length > 0) {
+          routes = routesByDeparture
+        } else {
+          // Fallback to created_at (but log warning)
+          const { data: fallbackRoutes } = await supabase
+            .from("routes")
+            .select("distance, truck_id")
+            .eq("company_id", userData.company_id)
+            .in("truck_id", validTruckIds)
+            .gte("created_at", periodStart)
+            .lte("created_at", periodEnd)
+          
+          if (fallbackRoutes && fallbackRoutes.length > 0) {
+            console.warn("[IFTA] Using created_at for route filtering - trip dates (route_start_time/route_departure_time) not available")
+          }
+          
+          routes = fallbackRoutes || []
+        }
+      }
 
       routes?.forEach((route) => {
         const distance = route.distance || "0 mi"
@@ -248,48 +333,47 @@ export async function createIFTAReport(formData: {
       })
     }
 
+    // If we still don't have mileage data, return error instead of fabricating data
+    if (totalMiles === 0) {
+      return { 
+        error: "Cannot generate IFTA report: No GPS/ELD mileage data available for the selected period. Please ensure trucks have ELD devices or GPS tracking enabled, or provide manual state-by-state mileage data.", 
+        data: null 
+      }
+    }
+
     // Estimate fuel purchased (simplified calculation)
     const estimatedFuel = Math.round(totalMiles / 6.5) // Assuming 6.5 MPG average
 
-    // Estimate tax owed (simplified - real IFTA calculation is more complex)
-    const estimatedTax = totalMiles * 0.0716 // Simplified rate
+    // Return error - cannot create IFTA report without actual state breakdown
+    // Provide helpful guidance on how to set up state crossing data
+    return {
+      error: `Cannot generate IFTA report: State-by-state mileage breakdown is required for IFTA filing.
 
-    // Create simplified state breakdown (fallback when no crossing data)
-    stateBreakdown = [
-      {
-        state: "California",
-        miles: Math.round(totalMiles * 0.3),
-        fuel: `${Math.round(estimatedFuel * 0.3)} gal`,
-        tax: `$${(estimatedTax * 0.3).toFixed(2)}`,
-      },
-      {
-        state: "Texas",
-        miles: Math.round(totalMiles * 0.4),
-        fuel: `${Math.round(estimatedFuel * 0.4)} gal`,
-        tax: `$${(estimatedTax * 0.4).toFixed(2)}`,
-      },
-      {
-        state: "Arizona",
-        miles: Math.round(totalMiles * 0.2),
-        fuel: `${Math.round(estimatedFuel * 0.2)} gal`,
-        tax: `$${(estimatedTax * 0.2).toFixed(2)}`,
-      },
-      {
-        state: "Nevada",
-        miles: Math.round(totalMiles * 0.1),
-        fuel: `${Math.round(estimatedFuel * 0.1)} gal`,
-        tax: `$${(estimatedTax * 0.1).toFixed(2)}`,
-      },
-    ]
+No state crossing data found for the selected period (${periodStart} to ${periodEnd}).
+
+To generate IFTA reports, you need state crossing data. The system automatically detects state crossings when:
+• Location updates are received from mobile apps or ELD devices
+• Routes are completed with GPS tracking enabled
+
+For demo/test purposes: Use the ELD Simulator or create routes with GPS tracking to generate test state crossing data.`,
+      data: null
+    }
   }
 
-  // Calculate totals
+  // FIXED: Calculate totals from raw numeric values (not formatted strings)
+  // Keep running numeric totals throughout to avoid round-trip string parsing precision loss
   const totalFuel = stateBreakdown.reduce(
-    (sum, state) => sum + parseFloat(state.fuel.replace(/[^0-9.]/g, "")),
+    (sum, state) => {
+      // Use numeric fuel value if available, otherwise parse from formatted string
+      return sum + (typeof state.fuel === 'number' ? state.fuel : parseFloat((state.fuel || "0").toString().replace(/[^0-9.]/g, "")))
+    },
     0
   )
   const totalTax = stateBreakdown.reduce(
-    (sum, state) => sum + parseFloat(state.tax.replace(/[^0-9.]/g, "")),
+    (sum, state) => {
+      // Use numeric tax value if available, otherwise parse from formatted string
+      return sum + (typeof state.tax === 'number' ? state.tax : parseFloat((state.tax || "0").toString().replace(/[^0-9.]/g, "")))
+    },
     0
   )
 
@@ -300,8 +384,11 @@ export async function createIFTAReport(formData: {
       quarter: formData.quarter,
       year: formData.year,
       period: period,
-      total_miles: `${totalMiles.toLocaleString()} mi`,
-      fuel_purchased: `${Math.round(totalFuel).toLocaleString()} gal`,
+      // FIXED: Store total_miles as INTEGER/DECIMAL, format only in UI
+      total_miles: totalMiles, // Store as number
+      total_miles_formatted: `${totalMiles.toLocaleString()} mi`, // Keep formatted version for backward compatibility
+      fuel_purchased: Math.round(totalFuel), // Store as number
+      fuel_purchased_formatted: `${Math.round(totalFuel).toLocaleString()} gal`, // Keep formatted version for backward compatibility
       tax_owed: totalTax,
       status: "draft",
       truck_ids: formData.truck_ids,

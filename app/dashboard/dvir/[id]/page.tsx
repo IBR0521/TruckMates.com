@@ -89,7 +89,7 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
       title={`DVIR Report - ${getTypeLabel(dvir.inspection_type)}`}
       subtitle={`${dvir.drivers?.name || "Unknown Driver"} • ${dvir.trucks?.truck_number || "N/A"}`}
       backUrl="/dashboard/dvir"
-      editUrl={`/dashboard/dvir/${id}/edit`}
+      // editUrl removed - edit page not yet implemented
     >
       <div className="space-y-6">
         {/* Status Card */}
@@ -245,8 +245,18 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
                     className="max-w-xs h-auto"
                     onError={(e) => {
                       e.currentTarget.style.display = "none"
+                      // Show fallback text if image fails to load
+                      const fallback = document.createElement("div")
+                      fallback.className = "text-sm text-muted-foreground"
+                      fallback.textContent = "Signature on file (image unavailable - may be expired or private)"
+                      e.currentTarget.parentElement?.appendChild(fallback)
                     }}
                   />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {dvir.driver_signature.startsWith("data:image") 
+                      ? "Signature stored as base64 image" 
+                      : "Signature from storage (URL may expire)"}
+                  </p>
                 </div>
               )}
             </div>

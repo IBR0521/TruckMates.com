@@ -12,10 +12,32 @@ import { getCachedUserCompany } from "@/lib/query-optimizer"
  * Reverse geocode coordinates to get state information
  * Uses Google Maps Geocoding API
  */
+// FIXED: Cache Google Maps API key in module scope to avoid fetching on every location update
+let cachedApiKey: string | null = null
+let apiKeyCacheTime: number = 0
+const API_KEY_CACHE_TTL = 3600000 // 1 hour in milliseconds
+
+// FIXED: Cache geocode results per approximate coordinate to avoid re-geocoding stationary trucks
+const geocodeCache = new Map<string, { data: any; timestamp: number }>()
+const GEOCODE_CACHE_TTL = 300000 // 5 minutes in milliseconds
+const GEOCODE_CACHE_PRECISION = 0.001 // ~100 meters
+
 async function reverseGeocodeCoordinates(latitude: number, longitude: number) {
   try {
-    const { getGoogleMapsApiKey } = await import("./integrations-google-maps")
-    const apiKey = await getGoogleMapsApiKey()
+    // Check cache first (for stationary trucks)
+    const cacheKey = `${Math.round(latitude / GEOCODE_CACHE_PRECISION)}_${Math.round(longitude / GEOCODE_CACHE_PRECISION)}`
+    const cached = geocodeCache.get(cacheKey)
+    if (cached && Date.now() - cached.timestamp < GEOCODE_CACHE_TTL) {
+      return cached.data
+    }
+    
+    // Get API key (cached in module scope)
+    if (!cachedApiKey || Date.now() - apiKeyCacheTime > API_KEY_CACHE_TTL) {
+      const { getGoogleMapsApiKey } = await import("./integrations-google-maps")
+      cachedApiKey = await getGoogleMapsApiKey()
+      apiKeyCacheTime = Date.now()
+    }
+    const apiKey = cachedApiKey
 
     const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}&result_type=administrative_area_level_1`
 
@@ -54,7 +76,7 @@ async function reverseGeocodeCoordinates(latitude: number, longitude: number) {
       return { error: "State information not found in geocoding result", data: null }
     }
 
-    return {
+    const geocodeResult = {
       data: {
         state_code: stateCode,
         state_name: stateName,
@@ -62,6 +84,19 @@ async function reverseGeocodeCoordinates(latitude: number, longitude: number) {
       },
       error: null,
     }
+    
+    // Cache the result
+    geocodeCache.set(cacheKey, { data: geocodeResult, timestamp: Date.now() })
+    
+    // Clean up old cache entries (keep last 1000)
+    if (geocodeCache.size > 1000) {
+      const entries = Array.from(geocodeCache.entries())
+      entries.sort((a, b) => b[1].timestamp - a[1].timestamp)
+      geocodeCache.clear()
+      entries.slice(0, 1000).forEach(([key, value]) => geocodeCache.set(key, value))
+    }
+    
+    return geocodeResult
   } catch (error: any) {
     console.error("[IFTA State Crossing] Reverse geocoding error:", error)
     return { error: error?.message || "Failed to reverse geocode coordinates", data: null }
@@ -88,6 +123,26 @@ export async function detectStateCrossing(params: {
 }) {
   const supabase = await createClient()
 
+  // FIXED: Always derive and verify company_id from authenticated session
+  // Never trust caller-provided company_id to prevent cross-company data injection
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
+  }
+
+  // Verify the passed company_id matches the authenticated user's company
+  if (params.company_id !== result.company_id) {
+    return { error: "Unauthorized: company_id mismatch", data: null }
+  }
+
   try {
     // Reverse geocode to get state information
     const geocodeResult = await reverseGeocodeCoordinates(params.latitude, params.longitude)
@@ -101,16 +156,28 @@ export async function detectStateCrossing(params: {
 
     const { state_code, state_name, address } = geocodeResult.data
 
-    // Get the most recent state crossing for this truck/driver
-    const { data: previousCrossing } = await supabase
+    // FIXED: Handle NULL truck_id and driver_id correctly using .is() instead of .eq()
+    // Supabase translates .eq('column', null) to WHERE column = NULL which matches nothing
+    let query = supabase
       .from("state_crossings")
-      .select("state_code, state_name, timestamp")
-      .eq("truck_id", params.truck_id)
-      .eq("driver_id", params.driver_id)
+      .select("id, state_code, state_name, timestamp, latitude, longitude, location_geography")
       .lt("timestamp", params.timestamp)
       .order("timestamp", { ascending: false })
       .limit(1)
-      .single()
+    
+    if (params.truck_id) {
+      query = query.eq("truck_id", params.truck_id)
+    } else {
+      query = query.is("truck_id", null)
+    }
+    
+    if (params.driver_id) {
+      query = query.eq("driver_id", params.driver_id)
+    } else {
+      query = query.is("driver_id", null)
+    }
+    
+    const { data: previousCrossing } = await query.single()
 
     // Check if state has changed
     if (previousCrossing && previousCrossing.state_code === state_code) {
@@ -118,10 +185,56 @@ export async function detectStateCrossing(params: {
       return { data: null, error: null } // Not an error, just no crossing
     }
 
-    // State has changed or this is the first crossing - log it
-    const crossingType = previousCrossing ? "entry" : "entry" // First crossing is also an entry
-    const previousStateCode = previousCrossing?.state_code || null
-    const previousStateName = previousCrossing?.state_name || null
+    // FIXED: Log both exit and entry crossings for accurate mileage tracking
+    // When state changes, log exit for previous state and entry for new state
+    let crossingType = "entry"
+    let previousStateCode = previousCrossing?.state_code || null
+    let previousStateName = previousCrossing?.state_name || null
+    
+    // If state changed, we need to log both exit and entry
+    if (previousCrossing && previousCrossing.state_code !== state_code) {
+      // First, log exit from previous state (using the previous crossing's location)
+      // Use the location data we already have from the query
+      if (previousCrossing.latitude && previousCrossing.longitude) {
+      
+        // Insert exit crossing record for the previous state
+        const { error: exitError } = await supabase
+          .from("state_crossings")
+          .insert({
+            company_id: params.company_id,
+            truck_id: params.truck_id,
+            driver_id: params.driver_id,
+            eld_device_id: params.eld_device_id,
+            latitude: previousCrossing.latitude,
+            longitude: previousCrossing.longitude,
+            location_geography: previousCrossing.location_geography,
+            address: address || params.address || null,
+            state_code: previousStateCode,
+            state_name: previousStateName,
+            crossing_type: "exit",
+            previous_state_code: null,
+            previous_state_name: null,
+            route_id: params.route_id || null,
+            load_id: params.load_id || null,
+            timestamp: params.timestamp,
+            speed: params.speed || null,
+            odometer: params.odometer || null,
+          })
+        
+        if (exitError) {
+          console.warn("[IFTA State Crossing] Failed to log exit crossing:", exitError)
+        }
+      }
+      
+      // Now log entry to new state
+      crossingType = "entry"
+    } else if (!previousCrossing) {
+      // First crossing for this trip
+      crossingType = "entry"
+    } else {
+      // Same state - no crossing detected
+      return { data: null, error: null }
+    }
 
     // Call the database function to insert the crossing
     const { data: crossingId, error: crossingError } = await supabase.rpc(

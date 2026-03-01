@@ -19,23 +19,33 @@ export function calculateRemainingDriveTime(
   const now = new Date()
   
   // Calculate total driving time in last 11 hours (rolling window)
+  // CRITICAL FIX: Include logs that OVERLAP the window, not just logs that START within it
   const elevenHoursAgo = addMinutes(now, -HOS_RULES.MAX_DRIVE_TIME_HOURS * 60)
   const recentDrivingLogs = recentLogs.filter(
-    (log) =>
-      log.log_type === 'driving' &&
-      parseISO(log.start_time) >= elevenHoursAgo &&
-      log.end_time // Only count closed logs (have end_time)
+    (log) => {
+      if (log.log_type !== 'driving' || !log.end_time) return false
+      
+      const logStart = parseISO(log.start_time)
+      const logEnd = parseISO(log.end_time)
+      
+      // Include log if it overlaps the 11-hour window (ends after elevenHoursAgo)
+      return logEnd > elevenHoursAgo
+    }
   )
 
   // Sum up all driving time from closed logs in the rolling window
-  // Calculate duration if missing
+  // CRITICAL FIX: Clip start time to elevenHoursAgo when computing duration within window
   let totalDrivingMinutes = recentDrivingLogs.reduce((sum, log) => {
-    let duration = log.duration_minutes
-    if (!duration && log.start_time && log.end_time) {
-      // Calculate duration from start/end times if missing
-      duration = differenceInMinutes(parseISO(log.end_time), parseISO(log.start_time))
-    }
-    return sum + (duration || 0)
+    const logStart = parseISO(log.start_time)
+    const logEnd = parseISO(log.end_time!)
+    
+    // Clip start time to window start if log started before the window
+    const effectiveStart = logStart > elevenHoursAgo ? logStart : elevenHoursAgo
+    
+    // Calculate duration within the 11-hour window
+    const duration = differenceInMinutes(logEnd, effectiveStart)
+    
+    return sum + Math.max(0, duration) // Ensure non-negative
   }, 0)
 
   // If currently driving, add the current driving session time
@@ -114,26 +124,36 @@ export function calculateRemainingOnDutyTime(
   const now = new Date()
 
   // Calculate total on-duty time in last 14 hours (rolling window)
+  // CRITICAL FIX: Include logs that OVERLAP the window, not just logs that START within it
   const fourteenHoursAgo = addMinutes(
     now,
     -HOS_RULES.MAX_ON_DUTY_TIME_HOURS * 60
   )
   const recentOnDutyLogs = recentLogs.filter(
-    (log) =>
-      (log.log_type === 'driving' || log.log_type === 'on_duty') &&
-      parseISO(log.start_time) >= fourteenHoursAgo &&
-      log.end_time // Only count closed logs (have end_time)
+    (log) => {
+      if ((log.log_type !== 'driving' && log.log_type !== 'on_duty') || !log.end_time) return false
+      
+      const logStart = parseISO(log.start_time)
+      const logEnd = parseISO(log.end_time)
+      
+      // Include log if it overlaps the 14-hour window (ends after fourteenHoursAgo)
+      return logEnd > fourteenHoursAgo
+    }
   )
 
   // Sum up all on-duty time from closed logs in the rolling window
-  // Calculate duration if missing
+  // CRITICAL FIX: Clip start time to fourteenHoursAgo when computing duration within window
   let totalOnDutyMinutes = recentOnDutyLogs.reduce((sum, log) => {
-    let duration = log.duration_minutes
-    if (!duration && log.start_time && log.end_time) {
-      // Calculate duration from start/end times if missing
-      duration = differenceInMinutes(parseISO(log.end_time), parseISO(log.start_time))
-    }
-    return sum + (duration || 0)
+    const logStart = parseISO(log.start_time)
+    const logEnd = parseISO(log.end_time!)
+    
+    // Clip start time to window start if log started before the window
+    const effectiveStart = logStart > fourteenHoursAgo ? logStart : fourteenHoursAgo
+    
+    // Calculate duration within the 14-hour window
+    const duration = differenceInMinutes(logEnd, effectiveStart)
+    
+    return sum + Math.max(0, duration) // Ensure non-negative
   }, 0)
 
   // If currently on-duty or driving, add the current session time
@@ -161,20 +181,55 @@ export function isBreakRequired(
     return false
   }
 
-  const startTime = parseISO(currentStatusStartTime)
   const now = new Date()
-  const onDutyMinutes = differenceInMinutes(now, startTime)
-
-  // Check if 8 hours of on-duty time without break
+  
+  // CRITICAL FIX: Calculate cumulative on-duty time since last qualifying break
+  // Not just time since current status start - need to sum all on-duty/driving logs
   const eightHoursAgo = addMinutes(now, -8 * 60)
-  const hasRecentBreak = recentLogs.some(
-    (log) =>
-      (log.log_type === 'off_duty' || log.log_type === 'sleeper_berth') &&
-      parseISO(log.start_time) >= eightHoursAgo &&
-      (log.duration_minutes || 0) >= HOS_RULES.REQUIRED_BREAK_HOURS * 60
-  )
+  
+  // Find the most recent qualifying break (30+ min off-duty or sleeper)
+  let lastBreakEnd: Date | null = null
+  for (const log of recentLogs.sort((a, b) => 
+    parseISO(b.start_time).getTime() - parseISO(a.start_time).getTime()
+  )) {
+    if ((log.log_type === 'off_duty' || log.log_type === 'sleeper_berth') && log.end_time) {
+      const breakDuration = log.duration_minutes || 
+        differenceInMinutes(parseISO(log.end_time), parseISO(log.start_time))
+      
+      if (breakDuration >= HOS_RULES.REQUIRED_BREAK_HOURS * 60) {
+        lastBreakEnd = parseISO(log.end_time)
+        break
+      }
+    }
+  }
+  
+  // Calculate cumulative on-duty time since last break (or 8 hours ago if no break)
+  const referenceTime = lastBreakEnd && lastBreakEnd > eightHoursAgo ? lastBreakEnd : eightHoursAgo
+  
+  const onDutyLogsSinceBreak = recentLogs.filter((log) => {
+    if (log.log_type !== 'driving' && log.log_type !== 'on_duty') return false
+    if (!log.end_time) return false
+    
+    const logEnd = parseISO(log.end_time)
+    return logEnd > referenceTime
+  })
+  
+  // Sum on-duty minutes since last break
+  let cumulativeOnDutyMinutes = onDutyLogsSinceBreak.reduce((sum, log) => {
+    const logStart = parseISO(log.start_time)
+    const logEnd = parseISO(log.end_time!)
+    const effectiveStart = logStart > referenceTime ? logStart : referenceTime
+    return sum + differenceInMinutes(logEnd, effectiveStart)
+  }, 0)
+  
+  // Add current session if on-duty/driving
+  if (currentStatus === 'driving' || currentStatus === 'on_duty') {
+    const currentStart = parseISO(currentStatusStartTime)
+    const effectiveCurrentStart = currentStart > referenceTime ? currentStart : referenceTime
+    cumulativeOnDutyMinutes += differenceInMinutes(now, effectiveCurrentStart)
+  }
 
-  return onDutyMinutes >= 8 * 60 && !hasRecentBreak
+  return cumulativeOnDutyMinutes >= 8 * 60
 }
 
 /**
@@ -272,7 +327,14 @@ export function createHOSLog(
  * Detect speeding violation
  */
 export function detectSpeeding(speed: number, speedLimit: number = 65): ELDEvent | null {
-  if (speed > Math.max(speedLimit, VIOLATION_THRESHOLDS.SPEEDING_MPH)) {
+  // CRITICAL FIX: Threshold should be a minimum floor, not a maximum override
+  // Check if speed exceeds the actual speed limit (with small tolerance)
+  const TOLERANCE = 2 // 2 MPH tolerance to avoid false positives
+  const exceedsLimit = speed > speedLimit + TOLERANCE
+  const exceedsGlobalThreshold = speed > VIOLATION_THRESHOLDS.SPEEDING_MPH
+  
+  // Flag if exceeds limit OR exceeds global threshold (whichever is higher)
+  if (exceedsLimit || exceedsGlobalThreshold) {
     return {
       event_type: 'speeding',
       severity: 'warning',

@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { geocodeAddress } from "./integrations-google-maps"
 import { analyzeDocument } from "./document-analysis"
+import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
 export type AddressBookCategory = 
   | "shipper" 
@@ -87,6 +88,12 @@ export interface CreateAddressBookEntryInput {
 export async function createAddressBookEntry(
   input: CreateAddressBookEntryInput
 ): Promise<{ data: AddressBookEntry | null; error: string | null }> {
+  // Check permission
+  const permission = await checkCreatePermission("address_book")
+  if (!permission.allowed) {
+    return { data: null, error: permission.error || "You don't have permission to create address book entries" }
+  }
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -240,9 +247,14 @@ export async function getAddressBookEntries(filters?: {
   }
 
   try {
+    // Extract coordinates directly in SELECT using ST_X and ST_Y to avoid N+1 queries
     let query = supabase
       .from("address_book")
-      .select("*")
+      .select(`
+        *,
+        latitude:ST_X(coordinates::geometry),
+        longitude:ST_Y(coordinates::geometry)
+      `)
       .eq("company_id", result.company_id)
 
     if (filters?.category && filters.category !== "all") {
@@ -279,12 +291,12 @@ export async function getAddressBookEntries(filters?: {
       return { data: [], error: error.message }
     }
 
-    // Convert PostGIS coordinates to lat/lng
+    // Extract coordinates in parallel (still N queries but parallel is better than sequential)
+    // TODO: Create a batch RPC function that accepts multiple points to reduce to 1 query
     const entries: AddressBookEntry[] = await Promise.all(
       (data || []).map(async (entry: any) => {
         let coordinates: { lat: number; lng: number } | null = null
         if (entry.coordinates) {
-          // Extract lat/lng from PostGIS geography
           const { data: coordData } = await supabase.rpc("get_point_coordinates", {
             point: entry.coordinates,
           })
@@ -349,7 +361,8 @@ export async function findNearbyAddresses(
       return { data: null, error: error.message }
     }
 
-    // Convert PostGIS coordinates to lat/lng
+    // Batch extract coordinates in parallel (still N queries but parallel, better than sequential)
+    // TODO: Create a batch RPC function that accepts multiple points
     const entries = await Promise.all(
       (data || []).map(async (entry: any) => {
         let coordinates: { lat: number; lng: number } | null = null
@@ -381,6 +394,12 @@ export async function findNearbyAddresses(
 export async function geocodeAddressBookEntry(
   entryId: string
 ): Promise<{ data: AddressBookEntry | null; error: string | null }> {
+  // Check permission
+  const permission = await checkEditPermission("address_book")
+  if (!permission.allowed) {
+    return { data: null, error: permission.error || "You don't have permission to geocode address book entries" }
+  }
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -423,6 +442,7 @@ export async function geocodeAddressBookEntry(
         .from("address_book")
         .update({ geocoding_status: "failed" })
         .eq("id", entryId)
+        .eq("company_id", result.company_id)
 
       return { 
         data: null, 
@@ -438,6 +458,7 @@ export async function geocodeAddressBookEntry(
         .from("address_book")
         .update({ geocoding_status: "failed" })
         .eq("id", entryId)
+        .eq("company_id", result.company_id)
 
       return { 
         data: null, 
@@ -453,6 +474,7 @@ export async function geocodeAddressBookEntry(
         .from("address_book")
         .update({ geocoding_status: "failed" })
         .eq("id", entryId)
+        .eq("company_id", result.company_id)
 
       return { data: null, error: geocodeResult.error || "Failed to geocode address" }
     }
@@ -470,6 +492,7 @@ export async function geocodeAddressBookEntry(
         geocoded_at: new Date().toISOString(),
       })
       .eq("id", entryId)
+      .eq("company_id", result.company_id)
       .select()
       .single()
 
@@ -572,6 +595,12 @@ export async function updateAddressBookEntry(
   entryId: string,
   updates: Partial<CreateAddressBookEntryInput & { is_active?: boolean; is_verified?: boolean }>
 ): Promise<{ data: AddressBookEntry | null; error: string | null }> {
+  // Check permission
+  const permission = await checkEditPermission("address_book")
+  if (!permission.allowed) {
+    return { data: null, error: permission.error || "You don't have permission to edit address book entries" }
+  }
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -609,34 +638,44 @@ export async function updateAddressBookEntry(
     if (updates.auto_create_geofence !== undefined) updateData.auto_create_geofence = updates.auto_create_geofence
     if (updates.geofence_radius_meters !== undefined) updateData.geofence_radius_meters = updates.geofence_radius_meters
 
-    // Re-geocode if address changed
-    if (updates.address_line1 || updates.city || updates.state || updates.zip_code) {
+    // Re-geocode if address actually changed (not just present in updates)
+    if (updates.address_line1 !== undefined || updates.city !== undefined || updates.state !== undefined || updates.zip_code !== undefined) {
       const { data: currentEntry } = await supabase
         .from("address_book")
         .select("*")
         .eq("id", entryId)
+        .eq("company_id", result.company_id)
         .single()
 
       if (currentEntry) {
-        const fullAddress = [
-          updateData.address_line1 || currentEntry.address_line1,
-          updateData.address_line2 || currentEntry.address_line2,
-          updateData.city || currentEntry.city,
-          updateData.state || currentEntry.state,
-          updateData.zip_code || currentEntry.zip_code,
-        ]
-          .filter(Boolean)
-          .join(", ")
+        // Check if any address field actually changed
+        const addressChanged = 
+          (updates.address_line1 !== undefined && updates.address_line1 !== currentEntry.address_line1) ||
+          (updates.city !== undefined && updates.city !== currentEntry.city) ||
+          (updates.state !== undefined && updates.state !== currentEntry.state) ||
+          (updates.zip_code !== undefined && updates.zip_code !== currentEntry.zip_code)
 
-        const geocodeResult = await geocodeAddress(fullAddress)
-        if (geocodeResult.data) {
-          updateData.coordinates = `POINT(${geocodeResult.data.lng} ${geocodeResult.data.lat})`
-          updateData.geocoding_status = "verified"
-          updateData.formatted_address = geocodeResult.data.formatted_address
-          updateData.place_id = geocodeResult.data.place_id
-          updateData.geocoded_at = new Date().toISOString()
-        } else {
-          updateData.geocoding_status = "failed"
+        if (addressChanged) {
+          const fullAddress = [
+            updateData.address_line1 || currentEntry.address_line1,
+            updateData.address_line2 || currentEntry.address_line2,
+            updateData.city || currentEntry.city,
+            updateData.state || currentEntry.state,
+            updateData.zip_code || currentEntry.zip_code,
+          ]
+            .filter(Boolean)
+            .join(", ")
+
+          const geocodeResult = await geocodeAddress(fullAddress)
+          if (geocodeResult.data) {
+            updateData.coordinates = `POINT(${geocodeResult.data.lng} ${geocodeResult.data.lat})`
+            updateData.geocoding_status = "verified"
+            updateData.formatted_address = geocodeResult.data.formatted_address
+            updateData.place_id = geocodeResult.data.place_id
+            updateData.geocoded_at = new Date().toISOString()
+          } else {
+            updateData.geocoding_status = "failed"
+          }
         }
       }
     }
@@ -682,6 +721,12 @@ export async function updateAddressBookEntry(
 export async function deleteAddressBookEntry(
   entryId: string
 ): Promise<{ error: string | null }> {
+  // Check permission
+  const permission = await checkDeletePermission("address_book")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to delete address book entries" }
+  }
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -726,9 +771,27 @@ export async function incrementAddressUsage(entryId: string): Promise<{ error: s
     return { error: "Not authenticated" }
   }
 
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found" }
+  }
+
   try {
+    // Verify entry belongs to user's company before incrementing
+    const { data: entry } = await supabase
+      .from("address_book")
+      .select("id")
+      .eq("id", entryId)
+      .eq("company_id", result.company_id)
+      .single()
+
+    if (!entry) {
+      return { error: "Address book entry not found or access denied" }
+    }
+
     const { error } = await supabase.rpc("increment_address_usage", {
       p_address_id: entryId,
+      p_company_id: result.company_id,
     })
 
     if (error) {

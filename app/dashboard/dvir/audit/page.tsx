@@ -54,7 +54,8 @@ export default function DVIRAuditPage() {
         return
       }
 
-      // Create blob and download
+      // Create blob and download - note: this is HTML, not PDF
+      // For actual PDF generation, use a library like @react-pdf/renderer or jsPDF
       const blob = new Blob([result.html], { type: "text/html" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
@@ -64,6 +65,9 @@ export default function DVIRAuditPage() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      
+      // Show info toast about HTML vs PDF
+      toast.info("Report downloaded as HTML. For PDF format, use your browser's Print to PDF feature.")
 
       // Also open in new window for printing
       const printWindow = window.open("", "_blank")
@@ -75,6 +79,9 @@ export default function DVIRAuditPage() {
         setTimeout(() => {
           printWindow.print()
         }, 500)
+      } else {
+        // Popup blocked - show user-friendly message
+        toast.warning("Popup was blocked. Please allow popups for this site to print the report, or use the downloaded HTML file.")
       }
 
       toast.success("DVIR audit report generated successfully")
@@ -158,7 +165,7 @@ export default function DVIRAuditPage() {
                 ) : (
                   <>
                     <Download className="w-4 h-4 mr-2" />
-                    Generate Audit PDF
+                    Generate Audit Report
                   </>
                 )}
               </Button>
@@ -171,9 +178,10 @@ export default function DVIRAuditPage() {
               <div>
                 <h3 className="font-semibold mb-2">Audit-Ready Reports</h3>
                 <p className="text-sm text-muted-foreground">
-                  This report includes all DVIRs for the selected date range and truck. The PDF is formatted
+                  This report includes all DVIRs for the selected date range and truck. The report is formatted
                   for DOT audits and includes all required information: inspection dates, driver signatures,
-                  defects found, and corrective actions. You can print or save this report for your records.
+                  defects found, and corrective actions. The report is generated as HTML - use your browser's
+                  "Print to PDF" feature to create a PDF file for your records.
                 </p>
               </div>
             </div>

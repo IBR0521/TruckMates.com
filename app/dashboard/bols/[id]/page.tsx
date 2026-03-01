@@ -98,23 +98,17 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
         return
       }
 
-      // Create a new window with the PDF HTML and trigger print
-      const printWindow = window.open("", "_blank")
-      if (!printWindow) {
-        toast.error("Please allow pop-ups to download PDF")
-        return
-      }
-
-      printWindow.document.write(result.html)
-      printWindow.document.close()
-
-      // Wait for images to load, then trigger print/save as PDF
-      printWindow.onload = () => {
-        setTimeout(() => {
-          printWindow.print()
-          toast.success("PDF ready to download")
-        }, 500)
-      }
+      // LOW FIX 2: Use Blob download API for better UX (interim until real PDF generation)
+      const blob = new Blob([result.html], { type: "text/html" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${bol?.bol_number || "BOL"}.html`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      toast.success("BOL downloaded (HTML format)")
     } catch (error: any) {
       toast.error("Failed to generate PDF: " + (error.message || "Unknown error"))
     }
@@ -175,7 +169,7 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
             className="bg-primary/10 hover:bg-primary/20 border-primary/50"
           >
             <Download className="w-4 h-4 mr-2" />
-            Download PDF
+            Print / Save as PDF
           </Button>
           {bol.load_id && typeof bol.load_id === 'string' && bol.load_id.trim() !== '' ? (
             <Link href={`/dashboard/loads/${bol.load_id}`}>
@@ -436,7 +430,20 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
                 )}
               </div>
               <div>
-                <p className="text-sm font-medium text-foreground mb-3">Consignee</p>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-medium text-foreground">Consignee</p>
+                  {!bol.consignee_signature && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSignatureDialog({ open: true, type: "consignee" })}
+                      className="h-7 text-xs"
+                    >
+                      <Pen className="w-3 h-3 mr-1" />
+                      Sign
+                    </Button>
+                  )}
+                </div>
                 {bol.consignee_signature ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
@@ -449,6 +456,13 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
                     <p className="text-xs text-muted-foreground">
                       {new Date(bol.consignee_signature.signed_at).toLocaleString()}
                     </p>
+                    {bol.consignee_signature.signature_url && (
+                      <img
+                        src={bol.consignee_signature.signature_url}
+                        alt="Consignee signature"
+                        className="border border-border rounded mt-2 max-w-full h-20 object-contain bg-white"
+                      />
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 text-muted-foreground">

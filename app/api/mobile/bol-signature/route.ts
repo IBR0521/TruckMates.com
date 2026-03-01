@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { updateBOLSignature } from "@/app/actions/bol"
 import { uploadDocument } from "@/app/actions/documents"
+import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { sanitizeString } from "@/lib/validation"
 
 /**
  * Upload BOL signature from mobile app
@@ -30,6 +32,33 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // FIXED: Get user company and validate bolId belongs to it
+    const result = await getCachedUserCompany(user.id)
+    const company_id = result.company_id
+    const companyError = result.error
+
+    if (companyError || !company_id) {
+      return NextResponse.json(
+        { error: companyError || "No company found" },
+        { status: 403 }
+      )
+    }
+
+    // FIXED: Verify BOL belongs to user's company before signing
+    const { data: bolCheck, error: bolCheckError } = await supabase
+      .from("bols")
+      .select("id, company_id")
+      .eq("id", bolId)
+      .eq("company_id", company_id)
+      .single()
+
+    if (bolCheckError || !bolCheck) {
+      return NextResponse.json(
+        { error: "BOL not found or does not belong to your company" },
+        { status: 403 }
+      )
+    }
+
     // Convert base64 to blob
     const base64Data = signatureData.replace(/^data:image\/\w+;base64,/, "")
     const buffer = Buffer.from(base64Data, "base64")
@@ -52,17 +81,49 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get signed URL for the uploaded document
+    // HIGH FIX 4: Extract full storage path correctly (not just filename)
+    let filePath = uploadResult.data.file_url
+    // Try to extract path from Supabase Storage URL format
+    const pathMatch = filePath.match(/\/storage\/v1\/object\/(?:public|sign)\/documents\/([^?]+)/)
+    if (pathMatch) {
+      filePath = decodeURIComponent(pathMatch[1])
+    } else {
+      // If URL format doesn't match, try extracting from path after /documents/
+      const documentsIndex = filePath.indexOf('/documents/')
+      if (documentsIndex !== -1) {
+        filePath = filePath.substring(documentsIndex + '/documents/'.length).split('?')[0]
+      } else if (filePath.includes('/')) {
+        // Last resort: use full path, not just filename
+        const parts = filePath.split('/')
+        const documentsIdx = parts.findIndex(p => p === 'documents')
+        if (documentsIdx !== -1 && documentsIdx < parts.length - 1) {
+          filePath = parts.slice(documentsIdx + 1).join('/').split('?')[0]
+        } else {
+          filePath = filePath.split('/').pop() || filePath
+        }
+      }
+    }
+    
+    // Get signed URL for the uploaded document using full path
     const { data: signedUrlData } = await supabase.storage
       .from("documents")
-      .createSignedUrl(uploadResult.data.file_url.split("/").pop() || "", 31536000) // 1 year
+      .createSignedUrl(filePath, 31536000) // 1 year
 
-    const signatureUrl = signedUrlData?.signedUrl || uploadResult.data.file_url
+    const signatureUrl = signedUrlData?.signedUrl || filePath
+
+    // FIXED: Sanitize signedByName to prevent impersonation
+    const sanitizedSignedByName = sanitizeString(signedByName, 100)
+    if (!sanitizedSignedByName) {
+      return NextResponse.json(
+        { error: "Invalid signature name" },
+        { status: 400 }
+      )
+    }
 
     // Update BOL with signature
     const updateResult = await updateBOLSignature(bolId, signatureType, {
       signature_url: signatureUrl,
-      signed_by: signedByName,
+      signed_by: sanitizedSignedByName, // FIXED: Sanitized
       signed_at: new Date().toISOString(),
     })
 

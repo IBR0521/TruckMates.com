@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { updateBOLPOD } from "@/app/actions/bol"
 import { uploadDocument } from "@/app/actions/documents"
 import { autoGenerateInvoiceOnPOD } from "@/app/actions/auto-invoice"
+import { getCachedUserCompany } from "@/lib/query-optimizer"
 
 /**
  * Upload POD (Proof of Delivery) from mobile app
@@ -37,12 +38,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get user company for alerts
-    const { data: userData } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
+    // FIXED: Get user company and validate loadId belongs to it
+    const result = await getCachedUserCompany(user.id)
+    const company_id = result.company_id
+    const companyError = result.error
+
+    if (companyError || !company_id) {
+      return NextResponse.json(
+        { error: companyError || "No company found" },
+        { status: 403 }
+      )
+    }
+
+    // FIXED: Verify load belongs to user's company before updating
+    const { data: loadCheck, error: loadCheckError } = await supabase
+      .from("loads")
+      .select("id, company_id")
+      .eq("id", loadId)
+      .eq("company_id", company_id)
       .single()
+
+    if (loadCheckError || !loadCheck) {
+      return NextResponse.json(
+        { error: "Load not found or does not belong to your company" },
+        { status: 403 }
+      )
+    }
 
     // Upload photos to Supabase Storage
     const photoUrls: string[] = []
@@ -53,13 +74,25 @@ export async function POST(request: NextRequest) {
       })
 
       if (uploadResult.data) {
-        // Get signed URL
-        const filePath = uploadResult.data.file_url.split("/").pop() || ""
+        // FIXED: Extract storage path properly from stored path (not signed URL)
+        // uploadDocument now stores the path, not a signed URL
+        let filePath = uploadResult.data.file_url
+        
+        // If it's a full URL, extract the path
+        const pathMatch = filePath.match(/\/storage\/v1\/object\/(?:public|sign)\/documents\/([^?]+)/)
+        if (pathMatch) {
+          filePath = decodeURIComponent(pathMatch[1])
+        } else if (filePath.includes('/')) {
+          // If it contains slashes but no match, try to extract from end
+          filePath = filePath.split('/').pop() || filePath
+        }
+        
+        // Generate signed URL from path
         const { data: signedUrlData } = await supabase.storage
           .from("documents")
           .createSignedUrl(filePath, 31536000) // 1 year
 
-        photoUrls.push(signedUrlData?.signedUrl || uploadResult.data.file_url)
+        photoUrls.push(signedUrlData?.signedUrl || filePath)
 
         // Link document to load
         try {
@@ -83,6 +116,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update load status to delivered
+    // FIXED: Add company_id filter for defense-in-depth
     try {
       await supabase
         .from("loads")
@@ -91,6 +125,7 @@ export async function POST(request: NextRequest) {
           actual_delivery: receivedDate,
         })
         .eq("id", loadId)
+        .eq("company_id", company_id) // FIXED: Add company_id filter
     } catch (error) {
       console.error("Failed to update load status:", error)
     }
@@ -110,13 +145,15 @@ export async function POST(request: NextRequest) {
     // Send POD alert notifications (database trigger also handles this, but keep as backup)
     try {
       const { createAlert } = await import("@/app/actions/alerts")
+      // FIXED: Add company_id filter to load query
       const { data: load } = await supabase
         .from("loads")
         .select("shipment_number, origin, destination, company_name, consignee_name")
         .eq("id", loadId)
+        .eq("company_id", company_id) // FIXED: Add company_id filter
         .single()
 
-      if (load && userData?.company_id) {
+      if (load) {
         // Create alert for dispatchers
         await createAlert({
           title: `POD Captured - Load ${load.shipment_number || loadId.substring(0, 8)}`,

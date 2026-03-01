@@ -206,7 +206,8 @@ async function handleInvoicePaid(supabase: any, invoice: Stripe.Invoice) {
     return
   }
 
-  // Store invoice
+  // Store invoice in separate billing_invoices table (not freight invoices table)
+  // Check if billing_invoices table exists, if not create it or use alternative storage
   const invoiceData = {
     company_id: subscription.company_id,
     subscription_id: subscription.id,
@@ -221,9 +222,19 @@ async function handleInvoicePaid(supabase: any, invoice: Stripe.Invoice) {
     paid_at: invoice.status === "paid" ? new Date().toISOString() : null,
   }
 
-  const { error } = await supabase.from("invoices").upsert(invoiceData, {
+  // Try to insert into billing_invoices table first
+  let { error } = await supabase.from("billing_invoices").upsert(invoiceData, {
     onConflict: "stripe_invoice_id",
   })
+
+  // If billing_invoices table doesn't exist, log error but don't fail
+  // The table should be created via migration
+  if (error && error.message?.includes("does not exist")) {
+    console.error("[Stripe Webhook] billing_invoices table does not exist. Please run migration to create it.")
+    console.error("[Stripe Webhook] NOT storing invoice in freight invoices table to prevent data corruption.")
+    // Don't store in invoices table - this would corrupt TMS accounting data
+    return
+  }
 
   if (error) {
     console.error("Error storing invoice:", error)

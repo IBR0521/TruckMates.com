@@ -83,34 +83,47 @@ export async function getAllDriversHOSStatus(): Promise<{
       }
     }
 
-    // Get HOS status for each driver
+    // Batch fetch all ELD logs for all drivers to avoid N+1 queries
+    const driverIds = drivers.map(d => d.id)
+    const eightDaysAgo = new Date()
+    eightDaysAgo.setDate(eightDaysAgo.getDate() - 8)
+    
+    // Fetch all logs for all drivers in one query
+    const { data: allLogs } = await supabase
+      .from("eld_logs")
+      .select("driver_id, log_type, duration_minutes, start_time, end_time")
+      .in("driver_id", driverIds)
+      .gte("start_time", eightDaysAgo.toISOString())
+      .order("start_time", { ascending: false })
+    
+    // Group logs by driver_id
+    const logsByDriver = new Map<string, typeof allLogs>()
+    if (allLogs) {
+      allLogs.forEach(log => {
+        if (!logsByDriver.has(log.driver_id)) {
+          logsByDriver.set(log.driver_id, [])
+        }
+        logsByDriver.get(log.driver_id)!.push(log)
+      })
+    }
+
+    // Get HOS status for each driver (now using batched data)
     const driversWithHOS = await Promise.all(
       drivers.map(async (driver) => {
         const hosResult = await calculateRemainingHOS(driver.id)
         
-        // Get current status from latest log
-        const { data: latestLog } = await supabase
-          .from("eld_logs")
-          .select("log_type, end_time")
-          .eq("driver_id", driver.id)
-          .order("start_time", { ascending: false })
-          .limit(1)
-          .single()
-
+        // Get current status from latest log (from batched data)
+        const driverLogs = logsByDriver.get(driver.id) || []
+        const latestLog = driverLogs[0] // Already sorted by start_time desc
+        
         const currentStatus = latestLog?.end_time === null 
           ? latestLog?.log_type || "off_duty"
           : "off_duty"
 
-        // Calculate weekly on-duty hours (70-hour/8-day rule)
-        const eightDaysAgo = new Date()
-        eightDaysAgo.setDate(eightDaysAgo.getDate() - 8)
-        
-        const { data: weeklyLogs } = await supabase
-          .from("eld_logs")
-          .select("log_type, duration_minutes, start_time, end_time")
-          .eq("driver_id", driver.id)
-          .gte("start_time", eightDaysAgo.toISOString())
-          .in("log_type", ["driving", "on_duty"])
+        // Calculate weekly on-duty hours (70-hour/8-day rule) from batched data
+        const weeklyLogs = driverLogs.filter(log => 
+          ["driving", "on_duty"].includes(log.log_type)
+        )
 
         let weeklyOnDutyMinutes = 0
         if (weeklyLogs) {

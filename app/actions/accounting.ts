@@ -3,7 +3,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
-import { validatePricingData, validateNonNegativeNumber, sanitizeString, validateDate } from "@/lib/validation"
+import { validatePricingData, validateNonNegativeNumber, sanitizeString, validateDate, validateRequiredString } from "@/lib/validation"
+import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
 export async function getInvoices(filters?: {
   load_id?: string
@@ -242,6 +243,12 @@ export async function updateInvoice(
     return { error: "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkEditPermission("invoicing")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to edit invoices", data: null }
+  }
+
   // Build update data
   const updateData: any = {}
   if (formData.status !== undefined) updateData.status = formData.status
@@ -312,14 +319,36 @@ export async function duplicateInvoice(id: string) {
     return { error: numberResult.error || "Failed to generate invoice number", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("invoicing")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to duplicate invoices", data: null }
+  }
+
   // Create duplicate with new invoice number and reset status
   const duplicateData: any = { ...originalInvoice }
   delete duplicateData.id
   delete duplicateData.created_at
   delete duplicateData.updated_at
+  delete duplicateData.paid_at
+  delete duplicateData.stripe_invoice_id
+  delete duplicateData.stripe_payment_id
   duplicateData.invoice_number = numberResult.data
   duplicateData.status = "draft" // Reset to draft
   duplicateData.issue_date = new Date().toISOString().split("T")[0] // Today's date
+  
+  // Recalculate due_date based on new issue_date and payment_terms
+  const issueDate = new Date(duplicateData.issue_date)
+  const paymentTerms = duplicateData.payment_terms || "Net 30"
+  let days = 30 // default
+  if (paymentTerms.includes("Net 7")) days = 7
+  else if (paymentTerms.includes("Net 15")) days = 15
+  else if (paymentTerms.includes("Net 45")) days = 45
+  else if (paymentTerms.includes("Net 60")) days = 60
+  else if (paymentTerms.includes("Net 90")) days = 90
+  else if (paymentTerms.includes("Due on Receipt")) days = 0
+  issueDate.setDate(issueDate.getDate() + days)
+  duplicateData.due_date = issueDate.toISOString().split("T")[0]
 
   const { data: newInvoice, error: createError } = await supabase
     .from("invoices")
@@ -360,6 +389,12 @@ export async function deleteInvoice(id: string) {
     return { error: "No company found" }
   }
 
+  // RBAC check
+  const permissionCheck = await checkDeletePermission("invoicing")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to delete invoices" }
+  }
+
   const { error } = await supabase
     .from("invoices")
     .delete()
@@ -397,6 +432,12 @@ export async function deleteExpense(id: string) {
     return { error: "No company found" }
   }
 
+  // RBAC check
+  const permissionCheck = await checkDeletePermission("accounting")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to delete expenses" }
+  }
+
   const { error } = await supabase
     .from("expenses")
     .delete()
@@ -432,6 +473,12 @@ export async function deleteSettlement(id: string) {
 
   if (!userData?.company_id) {
     return { error: "No company found" }
+  }
+
+  // RBAC check
+  const permissionCheck = await checkDeletePermission("settlements")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to delete settlements" }
   }
 
   const { error } = await supabase
@@ -479,6 +526,12 @@ export async function createInvoice(formData: {
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
+  }
+
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("invoicing")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to create invoices", data: null }
   }
 
   // Get company settings to apply invoice defaults
@@ -721,6 +774,12 @@ export async function createExpense(formData: {
     return { error: "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("accounting")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to create expenses", data: null }
+  }
+
   // Professional validation
   if (!validateRequiredString(formData.category, 1, 100)) {
     return { error: "Category is required and must be between 1 and 100 characters", data: null }
@@ -920,34 +979,56 @@ export async function getDriverLoadsForPeriod(driverId: string, periodStart: str
   }
 
   // Get loads for driver in the period
-  // Filter by load_date if available, otherwise use created_at as fallback
-  // Get loads with load_date in period
-  const { data: loadsWithDate, error: errorWithDate } = await supabase
-    .from("loads")
-    .select("id, shipment_number, value, status, actual_delivery, load_date, created_at")
-    .eq("company_id", userData.company_id)
-    .eq("driver_id", driverId)
-    .not("load_date", "is", null)
-    .gte("load_date", periodStart)
-    .lte("load_date", periodEnd)
-    .order("load_date", { ascending: true })
+  // Use COALESCE to prevent double-counting: use load_date if available, otherwise created_at::date
+  // Single query approach to avoid double-counting loads that get load_date backfilled
+  const { data: allLoads, error: loadsError } = await supabase
+    .rpc("get_driver_loads_for_period", {
+      p_driver_id: driverId,
+      p_company_id: userData.company_id,
+      p_period_start: periodStart,
+      p_period_end: periodEnd,
+    })
 
-  // Get loads without load_date, filtered by created_at
-  const { data: loadsWithoutDate, error: errorWithoutDate } = await supabase
-    .from("loads")
-    .select("id, shipment_number, value, status, actual_delivery, load_date, created_at")
-    .eq("company_id", userData.company_id)
-    .eq("driver_id", driverId)
-    .is("load_date", null)
-    .gte("created_at", `${periodStart}T00:00:00`)
-    .lte("created_at", `${periodEnd}T23:59:59`)
-    .order("created_at", { ascending: true })
+  // Fallback to two queries if RPC doesn't exist, but exclude loads that would be double-counted
+  if (loadsError || !allLoads) {
+    // Get loads with load_date in period
+    const { data: loadsWithDate, error: errorWithDate } = await supabase
+      .from("loads")
+      .select("id, shipment_number, value, status, actual_delivery, load_date, created_at")
+      .eq("company_id", userData.company_id)
+      .eq("driver_id", driverId)
+      .not("load_date", "is", null)
+      .gte("load_date", periodStart)
+      .lte("load_date", periodEnd)
+      .order("load_date", { ascending: true })
 
-  if (errorWithDate || errorWithoutDate) {
-    return { error: errorWithDate?.message || errorWithoutDate?.message || "Failed to fetch loads", data: null }
+    // Get loads without load_date, filtered by created_at, but exclude those that might have been backfilled
+    // Only include loads where created_at is in period AND load_date is still null
+    const { data: loadsWithoutDate, error: errorWithoutDate } = await supabase
+      .from("loads")
+      .select("id, shipment_number, value, status, actual_delivery, load_date, created_at")
+      .eq("company_id", userData.company_id)
+      .eq("driver_id", driverId)
+      .is("load_date", null)
+      .gte("created_at", `${periodStart}T00:00:00`)
+      .lte("created_at", `${periodEnd}T23:59:59`)
+      .order("created_at", { ascending: true })
+
+    if (errorWithDate || errorWithoutDate) {
+      return { error: errorWithDate?.message || errorWithoutDate?.message || "Failed to fetch loads", data: null }
+    }
+
+    // Combine and deduplicate by id
+    const loadMap = new Map()
+    ;(loadsWithDate || []).forEach(load => loadMap.set(load.id, load))
+    ;(loadsWithoutDate || []).forEach(load => {
+      if (!loadMap.has(load.id)) {
+        loadMap.set(load.id, load)
+      }
+    })
+    const combinedLoads = Array.from(loadMap.values())
+    return { data: combinedLoads, error: null }
   }
-
-  const allLoads = [...(loadsWithDate || []), ...(loadsWithoutDate || [])]
 
   return { data: allLoads, error: null }
 }
@@ -1032,6 +1113,24 @@ export async function createSettlement(formData: {
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
+  }
+
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("settlements")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to create settlements", data: null }
+  }
+
+  // Validate driver_id belongs to company
+  const { data: driver, error: driverError } = await supabase
+    .from("drivers")
+    .select("id")
+    .eq("id", formData.driver_id)
+    .eq("company_id", userData.company_id)
+    .single()
+
+  if (driverError || !driver) {
+    return { error: "Driver not found or does not belong to your company", data: null }
   }
 
   // Get driver's loads for the period

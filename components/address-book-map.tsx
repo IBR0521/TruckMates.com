@@ -224,18 +224,30 @@ export function AddressBookMap({ entries }: AddressBookMapProps) {
         },
       })
 
-      // Create info window
+      // Escape HTML to prevent XSS
+      const escapeHtml = (s: string) => {
+        const map: Record<string, string> = {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;'
+        }
+        return s.replace(/[&<>"']/g, (c) => map[c] || c)
+      }
+
+      // Create info window with escaped content
       const infoWindow = new window.google.maps.InfoWindow({
         content: `
           <div style="padding: 8px; min-width: 200px;">
-            <h3 style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px;">${entry.name}</h3>
-            ${entry.company_name ? `<p style="margin: 0 0 4px 0; color: #666; font-size: 12px;">${entry.company_name}</p>` : ""}
+            <h3 style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px;">${escapeHtml(entry.name)}</h3>
+            ${entry.company_name ? `<p style="margin: 0 0 4px 0; color: #666; font-size: 12px;">${escapeHtml(entry.company_name)}</p>` : ""}
             <p style="margin: 0 0 4px 0; color: #666; font-size: 12px;">
-              ${entry.address_line1}<br/>
-              ${entry.city}, ${entry.state} ${entry.zip_code}
+              ${escapeHtml(entry.address_line1)}<br/>
+              ${escapeHtml(entry.city)}, ${escapeHtml(entry.state)} ${escapeHtml(entry.zip_code)}
             </p>
-            ${entry.phone ? `<p style="margin: 4px 0 0 0; color: #666; font-size: 12px;">📞 ${entry.phone}</p>` : ""}
-            ${entry.email ? `<p style="margin: 4px 0 0 0; color: #666; font-size: 12px;">✉️ ${entry.email}</p>` : ""}
+            ${entry.phone ? `<p style="margin: 4px 0 0 0; color: #666; font-size: 12px;">📞 ${escapeHtml(entry.phone)}</p>` : ""}
+            ${entry.email ? `<p style="margin: 4px 0 0 0; color: #666; font-size: 12px;">✉️ ${escapeHtml(entry.email)}</p>` : ""}
           </div>
         `,
       })

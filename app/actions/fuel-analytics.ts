@@ -31,13 +31,14 @@ export async function getFuelAnalytics(filters?: {
   }
 
   try {
-    // Build query for fuel expenses
+    // Build query for fuel expenses with pagination/limit to prevent OOM
     let fuelQuery = supabase
       .from("expenses")
       .select("id, amount, date, mileage, truck_id, description, gallons, price_per_gallon")
       .eq("company_id", company_id)
       .eq("category", "fuel")
       .order("date", { ascending: false })
+      .limit(10000) // Cap at 10k rows to prevent memory exhaustion
 
     // Apply filters
     if (filters?.truck_id) {

@@ -7,6 +7,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { checkViewPermission, checkCreatePermission } from "@/lib/server-permissions"
 
 export interface DetentionRecord {
   id: string
@@ -36,6 +37,12 @@ export interface DetentionRecord {
  * Get active detention records (drivers currently in zones beyond threshold)
  */
 export async function getActiveDetentions() {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkViewPermission("reports")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -55,19 +62,41 @@ export async function getActiveDetentions() {
   }
 
   try {
+    // FIXED: RPC doesn't accept company_id, so we need to filter results by company
+    // TODO: Update calculate_active_detention RPC to accept p_company_id parameter
     const { data: activeDetentions, error } = await supabase.rpc('calculate_active_detention')
 
     if (error) {
       return { error: error.message || "Failed to get active detentions", data: null }
     }
 
-    // Get full details for each detention
-    const detentionIds = activeDetentions?.map((d: any) => d.zone_visit_id) || []
-    
-    if (detentionIds.length === 0) {
+    if (!activeDetentions || activeDetentions.length === 0) {
       return { data: [], error: null }
     }
 
+    // FIXED: Filter zone_visit_ids by company_id to prevent cross-company data leak
+    const zoneVisitIds = activeDetentions.map((d: any) => d.zone_visit_id)
+    const { data: zoneVisits } = await supabase
+      .from("zone_visits")
+      .select("id, geofence_id")
+      .in("id", zoneVisitIds)
+    
+    const { data: geofences } = await supabase
+      .from("geofences")
+      .select("id, company_id")
+      .eq("company_id", company_id)
+      .in("id", zoneVisits?.map((zv: any) => zv.geofence_id) || [])
+    
+    const validGeofenceIds = new Set(geofences?.map((g: any) => g.id) || [])
+    const validZoneVisitIds = zoneVisits
+      ?.filter((zv: any) => validGeofenceIds.has(zv.geofence_id))
+      .map((zv: any) => zv.id) || []
+    
+    if (validZoneVisitIds.length === 0) {
+      return { data: [], error: null }
+    }
+
+    // Get full details for each detention
     const { data: detentions, error: detError } = await supabase
       .from("detention_tracking")
       .select(`
@@ -77,7 +106,7 @@ export async function getActiveDetentions() {
         drivers:driver_id (id, name),
         loads:load_id (id, shipment_number)
       `)
-      .in('zone_visit_id', detentionIds)
+      .in('zone_visit_id', validZoneVisitIds)
       .eq('status', 'active')
       .eq('company_id', company_id)
 
@@ -105,6 +134,12 @@ export async function getDetentionRecords(filters?: {
   limit?: number
   offset?: number
 }) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkViewPermission("reports")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -199,18 +234,49 @@ export async function checkAndCreateDetentions() {
   }
 
   try {
-    // Get active detentions
+    // FIXED: RPC doesn't accept company_id, so we need to filter results by company
+    // TODO: Update calculate_active_detention RPC to accept p_company_id parameter
     const { data: activeDetentions, error: activeError } = await supabase.rpc('calculate_active_detention')
 
     if (activeError) {
       return { error: activeError.message, data: null }
     }
 
+    if (!activeDetentions || activeDetentions.length === 0) {
+      return {
+        data: {
+          created: 0,
+          errors: 0,
+          details: []
+        },
+        error: null
+      }
+    }
+
+    // FIXED: Filter zone_visit_ids by company_id to prevent cross-company data leak
+    const zoneVisitIds = activeDetentions.map((d: any) => d.zone_visit_id)
+    const { data: zoneVisits } = await supabase
+      .from("zone_visits")
+      .select("id, geofence_id")
+      .in("id", zoneVisitIds)
+    
+    const { data: geofences } = await supabase
+      .from("geofences")
+      .select("id, company_id")
+      .eq("company_id", company_id)
+      .in("id", zoneVisits?.map((zv: any) => zv.geofence_id) || [])
+    
+    const validGeofenceIds = new Set(geofences?.map((g: any) => g.id) || [])
+    const validDetentions = activeDetentions.filter((d: any) => {
+      const zv = zoneVisits?.find((zv: any) => zv.id === d.zone_visit_id)
+      return zv && validGeofenceIds.has(zv.geofence_id)
+    })
+
     const created: string[] = []
     const errors: Array<{ zone_visit_id: string; error: string }> = []
 
-    // Create detention records for each active detention
-    for (const detention of activeDetentions || []) {
+    // Create detention records for each active detention (filtered by company)
+    for (const detention of validDetentions) {
       try {
         // Check if detention already exists
         const { data: existing } = await supabase
@@ -221,14 +287,37 @@ export async function checkAndCreateDetentions() {
           .single()
 
         if (existing) {
-          // Update existing record
-          const { data: updated } = await supabase.rpc('create_detention_record', {
-            p_zone_visit_id: detention.zone_visit_id,
-            p_load_id: null
-          })
-          if (updated) created.push(updated)
+          // FIXED: Update existing record using UPDATE, not create_detention_record
+          const { error: updateError } = await supabase
+            .from("detention_tracking")
+            .update({
+              detention_minutes: detention.detention_minutes || 0,
+              total_fee: detention.total_fee || 0,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existing.id)
+            .eq("company_id", company_id)
+          
+          if (!updateError) {
+            created.push(existing.id)
+          }
         } else {
           // Create new record
+          // FIXED: Verify company_id before creating record
+          const { data: zoneVisit } = await supabase
+            .from("zone_visits")
+            .select("geofence_id, geofences:geofence_id(company_id)")
+            .eq("id", detention.zone_visit_id)
+            .single()
+          
+          if (!zoneVisit || (zoneVisit.geofences as any)?.company_id !== company_id) {
+            errors.push({
+              zone_visit_id: detention.zone_visit_id,
+              error: "Zone visit does not belong to your company"
+            })
+            continue
+          }
+          
           const { data: newId } = await supabase.rpc('create_detention_record', {
             p_zone_visit_id: detention.zone_visit_id,
             p_load_id: null
@@ -260,6 +349,12 @@ export async function checkAndCreateDetentions() {
  * Finalize detention when driver exits zone
  */
 export async function finalizeDetention(zoneVisitId: string) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkCreatePermission("reports")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to manage detentions", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -271,7 +366,25 @@ export async function finalizeDetention(zoneVisitId: string) {
     return { error: "Not authenticated", data: null }
   }
 
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+
+  if (!company_id) {
+    return { error: "No company found", data: null }
+  }
+
   try {
+    // FIXED: Verify ownership before calling RPC
+    const { data: zoneVisit } = await supabase
+      .from("zone_visits")
+      .select("company_id")
+      .eq("id", zoneVisitId)
+      .single()
+    
+    if (!zoneVisit || zoneVisit.company_id !== company_id) {
+      return { error: "Unauthorized: Zone visit does not belong to your company", data: null }
+    }
+    
     const { data: detentionId, error } = await supabase.rpc('finalize_detention_on_exit', {
       p_zone_visit_id: zoneVisitId
     })
@@ -290,6 +403,12 @@ export async function finalizeDetention(zoneVisitId: string) {
  * Add detention fee to invoice
  */
 export async function addDetentionToInvoice(detentionId: string, invoiceId: string) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkCreatePermission("reports")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to manage detentions", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -301,7 +420,35 @@ export async function addDetentionToInvoice(detentionId: string, invoiceId: stri
     return { error: "Not authenticated", data: null }
   }
 
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+
+  if (!company_id) {
+    return { error: "No company found", data: null }
+  }
+
   try {
+    // FIXED: Verify ownership of both detention and invoice before calling RPC
+    const { data: detention } = await supabase
+      .from("detention_tracking")
+      .select("company_id")
+      .eq("id", detentionId)
+      .single()
+    
+    if (!detention || detention.company_id !== company_id) {
+      return { error: "Unauthorized: Detention does not belong to your company", data: null }
+    }
+    
+    const { data: invoice } = await supabase
+      .from("invoices")
+      .select("company_id")
+      .eq("id", invoiceId)
+      .single()
+    
+    if (!invoice || invoice.company_id !== company_id) {
+      return { error: "Unauthorized: Invoice does not belong to your company", data: null }
+    }
+    
     const { data: success, error } = await supabase.rpc('add_detention_to_invoice', {
       p_detention_id: detentionId,
       p_invoice_id: invoiceId
@@ -461,6 +608,12 @@ export async function getDetentionAnalytics(filters?: {
   end_date?: string
   limit?: number
 }) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkViewPermission("reports")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -553,15 +706,16 @@ export async function getDetentionAnalytics(filters?: {
       }
     })
 
-    // Convert to array and sort by total_fee
-    const topCustomers = Array.from(customerMap.values())
+    // FIXED: Calculate totals BEFORE slicing (from full dataset, not just top-N)
+    const allCustomers = Array.from(customerMap.values())
+    const totalDetentionFee = allCustomers.reduce((sum, c) => sum + c.total_fee, 0)
+    const totalDetentionMinutes = allCustomers.reduce((sum, c) => sum + c.total_minutes, 0)
+    const totalDetentionCount = allCustomers.reduce((sum, c) => sum + c.detention_count, 0)
+    
+    // Then slice for top customers display
+    const topCustomers = allCustomers
       .sort((a, b) => b.total_fee - a.total_fee)
       .slice(0, filters?.limit || 10)
-
-    // Calculate totals
-    const totalDetentionFee = topCustomers.reduce((sum, c) => sum + c.total_fee, 0)
-    const totalDetentionMinutes = topCustomers.reduce((sum, c) => sum + c.total_minutes, 0)
-    const totalDetentionCount = topCustomers.reduce((sum, c) => sum + c.detention_count, 0)
 
     return {
       data: {

@@ -15,17 +15,23 @@ import { sendSMSNotification } from "./sms"
  */
 export async function checkAndSendMaintenanceAlerts(
   truckId: string,
-  currentMileage: number
+  currentMileage: number,
+  companyId?: string // FIXED: Accept companyId parameter for background operations
 ) {
+  // FIXED: Remove auth requirement - this function is called from background triggers
+  // Get company_id from truck record (works for both authenticated and background calls)
   const supabase = await createClient()
+  
+  const { data: truckData } = await supabase
+    .from("trucks")
+    .select("company_id")
+    .eq("id", truckId)
+    .single()
+  
+  const targetCompanyId = companyId || truckData?.company_id
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  if (!targetCompanyId) {
+    return { error: "No company found for truck", data: null }
   }
 
   try {
@@ -155,7 +161,8 @@ export async function getMaintenanceAlertHistory(filters?: {
         users:sent_to (id, name, phone)
       `)
       .eq("company_id", company_id)
-      .order("sent_at", { ascending: false })
+      // FIXED: Order by sent_at NULLS LAST to handle pending records with NULL sent_at
+      .order("sent_at", { ascending: false, nullsFirst: false })
 
     if (filters?.truck_id) {
       query = query.eq("truck_id", filters.truck_id)

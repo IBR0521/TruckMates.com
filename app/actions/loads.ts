@@ -794,6 +794,12 @@ export async function updateLoad(
     [key: string]: any
   }
 ) {
+  // Check permission
+  const permission = await checkEditPermission("loads")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to edit loads", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -852,7 +858,7 @@ export async function updateLoad(
   updateField("origin", formData.origin)
   updateField("destination", formData.destination)
   updateField("weight", formData.weight)
-  updateField("weight_kg", formData.weight_kg || null)
+  updateField("weight_kg", formData.weight_kg ?? null)
   updateField("contents", formData.contents)
   updateField("value", formData.value || null)
   updateField("carrier_type", formData.carrier_type)
@@ -903,8 +909,8 @@ export async function updateLoad(
   updateField("delivery_instructions", formData.delivery_instructions)
   
   // Enhanced freight details
-  updateField("pieces", formData.pieces || null)
-  updateField("pallets", formData.pallets || null)
+  updateField("pieces", formData.pieces ?? null)
+  updateField("pallets", formData.pallets ?? null)
   updateField("boxes", formData.boxes || null)
   updateField("length", formData.length || null)
   updateField("width", formData.width || null)
@@ -921,9 +927,9 @@ export async function updateLoad(
   updateField("appointment_time", formData.appointment_time)
   
   // Pricing
-  updateField("rate", formData.rate || null)
+  updateField("rate", formData.rate ?? null)
   updateField("rate_type", formData.rate_type)
-  updateField("fuel_surcharge", formData.fuel_surcharge || null)
+  updateField("fuel_surcharge", formData.fuel_surcharge ?? null)
   updateField("accessorial_charges", formData.accessorial_charges || null)
   updateField("discount", formData.discount || null)
   updateField("advance", formData.advance || null)
@@ -994,7 +1000,7 @@ export async function updateLoad(
           invoice_number: invoiceNumber,
           customer_name: data.company_name || "Customer",
           load_id: id,
-          amount: Number(data.value) || 0,
+          amount: Number(data.total_rate || data.rate) || 0,
           status: "pending",
           issue_date: issueDate,
           due_date: dueDate.toISOString().split("T")[0],
@@ -1082,7 +1088,7 @@ export async function updateLoad(
   }
 
   // Auto-schedule check calls if driver was just assigned
-  if (formData.driver_id && !data.driver_id) {
+  if (formData.driver_id && !currentLoad.driver_id) {
     try {
       const { scheduleCheckCallsForLoad } = await import("./check-calls")
       await scheduleCheckCallsForLoad(id)
@@ -1213,6 +1219,18 @@ export async function bulkDeleteLoads(ids: string[]) {
 }
 
 export async function bulkUpdateLoadStatus(ids: string[], status: string) {
+  // Check permission
+  const permission = await checkEditPermission("loads")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to edit loads", data: null }
+  }
+
+  // Validate status value
+  const validStatuses = ["pending", "scheduled", "in_transit", "delivered", "cancelled"]
+  if (!validStatuses.includes(status)) {
+    return { error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`, data: null }
+  }
+
   const supabase = await createClient()
 
   const {

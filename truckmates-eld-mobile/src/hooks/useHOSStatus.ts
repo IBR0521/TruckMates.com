@@ -3,7 +3,7 @@
  * Real-time Hours of Service tracking and calculations
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { 
   calculateRemainingDriveTime, 
@@ -47,6 +47,18 @@ export function useHOSStatus(): UseHOSStatusReturn {
     loadStatus()
   }, [])
 
+  // CRITICAL FIX: Use refs to avoid stale closure in setInterval
+  const currentStatusRef = useRef(currentStatus)
+  const statusStartTimeRef = useRef(statusStartTime)
+  const recentLogsRef = useRef(recentLogs)
+  
+  // Update refs when state changes
+  useEffect(() => {
+    currentStatusRef.current = currentStatus
+    statusStartTimeRef.current = statusStartTime
+    recentLogsRef.current = recentLogs
+  }, [currentStatus, statusStartTime, recentLogs])
+  
   // Update calculations every minute and when dependencies change
   useEffect(() => {
     if (!isLoading) {
@@ -55,12 +67,13 @@ export function useHOSStatus(): UseHOSStatusReturn {
     
     const interval = setInterval(() => {
       if (!isLoading) {
-        calculateHOSTimes()
+        // Use refs to get latest values (avoid stale closure)
+        calculateHOSTimesWithRefs()
       }
     }, 60000) // Update every minute
 
     return () => clearInterval(interval)
-  }, [currentStatus, statusStartTime, recentLogs, isLoading])
+  }, [isLoading])
 
   async function loadStatus() {
     try {
@@ -112,6 +125,37 @@ export function useHOSStatus(): UseHOSStatusReturn {
     const detectedViolations = detectHOSViolations(
       currentStatus,
       statusStartTime,
+      logs
+    )
+
+    setRemainingDriveTime(driveTime)
+    setRemainingOnDutyTime(onDutyTime)
+    setWeeklyOnDutyHours(weeklyHours)
+    setRemainingWeeklyHours(remainingWeekly)
+    setIsBreakRequired(breakReq)
+    setViolations(detectedViolations)
+  }
+  
+  // Calculate using refs (for setInterval to avoid stale closure)
+  function calculateHOSTimesWithRefs() {
+    const logs = Array.isArray(recentLogsRef.current) ? recentLogsRef.current : []
+    
+    const driveTime = calculateRemainingDriveTime(
+      currentStatusRef.current,
+      statusStartTimeRef.current,
+      logs
+    )
+    const onDutyTime = calculateRemainingOnDutyTime(
+      currentStatusRef.current,
+      statusStartTimeRef.current,
+      logs
+    )
+    const weeklyHours = calculateWeeklyOnDutyHours(currentStatusRef.current, statusStartTimeRef.current, logs)
+    const remainingWeekly = calculateRemainingWeeklyHours(currentStatusRef.current, statusStartTimeRef.current, logs)
+    const breakReq = checkBreakRequired(currentStatusRef.current, statusStartTimeRef.current, logs)
+    const detectedViolations = detectHOSViolations(
+      currentStatusRef.current,
+      statusStartTimeRef.current,
       logs
     )
 

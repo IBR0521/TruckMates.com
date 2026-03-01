@@ -41,13 +41,32 @@ export async function GET(
       )
     }
 
-    // Return HTML with proper headers for PDF generation
-    return new NextResponse(pdfResult.html, {
-      headers: {
-        "Content-Type": "text/html",
-        "Content-Disposition": `inline; filename="ifta-report-${id}.html"`,
-      },
-    })
+    // FIXED: Return actual PDF binary instead of HTML
+    if (pdfResult.pdf) {
+      return new NextResponse(pdfResult.pdf, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="ifta-report-${id}.pdf"`,
+          "Cache-Control": "no-cache",
+        },
+      })
+    }
+
+    // Fallback: Return HTML if PDF generation failed (for development)
+    if (pdfResult.html) {
+      console.warn("[IFTA PDF] Returning HTML fallback - PDF generation failed")
+      return new NextResponse(pdfResult.html, {
+        headers: {
+          "Content-Type": "text/html",
+          "Content-Disposition": `inline; filename="ifta-report-${id}.html"`,
+        },
+      })
+    }
+
+    return NextResponse.json(
+      { error: "Failed to generate PDF or HTML" },
+      { status: 500 }
+    )
   } catch (error: any) {
     console.error("Error generating IFTA PDF:", error)
     return NextResponse.json(

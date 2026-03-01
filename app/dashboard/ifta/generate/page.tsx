@@ -10,7 +10,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import { getTrucks } from "@/app/actions/trucks"
-import { generateIFTAReport } from "@/app/actions/tax-fuel-reconciliation"
+import { createIFTAReport } from "@/app/actions/ifta"
 import { toast } from "sonner"
 
 export default function GenerateIFTAPage() {
@@ -52,12 +52,15 @@ export default function GenerateIFTAPage() {
       return
     }
 
-    // Convert quarter string to number (Q1 -> 1, Q2 -> 2, etc.)
-    const quarterNumber = parseInt(formData.quarter.replace("Q", ""))
-
     setLoading(true)
     try {
-      const result = await generateIFTAReport(quarterNumber, formData.year)
+      // FIXED: Call createIFTAReport with all form fields (quarter, year, truck_ids, include_eld)
+      const result = await createIFTAReport({
+        quarter: formData.quarter,
+        year: formData.year,
+        truck_ids: formData.truck_ids,
+        include_eld: formData.include_eld,
+      })
       if (result.error) {
         toast.error(result.error)
       } else {

@@ -84,9 +84,32 @@ export async function createInvoiceTax(tax: Omit<InvoiceTax, "id">): Promise<{ d
     return { error: userError?.message || "No company found", data: null }
   }
 
+  // HIGH FIX 1: Add RBAC check - only managers can create invoice taxes
+  const { data: userRoleData } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!userRoleData || !MANAGER_ROLES.includes(userRoleData.role)) {
+    return { error: "Only managers can create invoice taxes", data: null }
+  }
+
   // Validate required fields
   if (!tax.name || tax.rate === undefined || !tax.tax_type) {
     return { error: "Name, rate, and tax type are required", data: null }
+  }
+
+  // LOW FIX 18: Validate rate bounds
+  if (tax.rate < 0) {
+    return { error: "Tax rate cannot be negative", data: null }
+  }
+  if (tax.tax_type === "percentage" && tax.rate > 1) {
+    return { error: "Percentage tax rate cannot exceed 1.0 (100%)", data: null }
+  }
+  if (tax.tax_type === "fixed" && tax.rate > 10000) {
+    return { error: "Fixed tax rate cannot exceed $10,000", data: null }
   }
 
   // If this is set as default, unset other defaults
@@ -160,6 +183,31 @@ export async function updateInvoiceTax(id: string, tax: Partial<InvoiceTax>): Pr
     return { error: "Invoice tax not found or access denied", data: null }
   }
 
+  // HIGH FIX 1: Add RBAC check - only managers can update invoice taxes
+  const { data: userRoleData } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!userRoleData || !MANAGER_ROLES.includes(userRoleData.role)) {
+    return { error: "Only managers can update invoice taxes", data: null }
+  }
+
+  // LOW FIX 18: Validate rate bounds
+  if (tax.rate !== undefined) {
+    if (tax.rate < 0) {
+      return { error: "Tax rate cannot be negative", data: null }
+    }
+    if (tax.tax_type === "percentage" && tax.rate > 1) {
+      return { error: "Percentage tax rate cannot exceed 1.0 (100%)", data: null }
+    }
+    if (tax.tax_type === "fixed" && tax.rate > 10000) {
+      return { error: "Fixed tax rate cannot exceed $10,000", data: null }
+    }
+  }
+
   // If setting as default, unset other defaults
   if (tax.is_default === true) {
     await supabase
@@ -213,14 +261,20 @@ export async function deleteInvoiceTax(id: string): Promise<{ error: string | nu
     return { error: "Not authenticated" }
   }
 
+  // HIGH FIX 1: Add RBAC check - only managers can delete invoice taxes
   const { data: userData, error: userError } = await supabase
     .from("users")
-    .select("company_id")
+    .select("role, company_id")
     .eq("id", user.id)
     .single()
 
   if (userError || !userData?.company_id) {
     return { error: userError?.message || "No company found" }
+  }
+
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!MANAGER_ROLES.includes(userData.role)) {
+    return { error: "Only managers can delete invoice taxes" }
   }
 
   // Verify the tax belongs to the company
@@ -246,6 +300,10 @@ export async function deleteInvoiceTax(id: string): Promise<{ error: string | nu
 
   return { error: null }
 }
+
+
+
+
 
 
 

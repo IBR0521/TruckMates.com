@@ -56,8 +56,8 @@ CREATE TABLE IF NOT EXISTS public.eld_locations (
   latitude DECIMAL(10, 8) NOT NULL,
   longitude DECIMAL(11, 8) NOT NULL,
   address TEXT,
-  speed INTEGER, -- Speed in MPH
-  heading INTEGER, -- Heading in degrees (0-360)
+  speed DECIMAL(6, 1), -- Speed in MPH (decimal for precision)
+  heading DECIMAL(5, 1), -- Heading in degrees (0-360, decimal for precision)
   odometer INTEGER,
   engine_status TEXT, -- 'on', 'off', 'idle'
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
@@ -115,6 +115,7 @@ ALTER TABLE public.eld_locations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.eld_events ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for eld_devices
+DROP POLICY IF EXISTS "Users can view ELD devices in their company" ON public.eld_devices;
 CREATE POLICY "Users can view ELD devices in their company"
   ON public.eld_devices FOR SELECT
   USING (
@@ -123,6 +124,7 @@ CREATE POLICY "Users can view ELD devices in their company"
     )
   );
 
+DROP POLICY IF EXISTS "Managers can insert ELD devices" ON public.eld_devices;
 CREATE POLICY "Managers can insert ELD devices"
   ON public.eld_devices FOR INSERT
   WITH CHECK (
@@ -131,6 +133,7 @@ CREATE POLICY "Managers can insert ELD devices"
     )
   );
 
+DROP POLICY IF EXISTS "Managers can update ELD devices" ON public.eld_devices;
 CREATE POLICY "Managers can update ELD devices"
   ON public.eld_devices FOR UPDATE
   USING (
@@ -139,6 +142,7 @@ CREATE POLICY "Managers can update ELD devices"
     )
   );
 
+DROP POLICY IF EXISTS "Managers can delete ELD devices" ON public.eld_devices;
 CREATE POLICY "Managers can delete ELD devices"
   ON public.eld_devices FOR DELETE
   USING (
@@ -148,6 +152,7 @@ CREATE POLICY "Managers can delete ELD devices"
   );
 
 -- RLS Policies for eld_logs
+DROP POLICY IF EXISTS "Users can view ELD logs in their company" ON public.eld_logs;
 CREATE POLICY "Users can view ELD logs in their company"
   ON public.eld_logs FOR SELECT
   USING (
@@ -156,6 +161,7 @@ CREATE POLICY "Users can view ELD logs in their company"
     )
   );
 
+DROP POLICY IF EXISTS "System can insert ELD logs" ON public.eld_logs;
 CREATE POLICY "System can insert ELD logs"
   ON public.eld_logs FOR INSERT
   WITH CHECK (
@@ -165,6 +171,7 @@ CREATE POLICY "System can insert ELD logs"
   );
 
 -- RLS Policies for eld_locations
+DROP POLICY IF EXISTS "Users can view ELD locations in their company" ON public.eld_locations;
 CREATE POLICY "Users can view ELD locations in their company"
   ON public.eld_locations FOR SELECT
   USING (
@@ -173,6 +180,7 @@ CREATE POLICY "Users can view ELD locations in their company"
     )
   );
 
+DROP POLICY IF EXISTS "System can insert ELD locations" ON public.eld_locations;
 CREATE POLICY "System can insert ELD locations"
   ON public.eld_locations FOR INSERT
   WITH CHECK (
@@ -182,6 +190,7 @@ CREATE POLICY "System can insert ELD locations"
   );
 
 -- RLS Policies for eld_events
+DROP POLICY IF EXISTS "Users can view ELD events in their company" ON public.eld_events;
 CREATE POLICY "Users can view ELD events in their company"
   ON public.eld_events FOR SELECT
   USING (
@@ -190,6 +199,7 @@ CREATE POLICY "Users can view ELD events in their company"
     )
   );
 
+DROP POLICY IF EXISTS "System can insert ELD events" ON public.eld_events;
 CREATE POLICY "System can insert ELD events"
   ON public.eld_events FOR INSERT
   WITH CHECK (
@@ -198,6 +208,7 @@ CREATE POLICY "System can insert ELD events"
     )
   );
 
+DROP POLICY IF EXISTS "Managers can update ELD events" ON public.eld_events;
 CREATE POLICY "Managers can update ELD events"
   ON public.eld_events FOR UPDATE
   USING (
@@ -216,8 +227,10 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Triggers for updated_at
+DROP TRIGGER IF EXISTS update_eld_devices_updated_at ON public.eld_devices;
 CREATE TRIGGER update_eld_devices_updated_at BEFORE UPDATE ON public.eld_devices
   FOR EACH ROW EXECUTE FUNCTION update_eld_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_eld_logs_updated_at ON public.eld_logs;
 CREATE TRIGGER update_eld_logs_updated_at BEFORE UPDATE ON public.eld_logs
   FOR EACH ROW EXECUTE FUNCTION update_eld_updated_at_column();

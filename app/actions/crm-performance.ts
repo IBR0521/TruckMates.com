@@ -133,6 +133,7 @@ export async function getCustomerPerformance(customerId: string): Promise<{
       .from("crm_customer_performance")
       .select("*")
       .eq("customer_id", customerId)
+      .eq("company_id", company_id)
       .single()
 
     if (error) {
@@ -173,26 +174,12 @@ export async function getVendorPerformanceMetrics(filters?: {
   }
 
   try {
-    // Get vendors with their company_id
-    const { data: vendors, error: vendorsError } = await supabase
-      .from("vendors")
-      .select("id, company_id")
-      .eq("company_id", company_id)
-
-    if (vendorsError) {
-      return { error: vendorsError.message, data: null }
-    }
-
-    if (!vendors || vendors.length === 0) {
-      return { data: [], error: null }
-    }
-
-    const vendorIds = vendors.map((v) => v.id)
-
+    // Query vendor performance directly with company_id filter (if view supports it)
+    // Otherwise, filter by vendor IDs from the company
     let query = supabase
       .from("crm_vendor_performance")
       .select("*")
-      .in("vendor_id", vendorIds)
+      .eq("company_id", company_id)
 
     // Apply filters
     if (filters?.relationship_type) {
@@ -247,6 +234,7 @@ export async function getVendorPerformance(vendorId: string): Promise<{
       .from("crm_vendor_performance")
       .select("*")
       .eq("vendor_id", vendorId)
+      .eq("company_id", company_id)
       .single()
 
     if (error) {
@@ -313,33 +301,11 @@ export async function getRelationshipInsights(): Promise<{
 
     const customers = (customersData || []) as CustomerPerformanceMetrics[]
 
-    // Get all vendor metrics directly from the view
-    const { data: vendorsData, error: vendorsError } = await supabase
-      .from("vendors")
-      .select("id, company_id")
-      .eq("company_id", company_id)
-
-    if (vendorsError) {
-      return { error: vendorsError.message || "Failed to get vendor metrics", data: null }
-    }
-
-    if (!vendorsData || vendorsData.length === 0) {
-      return {
-        data: {
-          top_customers: [],
-          top_vendors: [],
-          slow_payers: [],
-          low_performers: [],
-        },
-        error: null,
-      }
-    }
-
-    const vendorIds = vendorsData.map((v) => v.id)
+    // Get all vendor metrics directly from the view with company_id filter
     const { data: vendorsData2, error: vendorsError2 } = await supabase
       .from("crm_vendor_performance")
       .select("*")
-      .in("vendor_id", vendorIds)
+      .eq("company_id", company_id)
       .order("total_spent", { ascending: false })
 
     if (vendorsError2) {

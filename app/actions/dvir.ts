@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { validateRequiredString, validateNonNegativeNumber, validateDate, sanitizeString } from "@/lib/validation"
+import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
 /**
  * Get all DVIRs with optional filters
@@ -196,6 +197,35 @@ export async function createDVIR(formData: {
     return { error: "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("dvir")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to create DVIR records", data: null }
+  }
+
+  // Validate driver_id and truck_id ownership
+  const { data: driver, error: driverError } = await supabase
+    .from("drivers")
+    .select("id")
+    .eq("id", formData.driver_id)
+    .eq("company_id", company_id)
+    .single()
+
+  if (driverError || !driver) {
+    return { error: "Driver not found or does not belong to your company", data: null }
+  }
+
+  const { data: truck, error: truckError } = await supabase
+    .from("trucks")
+    .select("id")
+    .eq("id", formData.truck_id)
+    .eq("company_id", company_id)
+    .single()
+
+  if (truckError || !truck) {
+    return { error: "Truck not found or does not belong to your company", data: null }
+  }
+
   // Validation
   if (!validateRequiredString(formData.driver_id, 1, 100)) {
     return { error: "Driver is required", data: null }
@@ -226,17 +256,23 @@ export async function createDVIR(formData: {
   }
 
   try {
+    // Validate consistency: if defects_found is true, must have defects array
+    if (formData.defects_found && (!formData.defects || formData.defects.length === 0)) {
+      return { error: "If defects are found, you must add at least one defect. Otherwise, set defects_found to false.", data: null }
+    }
+
     // Determine status based on defects
     let status = "passed"
-    if (formData.defects_found) {
+    if (formData.defects_found && formData.defects && formData.defects.length > 0) {
       status = "failed"
       // Check if all defects are corrected
-      if (formData.defects && formData.defects.length > 0) {
-        const allCorrected = formData.defects.every((d) => d.corrected === true)
-        if (allCorrected) {
-          status = "defects_corrected"
-        }
+      const allCorrected = formData.defects.every((d) => d.corrected === true)
+      if (allCorrected) {
+        status = "defects_corrected"
       }
+    } else if (formData.defects_found) {
+      // This shouldn't happen due to validation above, but handle gracefully
+      return { error: "Invalid state: defects_found is true but no defects provided", data: null }
     }
 
     const { data: dvir, error } = await supabase
@@ -315,6 +351,29 @@ export async function updateDVIR(id: string, formData: {
     return { error: "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkEditPermission("dvir")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to update DVIR records", data: null }
+  }
+
+  // Get current DVIR to check if it's certified and get baseline values for status calculation
+  const { data: currentDVIR } = await supabase
+    .from("dvir")
+    .select("certified, certified_by, certified_date, defects_found, defects, status")
+    .eq("id", id)
+    .eq("company_id", company_id)
+    .single()
+
+  if (!currentDVIR) {
+    return { error: "DVIR not found", data: null }
+  }
+
+  // Prevent re-opening certified DVIRs
+  if (currentDVIR?.certified && formData.certified === false) {
+    return { error: "Cannot uncertify a DVIR that has already been certified. This is required for DOT compliance.", data: null }
+  }
+
   try {
     // Build update object
     const updateData: any = {
@@ -337,10 +396,12 @@ export async function updateDVIR(id: string, formData: {
       updateData.location = formData.location ? sanitizeString(formData.location, 500) : null
     }
     if (formData.mileage !== undefined) {
-      updateData.mileage = formData.mileage || null
+      // Use nullish coalescing to preserve 0 values
+      updateData.mileage = formData.mileage ?? null
     }
     if (formData.odometer_reading !== undefined) {
-      updateData.odometer_reading = formData.odometer_reading || null
+      // Use nullish coalescing to preserve 0 values
+      updateData.odometer_reading = formData.odometer_reading ?? null
     }
     if (formData.defects_found !== undefined) {
       updateData.defects_found = formData.defects_found
@@ -364,22 +425,27 @@ export async function updateDVIR(id: string, formData: {
       }
     }
     if (formData.certified !== undefined) {
-      updateData.certified = formData.certified
+      // Only allow setting certified to true, not false (prevent uncertification)
       if (formData.certified) {
+        updateData.certified = true
         updateData.certified_by = user.id
         updateData.certified_date = new Date().toISOString()
-      } else {
-        updateData.certified_by = null
-        updateData.certified_date = null
       }
+      // If trying to set to false, it's already blocked above
     }
 
-    // Determine status based on defects
+    // Determine status based on defects - use DB values as baseline, merge with formData
     if (formData.defects_found !== undefined || formData.defects !== undefined) {
-      const defectsFound = formData.defects_found !== undefined ? formData.defects_found : updateData.defects_found
-      const defects = formData.defects !== undefined ? formData.defects : updateData.defects
+      // Merge formData with current DB values for accurate status calculation
+      const defectsFound = formData.defects_found !== undefined ? formData.defects_found : currentDVIR.defects_found
+      const defects = formData.defects !== undefined ? formData.defects : currentDVIR.defects
 
-      if (defectsFound && defects && defects.length > 0) {
+      // Validate consistency
+      if (defectsFound && (!defects || (Array.isArray(defects) && defects.length === 0))) {
+        return { error: "If defects are found, you must provide at least one defect. Otherwise, set defects_found to false.", data: null }
+      }
+
+      if (defectsFound && defects && Array.isArray(defects) && defects.length > 0) {
         const allCorrected = defects.every((d: any) => d.corrected === true)
         updateData.status = allCorrected ? "defects_corrected" : "failed"
       } else if (!defectsFound) {
@@ -429,6 +495,33 @@ export async function deleteDVIR(id: string) {
     return { error: "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkDeletePermission("dvir")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to delete DVIR records", data: null }
+  }
+
+  // Check if DVIR is certified - prevent deletion of certified DVIRs for compliance
+  const { data: dvir } = await supabase
+    .from("dvir")
+    .select("certified, inspection_date")
+    .eq("id", id)
+    .eq("company_id", company_id)
+    .single()
+
+  if (dvir?.certified) {
+    return { error: "Cannot delete a certified DVIR. FMCSA regulations require DVIR records to be retained for at least 90 days.", data: null }
+  }
+
+  // Check if DVIR is within 90-day retention period
+  if (dvir?.inspection_date) {
+    const inspectionDate = new Date(dvir.inspection_date)
+    const daysSinceInspection = Math.floor((Date.now() - inspectionDate.getTime()) / (1000 * 60 * 60 * 24))
+    if (daysSinceInspection < 90) {
+      return { error: "Cannot delete DVIR within 90 days of inspection date. FMCSA regulations require retention for compliance.", data: null }
+    }
+  }
+
   try {
     const { error } = await supabase
       .from("dvir")
@@ -475,43 +568,59 @@ export async function getDVIRStats(filters?: {
   }
 
   try {
-    let query = supabase
-      .from("dvir")
-      .select("id, status, defects_found, safe_to_operate, inspection_type")
-      .eq("company_id", company_id)
-
-    if (filters?.driver_id) {
-      query = query.eq("driver_id", filters.driver_id)
-    }
-    if (filters?.truck_id) {
-      query = query.eq("truck_id", filters.truck_id)
-    }
-    if (filters?.start_date) {
-      query = query.gte("inspection_date", filters.start_date)
-    }
-    if (filters?.end_date) {
-      query = query.lte("inspection_date", filters.end_date)
-    }
-
-    const { data: dvirs, error } = await query
+    // Use RPC function for efficient server-side aggregation instead of fetching all records
+    const { data: stats, error } = await supabase.rpc("get_dvir_stats", {
+      p_company_id: company_id,
+      p_driver_id: filters?.driver_id || null,
+      p_truck_id: filters?.truck_id || null,
+      p_start_date: filters?.start_date || null,
+      p_end_date: filters?.end_date || null,
+    })
 
     if (error) {
-      return { error: error.message, data: null }
+      // Fallback to client-side calculation if RPC doesn't exist
+      console.warn("get_dvir_stats RPC not found, using fallback:", error)
+      let query = supabase
+        .from("dvir")
+        .select("id, status, defects_found, safe_to_operate, inspection_type")
+        .eq("company_id", company_id)
+        .limit(10000) // Cap at 10k to prevent memory issues
+
+      if (filters?.driver_id) {
+        query = query.eq("driver_id", filters.driver_id)
+      }
+      if (filters?.truck_id) {
+        query = query.eq("truck_id", filters.truck_id)
+      }
+      if (filters?.start_date) {
+        query = query.gte("inspection_date", filters.start_date)
+      }
+      if (filters?.end_date) {
+        query = query.lte("inspection_date", filters.end_date)
+      }
+
+      const { data: dvirs, error: queryError } = await query
+
+      if (queryError) {
+        return { error: queryError.message, data: null }
+      }
+
+      const fallbackStats = {
+        total: dvirs?.length || 0,
+        passed: dvirs?.filter((d) => d.status === "passed").length || 0,
+        failed: dvirs?.filter((d) => d.status === "failed").length || 0,
+        defects_corrected: dvirs?.filter((d) => d.status === "defects_corrected").length || 0,
+        with_defects: dvirs?.filter((d) => d.defects_found === true).length || 0,
+        unsafe: dvirs?.filter((d) => d.safe_to_operate === false).length || 0,
+        pre_trip: dvirs?.filter((d) => d.inspection_type === "pre_trip").length || 0,
+        post_trip: dvirs?.filter((d) => d.inspection_type === "post_trip").length || 0,
+        on_road: dvirs?.filter((d) => d.inspection_type === "on_road").length || 0,
+      }
+
+      return { data: fallbackStats, error: null }
     }
 
-    const stats = {
-      total: dvirs?.length || 0,
-      passed: dvirs?.filter((d) => d.status === "passed").length || 0,
-      failed: dvirs?.filter((d) => d.status === "failed").length || 0,
-      defects_corrected: dvirs?.filter((d) => d.status === "defects_corrected").length || 0,
-      with_defects: dvirs?.filter((d) => d.defects_found === true).length || 0,
-      unsafe: dvirs?.filter((d) => d.safe_to_operate === false).length || 0,
-      pre_trip: dvirs?.filter((d) => d.inspection_type === "pre_trip").length || 0,
-      post_trip: dvirs?.filter((d) => d.inspection_type === "post_trip").length || 0,
-      on_road: dvirs?.filter((d) => d.inspection_type === "on_road").length || 0,
-    }
-
-    return { data: stats, error: null }
+    return { data: stats || {}, error: null }
   } catch (error: any) {
     return { error: error.message || "Failed to get DVIR stats", data: null }
   }

@@ -8,8 +8,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Trash2, Edit } from "lucide-react"
 import { toast } from "sonner"
-import { getReminders, createReminder, completeReminder, getOverdueReminders } from "@/app/actions/reminders"
+import { getReminders, createReminder, completeReminder, getOverdueReminders, updateReminder, deleteReminder } from "@/app/actions/reminders"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { getLoads } from "@/app/actions/loads"
@@ -22,6 +24,8 @@ export default function RemindersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState("pending") // pending, completed, overdue, all
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [editingReminder, setEditingReminder] = useState<any | null>(null)
+  const [deletingReminder, setDeletingReminder] = useState<string | null>(null)
   const [drivers, setDrivers] = useState<any[]>([])
   const [trucks, setTrucks] = useState<any[]>([])
   const [loads, setLoads] = useState<any[]>([])
@@ -42,19 +46,47 @@ export default function RemindersPage() {
     send_sms: false,
   })
 
+  // CRITICAL FIX 2 & MEDIUM FIX 2: Separate data fetching
+  // Load drivers, trucks, loads once on mount
   useEffect(() => {
-    loadData()
+    async function loadStaticData() {
+      try {
+        const [driversResult, trucksResult, loadsResult] = await Promise.all([
+          getDrivers(),
+          getTrucks(),
+          getLoads(),
+        ])
+        if (driversResult.data) setDrivers(driversResult.data)
+        if (trucksResult.data) setTrucks(trucksResult.data)
+        if (loadsResult.data) setLoads(loadsResult.data)
+      } catch (error: any) {
+        console.error("Failed to load static data:", error)
+      }
+    }
+    loadStaticData()
+  }, [])
+
+  // Load reminders when filter changes
+  useEffect(() => {
+    loadReminders()
   }, [filter])
 
-  async function loadData() {
+  async function loadReminders() {
     setIsLoading(true)
     try {
-      const [remindersResult, overdueResult, driversResult, trucksResult, loadsResult] = await Promise.all([
+      // CRITICAL FIX 2: Skip getReminders when filter is 'overdue'
+      if (filter === "overdue") {
+        const overdueResult = await getOverdueReminders()
+        if (overdueResult.data) {
+          setOverdueReminders(overdueResult.data)
+        }
+        setIsLoading(false)
+        return
+      }
+
+      const [remindersResult, overdueResult] = await Promise.all([
         getReminders({ status: filter === "all" ? undefined : filter }),
         getOverdueReminders(),
-        getDrivers(),
-        getTrucks(),
-        getLoads(),
       ])
 
       if (remindersResult.data) {
@@ -63,15 +95,6 @@ export default function RemindersPage() {
       if (overdueResult.data) {
         setOverdueReminders(overdueResult.data)
       }
-      if (driversResult.data) {
-        setDrivers(driversResult.data)
-      }
-      if (trucksResult.data) {
-        setTrucks(trucksResult.data)
-      }
-      if (loadsResult.data) {
-        setLoads(loadsResult.data)
-      }
     } catch (error: any) {
       toast.error("Failed to load reminders")
     } finally {
@@ -79,7 +102,17 @@ export default function RemindersPage() {
     }
   }
 
+  async function loadData() {
+    // Legacy function for backward compatibility
+    await loadReminders()
+  }
+
   async function handleCreate() {
+    // LOW FIX 2: Client-side validation for past due dates
+    if (formData.due_date && new Date(formData.due_date) < new Date()) {
+      toast.error("Due date must be in the future")
+      return
+    }
     try {
       const result = await createReminder(formData)
       if (result.error) {
@@ -102,7 +135,7 @@ export default function RemindersPage() {
           send_email: true,
           send_sms: false,
         })
-        loadData()
+        loadReminders()
       }
     } catch (error: any) {
       toast.error("Failed to create reminder")
@@ -115,11 +148,58 @@ export default function RemindersPage() {
       if (result.error) {
         toast.error(result.error)
       } else {
-        toast.success("Reminder completed")
-        loadData()
+        if (result.warning) {
+          toast.warning(result.warning)
+        } else {
+          toast.success("Reminder completed")
+        }
+        loadReminders()
       }
     } catch (error: any) {
       toast.error("Failed to complete reminder")
+    }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      const result = await deleteReminder(id)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success("Reminder deleted")
+        loadReminders()
+      }
+    } catch (error: any) {
+      toast.error("Failed to delete reminder")
+    } finally {
+      setDeletingReminder(null)
+    }
+  }
+
+  async function handleUpdate() {
+    if (!editingReminder) return
+    // LOW FIX 2: Client-side validation
+    if (editingReminder.due_date && new Date(editingReminder.due_date) < new Date()) {
+      toast.error("Due date must be in the future")
+      return
+    }
+    try {
+      const result = await updateReminder(editingReminder.id, {
+        title: editingReminder.title,
+        description: editingReminder.description,
+        reminder_type: editingReminder.reminder_type,
+        due_date: editingReminder.due_date,
+        due_time: editingReminder.due_time,
+      })
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success("Reminder updated")
+        setEditingReminder(null)
+        loadReminders()
+      }
+    } catch (error: any) {
+      toast.error("Failed to update reminder")
     }
   }
 
@@ -207,6 +287,7 @@ export default function RemindersPage() {
                     value={formData.due_date}
                     onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
                     className="mt-2"
+                    min={new Date().toISOString().split('T')[0]}
                     required
                   />
                 </div>
@@ -339,16 +420,34 @@ export default function RemindersPage() {
                         )}
                       </div>
                     </div>
-                    {reminder.status === "pending" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleComplete(reminder.id)}
-                      >
-                        <CheckCircle2 className="w-4 h-4 mr-2" />
-                        Complete
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {reminder.status === "pending" && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingReminder(reminder)}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setDeletingReminder(reminder.id)}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleComplete(reminder.id)}
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-2" />
+                            Complete
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </Card>
               ))}
@@ -356,6 +455,67 @@ export default function RemindersPage() {
           )}
         </div>
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editingReminder} onOpenChange={(open) => !open && setEditingReminder(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Reminder</DialogTitle>
+          </DialogHeader>
+          {editingReminder && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-title">Title *</Label>
+                <Input
+                  id="edit-title"
+                  value={editingReminder.title}
+                  onChange={(e) => setEditingReminder({ ...editingReminder, title: e.target.value })}
+                  className="mt-2"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-description">Description</Label>
+                <Input
+                  id="edit-description"
+                  value={editingReminder.description || ""}
+                  onChange={(e) => setEditingReminder({ ...editingReminder, description: e.target.value })}
+                  className="mt-2"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-due_date">Due Date *</Label>
+                <Input
+                  id="edit-due_date"
+                  type="date"
+                  value={editingReminder.due_date}
+                  onChange={(e) => setEditingReminder({ ...editingReminder, due_date: e.target.value })}
+                  className="mt-2"
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+              <Button onClick={handleUpdate} className="w-full">Update Reminder</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deletingReminder} onOpenChange={(open) => !open && setDeletingReminder(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Reminder</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this reminder? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deletingReminder && handleDelete(deletingReminder)} className="bg-destructive">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

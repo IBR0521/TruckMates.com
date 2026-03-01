@@ -9,10 +9,11 @@ import { getCachedUserCompany } from "@/lib/query-optimizer"
  */
 
 /**
- * Generate IFTA report PDF HTML
+ * Generate IFTA report PDF (returns actual PDF buffer)
  */
 export async function generateIFTAReportPDF(reportId: string): Promise<{
-  html: string
+  pdf: Buffer | null
+  html: string | null
   error: string | null
 }> {
   const supabase = await createClient()
@@ -61,6 +62,17 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
         style: "currency",
         currency: "USD",
       }).format(num)
+    }
+
+    // FIXED: HTML escaping helper to prevent XSS in PDF generation
+    const escapeHtml = (str: string | null | undefined): string => {
+      if (!str) return ""
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;")
     }
 
     // Format date
@@ -296,14 +308,14 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
         <div class="header">
           <div class="header-top">
             <div class="company-info">
-              <div class="company-name">${company?.name || "TruckMates"}</div>
+              <div class="company-name">${escapeHtml(company?.name || "TruckMates")}</div>
               <div class="company-details">
-                ${company?.address ? `${company.address}<br>` : ""}
-                ${company?.city && company?.state ? `${company.city}, ${company.state} ${company.zip || ""}<br>` : ""}
-                ${company?.phone ? `Phone: ${company.phone}<br>` : ""}
-                ${company?.email ? `Email: ${company.email}<br>` : ""}
-                ${company?.mc_number ? `MC#: ${company.mc_number}<br>` : ""}
-                ${company?.dot_number ? `DOT#: ${company.dot_number}` : ""}
+                ${company?.address ? `${escapeHtml(company.address)}<br>` : ""}
+                ${company?.city && company?.state ? `${escapeHtml(company.city)}, ${escapeHtml(company.state)} ${escapeHtml(company.zip || "")}<br>` : ""}
+                ${company?.phone ? `Phone: ${escapeHtml(company.phone)}<br>` : ""}
+                ${company?.email ? `Email: ${escapeHtml(company.email)}<br>` : ""}
+                ${company?.mc_number ? `MC#: ${escapeHtml(company.mc_number)}<br>` : ""}
+                ${company?.dot_number ? `DOT#: ${escapeHtml(company.dot_number)}` : ""}
               </div>
             </div>
             <div class="report-info">
@@ -358,10 +370,10 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
                 .map(
                   (state: any) => `
                 <tr>
-                  <td>${state.state || "N/A"}</td>
+                  <td>${escapeHtml(state.state || "N/A")}</td>
                   <td>${state.miles?.toLocaleString() || "0"}</td>
-                  <td>${state.fuel || "0 gal"}</td>
-                  <td>${state.tax || "$0.00"}</td>
+                  <td>${escapeHtml(state.fuel?.toString() || "0 gal")}</td>
+                  <td>${escapeHtml(state.tax?.toString() || "$0.00")}</td>
                 </tr>
               `
                 )
@@ -380,7 +392,7 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
         <div class="state-breakdown-section" style="margin-top: 30px;">
           <div class="section-title">Trucks Included in Report</div>
           <div style="font-size: 11px; line-height: 1.8;">
-            ${report.truck_ids.map((id: string) => `Truck ID: ${id.substring(0, 8)}`).join(", ")}
+            ${report.truck_ids.map((id: string) => `Truck ID: ${escapeHtml(id.substring(0, 8))}`).join(", ")}
           </div>
         </div>
         ` : ""}
@@ -415,10 +427,47 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
       </html>
     `
 
-    return { html, error: null }
+    // FIXED: Generate actual PDF using Puppeteer instead of returning HTML
+    try {
+      const puppeteer = await import("puppeteer")
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-accelerated-2d-canvas",
+          "--disable-gpu",
+        ],
+      })
+
+      const page = await browser.newPage()
+      await page.setContent(html, { waitUntil: "networkidle0" })
+
+      // Generate PDF with proper settings for IFTA reports
+      const pdfBuffer = await page.pdf({
+        format: "Letter",
+        printBackground: true,
+        margin: {
+          top: "0.5in",
+          right: "0.5in",
+          bottom: "0.5in",
+          left: "0.5in",
+        },
+      })
+
+      await browser.close()
+
+      return { pdf: pdfBuffer, html: null, error: null }
+    } catch (puppeteerError: any) {
+      console.error("[IFTA PDF] Puppeteer error:", puppeteerError)
+      // Fallback: return HTML if Puppeteer fails (for development or if Puppeteer not available)
+      console.warn("[IFTA PDF] Falling back to HTML output due to Puppeteer error")
+      return { pdf: null, html, error: null }
+    }
   } catch (error: any) {
     console.error("Error generating IFTA report PDF:", error)
-    return { html: "", error: error.message || "Failed to generate PDF" }
+    return { pdf: null, html: null, error: error.message || "Failed to generate PDF" }
   }
 }
 

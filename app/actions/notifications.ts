@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache"
 
 // Initialize Resend (checks both env var and database)
 // Initialize lazily to avoid errors if API key is not set or package not available
-async function getResendClient() {
+// FIXED: Decouple from auth context - check company integration using target user's company_id
+async function getResendClient(companyId?: string) {
   // Always use platform API key from environment variables
   const apiKey = process.env.RESEND_API_KEY
   
@@ -14,33 +15,24 @@ async function getResendClient() {
     return null
   }
 
-  // Check if integration is enabled for this company
-  try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+  // If companyId is provided, check if integration is enabled for that company
+  if (companyId) {
+    try {
+      const supabase = await createClient()
+      const { data: integrations } = await supabase
+        .from("company_integrations")
+        .select("resend_enabled")
+        .eq("company_id", companyId)
+        .single()
 
-    if (user) {
-      const { getCachedUserCompany } = await import("@/lib/query-optimizer")
-      const result = await getCachedUserCompany(user.id)
-      
-      if (result.company_id) {
-        const { data: integrations } = await supabase
-          .from("company_integrations")
-          .select("resend_enabled")
-          .eq("company_id", result.company_id)
-          .single()
-
-        if (!integrations?.resend_enabled) {
-          console.log("[RESEND] Integration not enabled for company")
-          return null
-        }
+      if (!integrations?.resend_enabled) {
+        console.log("[RESEND] Integration not enabled for company")
+        return null
       }
+    } catch (error) {
+      console.error("[RESEND] Error checking integration:", error)
+      return null
     }
-  } catch (error) {
-    console.error("[RESEND] Error checking integration:", error)
-    return null
   }
   
   try {
@@ -112,45 +104,41 @@ export async function updateNotificationPreferences(preferences: {
     return { error: "Not authenticated", success: false }
   }
 
-  // Check if preferences exist
-  const { data: existing } = await supabase
+  // FIXED: Use upsert to eliminate race condition
+  const { error } = await supabase
     .from("notification_preferences")
-    .select("id")
-    .eq("user_id", user.id)
-    .single()
+    .upsert({
+      user_id: user.id,
+      ...preferences,
+    }, {
+      onConflict: "user_id"
+    })
 
-  if (existing) {
-    // Update existing
-    const { error } = await supabase
-      .from("notification_preferences")
-      .update(preferences)
-      .eq("user_id", user.id)
-
-    if (error) {
-      return { error: error.message, success: false }
-    }
-  } else {
-    // Create new
-    const { error } = await supabase
-      .from("notification_preferences")
-      .insert({
-        user_id: user.id,
-        ...preferences,
-      })
-
-    if (error) {
-      return { error: error.message, success: false }
-    }
+  if (error) {
+    return { error: error.message, success: false }
   }
 
   revalidatePath("/dashboard/settings")
   return { success: true, error: null }
 }
 
+// Helper function to escape HTML to prevent XSS
+function escapeHtml(text: string | null | undefined): string {
+  if (!text) return ""
+  const map: { [key: string]: string } = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  }
+  return text.replace(/[&<>"']/g, (m) => map[m])
+}
+
 // Function to send notifications (to be called when events happen)
 export async function sendNotification(
   userId: string,
-  type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder",
+  type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "reminder_due" | "dfm_matches_found" | "marketplace_load_accepted" | "marketplace_new_matching_load",
   data: any
 ) {
   const supabase = await createClient()
@@ -186,6 +174,22 @@ export async function sendNotification(
       shouldNotifyEmail = preferences.payment_reminders && preferences.email_alerts
       shouldNotifySMS = preferences.payment_reminders && preferences.sms_alerts
       break
+    case "reminder_due":
+      // Use payment_reminders preference for reminder notifications
+      shouldNotifyEmail = preferences.payment_reminders && preferences.email_alerts
+      shouldNotifySMS = preferences.payment_reminders && preferences.sms_alerts
+      break
+    case "dfm_matches_found":
+      // DFM matches - default to enabled if load_updates is enabled
+      shouldNotifyEmail = preferences.load_updates && preferences.email_alerts
+      shouldNotifySMS = preferences.load_updates && preferences.sms_alerts
+      break
+    case "marketplace_load_accepted":
+    case "marketplace_new_matching_load":
+      // Marketplace events - default to enabled if load_updates is enabled
+      shouldNotifyEmail = preferences.load_updates && preferences.email_alerts
+      shouldNotifySMS = preferences.load_updates && preferences.sms_alerts
+      break
   }
 
   const results: { email?: any; sms?: any } = {}
@@ -200,8 +204,15 @@ export async function sendNotification(
       .single()
 
     if (userData?.email) {
-      // Get Resend client
-      const resend = await getResendClient()
+      // FIXED: Get user's company_id to check integration settings
+      const { data: userCompany } = await supabase
+        .from("users")
+        .select("company_id")
+        .eq("id", userId)
+        .single()
+      
+      // Get Resend client with company_id for proper integration check
+      const resend = await getResendClient(userCompany?.company_id)
       
       // If Resend is not configured, log and return (don't throw error)
       if (resend) {
@@ -252,6 +263,86 @@ export async function sendNotification(
   const emailSent = results.email?.sent || false
   const smsSent = results.sms?.sent || false
 
+  // FIXED: Always insert notification record into database for in-app bell and notifications page
+  // This ensures email/SMS and in-app UI are connected
+  try {
+    // Get user data for notification title/message
+    const { data: userData } = await supabase
+      .from("users")
+      .select("full_name")
+      .eq("id", userId)
+      .single()
+
+    // Generate notification title and message
+    let notificationTitle = "Notification"
+    let notificationMessage = ""
+    
+    switch (type) {
+      case "route_update":
+        notificationTitle = `Route Update: ${data.routeName || "Route"}`
+        notificationMessage = data.status ? `Status changed to ${data.status}` : "Route has been updated"
+        break
+      case "load_update":
+        notificationTitle = `Load Update: ${data.shipmentNumber || "Load"}`
+        notificationMessage = data.status ? `Status changed to ${data.status}` : "Load has been updated"
+        break
+      case "maintenance_alert":
+        notificationTitle = `Maintenance Alert: ${data.truckNumber || "Vehicle"}`
+        notificationMessage = data.serviceType ? `Service required: ${data.serviceType}` : "Maintenance scheduled"
+        break
+      case "payment_reminder":
+        notificationTitle = `Payment Reminder: ${data.driverName || "Driver"}`
+        notificationMessage = data.amount ? `Amount: $${data.amount}` : "Payment reminder"
+        break
+      case "reminder_due":
+        notificationTitle = data.title || "Reminder Due"
+        notificationMessage = data.description || `Reminder: ${data.title || "Task"} is due ${data.due_date ? `on ${data.due_date}` : "soon"}`
+        break
+      case "dfm_matches_found":
+        notificationTitle = "DFM Matches Found"
+        notificationMessage = data.count ? `${data.count} matching loads found` : "New dispatch matching opportunities"
+        break
+      case "marketplace_load_accepted":
+        notificationTitle = "Marketplace Load Accepted"
+        notificationMessage = data.shipmentNumber ? `Load ${data.shipmentNumber} has been accepted` : "Your marketplace load has been accepted"
+        break
+      case "marketplace_new_matching_load":
+        notificationTitle = "New Marketplace Load"
+        notificationMessage = data.shipmentNumber ? `New matching load: ${data.shipmentNumber}` : "New matching load available"
+        break
+    }
+
+    // Determine priority from data or default to normal
+    const priority = data.priority || "normal"
+
+    // Insert notification record
+    const { error: notifError } = await supabase
+      .from("notifications")
+      .insert({
+        user_id: userId,
+        type: type,
+        title: notificationTitle,
+        message: notificationMessage,
+        priority: priority,
+        read: false,
+        metadata: {
+          ...data,
+          email_sent: emailSent,
+          sms_sent: smsSent,
+          email_message_id: results.email?.messageId,
+          sms_message_id: results.sms?.messageId,
+        },
+      })
+
+    if (notifError) {
+      console.error("[NOTIFICATION] Failed to insert notification record:", notifError)
+      // Don't fail the entire function if DB insert fails
+    }
+  } catch (error: any) {
+    console.error("[NOTIFICATION] Error inserting notification record:", error)
+    // Don't fail the entire function if DB insert fails
+  }
+
   return {
     sent: emailSent || smsSent,
     email: results.email,
@@ -262,7 +353,7 @@ export async function sendNotification(
 
 // Helper function to generate email content
 function getEmailContent(
-  type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder",
+  type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "dfm_matches_found" | "marketplace_load_accepted" | "marketplace_new_matching_load",
   data: any,
   userName: string
 ) {
@@ -288,10 +379,10 @@ function getEmailContent(
               <h1>Route Update</h1>
             </div>
             <div class="content">
-              <p>Hello ${userName},</p>
-              <p>Your route <strong>${data.routeName || "Route"}</strong> has been updated.</p>
-              ${data.status ? `<p><strong>New Status:</strong> ${data.status}</p>` : ""}
-              ${data.origin && data.destination ? `<p><strong>Route:</strong> ${data.origin} → ${data.destination}</p>` : ""}
+              <p>Hello ${escapeHtml(userName)},</p>
+              <p>Your route <strong>${escapeHtml(data.routeName || "Route")}</strong> has been updated.</p>
+              ${data.status ? `<p><strong>New Status:</strong> ${escapeHtml(data.status)}</p>` : ""}
+              ${data.origin && data.destination ? `<p><strong>Route:</strong> ${escapeHtml(data.origin)} → ${escapeHtml(data.destination)}</p>` : ""}
               <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/routes" class="button">View Route</a>
             </div>
             <div class="footer">
@@ -311,10 +402,10 @@ function getEmailContent(
               <h1>Load Update</h1>
             </div>
             <div class="content">
-              <p>Hello ${userName},</p>
-              <p>Your load <strong>${data.shipmentNumber || "Load"}</strong> status has been updated.</p>
-              ${data.status ? `<p><strong>New Status:</strong> ${data.status}</p>` : ""}
-              ${data.origin && data.destination ? `<p><strong>Route:</strong> ${data.origin} → ${data.destination}</p>` : ""}
+              <p>Hello ${escapeHtml(userName)},</p>
+              <p>Your load <strong>${escapeHtml(data.shipmentNumber || "Load")}</strong> status has been updated.</p>
+              ${data.status ? `<p><strong>New Status:</strong> ${escapeHtml(data.status)}</p>` : ""}
+              ${data.origin && data.destination ? `<p><strong>Route:</strong> ${escapeHtml(data.origin)} → ${escapeHtml(data.destination)}</p>` : ""}
               <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/loads" class="button">View Load</a>
             </div>
             <div class="footer">
@@ -334,12 +425,35 @@ function getEmailContent(
               <h1>Maintenance Alert</h1>
             </div>
             <div class="content">
-              <p>Hello ${userName},</p>
-              <p>Maintenance is scheduled for <strong>${data.truckNumber || "your vehicle"}</strong>.</p>
-              ${data.serviceType ? `<p><strong>Service Type:</strong> ${data.serviceType}</p>` : ""}
-              ${data.scheduledDate ? `<p><strong>Scheduled Date:</strong> ${new Date(data.scheduledDate).toLocaleDateString()}</p>` : ""}
+              <p>Hello ${escapeHtml(userName)},</p>
+              <p>Maintenance is scheduled for <strong>${escapeHtml(data.truckNumber || "your vehicle")}</strong>.</p>
+              ${data.serviceType ? `<p><strong>Service Type:</strong> ${escapeHtml(data.serviceType)}</p>` : ""}
+              ${data.scheduledDate ? `<p><strong>Scheduled Date:</strong> ${escapeHtml(new Date(data.scheduledDate).toLocaleDateString())}</p>` : ""}
               ${data.priority === "high" ? `<p style="color: #dc2626;"><strong>Priority: High</strong></p>` : ""}
               <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/maintenance" class="button">View Maintenance</a>
+            </div>
+            <div class="footer">
+              <p>This is an automated notification from TruckMates.</p>
+            </div>
+          </div>
+        `,
+      }
+
+    case "reminder_due":
+      return {
+        subject: `Reminder: ${data.title || "Task Due"}`,
+        html: `
+          ${baseStyle}
+          <div class="container">
+            <div class="header">
+              <h1>Reminder Due</h1>
+            </div>
+            <div class="content">
+              <p>Hello ${escapeHtml(userName)},</p>
+              <p>You have a reminder: <strong>${escapeHtml(data.title || "Task")}</strong></p>
+              ${data.description ? `<p>${escapeHtml(data.description)}</p>` : ""}
+              ${data.due_date ? `<p><strong>Due Date:</strong> ${escapeHtml(data.due_date)}</p>` : ""}
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/reminders" class="button">View Reminders</a>
             </div>
             <div class="footer">
               <p>This is an automated notification from TruckMates.</p>
@@ -358,11 +472,81 @@ function getEmailContent(
               <h1>Payment Reminder</h1>
             </div>
             <div class="content">
-              <p>Hello ${userName},</p>
-              <p>A payment reminder for <strong>${data.driverName || "driver"}</strong>.</p>
-              ${data.amount ? `<p><strong>Amount:</strong> $${parseFloat(data.amount).toFixed(2)}</p>` : ""}
-              ${data.period ? `<p><strong>Period:</strong> ${data.period}</p>` : ""}
+              <p>Hello ${escapeHtml(userName)},</p>
+              <p>A payment reminder for <strong>${escapeHtml(data.driverName || "driver")}</strong>.</p>
+              ${data.amount ? `<p><strong>Amount:</strong> $${escapeHtml(parseFloat(data.amount).toFixed(2))}</p>` : ""}
+              ${data.period ? `<p><strong>Period:</strong> ${escapeHtml(data.period)}</p>` : ""}
               <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/accounting/settlements" class="button">View Settlement</a>
+            </div>
+            <div class="footer">
+              <p>This is an automated notification from TruckMates.</p>
+            </div>
+          </div>
+        `,
+      }
+
+    case "dfm_matches_found":
+      return {
+        subject: "DFM Matches Found",
+        html: `
+          ${baseStyle}
+          <div class="container">
+            <div class="header">
+              <h1>DFM Matches Found</h1>
+            </div>
+            <div class="content">
+              <p>Hello ${escapeHtml(userName)},</p>
+              <p>New dispatch matching opportunities have been found.</p>
+              ${data.count ? `<p><strong>Matches Found:</strong> ${escapeHtml(String(data.count))}</p>` : ""}
+              ${data.origin && data.destination ? `<p><strong>Route:</strong> ${escapeHtml(data.origin)} → ${escapeHtml(data.destination)}</p>` : ""}
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/dispatch" class="button">View Matches</a>
+            </div>
+            <div class="footer">
+              <p>This is an automated notification from TruckMates.</p>
+            </div>
+          </div>
+        `,
+      }
+
+    case "marketplace_load_accepted":
+      return {
+        subject: "Marketplace Load Accepted",
+        html: `
+          ${baseStyle}
+          <div class="container">
+            <div class="header">
+              <h1>Load Accepted</h1>
+            </div>
+            <div class="content">
+              <p>Hello ${escapeHtml(userName)},</p>
+              <p>Your marketplace load has been accepted.</p>
+              ${data.shipmentNumber ? `<p><strong>Load:</strong> ${escapeHtml(data.shipmentNumber)}</p>` : ""}
+              ${data.origin && data.destination ? `<p><strong>Route:</strong> ${escapeHtml(data.origin)} → ${escapeHtml(data.destination)}</p>` : ""}
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/marketplace" class="button">View Load</a>
+            </div>
+            <div class="footer">
+              <p>This is an automated notification from TruckMates.</p>
+            </div>
+          </div>
+        `,
+      }
+
+    case "marketplace_new_matching_load":
+      return {
+        subject: "New Marketplace Load Available",
+        html: `
+          ${baseStyle}
+          <div class="container">
+            <div class="header">
+              <h1>New Matching Load</h1>
+            </div>
+            <div class="content">
+              <p>Hello ${escapeHtml(userName)},</p>
+              <p>A new matching load is available in the marketplace.</p>
+              ${data.shipmentNumber ? `<p><strong>Load:</strong> ${escapeHtml(data.shipmentNumber)}</p>` : ""}
+              ${data.origin && data.destination ? `<p><strong>Route:</strong> ${escapeHtml(data.origin)} → ${escapeHtml(data.destination)}</p>` : ""}
+              ${data.rate ? `<p><strong>Rate:</strong> $${escapeHtml(String(data.rate))}</p>` : ""}
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/marketplace" class="button">View Load</a>
             </div>
             <div class="footer">
               <p>This is an automated notification from TruckMates.</p>
@@ -374,7 +558,7 @@ function getEmailContent(
     default:
       return {
         subject: "Notification from TruckMates",
-        html: `<p>Hello ${userName},</p><p>You have a new notification.</p>`,
+        html: `<p>Hello ${escapeHtml(userName)},</p><p>You have a new notification.</p>`,
       }
   }
 }
@@ -416,8 +600,15 @@ export async function sendTestEmail() {
     return { sent: false, error: "User email not found" }
   }
 
-  // Get Resend client
-  const resend = await getResendClient()
+  // Get user's company_id for Resend client
+  const { data: userCompany } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+  
+  // Get Resend client with company_id
+  const resend = await getResendClient(userCompany?.company_id)
   
   if (!resend) {
     return { 

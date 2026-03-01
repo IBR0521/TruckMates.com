@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
 import { validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone, validateRequiredString, stateNameToCode } from "@/lib/validation"
+import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
 // Get all customers
 export async function getCustomers(filters?: {
@@ -179,6 +180,12 @@ export async function createCustomer(formData: {
     return { error: "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("crm")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to create customers", data: null }
+  }
+
   // Professional validation
   if (!validateRequiredString(formData.name, 2, 200)) {
     return { error: "Customer name is required and must be between 2 and 200 characters", data: null }
@@ -338,6 +345,12 @@ export async function updateCustomer(
     return { error: "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkEditPermission("crm")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to edit customers", data: null }
+  }
+
   // Get current customer data for audit trail
   const { data: currentCustomer } = await supabase
     .from("customers")
@@ -393,28 +406,29 @@ export async function updateCustomer(
     return { error: error.message, data: null }
   }
 
-  // Create audit log entries
+  // Create audit log entries (batched)
   if (changes.length > 0) {
     try {
       const { createAuditLog } = await import("@/lib/audit-log")
       if (user) {
-        for (const change of changes) {
-          try {
-            await createAuditLog({
-              action: change.field === "status" ? "status_updated" : "data.updated",
-              resource_type: "customer",
-              resource_id: id,
-              details: {
-                field: change.field,
-                old_value: change.old_value,
-                new_value: change.new_value,
-              },
-            })
-            console.log("[updateCustomer] ✅ Audit log created for field:", change.field)
-          } catch (err: any) {
+        // Batch all audit log entries into a single operation
+        const auditLogPromises = changes.map((change) =>
+          createAuditLog({
+            action: change.field === "status" ? "status_updated" : "data.updated",
+            resource_type: "customer",
+            resource_id: id,
+            details: {
+              field: change.field,
+              old_value: change.old_value,
+              new_value: change.new_value,
+            },
+          }).catch((err: any) => {
             console.error("[updateCustomer] ❌ Audit log failed for field", change.field, ":", err.message)
-          }
-        }
+            return null
+          })
+        )
+        await Promise.all(auditLogPromises)
+        console.log("[updateCustomer] ✅ Audit logs created for", changes.length, "fields")
       }
     } catch (err: any) {
       console.error("[updateCustomer] Failed to import audit log module:", err.message)
@@ -451,6 +465,12 @@ export async function deleteCustomer(id: string) {
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
+  }
+
+  // RBAC check
+  const permissionCheck = await checkDeletePermission("crm")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to delete customers" }
   }
 
   const { error } = await supabase
@@ -506,13 +526,40 @@ export async function getCustomerLoads(customerId: string) {
     return { error: "Customer not found", data: null }
   }
 
-  // Get loads for this customer (by customer_id or company_name)
-  const { data, error } = await supabase
+  // Get loads for this customer - use separate queries to prevent injection
+  // First get by customer_id
+  const { data: loadsByCustomerId, error: error1 } = await supabase
     .from("loads")
     .select("*")
     .eq("company_id", userData.company_id)
-    .or(`customer_id.eq.${customerId},company_name.eq.${customer.name}`)
-    .order("created_at", { ascending: false })
+    .eq("customer_id", customerId)
+
+  // Also get by company_name if it matches the customer name exactly (sanitized)
+  let loadsByCompanyName: any[] = []
+  if (customer.name) {
+    const sanitizedName = customer.name.trim()
+    const { data: loadsByName, error: error2 } = await supabase
+      .from("loads")
+      .select("*")
+      .eq("company_id", userData.company_id)
+      .eq("company_name", sanitizedName)
+      .neq("customer_id", customerId) // Exclude ones already matched by customer_id
+    
+    if (!error2 && loadsByName) {
+      loadsByCompanyName = loadsByName
+    }
+  }
+
+  // Combine results and remove duplicates
+  const allLoads = [...(loadsByCustomerId || []), ...loadsByCompanyName]
+  const uniqueLoads = allLoads.filter((load, index, self) => 
+    index === self.findIndex((l) => l.id === load.id)
+  )
+
+  const error = error1
+  const data = uniqueLoads.sort((a, b) => 
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
 
   if (error) {
     return { error: error.message, data: null }
@@ -560,13 +607,40 @@ export async function getCustomerInvoices(customerId: string) {
     return { error: "Customer not found", data: null }
   }
 
-  // Get invoices for this customer (by customer_id or customer_name)
-  const { data, error } = await supabase
+  // Get invoices for this customer - use separate queries to prevent injection
+  // First get by customer_id
+  const { data: invoicesByCustomerId, error: error1 } = await supabase
     .from("invoices")
     .select("*")
     .eq("company_id", userData.company_id)
-    .or(`customer_id.eq.${customerId},customer_name.eq.${customer.name}`)
-    .order("created_at", { ascending: false })
+    .eq("customer_id", customerId)
+
+  // Also get by customer_name if it matches the customer name exactly (sanitized)
+  let invoicesByCustomerName: any[] = []
+  if (customer.name) {
+    const sanitizedName = customer.name.trim()
+    const { data: invoicesByName, error: error2 } = await supabase
+      .from("invoices")
+      .select("*")
+      .eq("company_id", userData.company_id)
+      .eq("customer_name", sanitizedName)
+      .neq("customer_id", customerId) // Exclude ones already matched by customer_id
+    
+    if (!error2 && invoicesByName) {
+      invoicesByCustomerName = invoicesByName
+    }
+  }
+
+  // Combine results and remove duplicates
+  const allInvoices = [...(invoicesByCustomerId || []), ...invoicesByCustomerName]
+  const uniqueInvoices = allInvoices.filter((invoice, index, self) => 
+    index === self.findIndex((i) => i.id === invoice.id)
+  )
+
+  const error = error1
+  const data = uniqueInvoices.sort((a, b) => 
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
 
   if (error) {
     return { error: error.message, data: null }

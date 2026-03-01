@@ -89,47 +89,84 @@ BEGIN
       END IF;
     END IF;
     
-    -- Generate invoice number
-    v_invoice_number := 'INV-' || COALESCE(v_load.shipment_number, v_load_id::TEXT) || '-' || TO_CHAR(NOW(), 'YYYYMMDD');
+    -- CRITICAL FIX 2: Use time-precise suffix to prevent invoice number collisions
+    v_invoice_number := 'INV-' || COALESCE(v_load.shipment_number, v_load_id::TEXT) || '-' || TO_CHAR(NOW(), 'YYYYMMDDHH24MISS');
     
-    -- Create invoice
-    INSERT INTO public.invoices (
-      company_id,
-      invoice_number,
-      customer_name,
-      load_id,
-      amount,
-      status,
-      issue_date,
-      due_date,
-      payment_terms,
-      description
-    ) VALUES (
-      v_company_id,
-      v_invoice_number,
-      v_customer_name,
-      v_load_id,
-      v_amount,
-      'pending',
-      CURRENT_DATE,
-      CURRENT_DATE + INTERVAL '30 days', -- Net 30 default
-      'Net 30',
-      format('Invoice for load %s - %s to %s', 
-        COALESCE(v_load.shipment_number, 'N/A'),
-        COALESCE(v_load.origin, 'Origin'),
-        COALESCE(v_load.destination, 'Destination')
+    -- Create invoice with exception handling for unique violations
+    BEGIN
+      INSERT INTO public.invoices (
+        company_id,
+        invoice_number,
+        customer_name,
+        load_id,
+        amount,
+        status,
+        issue_date,
+        due_date,
+        payment_terms,
+        description
+      ) VALUES (
+        v_company_id,
+        v_invoice_number,
+        v_customer_name,
+        v_load_id,
+        v_amount,
+        'pending',
+        CURRENT_DATE,
+        CURRENT_DATE + INTERVAL '30 days', -- Net 30 default
+        'Net 30',
+        format('Invoice for load %s - %s to %s', 
+          COALESCE(v_load.shipment_number, 'N/A'),
+          COALESCE(v_load.origin, 'Origin'),
+          COALESCE(v_load.destination, 'Destination')
+        )
       )
-    )
-    RETURNING id INTO v_invoice_id;
+      RETURNING id INTO v_invoice_id;
+    EXCEPTION
+      WHEN unique_violation THEN
+        -- CRITICAL FIX 2: If invoice number collision, append random suffix and retry
+        v_invoice_number := v_invoice_number || '-' || SUBSTRING(MD5(RANDOM()::TEXT) FROM 1 FOR 6);
+        INSERT INTO public.invoices (
+          company_id,
+          invoice_number,
+          customer_name,
+          load_id,
+          amount,
+          status,
+          issue_date,
+          due_date,
+          payment_terms,
+          description
+        ) VALUES (
+          v_company_id,
+          v_invoice_number,
+          v_customer_name,
+          v_load_id,
+          v_amount,
+          'pending',
+          CURRENT_DATE,
+          CURRENT_DATE + INTERVAL '30 days',
+          'Net 30',
+          format('Invoice for load %s - %s to %s', 
+            COALESCE(v_load.shipment_number, 'N/A'),
+            COALESCE(v_load.origin, 'Origin'),
+            COALESCE(v_load.destination, 'Destination')
+          )
+        )
+        RETURNING id INTO v_invoice_id;
+    END;
     
     -- Update load with invoice_id
     UPDATE public.loads
     SET invoice_id = v_invoice_id
     WHERE id = v_load_id;
     
+    -- CRITICAL FIX 3: Cannot modify NEW in AFTER trigger - use UPDATE instead
     -- Update BOL status to 'delivered' if not already
     IF NEW.status != 'delivered' AND NEW.status != 'completed' THEN
-      NEW.status := 'delivered';
+      UPDATE public.bols
+      SET status = 'delivered'
+      WHERE id = NEW.id;
     END IF;
     
     RAISE NOTICE 'Auto-generated invoice % for load %', v_invoice_id, v_load_id;
@@ -212,7 +249,8 @@ BEGIN
       COALESCE(v_load.destination, 'Destination')
     );
     
-    -- Insert alerts for each dispatcher
+    -- MEDIUM FIX 2: Create one alert per event, not per dispatcher
+    -- Use company-scoped alert that all dispatchers can see
     INSERT INTO public.alerts (
       company_id,
       title,
@@ -222,8 +260,7 @@ BEGIN
       load_id,
       status,
       metadata
-    )
-    SELECT 
+    ) VALUES (
       v_company_id,
       v_alert_title,
       v_alert_message,
@@ -234,9 +271,10 @@ BEGIN
       jsonb_build_object(
         'bol_id', p_bol_id,
         'bol_number', v_bol.bol_number,
-        'shipment_number', v_load.shipment_number
+        'shipment_number', v_load.shipment_number,
+        'notify_user_ids', v_dispatcher_ids
       )
-    FROM unnest(v_dispatcher_ids) AS dispatcher_id;
+    );
   END IF;
   
   -- Get customer email for notification

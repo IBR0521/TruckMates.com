@@ -15,16 +15,48 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders })
   }
 
+  // Authentication check - require Authorization header with service role key or anon key
+  const authHeader = req.headers.get("authorization")
+  const apiKey = req.headers.get("x-api-key")
+  const expectedKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY")
+  
+  if (!expectedKey) {
+    return new Response(
+      JSON.stringify({ error: "Service not configured" }),
+      { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    )
+  }
+
+  // Validate authentication
+  const hasValidAuth = 
+    (authHeader && authHeader === `Bearer ${expectedKey}`) ||
+    (apiKey && apiKey === expectedKey)
+
+  if (!hasValidAuth) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized - valid Authorization header or x-api-key required" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    )
+  }
+
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     )
 
-    // Get query parameters
+    // Get query parameters - company_id is now required for security
     const url = new URL(req.url)
     const companyId = url.searchParams.get("company_id")
     const limit = parseInt(url.searchParams.get("limit") || "100")
+
+    // Require company_id to prevent processing all companies
+    if (!companyId) {
+      return new Response(
+        JSON.stringify({ error: "company_id query parameter is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
+    }
 
     // Get new ELD events with fault codes that haven't been analyzed
     let query = supabase

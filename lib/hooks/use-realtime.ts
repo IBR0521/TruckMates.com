@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
@@ -22,7 +22,8 @@ export function useRealtimeSubscription<T = any>(
   const [data, setData] = useState<T[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<Error | null>(null)
-  const supabase = createClient()
+  // FIXED: Memoize supabase client to avoid dependency churn
+  const supabase = useMemo(() => createClient(), [])
 
   const {
     filter = "",
@@ -97,7 +98,7 @@ export function useRealtimeSubscription<T = any>(
         setIsConnected(false)
       }
     }
-  }, [table, filter, event, enabled, supabase])
+  }, [table, filter, event, enabled]) // FIXED: Remove supabase from deps
 
   return { data, isConnected, error }
 }
@@ -115,7 +116,8 @@ export function useRealtimeRecord<T = any>(
 ) {
   const [record, setRecord] = useState<T | null>(null)
   const [isConnected, setIsConnected] = useState(false)
-  const supabase = createClient()
+  // FIXED: Memoize supabase client
+  const supabase = useMemo(() => createClient(), [])
 
   const { enabled = true, onUpdate } = options
 
@@ -148,7 +150,7 @@ export function useRealtimeRecord<T = any>(
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [table, recordId, enabled, supabase, onUpdate])
+  }, [table, recordId, enabled, onUpdate]) // FIXED: Remove supabase from deps
 
   return { record, isConnected }
 }
@@ -160,9 +162,11 @@ export function useRealtimeRecord<T = any>(
 export function useRealtimeNotifications() {
   const [notifications, setNotifications] = useState<any[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
-  const supabase = createClient()
+  const [userId, setUserId] = useState<string | null>(null)
+  // FIXED: Memoize supabase client to avoid dependency issues
+  const supabase = useMemo(() => createClient(), [])
 
-  // Load existing notifications
+  // Load existing notifications and get user ID
   useEffect(() => {
     const loadNotifications = async () => {
       try {
@@ -170,6 +174,8 @@ export function useRealtimeNotifications() {
           data: { user },
         } = await supabase.auth.getUser()
         if (!user) return
+
+        setUserId(user.id)
 
         const { data, error } = await supabase
           .from("notifications")
@@ -198,21 +204,28 @@ export function useRealtimeNotifications() {
   }, [supabase])
 
   // Subscribe to real-time updates
+  // FIXED: Add user_id filter to prevent receiving all users' notifications
   useEffect(() => {
+    if (!userId) return
+
     try {
       const channel = supabase
-        .channel("notifications")
+        .channel(`notifications:${userId}`)
         .on(
           "postgres_changes",
           {
             event: "INSERT",
             schema: "public",
             table: "notifications",
+            filter: `user_id=eq.${userId}`, // FIXED: Filter by user_id
           },
           (payload) => {
             const notification = payload.new
-            setNotifications((prev) => [notification, ...prev])
-            setUnreadCount((prev) => prev + 1)
+            // Only add if it's for this user
+            if (notification.user_id === userId) {
+              setNotifications((prev) => [notification, ...prev])
+              setUnreadCount((prev) => prev + 1)
+            }
           }
         )
         .subscribe()
@@ -224,7 +237,7 @@ export function useRealtimeNotifications() {
       // Silently fail if real-time is not available
       console.log("[NOTIFICATIONS] Real-time not available:", error)
     }
-  }, [supabase])
+  }, [supabase, userId]) // FIXED: Only depend on userId, not supabase
 
   const markAsRead = async (notificationId: string) => {
     try {

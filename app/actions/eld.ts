@@ -15,19 +15,15 @@ export async function getELDDevices() {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
+  // OPTIMIZATION: Use cached user company lookup for consistency
+  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
+  const result = await getCachedUserCompany(user.id)
+  
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
   }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+  
+  const company_id = result.company_id
 
   const { data: devices, error } = await supabase
     .from("eld_devices")
@@ -40,7 +36,7 @@ export async function getELDDevices() {
         model
       )
     `)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", company_id)
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -62,19 +58,15 @@ export async function getELDDevice(id: string) {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
+  // OPTIMIZATION: Use cached user company lookup for consistency
+  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
+  const result = await getCachedUserCompany(user.id)
+  
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
   }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+  
+  const company_id = result.company_id
 
   const { data: device, error } = await supabase
     .from("eld_devices")
@@ -88,7 +80,7 @@ export async function getELDDevice(id: string) {
       )
     `)
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", company_id)
     .single()
 
   if (error) {
@@ -132,8 +124,10 @@ export async function createELDDevice(formData: {
     return { error: "No company found", data: null }
   }
 
-  if (userData.role !== "manager") {
-    return { error: "Only managers can create ELD devices", data: null }
+  // RBAC: Allow managers, admins, and owners to manage ELD devices
+  const allowedRoles = ['manager', 'admin', 'owner', 'super_admin', 'operations_manager']
+  if (!allowedRoles.includes(userData.role)) {
+    return { error: "You don't have permission to create ELD devices", data: null }
   }
 
   // Build insert data
@@ -204,8 +198,10 @@ export async function updateELDDevice(
     return { error: "No company found", data: null }
   }
 
-  if (userData.role !== "manager") {
-    return { error: "Only managers can update ELD devices", data: null }
+  // RBAC: Allow managers, admins, and owners to manage ELD devices
+  const allowedRoles = ['manager', 'admin', 'owner', 'super_admin', 'operations_manager']
+  if (!allowedRoles.includes(userData.role)) {
+    return { error: "You don't have permission to update ELD devices", data: null }
   }
 
   // Build update data
@@ -226,7 +222,7 @@ export async function updateELDDevice(
     .from("eld_devices")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", company_id)
     .select()
     .single()
 
@@ -260,15 +256,17 @@ export async function deleteELDDevice(id: string) {
     return { error: "No company found", data: null }
   }
 
-  if (userData.role !== "manager") {
-    return { error: "Only managers can delete ELD devices", data: null }
+  // RBAC: Allow managers, admins, and owners to manage ELD devices
+  const allowedRoles = ['manager', 'admin', 'owner', 'super_admin', 'operations_manager']
+  if (!allowedRoles.includes(userData.role)) {
+    return { error: "You don't have permission to delete ELD devices", data: null }
   }
 
   const { error } = await supabase
     .from("eld_devices")
     .delete()
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", company_id)
 
   if (error) {
     return { error: error.message, data: null }
@@ -292,6 +290,8 @@ export async function getELDLogs(filters?: {
   start_date?: string
   end_date?: string
   log_type?: string
+  limit?: number
+  offset?: number
 }) {
   const supabase = await createClient()
 
@@ -303,19 +303,15 @@ export async function getELDLogs(filters?: {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
+  // OPTIMIZATION: Use cached user company lookup for consistency
+  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
+  const result = await getCachedUserCompany(user.id)
+  
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
   }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+  
+  const company_id = result.company_id
 
   let query = supabase
     .from("eld_logs")
@@ -335,7 +331,7 @@ export async function getELDLogs(filters?: {
         truck_number
       )
     `)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", company_id)
     .order("log_date", { ascending: false })
     .order("start_time", { ascending: false })
 
@@ -380,6 +376,8 @@ export async function getELDEvents(filters?: {
   resolved?: boolean
   start_date?: string
   end_date?: string
+  limit?: number
+  offset?: number
 }) {
   const supabase = await createClient()
 
@@ -391,19 +389,15 @@ export async function getELDEvents(filters?: {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
+  // OPTIMIZATION: Use cached user company lookup for consistency
+  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
+  const result = await getCachedUserCompany(user.id)
+  
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
   }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+  
+  const company_id = result.company_id
 
   let query = supabase
     .from("eld_events")
@@ -422,7 +416,7 @@ export async function getELDEvents(filters?: {
         truck_number
       )
     `)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", company_id)
     .order("event_time", { ascending: false })
 
   if (filters?.eld_device_id) {
@@ -478,25 +472,21 @@ export async function getELDMileageData(filters: {
     return { error: "Not authenticated", data: null }
   }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
+  // OPTIMIZATION: Use cached user company lookup for consistency
+  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
+  const result = await getCachedUserCompany(user.id)
+  
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
   }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+  
+  const company_id = result.company_id
 
   // Get mileage data from ELD logs for the specified trucks and date range
   const { data: logs, error } = await supabase
     .from("eld_logs")
     .select("truck_id, miles_driven, log_date, location_start, location_end")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", company_id)
     .in("truck_id", filters.truck_ids)
     .gte("log_date", filters.start_date)
     .lte("log_date", filters.end_date)
@@ -540,8 +530,10 @@ export async function resolveELDEvent(eventId: string) {
     return { error: "No company found", data: null }
   }
 
-  if (userData.role !== "manager") {
-    return { error: "Only managers can resolve events", data: null }
+  // RBAC: Allow managers, admins, and owners to manage ELD devices
+  const allowedRoles = ['manager', 'admin', 'owner', 'super_admin', 'operations_manager']
+  if (!allowedRoles.includes(userData.role)) {
+    return { error: "You don't have permission to resolve ELD events", data: null }
   }
 
   const { data, error } = await supabase
@@ -552,7 +544,7 @@ export async function resolveELDEvent(eventId: string) {
       resolved_by: user.id,
     })
     .eq("id", eventId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", company_id)
     .select()
     .single()
 

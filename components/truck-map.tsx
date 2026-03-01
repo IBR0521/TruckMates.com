@@ -60,13 +60,43 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
       { name: destination, type: "destination" },
     ]
 
-    // Simulate route calculation with truck restrictions
-    setRoute({
-      distance: "245 miles",
-      duration: "4h 35m",
-      truckFriendly: true,
-      waypoints: waypointsArray,
-    })
+    // Calculate route distance and duration using Google Maps API if available
+    const calculateRoute = async () => {
+      try {
+        const { getRouteDirections } = await import("@/app/actions/integrations-google-maps")
+        const waypointAddresses = stops.map(s => s.address || s.location_name)
+        const result = await getRouteDirections(origin, destination, waypointAddresses.length > 0 ? waypointAddresses : undefined)
+        
+        if (result.data) {
+          setRoute({
+            distance: result.data.distance,
+            duration: result.data.duration,
+            truckFriendly: true,
+            waypoints: waypointsArray,
+          })
+        } else {
+          // Fallback: show estimated values with disclaimer
+          setRoute({
+            distance: "Distance calculation unavailable",
+            duration: "Duration calculation unavailable",
+            truckFriendly: true,
+            waypoints: waypointsArray,
+            isEstimated: true,
+          })
+        }
+      } catch (error) {
+        // Fallback: show estimated values with disclaimer
+        setRoute({
+          distance: "Distance calculation unavailable",
+          duration: "Duration calculation unavailable",
+          truckFriendly: true,
+          waypoints: waypointsArray,
+          isEstimated: true,
+        })
+      }
+    }
+    
+    calculateRoute()
   }, [origin, destination, weight, truckHeight, contents, stops])
 
   return (

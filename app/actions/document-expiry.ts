@@ -3,12 +3,19 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { createAlert } from "./alerts"
+import { checkViewPermission, checkCreatePermission } from "@/lib/server-permissions"
 
 /**
  * Get all expiring documents, licenses, and insurance
  * @param daysAhead - Number of days ahead to check (default: 30)
  */
 export async function getExpiringItems(daysAhead: number = 30) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkViewPermission("documents")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to view expiring items", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -35,6 +42,9 @@ export async function getExpiringItems(daysAhead: number = 30) {
   futureDate.setHours(23, 59, 59, 999)
 
   try {
+    // FIXED: Add row limits to prevent unbounded queries
+    const limit = 1000 // Reasonable limit for expiry dashboard
+    
     // Get expiring documents
     const { data: expiringDocuments, error: docsError } = await supabase
       .from("documents")
@@ -44,6 +54,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
       .gte("expiry_date", today.toISOString().split("T")[0])
       .lte("expiry_date", futureDate.toISOString().split("T")[0])
       .order("expiry_date", { ascending: true })
+      .limit(limit) // FIXED: Add limit
 
     // Get expiring driver licenses
     const { data: expiringLicenses, error: licensesError } = await supabase
@@ -54,6 +65,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
       .gte("license_expiry", today.toISOString().split("T")[0])
       .lte("license_expiry", futureDate.toISOString().split("T")[0])
       .order("license_expiry", { ascending: true })
+      .limit(limit) // FIXED: Add limit
 
     // Get expiring truck licenses
     const { data: expiringTruckLicenses, error: truckLicensesError } = await supabase
@@ -64,6 +76,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
       .gte("license_expiry_date", today.toISOString().split("T")[0])
       .lte("license_expiry_date", futureDate.toISOString().split("T")[0])
       .order("license_expiry_date", { ascending: true })
+      .limit(limit) // FIXED: Add limit
 
     // Get expiring truck insurance
     const { data: expiringInsurance, error: insuranceError } = await supabase
@@ -74,6 +87,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
       .gte("insurance_expiry_date", today.toISOString().split("T")[0])
       .lte("insurance_expiry_date", futureDate.toISOString().split("T")[0])
       .order("insurance_expiry_date", { ascending: true })
+      .limit(limit) // FIXED: Add limit
 
     // Get expired items (past expiry date)
     const { data: expiredDocuments, error: expiredDocsError } = await supabase
@@ -83,6 +97,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
       .not("expiry_date", "is", null)
       .lt("expiry_date", today.toISOString().split("T")[0])
       .order("expiry_date", { ascending: false })
+      .limit(limit) // FIXED: Add limit
 
     const { data: expiredLicenses, error: expiredLicensesError } = await supabase
       .from("drivers")
@@ -91,6 +106,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
       .not("license_expiry", "is", null)
       .lt("license_expiry", today.toISOString().split("T")[0])
       .order("license_expiry", { ascending: false })
+      .limit(limit) // FIXED: Add limit
 
     const { data: expiredTruckLicenses, error: expiredTruckLicensesError } = await supabase
       .from("trucks")
@@ -99,6 +115,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
       .not("license_expiry_date", "is", null)
       .lt("license_expiry_date", today.toISOString().split("T")[0])
       .order("license_expiry_date", { ascending: false })
+      .limit(limit) // FIXED: Add limit
 
     const { data: expiredInsurance, error: expiredInsuranceError } = await supabase
       .from("trucks")
@@ -107,6 +124,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
       .not("insurance_expiry_date", "is", null)
       .lt("insurance_expiry_date", today.toISOString().split("T")[0])
       .order("insurance_expiry_date", { ascending: false })
+      .limit(limit) // FIXED: Add limit
 
     if (docsError || licensesError || truckLicensesError || insuranceError) {
       return { 
@@ -251,6 +269,12 @@ export async function getExpiringItems(daysAhead: number = 30) {
  * This can be called manually or by a cron job
  */
 export async function createExpiryAlerts(daysAhead: number = 30) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkCreatePermission("documents")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to create expiry alerts", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -278,9 +302,35 @@ export async function createExpiryAlerts(daysAhead: number = 30) {
   const { expiring, expired } = expiringResult.data
   const alertsCreated = []
 
+  // FIXED: Deduplication - check for existing alerts before creating new ones
+  // Get existing alerts from last 24 hours to avoid duplicates
+  const oneDayAgo = new Date()
+  oneDayAgo.setDate(oneDayAgo.getDate() - 1)
+  
+  const { data: existingAlerts } = await supabase
+    .from("alerts")
+    .select("metadata")
+    .eq("company_id", company_id)
+    .eq("event_type", "document_expiry")
+    .gte("created_at", oneDayAgo.toISOString())
+
+  // Create a set of existing alert item IDs for deduplication
+  const existingAlertItems = new Set<string>()
+  existingAlerts?.forEach((alert: any) => {
+    if (alert.metadata?.item_id) {
+      existingAlertItems.add(alert.metadata.item_id)
+    }
+  })
+
   // Create alerts for expiring items (7 days or less)
   for (const item of expiring) {
     if (item.days_until_expiry <= 7) {
+      // FIXED: Check for existing alert before creating
+      const itemId = `${item.item_type}_${item.id}`
+      if (existingAlertItems.has(itemId)) {
+        continue // Skip if alert already exists
+      }
+      
       const alertMessage = getExpiryAlertMessage(item)
       const alertResult = await createAlert({
         title: `Expiring Soon: ${item.name || item.item_type}`,
@@ -291,18 +341,26 @@ export async function createExpiryAlerts(daysAhead: number = 30) {
         truck_id: item.truck_id || null,
         metadata: {
           item_type: item.item_type,
+          item_id: itemId, // FIXED: Add item_id for deduplication
           expiry_date: item.expiry_date,
           days_until_expiry: item.days_until_expiry,
         },
       })
       if (!alertResult.error) {
         alertsCreated.push(alertResult.data)
+        existingAlertItems.add(itemId) // Track created alert
       }
     }
   }
 
   // Create alerts for expired items
   for (const item of expired) {
+    // FIXED: Check for existing alert before creating
+    const itemId = `${item.item_type}_${item.id}`
+    if (existingAlertItems.has(itemId)) {
+      continue // Skip if alert already exists
+    }
+    
     const alertMessage = getExpiredAlertMessage(item)
     const alertResult = await createAlert({
       title: `Expired: ${item.name || item.item_type}`,
@@ -313,12 +371,14 @@ export async function createExpiryAlerts(daysAhead: number = 30) {
       truck_id: item.truck_id || null,
       metadata: {
         item_type: item.item_type,
+        item_id: itemId, // FIXED: Add item_id for deduplication
         expiry_date: item.expiry_date,
         days_expired: item.days_expired,
       },
     })
     if (!alertResult.error) {
       alertsCreated.push(alertResult.data)
+      existingAlertItems.add(itemId) // Track created alert
     }
   }
 

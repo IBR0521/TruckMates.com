@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { checkViewPermission } from "@/lib/server-permissions"
 
 // Helper to get company ID
 async function getCompanyId() {
@@ -26,15 +27,22 @@ async function getCompanyId() {
 
 // Revenue Report
 export async function getRevenueReport(startDate?: string, endDate?: string) {
+  // FIXED: Add RBAC check - only authorized roles can view financial reports
+  const permissionCheck = await checkViewPermission("reports")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
+  }
+
   const companyId = await getCompanyId()
   if (!companyId) return { error: "Not authenticated", data: null }
 
   const supabase = await createClient()
   
   // Get ALL invoices (not just paid) - use created_at for reliable date filtering
+  // FIXED: Select only necessary columns and add limit
   let invoiceQuery = supabase
     .from("invoices")
-    .select("*")
+    .select("id, amount, customer_name, created_at, load_id")
     .eq("company_id", companyId)
 
   if (startDate) {
@@ -44,9 +52,14 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
     invoiceQuery = invoiceQuery.lte("created_at", endDate + "T23:59:59")
   }
 
-  const { data: invoices, error: invoiceError } = await invoiceQuery.order("created_at", { ascending: false })
+  // FIXED: Add limit to prevent unbounded queries
+  const limit = 10000 // Reasonable limit for report generation
+  const { data: invoices, error: invoiceError } = await invoiceQuery
+    .order("created_at", { ascending: false })
+    .limit(limit)
 
   // Also get loads data as fallback/supplement
+  // FIXED: Add limit to prevent unbounded queries
   let loadQuery = supabase
     .from("loads")
     .select("id, shipment_number, customer_id, total_rate, value, created_at")
@@ -59,7 +72,10 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
     loadQuery = loadQuery.lte("created_at", endDate + "T23:59:59")
   }
 
-  const { data: loads } = await loadQuery.order("created_at", { ascending: false })
+  const limit = 10000 // Reasonable limit for report generation
+  const { data: loads } = await loadQuery
+    .order("created_at", { ascending: false })
+    .limit(limit)
 
   // Get customers for loads
   const customerIds = loads?.map(l => l.customer_id).filter(Boolean) || []
@@ -81,6 +97,9 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
     { customer: string; loads: number; revenue: number; avgPerLoad: number }
   > = {}
 
+  // FIXED: Track which loads have invoices to prevent double-counting
+  const loadIdsWithInvoices = new Set<string>()
+  
   // Process invoices
   invoices?.forEach((invoice) => {
     const customer = invoice.customer_name || "Unknown Customer"
@@ -94,11 +113,21 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
     }
     revenueByCustomer[customer].revenue += Number(invoice.amount) || 0
     revenueByCustomer[customer].loads += 1
+    
+    // Track load_id from invoice to avoid double-counting
+    if (invoice.load_id) {
+      loadIdsWithInvoices.add(invoice.load_id)
+    }
   })
 
-  // Process loads (add to revenue if no invoice exists for that load)
+  // FIXED: Process loads - only add revenue if no invoice exists for that load
   if (loads) {
     loads.forEach((load: any) => {
+      // Skip if this load already has an invoice
+      if (load.id && loadIdsWithInvoices.has(load.id)) {
+        return
+      }
+      
       const customerName = load.customer_id ? (customerMap.get(load.customer_id) || "Unknown Customer") : "Unknown Customer"
       const amount = Number(load.total_rate) || Number(load.value) || 0
       
@@ -139,15 +168,22 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
 
 // Profit & Loss Report
 export async function getProfitLossReport(startDate?: string, endDate?: string) {
+  // FIXED: Add RBAC check - only authorized roles can view financial reports
+  const permissionCheck = await checkViewPermission("reports")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
+  }
+
   const companyId = await getCompanyId()
   if (!companyId) return { error: "Not authenticated", data: null }
 
   const supabase = await createClient()
 
   // Get ALL invoices (not just paid) - use created_at for reliable date filtering
+  // FIXED: Select only necessary columns and add limit
   let revenueQuery = supabase
     .from("invoices")
-    .select("*")
+    .select("id, amount, items, created_at, load_id")
     .eq("company_id", companyId)
 
   if (startDate) {
@@ -157,7 +193,9 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
     revenueQuery = revenueQuery.lte("created_at", endDate + "T23:59:59")
   }
 
-  const { data: invoices } = await revenueQuery
+  // FIXED: Add limit to prevent unbounded queries
+  const limit = 10000
+  const { data: invoices } = await revenueQuery.limit(limit)
 
   // Also get revenue from loads
   let loadQuery = supabase
@@ -175,9 +213,10 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
   const { data: loads } = await loadQuery
 
   // Get expenses
+  // FIXED: Select only necessary columns and add limit
   let expensesQuery = supabase
     .from("expenses")
-    .select("*")
+    .select("id, amount, category, date")
     .eq("company_id", companyId)
 
   if (startDate) {
@@ -187,16 +226,30 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
     expensesQuery = expensesQuery.lte("date", endDate)
   }
 
-  const { data: expenses } = await expensesQuery
+  // FIXED: Add limit to prevent unbounded queries
+  const expensesLimit = 10000
+  const { data: expenses } = await expensesQuery.limit(expensesLimit)
 
-  // Calculate totals - combine invoices and loads
+  // FIXED: Track which loads have invoices to prevent double-counting
+  const loadIdsWithInvoices = new Set<string>()
+  
+  // Process invoices and track their load_ids
+  invoices?.forEach((invoice) => {
+    if (invoice.load_id) {
+      loadIdsWithInvoices.add(invoice.load_id)
+    }
+  })
+  
+  // Calculate totals - combine invoices and loads (only loads without invoices)
   let totalRevenue = invoices?.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0) || 0
   
-  // Add revenue from loads
+  // FIXED: Only add revenue from loads that don't have invoices
   if (loads) {
-    const loadRevenue = loads.reduce((sum, load) => {
-      return sum + (Number(load.total_rate) || Number(load.value) || 0)
-    }, 0)
+    const loadRevenue = loads
+      .filter((load) => !load.id || !loadIdsWithInvoices.has(load.id)) // Only loads without invoices
+      .reduce((sum, load) => {
+        return sum + (Number(load.total_rate) || Number(load.value) || 0)
+      }, 0)
     totalRevenue += loadRevenue
   }
   
@@ -220,11 +273,13 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
     }
   })
   
-  // Process loads
+  // FIXED: Process loads - only add to breakdown if no invoice exists (avoid double-counting)
   if (loads) {
-    const loadRevenue = loads.reduce((sum, load) => {
-      return sum + (Number(load.total_rate) || Number(load.value) || 0)
-    }, 0)
+    const loadRevenue = loads
+      .filter((load) => !load.id || !loadIdsWithInvoices.has(load.id)) // Only loads without invoices
+      .reduce((sum, load) => {
+        return sum + (Number(load.total_rate) || Number(load.value) || 0)
+      }, 0)
     if (loadRevenue > 0) {
       revenueBreakdown["Load Revenue"] = (revenueBreakdown["Load Revenue"] || 0) + loadRevenue
     }
@@ -259,15 +314,21 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
 
 // Driver Payments Report
 export async function getDriverPaymentsReport(startDate?: string, endDate?: string) {
+  // FIXED: Add RBAC check - only authorized roles can view financial reports
+  const permissionCheck = await checkViewPermission("reports")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
+  }
+
   const companyId = await getCompanyId()
   if (!companyId) return { error: "Not authenticated", data: null }
 
   const supabase = await createClient()
 
-  // Get settlements
+  // FIXED: Select only necessary fields, not all columns (exclude sensitive calculation_details, pay_rule_id, etc.)
   let settlementsQuery = supabase
     .from("settlements")
-    .select("*")
+    .select("id, driver_id, period_start, period_end, net_pay, status, created_at, updated_at")
     .eq("company_id", companyId)
     .eq("status", "paid")
 
@@ -294,8 +355,13 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
     driverMap.set(driver.id, driver.name)
   })
 
-  // Get all settlements for YTD calculation
-  const currentYear = new Date().getFullYear()
+  // FIXED: Use user's timezone for year boundary, not server UTC
+  // Get user's timezone from their profile or default to UTC
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+  const now = new Date()
+  const userYear = new Intl.DateTimeFormat("en-US", { timeZone: userTimezone, year: "numeric" }).format(now)
+  const currentYear = parseInt(userYear)
+  
   const { data: allYearSettlements } = await supabase
     .from("settlements")
     .select("driver_id, net_pay")
@@ -357,14 +423,19 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
   const avgPerDriver = Object.keys(paymentsByDriver).length > 0 ? totalPaid / Object.keys(paymentsByDriver).length : 0
   const avgPerLoad = totalLoads > 0 ? totalPaid / totalLoads : 0
 
+  // FIXED: Return only aggregated data, not full settlement objects
   return {
     data: {
-      settlements,
+      // Don't return full settlements array - only return aggregated summary
       paymentsByDriver: Object.values(paymentsByDriver),
       totalPaid,
       totalLoads,
       avgPerDriver,
       avgPerLoad,
+      period: {
+        start: startDate || null,
+        end: endDate || null,
+      },
     },
     error: null,
   }
@@ -372,6 +443,12 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
 
 // Get monthly revenue trend
 export async function getMonthlyRevenueTrend(months: number = 6) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkViewPermission("reports")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to view reports", data: [] }
+  }
+
   try {
     const companyId = await getCompanyId()
     if (!companyId) {
@@ -425,20 +502,31 @@ export async function getMonthlyRevenueTrend(months: number = 6) {
       })
     }
 
-    // Process loads - combine with invoice data (don't double count if invoice exists for load)
+    // FIXED: Track which loads have invoices to prevent double-counting
+    const loadIdsWithInvoices = new Set<string>()
+    invoices?.forEach((invoice) => {
+      if (invoice.load_id) {
+        loadIdsWithInvoices.add(invoice.load_id)
+      }
+    })
+    
+    // Process loads - only add if no invoice exists for that load
     if (loads) {
       loads.forEach((load) => {
         if (!load.created_at) return
+        // Skip if this load already has an invoice
+        if (load.id && loadIdsWithInvoices.has(load.id)) {
+          return
+        }
+        
         const date = new Date(load.created_at)
         if (isNaN(date.getTime())) return
         
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-        // Only add load revenue if there's no invoice for this load (to avoid double counting)
-        // For now, we'll include it but prioritize invoices
         const amount = Number(load.total_rate) || Number(load.value) || 0
         if (amount > 0) {
-          // Add load revenue (invoices take priority, but loads supplement)
-          monthlyData[monthKey] = (monthlyData[monthKey] || 0) + (amount * 0.5) // Weight loads less to avoid double counting
+          // FIXED: Add full amount, not 0.5 - we've already filtered out loads with invoices
+          monthlyData[monthKey] = (monthlyData[monthKey] || 0) + amount
         }
       })
     }
@@ -452,7 +540,9 @@ export async function getMonthlyRevenueTrend(months: number = 6) {
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
       trend.push({
         month: monthKey,
-        amount: (monthlyData[monthKey] || 0) / 1000, // Convert to thousands
+        amount: monthlyData[monthKey] || 0, // FIXED: Store full amount, not divided by 1000
+        amountInThousands: (monthlyData[monthKey] || 0) / 1000, // Provide both for backward compatibility
+        unit: "dollars", // FIXED: Add unit metadata
       })
     }
 

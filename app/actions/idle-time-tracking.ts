@@ -255,15 +255,23 @@ export async function closeIdleSession(sessionId: string) {
     return { error: "Not authenticated", data: null }
   }
 
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+
+  if (!company_id) {
+    return { error: "No company found", data: null }
+  }
+
   try {
     const { data: session, error: fetchError } = await supabase
       .from("idle_time_sessions")
       .select("*")
       .eq("id", sessionId)
+      .eq("company_id", company_id)
       .single()
 
     if (fetchError || !session) {
-      return { error: "Session not found", data: null }
+      return { error: "Session not found or access denied", data: null }
     }
 
     const endTime = new Date().toISOString()
@@ -279,6 +287,7 @@ export async function closeIdleSession(sessionId: string) {
         updated_at: new Date().toISOString()
       })
       .eq("id", sessionId)
+      .eq("company_id", company_id)
       .select()
       .single()
 

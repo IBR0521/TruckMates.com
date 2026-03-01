@@ -172,54 +172,70 @@ export async function findNearestLocations(
   }
 
   try {
-    // Use PostGIS RPC function for nearest locations
-    // First get all locations, then calculate distances using PostGIS
-    let query = supabase
-      .from('eld_locations')
-      .select('id, latitude, longitude, timestamp, speed, heading, eld_device_id, truck_id, driver_id')
-      .eq('company_id', company_id)
-      .not('location_geography', 'is', null)
-
-    if (filters?.device_id) {
-      query = query.eq('eld_device_id', filters.device_id)
-    }
-
-    if (filters?.truck_id) {
-      query = query.eq('truck_id', filters.truck_id)
-    }
-
-    const { data: locations, error } = await query
+    // Use PostGIS native ST_Distance with ORDER BY LIMIT for efficient nearest neighbor query
+    // This replaces the N+1 query pattern with a single spatial query
+    const { data, error } = await supabase.rpc('find_nearest_locations', {
+      center_lat: centerLat,
+      center_lng: centerLng,
+      p_company_id: company_id,
+      p_device_id: filters?.device_id || null,
+      p_truck_id: filters?.truck_id || null,
+      p_limit: limit
+    })
 
     if (error) {
-      return { error: error.message, data: null }
+      // Fallback to old method if RPC function doesn't exist
+      console.warn('PostGIS nearest locations RPC failed, using fallback:', error)
+      
+      let query = supabase
+        .from('eld_locations')
+        .select('id, latitude, longitude, timestamp, speed, heading, eld_device_id, truck_id, driver_id')
+        .eq('company_id', company_id)
+        .not('location_geography', 'is', null)
+
+      if (filters?.device_id) {
+        query = query.eq('eld_device_id', filters.device_id)
+      }
+
+      if (filters?.truck_id) {
+        query = query.eq('truck_id', filters.truck_id)
+      }
+
+      const { data: locations, error: fallbackError } = await query
+
+      if (fallbackError) {
+        return { error: fallbackError.message, data: null }
+      }
+
+      if (!locations || locations.length === 0) {
+        return { data: [], error: null }
+      }
+
+      // Calculate distances using PostGIS for each location (fallback only)
+      const locationsWithDistance = await Promise.all(
+        locations.map(async (loc) => {
+          const distanceResult = await calculateDistancePostGIS(
+            centerLat,
+            centerLng,
+            loc.latitude,
+            loc.longitude
+          )
+          return {
+            ...loc,
+            distance_meters: distanceResult?.distance_meters || 0,
+            distance_miles: distanceResult?.distance_miles || 0
+          }
+        })
+      )
+
+      // Sort by distance and limit
+      locationsWithDistance.sort((a, b) => a.distance_meters - b.distance_meters)
+      const limited = locationsWithDistance.slice(0, limit)
+
+      return { data: limited, error: null }
     }
 
-    if (!locations || locations.length === 0) {
-      return { data: [], error: null }
-    }
-
-    // Calculate distances using PostGIS for each location
-    const locationsWithDistance = await Promise.all(
-      locations.map(async (loc) => {
-        const distanceResult = await calculateDistancePostGIS(
-          centerLat,
-          centerLng,
-          loc.latitude,
-          loc.longitude
-        )
-        return {
-          ...loc,
-          distance_meters: distanceResult?.distance_meters || 0,
-          distance_miles: distanceResult?.distance_miles || 0
-        }
-      })
-    )
-
-    // Sort by distance and limit
-    locationsWithDistance.sort((a, b) => a.distance_meters - b.distance_meters)
-    const limited = locationsWithDistance.slice(0, limit)
-
-    return { data: limited, error: null }
+    return { data: data || [], error: null }
   } catch (error: any) {
     return { error: error.message || "Failed to find nearest locations", data: null }
   }

@@ -76,7 +76,8 @@ serve(async (req) => {
           })
         }
 
-        // Alert 3: Driving limit reached (0 hours remaining)
+        // FIXED: Prioritize alerts - if driving limit reached, don't also fire on-duty limit
+        // Alert 3: Driving limit reached (0 hours remaining) - highest priority
         if (remaining_driving <= 0) {
           alerts.push({
             driver_id: driver.id,
@@ -85,10 +86,17 @@ serve(async (req) => {
             type: "limit_reached",
             message: `${driver.name} has reached the 11-hour driving limit. Must take 10-hour break.`,
           })
-        }
-
-        // Alert 4: On-duty limit approaching (< 1 hour remaining)
-        if (remaining_on_duty < 1 && remaining_on_duty > 0) {
+        } else if (remaining_on_duty <= 0) {
+          // Alert 5: On-duty limit reached (only if driving limit not reached)
+          alerts.push({
+            driver_id: driver.id,
+            driver_name: driver.name,
+            company_id: driver.company_id,
+            type: "limit_reached",
+            message: `${driver.name} has reached the 14-hour on-duty limit. Must take 10-hour break.`,
+          })
+        } else if (remaining_on_duty < 1 && remaining_on_duty > 0) {
+          // Alert 4: On-duty limit approaching (< 1 hour remaining, only if driving limit not reached)
           alerts.push({
             driver_id: driver.id,
             driver_name: driver.name,
@@ -108,23 +116,24 @@ serve(async (req) => {
     const sentAlerts = []
     for (const alert of alerts) {
       try {
-        // Store alert in database
-        const { error: alertError } = await supabase.from("eld_events").insert({
+        // FIXED: Store alert in alerts table, not eld_events
+        // eld_events is for raw telemetry, alerts is for operational alerts
+        const { error: alertError } = await supabase.from("alerts").insert({
           company_id: alert.company_id,
           driver_id: alert.driver_id,
-          event_type: "hos_alert",
-          severity: alert.type === "limit_reached" ? "critical" : "warning",
           title: alert.type === "approaching_limit"
             ? "Approaching HOS Limit"
             : alert.type === "break_required"
             ? "Break Required"
             : "HOS Limit Reached",
-          description: alert.message,
-          event_time: new Date().toISOString(),
-          resolved: false,
+          message: alert.message,
+          event_type: "hos_violation",
+          priority: alert.type === "limit_reached" ? "critical" : alert.type === "break_required" ? "high" : "normal",
+          status: "active",
           metadata: {
             hours_remaining: alert.hours_remaining,
             alert_type: alert.type,
+            driver_name: alert.driver_name,
           },
         })
 
@@ -139,13 +148,14 @@ serve(async (req) => {
           .eq("id", alert.driver_id)
           .single()
 
-        // Get dispatcher/manager phone numbers for this company
+        // FIXED: Include all relevant roles for HOS alerts (safety-critical)
+        // Get manager, safety_manager, owner, and dispatcher phone numbers
         const { data: managers } = await supabase
           .from("users")
-          .select("phone_number")
+          .select("phone, phone_number") // FIXED: Check both phone and phone_number columns
           .eq("company_id", alert.company_id)
-          .eq("role", "manager")
-          .not("phone_number", "is", null)
+          .in("role", ["manager", "safety_manager", "owner", "dispatcher"])
+          .or("phone.not.is.null,phone_number.not.is.null")
 
         // Send SMS to driver if phone available
         if (driverData?.phone && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
@@ -177,7 +187,9 @@ serve(async (req) => {
         // Send SMS to managers
         if (managers && managers.length > 0 && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
           for (const manager of managers) {
-            if (manager.phone_number) {
+            // FIXED: Use phone or phone_number (handle field name mismatch)
+            const phoneNumber = manager.phone || manager.phone_number
+            if (phoneNumber) {
               try {
                 await fetch(
                   `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
@@ -189,7 +201,7 @@ serve(async (req) => {
                     },
                     body: new URLSearchParams({
                       From: TWILIO_PHONE_NUMBER,
-                      To: manager.phone_number,
+                      To: phoneNumber,
                       Body: `[TruckMates Alert] ${alert.message}`,
                     }),
                   }

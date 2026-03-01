@@ -62,6 +62,21 @@ export async function POST(request: NextRequest) {
       api_secret: null,
     }
 
+    // Check if device with this serial already exists and belongs to a different company
+    const { data: existingDevice } = await supabase
+      .from("eld_devices")
+      .select("id, company_id")
+      .eq("device_serial_number", device_serial_number)
+      .single()
+    
+    // SECURITY: Prevent device serial hijacking - reject if exists with different company
+    if (existingDevice && existingDevice.company_id !== companyId) {
+      return NextResponse.json(
+        { error: "Device serial number is already registered to another company" },
+        { status: 403 }
+      )
+    }
+    
     // Upsert device (update if exists with same serial, create if new)
     const { data: device, error } = await supabase
       .from("eld_devices")

@@ -3,11 +3,18 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCompanySettings } from "./number-formats"
+import { checkCreatePermission, checkViewPermission } from "@/lib/server-permissions"
 
 /**
  * Auto-attach documents to loads based on settings
  */
 export async function autoAttachDocumentsToLoad(loadId: string) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkCreatePermission("documents")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to attach documents", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -57,12 +64,13 @@ export async function autoAttachDocumentsToLoad(loadId: string) {
   }
 
   // Find BOL document for this load
+  // FIXED: Use .eq() instead of .ilike() to match exact type
   const { data: bolDocuments } = await supabase
     .from("documents")
     .select("*")
     .eq("company_id", userData.company_id)
     .eq("load_id", loadId)
-    .ilike("type", "%bol%")
+    .eq("type", "bol") // FIXED: Exact match instead of substring
     .limit(1)
 
   if (bolDocuments && bolDocuments.length > 0) {
@@ -84,6 +92,12 @@ export async function autoAttachDocumentsToLoad(loadId: string) {
  * Get document templates
  */
 export async function getDocumentTemplates() {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkViewPermission("documents")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to view document templates", data: null }
+  }
+
   const supabase = await createClient()
 
   const {

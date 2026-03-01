@@ -300,7 +300,7 @@ export function DispatchGantt({
             <span className="text-muted-foreground">Urgent</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-orange-500"></div>
+            <div className="w-4 h-4 rounded bg-amber-500"></div>
             <span className="text-muted-foreground">Conflict</span>
           </div>
           <div className="flex items-center gap-2">

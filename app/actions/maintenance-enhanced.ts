@@ -11,6 +11,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
+import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
 /**
  * Analyze ELD fault code and create maintenance if needed
@@ -24,6 +25,29 @@ export async function analyzeFaultCodeAndCreateMaintenance(eventId: string) {
 
   if (!user) {
     return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
+  }
+
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("maintenance")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to create maintenance records", data: null }
+  }
+
+  // Validate eventId ownership
+  const { data: event, error: eventError } = await supabase
+    .from("eld_events")
+    .select("id, company_id")
+    .eq("id", eventId)
+    .eq("company_id", result.company_id)
+    .single()
+
+  if (eventError || !event) {
+    return { error: "ELD event not found or does not belong to your company", data: null }
   }
 
   try {
@@ -50,7 +74,7 @@ export async function analyzeFaultCodeAndCreateMaintenance(eventId: string) {
 /**
  * Batch analyze pending fault codes
  */
-export async function batchAnalyzePendingFaultCodes(companyId?: string, limit: number = 100) {
+export async function batchAnalyzePendingFaultCodes(limit: number = 100) {
   const supabase = await createClient()
 
   const {
@@ -62,7 +86,13 @@ export async function batchAnalyzePendingFaultCodes(companyId?: string, limit: n
   }
 
   const result = await getCachedUserCompany(user.id)
-  const company_id = companyId || result.company_id
+  const company_id = result.company_id
+
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("maintenance")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to batch analyze fault codes", data: null }
+  }
 
   if (!company_id) {
     return { error: "No company found", data: null }
@@ -113,6 +143,12 @@ export async function uploadMaintenanceDocument(
     return { error: result.error || "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("documents")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to upload maintenance documents", data: null }
+  }
+
   try {
     // Get maintenance to verify access and get truck_id
     const { data: maintenance, error: maintenanceError } = await supabase
@@ -139,10 +175,18 @@ export async function uploadMaintenanceDocument(
       return { error: `Upload failed: ${uploadError.message}`, data: null }
     }
 
-    // Get public URL
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("documents").getPublicUrl(fileName)
+    // Create signed URL instead of public URL for security
+    const { data: signedUrlData, error: signedError } = await supabase.storage
+      .from("documents")
+      .createSignedUrl(fileName, 31536000) // 1 year expiry
+
+    if (signedError || !signedUrlData?.signedUrl) {
+      // Delete the uploaded file if we can't create a signed URL
+      await supabase.storage.from("documents").remove([fileName])
+      return { error: `Failed to create secure access URL: ${signedError?.message || "Unknown error"}. Document not saved.`, data: null }
+    }
+
+    const publicUrl = signedUrlData.signedUrl
 
     // Save document record (trigger will sync to maintenance.documents)
     const { data: doc, error: docError } = await supabase
@@ -236,8 +280,14 @@ export async function deleteMaintenanceDocument(documentId: string) {
     return { error: result.error || "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkDeletePermission("documents")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to delete maintenance documents", data: null }
+  }
+
   try {
-    // Get document to get storage URL
+    // Get document to get storage URL and path
     const { data: document, error: docError } = await supabase
       .from("maintenance_documents")
       .select("storage_url, maintenance_id")
@@ -249,10 +299,40 @@ export async function deleteMaintenanceDocument(documentId: string) {
       return { error: "Document not found", data: null }
     }
 
-    // Delete from storage
-    const fileName = document.storage_url.split("/").pop()
-    if (fileName) {
-      await supabase.storage.from("documents").remove([`maintenance/${document.maintenance_id}/${fileName}`])
+    // Delete from storage - extract path correctly from URL
+    let storagePath: string | null = null
+    const url = document.storage_url
+    
+    // Handle signed URLs, public URLs, and direct paths
+    if (url.includes("/storage/v1/object/sign/")) {
+      // Signed URL format: .../sign/documents/maintenance/{maintenanceId}/{filename}?...
+      const match = url.match(/\/sign\/documents\/(.+?)(\?|$)/)
+      if (match && match[1]) {
+        storagePath = match[1]
+      }
+    } else if (url.includes("/storage/v1/object/public/documents/")) {
+      // Public URL format: .../object/public/documents/maintenance/{maintenanceId}/{filename}
+      const parts = url.split("/storage/v1/object/public/documents/")
+      if (parts.length > 1) {
+        storagePath = parts[1]
+      }
+    } else if (url.startsWith("maintenance/")) {
+      // Direct path
+      storagePath = url
+    } else {
+      // Fallback: try to extract from known structure
+      const fileName = url.split("/").pop()
+      if (fileName && document.maintenance_id) {
+        storagePath = `maintenance/${document.maintenance_id}/${fileName}`
+      }
+    }
+    
+    if (storagePath) {
+      const { error: removeError } = await supabase.storage.from("documents").remove([storagePath])
+      if (removeError) {
+        console.error("[deleteMaintenanceDocument] Failed to remove file from storage:", removeError)
+        // Continue with DB deletion even if storage deletion fails
+      }
     }
 
     // Delete from database (trigger will remove from maintenance.documents)
@@ -289,6 +369,29 @@ export async function createWorkOrderFromMaintenance(maintenanceId: string) {
 
   if (!user) {
     return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
+  }
+
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("maintenance")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to create work orders", data: null }
+  }
+
+  // Validate maintenance_id ownership
+  const { data: maintenance, error: maintenanceError } = await supabase
+    .from("maintenance")
+    .select("id, company_id")
+    .eq("id", maintenanceId)
+    .eq("company_id", result.company_id)
+    .single()
+
+  if (maintenanceError || !maintenance) {
+    return { error: "Maintenance record not found or does not belong to your company", data: null }
   }
 
   try {
@@ -528,6 +631,29 @@ export async function checkAndReserveParts(workOrderId: string) {
     return { error: "Not authenticated", data: null }
   }
 
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
+  }
+
+  // RBAC check
+  const permissionCheck = await checkEditPermission("maintenance")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to reserve parts", data: null }
+  }
+
+  // Validate work_order_id ownership
+  const { data: workOrder, error: workOrderError } = await supabase
+    .from("work_orders")
+    .select("id, company_id")
+    .eq("id", workOrderId)
+    .eq("company_id", result.company_id)
+    .single()
+
+  if (workOrderError || !workOrder) {
+    return { error: "Work order not found or does not belong to your company", data: null }
+  }
+
   try {
     const { data, error } = await supabase.rpc("check_and_reserve_parts", {
       p_work_order_id: workOrderId,
@@ -564,6 +690,29 @@ export async function completeWorkOrder(
 
   if (!user) {
     return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
+  }
+
+  // RBAC check
+  const permissionCheck = await checkEditPermission("maintenance")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to complete work orders", data: null }
+  }
+
+  // Validate work_order_id ownership
+  const { data: workOrder, error: workOrderError } = await supabase
+    .from("work_orders")
+    .select("id, company_id")
+    .eq("id", workOrderId)
+    .eq("company_id", result.company_id)
+    .single()
+
+  if (workOrderError || !workOrder) {
+    return { error: "Work order not found or does not belong to your company", data: null }
   }
 
   try {
@@ -662,6 +811,12 @@ export async function upsertFaultCodeRule(rule: {
     return { error: result.error || "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = rule.id ? await checkEditPermission("maintenance") : await checkCreatePermission("maintenance")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to manage fault code rules", data: null }
+  }
+
   try {
     const ruleData: any = {
       company_id: result.company_id,
@@ -729,6 +884,12 @@ export async function deleteFaultCodeRule(ruleId: string) {
   const result = await getCachedUserCompany(user.id)
   if (result.error || !result.company_id) {
     return { error: result.error || "No company found", data: null }
+  }
+
+  // RBAC check
+  const permissionCheck = await checkDeletePermission("maintenance")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to delete fault code rules", data: null }
   }
 
   try {
@@ -802,6 +963,17 @@ export async function autoCreatePartOrdersForLowStock(reorderMultiplier: number 
   const result = await getCachedUserCompany(user.id)
   if (result.error || !result.company_id) {
     return { error: result.error || "No company found", data: null }
+  }
+
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("maintenance")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to create part orders", data: null }
+  }
+
+  // Validate reorderMultiplier to prevent abuse
+  if (reorderMultiplier < 1 || reorderMultiplier > 10) {
+    return { error: "Reorder multiplier must be between 1 and 10", data: null }
   }
 
   try {

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getAuthContext } from "@/lib/auth/server"
+import { checkViewPermission } from "@/lib/server-permissions"
 
 type Period = 'weekly' | 'monthly' | 'yearly'
 
@@ -10,6 +11,12 @@ type Period = 'weekly' | 'monthly' | 'yearly'
  * Returns only plain JSON-serializable data
  */
 export async function getRevenueTrend(period: Period = 'weekly') {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkViewPermission("reports")
+  if (!permissionCheck.allowed) {
+    return { data: [], error: permissionCheck.error || "You don't have permission to view reports" }
+  }
+
   try {
     const { companyId, error: authError } = await getAuthContext()
     
@@ -55,12 +62,13 @@ export async function getRevenueTrend(period: Period = 'weekly') {
         })
       }
     } else if (period === 'yearly') {
+      // FIXED: Generate 5 years (not 6) to match query window
       startDate.setFullYear(now.getFullYear() - 5)
       startDate.setMonth(0, 1)
       startDate.setHours(0, 0, 0, 0)
       
-      // Generate 6 years
-      for (let i = 5; i >= 0; i--) {
+      // FIXED: Generate 5 data points (currentYear - 4 through currentYear), not 6
+      for (let i = 4; i >= 0; i--) {
         const date = new Date(now)
         date.setFullYear(date.getFullYear() - i)
         date.setMonth(0, 1)
@@ -73,24 +81,40 @@ export async function getRevenueTrend(period: Period = 'weekly') {
       }
     }
 
+    // FIXED: For yearly mode, use end of current year, not current date, for consistent full-year comparison
+    let endDate = now
+    if (period === 'yearly') {
+      endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999) // End of current year
+    }
+    
     // Fetch invoices
     const { data: invoices, error: invoicesError } = await supabase
       .from("invoices")
-      .select("amount, created_at, issue_date")
+      .select("amount, created_at, issue_date, load_id")
       .eq("company_id", companyId)
       .gte("created_at", startDate.toISOString())
+      .lte("created_at", endDate.toISOString())
       .order("created_at", { ascending: true })
 
     if (invoicesError) {
       console.error("[getRevenueTrend] Error fetching invoices:", invoicesError)
     }
 
-    // Fetch loads as fallback
+    // FIXED: Track which loads have invoices to prevent double-counting
+    const loadIdsWithInvoices = new Set<string>()
+    invoices?.forEach((inv: any) => {
+      if (inv.load_id) {
+        loadIdsWithInvoices.add(inv.load_id)
+      }
+    })
+    
+    // Fetch loads as fallback (only for loads without invoices)
     const { data: loads, error: loadsError } = await supabase
       .from("loads")
-      .select("created_at, total_rate, value")
+      .select("id, created_at, total_rate, value")
       .eq("company_id", companyId)
       .gte("created_at", startDate.toISOString())
+      .lte("created_at", endDate.toISOString())
       .order("created_at", { ascending: true })
 
     if (loadsError) {
@@ -130,10 +154,15 @@ export async function getRevenueTrend(period: Period = 'weekly') {
       })
     }
 
-    // Process loads
+    // FIXED: Process loads - only add if no invoice exists for that load (no 0.5 factor)
     if (loads && loads.length > 0) {
       loads.forEach((load: any) => {
         if (!load.created_at) return
+        // Skip if this load already has an invoice
+        if (load.id && loadIdsWithInvoices.has(load.id)) {
+          return
+        }
+        
         const date = new Date(load.created_at)
         if (isNaN(date.getTime())) return
 
@@ -149,7 +178,8 @@ export async function getRevenueTrend(period: Period = 'weekly') {
         if (periodKey) {
           const amount = Number(load.total_rate) || Number(load.value) || 0
           if (amount > 0) {
-            revenueByPeriod[periodKey] = (revenueByPeriod[periodKey] || 0) + (amount * 0.5)
+            // FIXED: Add full amount, not 0.5 - we've already filtered out loads with invoices
+            revenueByPeriod[periodKey] = (revenueByPeriod[periodKey] || 0) + amount
           }
         }
       })

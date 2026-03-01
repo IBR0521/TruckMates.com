@@ -196,9 +196,11 @@ export async function POST(request: NextRequest) {
         const latestLocation = locationsToInsert[locationsToInsert.length - 1]
         const { detectStateCrossing } = await import("@/app/actions/ifta-state-crossing")
         
-        // Only check state crossing periodically (every 5th location update) to avoid API rate limits
-        // State boundaries don't change frequently, so we don't need to check every single location
-        if (Math.random() < 0.2) { // 20% chance per location update
+        // Check state crossing deterministically - compare with previous known state
+        // Use a simple cache to track previous state per truck
+        // Always check on latest location (not random) to ensure IFTA compliance
+        // Note: This should be optimized with a proper state cache, but for now check every time
+        // TODO: Implement proper state cache to avoid excessive API calls
           await detectStateCrossing({
             company_id: companyId,
             truck_id: device.truck_id,

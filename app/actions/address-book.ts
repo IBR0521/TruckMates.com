@@ -217,20 +217,21 @@ export async function getAddressBookContacts(filters?: {
       }
     }
 
-    // Apply search filter if not already applied in queries (for cross-type searches)
+    // Apply search filter only if searching across all types (not already filtered in DB)
+    // For type-specific searches, DB filter is sufficient and consistent
     let filteredContacts = allContacts
     if (filters?.search && (filters.type === "all" || !filters.type)) {
+      // Only apply JavaScript filter for cross-type searches
+      // Use same fields as DB filters for consistency
       const searchLower = filters.search.toLowerCase()
       filteredContacts = allContacts.filter(
         (contact) =>
           contact.name.toLowerCase().includes(searchLower) ||
           contact.company_name?.toLowerCase().includes(searchLower) ||
           contact.email?.toLowerCase().includes(searchLower) ||
-          contact.phone?.toLowerCase().includes(searchLower) ||
-          contact.address?.toLowerCase().includes(searchLower) ||
-          `${contact.city} ${contact.state} ${contact.zip}`
-            .toLowerCase()
-            .includes(searchLower)
+          contact.phone?.toLowerCase().includes(searchLower)
+          // Note: address fields not included here to match DB filter behavior
+          // DB filters don't search address fields, so JS filter shouldn't either
       )
     }
 

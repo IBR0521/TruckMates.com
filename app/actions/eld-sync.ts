@@ -21,54 +21,113 @@ async function syncKeepTruckinData(device: any) {
   }
 
   try {
+    // Use Motive API (formerly KeepTruckin) - updated domain
+    // Fallback to old domain for backward compatibility
+    const apiBaseUrl = "https://api.gomotive.com/v1"
+    const fallbackUrl = "https://api.keeptruckin.com/v1"
+    
     // Sync HOS Logs
-    const logsResponse = await fetch(`https://api.keeptruckin.com/v1/logs?device_id=${device.provider_device_id}`, {
+    let logsResponse = await fetch(`${apiBaseUrl}/logs?device_id=${device.provider_device_id}`, {
       headers: {
         'X-Api-Key': device.api_key,
         'X-Api-Secret': device.api_secret,
         'Content-Type': 'application/json'
       }
     })
+    
+    // Fallback to old domain if new one fails
+    if (!logsResponse.ok && logsResponse.status === 404) {
+      logsResponse = await fetch(`${fallbackUrl}/logs?device_id=${device.provider_device_id}`, {
+        headers: {
+          'X-Api-Key': device.api_key,
+          'X-Api-Secret': device.api_secret,
+          'Content-Type': 'application/json'
+        }
+      })
+    }
 
     if (!logsResponse.ok) {
-      throw new Error(`KeepTruckin API error: ${logsResponse.statusText}`)
+      throw new Error(`Motive/KeepTruckin API error: ${logsResponse.statusText}`)
     }
 
     const logsData = await logsResponse.json()
     const logs = logsData.logs || []
 
     // Sync Locations
-    const locationsResponse = await fetch(`https://api.keeptruckin.com/v1/locations?device_id=${device.provider_device_id}`, {
+    let locationsResponse = await fetch(`${apiBaseUrl}/locations?device_id=${device.provider_device_id}`, {
       headers: {
         'X-Api-Key': device.api_key,
         'X-Api-Secret': device.api_secret,
         'Content-Type': 'application/json'
       }
     })
+    
+    // Fallback to old domain if new one fails
+    if (!locationsResponse.ok && locationsResponse.status === 404) {
+      locationsResponse = await fetch(`${fallbackUrl}/locations?device_id=${device.provider_device_id}`, {
+        headers: {
+          'X-Api-Key': device.api_key,
+          'X-Api-Secret': device.api_secret,
+          'Content-Type': 'application/json'
+        }
+      })
+    }
 
     const locationsData = await locationsResponse.json()
     const locations = locationsData.locations || []
 
     // Sync Events/Violations
-    const eventsResponse = await fetch(`https://api.keeptruckin.com/v1/violations?device_id=${device.provider_device_id}`, {
+    let eventsResponse = await fetch(`${apiBaseUrl}/violations?device_id=${device.provider_device_id}`, {
       headers: {
         'X-Api-Key': device.api_key,
         'X-Api-Secret': device.api_secret,
         'Content-Type': 'application/json'
       }
     })
+    
+    // Fallback to old domain if new one fails
+    if (!eventsResponse.ok && eventsResponse.status === 404) {
+      eventsResponse = await fetch(`${fallbackUrl}/violations?device_id=${device.provider_device_id}`, {
+        headers: {
+          'X-Api-Key': device.api_key,
+          'X-Api-Secret': device.api_secret,
+          'Content-Type': 'application/json'
+        }
+      })
+    }
 
     const eventsData = await eventsResponse.json()
     const events = eventsData.violations || []
 
     // Store logs in database
+    // OPTIMIZATION: Batch fetch all driver mappings to avoid N+1 queries
+    const uniqueProviderDriverIds = [...new Set(
+      logs
+        .map((log: any) => log.driver_id || log.driverId)
+        .filter((id: any) => id !== null && id !== undefined)
+    )]
+    
+    // Fetch all mappings in a single query
+    const { data: mappings } = await supabase
+      .from("eld_driver_mappings")
+      .select("provider_driver_id, internal_driver_id")
+      .eq("eld_device_id", device.id)
+      .eq("provider", "keeptruckin")
+      .eq("is_active", true)
+      .in("provider_driver_id", uniqueProviderDriverIds.map(String))
+    
+    // Create lookup map
+    const driverIdMap = new Map<string, string>()
+    mappings?.forEach((m: any) => {
+      driverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
+    })
+    
     // Map provider driver IDs to internal driver IDs
-    const logsToInsert = await Promise.all(
-      logs.map(async (log: any) => {
-        const providerDriverId = log.driver_id || log.driverId || null
-        const internalDriverId = providerDriverId
-          ? await mapProviderDriverId(device.id, providerDriverId, "keeptruckin")
-          : null
+    const logsToInsert = logs.map((log: any) => {
+      const providerDriverId = log.driver_id || log.driverId || null
+      const internalDriverId = providerDriverId
+        ? driverIdMap.get(String(providerDriverId)) || null
+        : null
 
         return {
           company_id: device.company_id,
@@ -98,42 +157,44 @@ async function syncKeepTruckinData(device: any) {
           raw_data: log
         }
       })
-    )
 
     if (logsToInsert.length > 0) {
       const { error: logsError } = await supabase
         .from("eld_logs")
-        .upsert(logsToInsert, { onConflict: "id", ignoreDuplicates: true })
+        .upsert(logsToInsert, { 
+          onConflict: "eld_device_id,log_date,start_time,log_type",
+          ignoreDuplicates: false 
+        })
 
       if (logsError) {
         console.error("Error inserting ELD logs:", logsError)
+        return { error: `Failed to sync logs: ${logsError.message}`, data: null }
       }
     }
 
     // Store locations in database
-    const locationsToInsert = await Promise.all(
-      locations.map(async (loc: any) => {
-        const providerDriverId = loc.driver_id || loc.driverId || null
-        const internalDriverId = providerDriverId
-          ? await mapProviderDriverId(device.id, providerDriverId, "keeptruckin")
-          : null
+    // Reuse driver mapping for locations
+    const locationsToInsert = locations.map((loc: any) => {
+      const providerDriverId = loc.driver_id || loc.driverId || null
+      const internalDriverId = providerDriverId
+        ? driverIdMap.get(String(providerDriverId)) || null
+        : null
 
-        return {
-          company_id: device.company_id,
-          eld_device_id: device.id,
-          driver_id: internalDriverId,
-          truck_id: device.truck_id || null,
-          timestamp: loc.timestamp || loc.datetime,
-          latitude: loc.latitude || loc.lat,
-          longitude: loc.longitude || loc.lng,
-          address: loc.address || loc.formatted_address,
-          speed: loc.speed || null,
-          heading: loc.heading || loc.bearing || null,
-          odometer: loc.odometer || null,
-          engine_status: loc.engine_status || (loc.engine_on ? "on" : "off")
-        }
-      })
-    )
+      return {
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: internalDriverId,
+        truck_id: device.truck_id || null,
+        timestamp: loc.timestamp || loc.datetime,
+        latitude: loc.latitude || loc.lat,
+        longitude: loc.longitude || loc.lng,
+        address: loc.address || loc.formatted_address,
+        speed: loc.speed || null,
+        heading: loc.heading || loc.bearing || null,
+        odometer: loc.odometer || null,
+        engine_status: loc.engine_status || (loc.engine_on ? "on" : "off")
+      }
+    })
 
     if (locationsToInsert.length > 0) {
       const { error: locationsError } = await supabase
@@ -142,6 +203,7 @@ async function syncKeepTruckinData(device: any) {
 
       if (locationsError) {
         console.error("Error inserting ELD locations:", locationsError)
+        return { error: `Failed to sync locations: ${locationsError.message}`, data: null }
       }
     }
 
@@ -172,6 +234,7 @@ async function syncKeepTruckinData(device: any) {
 
       if (eventsError) {
         console.error("Error inserting ELD events:", eventsError)
+        return { error: `Failed to sync events: ${eventsError.message}`, data: null }
       }
     }
 
@@ -181,13 +244,20 @@ async function syncKeepTruckinData(device: any) {
       .update({ last_sync_at: new Date().toISOString() })
       .eq("id", device.id)
 
+    // Collect any errors that occurred
+    const errors: string[] = []
+    if (logsToInsert.length > 0 && logsError) errors.push(`Logs: ${logsError.message}`)
+    if (locationsToInsert.length > 0 && locationsError) errors.push(`Locations: ${locationsError.message}`)
+    if (eventsToInsert.length > 0 && eventsError) errors.push(`Events: ${eventsError.message}`)
+
     return {
       data: {
         logs: logsToInsert.length,
         locations: locationsToInsert.length,
         events: eventsToInsert.length
       },
-      error: null
+      errors: errors.length > 0 ? errors : undefined,
+      error: errors.length > 0 ? "Partial sync failure" : null
     }
 
   } catch (error: any) {
@@ -209,8 +279,14 @@ async function syncSamsaraData(device: any) {
     const baseUrl = "https://api.samsara.com"
     const vehicleId = device.provider_device_id
 
-    // Sync HOS Logs
-    const logsResponse = await fetch(`${baseUrl}/fleet/drivers/hos_daily_logs?vehicleId=${vehicleId}`, {
+    // Sync HOS Logs - Correct Samsara v2 API endpoint
+    // Get driver IDs first if available
+    const driverIds = device.driver_id ? [device.driver_id] : []
+    const logsUrl = driverIds.length > 0
+      ? `${baseUrl}/v2/fleet/hos/daily-logs?driverIds=${driverIds.join(',')}`
+      : `${baseUrl}/v2/fleet/hos/daily-logs?vehicleIds=${vehicleId}`
+    
+    const logsResponse = await fetch(logsUrl, {
       headers: {
         'Authorization': `Bearer ${device.api_key}`,
         'Content-Type': 'application/json'
@@ -224,8 +300,8 @@ async function syncSamsaraData(device: any) {
     const logsData = await logsResponse.json()
     const logs = logsData.data || []
 
-    // Sync Locations
-    const locationsResponse = await fetch(`${baseUrl}/fleet/vehicles/locations?vehicleIds=${vehicleId}`, {
+    // Sync Locations - Correct Samsara v2 API endpoint
+    const locationsResponse = await fetch(`${baseUrl}/v2/fleet/vehicles/locations/feed?vehicleIds=${vehicleId}`, {
       headers: {
         'Authorization': `Bearer ${device.api_key}`,
         'Content-Type': 'application/json'
@@ -235,24 +311,49 @@ async function syncSamsaraData(device: any) {
     const locationsData = await locationsResponse.json()
     const locations = locationsData.data || []
 
-    // Sync Events
-    const eventsResponse = await fetch(`${baseUrl}/fleet/drivers/safety/score?vehicleId=${vehicleId}`, {
+    // Sync Events - Use correct Samsara HOS violations endpoint (not safety score)
+    const eventsResponse = await fetch(`${baseUrl}/v2/fleet/hos/violations?vehicleIds=${vehicleId}`, {
       headers: {
         'Authorization': `Bearer ${device.api_key}`,
         'Content-Type': 'application/json'
       }
     })
 
+    if (!eventsResponse.ok) {
+      throw new Error(`Samsara events API error: ${eventsResponse.statusText}`)
+    }
+
     const eventsData = await eventsResponse.json()
     const events = eventsData.data || []
 
+    // OPTIMIZATION: Batch fetch all driver mappings to avoid N+1 queries
+    const uniqueProviderDriverIds = [...new Set(
+      logs
+        .map((log: any) => log.driver_id || log.driverId)
+        .filter((id: any) => id !== null && id !== undefined)
+    )]
+    
+    // Fetch all mappings in a single query
+    const { data: mappings } = await supabase
+      .from("eld_driver_mappings")
+      .select("provider_driver_id, internal_driver_id")
+      .eq("eld_device_id", device.id)
+      .eq("provider", "samsara")
+      .eq("is_active", true)
+      .in("provider_driver_id", uniqueProviderDriverIds.map(String))
+    
+    // Create lookup map
+    const driverIdMap = new Map<string, string>()
+    mappings?.forEach((m: any) => {
+      driverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
+    })
+    
     // Transform and store logs
-    const logsToInsert = await Promise.all(
-      logs.map(async (log: any) => {
-        const providerDriverId = log.driver_id || log.driverId || null
-        const internalDriverId = providerDriverId
-          ? await mapProviderDriverId(device.id, providerDriverId, "samsara")
-          : null
+    const logsToInsert = logs.map((log: any) => {
+      const providerDriverId = log.driver_id || log.driverId || null
+      const internalDriverId = providerDriverId
+        ? driverIdMap.get(String(providerDriverId)) || null
+        : null
 
         return {
           company_id: device.company_id,
@@ -282,25 +383,47 @@ async function syncSamsaraData(device: any) {
           raw_data: log
         }
       })
-    )
 
     if (logsToInsert.length > 0) {
       const { error: logsError } = await supabase
         .from("eld_logs")
-        .upsert(logsToInsert, { onConflict: "id", ignoreDuplicates: true })
+        .upsert(logsToInsert, { 
+          onConflict: "eld_device_id,log_date,start_time,log_type",
+          ignoreDuplicates: false 
+        })
 
       if (logsError) {
         console.error("Error inserting ELD logs:", logsError)
+        return { error: `Failed to sync logs: ${logsError.message}`, data: null }
       }
     }
 
+    // OPTIMIZATION: Batch fetch driver mappings for locations
+    const uniqueLocationDriverIds = [...new Set(
+      locations
+        .map((loc: any) => loc.driverId || loc.driver_id)
+        .filter((id: any) => id !== null && id !== undefined)
+    )]
+    
+    const { data: locationMappings } = await supabase
+      .from("eld_driver_mappings")
+      .select("provider_driver_id, internal_driver_id")
+      .eq("eld_device_id", device.id)
+      .eq("provider", "samsara")
+      .eq("is_active", true)
+      .in("provider_driver_id", uniqueLocationDriverIds.map(String))
+    
+    const locationDriverIdMap = new Map<string, string>()
+    locationMappings?.forEach((m: any) => {
+      locationDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
+    })
+    
     // Transform and store locations
-    const locationsToInsert = await Promise.all(
-      locations.map(async (loc: any) => {
-        const providerDriverId = loc.driverId || loc.driver_id || null
-        const internalDriverId = providerDriverId
-          ? await mapProviderDriverId(device.id, providerDriverId, "samsara")
-          : null
+    const locationsToInsert = locations.map((loc: any) => {
+      const providerDriverId = loc.driverId || loc.driver_id || null
+      const internalDriverId = providerDriverId
+        ? locationDriverIdMap.get(String(providerDriverId)) || null
+        : null
 
         return {
           company_id: device.company_id,
@@ -317,7 +440,6 @@ async function syncSamsaraData(device: any) {
           engine_status: loc.engineState || (loc.engineOn ? "on" : "off") || "unknown"
         }
       })
-    )
 
     if (locationsToInsert.length > 0) {
       const { error: locationsError } = await supabase
@@ -326,16 +448,36 @@ async function syncSamsaraData(device: any) {
 
       if (locationsError) {
         console.error("Error inserting ELD locations:", locationsError)
+        return { error: `Failed to sync locations: ${locationsError.message}`, data: null }
       }
     }
 
+    // OPTIMIZATION: Batch fetch driver mappings for events
+    const uniqueEventDriverIds = [...new Set(
+      events
+        .map((event: any) => event.driverId || event.driver_id)
+        .filter((id: any) => id !== null && id !== undefined)
+    )]
+    
+    const { data: eventMappings } = await supabase
+      .from("eld_driver_mappings")
+      .select("provider_driver_id, internal_driver_id")
+      .eq("eld_device_id", device.id)
+      .eq("provider", "samsara")
+      .eq("is_active", true)
+      .in("provider_driver_id", uniqueEventDriverIds.map(String))
+    
+    const eventDriverIdMap = new Map<string, string>()
+    eventMappings?.forEach((m: any) => {
+      eventDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
+    })
+    
     // Transform and store events
-    const eventsToInsert = await Promise.all(
-      events.map(async (event: any) => {
-        const providerDriverId = event.driverId || event.driver_id || null
-        const internalDriverId = providerDriverId
-          ? await mapProviderDriverId(device.id, providerDriverId, "samsara")
-          : null
+    const eventsToInsert = events.map((event: any) => {
+      const providerDriverId = event.driverId || event.driver_id || null
+      const internalDriverId = providerDriverId
+        ? eventDriverIdMap.get(String(providerDriverId)) || null
+        : null
 
         return {
           company_id: device.company_id,
@@ -356,7 +498,6 @@ async function syncSamsaraData(device: any) {
           metadata: event
         }
       })
-    )
 
     if (eventsToInsert.length > 0) {
       const { error: eventsError } = await supabase
@@ -365,6 +506,7 @@ async function syncSamsaraData(device: any) {
 
       if (eventsError) {
         console.error("Error inserting ELD events:", eventsError)
+        return { error: `Failed to sync events: ${eventsError.message}`, data: null }
       }
     }
 
@@ -398,8 +540,25 @@ async function syncGeotabData(device: any) {
   }
 
   try {
-    // Geotab uses MyGeotab API with different authentication
-    const baseUrl = device.provider_device_id || "https://my.geotab.com/apiv1"
+    // SECURITY: Validate Geotab base URL to prevent SSRF
+    // Only allow official Geotab domains
+    const allowedGeotabDomains = [
+      "https://my.geotab.com",
+      "https://my1.geotab.com",
+      "https://my2.geotab.com",
+      "https://my3.geotab.com",
+      "https://my4.geotab.com",
+      "https://my5.geotab.com",
+    ]
+    
+    // Geotab server URL should be stored in a separate field, not provider_device_id
+    // For now, check if there's an api_endpoint field, otherwise use default
+    // provider_device_id is the device serial/ID, not the API endpoint
+    let baseUrl = "https://my.geotab.com/apiv1" // Default Geotab server
+    
+    // If device has api_endpoint field, use it (future enhancement)
+    // For now, always use default since provider_device_id is not the URL
+    // TODO: Add api_endpoint column to eld_devices table for Geotab server URL
     
     // Geotab requires session-based authentication
     const sessionResponse = await fetch(`${baseUrl}/Authenticate`, {
@@ -480,13 +639,32 @@ async function syncGeotabData(device: any) {
     const eventsData = await eventsResponse.json()
     const events = eventsData.result || []
 
+    // OPTIMIZATION: Batch fetch all driver mappings to avoid N+1 queries
+    const uniqueGeotabDriverIds = [...new Set(
+      logs
+        .map((log: any) => log.driver?.id || log.driverId)
+        .filter((id: any) => id !== null && id !== undefined)
+    )]
+    
+    const { data: geotabMappings } = await supabase
+      .from("eld_driver_mappings")
+      .select("provider_driver_id, internal_driver_id")
+      .eq("eld_device_id", device.id)
+      .eq("provider", "geotab")
+      .eq("is_active", true)
+      .in("provider_driver_id", uniqueGeotabDriverIds.map(String))
+    
+    const geotabDriverIdMap = new Map<string, string>()
+    geotabMappings?.forEach((m: any) => {
+      geotabDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
+    })
+    
     // Transform and store Geotab data
-    const logsToInsert = await Promise.all(
-      logs.map(async (log: any) => {
-        const providerDriverId = log.driver?.id || log.driverId || null
-        const internalDriverId = providerDriverId
-          ? await mapProviderDriverId(device.id, providerDriverId, "geotab")
-          : null
+    const logsToInsert = logs.map((log: any) => {
+      const providerDriverId = log.driver?.id || log.driverId || null
+      const internalDriverId = providerDriverId
+        ? geotabDriverIdMap.get(String(providerDriverId)) || null
+        : null
 
         return {
           company_id: device.company_id,
@@ -497,7 +675,8 @@ async function syncGeotabData(device: any) {
       log_type: mapGeotabStatus(log.dutyStatus),
       start_time: log.startDateTime || log.date,
       end_time: log.endDateTime || log.date,
-      duration_minutes: log.duration ? Math.round(log.duration / 60000) : null,
+      // Geotab duration is in seconds, not milliseconds
+      duration_minutes: log.duration ? Math.round(log.duration / 60) : null,
       location_start: log.startLocation ? {
         lat: log.startLocation.latitude,
         lng: log.startLocation.longitude,
@@ -516,24 +695,46 @@ async function syncGeotabData(device: any) {
           raw_data: log
         }
       })
-    )
 
     if (logsToInsert.length > 0) {
       const { error: logsError } = await supabase
         .from("eld_logs")
-        .upsert(logsToInsert, { onConflict: "id", ignoreDuplicates: true })
+        .upsert(logsToInsert, { 
+          onConflict: "eld_device_id,log_date,start_time,log_type",
+          ignoreDuplicates: false 
+        })
 
       if (logsError) {
         console.error("Error inserting ELD logs:", logsError)
+        return { error: `Failed to sync logs: ${logsError.message}`, data: null }
       }
     }
 
-    const locationsToInsert = await Promise.all(
-      locations.map(async (loc: any) => {
-        const providerDriverId = loc.driver?.id || loc.driverId || null
-        const internalDriverId = providerDriverId
-          ? await mapProviderDriverId(device.id, providerDriverId, "geotab")
-          : null
+    // Reuse driver mapping for locations if needed
+    const uniqueGeotabLocationDriverIds = [...new Set(
+      locations
+        .map((loc: any) => loc.driver?.id || loc.driverId)
+        .filter((id: any) => id !== null && id !== undefined)
+    )]
+    
+    const { data: geotabLocationMappings } = await supabase
+      .from("eld_driver_mappings")
+      .select("provider_driver_id, internal_driver_id")
+      .eq("eld_device_id", device.id)
+      .eq("provider", "geotab")
+      .eq("is_active", true)
+      .in("provider_driver_id", uniqueGeotabLocationDriverIds.map(String))
+    
+    const geotabLocationDriverIdMap = new Map<string, string>()
+    geotabLocationMappings?.forEach((m: any) => {
+      geotabLocationDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
+    })
+    
+    const locationsToInsert = locations.map((loc: any) => {
+      const providerDriverId = loc.driver?.id || loc.driverId || null
+      const internalDriverId = providerDriverId
+        ? geotabLocationDriverIdMap.get(String(providerDriverId)) || null
+        : null
 
         return {
           company_id: device.company_id,
@@ -550,7 +751,6 @@ async function syncGeotabData(device: any) {
           engine_status: loc.engineStatus || "unknown"
         }
       })
-    )
 
     if (locationsToInsert.length > 0) {
       const { error: locationsError } = await supabase
@@ -559,6 +759,7 @@ async function syncGeotabData(device: any) {
 
       if (locationsError) {
         console.error("Error inserting ELD locations:", locationsError)
+        return { error: `Failed to sync locations: ${locationsError.message}`, data: null }
       }
     }
 
@@ -598,6 +799,7 @@ async function syncGeotabData(device: any) {
 
       if (eventsError) {
         console.error("Error inserting ELD events:", eventsError)
+        return { error: `Failed to sync events: ${eventsError.message}`, data: null }
       }
     }
 
@@ -607,13 +809,20 @@ async function syncGeotabData(device: any) {
       .update({ last_sync_at: new Date().toISOString() })
       .eq("id", device.id)
 
+    // Collect any errors that occurred
+    const errors: string[] = []
+    if (logsToInsert.length > 0 && logsError) errors.push(`Logs: ${logsError.message}`)
+    if (locationsToInsert.length > 0 && locationsError) errors.push(`Locations: ${locationsError.message}`)
+    if (eventsToInsert.length > 0 && eventsError) errors.push(`Events: ${eventsError.message}`)
+
     return {
       data: {
         logs: logsToInsert.length,
         locations: locationsToInsert.length,
         events: eventsToInsert.length
       },
-      error: null
+      errors: errors.length > 0 ? errors : undefined,
+      error: errors.length > 0 ? "Partial sync failure" : null
     }
 
   } catch (error: any) {
@@ -623,37 +832,67 @@ async function syncGeotabData(device: any) {
 }
 
 // Helper function to determine fault code category
+// OBD-II fault code lookup table for proper categorization
+const OBD_CODE_CATEGORIES: Record<string, string> = {
+  // P0xxx codes (powertrain)
+  'p01': 'engine',
+  'p02': 'engine',
+  'p03': 'engine',
+  'p04': 'emissions',
+  'p05': 'electrical',
+  'p06': 'engine',
+  'p07': 'transmission',
+  'p08': 'engine',
+  'p09': 'engine',
+  // C0xxx codes (chassis)
+  'c01': 'brakes',
+  'c02': 'brakes',
+  'c03': 'suspension',
+  'c04': 'brakes',
+  'c05': 'brakes',
+  'c12': 'brakes',
+  // B0xxx codes (body)
+  'b00': 'electrical',
+  'b01': 'electrical',
+  // U0xxx codes (network)
+  'u00': 'electrical',
+  'u01': 'electrical',
+}
+
 function determineFaultCodeCategory(faultCodeName: string | null): string | null {
   if (!faultCodeName) return null
   
-  const name = faultCodeName.toLowerCase()
+  const name = faultCodeName.toLowerCase().trim()
   
-  // Engine-related
-  if (name.includes('engine') || name.includes('misfire') || name.includes('p03') || name.includes('p01')) {
+  // Extract OBD-II code prefix (e.g., "P0123" -> "p01")
+  const codeMatch = name.match(/^([a-z])(\d{2})/)
+  if (codeMatch) {
+    const prefix = `${codeMatch[1]}${codeMatch[2]}`
+    if (OBD_CODE_CATEGORIES[prefix]) {
+      return OBD_CODE_CATEGORIES[prefix]
+    }
+  }
+  
+  // Fallback to keyword matching for non-standard codes
+  if (name.includes('engine') || name.includes('misfire')) {
     return 'engine'
   }
-  // Transmission-related
-  if (name.includes('transmission') || name.includes('p07')) {
+  if (name.includes('transmission')) {
     return 'transmission'
   }
-  // Brake-related
-  if (name.includes('brake') || name.includes('abs') || name.includes('c12')) {
+  if (name.includes('brake') || name.includes('abs')) {
     return 'brakes'
   }
-  // Electrical-related
-  if (name.includes('electrical') || name.includes('voltage') || name.includes('p05')) {
+  if (name.includes('electrical') || name.includes('voltage')) {
     return 'electrical'
   }
-  // Cooling-related
-  if (name.includes('coolant') || name.includes('cooling') || name.includes('temperature') || name.includes('p01')) {
+  if (name.includes('coolant') || name.includes('cooling') || name.includes('temperature')) {
     return 'cooling'
   }
-  // Fuel-related
-  if (name.includes('fuel') || name.includes('p01') || name.includes('p00')) {
+  if (name.includes('fuel')) {
     return 'fuel'
   }
-  // Emissions-related
-  if (name.includes('emission') || name.includes('p04')) {
+  if (name.includes('emission')) {
     return 'emissions'
   }
   

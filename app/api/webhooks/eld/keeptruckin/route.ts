@@ -19,10 +19,15 @@ function verifyKeepTruckinSignature(
   hmac.update(body)
   const expectedSignature = hmac.digest("hex")
   
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expectedSignature)
-  )
+  // Check buffer lengths first to prevent TypeError
+  const sigBuffer = Buffer.from(signature)
+  const expectedBuffer = Buffer.from(expectedSignature)
+  
+  if (sigBuffer.length !== expectedBuffer.length) {
+    return false
+  }
+  
+  return crypto.timingSafeEqual(sigBuffer, expectedBuffer)
 }
 
 export async function POST(request: NextRequest) {
@@ -30,11 +35,17 @@ export async function POST(request: NextRequest) {
     const body = await request.text()
     const signature = request.headers.get("x-kt-signature")
     
-    // Get webhook secret from environment or device config
+    // Get webhook secret from environment
     const webhookSecret = process.env.KEEPTRUCKIN_WEBHOOK_SECRET || ""
     
-    // Verify signature if secret is configured
-    if (webhookSecret && !verifyKeepTruckinSignature(body, signature, webhookSecret)) {
+    // SECURITY: Fail-closed - require secret to be configured
+    if (!webhookSecret) {
+      console.error("[KeepTruckin Webhook] KEEPTRUCKIN_WEBHOOK_SECRET not configured")
+      return NextResponse.json({ error: "Webhook not configured" }, { status: 503 })
+    }
+    
+    // Verify signature
+    if (!verifyKeepTruckinSignature(body, signature, webhookSecret)) {
       console.error("[KeepTruckin Webhook] Invalid signature")
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
     }
@@ -92,6 +103,10 @@ export async function POST(request: NextRequest) {
 
 async function processHOSLog(data: any, device: any, supabase: any) {
   // Map KeepTruckin log format to TruckMates format
+  // Derive log_date from start_time (required field)
+  const startTime = data.start_time || data.start
+  const logDate = startTime ? new Date(startTime).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+  
   const log = {
     driver_id: data.driver_id, // Will need driver mapping
     log_type: mapKeepTruckinStatus(data.status),
@@ -121,6 +136,7 @@ async function processHOSLog(data: any, device: any, supabase: any) {
     driver_id: log.driver_id,
     truck_id: device.truck_id,
     eld_device_id: device.id,
+    log_date: logDate, // Required field - derive from start_time
     log_type: log.log_type,
     start_time: log.start_time,
     end_time: log.end_time,

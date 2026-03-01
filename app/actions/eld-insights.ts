@@ -2,9 +2,16 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { checkViewPermission } from "@/lib/server-permissions"
 
 // Generate AI-powered insights based on ELD data
 export async function generateELDInsights(driverId?: string, days: number = 7) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkViewPermission("reports")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -83,22 +90,35 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
     const recent = violationTrend.slice(-3).reduce((a, b) => a + b, 0) / 3
     const earlier = violationTrend.slice(0, -3).reduce((a, b) => a + b, 0) / Math.max(1, violationTrend.length - 3)
     
-    if (recent > earlier * 1.3) {
-      insights.push({
-        type: "warning",
-        title: "Violations Increasing",
-        description: `Violations have increased ${Math.round(((recent - earlier) / earlier) * 100)}% in the last 3 days. Consider reviewing driver schedules and routes.`,
-        severity: "warning",
-        action: "Review driver schedules and provide additional training if needed.",
-      })
-    } else if (recent < earlier * 0.7) {
-      insights.push({
-        type: "success",
-        title: "Violations Decreasing",
-        description: `Great news! Violations have decreased ${Math.round(((earlier - recent) / earlier) * 100)}% in the last 3 days.`,
-        severity: "info",
-        action: "Keep up the good work! Consider recognizing top performers.",
-      })
+    // FIXED: Handle division by zero when earlier === 0
+    if (earlier === 0) {
+      if (recent > 0) {
+        insights.push({
+          type: "warning",
+          title: "Violations Detected",
+          description: `${recent} violations detected in the last 3 days (previously had zero violations). Consider reviewing driver schedules and routes.`,
+          severity: "warning",
+          action: "Review driver schedules and provide additional training if needed.",
+        })
+      }
+    } else {
+      if (recent > earlier * 1.3) {
+        insights.push({
+          type: "warning",
+          title: "Violations Increasing",
+          description: `Violations have increased ${Math.round(((recent - earlier) / earlier) * 100)}% in the last 3 days. Consider reviewing driver schedules and routes.`,
+          severity: "warning",
+          action: "Review driver schedules and provide additional training if needed.",
+        })
+      } else if (recent < earlier * 0.7) {
+        insights.push({
+          type: "success",
+          title: "Violations Decreasing",
+          description: `Great news! Violations have decreased ${Math.round(((earlier - recent) / earlier) * 100)}% in the last 3 days.`,
+          severity: "info",
+          action: "Keep up the good work! Consider recognizing top performers.",
+        })
+      }
     }
   }
 

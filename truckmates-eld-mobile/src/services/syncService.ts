@@ -177,11 +177,21 @@ function validateDataIntegrity(data: any[], type: string): { valid: boolean; err
       if (!item.event_type || !item.event_time) {
         errors.push(`Invalid event: missing required fields`)
       }
+    } else if (type === 'dvir') {
+      // Validate DVIR required fields
+      if (!item.inspection_type || !item.inspection_date || !item.truck_id) {
+        errors.push(`Invalid DVIR: missing required fields (inspection_type, inspection_date, truck_id)`)
+      }
+      // Validate inspection_type enum
+      const validTypes = ['pre_trip', 'post_trip', 'on_road']
+      if (item.inspection_type && !validTypes.includes(item.inspection_type)) {
+        errors.push(`Invalid DVIR: inspection_type must be one of ${validTypes.join(', ')}`)
+      }
     }
     
     // Validate timestamps
-    if (item.timestamp || item.start_time || item.event_time) {
-      const timestamp = item.timestamp || item.start_time || item.event_time
+    if (item.timestamp || item.start_time || item.event_time || item.inspection_date) {
+      const timestamp = item.timestamp || item.start_time || item.event_time || item.inspection_date
       if (isNaN(new Date(timestamp).getTime())) {
         errors.push(`Invalid timestamp: ${timestamp}`)
       }
@@ -246,7 +256,10 @@ export async function syncAllQueues(deviceId: string): Promise<{
 
           if (response.success) {
             results.locationsSynced += locations.length
-            await clearQueueItems('locations', batch.length)
+            // CRITICAL FIX: Remove by actual queue items processed, not batch.length
+            // Each batch item contains an array of locations, so we need to remove the exact items
+            const itemsProcessed = batch.length
+            await clearQueueItems('locations', itemsProcessed)
           } else {
             results.errors.push(`Location sync failed: ${response.error}`)
           }

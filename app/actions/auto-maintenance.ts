@@ -65,6 +65,29 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
   let scheduled = 0
   let skipped = 0
 
+  // Get all last completed services for this truck in a single query to avoid N+1
+  const { data: allLastServices } = await supabase
+    .from("maintenance")
+    .select("service_type, current_mileage, scheduled_date")
+    .eq("truck_id", truckId)
+    .eq("company_id", result.company_id)
+    .eq("status", "completed")
+    .in("service_type", Object.keys(maintenanceIntervals))
+    .order("scheduled_date", { ascending: false })
+
+  // Group by service_type and get most recent for each
+  const lastServiceByType: Record<string, { current_mileage: number; scheduled_date: string }> = {}
+  if (allLastServices) {
+    for (const service of allLastServices) {
+      if (!lastServiceByType[service.service_type]) {
+        lastServiceByType[service.service_type] = {
+          current_mileage: service.current_mileage || 0,
+          scheduled_date: service.scheduled_date || "",
+        }
+      }
+    }
+  }
+
   // Check each maintenance type
   for (const [serviceType, interval] of Object.entries(maintenanceIntervals)) {
     // Check if this service is already scheduled
@@ -77,16 +100,8 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
       continue
     }
 
-    // Find last time this service was performed
-    const { data: lastService } = await supabase
-      .from("maintenance")
-      .select("current_mileage, scheduled_date")
-      .eq("truck_id", truckId)
-      .eq("service_type", serviceType)
-      .eq("status", "completed")
-      .order("scheduled_date", { ascending: false })
-      .limit(1)
-      .single()
+    // Get last service from pre-fetched data
+    const lastService = lastServiceByType[serviceType]
 
     const lastServiceMileage = lastService?.current_mileage || 0
     const milesSinceLastService = currentMileage - lastServiceMileage

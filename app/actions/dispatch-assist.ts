@@ -221,10 +221,10 @@ export async function getOptimalDriverSuggestions(
       }
 
       // Penalties
-      if (conflictCheck.data?.conflicts.length || 0 > 0) {
+      if ((conflictCheck.data?.conflicts.length ?? 0) > 0) {
         score -= 20 // Conflict penalty
       }
-      if (conflictCheck.data?.hos_violations.length || 0 > 0) {
+      if ((conflictCheck.data?.hos_violations.length ?? 0) > 0) {
         score -= 30 // HOS violation penalty
       }
 
@@ -246,19 +246,22 @@ export async function getOptimalDriverSuggestions(
       if (equipmentMatch) {
         reasons.push("Equipment compatible")
       }
-      if (conflictCheck.data?.conflicts.length || 0 > 0) {
+      if ((conflictCheck.data?.conflicts.length ?? 0) > 0) {
         reasons.push(`⚠️ Has ${conflictCheck.data.conflicts.length} scheduling conflict(s)`)
       }
-      if (conflictCheck.data?.hos_violations.length || 0 > 0) {
+      if ((conflictCheck.data?.hos_violations.length ?? 0) > 0) {
         reasons.push(`⚠️ HOS violation: ${conflictCheck.data.hos_violations[0]}`)
       }
 
+      // Clamp score before building reasons to ensure penalties are visible
+      const clampedScore = Math.max(0, Math.min(100, score))
+      
       suggestions.push({
         driver_id: driver.driver_id,
         driver_name: driver.driver_name,
         truck_id: driver.truck_id,
         truck_number: driver.truck_number,
-        score: Math.max(0, Math.min(100, score)),
+        score: clampedScore,
         reasons,
         distance_miles: driver.distance_miles,
         remaining_drive_hours: driver.remaining_drive_hours,
@@ -323,11 +326,13 @@ export async function validateAssignment(
     // Check for conflicts
     const conflictCheck = await checkAssignmentConflicts(driverId, loadId, routeId)
 
-    if (conflictCheck.data?.conflicts.length || 0 > 0) {
+    if (conflictCheck.error) {
+      errors.push(`Failed to check conflicts: ${conflictCheck.error}`)
+    } else if ((conflictCheck.data?.conflicts.length ?? 0) > 0) {
       errors.push(`Scheduling conflicts: ${conflictCheck.data?.conflicts.join(", ")}`)
     }
 
-    if (conflictCheck.data?.hos_violations.length || 0 > 0) {
+    if ((conflictCheck.data?.hos_violations.length ?? 0) > 0) {
       errors.push(`HOS violations: ${conflictCheck.data?.hos_violations.join(", ")}`)
     }
 

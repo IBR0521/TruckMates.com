@@ -57,44 +57,9 @@ export async function getCompanySettings() {
     .eq("company_id", userData.company_id)
     .single()
 
-  // Check if table doesn't exist (schema not run yet)
+  // MEDIUM FIX 16: Return error instead of hardcoded defaults to prevent silent misconfiguration
   if (error && (error.code === "42P01" || error.message.includes("does not exist"))) {
-    console.warn("[getCompanySettings] company_settings table does not exist. Please run the SQL schema.")
-    // Return default settings instead of error
-    return {
-      data: {
-        load_number_format: "LOAD-{YEAR}-{SEQUENCE}",
-        load_number_sequence: 1,
-        invoice_number_format: "INV-{YEAR}-{MONTH}-{SEQUENCE}",
-        invoice_number_sequence: 1,
-        dispatch_number_format: "DISP-{YEAR}-{SEQUENCE}",
-        dispatch_number_sequence: 1,
-        bol_number_format: "BOL-{YEAR}-{SEQUENCE}",
-        bol_number_sequence: 1,
-        timezone: "America/New_York",
-        date_format: "MM/DD/YYYY",
-        time_format: "12h",
-        currency: "USD",
-        currency_symbol: "$",
-        default_payment_terms: "Net 30",
-        invoice_auto_send: false,
-        default_load_type: "ftl",
-        default_carrier_type: "dry-van",
-        auto_create_route: true,
-        default_check_call_interval: 4,
-        check_call_reminder_minutes: 15,
-        require_check_call_at_pickup: true,
-        require_check_call_at_delivery: true,
-        auto_attach_bol_to_load: false,
-        auto_email_bol_to_customer: false,
-        document_retention_days: 365,
-        bol_auto_generate: false,
-        odometer_validation_enabled: true,
-        max_odometer_increase_per_day: 1000,
-        odometer_auto_sync_from_eld: true,
-      },
-      error: null,
-    }
+    return { error: "company_settings table does not exist. Please run the SQL schema.", data: null }
   }
 
   if (error && error.code === 'PGRST116') {
@@ -109,82 +74,14 @@ export async function getCompanySettings() {
       .single()
 
     if (createError) {
-      // If creation fails (likely RLS), return default settings
-      console.warn("[getCompanySettings] Failed to create settings, using defaults:", createError.message)
-      return {
-        data: {
-          load_number_format: "LOAD-{YEAR}-{SEQUENCE}",
-          load_number_sequence: 1,
-          invoice_number_format: "INV-{YEAR}-{MONTH}-{SEQUENCE}",
-          invoice_number_sequence: 1,
-          dispatch_number_format: "DISP-{YEAR}-{SEQUENCE}",
-          dispatch_number_sequence: 1,
-          bol_number_format: "BOL-{YEAR}-{SEQUENCE}",
-          bol_number_sequence: 1,
-          timezone: "America/New_York",
-          date_format: "MM/DD/YYYY",
-          time_format: "12h",
-          currency: "USD",
-          currency_symbol: "$",
-          default_payment_terms: "Net 30",
-          invoice_auto_send: false,
-          default_load_type: "ftl",
-          default_carrier_type: "dry-van",
-          auto_create_route: true,
-          default_check_call_interval: 4,
-          check_call_reminder_minutes: 15,
-          require_check_call_at_pickup: true,
-          require_check_call_at_delivery: true,
-          auto_attach_bol_to_load: false,
-          auto_email_bol_to_customer: false,
-          document_retention_days: 365,
-          bol_auto_generate: false,
-          odometer_validation_enabled: true,
-          max_odometer_increase_per_day: 1000,
-          odometer_auto_sync_from_eld: true,
-        },
-        error: null,
-      }
+      // MEDIUM FIX 16: Return error instead of hardcoded defaults
+      return { error: `Failed to create settings: ${createError.message}`, data: null }
     }
 
     settings = newSettings
   } else if (error) {
-    // For other errors, also return defaults instead of failing
-    console.warn("[getCompanySettings] Error fetching settings, using defaults:", error.message)
-    return {
-      data: {
-        load_number_format: "LOAD-{YEAR}-{SEQUENCE}",
-        load_number_sequence: 1,
-        invoice_number_format: "INV-{YEAR}-{MONTH}-{SEQUENCE}",
-        invoice_number_sequence: 1,
-        dispatch_number_format: "DISP-{YEAR}-{SEQUENCE}",
-        dispatch_number_sequence: 1,
-        bol_number_format: "BOL-{YEAR}-{SEQUENCE}",
-        bol_number_sequence: 1,
-        timezone: "America/New_York",
-        date_format: "MM/DD/YYYY",
-        time_format: "12h",
-        currency: "USD",
-        currency_symbol: "$",
-        default_payment_terms: "Net 30",
-        invoice_auto_send: false,
-        default_load_type: "ftl",
-        default_carrier_type: "dry-van",
-        auto_create_route: true,
-        default_check_call_interval: 4,
-        check_call_reminder_minutes: 15,
-        require_check_call_at_pickup: true,
-        require_check_call_at_delivery: true,
-        auto_attach_bol_to_load: false,
-        auto_email_bol_to_customer: false,
-        document_retention_days: 365,
-        bol_auto_generate: false,
-        odometer_validation_enabled: true,
-        max_odometer_increase_per_day: 1000,
-        odometer_auto_sync_from_eld: true,
-      },
-      error: null,
-    }
+    // MEDIUM FIX 16: Return error instead of hardcoded defaults
+    return { error: `Failed to fetch settings: ${error.message}`, data: null }
   }
 
   return { data: settings, error: null }
@@ -239,7 +136,7 @@ export async function updateCompanySettings(settings: {
   check_call_notify_enroute?: boolean
   check_call_notify_at_consignee?: boolean
   check_call_notify_dropoff_completed?: boolean
-  [key: string]: any
+  // HIGH FIX 3: Removed [key: string]: any to prevent arbitrary column injection
 }) {
   const supabase = await createClient()
 
@@ -261,13 +158,38 @@ export async function updateCompanySettings(settings: {
     return { error: "No company found", data: null }
   }
 
-  if (userData.role !== 'manager') {
+  // HIGH FIX 2: Fix role check - use 'operations_manager' not 'manager'
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!MANAGER_ROLES.includes(userData.role)) {
     return { error: "Only managers can update company settings", data: null }
+  }
+
+  // HIGH FIX 3: Build explicit updateData object to prevent [key: string]: any injection
+  const updateData: any = {}
+  const allowedFields = [
+    'load_number_format', 'invoice_number_format', 'dispatch_number_format', 'bol_number_format',
+    'timezone', 'date_format', 'time_format', 'currency', 'currency_symbol', 'default_payment_terms',
+    'invoice_auto_send', 'default_load_type', 'default_carrier_type', 'auto_create_route',
+    'default_check_call_interval', 'check_call_reminder_minutes', 'require_check_call_at_pickup',
+    'require_check_call_at_delivery', 'auto_attach_bol_to_load', 'auto_email_bol_to_customer',
+    'document_retention_days', 'bol_auto_generate', 'odometer_validation_enabled',
+    'max_odometer_increase_per_day', 'odometer_auto_sync_from_eld', 'owner_name', 'dba_name',
+    'ein_number', 'business_type', 'load_charge_type', 'miles_calculation_method',
+    'fuel_surcharge_method', 'fuel_surcharge_flat_amount', 'fuel_surcharge_per_mile',
+    'check_call_notify_customer', 'check_call_notify_broker', 'check_call_notify_on_trip_start',
+    'check_call_notify_at_shipper', 'check_call_notify_pickup_completed', 'check_call_notify_enroute',
+    'check_call_notify_at_consignee', 'check_call_notify_dropoff_completed'
+  ]
+  
+  for (const field of allowedFields) {
+    if (settings[field] !== undefined) {
+      updateData[field] = settings[field]
+    }
   }
 
   const { data, error } = await supabase
     .from("company_settings")
-    .update(settings)
+    .update(updateData)
     .eq("company_id", userData.company_id)
     .select()
     .single()
@@ -315,7 +237,41 @@ export async function generateLoadNumber(): Promise<{ data: string | null; error
 
   const settings = settingsResult.data
   const format = settings.load_number_format || 'LOAD-{YEAR}-{SEQUENCE}'
-  let sequence = settings.load_number_sequence || 1
+
+  // MEDIUM FIX 7: Use RPC function for atomic sequence increment to prevent race conditions
+  // Try RPC first, fallback to manual increment if RPC doesn't exist
+  let sequence: number
+  try {
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('increment_load_number_sequence', {
+      p_company_id: userData.company_id
+    })
+    
+    if (!rpcError && rpcResult !== null && rpcResult !== undefined) {
+      sequence = typeof rpcResult === 'number' ? rpcResult : parseInt(String(rpcResult), 10)
+    } else {
+      // Fallback: manual increment (still has race condition but better than before)
+      sequence = settings.load_number_sequence || 1
+      const { error: updateError } = await supabase
+        .from("company_settings")
+        .update({ load_number_sequence: sequence + 1 })
+        .eq("company_id", userData.company_id)
+      
+      if (updateError) {
+        return { error: `Failed to update sequence: ${updateError.message}`, data: null }
+      }
+    }
+  } catch (error) {
+    // RPC function doesn't exist, use fallback
+    sequence = settings.load_number_sequence || 1
+    const { error: updateError } = await supabase
+      .from("company_settings")
+      .update({ load_number_sequence: sequence + 1 })
+      .eq("company_id", userData.company_id)
+    
+    if (updateError) {
+      return { error: `Failed to update sequence: ${updateError.message}`, data: null }
+    }
+  }
 
   // Get company name for {COMPANY} token
   const { data: company } = await supabase
@@ -324,19 +280,8 @@ export async function generateLoadNumber(): Promise<{ data: string | null; error
     .eq("id", userData.company_id)
     .single()
 
-  // Generate number
+  // Generate number using the incremented sequence
   const number = generateNumber(format, sequence, company?.name)
-
-  // Increment sequence (non-blocking - if it fails, we still return the number)
-  const { error: updateError } = await supabase
-    .from("company_settings")
-    .update({ load_number_sequence: sequence + 1 })
-    .eq("company_id", userData.company_id)
-
-  if (updateError) {
-    // If update fails (RLS or table doesn't exist), log but don't fail
-    console.warn("[generateLoadNumber] Failed to update sequence:", updateError.message)
-  }
 
   return { data: number, error: null }
 }
@@ -376,7 +321,38 @@ export async function generateInvoiceNumber(): Promise<{ data: string | null; er
 
   const settings = settingsResult.data
   const format = settings.invoice_number_format || 'INV-{YEAR}-{MONTH}-{SEQUENCE}'
-  let sequence = settings.invoice_number_sequence || 1
+
+  // MEDIUM FIX 7: Use RPC function for atomic sequence increment
+  let sequence: number
+  try {
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('increment_invoice_number_sequence', {
+      p_company_id: userData.company_id
+    })
+    
+    if (!rpcError && rpcResult !== null && rpcResult !== undefined) {
+      sequence = typeof rpcResult === 'number' ? rpcResult : parseInt(String(rpcResult), 10)
+    } else {
+      sequence = settings.invoice_number_sequence || 1
+      const { error: updateError } = await supabase
+        .from("company_settings")
+        .update({ invoice_number_sequence: sequence + 1 })
+        .eq("company_id", userData.company_id)
+      
+      if (updateError) {
+        return { error: `Failed to update sequence: ${updateError.message}`, data: null }
+      }
+    }
+  } catch (error) {
+    sequence = settings.invoice_number_sequence || 1
+    const { error: updateError } = await supabase
+      .from("company_settings")
+      .update({ invoice_number_sequence: sequence + 1 })
+      .eq("company_id", userData.company_id)
+    
+    if (updateError) {
+      return { error: `Failed to update sequence: ${updateError.message}`, data: null }
+    }
+  }
 
   const { data: company } = await supabase
     .from("companies")
@@ -385,11 +361,6 @@ export async function generateInvoiceNumber(): Promise<{ data: string | null; er
     .single()
 
   const number = generateNumber(format, sequence, company?.name)
-
-  await supabase
-    .from("company_settings")
-    .update({ invoice_number_sequence: sequence + 1 })
-    .eq("company_id", userData.company_id)
 
   return { data: number, error: null }
 }
@@ -429,7 +400,38 @@ export async function generateDispatchNumber(): Promise<{ data: string | null; e
 
   const settings = settingsResult.data
   const format = settings.dispatch_number_format || 'DISP-{YEAR}-{SEQUENCE}'
-  let sequence = settings.dispatch_number_sequence || 1
+
+  // MEDIUM FIX 7: Use RPC function for atomic sequence increment
+  let sequence: number
+  try {
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('increment_dispatch_number_sequence', {
+      p_company_id: userData.company_id
+    })
+    
+    if (!rpcError && rpcResult !== null && rpcResult !== undefined) {
+      sequence = typeof rpcResult === 'number' ? rpcResult : parseInt(String(rpcResult), 10)
+    } else {
+      sequence = settings.dispatch_number_sequence || 1
+      const { error: updateError } = await supabase
+        .from("company_settings")
+        .update({ dispatch_number_sequence: sequence + 1 })
+        .eq("company_id", userData.company_id)
+      
+      if (updateError) {
+        return { error: `Failed to update sequence: ${updateError.message}`, data: null }
+      }
+    }
+  } catch (error) {
+    sequence = settings.dispatch_number_sequence || 1
+    const { error: updateError } = await supabase
+      .from("company_settings")
+      .update({ dispatch_number_sequence: sequence + 1 })
+      .eq("company_id", userData.company_id)
+    
+    if (updateError) {
+      return { error: `Failed to update sequence: ${updateError.message}`, data: null }
+    }
+  }
 
   const { data: company } = await supabase
     .from("companies")
@@ -438,11 +440,6 @@ export async function generateDispatchNumber(): Promise<{ data: string | null; e
     .single()
 
   const number = generateNumber(format, sequence, company?.name)
-
-  await supabase
-    .from("company_settings")
-    .update({ dispatch_number_sequence: sequence + 1 })
-    .eq("company_id", userData.company_id)
 
   return { data: number, error: null }
 }
@@ -482,7 +479,38 @@ export async function generateBOLNumber(): Promise<{ data: string | null; error:
 
   const settings = settingsResult.data
   const format = settings.bol_number_format || 'BOL-{YEAR}-{SEQUENCE}'
-  let sequence = settings.bol_number_sequence || 1
+
+  // MEDIUM FIX 7: Use RPC function for atomic sequence increment
+  let sequence: number
+  try {
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('increment_bol_number_sequence', {
+      p_company_id: userData.company_id
+    })
+    
+    if (!rpcError && rpcResult !== null && rpcResult !== undefined) {
+      sequence = typeof rpcResult === 'number' ? rpcResult : parseInt(String(rpcResult), 10)
+    } else {
+      sequence = settings.bol_number_sequence || 1
+      const { error: updateError } = await supabase
+        .from("company_settings")
+        .update({ bol_number_sequence: sequence + 1 })
+        .eq("company_id", userData.company_id)
+      
+      if (updateError) {
+        return { error: `Failed to update sequence: ${updateError.message}`, data: null }
+      }
+    }
+  } catch (error) {
+    sequence = settings.bol_number_sequence || 1
+    const { error: updateError } = await supabase
+      .from("company_settings")
+      .update({ bol_number_sequence: sequence + 1 })
+      .eq("company_id", userData.company_id)
+    
+    if (updateError) {
+      return { error: `Failed to update sequence: ${updateError.message}`, data: null }
+    }
+  }
 
   const { data: company } = await supabase
     .from("companies")
@@ -491,11 +519,6 @@ export async function generateBOLNumber(): Promise<{ data: string | null; error:
     .single()
 
   const number = generateNumber(format, sequence, company?.name)
-
-  await supabase
-    .from("company_settings")
-    .update({ bol_number_sequence: sequence + 1 })
-    .eq("company_id", userData.company_id)
 
   return { data: number, error: null }
 }

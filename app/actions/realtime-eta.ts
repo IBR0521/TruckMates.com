@@ -128,15 +128,27 @@ export async function updateRouteETA(routeId: string) {
     return { error: "Not authenticated", data: null }
   }
 
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+
+  if (!company_id) {
+    return { error: "No company found", data: null }
+  }
+
   try {
     // Get route with driver info
     const { data: route } = await supabase
       .from("routes")
-      .select("truck_id, driver_id, traffic_last_updated")
+      .select("truck_id, driver_id, traffic_last_updated, company_id")
       .eq("id", routeId)
+      .eq("company_id", company_id)
       .single()
 
-    if (!route?.truck_id) {
+    if (!route) {
+      return { error: "Route not found or access denied", data: null }
+    }
+
+    if (!route.truck_id) {
       return { error: "Route has no truck assigned", data: null }
     }
 
@@ -188,6 +200,7 @@ export async function updateRouteETA(routeId: string) {
             eta_confidence: enhancedResult.data.confidence
           })
           .eq("id", routeId)
+          .eq("company_id", company_id)
 
         return { data: { enhanced: true, eta: enhancedResult.data }, error: null }
       }

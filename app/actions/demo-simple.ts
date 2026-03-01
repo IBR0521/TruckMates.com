@@ -156,15 +156,23 @@ export async function createDemoAndSignIn() {
         .eq("id", userId)
     }
 
-    // Populate demo data - WAIT for it to complete (this is important!)
+    // Populate demo data - with timeout to prevent hanging
     if (companyId) {
       try {
         console.log("Starting demo data population for company:", companyId)
         
-        // Call the function and WAIT for it
-        const { data: populateResult, error: populateError } = await adminClient.rpc('populate_demo_data_for_company', {
-          p_company_id: companyId
-        })
+        // Add timeout wrapper to prevent infinite hanging
+        const populateWithTimeout = Promise.race([
+          adminClient.rpc('populate_demo_data_for_company', {
+            p_company_id: companyId
+          }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Demo data population timed out after 30 seconds')), 30000)
+          )
+        ]) as Promise<{ data: any; error: any }>
+        
+        // Call the function with timeout
+        const { data: populateResult, error: populateError } = await populateWithTimeout
         
         if (populateError) {
           console.error("Demo data population RPC error:", populateError)
@@ -172,18 +180,27 @@ export async function createDemoAndSignIn() {
           // Check for common errors
           const errorMsg = populateError.message || String(populateError)
           
-          if (errorMsg.includes('does not exist') || errorMsg.includes('function') && errorMsg.includes('not found')) {
+          // If timeout or function missing, continue anyway - company is created
+          if (errorMsg.includes('timed out') || errorMsg.includes('does not exist') || (errorMsg.includes('function') && errorMsg.includes('not found'))) {
+            console.warn("Demo data population failed, but continuing with company creation:", errorMsg)
+            // Don't fail - company is created, data can populate later
             return { 
-              error: `❌ The populate_demo_data_for_company function is missing in Supabase!\n\nPlease run this SQL file in your Supabase SQL Editor:\n\nsupabase/populate_demo_data_function.sql\n\nAfter running it, try the demo again.`,
-              userId,
-              companyId
+              success: true, 
+              userId, 
+              companyId,
+              warning: errorMsg.includes('timed out') 
+                ? "Demo company created successfully, but data population timed out. You can continue using the platform."
+                : "Demo company created successfully, but data population function is missing. Please run supabase/populate_demo_data_function.sql in Supabase SQL Editor."
             }
           }
           
+          // For other errors, also continue but warn
+          console.warn("Demo data population had an error, but continuing:", errorMsg)
           return { 
-            error: `Demo company created but data population failed:\n\n${errorMsg}\n\nPlease check if populate_demo_data_for_company function exists in Supabase.`,
-            userId,
-            companyId
+            success: true,
+            userId, 
+            companyId,
+            warning: `Demo company created successfully, but data population had an issue: ${errorMsg}`
           }
         }
         
@@ -223,19 +240,26 @@ export async function createDemoAndSignIn() {
         
         const errorMsg = err?.message || String(err)
         
-        // Check if it's a "function doesn't exist" error
-        if (errorMsg.includes('does not exist') || (errorMsg.includes('function') && errorMsg.includes('not found'))) {
+        // Don't fail on timeout or missing function - company is created
+        if (errorMsg.includes('timed out') || errorMsg.includes('does not exist') || (errorMsg.includes('function') && errorMsg.includes('not found'))) {
+          console.warn("Demo data population failed, but continuing with company creation:", errorMsg)
           return { 
-            error: `❌ The populate_demo_data_for_company function is missing in Supabase!\n\nPlease run this SQL file in your Supabase SQL Editor:\n\nsupabase/populate_demo_data_function.sql\n\nAfter running it, try the demo again.`,
-            userId,
-            companyId
+            success: true,
+            userId, 
+            companyId,
+            warning: errorMsg.includes('timed out')
+              ? "Demo company created successfully, but data population timed out. You can continue using the platform."
+              : "Demo company created successfully, but data population function is missing. Please run supabase/populate_demo_data_function.sql in Supabase SQL Editor."
           }
         }
         
+        // For other errors, continue anyway
+        console.warn("Demo data population had an exception, but continuing:", errorMsg)
         return { 
-          error: `Demo company created but data population failed:\n\n${errorMsg}\n\nPlease check if populate_demo_data_for_company function exists in Supabase.`,
-          userId,
-          companyId
+          success: true,
+          userId, 
+          companyId,
+          warning: `Demo company created successfully, but data population had an issue: ${errorMsg}`
         }
       }
     }

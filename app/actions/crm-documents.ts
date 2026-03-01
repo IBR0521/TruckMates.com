@@ -8,6 +8,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
+import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 
 export interface CRMDocument {
   id: string
@@ -62,6 +63,12 @@ export async function uploadCRMDocument(
     return { error: "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("crm")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to upload documents", data: null }
+  }
+
   // Validate that either customer_id or vendor_id is provided
   if (!metadata.customer_id && !metadata.vendor_id) {
     return { error: "Either customer_id or vendor_id must be provided", data: null }
@@ -84,14 +91,18 @@ export async function uploadCRMDocument(
       return { error: `Upload failed: ${uploadError.message}`, data: null }
     }
 
-    // Create signed URL for storage
+    // Create signed URL for storage - NEVER fall back to public URL for sensitive documents
     const { data: signedUrlData, error: signedError } = await supabase.storage
       .from("documents")
       .createSignedUrl(filePath, 31536000) // 1 year expiry
 
-    const fileUrl = signedError
-      ? `https://${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace("https://", "").split("/")[0]}/storage/v1/object/public/documents/${filePath}`
-      : signedUrlData?.signedUrl || filePath
+    if (signedError || !signedUrlData?.signedUrl) {
+      // Delete the uploaded file if we can't create a signed URL
+      await supabase.storage.from("documents").remove([filePath])
+      return { error: `Failed to create secure access URL: ${signedError?.message || "Unknown error"}. Document not saved.`, data: null }
+    }
+
+    const fileUrl = signedUrlData.signedUrl
 
     // Save document record
     const { data: documentData, error: docError } = await supabase
@@ -298,6 +309,12 @@ export async function deleteCRMDocument(documentId: string): Promise<{
     return { error: "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkDeletePermission("crm")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to delete documents", data: null }
+  }
+
   try {
     // Get document to find storage path
     const { data: document, error: fetchError } = await supabase
@@ -320,9 +337,38 @@ export async function deleteCRMDocument(documentId: string): Promise<{
     }
 
     // Delete from storage (extract path from URL)
-    const storagePath = document.storage_url.split("/").slice(-2).join("/")
+    // Handle both signed URLs and public URLs
+    let storagePath: string | null = null
+    const url = document.storage_url
+    
+    if (url.includes("/storage/v1/object/public/documents/")) {
+      // Public URL format: .../object/public/documents/crm/{user.id}/{filename}
+      const parts = url.split("/storage/v1/object/public/documents/")
+      if (parts.length > 1) {
+        storagePath = parts[1]
+      }
+    } else if (url.includes("/storage/v1/object/sign/")) {
+      // Signed URL format: .../sign/documents/crm/{user.id}/{filename}?...
+      const match = url.match(/\/sign\/documents\/(.+?)(\?|$)/)
+      if (match && match[1]) {
+        storagePath = match[1]
+      }
+    } else {
+      // Assume it's already a path or try to extract last two segments
+      const segments = url.split("/")
+      if (segments.length >= 2) {
+        storagePath = segments.slice(-2).join("/")
+      } else {
+        storagePath = segments[segments.length - 1]
+      }
+    }
+    
     if (storagePath) {
-      await supabase.storage.from("documents").remove([storagePath])
+      const { error: removeError } = await supabase.storage.from("documents").remove([storagePath])
+      if (removeError) {
+        console.error("[deleteCRMDocument] Failed to remove file from storage:", removeError)
+        // Continue with DB deletion even if storage deletion fails
+      }
     }
 
     // Delete from database

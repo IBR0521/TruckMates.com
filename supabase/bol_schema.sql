@@ -78,10 +78,15 @@ CREATE TABLE IF NOT EXISTS public.bols (
   status TEXT DEFAULT 'draft', -- 'draft', 'sent', 'signed', 'delivered', 'completed'
   
   -- Metadata
+  metadata JSONB DEFAULT '{}'::jsonb, -- HIGH FIX 2: Add metadata column for signed_pdf_url
+  version INTEGER DEFAULT 1, -- CRITICAL FIX 3: Track BOL version for amendments
+  is_active BOOLEAN DEFAULT true, -- CRITICAL FIX 3: Track active BOLs
+  parent_bol_id UUID REFERENCES public.bols(id) ON DELETE SET NULL, -- CRITICAL FIX 3: Link to parent BOL for amendments
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
   
-  CONSTRAINT bols_load_id_unique UNIQUE(load_id)
+  -- CRITICAL FIX 3: Removed UNIQUE(load_id) constraint to allow BOL amendments
+  -- Application layer enforces 'one active BOL per load' via is_active flag
 );
 
 -- Create indexes
@@ -96,6 +101,7 @@ ALTER TABLE public.bol_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bols ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for bol_templates
+DROP POLICY IF EXISTS "Users can view BOL templates in their company" ON public.bol_templates;
 CREATE POLICY "Users can view BOL templates in their company"
   ON public.bol_templates FOR SELECT
   USING (
@@ -104,6 +110,7 @@ CREATE POLICY "Users can view BOL templates in their company"
     )
   );
 
+DROP POLICY IF EXISTS "Users can insert BOL templates in their company" ON public.bol_templates;
 CREATE POLICY "Users can insert BOL templates in their company"
   ON public.bol_templates FOR INSERT
   WITH CHECK (
@@ -112,6 +119,7 @@ CREATE POLICY "Users can insert BOL templates in their company"
     )
   );
 
+DROP POLICY IF EXISTS "Users can update BOL templates in their company" ON public.bol_templates;
 CREATE POLICY "Users can update BOL templates in their company"
   ON public.bol_templates FOR UPDATE
   USING (
@@ -120,6 +128,7 @@ CREATE POLICY "Users can update BOL templates in their company"
     )
   );
 
+DROP POLICY IF EXISTS "Users can delete BOL templates in their company" ON public.bol_templates;
 CREATE POLICY "Users can delete BOL templates in their company"
   ON public.bol_templates FOR DELETE
   USING (
@@ -129,6 +138,7 @@ CREATE POLICY "Users can delete BOL templates in their company"
   );
 
 -- RLS Policies for bols
+DROP POLICY IF EXISTS "Users can view BOLs in their company" ON public.bols;
 CREATE POLICY "Users can view BOLs in their company"
   ON public.bols FOR SELECT
   USING (
@@ -137,6 +147,7 @@ CREATE POLICY "Users can view BOLs in their company"
     )
   );
 
+DROP POLICY IF EXISTS "Users can insert BOLs in their company" ON public.bols;
 CREATE POLICY "Users can insert BOLs in their company"
   ON public.bols FOR INSERT
   WITH CHECK (
@@ -145,6 +156,7 @@ CREATE POLICY "Users can insert BOLs in their company"
     )
   );
 
+DROP POLICY IF EXISTS "Users can update BOLs in their company" ON public.bols;
 CREATE POLICY "Users can update BOLs in their company"
   ON public.bols FOR UPDATE
   USING (
@@ -153,20 +165,30 @@ CREATE POLICY "Users can update BOLs in their company"
     )
   );
 
-CREATE POLICY "Users can delete BOLs in their company"
+-- SECURITY FIX 2: Restrict DELETE to managers/admins/owners only
+DROP POLICY IF EXISTS "Managers can delete BOLs in their company" ON public.bols;
+DROP POLICY IF EXISTS "Users can delete BOLs in their company" ON public.bols;
+CREATE POLICY "Managers can delete BOLs in their company"
   ON public.bols FOR DELETE
   USING (
     company_id IN (
       SELECT company_id FROM public.users WHERE id = auth.uid()
     )
+    AND EXISTS (
+      SELECT 1 FROM public.users
+      WHERE id = auth.uid()
+        AND role IN ('manager', 'admin', 'owner')
+    )
   );
 
 -- Update triggers
+DROP TRIGGER IF EXISTS update_bol_templates_updated_at ON public.bol_templates;
 CREATE TRIGGER update_bol_templates_updated_at 
   BEFORE UPDATE ON public.bol_templates
   FOR EACH ROW 
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_bols_updated_at ON public.bols;
 CREATE TRIGGER update_bols_updated_at 
   BEFORE UPDATE ON public.bols
   FOR EACH ROW 

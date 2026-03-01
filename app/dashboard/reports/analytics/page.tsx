@@ -5,9 +5,9 @@ import { ArrowLeft, BarChart3, TrendingUp, Truck, DollarSign, Package, Users, Ca
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
-import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { getMonthlyRevenueTrend } from "@/app/actions/reports"
+import { getAnalyticsData } from "@/app/actions/analytics"
 
 export default function AnalyticsPage() {
   const [stats, setStats] = useState({
@@ -31,89 +31,18 @@ export default function AnalyticsPage() {
   async function loadAnalytics() {
     setIsLoading(true)
     try {
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) return
-
-      const { data: userData } = await supabase
-        .from("users")
-        .select("company_id")
-        .eq("id", user.id)
-        .single()
-
-      if (!userData?.company_id) return
-
-      const startDate = new Date()
-      startDate.setDate(startDate.getDate() - parseInt(dateRange))
-
-      // Get loads statistics
-      const { data: loadsData } = await supabase
-        .from("loads")
-        .select("*")
-        .eq("company_id", userData.company_id)
-        .gte("created_at", startDate.toISOString())
-
-      // Get trucks statistics
-      const { data: trucksData } = await supabase
-        .from("trucks")
-        .select("*")
-        .eq("company_id", userData.company_id)
-
-      // Get drivers statistics
-      const { data: driversData } = await supabase
-        .from("drivers")
-        .select("*")
-        .eq("company_id", userData.company_id)
-
-      // Get invoices for revenue (ALL invoices, not just paid)
-      const { data: invoicesData } = await supabase
-        .from("invoices")
-        .select("amount, status, created_at")
-        .eq("company_id", userData.company_id)
-        .gte("created_at", startDate.toISOString())
-
-      // Also get revenue from loads as fallback
-      const { data: loadsWithRevenue } = await supabase
-        .from("loads")
-        .select("total_rate, value, created_at")
-        .eq("company_id", userData.company_id)
-        .gte("created_at", startDate.toISOString())
-
-      const totalLoads = loadsData?.length || 0
-      const activeLoads = loadsData?.filter((l) => l.status === "in_transit" || l.status === "scheduled").length || 0
-      const completedLoads = loadsData?.filter((l) => l.status === "delivered").length || 0
+      // FIXED: Use server action instead of browser-side select(*) queries
+      const analyticsResult = await getAnalyticsData(parseInt(dateRange))
       
-      // Calculate revenue from ALL invoices (not just paid)
-      let totalRevenue = invoicesData?.reduce((sum, inv) => sum + (parseFloat(inv.amount) || 0), 0) || 0
-      
-      // Add revenue from loads if invoices are low/empty
-      if (totalRevenue === 0 && loadsWithRevenue) {
-        totalRevenue = loadsWithRevenue.reduce((sum, load) => {
-          return sum + (parseFloat(load.total_rate) || parseFloat(load.value) || 0)
-        }, 0)
+      if (analyticsResult.error) {
+        toast.error(analyticsResult.error)
+        setIsLoading(false)
+        return
       }
-      const activeTrucks = trucksData?.filter((t) => t.status === "in_use").length || 0
-      const activeDrivers = driversData?.filter((d) => d.status === "active").length || 0
-      const onTimeDeliveries = loadsData?.filter((l) => {
-        if (!l.estimated_delivery || !l.actual_delivery) return false
-        return new Date(l.actual_delivery) <= new Date(l.estimated_delivery)
-      }).length || 0
 
-      const averageRevenuePerLoad = completedLoads > 0 ? totalRevenue / completedLoads : 0
-
-      setStats({
-        totalLoads,
-        activeLoads,
-        completedLoads,
-        totalRevenue,
-        activeTrucks,
-        activeDrivers,
-        onTimeDeliveries,
-        averageRevenuePerLoad,
-      })
+      if (analyticsResult.data) {
+        setStats(analyticsResult.data)
+      }
 
       // Load revenue trend data
       const trendResult = await getMonthlyRevenueTrend(6)
@@ -359,7 +288,8 @@ export default function AnalyticsPage() {
                       />
                       <p className="text-xs text-muted-foreground text-center">{formatMonth(item.month)}</p>
                       <p className="text-xs font-semibold text-foreground">
-                        ${(item.amount || 0) > 0 ? ((item.amount || 0) / 1000).toFixed(1) : '0.0'}k
+                        {/* FIXED: Use amountInThousands if available, otherwise calculate from amount */}
+                        ${(item.amountInThousands !== undefined ? item.amountInThousands : (item.amount || 0) / 1000).toFixed(1)}k
                       </p>
                     </div>
                   )

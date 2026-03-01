@@ -258,7 +258,7 @@ export async function getDriverTimelines(filters?: {
       return { error: loadsError.message, data: null }
     }
 
-    // Get all assigned routes
+    // Get all assigned routes (we'll filter by date in JavaScript since routes may not have all date fields)
     const { data: routes, error: routesError } = await supabase
       .from("routes")
       .select(
@@ -271,6 +271,8 @@ export async function getDriverTimelines(filters?: {
         truck_id,
         estimated_arrival,
         estimated_time,
+        route_start_time,
+        route_departure_time,
         created_at,
         status,
         priority,
@@ -351,15 +353,21 @@ export async function getDriverTimelines(filters?: {
       })
     }
 
-    // Process routes
+    // Process routes (filter by date range)
     for (const route of routes || []) {
-      // Use created_at as start date, or current date if not available
-      const startDate = route.created_at ? new Date(route.created_at) : new Date()
+      // Use route_start_time or route_departure_time instead of created_at
+      const routeStartDate = route.route_start_time 
+        ? new Date(route.route_start_time)
+        : route.route_departure_time 
+        ? new Date(route.route_departure_time) 
+        : route.created_at
+        ? new Date(route.created_at)
+        : new Date()
       
       // Use estimated_arrival as end date, or calculate from estimated_time, or default to 24 hours later
-      let endDate: Date
+      let routeEndDate: Date
       if (route.estimated_arrival) {
-        endDate = new Date(route.estimated_arrival)
+        routeEndDate = new Date(route.estimated_arrival)
       } else if (route.estimated_time) {
         // Parse estimated_time (e.g., "3h 30m") and add to start date
         if (route.estimated_time && typeof route.estimated_time === 'string') {
@@ -367,21 +375,26 @@ export async function getDriverTimelines(filters?: {
           if (timeMatch) {
             const hours = parseInt(timeMatch[1]) || 0
             const minutes = parseInt(timeMatch[2]) || 0
-            endDate = new Date(startDate.getTime() + (hours * 60 + minutes) * 60 * 1000)
+            routeEndDate = new Date(routeStartDate.getTime() + (hours * 60 + minutes) * 60 * 1000)
           } else {
-            endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
+            routeEndDate = new Date(routeStartDate.getTime() + 24 * 60 * 60 * 1000)
           }
         } else {
-          endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
+          routeEndDate = new Date(routeStartDate.getTime() + 24 * 60 * 60 * 1000)
         }
       } else {
-        endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
+        routeEndDate = new Date(routeStartDate.getTime() + 24 * 60 * 60 * 1000)
+      }
+
+      // Filter routes by date range - skip if route doesn't overlap with view window
+      if (routeEndDate < startDate || routeStartDate > endDate) {
+        continue
       }
 
       // Estimate drive time
       const driveTimeMinutes = 480 // Default 8 hours
 
-      const durationMinutes = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60))
+      const durationMinutes = Math.ceil((routeEndDate.getTime() - routeStartDate.getTime()) / (1000 * 60))
 
       allJobs.push({
         id: route.id,
@@ -395,8 +408,8 @@ export async function getDriverTimelines(filters?: {
         destination: route.destination,
         origin_coords: null,
         destination_coords: null,
-        scheduled_start: startDate,
-        scheduled_end: endDate,
+        scheduled_start: routeStartDate,
+        scheduled_end: routeEndDate,
         estimated_duration_minutes: durationMinutes,
         drive_time_minutes: driveTimeMinutes,
         status: route.status,
@@ -559,6 +572,61 @@ export async function checkAssignmentConflicts(
           status: load.status,
           priority: load.priority || "normal",
           urgency_score: load.urgency_score || 0,
+          conflicts: [],
+          hos_violation: false,
+        }
+      }
+    } else if (routeId) {
+      const { data: route } = await supabase
+        .from("routes")
+        .select("*")
+        .eq("id", routeId)
+        .single()
+
+      if (route) {
+        const startDate = route.route_start_time 
+          ? new Date(route.route_start_time)
+          : route.route_departure_time 
+          ? new Date(route.route_departure_time) 
+          : new Date()
+        
+        let endDate: Date
+        if (route.estimated_arrival) {
+          endDate = new Date(route.estimated_arrival)
+        } else if (route.estimated_time && typeof route.estimated_time === 'string') {
+          const timeMatch = route.estimated_time.match(/(\d+)h\s*(\d+)?m?/)
+          if (timeMatch) {
+            const hours = parseInt(timeMatch[1]) || 0
+            const minutes = parseInt(timeMatch[2]) || 0
+            endDate = new Date(startDate.getTime() + (hours * 60 + minutes) * 60 * 1000)
+          } else {
+            endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
+          }
+        } else {
+          endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
+        }
+
+        newJob = {
+          id: route.id,
+          type: "route",
+          route_name: route.name,
+          driver_id: driverId,
+          driver_name: null,
+          truck_id: null,
+          truck_number: null,
+          origin: route.origin,
+          destination: route.destination,
+          origin_coords: null,
+          destination_coords: null,
+          scheduled_start: startDate,
+          scheduled_end: endDate,
+          estimated_duration_minutes: Math.ceil(
+            (endDate.getTime() - startDate.getTime()) / (1000 * 60)
+          ),
+          drive_time_minutes: 480,
+          status: route.status,
+          priority: route.priority || "normal",
+          urgency_score: 0,
           conflicts: [],
           hos_violation: false,
         }

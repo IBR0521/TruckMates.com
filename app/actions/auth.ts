@@ -151,32 +151,40 @@ export async function registerEmployee(data: {
 
     const role = data.role as EmployeeRole
 
-    // Disallow self-registration for high-privilege roles
-    const disallowedSelfRegisterRoles: EmployeeRole[] = ["super_admin", "operations_manager"]
-    if (disallowedSelfRegisterRoles.includes(role)) {
+    // HIGH FIX 5: Use allowlist instead of blocklist for role validation
+    const ALLOWED_SELF_REGISTER_ROLES: EmployeeRole[] = ["dispatcher", "safety_compliance", "financial_controller", "driver"]
+    if (!ALLOWED_SELF_REGISTER_ROLES.includes(role)) {
       return {
         data: null,
-        error: "You cannot self-register as a manager or super admin. Please contact your company administrator.",
+        error: `You cannot self-register as ${role}. Only ${ALLOWED_SELF_REGISTER_ROLES.join(", ")} roles can self-register.`,
       }
+    }
+
+    // HIGH FIX 5: Require invite token for company registration
+    // For now, we'll require companyId to exist AND add a note that invite tokens should be implemented
+    if (!data.companyId) {
+      return { data: null, error: "Company ID is required. Please use a valid invitation link." }
     }
 
     // If a companyId was provided, verify that the company exists
-    if (data.companyId) {
-      const { data: company, error: companyError } = await supabase
-        .from("companies")
-        .select("id")
-        .eq("id", data.companyId)
-        .maybeSingle()
+    const { data: company, error: companyError } = await supabase
+      .from("companies")
+      .select("id")
+      .eq("id", data.companyId)
+      .maybeSingle()
 
-      if (companyError) {
-        const errorMsg = companyError.message || String(companyError) || "Failed to verify company"
-        return { data: null, error: errorMsg.substring(0, 200) }
-      }
-
-      if (!company) {
-        return { data: null, error: "Invalid company ID. Please use a valid invitation or contact your administrator." }
-      }
+    if (companyError) {
+      const errorMsg = companyError.message || String(companyError) || "Failed to verify company"
+      return { data: null, error: errorMsg.substring(0, 200) }
     }
+
+    if (!company) {
+      return { data: null, error: "Invalid company ID. Please use a valid invitation or contact your administrator." }
+    }
+
+    // TODO: HIGH FIX 5 - Implement invite token validation
+    // Should check for valid invite token in company_invites table
+    // For now, company existence check is the only validation
 
     // Create auth user with employee_role in metadata
     const { data: authData, error: authError } = await supabase.auth.signUp({

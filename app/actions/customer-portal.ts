@@ -119,7 +119,8 @@ export async function createCustomerPortalAccess(formData: {
     .eq("company_id", userData.company_id)
     .single()
 
-  const accessToken = generateAccessToken()
+  // Preserve existing token if updating, only generate new one if creating
+  const accessToken = existingAccess?.access_token || generateAccessToken()
   const expiresAt = formData.expires_days
     ? new Date(Date.now() + formData.expires_days * 24 * 60 * 60 * 1000).toISOString()
     : null
@@ -127,19 +128,25 @@ export async function createCustomerPortalAccess(formData: {
   let data, error
 
   if (existingAccess) {
-    // Update existing access
+    // Update existing access - preserve token unless explicitly regenerating
+    const updateData: any = {
+      portal_url: formData.portal_url || null,
+      can_view_location: formData.can_view_location || false,
+      can_submit_loads: formData.can_submit_loads || false,
+      email_notifications: formData.email_notifications !== false,
+      sms_notifications: formData.sms_notifications || false,
+      expires_at: expiresAt,
+      is_active: true,
+    }
+    
+    // Only update token if it's different (new generation)
+    if (accessToken !== existingAccess.access_token) {
+      updateData.access_token = accessToken
+    }
+    
     const { data: updated, error: updateError } = await supabase
       .from("customer_portal_access")
-      .update({
-        access_token: accessToken,
-        portal_url: formData.portal_url || null,
-        can_view_location: formData.can_view_location || false,
-        can_submit_loads: formData.can_submit_loads || false,
-        email_notifications: formData.email_notifications !== false,
-        sms_notifications: formData.sms_notifications || false,
-        expires_at: expiresAt,
-        is_active: true,
-      })
+      .update(updateData)
       .eq("id", existingAccess.id)
       .select()
       .single()
@@ -353,9 +360,7 @@ export async function getCustomerPortalLoads(token: string) {
   const portalAccess = portalResult.data
   const supabase = await createClient()
 
-  // Get loads for this customer
-  // Match by customer_id if set, or by customer name in company_name field
-  const customerName = portalAccess.customer?.name || ""
+  // Get loads for this customer - use strict customer_id matching only
   let query = supabase
     .from("loads")
     .select(`
@@ -366,16 +371,12 @@ export async function getCustomerPortalLoads(token: string) {
     `)
     .eq("company_id", portalAccess.company_id)
 
-  // Filter by customer - try customer_id first, then fallback to name matching
+  // Filter by customer_id only - no name matching for security
   if (portalAccess.customer_id) {
-    // Use OR filter: match by customer_id OR company_name
-    if (customerName) {
-      query = query.or(`customer_id.eq.${portalAccess.customer_id},company_name.ilike.%${customerName}%`)
-    } else {
-      query = query.eq("customer_id", portalAccess.customer_id)
-    }
-  } else if (customerName) {
-    query = query.ilike("company_name", `%${customerName}%`)
+    query = query.eq("customer_id", portalAccess.customer_id)
+  } else {
+    // No customer_id means no access
+    return { data: [], error: null }
   }
 
   const { data: loads, error } = await query.order("created_at", { ascending: false })
@@ -416,18 +417,16 @@ export async function getCustomerPortalLoad(token: string, loadId: string) {
     return { error: "Load not found", data: null }
   }
 
-  // Check if customer has access to this load
-  const customerName = portalAccess.customer?.name || ""
-  if (load.company_name && !load.company_name.toLowerCase().includes(customerName.toLowerCase())) {
-    if (load.customer_id !== portalAccess.customer_id) {
-      return { error: "Access denied", data: null }
-    }
+  // Check if customer has access to this load - strict customer_id matching
+  if (load.customer_id !== portalAccess.customer_id) {
+    return { error: "Access denied", data: null }
   }
 
-  // Get real-time location if allowed
+  // Get real-time location if allowed - only for this specific load
   let driverLocation = null
-  if (portalAccess.can_view_location && load.driver_id) {
-    // Get latest ELD location
+  if (portalAccess.can_view_location && load.driver_id && load.id) {
+    // Get latest ELD location for this specific load's route/driver
+    // Only return location if driver is currently assigned to this load
     const { data: location } = await supabase
       .from("eld_locations")
       .select("*")
@@ -436,7 +435,8 @@ export async function getCustomerPortalLoad(token: string, loadId: string) {
       .limit(1)
       .single()
 
-    if (location) {
+    // Verify the driver is still assigned to this load before showing location
+    if (location && load.status !== "delivered" && load.status !== "cancelled") {
       driverLocation = {
         latitude: location.latitude,
         longitude: location.longitude,
@@ -471,12 +471,29 @@ export async function getCustomerPortalDocuments(token: string, loadId?: string)
     return { error: "Document access not allowed", data: null }
   }
 
+  // Get customer's loads first to filter documents
+  const customerLoadsResult = await getCustomerPortalLoads(token)
+  if (customerLoadsResult.error || !customerLoadsResult.data) {
+    return { error: "Could not verify customer access", data: null }
+  }
+
+  const customerLoadIds = customerLoadsResult.data.map((l: any) => l.id)
+
+  if (customerLoadIds.length === 0) {
+    return { data: [], error: null }
+  }
+
   let query = supabase
     .from("documents")
     .select("*")
     .eq("company_id", portalAccess.company_id)
+    .in("load_id", customerLoadIds)
 
   if (loadId) {
+    // Verify the loadId belongs to this customer
+    if (!customerLoadIds.includes(loadId)) {
+      return { error: "Access denied to this load's documents", data: null }
+    }
     query = query.eq("load_id", loadId)
   }
 
@@ -505,25 +522,18 @@ export async function getCustomerPortalInvoices(token: string) {
     return { error: "Invoice access not allowed", data: null }
   }
 
-  const customerName = portalAccess.customer?.name || ""
   const customerId = portalAccess.customer_id
+
+  // Use strict customer_id matching only - no name matching for security
+  if (!customerId) {
+    return { data: [], error: null }
+  }
 
   let query = supabase
     .from("invoices")
     .select("*")
     .eq("company_id", portalAccess.company_id)
-
-  // Filter by customer - try customer_id first, then fallback to name matching
-  if (customerId) {
-    // Try to match by customer_id or customer_name
-    if (customerName) {
-      query = query.or(`customer_id.eq.${customerId},customer_name.ilike.%${customerName}%`)
-    } else {
-      query = query.eq("customer_id", customerId)
-    }
-  } else if (customerName) {
-    query = query.ilike("customer_name", `%${customerName}%`)
-  }
+    .eq("customer_id", customerId)
 
   const { data, error } = await query.order("created_at", { ascending: false })
 

@@ -75,27 +75,45 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
         return
       }
 
-      const html = await response.text()
-
-      // Open PDF in new window for printing/downloading
-      const printWindow = window.open("", "_blank")
-      if (printWindow) {
-        printWindow.document.write(html)
-        printWindow.document.close()
-        // Auto-trigger print dialog
-        setTimeout(() => {
-          printWindow.print()
-        }, 250)
-        toast.success("IFTA report PDF opened for download")
+      // FIXED: Handle actual PDF binary instead of HTML
+      const contentType = response.headers.get("content-type")
+      
+      if (contentType === "application/pdf") {
+        // Download actual PDF file
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `ifta-report-${id}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        toast.success("IFTA report PDF downloaded")
       } else {
-        toast.error("Please allow popups to download the PDF")
+        // Fallback: Handle HTML if PDF generation failed
+        const html = await response.text()
+        const printWindow = window.open("", "_blank")
+        if (printWindow) {
+          printWindow.document.write(html)
+          printWindow.document.close()
+          setTimeout(() => {
+            printWindow.print()
+          }, 250)
+          toast.success("IFTA report opened for printing (HTML fallback)")
+        } else {
+          toast.error("Please allow popups to download the PDF")
+        }
       }
     } catch (error: any) {
       toast.error(error?.message || "Failed to generate IFTA report PDF")
     }
   }
 
-  const quarterLabel = `Q${report.quarter} ${report.year}`
+  // FIXED: Normalize quarter label to prevent "QQ1 2025" if quarter already has Q prefix
+  const quarterLabel = String(report.quarter).startsWith("Q")
+    ? `${report.quarter} ${report.year}`
+    : `Q${report.quarter} ${report.year}`
   const statusColors: Record<string, string> = {
     draft: "bg-yellow-500/20 text-yellow-400",
     submitted: "bg-blue-500/20 text-blue-400",
@@ -170,17 +188,30 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
                     </tr>
                   </thead>
                   <tbody>
-                    {report.state_breakdown.map((state: any, i: number) => (
-                      <tr key={i} className="border-b border-border hover:bg-secondary/20 transition">
-                        <td className="px-6 py-4 text-foreground font-medium">{state.state}</td>
-                        <td className="px-6 py-4 text-foreground">{state.miles?.toLocaleString() || 0}</td>
-                        <td className="px-6 py-4 text-foreground">{state.gallons?.toLocaleString() || 0}</td>
-                        <td className="px-6 py-4 text-foreground">${state.tax_rate?.toFixed(4) || "0.0000"}</td>
-                        <td className="px-6 py-4 text-foreground">${state.tax_due?.toFixed(2) || "0.00"}</td>
-                        <td className="px-6 py-4 text-foreground">${state.tax_paid?.toFixed(2) || "0.00"}</td>
-                        <td className="px-6 py-4 text-foreground font-semibold">${state.net_tax_due?.toFixed(2) || "0.00"}</td>
-                      </tr>
-                    ))}
+                    {report.state_breakdown.map((state: any, i: number) => {
+                      // FIXED: Align field names with what createIFTAReport actually stores
+                      // createIFTAReport stores: state, miles, fuel (number), tax (number), taxRate
+                      // Detail page expects: state, miles, gallons, tax_rate, tax_due, tax_paid, net_tax_due
+                      const miles = state.miles || 0
+                      const fuel = typeof state.fuel === 'number' ? state.fuel : parseFloat((state.fuel || "0").toString().replace(/[^0-9.]/g, ""))
+                      const taxRate = state.taxRate || state.tax_rate || 0.25
+                      const taxDue = state.tax || (fuel * taxRate) || 0
+                      // Tax paid and net tax due are not stored in current schema, calculate if needed
+                      const taxPaid = state.tax_paid || 0
+                      const netTaxDue = state.net_tax_due || (taxDue - taxPaid)
+                      
+                      return (
+                        <tr key={i} className="border-b border-border hover:bg-secondary/20 transition">
+                          <td className="px-6 py-4 text-foreground font-medium">{state.state}</td>
+                          <td className="px-6 py-4 text-foreground">{miles.toLocaleString()}</td>
+                          <td className="px-6 py-4 text-foreground">{fuel.toLocaleString()}</td>
+                          <td className="px-6 py-4 text-foreground">${taxRate.toFixed(4)}</td>
+                          <td className="px-6 py-4 text-foreground">${taxDue.toFixed(2)}</td>
+                          <td className="px-6 py-4 text-foreground">${taxPaid.toFixed(2)}</td>
+                          <td className="px-6 py-4 text-foreground font-semibold">${netTaxDue.toFixed(2)}</td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-border">

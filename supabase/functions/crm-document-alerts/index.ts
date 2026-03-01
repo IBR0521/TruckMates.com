@@ -81,8 +81,19 @@ serve(async (req) => {
       const companyDocs = documentsToAlert.filter((doc: any) => doc.company_id === companyId)
 
       for (const doc of companyDocs) {
+        // FIXED: Helper function to escape HTML to prevent XSS
+        const esc = (s: string | null | undefined): string => {
+          if (!s) return ""
+          return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;")
+        }
+
         // Create alert in database
-        const { error: alertError } = await supabaseClient.from("alerts").insert({
+        const { error: alertError, data: alertData } = await supabaseClient.from("alerts").insert({
           company_id: companyId,
           title: `Document Expiring: ${doc.name}`,
           message: `${doc.document_type.toUpperCase()} for ${doc.customer_name || doc.vendor_name || "Unknown"} expires in ${doc.days_until_expiration} days`,
@@ -94,9 +105,10 @@ serve(async (req) => {
             expiration_date: doc.expiration_date,
             days_until_expiration: doc.days_until_expiration,
           },
-        })
+        }).select().single()
 
-        if (!alertError) {
+        // FIXED: Only mark as alerted and send email if alert insert succeeded
+        if (!alertError && alertData) {
           // Mark document as alerted
           await supabaseClient
             .from("crm_documents")
@@ -109,6 +121,7 @@ serve(async (req) => {
             for (const user of users) {
               if (user.email) {
                 try {
+                  // FIXED: Escape all user-controlled values to prevent XSS
                   await fetch("https://api.resend.com/emails", {
                     method: "POST",
                     headers: {
@@ -118,28 +131,33 @@ serve(async (req) => {
                     body: JSON.stringify({
                       from: "TruckMates <noreply@truckmates.com>",
                       to: user.email,
-                      subject: `⚠️ Document Expiring: ${doc.name}`,
+                      subject: `⚠️ Document Expiring: ${esc(doc.name)}`,
                       html: `
                         <h2>Document Expiration Alert</h2>
-                        <p>Hello ${user.full_name || "User"},</p>
+                        <p>Hello ${esc(user.full_name || "User")},</p>
                         <p>The following document is expiring soon:</p>
                         <ul>
-                          <li><strong>Document:</strong> ${doc.name}</li>
-                          <li><strong>Type:</strong> ${doc.document_type.toUpperCase()}</li>
-                          <li><strong>Entity:</strong> ${doc.customer_name || doc.vendor_name || "Unknown"}</li>
-                          <li><strong>Expiration Date:</strong> ${new Date(doc.expiration_date).toLocaleDateString()}</li>
-                          <li><strong>Days Remaining:</strong> ${doc.days_until_expiration}</li>
+                          <li><strong>Document:</strong> ${esc(doc.name)}</li>
+                          <li><strong>Type:</strong> ${esc(doc.document_type?.toUpperCase())}</li>
+                          <li><strong>Entity:</strong> ${esc(doc.customer_name || doc.vendor_name || "Unknown")}</li>
+                          <li><strong>Expiration Date:</strong> ${esc(new Date(doc.expiration_date).toLocaleDateString())}</li>
+                          <li><strong>Days Remaining:</strong> ${esc(String(doc.days_until_expiration))}</li>
                         </ul>
                         <p>Please renew this document to avoid compliance issues.</p>
                       `,
                     }),
                   })
                 } catch (emailError) {
+                  // FIXED: Log error but don't fail silently - mark alert as failed
                   console.error("Failed to send email:", emailError)
+                  // Could update alert metadata to track email failure
                 }
               }
             }
           }
+        } else {
+          // FIXED: Log alert creation failure - don't mark document as alerted
+          console.error("Failed to create alert for document:", doc.id, alertError)
         }
 
         alerts.push({

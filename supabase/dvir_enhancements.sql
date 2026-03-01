@@ -43,10 +43,19 @@ BEGIN
     RETURN;
   END IF;
   
-  -- Check if work orders already created
-  IF jsonb_array_length(COALESCE(v_dvir.work_orders_created, '[]'::JSONB)) > 0 THEN
-    RETURN; -- Already processed
-  END IF;
+  -- Check if work orders already created - but allow partial retries
+  -- Track which specific defects have had work orders created
+  -- For now, we'll allow re-processing if previous run failed (check error table)
+  DECLARE
+    v_has_errors BOOLEAN;
+  BEGIN
+    SELECT EXISTS(SELECT 1 FROM public.dvir_errors WHERE dvir_id = p_dvir_id) INTO v_has_errors;
+    
+    -- If no errors and work orders exist, skip
+    IF NOT v_has_errors AND jsonb_array_length(COALESCE(v_dvir.work_orders_created, '[]'::JSONB)) > 0 THEN
+      RETURN; -- Already processed successfully
+    END IF;
+  END;
   
   -- Process each defect
   FOR v_defect IN SELECT * FROM jsonb_array_elements(v_dvir.defects)
@@ -111,11 +120,35 @@ $$ LANGUAGE plpgsql;
 -- Step 3: Trigger to auto-create work orders when defects are found
 CREATE OR REPLACE FUNCTION trigger_create_work_orders_on_dvir_defects()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_error_message TEXT;
 BEGIN
   -- Only trigger if defects found and status is 'failed'
   IF NEW.defects_found = true AND NEW.status = 'failed' THEN
-    -- Auto-create work orders (non-blocking)
-    PERFORM create_work_orders_from_dvir_defects(NEW.id);
+    -- Auto-create work orders with error handling
+    BEGIN
+      PERFORM create_work_orders_from_dvir_defects(NEW.id);
+    EXCEPTION WHEN OTHERS THEN
+      -- Log error to a dedicated table (create if doesn't exist)
+      v_error_message := SQLERRM;
+      
+      -- Try to log to error table
+      BEGIN
+        CREATE TABLE IF NOT EXISTS public.dvir_errors (
+          id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+          dvir_id UUID REFERENCES public.dvir(id) ON DELETE CASCADE,
+          error_message TEXT NOT NULL,
+          error_context TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+        );
+        
+        INSERT INTO public.dvir_errors (dvir_id, error_message, error_context)
+        VALUES (NEW.id, v_error_message, 'trigger_create_work_orders_on_dvir_defects');
+      EXCEPTION WHEN OTHERS THEN
+        -- If error table creation/insert fails, at least raise a warning
+        RAISE WARNING 'Failed to create work orders from DVIR %: %', NEW.id, v_error_message;
+      END;
+    END;
   END IF;
   RETURN NEW;
 END;

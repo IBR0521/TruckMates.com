@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
 
+// Manager roles that can manage driver onboarding
+const MANAGER_ROLES = ["super_admin", "operations_manager"]
+
 /**
  * Initialize driver onboarding when driver is created
  */
@@ -18,7 +21,21 @@ export async function initializeDriverOnboarding(driverId: string) {
     return { data: null, error: "Not authenticated" }
   }
 
-  const { company_id } = await getCachedUserCompany(user.id)
+  // MEDIUM FIX 10: Add RBAC check - only managers can initialize onboarding
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role, company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData || !MANAGER_ROLES.includes(userData.role)) {
+    return { data: null, error: "Only managers can initialize driver onboarding" }
+  }
+
+  const company_id = userData.company_id
+  if (!company_id) {
+    return { data: null, error: "No company found" }
+  }
 
   // Get driver info
   const { data: driver } = await supabase
@@ -40,6 +57,18 @@ export async function initializeDriverOnboarding(driverId: string) {
     "w9",
     "i9",
   ]
+
+  // MEDIUM FIX 14: Check for existing onboarding record before inserting
+  const { data: existing } = await supabase
+    .from("driver_onboarding")
+    .select("id")
+    .eq("driver_id", driverId)
+    .eq("company_id", company_id)
+    .maybeSingle()
+
+  if (existing) {
+    return { data: existing, error: null } // Return existing record
+  }
 
   // Create onboarding record
   const { data, error } = await supabase
@@ -84,7 +113,37 @@ export async function getDriverOnboarding(driverId: string) {
     return { data: null, error: "Not authenticated" }
   }
 
-  const { company_id } = await getCachedUserCompany(user.id)
+  // MEDIUM FIX 10: Add RBAC check - managers can view any, drivers can view their own
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role, company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData) {
+    return { data: null, error: "User not found" }
+  }
+
+  const company_id = userData.company_id
+  if (!company_id) {
+    return { data: null, error: "No company found" }
+  }
+
+  // Check if user is manager or viewing their own driver record
+  const isManager = MANAGER_ROLES.includes(userData.role)
+  if (!isManager) {
+    // For non-managers, verify they're viewing their own driver record
+    const { data: driver } = await supabase
+      .from("drivers")
+      .select("id, user_id")
+      .eq("id", driverId)
+      .eq("company_id", company_id)
+      .single()
+
+    if (!driver || driver.user_id !== user.id) {
+      return { data: null, error: "You can only view your own onboarding status" }
+    }
+  }
 
   const { data, error } = await supabase
     .from("driver_onboarding")
@@ -123,11 +182,30 @@ export async function updateOnboardingStep(driverId: string, step: number) {
     return { data: null, error: "Not authenticated" }
   }
 
-  const { company_id } = await getCachedUserCompany(user.id)
+  // MEDIUM FIX 10: Add RBAC check
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role, company_id")
+    .eq("id", user.id)
+    .single()
 
-  // Calculate completion percentage
+  if (!userData || !MANAGER_ROLES.includes(userData.role)) {
+    return { data: null, error: "Only managers can update onboarding steps" }
+  }
+
+  const company_id = userData.company_id
+  if (!company_id) {
+    return { data: null, error: "No company found" }
+  }
+
+  // MEDIUM FIX 13: Validate step bounds
   const totalSteps = 5
-  const completionPercentage = Math.round((step / totalSteps) * 100)
+  if (step < 1 || step > totalSteps) {
+    return { data: null, error: `Step must be between 1 and ${totalSteps}` }
+  }
+
+  // Calculate completion percentage and clamp to [0, 100]
+  const completionPercentage = Math.max(0, Math.min(100, Math.round((step / totalSteps) * 100)))
 
   const { data, error } = await supabase
     .from("driver_onboarding")
@@ -164,7 +242,36 @@ export async function markDocumentUploaded(driverId: string, documentType: strin
     return { data: null, error: "Not authenticated" }
   }
 
-  const { company_id } = await getCachedUserCompany(user.id)
+  // MEDIUM FIX 10: Add RBAC check - managers can mark documents for any driver
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role, company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData) {
+    return { data: null, error: "User not found" }
+  }
+
+  const company_id = userData.company_id
+  if (!company_id) {
+    return { data: null, error: "No company found" }
+  }
+
+  const isManager = MANAGER_ROLES.includes(userData.role)
+  if (!isManager) {
+    // For non-managers, verify they're marking documents for their own driver record
+    const { data: driver } = await supabase
+      .from("drivers")
+      .select("id, user_id")
+      .eq("id", driverId)
+      .eq("company_id", company_id)
+      .single()
+
+    if (!driver || driver.user_id !== user.id) {
+      return { data: null, error: "You can only mark documents for your own onboarding" }
+    }
+  }
 
   // Get current onboarding status
   const { data: onboarding } = await supabase
@@ -178,10 +285,31 @@ export async function markDocumentUploaded(driverId: string, documentType: strin
     return { data: null, error: "Onboarding record not found" }
   }
 
-  // Update document status
-  const documentsCompleted = Array.isArray(onboarding.documents_completed)
-    ? [...onboarding.documents_completed, documentId]
-    : [documentId]
+  // MEDIUM FIX 11 & 12: Track documents by type, not just ID, and prevent duplicates
+  // Handle both old format (array of UUIDs) and new format (array of objects)
+  const existingCompleted = Array.isArray(onboarding.documents_completed) 
+    ? onboarding.documents_completed 
+    : []
+  
+  // MEDIUM FIX 12: Check for duplicate documentId (works for both formats)
+  const isDuplicate = existingCompleted.some((doc: any) => {
+    if (typeof doc === 'string') {
+      return doc === documentId
+    }
+    if (typeof doc === 'object' && doc.documentId) {
+      return doc.documentId === documentId
+    }
+    return false
+  })
+  
+  if (isDuplicate) {
+    return { data: null, error: "This document has already been marked as uploaded" }
+  }
+
+  // MEDIUM FIX 11: Store as object with type for proper validation
+  // New format: [{ type: "license", documentId: "uuid" }, ...]
+  const newDocumentEntry = { type: documentType, documentId }
+  const documentsCompleted = [...existingCompleted, newDocumentEntry]
 
   const documentsMissing = Array.isArray(onboarding.documents_missing)
     ? onboarding.documents_missing.filter((doc: string) => doc !== documentType)
@@ -201,10 +329,23 @@ export async function markDocumentUploaded(driverId: string, documentType: strin
   if (documentType === "w9") updateData.w9_uploaded = true
   if (documentType === "i9") updateData.i9_uploaded = true
 
-  // Recalculate completion percentage
-  const requiredDocs = Array.isArray(onboarding.documents_required) ? onboarding.documents_required.length : 5
-  const completedDocs = documentsCompleted.length
-  const docCompletion = requiredDocs > 0 ? Math.round((completedDocs / requiredDocs) * 100) : 0
+  // MEDIUM FIX 11: Recalculate completion percentage based on unique document types
+  const requiredDocs = Array.isArray(onboarding.documents_required) ? onboarding.documents_required : []
+  // Count unique document types completed (handle both old UUID format and new object format)
+  const completedTypes = new Set(
+    documentsCompleted
+      .map((doc: any) => {
+        if (typeof doc === 'object' && doc.type) {
+          return doc.type // New format: { type, documentId }
+        }
+        // Old format: just UUID - we can't determine type, so skip for type-based counting
+        // This will require migration or re-uploading documents
+        return null
+      })
+      .filter((type: string | null) => type !== null)
+  )
+  const uniqueCompletedCount = completedTypes.size
+  const docCompletion = requiredDocs.length > 0 ? Math.round((uniqueCompletedCount / requiredDocs.length) * 100) : 0
 
   // Overall completion includes steps and documents
   const stepCompletion = (onboarding.current_step / onboarding.total_steps) * 50
@@ -244,7 +385,21 @@ export async function completeDriverOnboarding(driverId: string) {
     return { data: null, error: "Not authenticated" }
   }
 
-  const { company_id } = await getCachedUserCompany(user.id)
+  // MEDIUM FIX 10: Add RBAC check - only managers can complete onboarding
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role, company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData || !MANAGER_ROLES.includes(userData.role)) {
+    return { data: null, error: "Only managers can complete driver onboarding" }
+  }
+
+  const company_id = userData.company_id
+  if (!company_id) {
+    return { data: null, error: "No company found" }
+  }
 
   // Verify all required documents are uploaded
   const { data: onboarding } = await supabase
@@ -258,12 +413,27 @@ export async function completeDriverOnboarding(driverId: string) {
     return { data: null, error: "Onboarding record not found" }
   }
 
-  // Check if all required documents are uploaded
+  // MEDIUM FIX 11: Check if all required document types are uploaded (not just count)
   const requiredDocs = Array.isArray(onboarding.documents_required) ? onboarding.documents_required : []
   const completedDocs = Array.isArray(onboarding.documents_completed) ? onboarding.documents_completed : []
 
-  if (completedDocs.length < requiredDocs.length) {
-    return { data: null, error: "Not all required documents have been uploaded" }
+  // Extract unique document types from completed documents (handle both formats)
+  const completedTypes = new Set(
+    completedDocs
+      .map((doc: any) => {
+        if (typeof doc === 'object' && doc.type) {
+          return doc.type // New format
+        }
+        // Old format: UUID only - can't determine type
+        return null
+      })
+      .filter((type: string | null) => type !== null)
+  )
+
+  // Check that each required document type has been uploaded
+  const missingDocs = requiredDocs.filter((type: string) => !completedTypes.has(type))
+  if (missingDocs.length > 0) {
+    return { data: null, error: `Missing required documents: ${missingDocs.join(", ")}` }
   }
 
   // Mark onboarding as completed
@@ -314,7 +484,21 @@ export async function getAllDriverOnboarding(filters?: {
     return { data: null, error: "Not authenticated" }
   }
 
-  const { company_id } = await getCachedUserCompany(user.id)
+  // MEDIUM FIX 10: Add RBAC check - only managers can view all onboarding records
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role, company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData || !MANAGER_ROLES.includes(userData.role)) {
+    return { data: null, error: "Only managers can view all onboarding records" }
+  }
+
+  const company_id = userData.company_id
+  if (!company_id) {
+    return { data: null, error: "No company found" }
+  }
 
   let query = supabase
     .from("driver_onboarding")

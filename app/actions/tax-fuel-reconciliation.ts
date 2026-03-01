@@ -437,7 +437,8 @@ export async function generateIFTAReport(quarter: number, year: number) {
 
   const stateBreakdowns = Object.entries(stateData).map(([state, data]) => {
     const taxRate = STATE_FUEL_TAX_RATES[state] || 0.25 // Default rate if state not found
-    const taxDue = data.miles * (taxRate / 100) // Simplified calculation
+    // FIXED: Tax rate is already in $/gallon (e.g., 0.19 = $0.19/gal), don't divide by 100
+    const taxDue = (data.miles / 6.5) * taxRate // Calculate gallons from miles (6.5 MPG avg), then multiply by rate
     const taxPaid = data.gallons * taxRate // Tax paid at purchase
     const netTaxDue = taxDue - taxPaid
 

@@ -80,9 +80,38 @@ export async function updatePortalSettings(settings: {
     return { error: "Not authenticated", success: false }
   }
 
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", success: false }
+  // HIGH FIX 1: Add RBAC check - only managers can update portal settings
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role, company_id")
+    .eq("id", user.id)
+    .single()
+
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!userData || !MANAGER_ROLES.includes(userData.role)) {
+    return { error: "Only managers can update portal settings", success: false }
+  }
+
+  if (!userData.company_id) {
+    return { error: "No company found", success: false }
+  }
+
+  const result = { company_id: userData.company_id }
+
+  // MEDIUM FIX 10: Validate custom_url with strict regex to prevent path traversal
+  if (settings.custom_url) {
+    // Only allow lowercase letters, digits, and hyphens, 3-50 characters
+    const customUrlRegex = /^[a-z0-9-]{3,50}$/
+    if (!customUrlRegex.test(settings.custom_url)) {
+      return { error: "Custom URL must contain only lowercase letters, numbers, and hyphens (3-50 characters)", success: false }
+    }
+  }
+
+  // LOW FIX 19: Validate session_timeout_minutes
+  if (settings.session_timeout_minutes !== undefined) {
+    if (settings.session_timeout_minutes < 1 || settings.session_timeout_minutes > 10080) {
+      return { error: "Session timeout must be between 1 and 10080 minutes (1 week)", success: false }
+    }
   }
 
   // Generate portal URL if custom_url is provided
@@ -92,10 +121,18 @@ export async function updatePortalSettings(settings: {
     portalUrl = `${baseUrl}/portal/${settings.custom_url}`
   }
 
-  const updateData = {
-    ...settings,
-    ...(portalUrl && { portal_url: portalUrl }),
-  }
+  // MEDIUM FIX 17: Build explicit updateData object to prevent column injection
+  const updateData: any = {}
+  if (settings.enabled !== undefined) updateData.enabled = settings.enabled
+  if (settings.custom_url !== undefined) updateData.custom_url = settings.custom_url
+  if (settings.allow_customer_login !== undefined) updateData.allow_customer_login = settings.allow_customer_login
+  if (settings.allow_load_tracking !== undefined) updateData.allow_load_tracking = settings.allow_load_tracking
+  if (settings.allow_invoice_viewing !== undefined) updateData.allow_invoice_viewing = settings.allow_invoice_viewing
+  if (settings.allow_document_download !== undefined) updateData.allow_document_download = settings.allow_document_download
+  if (settings.allow_load_submission !== undefined) updateData.allow_load_submission = settings.allow_load_submission
+  if (settings.require_authentication !== undefined) updateData.require_authentication = settings.require_authentication
+  if (settings.session_timeout_minutes !== undefined) updateData.session_timeout_minutes = settings.session_timeout_minutes
+  if (portalUrl) updateData.portal_url = portalUrl
 
   // Check if settings exist
   const { data: existing } = await supabase

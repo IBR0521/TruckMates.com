@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -130,10 +130,27 @@ export default function EnhancedAddressBookPage() {
     geofence_radius_meters: 500,
     auto_geocode: true,
   })
+  const [queuedReceiver, setQueuedReceiver] = useState<CreateAddressBookEntryInput | null>(null)
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Debounced search effect
   useEffect(() => {
-    loadEntries()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Clear previous timeout
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current)
+    }
+
+    // Set new timeout
+    searchDebounceRef.current = setTimeout(() => {
+      loadEntries()
+    }, 300) // 300ms debounce
+
+    // Cleanup
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current)
+      }
+    }
   }, [searchTerm, categoryFilter, geocodingStatusFilter])
 
   async function loadEntries() {
@@ -172,7 +189,20 @@ export default function EnhancedAddressBookPage() {
         }
         setShowCreateDialog(false)
         resetForm()
-        loadEntries()
+        
+        // If receiver was queued, open dialog for it
+        if (queuedReceiver) {
+          setFormData({
+            ...formData,
+            ...queuedReceiver,
+            category: "receiver",
+          })
+          setQueuedReceiver(null)
+          setShowCreateDialog(true)
+          toast.info("Receiver address ready. Please verify and save.")
+        } else {
+          loadEntries()
+        }
       }
     } catch (error) {
       toast.error("Failed to create address book entry")
@@ -240,27 +270,79 @@ export default function EnhancedAddressBookPage() {
 
   async function handleOCRUpload(file: File) {
     try {
-      // Upload file to Supabase Storage first
+      // Get company ID for path isolation
       const supabase = (await import("@/lib/supabase/client")).createClient()
-      const fileExt = file.name.split(".").pop()
-      const fileName = `${Date.now()}.${fileExt}`
-      const filePath = `rate-cons/${fileName}`
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        toast.error("Not authenticated")
+        return
+      }
 
+      const { data: userData } = await supabase
+        .from("users")
+        .select("company_id")
+        .eq("id", user.id)
+        .single()
+
+      if (!userData?.company_id) {
+        toast.error("No company found")
+        return
+      }
+
+      // Generate UUID for filename instead of timestamp (more secure)
+      // Use crypto.randomUUID() if available, otherwise generate a random string
+      const generateUUID = () => {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+          return crypto.randomUUID()
+        }
+        // Fallback for browsers without crypto.randomUUID
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = Math.random() * 16 | 0
+          const v = c === 'x' ? r : (r & 0x3 | 0x8)
+          return v.toString(16)
+        })
+      }
+      
+      const fileExt = file.name.split(".").pop()
+      const fileName = `${generateUUID()}.${fileExt}`
+      const filePath = `rate-cons/${userData.company_id}/${fileName}`
+
+      // Upload to private bucket (use signed URL instead of public URL)
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("documents")
-        .upload(filePath, file)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        })
 
       if (uploadError) {
         toast.error("Failed to upload file")
         return
       }
 
-      const { data: { publicUrl } } = supabase.storage
+      // Get signed URL (expires in 1 hour) instead of public URL
+      const { data: signedUrlData } = await supabase.storage
         .from("documents")
-        .getPublicUrl(filePath)
+        .createSignedUrl(filePath, 3600) // 1 hour expiry
+
+      if (!signedUrlData?.signedUrl) {
+        toast.error("Failed to generate file URL")
+        // Clean up uploaded file
+        await supabase.storage.from("documents").remove([filePath])
+        return
+      }
 
       // Extract addresses
-      const result = await extractAddressesFromRateCon(publicUrl, file.name)
+      const result = await extractAddressesFromRateCon(signedUrlData.signedUrl, file.name)
+      
+      // Delete file after extraction (regardless of success/failure)
+      try {
+        await supabase.storage.from("documents").remove([filePath])
+      } catch (deleteError) {
+        console.error("Failed to delete uploaded file:", deleteError)
+        // Non-blocking - log but don't fail the operation
+      }
+
       if (result.error) {
         toast.error(result.error)
       } else if (result.data) {
@@ -271,12 +353,21 @@ export default function EnhancedAddressBookPage() {
             ...result.data.shipper,
             category: "shipper",
           })
+          // Queue receiver if also extracted
+          if (result.data.receiver) {
+            setQueuedReceiver(result.data.receiver)
+          }
           setShowCreateDialog(true)
-          toast.success("Shipper address extracted. Please verify and save.")
-        }
-        if (result.data.receiver) {
-          // Could show second dialog or allow user to save shipper first
-          toast.info("Receiver address also extracted. Save shipper first, then create receiver.")
+          toast.success("Shipper address extracted. Please verify and save." + (result.data.receiver ? " Receiver address will be available after saving shipper." : ""))
+        } else if (result.data.receiver) {
+          // If only receiver extracted (unlikely but possible)
+          setFormData({
+            ...formData,
+            ...result.data.receiver,
+            category: "receiver",
+          })
+          setShowCreateDialog(true)
+          toast.success("Receiver address extracted. Please verify and save.")
         }
       }
     } catch (error) {

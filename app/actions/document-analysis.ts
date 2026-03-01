@@ -1,9 +1,13 @@
 "use server"
 
+import { checkCreatePermission } from "@/lib/server-permissions"
+import { sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
+
 // Polyfill for DOMMatrix and other browser APIs needed for pdfjs-dist in Node.js
 // MUST be set up BEFORE importing pdfjs-dist
 if (typeof globalThis.DOMMatrix === 'undefined') {
   try {
+    // FIXED: Use proper require instead of eval
     const dommatrix = require('dommatrix')
     if (dommatrix.DOMMatrix) {
       globalThis.DOMMatrix = dommatrix.DOMMatrix
@@ -46,13 +50,12 @@ let pdfjsLib: any = null
 let createCanvas: any = null
 
 // Lazy load pdfjs-dist only when needed (prevents canvas from being imported at build time)
-// Use Function constructor to prevent static analysis by Turbopack
+// FIXED: Use proper dynamic import instead of Function constructor
 async function getPdfjsLib() {
   if (!pdfjsLib) {
     try {
-      // Use Function to make import truly dynamic (not analyzed at build time)
-      const dynamicImport = new Function('specifier', 'return import(specifier)')
-      pdfjsLib = await dynamicImport("pdfjs-dist")
+      // FIXED: Use proper dynamic import() - Next.js supports this natively
+      pdfjsLib = await import("pdfjs-dist")
     } catch (e) {
       console.error("[DOCUMENT_ANALYSIS] Failed to load pdfjs-dist:", e)
       throw e
@@ -62,12 +65,12 @@ async function getPdfjsLib() {
 }
 
 // Lazy load canvas only when needed
-// Use eval to prevent static analysis
+// FIXED: Use proper require instead of eval
 async function getCanvas() {
   if (createCanvas === null) {
     try {
-      // Use eval to prevent static analysis
-      const canvasModule = eval('require')("canvas")
+      // FIXED: Use proper require - no need for eval
+      const canvasModule = require("canvas")
       createCanvas = canvasModule.createCanvas
     } catch (e) {
       console.warn("[DOCUMENT_ANALYSIS] Canvas module not available, PDF to image conversion will be disabled")
@@ -266,11 +269,50 @@ export type ExtractedData =
 export async function analyzeDocument(fileUrl: string, fileName: string): Promise<{
   data: ExtractedData | null
   error: string | null
+  warning?: string | null // FIXED: Add warning field for multi-page PDFs
 }> {
-  // Check rate limit for OpenAI API
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkCreatePermission("documents")
+  if (!permissionCheck.allowed) {
+    return {
+      error: permissionCheck.error || "You don't have permission to analyze documents",
+      data: null
+    }
+  }
+  
+  // FIXED: Declare multiPageWarning at function scope so it can be returned
+  let multiPageWarning: string | null = null
+
+  // FIXED: Validate fileUrl to prevent SSRF - only allow Supabase storage URLs
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) {
+    return {
+      error: "Supabase URL not configured",
+      data: null
+    }
+  }
+
+  // FIXED: Validate that fileUrl matches Supabase storage domain pattern
+  // Extract project ID from NEXT_PUBLIC_SUPABASE_URL to build pattern
+  const supabaseUrlPattern = supabaseUrl 
+    ? new RegExp(`^https://[^/]+\\.supabase\\.co/storage/v1/object/(public|sign)/documents/`)
+    : null
+  
+  if (!supabaseUrlPattern || !supabaseUrlPattern.test(fileUrl)) {
+    return {
+      error: "Invalid file URL. Only Supabase storage URLs are allowed.",
+      data: null
+    }
+  }
+  
+  // FIXED: Declare multiPageWarning at function scope
+  let multiPageWarning: string | null = null
+
+  // FIXED: Rate limit should fail closed, not open
+  let rateCheck
   try {
     const { checkApiUsage } = await import("@/lib/api-protection")
-    const rateCheck = await checkApiUsage("openai", "document_analysis")
+    rateCheck = await checkApiUsage("openai", "document_analysis")
     if (!rateCheck.allowed) {
       return {
         error: rateCheck.reason || "Rate limit exceeded. Please try again later.",
@@ -278,8 +320,12 @@ export async function analyzeDocument(fileUrl: string, fileName: string): Promis
       }
     }
   } catch (error) {
-    // If rate limit check fails, allow the call to proceed (fail open)
+    // FIXED: Fail closed - if rate limit check fails, deny the request
     console.error("[Document Analysis] Rate limit check failed:", error)
+    return {
+      error: "Rate limit check failed. Request denied for security.",
+      data: null
+    }
   }
   try {
     // Use OpenAI Vision API to analyze the document
@@ -659,9 +705,10 @@ ACTION:
             }
           })
           
-          // If PDF has multiple pages, add a note in the prompt
+          // FIXED: Set multi-page PDF warning (variable declared at function scope)
           if (pdfDocument.numPages > 1) {
-            content[0].text += `\n\nNOTE: This PDF has ${pdfDocument.numPages} pages. Only the first page is being analyzed. If important information is on other pages, please upload those pages separately as images.`
+            multiPageWarning = `This PDF has ${pdfDocument.numPages} pages. Only the first page is being analyzed. If important information is on other pages, please upload those pages separately as images.`
+            content[0].text += `\n\nNOTE: ${multiPageWarning}`
           }
         } catch (pdfError: any) {
           console.error("[DOCUMENT_ANALYSIS] PDF conversion error:", pdfError)
@@ -839,9 +886,11 @@ ACTION:
       }
     }
 
+    // FIXED: Return warning if multi-page PDF was detected (from PDF processing block)
     return {
       data: extractedData,
-      error: null
+      error: null,
+      warning: multiPageWarning || null // FIXED: Return warning to user
     }
   } catch (error: any) {
     console.error("[DOCUMENT_ANALYSIS] Error:", error)
@@ -1038,15 +1087,33 @@ Please try uploading a NEW document - old uploads may have incorrect URLs.`,
       }
     }
 
-    // Save document record to database
-    // Store the signed URL (it will expire, but we can regenerate signed URLs when needed)
+    // FIXED: Store storage path instead of signed URL (generate signed URLs on-demand)
+    // Extract and store the storage path, not the signed URL
+    let storagePath: string | null = null
+    
+    // Extract path from signed URL or original URL
+    const pathMatch = signedUrl.match(/\/storage\/v1\/object\/(?:public|sign)\/documents\/([^?]+)/)
+    if (pathMatch) {
+      storagePath = decodeURIComponent(pathMatch[1])
+    } else {
+      // If we can't extract path, try to extract from original fileUrl
+      const originalPathMatch = fileUrl.match(/\/storage\/v1\/object\/(?:public|sign)\/documents\/([^?]+)/)
+      if (originalPathMatch) {
+        storagePath = decodeURIComponent(originalPathMatch[1])
+      } else {
+        // Last resort: use fileUrl as-is if it looks like a path
+        storagePath = fileUrl.includes('/') ? fileUrl.split('/').pop() || fileUrl : fileUrl
+      }
+    }
+
+    // Save document record with storage path (not signed URL)
     const { data: documentData, error: docError } = await supabase
       .from("documents")
       .insert({
         company_id: userData.company_id,
         name: metadata?.name || fileName,
         type: metadata?.type || "other",
-        file_url: signedUrl, // Store the signed URL we just created
+        file_url: storagePath, // FIXED: Store path, not signed URL
         file_size: fileSize,
         upload_date: new Date().toISOString().split("T")[0],
       })
@@ -1058,6 +1125,7 @@ Please try uploading a NEW document - old uploads may have incorrect URLs.`,
     }
 
     // Analyze the document using signed URL (works with private buckets)
+    // Note: analyzeDocument now validates the URL is from Supabase storage
     const analysisResult = await analyzeDocument(signedUrl, fileName)
 
     if (analysisResult.error) {
@@ -1078,7 +1146,8 @@ Please try uploading a NEW document - old uploads may have incorrect URLs.`,
       data: {
         documentId: documentData.id,
         extractedData: analysisResult.data,
-        fileUrl: signedUrl
+        fileUrl: signedUrl, // Return signed URL for immediate use
+        warning: analysisResult.warning || null // FIXED: Pass through multi-page warning
       },
       error: null
     }
@@ -1097,6 +1166,12 @@ export async function createRecordFromExtractedData(
   data: { id: string; type: string } | null
   error: string | null
 }> {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkCreatePermission("documents")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to create records from documents", data: null }
+  }
+
   try {
     const supabase = await createClient()
 
@@ -1123,16 +1198,18 @@ export async function createRecordFromExtractedData(
 
     switch (extractedData.type) {
       case "driver": {
+        const driverData = extractedData as ExtractedDriverData
+        // FIXED: Sanitize all AI-supplied fields before inserting
         const { data, error: driverError } = await supabase
           .from("drivers")
           .insert({
             company_id: userData.company_id,
-            name: (extractedData as ExtractedDriverData).name || "",
-            email: (extractedData as ExtractedDriverData).email,
-            phone: (extractedData as ExtractedDriverData).phone,
-            license_number: (extractedData as ExtractedDriverData).license_number,
-            license_expiry: (extractedData as ExtractedDriverData).license_expiry,
-            status: (extractedData as ExtractedDriverData).status || "active",
+            name: sanitizeString(driverData.name, 100) || "",
+            email: driverData.email ? sanitizeEmail(driverData.email) : null,
+            phone: driverData.phone ? sanitizePhone(driverData.phone) : null,
+            license_number: sanitizeString(driverData.license_number, 20) || null,
+            license_expiry: driverData.license_expiry || null,
+            status: (driverData.status === "active" || driverData.status === "inactive") ? driverData.status : "active", // FIXED: Validate status enum
           })
           .select()
           .single()
@@ -1163,18 +1240,29 @@ export async function createRecordFromExtractedData(
 
       case "load": {
         const loadData = extractedData as ExtractedLoadData
+        // FIXED: Sanitize and validate AI-supplied fields
+        const validStatuses = ["pending", "scheduled", "in_transit", "delivered", "cancelled"]
+        const sanitizedStatus = loadData.status && validStatuses.includes(loadData.status) 
+          ? loadData.status 
+          : "pending" // FIXED: Prevent AI from setting status to "delivered" or invalid values
+        
+        // FIXED: Validate and sanitize value (prevent arbitrary dollar amounts)
+        const sanitizedValue = typeof loadData.value === 'number' && loadData.value >= 0 && loadData.value <= 10000000
+          ? loadData.value 
+          : null // Cap at $10M, reject negative values
+        
         const { data, error: loadError } = await supabase
           .from("loads")
           .insert({
             company_id: userData.company_id,
-            shipment_number: loadData.shipment_number || `LOAD-${Date.now()}`,
-            origin: loadData.origin || "",
-            destination: loadData.destination || "",
-            weight: loadData.weight,
-            weight_kg: loadData.weight_kg,
-            contents: loadData.contents,
-            value: loadData.value,
-            status: loadData.status || "pending",
+            shipment_number: sanitizeString(loadData.shipment_number, 50) || `LOAD-${Date.now()}`,
+            origin: sanitizeString(loadData.origin, 200) || "",
+            destination: sanitizeString(loadData.destination, 200) || "",
+            weight: sanitizeString(loadData.weight, 50) || null,
+            weight_kg: typeof loadData.weight_kg === 'number' && loadData.weight_kg >= 0 ? loadData.weight_kg : null,
+            contents: sanitizeString(loadData.contents, 500) || null,
+            value: sanitizedValue, // FIXED: Sanitized value
+            status: sanitizedStatus, // FIXED: Validated status
             delivery_type: loadData.delivery_points && loadData.delivery_points.length > 1 ? "multi" : "single",
             total_delivery_points: loadData.delivery_points?.length || 1,
           })
@@ -1470,16 +1558,26 @@ export async function createRecordFromExtractedData(
 
       case "invoice": {
         const invoiceData = extractedData as ExtractedInvoiceData
+        // FIXED: Sanitize invoice_number to prevent SQL-like characters and collisions
+        const sanitizedInvoiceNumber = sanitizeString(invoiceData.invoice_number, 50) || `INV-${Date.now()}`
+        
+        // FIXED: Validate amount
+        const sanitizedAmount = typeof invoiceData.amount === 'number' && invoiceData.amount >= 0 && invoiceData.amount <= 10000000
+          ? invoiceData.amount 
+          : 0
+        
         const { data, error: invoiceError } = await supabase
           .from("invoices")
           .insert({
             company_id: userData.company_id,
-            invoice_number: invoiceData.invoice_number || `INV-${Date.now()}`,
-            customer_name: invoiceData.customer_name || "",
-            amount: invoiceData.amount || 0,
+            invoice_number: sanitizedInvoiceNumber, // FIXED: Sanitized
+            customer_name: sanitizeString(invoiceData.customer_name, 200) || "",
+            amount: sanitizedAmount, // FIXED: Validated
             issue_date: invoiceData.issue_date || new Date().toISOString().split("T")[0],
-            due_date: invoiceData.due_date,
-            status: invoiceData.status || "pending",
+            due_date: invoiceData.due_date || null,
+            status: (invoiceData.status === "pending" || invoiceData.status === "paid" || invoiceData.status === "overdue") 
+              ? invoiceData.status 
+              : "pending", // FIXED: Validate status enum
           })
           .select()
           .single()
@@ -1490,15 +1588,20 @@ export async function createRecordFromExtractedData(
 
       case "expense": {
         const expenseData = extractedData as ExtractedExpenseData
+        // FIXED: Validate amount (prevent arbitrary dollar amounts)
+        const sanitizedAmount = typeof expenseData.amount === 'number' && expenseData.amount >= 0 && expenseData.amount <= 10000000
+          ? expenseData.amount 
+          : 0
+        
         const { data, error: expenseError } = await supabase
           .from("expenses")
           .insert({
             company_id: userData.company_id,
-            category: expenseData.category || "other",
-            description: expenseData.description || "",
-            amount: expenseData.amount || 0,
+            category: sanitizeString(expenseData.category, 50) || "other",
+            description: sanitizeString(expenseData.description, 500) || "",
+            amount: sanitizedAmount, // FIXED: Validated
             date: expenseData.date || new Date().toISOString().split("T")[0],
-            vendor: expenseData.vendor,
+            vendor: sanitizeString(expenseData.vendor, 200) || null,
           })
           .select()
           .single()

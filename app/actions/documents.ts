@@ -3,11 +3,18 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { checkViewPermission, checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 
 export async function getDocuments(filters?: {
   limit?: number
   offset?: number
 }) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkViewPermission("documents")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to view documents", data: null, count: 0 }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -15,7 +22,7 @@ export async function getDocuments(filters?: {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return { error: "Not authenticated", data: null }
+    return { error: "Not authenticated", data: null, count: 0 }
   }
 
   // Use optimized helper with caching
@@ -46,6 +53,12 @@ export async function getDocuments(filters?: {
 }
 
 export async function deleteDocument(id: string) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkDeletePermission("documents")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to delete documents" }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -123,6 +136,12 @@ export async function deleteDocument(id: string) {
 
 // Bulk delete documents
 export async function deleteDocuments(ids: string[]) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkDeletePermission("documents")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to delete documents", deletedCount: 0 }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -130,7 +149,7 @@ export async function deleteDocuments(ids: string[]) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return { error: "Not authenticated" }
+    return { error: "Not authenticated", deletedCount: 0 }
   }
 
   if (!ids || ids.length === 0) {
@@ -210,6 +229,12 @@ export async function deleteDocuments(ids: string[]) {
 
 // Get signed URL for viewing/downloading a document
 export async function getDocumentUrl(documentId: string) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkViewPermission("documents")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to view documents", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -220,11 +245,21 @@ export async function getDocumentUrl(documentId: string) {
     return { error: "Not authenticated", data: null }
   }
 
-  // Get document record
+  // FIXED: Get user's company_id and filter document query by it
+  const result = await getCachedUserCompany(user.id)
+  const company_id = result.company_id
+  const companyError = result.error
+
+  if (companyError || !company_id) {
+    return { error: companyError || "No company found", data: null }
+  }
+
+  // FIXED: Get document record with company_id filter to prevent cross-company access
   const { data: document, error: docError } = await supabase
     .from("documents")
     .select("file_url, name")
     .eq("id", documentId)
+    .eq("company_id", company_id) // FIXED: Add company_id filter
     .single()
 
   if (docError || !document) {
@@ -283,6 +318,12 @@ export async function uploadDocument(
     expiry_date?: string
   }
 ) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkCreatePermission("documents")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to upload documents", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -303,6 +344,23 @@ export async function uploadDocument(
   }
 
   try {
+    // FIXED: Validate MIME type against allowlist before upload
+    const ALLOWED_MIME_TYPES = [
+      'application/pdf',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+      'image/gif',
+    ]
+    
+    if (!file.type || !ALLOWED_MIME_TYPES.includes(file.type.toLowerCase())) {
+      return { 
+        error: `File type not allowed. Allowed types: PDF, JPEG, PNG, WebP, GIF. Received: ${file.type || 'unknown'}`, 
+        data: null 
+      }
+    }
+
     // Upload file to Supabase storage
     const fileExt = file.name.split(".").pop()
     const fileName = `${user.id}/${Date.now()}.${fileExt}`
@@ -319,50 +377,15 @@ export async function uploadDocument(
       return { error: `Upload failed: ${uploadError.message}`, data: null }
     }
 
-    // Create signed URL for storage
-    const { data: signedUrlData, error: signedError } = await supabase.storage
-      .from("documents")
-      .createSignedUrl(filePath, 31536000) // 1 year expiry
-
-    if (signedError || !signedUrlData?.signedUrl) {
-      // Try public URL as fallback
-      const { data: publicUrlData } = supabase.storage
-        .from("documents")
-        .getPublicUrl(filePath)
-      
-      const fileUrl = publicUrlData?.publicUrl || filePath
-
-      // Save document record
-      const { data: documentData, error: docError } = await supabase
-        .from("documents")
-        .insert({
-          company_id: company_id,
-          name: metadata?.name || file.name,
-          type: metadata?.type || "other",
-          file_url: fileUrl,
-          file_size: file.size,
-          upload_date: new Date().toISOString().split("T")[0],
-          expiry_date: metadata?.expiry_date || null,
-        })
-        .select()
-        .single()
-
-      if (docError) {
-        return { error: docError.message, data: null }
-      }
-
-      revalidatePath("/dashboard/documents")
-      return { data: documentData, error: null }
-    }
-
-    // Save document record with signed URL
+    // FIXED: Store storage path instead of signed URL (generate signed URLs on-demand)
+    // Save document record with storage path (not signed URL)
     const { data: documentData, error: docError } = await supabase
       .from("documents")
       .insert({
         company_id: company_id,
         name: metadata?.name || file.name,
         type: metadata?.type || "other",
-        file_url: signedUrlData.signedUrl,
+        file_url: filePath, // FIXED: Store path, not signed URL
         file_size: file.size,
         upload_date: new Date().toISOString().split("T")[0],
         expiry_date: metadata?.expiry_date || null,

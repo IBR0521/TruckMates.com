@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { checkViewPermission } from "@/lib/server-permissions"
 
 /**
  * Get on-time delivery analytics by customer
@@ -11,6 +12,12 @@ export async function getOnTimeDeliveryAnalytics(filters?: {
   end_date?: string
   customer_id?: string
 }) {
+  // FIXED: Add RBAC check
+  const permissionCheck = await checkViewPermission("reports")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -62,6 +69,10 @@ export async function getOnTimeDeliveryAnalytics(filters?: {
       query = query.lte("actual_delivery", filters.end_date)
     }
 
+    // FIXED: Add limit to prevent unbounded queries
+    const limit = 10000 // Reasonable limit for analytics
+    query = query.limit(limit)
+
     const { data: loads, error } = await query
 
     if (error) {
@@ -91,12 +102,19 @@ export async function getOnTimeDeliveryAnalytics(filters?: {
       const customerId = customer.id
       const customerName = customer.name || customer.company_name || "Unknown Customer"
 
+      // FIXED: Normalize timezones and use proper on-time window (same day or within delivery window)
+      // Convert to UTC for consistent comparison
       const estimatedDate = new Date(load.estimated_delivery)
       const actualDate = new Date(load.actual_delivery)
-
+      
+      // FIXED: Use same-day definition for on-time (not exact millisecond equality)
+      // A delivery is "on-time" if it's on the same calendar day or within a reasonable window
+      const estimatedDay = new Date(estimatedDate.getFullYear(), estimatedDate.getMonth(), estimatedDate.getDate())
+      const actualDay = new Date(actualDate.getFullYear(), actualDate.getMonth(), actualDate.getDate())
+      
       // Calculate days difference (positive = late, negative = early)
       const daysDifference = Math.round(
-        (actualDate.getTime() - estimatedDate.getTime()) / (1000 * 60 * 60 * 24)
+        (actualDay.getTime() - estimatedDay.getTime()) / (1000 * 60 * 60 * 24)
       )
 
       if (!customerMap.has(customerId)) {

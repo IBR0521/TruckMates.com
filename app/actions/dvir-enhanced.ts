@@ -10,6 +10,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
+import { checkCreatePermission } from "@/lib/server-permissions"
 
 /**
  * Check if pre-trip DVIR is required for a truck
@@ -26,6 +27,23 @@ export async function checkPreTripDVIRRequired(
 
   if (!user) {
     return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
+  }
+
+  // Validate truck_id ownership
+  const { data: truck, error: truckError } = await supabase
+    .from("trucks")
+    .select("id")
+    .eq("id", truckId)
+    .eq("company_id", result.company_id)
+    .single()
+
+  if (truckError || !truck) {
+    return { error: "Truck not found or does not belong to your company", data: null }
   }
 
   try {
@@ -103,6 +121,29 @@ export async function createWorkOrdersFromDVIRDefects(
 
   if (!user) {
     return { error: "Not authenticated", data: null }
+  }
+
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
+  }
+
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("maintenance")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to create work orders", data: null }
+  }
+
+  // Validate dvirId ownership
+  const { data: dvir, error: dvirError } = await supabase
+    .from("dvir")
+    .select("id, company_id")
+    .eq("id", dvirId)
+    .eq("company_id", result.company_id)
+    .single()
+
+  if (dvirError || !dvir) {
+    return { error: "DVIR not found or does not belong to your company", data: null }
   }
 
   try {

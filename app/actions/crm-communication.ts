@@ -8,6 +8,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
+import { checkCreatePermission } from "@/lib/server-permissions"
 
 export interface CommunicationLog {
   id: string
@@ -62,6 +63,12 @@ export async function logCommunication(input: {
 
   if (!company_id) {
     return { error: "No company found", data: null }
+  }
+
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("crm")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to log communications", data: null }
   }
 
   // Validate that either customer_id or vendor_id is provided
@@ -201,10 +208,10 @@ export async function logCommunicationFromWebhook(input: {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   // For webhooks, we might not have a user - use service role if available
+  let company_id: string | null = null
+
   if (authError || !user) {
     // Try to get company_id from customer_id or vendor_id
-    let company_id: string | null = null
-
     if (input.customer_id) {
       const { data: customer } = await supabase
         .from("customers")
@@ -226,7 +233,7 @@ export async function logCommunicationFromWebhook(input: {
     }
   } else {
     const result = await getCachedUserCompany(user.id)
-    const company_id = result.company_id
+    company_id = result.company_id
 
     if (!company_id) {
       return { error: "No company found", data: null }
@@ -250,13 +257,6 @@ export async function logCommunicationFromWebhook(input: {
       if (existing) {
         return { data: existing as any, error: null }
       }
-    }
-
-    const result = await getCachedUserCompany(user?.id || "")
-    const company_id = result.company_id
-
-    if (!company_id) {
-      return { error: "No company found", data: null }
     }
 
     const { data, error } = await supabase

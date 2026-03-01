@@ -130,3 +130,7 @@ GRANT EXECUTE ON FUNCTION public.get_ifta_tax_rates_for_quarter(UUID, INTEGER, I
 
 
 
+
+
+
+

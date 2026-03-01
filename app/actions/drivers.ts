@@ -193,7 +193,7 @@ export async function createDriver(formData: {
       return { error: "Invalid truck selected", data: null }
     }
 
-    if (truck.current_driver_id && truck.current_driver_id !== formData.truck_id) {
+    if (truck.current_driver_id) {
       return { error: "Truck is already assigned to another driver", data: null }
     }
   }
@@ -499,6 +499,18 @@ export async function bulkDeleteDrivers(ids: string[]) {
 }
 
 export async function bulkUpdateDriverStatus(ids: string[], status: string) {
+  // Check permission
+  const permission = await checkEditPermission("drivers")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to edit drivers", data: null }
+  }
+
+  // Validate status value
+  const validStatuses = ["active", "inactive", "on_leave"]
+  if (!validStatuses.includes(status)) {
+    return { error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`, data: null }
+  }
+
   const supabase = await createClient()
 
   const {

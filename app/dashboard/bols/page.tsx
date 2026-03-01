@@ -27,6 +27,8 @@ export default function BOLsPage() {
     setIsLoading(true)
     const filters: any = {}
     if (statusFilter !== "all") filters.status = statusFilter
+    // MEDIUM FIX 3: Use server-side search instead of client-side filtering
+    if (searchTerm) filters.search = searchTerm
 
     const result = await getBOLs(filters)
     if (result.error) {
@@ -35,18 +37,7 @@ export default function BOLsPage() {
       return
     }
     if (result.data) {
-      let filteredData = result.data
-      
-      // Client-side search filter
-      if (searchTerm) {
-        filteredData = filteredData.filter((bol) =>
-          bol.bol_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          bol.shipper_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          bol.consignee_name?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      }
-      
-      setBolsList(filteredData)
+      setBolsList(result.data)
     }
     setIsLoading(false)
   }

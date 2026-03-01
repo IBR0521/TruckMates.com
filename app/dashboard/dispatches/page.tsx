@@ -122,19 +122,43 @@ export default function DispatchesPage() {
       enabled: !!companyId,
       onUpdate: (payload) => {
         // Update load in local state instantly
+        // Only update specific fields to preserve join data (driver, truck objects)
         setUnassignedLoads((prev) => {
-          const updated = prev.map((load) =>
-            load.id === payload.id ? { ...load, ...payload } : load
-          )
+          const updated = prev.map((load) => {
+            if (load.id === payload.id) {
+              // Only update fields that are in the payload, preserve existing join data
+              return {
+                ...load,
+                ...Object.fromEntries(
+                  Object.entries(payload).filter(([key]) => 
+                    !['driver', 'truck'].includes(key) && 
+                    !key.endsWith('_id') || key === 'driver_id' || key === 'truck_id'
+                  )
+                )
+              }
+            }
+            return load
+          })
           // Remove if no longer unassigned
           return updated.filter(
             (load) => !load.driver_id || !load.truck_id || load.status === "pending"
           )
         })
         
-        // Update load details if it's the selected load
+        // Update load details if it's the selected load (preserve join data)
         if (selectedLoadId === payload.id) {
-          setLoadDetails((prev) => prev ? { ...prev, ...payload } : null)
+          setLoadDetails((prev) => {
+            if (!prev) return null
+            // Only update fields from payload, preserve existing join data
+            return {
+              ...prev,
+              ...Object.fromEntries(
+                Object.entries(payload).filter(([key]) => 
+                  !['driver', 'truck'].includes(key)
+                )
+              )
+            }
+          })
         }
         
         // Show toast notification for status changes (only if status actually changed)
@@ -488,8 +512,8 @@ export default function DispatchesPage() {
                     const status = getHOSStatus(driver)
                     const maxDriveHours = 11
                     const maxOnDutyHours = 14
-                    const driveProgress = (driver.remaining_drive_hours / maxDriveHours) * 100
-                    const onDutyProgress = (driver.remaining_on_duty_hours / maxOnDutyHours) * 100
+                    const driveProgress = Math.min(100, (driver.remaining_drive_hours / maxDriveHours) * 100)
+                    const onDutyProgress = Math.min(100, (driver.remaining_on_duty_hours / maxOnDutyHours) * 100)
 
                     return (
                       <Card key={driver.driver_id} className="border-border p-4">

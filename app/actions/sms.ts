@@ -60,8 +60,41 @@ export async function sendSMS(phoneNumber: string, message: string) {
   }
 
   try {
-    // Normalize phone number (ensure it starts with +)
-    const normalizedPhone = phoneNumber.startsWith("+") ? phoneNumber : `+1${phoneNumber.replace(/\D/g, "")}`
+    // FIXED: Proper phone number normalization for international numbers
+    // Check if phone number already has country code
+    let normalizedPhone = phoneNumber.trim()
+    
+    if (!normalizedPhone.startsWith("+")) {
+      // If no country code, validate it's a valid format
+      // For now, assume US numbers if no country code (legacy behavior)
+      // But log a warning for international numbers
+      const digitsOnly = normalizedPhone.replace(/\D/g, "")
+      
+      // If it's 10 digits, assume US (+1)
+      if (digitsOnly.length === 10) {
+        normalizedPhone = `+1${digitsOnly}`
+      } else if (digitsOnly.length === 11 && digitsOnly.startsWith("1")) {
+        // Already has US country code without +
+        normalizedPhone = `+${digitsOnly}`
+      } else {
+        // Invalid format - return error instead of silently failing
+        return {
+          sent: false,
+          error: `Invalid phone number format: ${phoneNumber}. Phone numbers must include country code (e.g., +1234567890 for US, +447911123456 for UK).`,
+        }
+      }
+    } else {
+      // Has country code, validate E.164 format
+      const e164Pattern = /^\+[1-9]\d{1,14}$/
+      if (!e164Pattern.test(normalizedPhone.replace(/\s/g, ""))) {
+        return {
+          sent: false,
+          error: `Invalid phone number format: ${phoneNumber}. Must be in E.164 format (e.g., +1234567890).`,
+        }
+      }
+      // Remove any spaces
+      normalizedPhone = normalizedPhone.replace(/\s/g, "")
+    }
 
     const result = await twilio.messages.create({
       body: message,

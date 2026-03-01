@@ -84,8 +84,9 @@ export async function createAlertRule(formData: {
     return { error: "No company found", data: null }
   }
 
-  if (userData.role !== 'manager') {
-    return { error: "Only managers can create alert rules", data: null }
+  // FIXED: Allow admin and owner roles to create alert rules
+  if (!['manager', 'admin', 'owner'].includes(userData.role || '')) {
+    return { error: "Only managers, admins, and owners can create alert rules", data: null }
   }
 
   const { data, error } = await supabase
@@ -100,8 +101,16 @@ export async function createAlertRule(formData: {
       send_sms: formData.send_sms || false,
       send_in_app: formData.send_in_app !== false,
       notify_users: formData.notify_users || [],
+      // NOTE: escalation_enabled is stored but not yet implemented
+      // The escalation feature (checking, scheduling, timers) is not implemented
+      // This field is stored for future use but currently has no effect
       escalation_enabled: formData.escalation_enabled || false,
-      escalation_delay_minutes: formData.escalation_delay_minutes || 30,
+      // FIXED: Add server-side validation for escalation_delay_minutes
+      escalation_delay_minutes: formData.escalation_enabled 
+        ? (formData.escalation_delay_minutes && formData.escalation_delay_minutes >= 1 && formData.escalation_delay_minutes <= 1440
+          ? formData.escalation_delay_minutes 
+          : 30)
+        : null,
       priority: formData.priority || 'normal',
       is_active: true,
     })
@@ -294,10 +303,12 @@ export async function createAlert(formData: {
       
       if (companyUsers) {
         // Filter by role-based event type visibility
+        // FIXED: Add 'owner' role with wildcard access (same as manager)
         const roleEventTypes: Record<string, string[]> = {
           driver: ["hos_violation", "hos_alert", "dvir_required", "check_call", "load_assigned"],
           dispatcher: ["load_status_change", "driver_late", "check_call_missed", "delivery_window"],
           manager: ["*"],
+          owner: ["*"], // FIXED: Owner should see all alerts like manager
           fleet_manager: ["maintenance_due", "maintenance_overdue", "insurance_expiration"],
           maintenance_manager: ["maintenance_due", "maintenance_overdue", "dvir_required"],
         }
@@ -317,10 +328,29 @@ export async function createAlert(formData: {
     const sendEmail = priority !== "low" // All except low priority
     const sendInApp = true // Always send in-app
 
+    // FIXED: Map event_type to appropriate notification type
+    // This ensures correct email/SMS templates are used
+    const getNotificationType = (eventType: string): "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" => {
+      if (eventType.includes("maintenance") || eventType.includes("service")) {
+        return "maintenance_alert"
+      }
+      if (eventType.includes("payment") || eventType.includes("settlement")) {
+        return "payment_reminder"
+      }
+      if (eventType.includes("route")) {
+        return "route_update"
+      }
+      // Default to load_update for most alerts (load_status_change, etc.)
+      return "load_update"
+    }
+
+    const notificationType = getNotificationType(formData.event_type)
+
     // Send notifications
     for (const userId of notifyUserIds) {
-      // Push notification via Realtime (for critical/high priority)
-      if (sendPush && alertRule.send_in_app !== false) {
+      // FIXED: Decouple in-app notification from sendPush flag
+      // Create in-app notification record when sendInApp is true and rule allows it
+      if (sendInApp && alertRule.send_in_app !== false) {
         // Create in-app notification record for Realtime subscription
         // Note: notifications table may not exist, that's okay
         await supabase
@@ -345,9 +375,14 @@ export async function createAlert(formData: {
       // SMS (critical only)
       if (sendSMS && alertRule.send_sms) {
         const { sendSMSNotification } = await import("./sms")
-        await sendSMSNotification(userId, "load_update" as any, {
+        // FIXED: Use correct notification type instead of hardcoded "load_update"
+        await sendSMSNotification(userId, notificationType, {
           title: formData.title,
           message: formData.message,
+          shipmentNumber: formData.metadata?.shipment_number,
+          truckNumber: formData.metadata?.truck_number,
+          driverName: formData.metadata?.driver_name,
+          serviceType: formData.metadata?.service_type,
         }).catch(() => {
           // SMS might fail, continue with other channels
         })
@@ -355,9 +390,19 @@ export async function createAlert(formData: {
       
       // Email (all except low priority)
       if (sendEmail && alertRule.send_email) {
-        await sendNotification(userId, "load_update" as any, {
+        // FIXED: Use correct notification type instead of hardcoded "load_update"
+        await sendNotification(userId, notificationType, {
           title: formData.title,
           message: formData.message,
+          shipmentNumber: formData.metadata?.shipment_number,
+          routeName: formData.metadata?.route_name,
+          truckNumber: formData.metadata?.truck_number,
+          driverName: formData.metadata?.driver_name,
+          serviceType: formData.metadata?.service_type,
+          scheduledDate: formData.metadata?.scheduled_date,
+          status: formData.metadata?.status,
+          origin: formData.metadata?.origin,
+          destination: formData.metadata?.destination,
         }).catch(() => {
           // Email might fail, continue
         })
@@ -449,6 +494,7 @@ export async function resolveAlert(id: string) {
     .from("alerts")
     .update({
       status: 'resolved',
+      resolved_by: user.id, // FIXED: Record who resolved the alert
       resolved_at: new Date().toISOString(),
     })
     .eq("id", id)

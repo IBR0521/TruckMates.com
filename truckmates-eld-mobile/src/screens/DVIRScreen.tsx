@@ -91,17 +91,19 @@ export default function DVIRScreen() {
     }
   }
 
-  function handleAddDefect() {
+  function handleAddDefect(initialComponent?: string) {
+    const newDefect = {
+      component: initialComponent || '',
+      description: '',
+      severity: 'minor' as DefectSeverity,
+      corrected: false,
+    }
     setDefects([
       ...defects,
-      {
-        component: '',
-        description: '',
-        severity: 'minor',
-        corrected: false,
-      },
+      newDefect,
     ])
     setDefectsFound(true)
+    return defects.length // Return the index of the newly added defect
   }
 
   function handleRemoveDefect(index: number) {
@@ -209,12 +211,13 @@ export default function DVIRScreen() {
         'DVIR Submitted',
         `${inspectionType === 'pre_trip' ? 'Pre-trip' : 'Post-trip'} inspection submitted successfully.`,
         [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Reset form
-              setDefects([])
-              setDefectsFound(false)
+            {
+              text: 'OK',
+              onPress: () => {
+                // Reset form
+                setDefects([])
+                setDefectsFound(false)
+                setComponentStatuses({}) // Reset component statuses after successful submission
               setSafeToOperate(true)
               setNotes('')
               setOdometer('')
@@ -339,11 +342,8 @@ export default function DVIRScreen() {
                     if (next === 'defective') {
                       const existingDefect = defects.find(d => d.component === component)
                       if (!existingDefect) {
-                        handleAddDefect()
-                        const newIndex = defects.length
-                        setTimeout(() => {
-                          handleDefectChange(newIndex, 'component', component)
-                        }, 100)
+                        // Pass component name directly to avoid race condition
+                        handleAddDefect(component)
                       }
                       setDefectsFound(true)
                     } else if (next === 'ok') {

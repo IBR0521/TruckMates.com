@@ -15,11 +15,52 @@ export async function POST(req: NextRequest) {
     const authHeader = req.headers.get("authorization") || ""
 
     // Check for webhook secret in header (Bearer token or API key)
-    const hasValidAuth = 
+    let hasValidAuth = 
       (webhookSecret && authHeader === `Bearer ${webhookSecret}`) ||
-      (webhookSecret && apiKey === webhookSecret) ||
-      // Allow SendGrid/Postmark signature verification
-      (req.headers.get("x-sendgrid-signature") || req.headers.get("x-postmark-signature"))
+      (webhookSecret && apiKey === webhookSecret)
+
+    // Get raw body for signature verification (if needed)
+    const rawBody = await req.text()
+    let body: any = {}
+
+    // Verify SendGrid/Postmark signature if present (HMAC-SHA256)
+    const sendgridSig = req.headers.get("x-sendgrid-signature")
+    const postmarkSig = req.headers.get("x-postmark-signature")
+    
+    if (sendgridSig || postmarkSig) {
+      const signingKey = process.env.SENDGRID_SIGNING_KEY || process.env.POSTMARK_SIGNING_KEY || webhookSecret
+      
+      if (signingKey && rawBody) {
+        // Verify HMAC signature
+        const expectedSig = crypto.createHmac('sha256', signingKey)
+          .update(rawBody)
+          .digest('hex')
+        
+        const providedSig = sendgridSig || postmarkSig || ''
+        
+        // Use timing-safe comparison to prevent timing attacks
+        // Note: Both signatures must be same length for timingSafeEqual
+        if (expectedSig.length === providedSig.length) {
+          try {
+            if (crypto.timingSafeEqual(Buffer.from(expectedSig), Buffer.from(providedSig))) {
+              hasValidAuth = true
+            }
+          } catch {
+            // Signature mismatch
+          }
+        }
+      }
+    }
+
+    // Parse body as JSON
+    try {
+      body = JSON.parse(rawBody)
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid JSON body" },
+        { status: 400 }
+      )
+    }
 
     // SECURITY: Fail-closed - require authentication if WEBHOOK_SECRET is set
     if (!webhookSecret || !hasValidAuth) {
@@ -36,8 +77,6 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       )
     }
-
-    const body = await req.json()
 
     // Determine source from headers or body
     const source = req.headers.get("x-webhook-source") || body.source || "webhook"

@@ -21,11 +21,15 @@ interface Geofence {
   id: string
   name: string
   description?: string
-  zone_type: "circle" | "polygon"
+  zone_type: "circle" | "polygon" | "rectangle"
   center_latitude?: number
   center_longitude?: number
   radius_meters?: number
-  polygon_coordinates?: number[][]
+  polygon_coordinates?: Array<{ lat: number; lng: number }> | number[][]
+  north_bound?: number
+  south_bound?: number
+  east_bound?: number
+  west_bound?: number
   is_active: boolean
 }
 
@@ -397,12 +401,24 @@ export function FleetMap({
         // Create info window with close button functionality
         const infoWindow = new window.google.maps.InfoWindow()
         
+        // Escape HTML to prevent XSS
+        const escapeHtml = (s: string) => {
+          const map: Record<string, string> = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+          }
+          return s.replace(/[&<>"']/g, (c) => map[c] || c)
+        }
+
         // Function to create content with working close button
         const createInfoContent = () => {
           return `
             <div style="padding: 14px; min-width: 220px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #ffffff; border-radius: 8px; position: relative;">
               <button 
-                onclick="window.closeGeofenceInfo && window.closeGeofenceInfo()"
+                onclick="window.closeGeofenceInfo_${geofence.id} && window.closeGeofenceInfo_${geofence.id}()"
                 style="position: absolute; top: 8px; right: 8px; background: transparent; border: none; cursor: pointer; padding: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: background 0.2s; z-index: 1000;"
                 onmouseover="this.style.background='#f3f4f6'"
                 onmouseout="this.style.background='transparent'"
@@ -413,11 +429,11 @@ export function FleetMap({
                 </svg>
               </button>
               <div style="font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 8px; line-height: 1.3; padding-right: 28px;">
-                ${geofence.name}
+                ${escapeHtml(geofence.name)}
               </div>
               ${geofence.description ? `
                 <div style="font-size: 14px; color: #374151; margin-top: 6px; line-height: 1.5;">
-                  ${geofence.description}
+                  ${escapeHtml(geofence.description)}
                 </div>
               ` : ''}
               <div style="font-size: 12px; color: #6b7280; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
@@ -448,12 +464,12 @@ export function FleetMap({
           // Toggle info window - close if already open, open if closed
           if (infoWindow.getMap()) {
             infoWindow.close()
-            window.closeGeofenceInfo = undefined
+            ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = undefined
           } else {
-            // Set up close function before opening
-            window.closeGeofenceInfo = () => {
+            // Set up close function before opening (scoped to this geofence)
+            ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = () => {
               infoWindow.close()
-              window.closeGeofenceInfo = undefined
+              ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = undefined
             }
             
             // Set content and open
@@ -468,11 +484,22 @@ export function FleetMap({
 
         geofenceShapesRef.current.set(geofence.id, circle)
       } else if (geofence.zone_type === "polygon" && geofence.polygon_coordinates) {
+        // Handle both {lat, lng} and [lat, lng] formats
+        const paths = geofence.polygon_coordinates.map((coord: any) => {
+          if (typeof coord === 'object' && 'lat' in coord && 'lng' in coord) {
+            return { lat: coord.lat, lng: coord.lng }
+          } else if (Array.isArray(coord) && coord.length >= 2) {
+            return { lat: coord[0], lng: coord[1] }
+          }
+          return null
+        }).filter((p: any) => p !== null)
+        
+        if (paths.length === 0) {
+          return // Skip invalid polygon
+        }
+        
         const polygon = new window.google.maps.Polygon({
-          paths: geofence.polygon_coordinates.map((coord) => ({
-            lat: coord[0],
-            lng: coord[1],
-          })),
+          paths,
           strokeColor: isSelected ? "#ef4444" : "#3b82f6",
           strokeOpacity: isSelected ? 0.8 : 0.5,
           strokeWeight: isSelected ? 3 : 2,
@@ -485,12 +512,24 @@ export function FleetMap({
         // Create info window with close button functionality
         const infoWindow = new window.google.maps.InfoWindow()
         
+        // Escape HTML to prevent XSS
+        const escapeHtml = (s: string) => {
+          const map: Record<string, string> = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+          }
+          return s.replace(/[&<>"']/g, (c) => map[c] || c)
+        }
+
         // Function to create content with working close button
         const createInfoContent = () => {
           return `
             <div style="padding: 14px; min-width: 220px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #ffffff; border-radius: 8px; position: relative;">
               <button 
-                onclick="window.closeGeofenceInfo && window.closeGeofenceInfo()"
+                onclick="window.closeGeofenceInfo_${geofence.id} && window.closeGeofenceInfo_${geofence.id}()"
                 style="position: absolute; top: 8px; right: 8px; background: transparent; border: none; cursor: pointer; padding: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: background 0.2s; z-index: 1000;"
                 onmouseover="this.style.background='#f3f4f6'"
                 onmouseout="this.style.background='transparent'"
@@ -501,11 +540,11 @@ export function FleetMap({
                 </svg>
               </button>
               <div style="font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 8px; line-height: 1.3; padding-right: 28px;">
-                ${geofence.name}
+                ${escapeHtml(geofence.name)}
               </div>
               ${geofence.description ? `
                 <div style="font-size: 14px; color: #374151; margin-top: 6px; line-height: 1.5;">
-                  ${geofence.description}
+                  ${escapeHtml(geofence.description)}
                 </div>
               ` : ''}
               <div style="font-size: 12px; color: #6b7280; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
@@ -536,18 +575,23 @@ export function FleetMap({
           // Toggle info window - close if already open, open if closed
           if (infoWindow.getMap()) {
             infoWindow.close()
-            window.closeGeofenceInfo = undefined
+            ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = undefined
           } else {
-            // Set up close function before opening
-            window.closeGeofenceInfo = () => {
+            // Set up close function before opening (scoped to this geofence)
+            ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = () => {
               infoWindow.close()
-              window.closeGeofenceInfo = undefined
+              ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = undefined
             }
             
             // Get center of polygon for info window
             const bounds = new window.google.maps.LatLngBounds()
-            geofence.polygon_coordinates!.forEach((coord) => {
-              bounds.extend({ lat: coord[0], lng: coord[1] })
+            geofence.polygon_coordinates!.forEach((coord: any) => {
+              // Handle both {lat, lng} and [lat, lng] formats
+              const lat = coord.lat ?? coord[0] ?? coord.latitude
+              const lng = coord.lng ?? coord[1] ?? coord.longitude
+              if (lat != null && lng != null) {
+                bounds.extend({ lat, lng })
+              }
             })
             
             // Set content and open

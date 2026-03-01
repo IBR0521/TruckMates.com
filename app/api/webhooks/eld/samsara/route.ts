@@ -33,8 +33,14 @@ export async function POST(request: NextRequest) {
     // Get webhook secret from environment
     const webhookSecret = process.env.SAMSARA_WEBHOOK_SECRET || ""
     
-    // Verify signature if secret is configured
-    if (webhookSecret && !verifySamsaraSignature(body, signature, webhookSecret)) {
+    // SECURITY: Fail-closed - require secret to be configured
+    if (!webhookSecret) {
+      console.error("[Samsara Webhook] SAMSARA_WEBHOOK_SECRET not configured")
+      return NextResponse.json({ error: "Webhook not configured" }, { status: 503 })
+    }
+    
+    // Verify signature
+    if (!verifySamsaraSignature(body, signature, webhookSecret)) {
       console.error("[Samsara Webhook] Invalid signature")
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
     }
@@ -97,6 +103,10 @@ async function processHOSLogs(data: any, device: any, supabase: any) {
   const logs = data.logs || data.hosLogs || [data]
   
   for (const logData of logs) {
+    // Derive log_date from start_time (required field)
+    const startTime = logData.startTime || logData.start_time || logData.start
+    const logDate = startTime ? new Date(startTime).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+    
     const log = {
       driver_id: logData.driver?.id || logData.driverId,
       log_type: mapSamsaraStatus(logData.dutyStatus || logData.status),
@@ -126,6 +136,7 @@ async function processHOSLogs(data: any, device: any, supabase: any) {
       driver_id: log.driver_id,
       truck_id: device.truck_id,
       eld_device_id: device.id,
+      log_date: logDate, // Required field - derive from start_time
       log_type: log.log_type,
       start_time: log.start_time,
       end_time: log.end_time,

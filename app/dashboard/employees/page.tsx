@@ -84,21 +84,30 @@ export default function EmployeesPage() {
 
         if (userResult.error || !userResult.data) {
           console.error("Failed to load user data after retries:", userResult.error)
-          // Don't redirect, just show error and allow user to stay on page
           toast.error("Failed to load user data. Please refresh the page.")
           setIsLoading(false)
-          // Still allow access - don't block the page
-          setIsManager(true)
-          setIsSuperAdmin(true) // Assume super admin if we can't verify
+          // HIGH FIX 6: Fail closed - deny access on auth failure
+          setIsManager(false)
+          setIsSuperAdmin(false)
+          router.push("/dashboard")
           return
         }
 
         const userRole = userResult.data.role
-        const isManagerOrSuperAdmin = userRole === "manager" || userRole === "super_admin" || userRole === "super_admin"
+        // HIGH FIX 6 & MEDIUM FIX 16: Fix role check to use correct role names
+        // LOW FIX 17: Remove dead code - isManagerOrSuperAdmin was computed but never used
+        const isManagerOrSuperAdmin = userRole === "operations_manager" || userRole === "super_admin"
         
-        // Always allow access - don't redirect
-        setIsManager(true)
-        setIsSuperAdmin(userRole === "super_admin" || userRole === "manager")
+        // HIGH FIX 6: Only grant access if user is actually a manager
+        setIsManager(isManagerOrSuperAdmin)
+        setIsSuperAdmin(userRole === "super_admin")
+        
+        // HIGH FIX 6: Deny access to non-managers
+        if (!isManagerOrSuperAdmin) {
+          toast.error("You do not have permission to view this page")
+          router.push("/dashboard")
+          return
+        }
 
         // Load employees
         const employeesResult = await getEmployees()
@@ -111,9 +120,11 @@ export default function EmployeesPage() {
         }
       } catch (error) {
         console.error("Error in loadData:", error)
-        // Don't redirect on error - allow user to stay on page
-        setIsManager(true)
-        setIsSuperAdmin(true) // Assume super admin on error
+        // HIGH FIX 6: Fail closed - deny access on error
+        setIsManager(false)
+        setIsSuperAdmin(false)
+        toast.error("Failed to load page data. Please refresh.")
+        router.push("/dashboard")
       } finally {
         setIsLoading(false)
       }
@@ -212,10 +223,21 @@ export default function EmployeesPage() {
   )
 }
 
-  // Always show the page - removed blocking check
-  // if (!isManager) {
-  //   return null
-  // }
+  // HIGH FIX 6: Block access for non-managers
+  if (!isManager) {
+    return (
+      <div className="w-full">
+        <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4">
+          <h1 className="text-2xl font-bold text-foreground">Access Denied</h1>
+        </div>
+        <div className="p-4 md:p-8">
+          <div className="max-w-6xl mx-auto">
+            <p className="text-muted-foreground">You do not have permission to view this page.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="w-full">

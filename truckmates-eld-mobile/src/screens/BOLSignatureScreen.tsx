@@ -7,6 +7,7 @@ import React, { useState, useRef } from 'react'
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -134,7 +135,7 @@ export default function BOLSignatureScreen() {
       <View style={styles.form}>
         <Text style={styles.label}>Name (as it appears on signature)</Text>
         <View style={styles.inputContainer}>
-          <Text
+          <TextInput
             style={styles.input}
             value={signedByName}
             onChangeText={setSignedByName}

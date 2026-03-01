@@ -35,21 +35,30 @@ export function RemindersWidget() {
   const loadReminders = async () => {
     setIsLoading(true)
     try {
-      // Get overdue and upcoming reminders
-      const today = new Date().toISOString().split("T")[0]
-      const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+      // HIGH FIX 7 & LOW FIX 1: Parse dates as local noon to avoid timezone issues
+      const today = new Date()
+      today.setHours(12, 0, 0, 0)
+      const todayStr = today.toISOString().split("T")[0]
+      
+      const sevenDaysFromNow = new Date()
+      sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7)
+      sevenDaysFromNow.setHours(12, 0, 0, 0)
+      const sevenDaysFromNowStr = sevenDaysFromNow.toISOString().split("T")[0]
       
       const [overdueResult, upcomingResult] = await Promise.all([
         getOverdueReminders(),
         getReminders({
           status: "pending",
-          due_date_start: today,
-          due_date_end: sevenDaysFromNow,
+          due_date_start: todayStr,
+          due_date_end: sevenDaysFromNowStr,
         }),
       ])
 
       const overdue = overdueResult.data || []
       const upcoming = upcomingResult.data || []
+
+      // MEDIUM FIX 5: Track total overdue count before slicing
+      const totalOverdueCount = overdue.length
 
       // Combine and sort: overdue first, then by due date
       const allReminders = [
@@ -63,7 +72,8 @@ export function RemindersWidget() {
         return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
       })
 
-      setReminders(allReminders.slice(0, 5)) // Show top 5
+      // Store total overdue count in state for badge
+      setReminders(allReminders.slice(0, 5).map(r => ({ ...r, totalOverdueCount }))) // Show top 5
     } catch (error: any) {
       console.error("Error loading reminders:", error)
     } finally {
@@ -118,10 +128,14 @@ export function RemindersWidget() {
   }
 
   const formatDueDate = (dueDate: string, dueTime?: string) => {
-    const date = new Date(dueDate)
-    const isOverdue = isPast(date) && !isToday(date)
+    // LOW FIX 1: Parse as local noon to avoid timezone issues
+    const date = new Date(dueDate + "T12:00:00")
+    const now = new Date()
+    now.setHours(12, 0, 0, 0)
+    
+    const isOverdue = date < now && !isToday(date)
     const isTodayDate = isToday(date)
-    const daysUntil = differenceInDays(date, new Date())
+    const daysUntil = differenceInDays(date, now)
 
     if (isOverdue) {
       return `${Math.abs(daysUntil)} day${Math.abs(daysUntil) !== 1 ? "s" : ""} overdue`
@@ -174,9 +188,9 @@ export function RemindersWidget() {
         <div className="flex items-center gap-3">
           <Bell className="w-5 h-5 text-muted-foreground" />
           <h3 className="text-lg font-semibold text-foreground">Reminders</h3>
-          {reminders.filter((r: any) => r.isOverdue).length > 0 && (
+          {reminders.length > 0 && reminders[0].totalOverdueCount > 0 && (
             <Badge variant="destructive" className="ml-2">
-              {reminders.filter((r: any) => r.isOverdue).length} Overdue
+              {reminders[0].totalOverdueCount} Overdue
             </Badge>
           )}
         </div>
@@ -189,8 +203,12 @@ export function RemindersWidget() {
 
       <div className="space-y-3">
         {reminders.map((reminder: any) => {
-          const isOverdue = reminder.isOverdue || isPast(new Date(reminder.due_date))
-          const isUrgent = isOverdue || differenceInDays(new Date(reminder.due_date), new Date()) <= 1
+          // LOW FIX 1: Parse as local noon for consistent timezone handling
+          const reminderDate = new Date(reminder.due_date + "T12:00:00")
+          const now = new Date()
+          now.setHours(12, 0, 0, 0)
+          const isOverdue = reminder.isOverdue || reminderDate < now
+          const isUrgent = isOverdue || differenceInDays(reminderDate, now) <= 1
 
           return (
             <div

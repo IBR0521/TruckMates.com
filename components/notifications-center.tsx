@@ -12,13 +12,12 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useRealtimeNotifications } from "@/lib/hooks/use-realtime"
 import { formatDate } from "@/lib/format-utils"
-import { createClient } from "@/lib/supabase/client"
 
 export function NotificationsCenter() {
   const [open, setOpen] = useState(false)
   const { notifications, unreadCount, markAsRead, markAllAsRead } =
     useRealtimeNotifications()
-  const supabase = createClient()
+  // FIXED: Removed unused supabase client
 
   // Note: Notifications are managed by the useRealtimeNotifications hook
   // This component just displays them
@@ -153,8 +152,8 @@ export function NotificationsCenter() {
               variant="ghost"
               className="w-full text-xs"
               onClick={() => {
-                // Navigate to full notifications page
-                window.location.href = "/dashboard/alerts"
+                // FIXED: Navigate to correct notifications page
+                window.location.href = "/dashboard/notifications"
               }}
             >
               View all notifications

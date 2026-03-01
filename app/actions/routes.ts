@@ -5,6 +5,7 @@ import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
 import { validateRequiredString, sanitizeString } from "@/lib/validation"
 import { sendNotification } from "./notifications"
+import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
 // Helper function to send notifications in background (non-blocking)
 async function sendNotificationsForRouteUpdate(routeData: any) {
@@ -169,6 +170,12 @@ export async function createRoute(formData: {
   route_type?: string
   scenario?: string
 }) {
+  // Check permission
+  const permission = await checkCreatePermission("routes")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to create routes", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -313,6 +320,12 @@ export async function updateRoute(
     [key: string]: any
   }
 ) {
+  // Check permission
+  const permission = await checkEditPermission("routes")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to edit routes", data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -432,6 +445,12 @@ export async function updateRoute(
 }
 
 export async function deleteRoute(id: string) {
+  // Check permission
+  const permission = await checkDeletePermission("routes")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to delete routes" }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -507,6 +526,18 @@ export async function bulkDeleteRoutes(ids: string[]) {
 }
 
 export async function bulkUpdateRouteStatus(ids: string[], status: string) {
+  // Check permission
+  const permission = await checkEditPermission("routes")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to edit routes", data: null }
+  }
+
+  // Validate status value
+  const validStatuses = ["pending", "scheduled", "in_progress", "completed", "cancelled"]
+  if (!validStatuses.includes(status)) {
+    return { error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`, data: null }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -583,6 +614,8 @@ export async function duplicateRoute(id: string) {
   duplicateData.name = `${originalRoute.name} (Copy)`
   duplicateData.status = "pending" // Reset to pending
   duplicateData.estimated_arrival = null
+  duplicateData.driver_id = null // Clear driver assignment
+  duplicateData.truck_id = null // Clear truck assignment
 
   const { data: newRoute, error: createError } = await supabase
     .from("routes")

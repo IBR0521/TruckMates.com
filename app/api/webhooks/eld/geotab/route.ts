@@ -43,10 +43,10 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient()
     
     // Geotab webhooks include entityType and entity
-    const entityType = data.entityType || data.type
+    const entityType = body.entityType || body.type || body.entity?.type
     
     // Get device by provider_device_id (Geotab uses device serial)
-    const deviceId = data.entity?.device?.id || data.deviceId
+    const deviceId = body.entity?.device?.id || body.deviceId || body.device?.id
     const { data: device, error: deviceError } = await supabase
       .from("eld_devices")
       .select("id, company_id, truck_id, provider_device_id")
@@ -63,17 +63,17 @@ export async function POST(request: NextRequest) {
     switch (entityType) {
       case "LogRecord":
       case "hos_log":
-        await processHOSLog(data, device, supabase)
+        await processHOSLog(body, device, supabase)
         break
         
       case "StatusData":
       case "gps_location":
-        await processLocation(data, device, supabase)
+        await processLocation(body, device, supabase)
         break
         
       case "ExceptionEvent":
       case "hos_violation":
-        await processViolation(data, device, supabase)
+        await processViolation(body, device, supabase)
         break
         
       default:
@@ -92,6 +92,10 @@ export async function POST(request: NextRequest) {
 
 async function processHOSLog(data: any, device: any, supabase: any) {
   const logData = data.entity || data
+  
+  // Derive log_date from start_time (required field)
+  const startTime = logData.dateTime || logData.startTime || logData.start
+  const logDate = startTime ? new Date(startTime).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
   
   const log = {
     driver_id: logData.driver?.id || logData.driverId,
@@ -122,6 +126,7 @@ async function processHOSLog(data: any, device: any, supabase: any) {
     driver_id: log.driver_id,
     truck_id: device.truck_id,
     eld_device_id: device.id,
+    log_date: logDate, // Required field - derive from start_time
     log_type: log.log_type,
     start_time: log.start_time,
     end_time: log.end_time,
