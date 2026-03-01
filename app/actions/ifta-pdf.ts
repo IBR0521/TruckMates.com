@@ -428,8 +428,17 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
     `
 
     // FIXED: Generate actual PDF using Puppeteer instead of returning HTML
+    // Note: Puppeteer is optional - if not installed, we return HTML
     try {
-      const puppeteer = await import("puppeteer")
+      // Try to import puppeteer - it may not be installed in all environments
+      const puppeteer = await import("puppeteer").catch(() => null)
+      
+      if (!puppeteer) {
+        // Puppeteer not available - return HTML as fallback
+        console.warn("[IFTA PDF] Puppeteer not available, returning HTML")
+        return { pdf: null, html, error: null }
+      }
+
       const browser = await puppeteer.launch({
         headless: true,
         args: [

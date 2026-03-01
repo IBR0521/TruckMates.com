@@ -201,23 +201,22 @@ export async function POST(request: NextRequest) {
         // Always check on latest location (not random) to ensure IFTA compliance
         // Note: This should be optimized with a proper state cache, but for now check every time
         // TODO: Implement proper state cache to avoid excessive API calls
-          await detectStateCrossing({
-            company_id: companyId,
-            truck_id: device.truck_id,
-            driver_id: latestLocation.driver_id,
-            eld_device_id: device_id,
-            latitude: latestLocation.latitude,
-            longitude: latestLocation.longitude,
-            timestamp: latestLocation.timestamp,
-            route_id: activeRouteId,
-            load_id: activeLoadId,
-            speed: latestLocation.speed,
-            odometer: latestLocation.odometer,
-            address: latestLocation.address,
-          }).catch(err => 
-            console.error("State crossing detection error (non-blocking):", err)
-          )
-        }
+        await detectStateCrossing({
+          company_id: companyId,
+          truck_id: device.truck_id,
+          driver_id: latestLocation.driver_id,
+          eld_device_id: device_id,
+          latitude: latestLocation.latitude,
+          longitude: latestLocation.longitude,
+          timestamp: latestLocation.timestamp,
+          route_id: activeRouteId,
+          load_id: activeLoadId,
+          speed: latestLocation.speed,
+          odometer: latestLocation.odometer,
+          address: latestLocation.address,
+        }).catch(err => 
+          console.error("State crossing detection error (non-blocking):", err)
+        )
       } catch (stateError) {
         // Don't fail the request if state crossing detection fails
         console.error("State crossing detection error (non-blocking):", stateError)

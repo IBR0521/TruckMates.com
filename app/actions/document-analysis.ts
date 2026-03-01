@@ -304,9 +304,6 @@ export async function analyzeDocument(fileUrl: string, fileName: string): Promis
       data: null
     }
   }
-  
-  // FIXED: Declare multiPageWarning at function scope
-  let multiPageWarning: string | null = null
 
   // FIXED: Rate limit should fail closed, not open
   let rateCheck

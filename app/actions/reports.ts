@@ -72,7 +72,7 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
     loadQuery = loadQuery.lte("created_at", endDate + "T23:59:59")
   }
 
-  const limit = 10000 // Reasonable limit for report generation
+  // Use the same limit variable declared above
   const { data: loads } = await loadQuery
     .order("created_at", { ascending: false })
     .limit(limit)
