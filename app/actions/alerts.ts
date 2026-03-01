@@ -126,6 +126,154 @@ export async function createAlertRule(formData: {
 }
 
 /**
+ * Update alert rule
+ */
+export async function updateAlertRule(
+  ruleId: string,
+  formData: {
+    name?: string
+    description?: string
+    event_type?: string
+    conditions?: any
+    send_email?: boolean
+    send_sms?: boolean
+    send_in_app?: boolean
+    notify_users?: string[]
+    escalation_enabled?: boolean
+    escalation_delay_minutes?: number
+    priority?: string
+    is_active?: boolean
+  }
+) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  // FIXED: Allow admin and owner roles to update alert rules
+  if (!['manager', 'admin', 'owner'].includes(userData.role || '')) {
+    return { error: "Only managers, admins, and owners can update alert rules", data: null }
+  }
+
+  // Verify the rule belongs to the company
+  const { data: existingRule } = await supabase
+    .from("alert_rules")
+    .select("id, company_id")
+    .eq("id", ruleId)
+    .eq("company_id", userData.company_id)
+    .single()
+
+  if (!existingRule) {
+    return { error: "Alert rule not found", data: null }
+  }
+
+  const updateData: any = {}
+  if (formData.name !== undefined) updateData.name = formData.name
+  if (formData.description !== undefined) updateData.description = formData.description || null
+  if (formData.event_type !== undefined) updateData.event_type = formData.event_type
+  if (formData.conditions !== undefined) updateData.conditions = formData.conditions
+  if (formData.send_email !== undefined) updateData.send_email = formData.send_email
+  if (formData.send_sms !== undefined) updateData.send_sms = formData.send_sms
+  if (formData.send_in_app !== undefined) updateData.send_in_app = formData.send_in_app
+  if (formData.notify_users !== undefined) updateData.notify_users = formData.notify_users
+  if (formData.escalation_enabled !== undefined) updateData.escalation_enabled = formData.escalation_enabled
+  if (formData.escalation_delay_minutes !== undefined) {
+    updateData.escalation_delay_minutes = formData.escalation_enabled 
+      ? (formData.escalation_delay_minutes && formData.escalation_delay_minutes >= 1 && formData.escalation_delay_minutes <= 1440
+        ? formData.escalation_delay_minutes 
+        : 30)
+      : null
+  }
+  if (formData.priority !== undefined) updateData.priority = formData.priority
+  if (formData.is_active !== undefined) updateData.is_active = formData.is_active
+
+  const { data, error } = await supabase
+    .from("alert_rules")
+    .update(updateData)
+    .eq("id", ruleId)
+    .eq("company_id", userData.company_id)
+    .select()
+    .single()
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  revalidatePath("/dashboard/settings/alerts")
+  return { data, error: null }
+}
+
+/**
+ * Delete alert rule
+ */
+export async function deleteAlertRule(ruleId: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  // FIXED: Allow admin and owner roles to delete alert rules
+  if (!['manager', 'admin', 'owner'].includes(userData.role || '')) {
+    return { error: "Only managers, admins, and owners can delete alert rules", data: null }
+  }
+
+  // Verify the rule belongs to the company
+  const { data: existingRule } = await supabase
+    .from("alert_rules")
+    .select("id, company_id")
+    .eq("id", ruleId)
+    .eq("company_id", userData.company_id)
+    .single()
+
+  if (!existingRule) {
+    return { error: "Alert rule not found", data: null }
+  }
+
+  const { error } = await supabase
+    .from("alert_rules")
+    .delete()
+    .eq("id", ruleId)
+    .eq("company_id", userData.company_id)
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  revalidatePath("/dashboard/settings/alerts")
+  return { data: { success: true }, error: null }
+}
+
+/**
  * Get active alerts with role-based filtering
  */
 export async function getAlerts(filters?: {
