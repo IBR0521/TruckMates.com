@@ -9,8 +9,6 @@
     "app/api/**/*.ts": {
       "maxDuration": 30
     }
-  },
-  "buildCommand": "next build",
-  "outputDirectory": ".next"
+  }
 }
 
