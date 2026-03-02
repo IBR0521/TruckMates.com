@@ -111,13 +111,13 @@ export default function Home() {
             </div>
 
             {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-              <Link href="/register" suppressHydrationWarning>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8" suppressHydrationWarning>
+              <Link href="/register">
                 <Button size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-8 py-6 shadow-lg shadow-primary/25">
                   Get Started Free <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
-              <Link href="/demo" suppressHydrationWarning>
+              <Link href="/demo">
                 <Button size="lg" variant="outline" className="w-full sm:w-auto border-2 border-primary text-primary hover:bg-primary/10 text-lg px-8 py-6">
                   <Play className="mr-2 w-5 h-5" />
                   View Demo

@@ -91,7 +91,7 @@ export default function BOLsPage() {
 
       {/* Filters and Search */}
       <div className="p-4 md:p-8">
-        <div className="mb-6 flex flex-col sm:flex-row gap-4">
+        <div className="mb-6 flex flex-col sm:flex-row gap-4" suppressHydrationWarning>
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <Input
