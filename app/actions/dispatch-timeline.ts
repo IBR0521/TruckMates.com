@@ -220,6 +220,7 @@ export async function getDriverTimelines(filters?: {
     const startDate = filters?.start_date || new Date()
     const endDate = filters?.end_date || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
 
+    // MEDIUM FIX: Add limit to prevent unbounded queries even with date range
     // Get all assigned loads
     const { data: loads, error: loadsError } = await supabase
       .from("loads")
@@ -253,11 +254,13 @@ export async function getDriverTimelines(filters?: {
       .gte("load_date", startDate.toISOString().split("T")[0])
       .lte("estimated_delivery", endDate.toISOString().split("T")[0])
       .in("status", ["scheduled", "in_transit", "in_progress"])
+      .limit(1000) // Reasonable limit for timeline view (7 days)
 
     if (loadsError) {
       return { error: loadsError.message, data: null }
     }
 
+    // MEDIUM FIX: Add limit to prevent unbounded queries
     // Get all assigned routes (we'll filter by date in JavaScript since routes may not have all date fields)
     const { data: routes, error: routesError } = await supabase
       .from("routes")
@@ -289,6 +292,7 @@ export async function getDriverTimelines(filters?: {
       .eq("company_id", company_id)
       .not("driver_id", "is", null)
       .in("status", ["scheduled", "in_progress", "in_transit"])
+      .limit(1000) // Reasonable limit for timeline view (7 days)
 
     if (routesError) {
       return { error: routesError.message, data: null }
@@ -443,10 +447,15 @@ export async function getDriverTimelines(filters?: {
       timeline.jobs.push(job)
     }
 
+    // MEDIUM FIX: Batch HOS checks to avoid N+1 queries - process all drivers in parallel
     // Detect conflicts and HOS violations for each driver
     const timelines: DriverTimeline[] = []
-
-    for (const [driverId, timeline] of driverMap.entries()) {
+    const allDriverIds = Array.from(driverMap.keys())
+    
+    // Process all drivers in parallel (conflict detection is fast, HOS checks run in parallel)
+    const processedTimelines = await Promise.all(
+      allDriverIds.map(async (driverId) => {
+        const timeline = driverMap.get(driverId)!
       // Sort jobs by scheduled start time
       timeline.jobs.sort(
         (a, b) => new Date(a.scheduled_start).getTime() - new Date(b.scheduled_start).getTime()
@@ -479,8 +488,11 @@ export async function getDriverTimelines(filters?: {
         0
       )
 
-      timelines.push(timeline)
-    }
+      return timeline
+      })
+    )
+    
+    timelines.push(...processedTimelines)
 
     // Filter by driver_id if specified
     if (filters?.driver_id) {

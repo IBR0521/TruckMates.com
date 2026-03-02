@@ -137,14 +137,20 @@ export async function createAddressBookEntry(
           const geocodeResult = await geocodeAddress(fullAddress)
           
           if (geocodeResult.data) {
-            coordinates = {
-              lat: geocodeResult.data.lat,
-              lng: geocodeResult.data.lng,
+            // LOW FIX: Validate coordinate bounds before storing
+            const lat = geocodeResult.data.lat
+            const lng = geocodeResult.data.lng
+            
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+              geocoding_status = "failed"
+              console.error("[Address Book] Invalid coordinates from geocoding:", { lat, lng })
+            } else {
+              coordinates = { lat, lng }
+              geocoding_status = "verified"
+              formatted_address = geocodeResult.data.formatted_address
+              place_id = geocodeResult.data.place_id
+              geocoded_at = new Date().toISOString()
             }
-            geocoding_status = "verified"
-            formatted_address = geocodeResult.data.formatted_address
-            place_id = geocodeResult.data.place_id
-            geocoded_at = new Date().toISOString()
           } else {
             geocoding_status = "failed"
             // Log the error for debugging
@@ -479,8 +485,25 @@ export async function geocodeAddressBookEntry(
       return { data: null, error: geocodeResult.error || "Failed to geocode address" }
     }
 
+    // LOW FIX: Validate coordinate bounds before storing
+    const lat = geocodeResult.data.lat
+    const lng = geocodeResult.data.lng
+    
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      await supabase
+        .from("address_book")
+        .update({ geocoding_status: "failed" })
+        .eq("id", entryId)
+        .eq("company_id", result.company_id)
+      
+      return { 
+        data: null, 
+        error: "Invalid coordinates returned from geocoding service. Please try again or enter coordinates manually." 
+      }
+    }
+
     // Update entry with geocoded coordinates
-    const coordinatesString = `POINT(${geocodeResult.data.lng} ${geocodeResult.data.lat})`
+    const coordinatesString = `POINT(${lng} ${lat})`
 
     const { data: updatedEntry, error: updateError } = await supabase
       .from("address_book")
@@ -742,6 +765,21 @@ export async function deleteAddressBookEntry(
   }
 
   try {
+    // LOW FIX: Check if entry is referenced by active loads before deletion
+    const { data: referencedLoads } = await supabase
+      .from("loads")
+      .select("id, shipment_number")
+      .eq("company_id", result.company_id)
+      .or(`shipper_address_book_id.eq.${entryId},consignee_address_book_id.eq.${entryId}`)
+      .not("status", "in", '("delivered","cancelled","completed")')
+      .limit(1)
+    
+    if (referencedLoads && referencedLoads.length > 0) {
+      return { 
+        error: `Cannot delete address book entry: It is referenced by active load(s) (e.g., ${referencedLoads[0].shipment_number || referencedLoads[0].id}). Please complete or cancel the load(s) first.` 
+      }
+    }
+    
     const { error } = await supabase
       .from("address_book")
       .delete()

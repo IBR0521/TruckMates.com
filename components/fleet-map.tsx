@@ -348,13 +348,32 @@ export function FleetMap({
         })
       }
 
-      // Add info window
+      // HIGH FIX: Escape HTML to prevent XSS attacks
+      const escapeHtml = (text: string | null | undefined): string => {
+        if (!text) return ""
+        const div = document.createElement("div")
+        div.textContent = text
+        return div.innerHTML
+      }
+
+      // LOW FIX: Format truck popup with proper formatting (status capitalization, driver name formatting)
+      const formatStatus = (status?: string) => {
+        if (!status) return "Unknown status"
+        return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+      }
+      
+      const formatDriverName = (name?: string) => {
+        if (!name) return "No driver"
+        return name.trim()
+      }
+      
+      // Add info window with escaped and formatted content
       const infoWindow = new window.google.maps.InfoWindow({
         content: `
-          <div style="padding: 8px;">
-            <strong>${vehicle.truck_number}</strong><br/>
-            ${vehicle.driver?.name || "No driver"}<br/>
-            ${vehicle.status || "Unknown status"}
+          <div style="padding: 8px; font-family: system-ui, -apple-system, sans-serif;">
+            <strong style="font-size: 14px; color: #1f2937;">${escapeHtml(vehicle.truck_number || "Unknown")}</strong><br/>
+            <span style="color: #6b7280; font-size: 12px;">${escapeHtml(formatDriverName(vehicle.driver?.name))}</span><br/>
+            <span style="color: #4b5563; font-size: 12px;">${escapeHtml(formatStatus(vehicle.status))}</span>
           </div>
         `,
       })

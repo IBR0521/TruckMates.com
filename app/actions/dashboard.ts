@@ -514,12 +514,16 @@ export async function getDashboardStats() {
     }
 
     // Get financial metrics (with timeout protection)
-    // Get ALL invoices (not just paid) to match Reports logic
+    // MEDIUM FIX: Add date range filter and limits to prevent full-table scans
+    // Use last 12 months for financial data (reasonable for dashboard)
+    const twelveMonthsAgo = new Date()
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
+    
     const financialPromise = Promise.all([
-      supabase.from("invoices").select("amount, status, issue_date, created_at").eq("company_id", companyId),
-      supabase.from("expenses").select("amount, date").eq("company_id", companyId),
-      supabase.from("invoices").select("amount, status, due_date").eq("company_id", companyId).in("status", ["sent", "overdue"]),
-      supabase.from("loads").select("total_rate, value, created_at").eq("company_id", companyId),
+      supabase.from("invoices").select("amount, status, issue_date, created_at").eq("company_id", companyId).gte("created_at", twelveMonthsAgo.toISOString()).limit(10000),
+      supabase.from("expenses").select("amount, date").eq("company_id", companyId).gte("date", twelveMonthsAgo.toISOString().split('T')[0]).limit(10000),
+      supabase.from("invoices").select("amount, status, due_date").eq("company_id", companyId).in("status", ["sent", "overdue"]).limit(1000),
+      supabase.from("loads").select("total_rate, value, created_at").eq("company_id", companyId).gte("created_at", twelveMonthsAgo.toISOString()).limit(10000),
     ]).catch(() => {
       return [
         { data: [] },
@@ -571,6 +575,7 @@ export async function getDashboardStats() {
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
       sevenDaysAgo.setHours(0, 0, 0, 0) // Start of day
       
+      // MEDIUM FIX: Add limits to prevent unbounded queries (even with date range)
       // Get ALL invoices (not just paid) - use created_at for reliable date
       const { data: invoices } = await supabase
         .from("invoices")
@@ -578,6 +583,7 @@ export async function getDashboardStats() {
         .eq("company_id", companyId)
         .gte("created_at", sevenDaysAgo.toISOString())
         .order("created_at", { ascending: true })
+        .limit(5000) // Reasonable limit for 7 days of data
       
       // Also get revenue from loads as fallback
       const { data: loadsForTrend } = await supabase
@@ -586,6 +592,7 @@ export async function getDashboardStats() {
         .eq("company_id", companyId)
         .gte("created_at", sevenDaysAgo.toISOString())
         .order("created_at", { ascending: true })
+        .limit(5000) // Reasonable limit for 7 days of data
 
       // Group revenue by date
       const revenueByDate: Record<string, number> = {}
@@ -655,6 +662,7 @@ export async function getDashboardStats() {
       }
     }
 
+    // MEDIUM FIX: Add limit to prevent unbounded query
     // Get load status distribution
     let allLoads: any[] = []
     try {
@@ -662,7 +670,8 @@ export async function getDashboardStats() {
         .from("loads")
         .select("status")
         .eq("company_id", companyId)
-      
+        .limit(10000) // Reasonable limit for status distribution
+        
       allLoads = loadStatusResult.data || []
     } catch (error) {
       // Only log in development
@@ -692,14 +701,14 @@ export async function getDashboardStats() {
           .in("status", ["overdue", "scheduled"])
           .lte("scheduled_date", new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
           .limit(5)
-          .then(res => res)
+          .then((res: any) => res)
           .catch(() => ({ data: [], error: null })),
         supabase.from("invoices")
           .select("id, invoice_number, due_date, amount, status")
           .eq("company_id", companyId)
           .eq("status", "overdue")
           .limit(5)
-          .then(res => res)
+          .then((res: any) => res)
           .catch(() => ({ data: [], error: null })),
         supabase.from("loads")
           .select("id, shipment_number, estimated_delivery, status")
@@ -707,7 +716,7 @@ export async function getDashboardStats() {
           .eq("status", "in_transit")
           .lte("estimated_delivery", new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString())
           .limit(5)
-          .then(res => res)
+          .then((res: any) => res)
           .catch(() => ({ data: [], error: null })),
       ])
       

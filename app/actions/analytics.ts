@@ -80,12 +80,14 @@ export async function getAnalyticsData(dateRange: number = 30) {
       return { error: invoicesError.message, data: null }
     }
 
+    // MEDIUM FIX: Add limit to prevent unbounded queries
     // Get revenue from loads as fallback
     const { data: loadsWithRevenue, error: loadsRevenueError } = await supabase
       .from("loads")
       .select("total_rate, value, created_at")
       .eq("company_id", company_id)
       .gte("created_at", startDate.toISOString())
+      .limit(10000) // Reasonable limit for analytics
 
     if (loadsRevenueError) {
       return { error: loadsRevenueError.message, data: null }

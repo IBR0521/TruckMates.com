@@ -15,63 +15,75 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders })
   }
 
-  // Authentication check - require Authorization header with service role key or anon key
+  // HIGH FIX: Require proper user authentication via JWT token
+  // This function should only be called by authenticated users or internal services
   const authHeader = req.headers.get("authorization")
-  const apiKey = req.headers.get("x-api-key")
-  const expectedKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY")
   
-  if (!expectedKey) {
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized - valid JWT token required" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    )
+  }
+
+  // Create Supabase client to verify JWT token
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? ""
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+  
+  if (!supabaseUrl || !supabaseAnonKey) {
     return new Response(
       JSON.stringify({ error: "Service not configured" }),
       { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
   }
 
-  // Validate authentication
-  const hasValidAuth = 
-    (authHeader && authHeader === `Bearer ${expectedKey}`) ||
-    (apiKey && apiKey === expectedKey)
+  // Verify JWT token and get user
+  const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } }
+  })
 
-  if (!hasValidAuth) {
+  const { data: { user }, error: authError } = await supabaseAuth.auth.getUser()
+
+  if (authError || !user) {
     return new Response(
-      JSON.stringify({ error: "Unauthorized - valid Authorization header or x-api-key required" }),
+      JSON.stringify({ error: "Unauthorized - invalid or expired token" }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
   }
 
   try {
-    const supabase = createClient(
+    // HIGH FIX: Get user's company_id from authenticated user record
+    const supabaseService = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     )
 
-    // Get query parameters - company_id is now required for security
-    const url = new URL(req.url)
-    const companyId = url.searchParams.get("company_id")
-    const limit = parseInt(url.searchParams.get("limit") || "100")
+    // Get user's company_id from users table
+    const { data: userData, error: userError } = await supabaseService
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
 
-    // Require company_id to prevent processing all companies
-    if (!companyId) {
+    if (userError || !userData?.company_id) {
       return new Response(
-        JSON.stringify({ error: "company_id query parameter is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "User company not found" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
 
-    // Get new ELD events with fault codes that haven't been analyzed
-    let query = supabase
+    const companyId = userData.company_id
+    const limit = parseInt(new URL(req.url).searchParams.get("limit") || "100")
+
+    // HIGH FIX: Always filter by authenticated user's company_id
+    const { data: events, error: eventsError } = await supabaseService
       .from("eld_events")
       .select("*")
       .eq("maintenance_created", false)
       .not("fault_code", "is", null)
+      .eq("company_id", companyId) // Always filter by user's company
       .order("event_time", { ascending: false })
       .limit(limit)
-
-    if (companyId) {
-      query = query.eq("company_id", companyId)
-    }
-
-    const { data: events, error: eventsError } = await query
 
     if (eventsError) {
       console.error("Error fetching events:", eventsError)
@@ -101,7 +113,7 @@ serve(async (req) => {
     for (const event of events) {
       try {
         // Call database function to analyze and create maintenance
-        const { data: maintenanceId, error: analysisError } = await supabase.rpc(
+        const { data: maintenanceId, error: analysisError } = await supabaseService.rpc(
           "analyze_fault_code_and_create_maintenance",
           { p_event_id: event.id }
         )

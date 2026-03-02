@@ -160,31 +160,65 @@ export async function registerEmployee(data: {
       }
     }
 
-    // HIGH FIX 5: Require invite token for company registration
-    // For now, we'll require companyId to exist AND add a note that invite tokens should be implemented
-    if (!data.companyId) {
-      return { data: null, error: "Company ID is required. Please use a valid invitation link." }
+    // HIGH FIX: Require invite token for company registration
+    // Check if invitation_code table exists, if not fall back to companyId validation
+    let companyId: string | null = null
+    
+    // Try to get invitation token from data (could be passed as invitationCode or companyId)
+    const invitationCode = (data as any).invitationCode || data.companyId
+    
+    if (invitationCode) {
+      // Check if it's an invitation code (UUID format or alphanumeric)
+      // First try to find it in invitation_codes table
+      const { data: invitation, error: inviteError } = await supabase
+        .from("invitation_codes")
+        .select("company_id, email, status, expires_at")
+        .eq("invitation_code", invitationCode)
+        .eq("status", "pending")
+        .gt("expires_at", new Date().toISOString())
+        .maybeSingle()
+
+      if (!inviteError && invitation) {
+        // Valid invitation code found
+        companyId = invitation.company_id
+        
+        // Verify email matches if email was provided in invitation
+        if (invitation.email && invitation.email.toLowerCase() !== data.email.toLowerCase()) {
+          return { 
+            data: null, 
+            error: "This invitation was sent to a different email address. Please use the email address the invitation was sent to." 
+          }
+        }
+      } else {
+        // Not an invitation code, try as companyId (backward compatibility)
+        const { data: company, error: companyError } = await supabase
+          .from("companies")
+          .select("id")
+          .eq("id", invitationCode)
+          .maybeSingle()
+
+        if (!companyError && company) {
+          companyId = company.id
+        } else {
+          return { 
+            data: null, 
+            error: "Invalid invitation code or company ID. Please use a valid invitation link or contact your administrator." 
+          }
+        }
+      }
+    } else {
+      return { 
+        data: null, 
+        error: "Invitation code or company ID is required. Please use a valid invitation link." 
+      }
     }
 
-    // If a companyId was provided, verify that the company exists
-    const { data: company, error: companyError } = await supabase
-      .from("companies")
-      .select("id")
-      .eq("id", data.companyId)
-      .maybeSingle()
-
-    if (companyError) {
-      const errorMsg = companyError.message || String(companyError) || "Failed to verify company"
-      return { data: null, error: errorMsg.substring(0, 200) }
+    if (!companyId) {
+      return { 
+        data: null, 
+        error: "Invalid invitation. Please use a valid invitation link or contact your administrator." 
+      }
     }
-
-    if (!company) {
-      return { data: null, error: "Invalid company ID. Please use a valid invitation or contact your administrator." }
-    }
-
-    // TODO: HIGH FIX 5 - Implement invite token validation
-    // Should check for valid invite token in company_invites table
-    // For now, company existence check is the only validation
 
     // Create auth user with employee_role in metadata
     const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -208,10 +242,21 @@ export async function registerEmployee(data: {
     const updateData: any = {
       full_name: data.fullName.trim(),
       role,
+      company_id: companyId, // Use validated companyId from invitation
     }
-
-    if (data.companyId) {
-      updateData.company_id = data.companyId
+    
+    // If invitation code was used, mark it as accepted
+    const invitationCode = (data as any).invitationCode
+    if (invitationCode) {
+      await supabase
+        .from("invitation_codes")
+        .update({
+          status: "accepted",
+          accepted_at: new Date().toISOString(),
+          accepted_by: authData.user.id,
+        })
+        .eq("invitation_code", invitationCode)
+        .eq("status", "pending")
     }
 
     const { error: updateError } = await supabase

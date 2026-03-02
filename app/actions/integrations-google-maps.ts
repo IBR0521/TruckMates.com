@@ -170,6 +170,24 @@ export async function geocodeAddress(address: string) {
       return { error: "Address is too short or empty. Please provide a complete address.", data: null }
     }
 
+    // LOW FIX: Add rate limiting to prevent API quota exhaustion
+    const { checkApiUsage, getCachedApiResult, setCachedApiResult } = await import("@/lib/api-protection")
+    const { generateCacheKey } = await import("@/lib/api-cache-utils")
+    
+    const cacheKey = generateCacheKey("google_maps_geocode", { address })
+    
+    // Check cache first (cache for 7 days - addresses don't change often)
+    const cached = await getCachedApiResult<any>(cacheKey, 604800)
+    if (cached) {
+      return { data: cached, error: null }
+    }
+
+    // Check rate limit (max 50 requests per minute per company)
+    const rateCheck = await checkApiUsage("google_maps", "geocoding")
+    if (!rateCheck.allowed) {
+      return { error: rateCheck.reason || "Geocoding rate limit exceeded. Please try again in a moment.", data: null }
+    }
+
     const apiKey = await getGoogleMapsApiKey()
 
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
@@ -215,14 +233,19 @@ export async function geocodeAddress(address: string) {
     }
 
     const result = data.results[0]
+    const geocodeResult = {
+      lat: result.geometry.location.lat,
+      lng: result.geometry.location.lng,
+      formatted_address: result.formatted_address,
+      place_id: result.place_id,
+      address_components: result.address_components,
+    }
+    
+    // Cache the result for 7 days
+    await setCachedApiResult(cacheKey, geocodeResult, 604800)
+    
     return {
-      data: {
-        lat: result.geometry.location.lat,
-        lng: result.geometry.location.lng,
-        formatted_address: result.formatted_address,
-        place_id: result.place_id,
-        address_components: result.address_components,
-      },
+      data: geocodeResult,
       error: null,
     }
   } catch (error: any) {

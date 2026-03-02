@@ -72,9 +72,33 @@ export async function generateEIN(): Promise<{ data: { ein: string; id: string }
       return { error: "Failed to generate unique EIN after multiple attempts", data: null }
     }
 
-    // MEDIUM FIX 13: Use RPC function or transaction for atomic EIN creation
-    // For now, we'll use a single RPC call if available, otherwise we'll do both operations
-    // and handle rollback manually
+    // MEDIUM FIX: Use atomic RPC function for EIN creation
+    // Try RPC first, fallback to manual if RPC doesn't exist
+    let einId: string
+    try {
+      const { data: rpcResult, error: rpcError } = await supabase.rpc("create_ein_atomic", {
+        p_company_id: userData.company_id,
+        p_ein_number: newEIN,
+        p_generated_by: user.id,
+      })
+
+      if (!rpcError && rpcResult) {
+        einId = typeof rpcResult === 'string' ? rpcResult : String(rpcResult)
+        
+        return {
+          data: {
+            ein: newEIN,
+            id: einId,
+          },
+          error: null,
+        }
+      }
+    } catch (error) {
+      // RPC function doesn't exist, use fallback
+      console.warn("[generateEIN] RPC function not available, using fallback")
+    }
+
+    // Fallback: Manual two-step with rollback (not fully atomic but better than before)
     const { data: savedEIN, error: saveError } = await supabase
       .from("company_ein_numbers")
       .insert({
@@ -89,13 +113,13 @@ export async function generateEIN(): Promise<{ data: { ein: string; id: string }
       return { error: saveError.message || "Failed to save EIN", data: null }
     }
 
-    // Update company_settings with the EIN (atomic operation would be better)
+    // Update company_settings with the EIN
     const { error: updateError } = await supabase
       .from("company_settings")
       .update({ ein_number: newEIN })
       .eq("company_id", userData.company_id)
 
-    // MEDIUM FIX 13: If update fails, delete the EIN record to prevent orphan
+    // If update fails, delete the EIN record to prevent orphan
     if (updateError) {
       // Rollback: delete the EIN record we just created
       await supabase

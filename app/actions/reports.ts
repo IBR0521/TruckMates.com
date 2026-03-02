@@ -339,6 +339,7 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
     settlementsQuery = settlementsQuery.lte("period_end", endDate)
   }
 
+  // LOW FIX: Sort by period_end (pay period) instead of created_at for proper chronological display
   const { data: settlements, error } = await settlementsQuery.order("period_end", { ascending: false })
 
   if (error) return { error: error.message, data: null }
@@ -471,6 +472,7 @@ export async function getMonthlyRevenueTrend(months: number = 6) {
       .lte("created_at", endDate.toISOString())
       .order("created_at", { ascending: true })
 
+    // MEDIUM FIX: Add limit to prevent unbounded queries even with date range
     // Also get revenue from loads (value field) as fallback
     const { data: loads } = await supabase
       .from("loads")
@@ -478,6 +480,7 @@ export async function getMonthlyRevenueTrend(months: number = 6) {
       .eq("company_id", companyId)
       .gte("created_at", startDate.toISOString())
       .lte("created_at", endDate.toISOString())
+      .limit(10000) // Reasonable limit for 6 months of data
 
     // Group by month - combine invoices and loads
     const monthlyData: Record<string, number> = {}

@@ -124,8 +124,8 @@ export async function createELDDevice(formData: {
     return { error: "No company found", data: null }
   }
 
-  // RBAC: Allow managers, admins, and owners to manage ELD devices
-  const allowedRoles = ['manager', 'admin', 'owner', 'super_admin', 'operations_manager']
+  // LOW FIX: Remove phantom roles - only real roles exist
+  const allowedRoles = ['super_admin', 'operations_manager']
   if (!allowedRoles.includes(userData.role)) {
     return { error: "You don't have permission to create ELD devices", data: null }
   }
@@ -199,7 +199,7 @@ export async function updateELDDevice(
   }
 
   // RBAC: Allow managers, admins, and owners to manage ELD devices
-  const allowedRoles = ['manager', 'admin', 'owner', 'super_admin', 'operations_manager']
+  const allowedRoles = ['super_admin', 'operations_manager']
   if (!allowedRoles.includes(userData.role)) {
     return { error: "You don't have permission to update ELD devices", data: null }
   }
@@ -257,7 +257,7 @@ export async function deleteELDDevice(id: string) {
   }
 
   // RBAC: Allow managers, admins, and owners to manage ELD devices
-  const allowedRoles = ['manager', 'admin', 'owner', 'super_admin', 'operations_manager']
+  const allowedRoles = ['super_admin', 'operations_manager']
   if (!allowedRoles.includes(userData.role)) {
     return { error: "You don't have permission to delete ELD devices", data: null }
   }
@@ -531,7 +531,7 @@ export async function resolveELDEvent(eventId: string) {
   }
 
   // RBAC: Allow managers, admins, and owners to manage ELD devices
-  const allowedRoles = ['manager', 'admin', 'owner', 'super_admin', 'operations_manager']
+  const allowedRoles = ['super_admin', 'operations_manager']
   if (!allowedRoles.includes(userData.role)) {
     return { error: "You don't have permission to resolve ELD events", data: null }
   }

@@ -108,6 +108,7 @@ export async function getRevenueTrend(period: Period = 'weekly') {
       }
     })
     
+    // MEDIUM FIX: Add limit to prevent unbounded queries even with date range
     // Fetch loads as fallback (only for loads without invoices)
     const { data: loads, error: loadsError } = await supabase
       .from("loads")
@@ -116,6 +117,7 @@ export async function getRevenueTrend(period: Period = 'weekly') {
       .gte("created_at", startDate.toISOString())
       .lte("created_at", endDate.toISOString())
       .order("created_at", { ascending: true })
+      .limit(10000) // Reasonable limit for trend analysis
 
     if (loadsError) {
       console.error("[getRevenueTrend] Error fetching loads:", loadsError)

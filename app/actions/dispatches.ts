@@ -32,7 +32,7 @@ export async function getUnassignedLoads() {
     return { error: "No company found", data: null }
   }
 
-  // Get unassigned loads with DB-level filtering
+  // MEDIUM FIX: Add limit to prevent unbounded queries
   const { data: loads, error } = await supabase
     .from("loads")
     .select("*")
@@ -40,6 +40,7 @@ export async function getUnassignedLoads() {
     .or("driver_id.is.null,truck_id.is.null")
     .not("status", "in", '("delivered","cancelled","completed")')
     .order("created_at", { ascending: false })
+    .limit(500) // Reasonable limit for dispatch board
 
   if (error) {
     return { error: error.message, data: null }
@@ -81,7 +82,7 @@ export async function getUnassignedRoutes() {
     return { error: "No company found", data: null }
   }
 
-  // Get unassigned routes with DB-level filtering
+  // MEDIUM FIX: Add limit to prevent unbounded queries
   const { data: routes, error } = await supabase
     .from("routes")
     .select("*")
@@ -89,6 +90,7 @@ export async function getUnassignedRoutes() {
     .or("driver_id.is.null,truck_id.is.null")
     .not("status", "in", '("completed","cancelled")')
     .order("created_at", { ascending: false })
+    .limit(500) // Reasonable limit for dispatch board
 
   if (error) {
     return { error: error.message, data: null }

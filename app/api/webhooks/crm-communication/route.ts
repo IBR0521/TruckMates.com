@@ -160,6 +160,41 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // MEDIUM FIX: Validate company_id from body if provided (prevent cross-company data injection)
+    if (body.company_id) {
+      // Verify company_id matches the customer/vendor's company
+      const { createAdminClient } = await import("@/lib/supabase/admin")
+      const adminSupabase = createAdminClient()
+      
+      if (communicationData.customer_id) {
+        const { data: customer } = await adminSupabase
+          .from("customers")
+          .select("company_id")
+          .eq("id", communicationData.customer_id)
+          .single()
+        
+        if (!customer || customer.company_id !== body.company_id) {
+          return NextResponse.json(
+            { error: "company_id does not match customer's company" },
+            { status: 403 }
+          )
+        }
+      } else if (communicationData.vendor_id) {
+        const { data: vendor } = await adminSupabase
+          .from("vendors")
+          .select("company_id")
+          .eq("id", communicationData.vendor_id)
+          .single()
+        
+        if (!vendor || vendor.company_id !== body.company_id) {
+          return NextResponse.json(
+            { error: "company_id does not match vendor's company" },
+            { status: 403 }
+          )
+        }
+      }
+    }
+
     // Log the communication
     const result = await logCommunicationFromWebhook(communicationData)
 

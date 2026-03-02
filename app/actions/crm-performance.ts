@@ -80,7 +80,8 @@ export async function getCustomerPerformanceMetrics(filters?: {
       query = query.eq("status", filters.status)
     }
 
-    const { data, error } = await query.order("total_revenue", { ascending: false })
+    // MEDIUM FIX: Add limit to prevent unbounded aggregation queries
+    const { data, error } = await query.order("total_revenue", { ascending: false }).limit(1000)
 
     if (error) {
       // If view doesn't exist, return empty data instead of error
@@ -189,7 +190,8 @@ export async function getVendorPerformanceMetrics(filters?: {
       query = query.eq("status", filters.status)
     }
 
-    const { data, error } = await query.order("total_spent", { ascending: false })
+    // MEDIUM FIX: Add limit to prevent unbounded aggregation queries
+    const { data, error } = await query.order("total_spent", { ascending: false }).limit(1000)
 
     if (error) {
       return { error: error.message, data: null }
@@ -280,7 +282,8 @@ export async function getRelationshipInsights(): Promise<{
       .select("*")
       .eq("company_id", company_id)
     
-    const { data: customersData, error: customersError } = await customerQuery.order("total_revenue", { ascending: false })
+    // MEDIUM FIX: Add limit to prevent unbounded aggregation queries
+    const { data: customersData, error: customersError } = await customerQuery.order("total_revenue", { ascending: false }).limit(1000)
     
     if (customersError) {
       // If view doesn't exist, return empty data instead of error
@@ -302,11 +305,13 @@ export async function getRelationshipInsights(): Promise<{
     const customers = (customersData || []) as CustomerPerformanceMetrics[]
 
     // Get all vendor metrics directly from the view with company_id filter
+    // MEDIUM FIX: Add limit to prevent unbounded aggregation queries
     const { data: vendorsData2, error: vendorsError2 } = await supabase
       .from("crm_vendor_performance")
       .select("*")
       .eq("company_id", company_id)
       .order("total_spent", { ascending: false })
+      .limit(1000)
 
     if (vendorsError2) {
       // If view doesn't exist, return empty data instead of error

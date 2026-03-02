@@ -160,43 +160,63 @@ export async function savePaymentMethod(paymentMethod: {
     return { error: "Only managers can save payment methods", data: null }
   }
 
-  // MEDIUM FIX 14: Use atomic RPC or single transaction to prevent TOCTOU race condition
-  // For now, we'll use a single upsert with conflict handling
-  // TODO: Create RPC function for atomic default payment method swap
+  // MEDIUM FIX: Use atomic RPC function to prevent TOCTOU race condition
   if (paymentMethod.is_default) {
-    // Use a single query to unset all and set this one as default atomically
-    // This is still not fully atomic but reduces the race window
-    const { error: unsetError } = await supabase
-      .from("company_payment_methods")
-      .update({ is_default: false })
-      .eq("company_id", userData.company_id)
-      .eq("is_default", true)
+    // Use RPC function for atomic default swap
+    const { error: rpcError } = await supabase.rpc("set_payment_method_default", {
+      p_company_id: userData.company_id,
+      p_payment_method_id: paymentMethod.id || "", // Will be set after insert
+      p_is_default: true,
+    })
     
-    if (unsetError) {
-      console.error("[savePaymentMethod] Failed to unset defaults:", unsetError)
-      // Continue anyway - the insert/update will still set is_default
+    if (rpcError && !paymentMethod.id) {
+      // If this is a new payment method, we'll set default after insert
+      // For existing, RPC should work
+      console.warn("[savePaymentMethod] RPC failed, will set default after insert:", rpcError)
     }
   }
 
   if (paymentMethod.id) {
-    // Update existing
+    // Update existing (don't set is_default here, use RPC if needed)
+    const updateData: any = {
+      type: paymentMethod.type,
+      card_brand: paymentMethod.card_brand || null,
+      card_last4: paymentMethod.card_last4 || null,
+      card_exp_month: paymentMethod.card_exp_month || null,
+      card_exp_year: paymentMethod.card_exp_year || null,
+      cardholder_name: paymentMethod.cardholder_name || null,
+      bank_name: paymentMethod.bank_name || null,
+      account_type: paymentMethod.account_type || null,
+      account_last4: paymentMethod.account_last4 || null,
+      external_id: paymentMethod.external_id || null,
+    }
+    
+    // Only set is_default if not using RPC (fallback)
+    if (paymentMethod.is_default) {
+      // Try RPC first for atomic swap
+      const { error: rpcError } = await supabase.rpc("set_payment_method_default", {
+        p_company_id: userData.company_id,
+        p_payment_method_id: paymentMethod.id,
+        p_is_default: true,
+      })
+      
+      if (rpcError) {
+        // Fallback to non-atomic update if RPC fails
+        updateData.is_default = true
+        const { error: unsetError } = await supabase
+          .from("company_payment_methods")
+          .update({ is_default: false })
+          .eq("company_id", userData.company_id)
+          .eq("is_default", true)
+          .neq("id", paymentMethod.id)
+      }
+    } else {
+      updateData.is_default = false
+    }
+    
     const { data, error } = await supabase
       .from("company_payment_methods")
-      .update({
-        type: paymentMethod.type,
-        card_brand: paymentMethod.card_brand || null,
-        card_last4: paymentMethod.card_last4 || null,
-        card_exp_month: paymentMethod.card_exp_month || null,
-        card_exp_year: paymentMethod.card_exp_year || null,
-        cardholder_name: paymentMethod.cardholder_name || null,
-        bank_name: paymentMethod.bank_name || null,
-        account_type: paymentMethod.account_type || null,
-        account_last4: paymentMethod.account_last4 || null,
-        // HIGH FIX 6: Never store routing numbers in plain text - use external_id (tokenized) only
-        // routing_number: paymentMethod.routing_number || null, // REMOVED - PCI DSS violation
-        external_id: paymentMethod.external_id || null,
-        is_default: paymentMethod.is_default || false,
-      })
+      .update(updateData)
       .eq("id", paymentMethod.id)
       .eq("company_id", userData.company_id)
       .select()
@@ -208,7 +228,7 @@ export async function savePaymentMethod(paymentMethod: {
 
     return { data, error: null }
   } else {
-    // Create new
+    // Create new (don't set is_default on insert, use RPC after)
     const { data, error } = await supabase
       .from("company_payment_methods")
       .insert({
@@ -222,10 +242,8 @@ export async function savePaymentMethod(paymentMethod: {
         bank_name: paymentMethod.bank_name || null,
         account_type: paymentMethod.account_type || null,
         account_last4: paymentMethod.account_last4 || null,
-        // HIGH FIX 6: Never store routing numbers in plain text - use external_id (tokenized) only
-        // routing_number: paymentMethod.routing_number || null, // REMOVED - PCI DSS violation
         external_id: paymentMethod.external_id || null,
-        is_default: paymentMethod.is_default || false,
+        is_default: false, // Set via RPC after insert
         is_active: true,
       })
       .select()
@@ -233,6 +251,15 @@ export async function savePaymentMethod(paymentMethod: {
 
     if (error) {
       return { error: error.message || "Failed to create payment method", data: null }
+    }
+
+    // If this should be default, use RPC to atomically set it
+    if (paymentMethod.is_default && data?.id) {
+      await supabase.rpc("set_payment_method_default", {
+        p_company_id: userData.company_id,
+        p_payment_method_id: data.id,
+        p_is_default: true,
+      })
     }
 
     return { data, error: null }

@@ -389,6 +389,7 @@ export async function updateGeofence(id: string, formData: Partial<{
       updated_at: new Date().toISOString(),
     }
 
+    // LOW FIX: Sanitize geofence name to prevent stored XSS
     if (formData.name !== undefined) {
       updateData.name = sanitizeString(formData.name, 200)
     }
@@ -487,6 +488,14 @@ export async function deleteGeofence(id: string) {
   }
 
   try {
+    // LOW FIX: Cascade cleanup - delete zone_visits before deleting geofence
+    // This prevents orphaned records
+    await supabase
+      .from("zone_visits")
+      .delete()
+      .eq("geofence_id", id)
+      .eq("company_id", company_id)
+    
     const { error } = await supabase
       .from("geofences")
       .delete()
@@ -540,12 +549,19 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
       return { error: "Truck not found", data: null }
     }
 
-    // Get active geofences
-    const { data: geofences } = await supabase
+    // MEDIUM FIX: Filter geofences by assigned_trucks at database level to avoid full table scan
+    // Use JSONB contains operator for efficient filtering
+    let geofenceQuery = supabase
       .from("geofences")
       .select("*")
       .eq("company_id", company_id)
       .eq("is_active", true)
+    
+    // Filter by assigned_trucks if geofence has assignments
+    // Use .or() to include geofences with no assignments OR geofences assigned to this truck
+    geofenceQuery = geofenceQuery.or(`assigned_trucks.is.null,assigned_trucks.cs.{${truckId}}`)
+    
+    const { data: geofences } = await geofenceQuery
 
     if (!geofences || geofences.length === 0) {
       return { data: { events: [] }, error: null }
@@ -669,15 +685,26 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
           .select()
           .single()
 
-        // Update entry visit with exit info
+        // MEDIUM FIX: Update entry visit with exit info - verify ownership before update
         if (recentVisit) {
-          await supabase
+          // Verify the visit belongs to this company before updating
+          const { data: visitCheck } = await supabase
             .from("zone_visits")
-            .update({
-              exit_timestamp: timestamp || new Date().toISOString(),
-              duration_minutes: duration,
-            })
+            .select("id, company_id")
             .eq("id", recentVisit.id)
+            .eq("company_id", company_id)
+            .single()
+          
+          if (visitCheck) {
+            await supabase
+              .from("zone_visits")
+              .update({
+                exit_timestamp: timestamp || new Date().toISOString(),
+                duration_minutes: duration,
+              })
+              .eq("id", recentVisit.id)
+              .eq("company_id", company_id) // Additional safety check
+          }
         }
 
         if (visit && geofence.alert_on_exit) {

@@ -115,6 +115,25 @@ export async function createCheckCall(formData: {
     return { error: "No company found", data: null }
   }
 
+  // LOW FIX: Use driver's timezone for timestamp if available, otherwise use server time
+  let timestamp = new Date().toISOString()
+  if (formData.driver_id) {
+    // Try to get driver's timezone from profile
+    const { data: driver } = await supabase
+      .from("drivers")
+      .select("timezone")
+      .eq("id", formData.driver_id)
+      .eq("company_id", userData.company_id)
+      .single()
+    
+    if (driver?.timezone) {
+      // Convert to driver's timezone
+      const now = new Date()
+      const driverTime = new Date(now.toLocaleString("en-US", { timeZone: driver.timezone }))
+      timestamp = driverTime.toISOString()
+    }
+  }
+
   const { data, error } = await supabase
     .from("check_calls")
     .insert({
@@ -127,6 +146,7 @@ export async function createCheckCall(formData: {
       location: formData.location || null,
       latitude: formData.latitude || null,
       longitude: formData.longitude || null,
+      timestamp: timestamp, // LOW FIX: Use driver timezone-aware timestamp
       address: formData.address || null,
       notes: formData.notes || null,
       status: "pending",

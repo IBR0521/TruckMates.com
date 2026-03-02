@@ -193,10 +193,12 @@ BEGIN
       
       -- Reserve if available
       IF v_available_qty >= v_required_qty THEN
+        -- MEDIUM FIX: Add company_id check to UPDATE for defense-in-depth
         UPDATE public.parts
         SET quantity = quantity - v_required_qty,
             updated_at = NOW()
-        WHERE id = v_part_id;
+        WHERE id = v_part_id
+          AND company_id = v_work_order.company_id;
         
         v_reserved := true;
         v_message := format('Reserved %s units', v_required_qty);
