@@ -177,6 +177,14 @@ export function useRealtimeNotifications() {
 
         setUserId(user.id)
 
+        // MEDIUM FIX 13: Use efficient COUNT query instead of fetching all records
+        const { getUnreadNotificationCount } = await import("@/app/actions/notifications")
+        const countResult = await getUnreadNotificationCount()
+        if (countResult.data) {
+          setUnreadCount(countResult.data.total)
+        }
+
+        // Still fetch notifications for display (limited to 50)
         const { data, error } = await supabase
           .from("notifications")
           .select("*")
@@ -192,7 +200,6 @@ export function useRealtimeNotifications() {
 
         if (data) {
           setNotifications(data)
-          setUnreadCount(data.filter((n: any) => !n.read).length)
         }
       } catch (error) {
         // Silently fail if notifications table doesn't exist
@@ -224,7 +231,10 @@ export function useRealtimeNotifications() {
             // Only add if it's for this user
             if (notification.user_id === userId) {
               setNotifications((prev) => [notification, ...prev])
-              setUnreadCount((prev) => prev + 1)
+              // MEDIUM FIX 13: Update count efficiently
+              if (!notification.read) {
+                setUnreadCount((prev) => prev + 1)
+              }
             }
           }
         )
@@ -249,9 +259,15 @@ export function useRealtimeNotifications() {
 
       if (!error) {
         setNotifications((prev) =>
-          prev.map((n) => (n.id === notificationId ? { ...n, read: true, read_at: new Date().toISOString() } : n))
+          prev.map((n) => {
+            if (n.id === notificationId && !n.read) {
+              // MEDIUM FIX 13: Only decrement if it was unread
+              setUnreadCount((prev) => Math.max(0, prev - 1))
+              return { ...n, read: true, read_at: new Date().toISOString() }
+            }
+            return n
+          })
         )
-        setUnreadCount((prev) => Math.max(0, prev - 1))
       } else {
         console.error("[NOTIFICATIONS] Error marking as read:", error)
       }

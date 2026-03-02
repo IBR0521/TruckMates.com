@@ -45,3 +45,4 @@ I've updated the function to check if the column exists before using it. So it w
 
 
 
+
