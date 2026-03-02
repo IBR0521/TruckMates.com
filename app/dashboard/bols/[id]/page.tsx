@@ -169,7 +169,7 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
             className="bg-primary/10 hover:bg-primary/20 border-primary/50"
           >
             <Download className="w-4 h-4 mr-2" />
-            Print / Save as PDF
+            Download BOL (HTML)
           </Button>
           {bol.load_id && typeof bol.load_id === 'string' && bol.load_id.trim() !== '' ? (
             <Link href={`/dashboard/loads/${bol.load_id}`}>

@@ -72,14 +72,36 @@ export default function CreateBOLPage() {
       const load = loads.find((l) => l.id === formData.load_id)
       if (load) {
         setSelectedLoad(load)
-        // Pre-fill form data from load
-        setFormData((prev) => ({
-          ...prev,
-          shipper_name: prev.shipper_name || load.company_name || "",
-          consignee_name: prev.consignee_name || "",
-          pickup_date: prev.pickup_date || (load.load_date || ""),
-          delivery_date: prev.delivery_date || (load.estimated_delivery || ""),
-        }))
+        // MEDIUM FIX 13: Pre-fill consignee_name from load data using getBOLDataFromLoad
+        const loadBOLData = async () => {
+          const { getBOLDataFromLoad } = await import("@/app/actions/bol")
+          const result = await getBOLDataFromLoad(load.id)
+          if (result.data) {
+            setFormData((prev) => ({
+              ...prev,
+              shipper_name: prev.shipper_name || result.data?.shipper_name || load.company_name || "",
+              consignee_name: prev.consignee_name || result.data?.consignee_name || "",
+              consignee_address: prev.consignee_address || result.data?.consignee_address || "",
+              consignee_city: prev.consignee_city || result.data?.consignee_city || "",
+              consignee_state: prev.consignee_state || result.data?.consignee_state || "",
+              consignee_zip: prev.consignee_zip || result.data?.consignee_zip || "",
+              consignee_phone: prev.consignee_phone || result.data?.consignee_phone || "",
+              consignee_email: prev.consignee_email || result.data?.consignee_email || "",
+              pickup_date: prev.pickup_date || result.data?.pickup_date || load.load_date || "",
+              delivery_date: prev.delivery_date || result.data?.delivery_date || load.estimated_delivery || "",
+            }))
+          } else {
+            // Fallback to basic load data if getBOLDataFromLoad fails
+            setFormData((prev) => ({
+              ...prev,
+              shipper_name: prev.shipper_name || load.company_name || "",
+              consignee_name: prev.consignee_name || "",
+              pickup_date: prev.pickup_date || (load.load_date || ""),
+              delivery_date: prev.delivery_date || (load.estimated_delivery || ""),
+            }))
+          }
+        }
+        loadBOLData()
       }
     } else {
       setSelectedLoad(null)
@@ -87,8 +109,9 @@ export default function CreateBOLPage() {
   }, [formData.load_id, loads])
 
   async function loadData() {
+    // MEDIUM FIX 14: Filter out completed and cancelled loads
     const [loadsResult, templatesResult] = await Promise.all([
-      getLoads(),
+      getLoads({ status: undefined }), // Will filter client-side to exclude completed/cancelled
       getBOLTemplates(),
     ])
 

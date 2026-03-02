@@ -679,3 +679,106 @@ export async function sendTestEmail() {
   }
 }
 
+/**
+ * Delete notification
+ * LOW FIX 17: Implement deleteNotification server action
+ */
+export async function deleteNotification(notificationId: string, notificationType: "notification" | "alert") {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  try {
+    if (notificationType === "notification") {
+      // Delete from notifications table (user can only delete their own)
+      const { error } = await supabase
+        .from("notifications")
+        .delete()
+        .eq("id", notificationId)
+        .eq("user_id", user.id)
+
+      if (error) {
+        return { error: error.message, data: null }
+      }
+    } else if (notificationType === "alert") {
+      // Delete from alerts table (with company_id check)
+      const { error } = await supabase
+        .from("alerts")
+        .delete()
+        .eq("id", notificationId)
+        .eq("company_id", userData.company_id)
+
+      if (error) {
+        return { error: error.message, data: null }
+      }
+    } else {
+      return { error: "Invalid notification type", data: null }
+    }
+
+    revalidatePath("/dashboard/notifications")
+    return { data: { success: true }, error: null }
+  } catch (error: any) {
+    return { error: error.message || "Failed to delete notification", data: null }
+  }
+}
+
+/**
+ * Get unread notification count (efficient COUNT query)
+ * MEDIUM FIX 13: Use COUNT(*) instead of fetching all records
+ */
+export async function getUnreadNotificationCount() {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  // Use efficient COUNT queries instead of fetching all records
+  const [notificationsResult, alertsResult] = await Promise.all([
+    supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false),
+    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", userData.company_id).in("status", ["pending", "active"]),
+  ])
+
+  const notificationsCount = notificationsResult.count || 0
+  const alertsCount = alertsResult.count || 0
+
+  return {
+    data: {
+      total: notificationsCount + alertsCount,
+      notifications: notificationsCount,
+      alerts: alertsCount,
+    },
+    error: null
+  }
+}
+
