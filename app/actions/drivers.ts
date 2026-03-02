@@ -439,20 +439,6 @@ export async function updateDriver(
   revalidatePath("/dashboard/drivers")
   revalidatePath(`/dashboard/drivers/${id}`)
 
-  // CRITICAL FIX: Ensure data is JSON-serializable for Next.js server actions
-  // Convert Date objects and other non-serializable values to strings
-  const serializableData = data ? JSON.parse(JSON.stringify(data, (key, value) => {
-    // Convert Date objects to ISO strings
-    if (value instanceof Date) {
-      return value.toISOString()
-    }
-    // Handle other non-serializable types
-    if (typeof value === 'bigint') {
-      return value.toString()
-    }
-    return value
-  })) : null
-
   return { data: serializableData, error: null }
 }
 
