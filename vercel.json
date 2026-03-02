@@ -4,6 +4,13 @@
       "path": "/api/cron/sync-eld",
       "schedule": "0 0 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "app/api/**/*.ts": {
+      "maxDuration": 30
+    }
+  },
+  "buildCommand": "next build",
+  "outputDirectory": ".next"
 }
 
