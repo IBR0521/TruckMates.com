@@ -383,7 +383,13 @@ export async function updateRoute(
   }
 
   if (Object.keys(updateData).length === 0) {
-    return { data: currentRoute, error: null }
+    // CRITICAL FIX: Ensure currentRoute is JSON-serializable
+    const serializableCurrentRoute = currentRoute ? JSON.parse(JSON.stringify(currentRoute, (key, value) => {
+      if (value instanceof Date) return value.toISOString()
+      if (typeof value === 'bigint') return value.toString()
+      return value
+    })) : null
+    return { data: serializableCurrentRoute, error: null }
   }
 
   const { data, error } = await supabase
@@ -441,7 +447,14 @@ export async function updateRoute(
   revalidatePath("/dashboard/routes")
   revalidatePath(`/dashboard/routes/${id}`)
 
-  return { data, error: null }
+  // CRITICAL FIX: Ensure data is JSON-serializable for Next.js server actions
+  const serializableData = data ? JSON.parse(JSON.stringify(data, (key, value) => {
+    if (value instanceof Date) return value.toISOString()
+    if (typeof value === 'bigint') return value.toString()
+    return value
+  })) : null
+
+  return { data: serializableData, error: null }
 }
 
 export async function deleteRoute(id: string) {

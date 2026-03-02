@@ -391,7 +391,13 @@ export async function updateCustomer(
   }
 
   if (Object.keys(updateData).length === 0) {
-    return { data: currentCustomer, error: null }
+    // CRITICAL FIX: Ensure currentCustomer is JSON-serializable
+    const serializableCurrentCustomer = currentCustomer ? JSON.parse(JSON.stringify(currentCustomer, (key, value) => {
+      if (value instanceof Date) return value.toISOString()
+      if (typeof value === 'bigint') return value.toString()
+      return value
+    })) : null
+    return { data: serializableCurrentCustomer, error: null }
   }
 
   const { data, error } = await supabase
@@ -437,7 +443,15 @@ export async function updateCustomer(
 
   revalidatePath("/dashboard/customers")
   revalidatePath(`/dashboard/customers/${id}`)
-  return { data, error: null }
+  
+  // CRITICAL FIX: Ensure data is JSON-serializable for Next.js server actions
+  const serializableData = data ? JSON.parse(JSON.stringify(data, (key, value) => {
+    if (value instanceof Date) return value.toISOString()
+    if (typeof value === 'bigint') return value.toString()
+    return value
+  })) : null
+  
+  return { data: serializableData, error: null }
 }
 
 // Delete customer

@@ -352,7 +352,13 @@ export async function updateVendor(
   }
 
   if (Object.keys(updateData).length === 0) {
-    return { data: currentVendor, error: null }
+    // CRITICAL FIX: Ensure currentVendor is JSON-serializable
+    const serializableCurrentVendor = currentVendor ? JSON.parse(JSON.stringify(currentVendor, (key, value) => {
+      if (value instanceof Date) return value.toISOString()
+      if (typeof value === 'bigint') return value.toString()
+      return value
+    })) : null
+    return { data: serializableCurrentVendor, error: null }
   }
 
   const { data, error } = await supabase
