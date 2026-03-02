@@ -245,9 +245,10 @@ export async function registerEmployee(data: {
       company_id: companyId, // Use validated companyId from invitation
     }
     
+    // BUG FIX: invitationCode already declared above, reuse it instead of redeclaring
     // If invitation code was used, mark it as accepted
-    const invitationCode = (data as any).invitationCode
-    if (invitationCode) {
+    // invitationCode is already defined on line 168, so we can use it here
+    if (invitationCode && typeof invitationCode === 'string') {
       await supabase
         .from("invitation_codes")
         .update({

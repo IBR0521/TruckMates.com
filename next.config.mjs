@@ -59,6 +59,7 @@ const nextConfig = {
     '@upstash/redis',
     'import-in-the-middle',
     'require-in-the-middle',
+    'puppeteer', // Optional - only needed for PDF generation
   ],
   // Note: Webpack config removed - Next.js 16 uses Turbopack by default
   // Turbopack handles bundle optimization automatically

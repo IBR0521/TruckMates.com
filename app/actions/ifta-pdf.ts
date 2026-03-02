@@ -429,17 +429,29 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
 
     // FIXED: Generate actual PDF using Puppeteer instead of returning HTML
     // Note: Puppeteer is optional - if not installed, we return HTML
+    // BUG FIX: Use Function constructor to prevent Turbopack from resolving at build time
     try {
-      // Try to import puppeteer - it may not be installed in all environments
-      const puppeteer = await import("puppeteer").catch(() => null)
+      // Use Function constructor to create a dynamic import that Turbopack won't resolve at build time
+      // This makes puppeteer truly optional - if not installed, we gracefully fall back to HTML
+      let puppeteerModule: any = null
+      try {
+        // Dynamic import using Function to prevent build-time resolution
+        const dynamicImport = new Function('specifier', 'return import(specifier)')
+        const puppeteer = await dynamicImport('puppeteer')
+        puppeteerModule = puppeteer.default || puppeteer
+      } catch (importError) {
+        // Puppeteer not available - this is expected in some environments (e.g., Vercel)
+        console.warn("[IFTA PDF] Puppeteer not available, returning HTML:", importError)
+        return { pdf: null, html, error: null }
+      }
       
-      if (!puppeteer) {
+      if (!puppeteerModule) {
         // Puppeteer not available - return HTML as fallback
-        console.warn("[IFTA PDF] Puppeteer not available, returning HTML")
+        console.warn("[IFTA PDF] Puppeteer module not available, returning HTML")
         return { pdf: null, html, error: null }
       }
 
-      const browser = await puppeteer.launch({
+      const browser = await puppeteerModule.launch({
         headless: true,
         args: [
           "--no-sandbox",

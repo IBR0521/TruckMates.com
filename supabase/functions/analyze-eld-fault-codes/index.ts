@@ -53,15 +53,24 @@ serve(async (req) => {
 
   try {
     // HIGH FIX: Get user's company_id from authenticated user record
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    
+    if (!supabaseServiceKey) {
+      return new Response(
+        JSON.stringify({ error: "Service not configured - missing service role key" }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
+    }
+
     const supabaseService = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      supabaseUrl,
+      supabaseServiceKey
     )
 
-    // Get user's company_id from users table
+    // Get user's company_id and role from users table for RBAC check
     const { data: userData, error: userError } = await supabaseService
       .from("users")
-      .select("company_id")
+      .select("company_id, role")
       .eq("id", user.id)
       .single()
 
@@ -72,13 +81,40 @@ serve(async (req) => {
       )
     }
 
+    // MEDIUM FIX: RBAC check - only managers/admins/owners can trigger maintenance creation
+    // Drivers and dispatchers should not be able to trigger this function
+    const allowedRoles = ["manager", "admin", "owner", "super_admin", "operations_manager"]
+    if (!userData.role || !allowedRoles.includes(userData.role)) {
+      return new Response(
+        JSON.stringify({ error: "Insufficient permissions - only managers can analyze fault codes" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
+    }
+
     const companyId = userData.company_id
-    const limit = parseInt(new URL(req.url).searchParams.get("limit") || "100")
+    
+    // MEDIUM FIX: Validate and clamp limit to prevent performance issues
+    let limit = 100
+    try {
+      // BUG FIX: Check if req.url exists before parsing
+      if (req.url) {
+        const limitParam = new URL(req.url).searchParams.get("limit")
+        if (limitParam) {
+          const parsedLimit = parseInt(limitParam, 10)
+          // Clamp between 1 and 1000 to prevent abuse
+          limit = Math.max(1, Math.min(1000, isNaN(parsedLimit) ? 100 : parsedLimit))
+        }
+      }
+    } catch (error) {
+      // If URL parsing fails, use default limit
+      limit = 100
+    }
 
     // HIGH FIX: Always filter by authenticated user's company_id
+    // BUG FIX: Select only needed columns, not all columns (prevents sensitive data exposure)
     const { data: events, error: eventsError } = await supabaseService
       .from("eld_events")
-      .select("*")
+      .select("id, company_id, fault_code, fault_code_category, event_time, truck_id, severity, description, title")
       .eq("maintenance_created", false)
       .not("fault_code", "is", null)
       .eq("company_id", companyId) // Always filter by user's company
@@ -112,29 +148,50 @@ serve(async (req) => {
     // Process each event
     for (const event of events) {
       try {
+        // CRITICAL SECURITY FIX: RPC function doesn't validate company_id ownership
+        // The RPC only takes p_event_id and uses the event's company_id from the database
+        // This means if RPC is called directly, it could create maintenance for any company
+        // We've already filtered by company_id above, but we need to validate the event
+        // belongs to this company before calling RPC for defense in depth
+        
+        // Verify event belongs to company and has valid ID (defense in depth)
+        if (!event.id || !event.company_id || event.company_id !== companyId) {
+          console.warn(`Skipping event ${event.id || 'unknown'} - ownership validation failed`)
+          skipped++
+          continue
+        }
+
         // Call database function to analyze and create maintenance
         const { data: maintenanceId, error: analysisError } = await supabaseService.rpc(
           "analyze_fault_code_and_create_maintenance",
           { p_event_id: event.id }
         )
 
-        processed++
-
+        // BUG FIX: Handle RPC errors properly - don't count as processed if error
         if (analysisError) {
           console.error(`Failed to analyze event ${event.id}:`, analysisError)
           skipped++
           continue
         }
 
-        if (maintenanceId) {
+        // BUG FIX: Validate RPC response type - should be UUID or null
+        // Count as processed only if we got a valid response (UUID or null)
+        processed++
+
+        // BUG FIX: maintenanceId can be UUID (string) or null
+        // If it's a valid UUID string, maintenance was created
+        // If null, RPC decided not to create maintenance (e.g., non-critical fault)
+        if (maintenanceId && typeof maintenanceId === 'string' && maintenanceId.length > 0) {
           created++
           console.log(`Created maintenance ${maintenanceId} from fault code event ${event.id}`)
         } else {
+          // RPC returned null - no maintenance created (e.g., non-critical fault, no rule match)
           skipped++
         }
       } catch (error: any) {
         console.error(`Error processing event ${event.id}:`, error)
         skipped++
+        // Don't increment processed on exception either
       }
     }
 
