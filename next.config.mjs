@@ -35,17 +35,38 @@ const nextConfig = {
       'recharts',
       'date-fns',
     ],
+    // Reduce serverless function bundle size
+    serverComponentsExternalPackages: [
+      'puppeteer',
+      'canvas',
+      'pdfjs-dist',
+      'twilio',
+    ],
   },
-  // Optimize output file tracing to reduce memory usage
+  // Optimize output file tracing to reduce memory usage and deployment size
   outputFileTracingExcludes: {
     '*': [
       'node_modules/@swc/core-linux-x64-gnu',
       'node_modules/@swc/core-linux-x64-musl',
       'node_modules/@esbuild/linux-x64',
       'node_modules/webpack',
+      // Exclude large optional dependencies that are dynamically imported
+      'node_modules/puppeteer',
+      'node_modules/canvas',
+      'node_modules/pdfjs-dist',
+      'node_modules/twilio',
+      // Exclude development dependencies
+      'node_modules/@types',
+      'node_modules/.cache',
+      // Exclude test files
+      '**/*.test.ts',
+      '**/*.test.tsx',
+      '**/*.spec.ts',
+      '**/*.spec.tsx',
     ],
   },
   // Configure Turbopack (Next.js 16 uses Turbopack by default)
+  // Optimize for smaller build output
   turbopack: {},
   // Performance: Enable React strict mode for better development experience
   reactStrictMode: true,
