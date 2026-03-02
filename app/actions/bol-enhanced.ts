@@ -17,37 +17,47 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
   data: { pdf_url: string } | null
   error: string | null
 }> {
-  const supabase = await createClient()
-
-  // CRITICAL FIX 4: Allow function to run without user auth (for background/mobile contexts)
+  // CRITICAL FIX 4: Use service-role client for storage operations to allow background execution
   let targetCompanyId = companyId
+  let supabase = await createClient()
 
   if (!targetCompanyId) {
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
+    // Try to get company_id from BOL itself first (no auth required)
+    const { data: bolData } = await supabase
+      .from("bols")
+      .select("company_id")
+      .eq("id", bolId)
+      .single()
 
-    if (authError || !user) {
-      // If no user, try to get company_id from BOL itself
-      const { data: bolData } = await supabase
-        .from("bols")
-        .select("company_id")
-        .eq("id", bolId)
-        .single()
-
-      if (bolData?.company_id) {
-        targetCompanyId = bolData.company_id
-      } else {
-        return { error: "Not authenticated and cannot determine company", data: null }
-      }
+    if (bolData?.company_id) {
+      targetCompanyId = bolData.company_id
     } else {
-      const result = await getCachedUserCompany(user.id)
-      if (result.error || !result.company_id) {
-        return { error: result.error || "No company found", data: null }
+      // Fallback: try to get from user session if available
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser()
+
+      if (!authError && user) {
+        const result = await getCachedUserCompany(user.id)
+        if (result.company_id) {
+          targetCompanyId = result.company_id
+        }
       }
-      targetCompanyId = result.company_id
+
+      if (!targetCompanyId) {
+        return { error: "Cannot determine company for BOL", data: null }
+      }
     }
+  }
+
+  // Use service-role client for storage operations (bypasses RLS)
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    supabase = createAdminClient()
+  } catch (error) {
+    // If admin client not available, continue with regular client
+    console.warn("[storeSignedBOLPDF] Admin client not available, using regular client")
   }
 
   try {
@@ -166,37 +176,47 @@ export async function autoStoreBOLPDFOnCompletion(bolId: string, companyId?: str
   data: { pdf_url: string } | null
   error: string | null
 }> {
-  const supabase = await createClient()
-
-  // CRITICAL FIX 4: Allow function to run without user auth (for background/mobile contexts)
+  // CRITICAL FIX 4: Use service-role client for storage operations to allow background execution
   let targetCompanyId = companyId
+  let supabase = await createClient()
 
   if (!targetCompanyId) {
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
+    // Try to get company_id from BOL itself first (no auth required)
+    const { data: bolData } = await supabase
+      .from("bols")
+      .select("company_id")
+      .eq("id", bolId)
+      .single()
 
-    if (authError || !user) {
-      // If no user, try to get company_id from BOL itself
-      const { data: bolData } = await supabase
-        .from("bols")
-        .select("company_id")
-        .eq("id", bolId)
-        .single()
-
-      if (bolData?.company_id) {
-        targetCompanyId = bolData.company_id
-      } else {
-        return { error: "Not authenticated and cannot determine company", data: null }
-      }
+    if (bolData?.company_id) {
+      targetCompanyId = bolData.company_id
     } else {
-      const result = await getCachedUserCompany(user.id)
-      if (result.error || !result.company_id) {
-        return { error: result.error || "No company found", data: null }
+      // Fallback: try to get from user session if available
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser()
+
+      if (!authError && user) {
+        const result = await getCachedUserCompany(user.id)
+        if (result.company_id) {
+          targetCompanyId = result.company_id
+        }
       }
-      targetCompanyId = result.company_id
+
+      if (!targetCompanyId) {
+        return { error: "Cannot determine company for BOL", data: null }
+      }
     }
+  }
+
+  // Use service-role client for storage operations (bypasses RLS)
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    supabase = createAdminClient()
+  } catch (error) {
+    // If admin client not available, continue with regular client
+    console.warn("[autoStoreBOLPDFOnCompletion] Admin client not available, using regular client")
   }
 
   try {

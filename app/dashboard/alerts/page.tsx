@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { getAlerts, acknowledgeAlert, resolveAlert } from "@/app/actions/alerts"
+import { getAlerts, getAlertCounts, acknowledgeAlert, resolveAlert } from "@/app/actions/alerts"
 import { Bell, AlertTriangle, CheckCircle2, XCircle, Info, Clock } from "lucide-react"
 import { format } from "date-fns"
 import Link from "next/link"
@@ -23,7 +23,7 @@ import {
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<any[]>([])
-  const [allAlerts, setAllAlerts] = useState<any[]>([]) // FIXED: Store unfiltered alerts for summary cards
+  const [alertCounts, setAlertCounts] = useState({ active: 0, critical: 0, acknowledged: 0, resolved: 0 }) // FIXED: Use efficient counts instead of fetching all records
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState("active") // active, acknowledged, resolved, all
   const [priorityFilter, setPriorityFilter] = useState("all") // all, low, normal, high, critical
@@ -39,20 +39,18 @@ export default function AlertsPage() {
   async function loadAlerts() {
     setIsLoading(true)
     try {
-      // FIXED: Fetch unfiltered alerts for summary cards
-      const allResult = await getAlerts({
-        limit: 1000, // Get all for accurate counts
-      })
+      // FIXED: Use efficient COUNT queries for summary cards instead of fetching all records
+      const [countsResult, filteredResult] = await Promise.all([
+        getAlertCounts(),
+        getAlerts({
+          status: filter === "all" ? undefined : filter,
+          priority: priorityFilter === "all" ? undefined : priorityFilter,
+          limit: 100,
+        })
+      ])
 
-      // Fetch filtered alerts for the list
-      const filteredResult = await getAlerts({
-        status: filter === "all" ? undefined : filter,
-        priority: priorityFilter === "all" ? undefined : priorityFilter,
-        limit: 100,
-      })
-
-      if (allResult.data) {
-        setAllAlerts(allResult.data) // Store for summary cards
+      if (countsResult.data) {
+        setAlertCounts(countsResult.data) // Store counts for summary cards
       }
       
       if (filteredResult.data) {
@@ -147,11 +145,11 @@ export default function AlertsPage() {
     return type.split("_").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ")
   }
 
-  // FIXED: Use allAlerts for summary cards (unfiltered counts)
-  const activeAlerts = allAlerts.filter(a => a.status === "active")
-  const criticalAlerts = allAlerts.filter(a => a.priority === "critical" && a.status === "active")
-  const acknowledgedAlerts = allAlerts.filter(a => a.status === "acknowledged")
-  const resolvedAlerts = allAlerts.filter(a => a.status === "resolved")
+  // FIXED: Use efficient counts from COUNT queries instead of filtering arrays
+  const activeAlertsCount = alertCounts.active
+  const criticalAlertsCount = alertCounts.critical
+  const acknowledgedAlertsCount = alertCounts.acknowledged
+  const resolvedAlertsCount = alertCounts.resolved
 
   return (
     <div className="w-full">
@@ -173,7 +171,7 @@ export default function AlertsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Active Alerts</p>
-                  <p className="text-2xl font-bold">{activeAlerts.length}</p>
+                  <p className="text-2xl font-bold">{activeAlertsCount}</p>
                 </div>
                 <Bell className="w-8 h-8 text-primary" />
               </div>
@@ -182,7 +180,7 @@ export default function AlertsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Critical</p>
-                  <p className="text-2xl font-bold text-red-600">{criticalAlerts.length}</p>
+                  <p className="text-2xl font-bold text-red-600">{criticalAlertsCount}</p>
                 </div>
                 <AlertTriangle className="w-8 h-8 text-red-600" />
               </div>
@@ -192,7 +190,7 @@ export default function AlertsPage() {
                 <div>
                   <p className="text-sm text-muted-foreground">Acknowledged</p>
                   <p className="text-2xl font-bold">
-                    {acknowledgedAlerts.length}
+                    {acknowledgedAlertsCount}
                   </p>
                 </div>
                 <Info className="w-8 h-8 text-blue-500" />
@@ -203,7 +201,7 @@ export default function AlertsPage() {
                 <div>
                   <p className="text-sm text-muted-foreground">Resolved</p>
                   <p className="text-2xl font-bold">
-                    {resolvedAlerts.length}
+                    {resolvedAlertsCount}
                   </p>
                 </div>
                 <CheckCircle2 className="w-8 h-8 text-green-500" />
