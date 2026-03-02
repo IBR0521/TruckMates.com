@@ -274,6 +274,49 @@ export async function deleteAlertRule(ruleId: string) {
 }
 
 /**
+ * Get alert counts by status and priority (efficient COUNT query)
+ */
+export async function getAlertCounts() {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  // Use efficient COUNT queries instead of fetching all records
+  const [activeResult, criticalResult, acknowledgedResult, resolvedResult] = await Promise.all([
+    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", userData.company_id).eq("status", "active"),
+    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", userData.company_id).eq("status", "active").eq("priority", "critical"),
+    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", userData.company_id).eq("status", "acknowledged"),
+    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", userData.company_id).eq("status", "resolved"),
+  ])
+
+  return {
+    data: {
+      active: activeResult.count || 0,
+      critical: criticalResult.count || 0,
+      acknowledged: acknowledgedResult.count || 0,
+      resolved: resolvedResult.count || 0,
+    },
+    error: null
+  }
+}
+
+/**
  * Get active alerts with role-based filtering
  */
 export async function getAlerts(filters?: {
