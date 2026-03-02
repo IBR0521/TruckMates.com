@@ -68,10 +68,6 @@ const nextConfig = {
   // Configure Turbopack (Next.js 16 uses Turbopack by default)
   // Optimize for smaller build output
   turbopack: {},
-  
-  // CRITICAL FIX: Add output configuration to help Vercel deployment
-  // This ensures proper build output structure
-  output: 'standalone',
   // Performance: Enable React strict mode for better development experience
   reactStrictMode: true,
   // Externalize optional dependencies to prevent build errors
