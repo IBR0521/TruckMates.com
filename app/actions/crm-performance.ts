@@ -194,6 +194,11 @@ export async function getVendorPerformanceMetrics(filters?: {
     const { data, error } = await query.order("total_spent", { ascending: false }).limit(1000)
 
     if (error) {
+      // CRITICAL FIX: Handle schema cache errors gracefully - view might not exist
+      if (error.message?.includes("schema cache") || error.message?.includes("does not exist") || error.code === "42P01") {
+        console.warn("[CRM Performance] View crm_vendor_performance does not exist. Please run the SQL migration.")
+        return { data: [], error: null }
+      }
       return { error: error.message, data: null }
     }
 
@@ -240,6 +245,11 @@ export async function getVendorPerformance(vendorId: string): Promise<{
       .single()
 
     if (error) {
+      // CRITICAL FIX: Handle schema cache errors gracefully - view might not exist
+      if (error.message?.includes("schema cache") || error.message?.includes("does not exist") || error.code === "42P01") {
+        console.warn("[CRM Performance] View crm_vendor_performance does not exist. Please run the SQL migration.")
+        return { data: null, error: null }
+      }
       return { error: error.message, data: null }
     }
 
@@ -314,8 +324,8 @@ export async function getRelationshipInsights(): Promise<{
       .limit(1000)
 
     if (vendorsError2) {
-      // If view doesn't exist, return empty data instead of error
-      if (vendorsError2.message?.includes("does not exist") || vendorsError2.code === "42P01") {
+      // CRITICAL FIX: Handle schema cache errors gracefully - view might not exist
+      if (vendorsError2.message?.includes("schema cache") || vendorsError2.message?.includes("does not exist") || vendorsError2.code === "42P01") {
         console.warn("[CRM Performance] View crm_vendor_performance does not exist. Please run the SQL migration.")
         return {
           data: {

@@ -369,7 +369,38 @@ export async function updateDriver(
     .update(updateData)
     .eq("id", id)
     .eq("company_id", result.company_id)
-    .select()
+    .select(`
+      id,
+      company_id,
+      name,
+      email,
+      phone,
+      status,
+      license_number,
+      license_expiry,
+      license_state,
+      license_type,
+      license_endorsements,
+      driver_id,
+      employee_type,
+      address,
+      city,
+      state,
+      zip,
+      emergency_contact_name,
+      emergency_contact_phone,
+      emergency_contact_relationship,
+      date_of_birth,
+      hire_date,
+      pay_rate_type,
+      pay_rate,
+      notes,
+      custom_fields,
+      truck_id,
+      created_at,
+      updated_at,
+      trucks:truck_id (id, truck_number, make, model)
+    `)
     .single()
 
   if (error) {

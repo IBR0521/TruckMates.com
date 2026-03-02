@@ -253,14 +253,11 @@ export async function getAddressBookEntries(filters?: {
   }
 
   try {
-    // Extract coordinates directly in SELECT using ST_X and ST_Y to avoid N+1 queries
+    // CRITICAL FIX: Supabase doesn't support PostGIS functions (ST_X, ST_Y) directly in SELECT
+    // Select all columns and extract coordinates via RPC function
     let query = supabase
       .from("address_book")
-      .select(`
-        *,
-        latitude:ST_X(coordinates::geometry),
-        longitude:ST_Y(coordinates::geometry)
-      `)
+      .select("*")
       .eq("company_id", result.company_id)
 
     if (filters?.category && filters.category !== "all") {
