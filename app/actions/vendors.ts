@@ -403,7 +403,15 @@ export async function updateVendor(
 
   revalidatePath("/dashboard/vendors")
   revalidatePath(`/dashboard/vendors/${id}`)
-  return { data, error: null }
+  
+  // CRITICAL FIX: Ensure data is JSON-serializable for Next.js server actions
+  const serializableData = data ? JSON.parse(JSON.stringify(data, (key, value) => {
+    if (value instanceof Date) return value.toISOString()
+    if (typeof value === 'bigint') return value.toString()
+    return value
+  })) : null
+  
+  return { data: serializableData, error: null }
 }
 
 // Delete vendor
