@@ -385,7 +385,13 @@ export async function updateTruck(
   }
 
   if (Object.keys(updateData).length === 0) {
-    return { data: currentTruck, error: null }
+    // CRITICAL FIX: Ensure currentTruck is JSON-serializable
+    const serializableCurrentTruck = currentTruck ? JSON.parse(JSON.stringify(currentTruck, (key, value) => {
+      if (value instanceof Date) return value.toISOString()
+      if (typeof value === 'bigint') return value.toString()
+      return value
+    })) : null
+    return { data: serializableCurrentTruck, error: null }
   }
 
   const { data, error } = await supabase
