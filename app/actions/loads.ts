@@ -962,7 +962,13 @@ export async function updateLoad(
 
   // If no changes, return early
   if (Object.keys(updateData).length === 0) {
-    return { data: currentLoad, error: null }
+    // CRITICAL FIX: Ensure currentLoad is JSON-serializable
+    const serializableCurrentLoad = currentLoad ? JSON.parse(JSON.stringify(currentLoad, (key, value) => {
+      if (value instanceof Date) return value.toISOString()
+      if (typeof value === 'bigint') return value.toString()
+      return value
+    })) : null
+    return { data: serializableCurrentLoad, error: null }
   }
 
   const { data, error } = await supabase
@@ -1138,7 +1144,14 @@ export async function updateLoad(
   revalidatePath(`/dashboard/loads/${id}`)
   revalidatePath("/dashboard/accounting/invoices")
 
-  return { data, error: null }
+  // CRITICAL FIX: Ensure data is JSON-serializable for Next.js server actions
+  const serializableData = data ? JSON.parse(JSON.stringify(data, (key, value) => {
+    if (value instanceof Date) return value.toISOString()
+    if (typeof value === 'bigint') return value.toString()
+    return value
+  })) : null
+
+  return { data: serializableData, error: null }
 }
 
 export async function deleteLoad(id: string) {

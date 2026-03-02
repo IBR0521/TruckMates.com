@@ -355,7 +355,13 @@ export async function updateDriver(
 
   // If no changes, return early
   if (Object.keys(updateData).length === 0) {
-    return { data: currentDriver, error: null }
+    // CRITICAL FIX: Ensure currentDriver is JSON-serializable
+    const serializableCurrentDriver = currentDriver ? JSON.parse(JSON.stringify(currentDriver, (key, value) => {
+      if (value instanceof Date) return value.toISOString()
+      if (typeof value === 'bigint') return value.toString()
+      return value
+    })) : null
+    return { data: serializableCurrentDriver, error: null }
   }
 
   const { data, error } = await supabase
@@ -369,6 +375,20 @@ export async function updateDriver(
   if (error) {
     return { error: error.message, data: null }
   }
+
+  // CRITICAL FIX: Ensure data is JSON-serializable for Next.js server actions
+  // Convert Date objects and other non-serializable values to strings
+  const serializableData = data ? JSON.parse(JSON.stringify(data, (key, value) => {
+    // Convert Date objects to ISO strings
+    if (value instanceof Date) {
+      return value.toISOString()
+    }
+    // Handle other non-serializable types
+    if (typeof value === 'bigint') {
+      return value.toString()
+    }
+    return value
+  })) : null
 
   // Create audit log entries for each change
   if (changes.length > 0) {
@@ -419,7 +439,21 @@ export async function updateDriver(
   revalidatePath("/dashboard/drivers")
   revalidatePath(`/dashboard/drivers/${id}`)
 
-  return { data, error: null }
+  // CRITICAL FIX: Ensure data is JSON-serializable for Next.js server actions
+  // Convert Date objects and other non-serializable values to strings
+  const serializableData = data ? JSON.parse(JSON.stringify(data, (key, value) => {
+    // Convert Date objects to ISO strings
+    if (value instanceof Date) {
+      return value.toISOString()
+    }
+    // Handle other non-serializable types
+    if (typeof value === 'bigint') {
+      return value.toString()
+    }
+    return value
+  })) : null
+
+  return { data: serializableData, error: null }
 }
 
 export async function deleteDriver(id: string) {
