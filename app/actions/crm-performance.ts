@@ -67,9 +67,30 @@ export async function getCustomerPerformanceMetrics(filters?: {
   }
 
   try {
+    // SECURITY FIX: Use explicit column selection instead of select("*")
     let query = supabase
       .from("crm_customer_performance")
-      .select("*")
+      .select(`
+        company_id,
+        customer_id,
+        name,
+        company_name,
+        relationship_type,
+        status,
+        payment_terms,
+        total_loads,
+        completed_loads,
+        on_time_deliveries,
+        on_time_rate,
+        total_revenue,
+        pending_revenue,
+        paid_invoices,
+        pending_invoices,
+        avg_payment_days,
+        last_load_date,
+        last_invoice_date,
+        revenue_per_load
+      `)
       .eq("company_id", company_id)
 
     // Apply filters
@@ -130,9 +151,30 @@ export async function getCustomerPerformance(customerId: string): Promise<{
   }
 
   try {
+    // SECURITY FIX: Use explicit column selection instead of select("*")
     const { data, error } = await supabase
       .from("crm_customer_performance")
-      .select("*")
+      .select(`
+        company_id,
+        customer_id,
+        name,
+        company_name,
+        relationship_type,
+        status,
+        payment_terms,
+        total_loads,
+        completed_loads,
+        on_time_deliveries,
+        on_time_rate,
+        total_revenue,
+        pending_revenue,
+        paid_invoices,
+        pending_invoices,
+        avg_payment_days,
+        last_load_date,
+        last_invoice_date,
+        revenue_per_load
+      `)
       .eq("customer_id", customerId)
       .eq("company_id", company_id)
       .single()
@@ -175,11 +217,25 @@ export async function getVendorPerformanceMetrics(filters?: {
   }
 
   try {
+    // SECURITY FIX: Use explicit column selection instead of select("*")
     // Query vendor performance directly with company_id filter (if view supports it)
     // Otherwise, filter by vendor IDs from the company
     let query = supabase
       .from("crm_vendor_performance")
-      .select("*")
+      .select(`
+        company_id,
+        vendor_id,
+        name,
+        company_name,
+        relationship_type,
+        status,
+        total_expenses,
+        total_spent,
+        avg_expense_amount,
+        last_transaction_date,
+        first_transaction_date,
+        transactions_per_month
+      `)
       .eq("company_id", company_id)
 
     // Apply filters
@@ -237,9 +293,23 @@ export async function getVendorPerformance(vendorId: string): Promise<{
   }
 
   try {
+    // SECURITY FIX: Use explicit column selection instead of select("*")
     const { data, error } = await supabase
       .from("crm_vendor_performance")
-      .select("*")
+      .select(`
+        company_id,
+        vendor_id,
+        name,
+        company_name,
+        relationship_type,
+        status,
+        total_expenses,
+        total_spent,
+        avg_expense_amount,
+        last_transaction_date,
+        first_transaction_date,
+        transactions_per_month
+      `)
       .eq("vendor_id", vendorId)
       .eq("company_id", company_id)
       .single()
@@ -286,10 +356,31 @@ export async function getRelationshipInsights(): Promise<{
   }
 
   try {
+    // SECURITY FIX: Use explicit column selection instead of select("*")
     // Get all customer metrics directly from the view to avoid circular dependency
     let customerQuery = supabase
       .from("crm_customer_performance")
-      .select("*")
+      .select(`
+        company_id,
+        customer_id,
+        name,
+        company_name,
+        relationship_type,
+        status,
+        payment_terms,
+        total_loads,
+        completed_loads,
+        on_time_deliveries,
+        on_time_rate,
+        total_revenue,
+        pending_revenue,
+        paid_invoices,
+        pending_invoices,
+        avg_payment_days,
+        last_load_date,
+        last_invoice_date,
+        revenue_per_load
+      `)
       .eq("company_id", company_id)
     
     // MEDIUM FIX: Add limit to prevent unbounded aggregation queries
@@ -314,11 +405,25 @@ export async function getRelationshipInsights(): Promise<{
 
     const customers = (customersData || []) as CustomerPerformanceMetrics[]
 
+    // SECURITY FIX: Use explicit column selection instead of select("*")
     // Get all vendor metrics directly from the view with company_id filter
     // MEDIUM FIX: Add limit to prevent unbounded aggregation queries
     const { data: vendorsData2, error: vendorsError2 } = await supabase
       .from("crm_vendor_performance")
-      .select("*")
+      .select(`
+        company_id,
+        vendor_id,
+        name,
+        company_name,
+        relationship_type,
+        status,
+        total_expenses,
+        total_spent,
+        avg_expense_amount,
+        last_transaction_date,
+        first_transaction_date,
+        transactions_per_month
+      `)
       .eq("company_id", company_id)
       .order("total_spent", { ascending: false })
       .limit(1000)

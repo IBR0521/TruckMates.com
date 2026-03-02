@@ -80,9 +80,41 @@ export async function getDriver(id: string) {
     return { error: result.error || "No company found", data: null }
   }
 
+  // SECURITY FIX: Use explicit column selection instead of select("*")
   const { data: driver, error } = await supabase
     .from("drivers")
-    .select("*")
+    .select(`
+      id,
+      company_id,
+      name,
+      email,
+      phone,
+      status,
+      license_number,
+      license_expiry,
+      license_state,
+      license_type,
+      license_endorsements,
+      driver_id,
+      employee_type,
+      address,
+      city,
+      state,
+      zip,
+      emergency_contact_name,
+      emergency_contact_phone,
+      emergency_contact_relationship,
+      date_of_birth,
+      hire_date,
+      pay_rate_type,
+      pay_rate,
+      notes,
+      custom_fields,
+      truck_id,
+      created_at,
+      updated_at,
+      trucks:truck_id (id, truck_number, make, model)
+    `)
     .eq("id", id)
     .eq("company_id", result.company_id)
     .maybeSingle()
@@ -152,28 +184,40 @@ export async function createDriver(formData: {
     return { error: driverValidation.errors.join("; "), data: null }
   }
 
+  // ERROR HANDLING FIX: Use maybeSingle() when checking for duplicates (might not exist)
   // Check for duplicate email if provided
   if (formData.email) {
-    const { data: existingDriver } = await supabase
+    const { data: existingDriver, error: emailCheckError } = await supabase
       .from("drivers")
       .select("id")
       .eq("company_id", userData.company_id)
       .eq("email", sanitizeEmail(formData.email))
-      .single()
+      .maybeSingle()
+
+    // Only treat as error if it's not a "not found" case
+    if (emailCheckError && emailCheckError.code !== "PGRST116") {
+      return { error: emailCheckError.message || "Failed to check for duplicate email", data: null }
+    }
 
     if (existingDriver) {
       return { error: "Driver with this email already exists", data: null }
     }
   }
 
+  // ERROR HANDLING FIX: Use maybeSingle() when checking for duplicates (might not exist)
   // Check for duplicate license number if provided
   if (formData.license_number) {
-    const { data: existingLicense } = await supabase
+    const { data: existingLicense, error: licenseCheckError } = await supabase
       .from("drivers")
       .select("id")
       .eq("company_id", userData.company_id)
       .eq("license_number", sanitizeString(formData.license_number, 20).toUpperCase())
-      .single()
+      .maybeSingle()
+
+    // Only treat as error if it's not a "not found" case
+    if (licenseCheckError && licenseCheckError.code !== "PGRST116") {
+      return { error: licenseCheckError.message || "Failed to check for duplicate license", data: null }
+    }
 
     if (existingLicense) {
       return { error: "Driver with this license number already exists", data: null }
@@ -182,14 +226,19 @@ export async function createDriver(formData: {
 
   // Validate truck assignment if provided
   if (formData.truck_id) {
+    // ERROR HANDLING FIX: Use maybeSingle() when checking if record exists (might not exist)
     const { data: truck, error: truckError } = await supabase
       .from("trucks")
       .select("id, status, company_id, current_driver_id")
       .eq("id", formData.truck_id)
       .eq("company_id", userData.company_id)
-      .single()
+      .maybeSingle()
 
-    if (truckError || !truck) {
+    if (truckError) {
+      return { error: truckError.message || "Failed to validate truck", data: null }
+    }
+
+    if (!truck) {
       return { error: "Invalid truck selected", data: null }
     }
 
@@ -232,10 +281,41 @@ export async function createDriver(formData: {
   if (formData.emergency_contact_relationship) driverData.emergency_contact_relationship = sanitizeString(formData.emergency_contact_relationship, 50)
   if (formData.notes) driverData.notes = sanitizeString(formData.notes, 1000)
 
+  // SECURITY FIX: Use explicit column selection instead of select()
   const { data, error } = await supabase
     .from("drivers")
     .insert(driverData)
-    .select()
+    .select(`
+      id,
+      company_id,
+      name,
+      email,
+      phone,
+      status,
+      license_number,
+      license_expiry,
+      license_state,
+      license_type,
+      license_endorsements,
+      driver_id,
+      employee_type,
+      address,
+      city,
+      state,
+      zip,
+      emergency_contact_name,
+      emergency_contact_phone,
+      emergency_contact_relationship,
+      date_of_birth,
+      hire_date,
+      pay_rate_type,
+      pay_rate,
+      notes,
+      custom_fields,
+      truck_id,
+      created_at,
+      updated_at
+    `)
     .single()
 
   if (error) {
@@ -280,13 +360,49 @@ export async function updateDriver(
     return { error: result.error || "No company found", data: null }
   }
 
+  // ERROR HANDLING FIX: Use maybeSingle() when checking if record exists (might not exist)
+  // SECURITY FIX: Use explicit column selection instead of select("*")
   // Get current driver data for audit trail (with company_id verification)
-  const { data: currentDriver } = await supabase
+  const { data: currentDriver, error: fetchError } = await supabase
     .from("drivers")
-    .select("*")
+    .select(`
+      id,
+      company_id,
+      name,
+      email,
+      phone,
+      status,
+      license_number,
+      license_expiry,
+      license_state,
+      license_type,
+      license_endorsements,
+      driver_id,
+      employee_type,
+      address,
+      city,
+      state,
+      zip,
+      emergency_contact_name,
+      emergency_contact_phone,
+      emergency_contact_relationship,
+      date_of_birth,
+      hire_date,
+      pay_rate_type,
+      pay_rate,
+      notes,
+      custom_fields,
+      truck_id,
+      created_at,
+      updated_at
+    `)
     .eq("id", id)
     .eq("company_id", result.company_id)
-    .single()
+    .maybeSingle()
+
+  if (fetchError) {
+    return { error: fetchError.message || "Failed to fetch driver", data: null }
+  }
 
   if (!currentDriver) {
     return { error: "Driver not found", data: null }

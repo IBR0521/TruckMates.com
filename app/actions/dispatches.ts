@@ -32,10 +32,30 @@ export async function getUnassignedLoads() {
     return { error: "No company found", data: null }
   }
 
+  // SECURITY FIX: Use explicit column selection instead of select("*")
   // MEDIUM FIX: Add limit to prevent unbounded queries
   const { data: loads, error } = await supabase
     .from("loads")
-    .select("*")
+    .select(`
+      id,
+      company_id,
+      shipment_number,
+      origin,
+      destination,
+      status,
+      priority,
+      driver_id,
+      truck_id,
+      load_date,
+      estimated_delivery,
+      weight,
+      weight_kg,
+      value,
+      rate,
+      total_rate,
+      created_at,
+      updated_at
+    `)
     .eq("company_id", userData.company_id)
     .or("driver_id.is.null,truck_id.is.null")
     .not("status", "in", '("delivered","cancelled","completed")')
@@ -47,7 +67,7 @@ export async function getUnassignedLoads() {
   }
 
   // Additional filter for pending status loads that might have assignments
-  const unassignedLoads = loads?.filter((load) => 
+  const unassignedLoads = loads?.filter((load: any) => 
     !load.driver_id || !load.truck_id || load.status === "pending"
   ) || []
 
@@ -82,10 +102,25 @@ export async function getUnassignedRoutes() {
     return { error: "No company found", data: null }
   }
 
+  // SECURITY FIX: Use explicit column selection instead of select("*")
   // MEDIUM FIX: Add limit to prevent unbounded queries
   const { data: routes, error } = await supabase
     .from("routes")
-    .select("*")
+    .select(`
+      id,
+      company_id,
+      name,
+      origin,
+      destination,
+      status,
+      priority,
+      driver_id,
+      truck_id,
+      distance,
+      estimated_time,
+      created_at,
+      updated_at
+    `)
     .eq("company_id", userData.company_id)
     .or("driver_id.is.null,truck_id.is.null")
     .not("status", "in", '("completed","cancelled")')
@@ -97,7 +132,7 @@ export async function getUnassignedRoutes() {
   }
 
   // Additional filter for pending status routes that might have assignments
-  const unassignedRoutes = routes?.filter((route) => 
+  const unassignedRoutes = routes?.filter((route: any) => 
     !route.driver_id || !route.truck_id || route.status === "pending"
   ) || []
 
@@ -108,8 +143,8 @@ export async function getUnassignedRoutes() {
  * Quick assign driver and truck to a load
  */
 export async function quickAssignLoad(loadId: string, driverId?: string, truckId?: string) {
-  // Check permission
-  const permission = await checkEditPermission("dispatches")
+  // Check permission - use "dispatch" feature category
+  const permission = await checkEditPermission("dispatch")
   if (!permission.allowed) {
     return { error: permission.error || "You don't have permission to assign loads", data: null }
   }
@@ -138,15 +173,20 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
     return { error: "No company found", data: null }
   }
 
+  // ERROR HANDLING FIX: Use maybeSingle() when checking if record exists (might not exist)
   // Get current load to check status and company
   const { data: currentLoad, error: loadError } = await supabase
     .from("loads")
     .select("status, company_id")
     .eq("id", loadId)
     .eq("company_id", userData.company_id)
-    .single()
+    .maybeSingle()
 
-  if (loadError || !currentLoad) {
+  if (loadError) {
+    return { error: loadError.message || "Failed to fetch load", data: null }
+  }
+
+  if (!currentLoad) {
     return { error: "Load not found or access denied", data: null }
   }
 
@@ -155,28 +195,38 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
     return { error: "Cannot assign driver to a completed or cancelled load", data: null }
   }
 
+  // ERROR HANDLING FIX: Use maybeSingle() when checking if record exists (might not exist)
   // Validate driver ownership if provided
   if (driverId) {
-    const { data: driver } = await supabase
+    const { data: driver, error: driverError } = await supabase
       .from("drivers")
       .select("id")
       .eq("id", driverId)
       .eq("company_id", userData.company_id)
-      .single()
+      .maybeSingle()
+    
+    if (driverError) {
+      return { error: driverError.message || "Failed to validate driver", data: null }
+    }
     
     if (!driver) {
       return { error: "Invalid driver or driver does not belong to your company", data: null }
     }
   }
 
+  // ERROR HANDLING FIX: Use maybeSingle() when checking if record exists (might not exist)
   // Validate truck ownership if provided
   if (truckId) {
-    const { data: truck } = await supabase
+    const { data: truck, error: truckError } = await supabase
       .from("trucks")
       .select("id")
       .eq("id", truckId)
       .eq("company_id", userData.company_id)
-      .single()
+      .maybeSingle()
+    
+    if (truckError) {
+      return { error: truckError.message || "Failed to validate truck", data: null }
+    }
     
     if (!truck) {
       return { error: "Invalid truck or truck does not belong to your company", data: null }
@@ -197,7 +247,15 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
     .update(updateData)
     .eq("id", loadId)
     .eq("company_id", userData.company_id)
-    .select()
+    .select(`
+      id,
+      shipment_number,
+      origin,
+      destination,
+      status,
+      driver_id,
+      truck_id
+    `)
     .single()
 
   if (error) {
@@ -243,8 +301,8 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
  * Quick assign driver and truck to a route
  */
 export async function quickAssignRoute(routeId: string, driverId?: string, truckId?: string) {
-  // Check permission
-  const permission = await checkEditPermission("dispatches")
+  // Check permission - use "dispatch" feature category
+  const permission = await checkEditPermission("dispatch")
   if (!permission.allowed) {
     return { error: permission.error || "You don't have permission to assign routes", data: null }
   }
@@ -273,15 +331,20 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
     return { error: "No company found", data: null }
   }
 
+  // ERROR HANDLING FIX: Use maybeSingle() when checking if record exists (might not exist)
   // Get current route status and company
   const { data: currentRoute, error: routeError } = await supabase
     .from("routes")
     .select("status, company_id")
     .eq("id", routeId)
     .eq("company_id", userData.company_id)
-    .single()
+    .maybeSingle()
 
-  if (routeError || !currentRoute) {
+  if (routeError) {
+    return { error: routeError.message || "Failed to fetch route", data: null }
+  }
+
+  if (!currentRoute) {
     return { error: "Route not found or access denied", data: null }
   }
 
@@ -290,28 +353,38 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
     return { error: "Cannot assign driver to a completed or cancelled route", data: null }
   }
 
+  // ERROR HANDLING FIX: Use maybeSingle() when checking if record exists (might not exist)
   // Validate driver ownership if provided
   if (driverId) {
-    const { data: driver } = await supabase
+    const { data: driver, error: driverError } = await supabase
       .from("drivers")
       .select("id")
       .eq("id", driverId)
       .eq("company_id", userData.company_id)
-      .single()
+      .maybeSingle()
+    
+    if (driverError) {
+      return { error: driverError.message || "Failed to validate driver", data: null }
+    }
     
     if (!driver) {
       return { error: "Invalid driver or driver does not belong to your company", data: null }
     }
   }
 
+  // ERROR HANDLING FIX: Use maybeSingle() when checking if record exists (might not exist)
   // Validate truck ownership if provided
   if (truckId) {
-    const { data: truck } = await supabase
+    const { data: truck, error: truckError } = await supabase
       .from("trucks")
       .select("id")
       .eq("id", truckId)
       .eq("company_id", userData.company_id)
-      .single()
+      .maybeSingle()
+    
+    if (truckError) {
+      return { error: truckError.message || "Failed to validate truck", data: null }
+    }
     
     if (!truck) {
       return { error: "Invalid truck or truck does not belong to your company", data: null }
@@ -332,7 +405,15 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
     .update(updateData)
     .eq("id", routeId)
     .eq("company_id", userData.company_id)
-    .select()
+    .select(`
+      id,
+      name,
+      origin,
+      destination,
+      status,
+      driver_id,
+      truck_id
+    `)
     .single()
 
   if (error) {

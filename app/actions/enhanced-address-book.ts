@@ -197,7 +197,40 @@ export async function createAddressBookEntry(
         geofence_radius_meters: input.geofence_radius_meters || 500,
         created_by: user.id,
       })
-      .select()
+      .select(`
+        id,
+        company_id,
+        name,
+        company_name,
+        contact_name,
+        email,
+        phone,
+        fax,
+        address_line1,
+        address_line2,
+        city,
+        state,
+        zip_code,
+        country,
+        coordinates,
+        geocoded_at,
+        geocoding_status,
+        formatted_address,
+        place_id,
+        category,
+        custom_fields,
+        notes,
+        is_active,
+        is_verified,
+        auto_create_geofence,
+        geofence_id,
+        geofence_radius_meters,
+        created_by,
+        created_at,
+        updated_at,
+        last_used_at,
+        usage_count
+      `)
       .single()
 
     if (error) {
@@ -253,11 +286,45 @@ export async function getAddressBookEntries(filters?: {
   }
 
   try {
+    // SECURITY FIX: Use explicit column selection instead of select("*")
     // CRITICAL FIX: Supabase doesn't support PostGIS functions (ST_X, ST_Y) directly in SELECT
     // Select all columns and extract coordinates via RPC function
     let query = supabase
       .from("address_book")
-      .select("*")
+      .select(`
+        id,
+        company_id,
+        name,
+        company_name,
+        contact_name,
+        email,
+        phone,
+        fax,
+        address_line1,
+        address_line2,
+        city,
+        state,
+        zip_code,
+        country,
+        coordinates,
+        geocoded_at,
+        geocoding_status,
+        formatted_address,
+        place_id,
+        category,
+        custom_fields,
+        notes,
+        is_active,
+        is_verified,
+        auto_create_geofence,
+        geofence_id,
+        geofence_radius_meters,
+        created_by,
+        created_at,
+        updated_at,
+        last_used_at,
+        usage_count
+      `)
       .eq("company_id", result.company_id)
 
     if (filters?.category && filters.category !== "all") {
@@ -418,10 +485,44 @@ export async function geocodeAddressBookEntry(
   }
 
   try {
+    // SECURITY FIX: Use explicit column selection instead of select("*")
     // Get entry
     const { data: entry, error: fetchError } = await supabase
       .from("address_book")
-      .select("*")
+      .select(`
+        id,
+        company_id,
+        name,
+        company_name,
+        contact_name,
+        email,
+        phone,
+        fax,
+        address_line1,
+        address_line2,
+        city,
+        state,
+        zip_code,
+        country,
+        coordinates,
+        geocoded_at,
+        geocoding_status,
+        formatted_address,
+        place_id,
+        category,
+        custom_fields,
+        notes,
+        is_active,
+        is_verified,
+        auto_create_geofence,
+        geofence_id,
+        geofence_radius_meters,
+        created_by,
+        created_at,
+        updated_at,
+        last_used_at,
+        usage_count
+      `)
       .eq("id", entryId)
       .eq("company_id", result.company_id)
       .single()
@@ -502,6 +603,7 @@ export async function geocodeAddressBookEntry(
     // Update entry with geocoded coordinates
     const coordinatesString = `POINT(${lng} ${lat})`
 
+    // SECURITY FIX: Use explicit column selection instead of select()
     const { data: updatedEntry, error: updateError } = await supabase
       .from("address_book")
       .update({
@@ -513,7 +615,40 @@ export async function geocodeAddressBookEntry(
       })
       .eq("id", entryId)
       .eq("company_id", result.company_id)
-      .select()
+      .select(`
+        id,
+        company_id,
+        name,
+        company_name,
+        contact_name,
+        email,
+        phone,
+        fax,
+        address_line1,
+        address_line2,
+        city,
+        state,
+        zip_code,
+        country,
+        coordinates,
+        geocoded_at,
+        geocoding_status,
+        formatted_address,
+        place_id,
+        category,
+        custom_fields,
+        notes,
+        is_active,
+        is_verified,
+        auto_create_geofence,
+        geofence_id,
+        geofence_radius_meters,
+        created_by,
+        created_at,
+        updated_at,
+        last_used_at,
+        usage_count
+      `)
       .single()
 
     if (updateError) {
@@ -660,9 +795,16 @@ export async function updateAddressBookEntry(
 
     // Re-geocode if address actually changed (not just present in updates)
     if (updates.address_line1 !== undefined || updates.city !== undefined || updates.state !== undefined || updates.zip_code !== undefined) {
+      // SECURITY FIX: Use explicit column selection - only need address fields for comparison
       const { data: currentEntry } = await supabase
         .from("address_book")
-        .select("*")
+        .select(`
+          address_line1,
+          address_line2,
+          city,
+          state,
+          zip_code
+        `)
         .eq("id", entryId)
         .eq("company_id", result.company_id)
         .single()
@@ -700,12 +842,46 @@ export async function updateAddressBookEntry(
       }
     }
 
+    // SECURITY FIX: Use explicit column selection instead of select()
     const { data, error } = await supabase
       .from("address_book")
       .update(updateData)
       .eq("id", entryId)
       .eq("company_id", result.company_id)
-      .select()
+      .select(`
+        id,
+        company_id,
+        name,
+        company_name,
+        contact_name,
+        email,
+        phone,
+        fax,
+        address_line1,
+        address_line2,
+        city,
+        state,
+        zip_code,
+        country,
+        coordinates,
+        geocoded_at,
+        geocoding_status,
+        formatted_address,
+        place_id,
+        category,
+        custom_fields,
+        notes,
+        is_active,
+        is_verified,
+        auto_create_geofence,
+        geofence_id,
+        geofence_radius_meters,
+        created_by,
+        created_at,
+        updated_at,
+        last_used_at,
+        usage_count
+      `)
       .single()
 
     if (error) {
