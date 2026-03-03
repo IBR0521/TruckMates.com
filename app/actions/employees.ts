@@ -94,7 +94,7 @@ export async function getEmployees() {
   // HIGH FIX 1: Select only necessary columns to prevent exposing sensitive internal fields
   const { data: employees, error } = await supabase
     .from("users")
-    .select("id, full_name, email, phone, position, employee_status, role, created_at")
+    .select("id, full_name, email, phone, employee_status, role, created_at")
     .eq("company_id", companyId)
     .neq("id", user.id) // Exclude the manager
     .order("created_at", { ascending: false })
@@ -111,14 +111,13 @@ export async function getEmployees() {
 }
 
 
-// Update employee (status, position, etc.)
+// Update employee (status, etc.)
 export async function updateEmployee(
   employeeId: string,
   updates: {
     full_name?: string
     email?: string
     phone?: string
-    position?: string
     employee_status?: string
   }
 ) {
@@ -167,7 +166,6 @@ export async function updateEmployee(
   if (updates.full_name !== undefined) updateData.full_name = updates.full_name
   if (updates.email !== undefined) updateData.email = updates.email
   if (updates.phone !== undefined) updateData.phone = updates.phone
-  if (updates.position !== undefined) updateData.position = updates.position
   if (updates.employee_status !== undefined) updateData.employee_status = updates.employee_status
 
   // MEDIUM FIX 9: Sync email update with auth.users

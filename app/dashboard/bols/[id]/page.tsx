@@ -8,7 +8,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { use } from "react"
 import { getBOL, updateBOLSignature } from "@/app/actions/bol"
-import { generateBOLPDF } from "@/app/actions/bol-pdf"
+import { generateBOLPDFFile } from "@/app/actions/bol-pdf"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { SignatureCapture } from "@/components/signature-capture"
@@ -92,23 +92,28 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
 
   const handleDownloadPDF = async () => {
     try {
-      const result = await generateBOLPDF(id)
+      const result = await generateBOLPDFFile(id)
       if (result.error) {
         toast.error(result.error)
         return
       }
 
-      // LOW FIX 2: Use Blob download API for better UX (interim until real PDF generation)
-      const blob = new Blob([result.html], { type: "text/html" })
+      if (!result.pdf) {
+        toast.error("Failed to generate PDF")
+        return
+      }
+
+      // Download actual PDF file
+      const blob = new Blob([result.pdf], { type: "application/pdf" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `${bol?.bol_number || "BOL"}.html`
+      a.download = `${bol?.bol_number || "BOL"}.pdf`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      toast.success("BOL downloaded (HTML format)")
+      toast.success("BOL downloaded as PDF")
     } catch (error: any) {
       toast.error("Failed to generate PDF: " + (error.message || "Unknown error"))
     }

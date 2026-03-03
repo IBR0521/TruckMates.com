@@ -606,6 +606,162 @@ export async function createAlert(formData: {
 }
 
 /**
+ * Process alert escalations.
+ * This is designed to be called from a scheduled job (e.g., cron / background worker).
+ *
+ * Escalation logic:
+ * - For each active alert linked to an alert_rule with escalation_enabled = true:
+ *   - If the alert is still 'active' and NOT acknowledged/resolved,
+ *   - AND now - created_at >= escalation_delay_minutes,
+ *   - AND alert.escalated is false,
+ *   => mark escalated and send notifications to manager/admin/owner users.
+ */
+export async function processAlertEscalations() {
+  // Use regular server client; RLS on alerts/alert_rules already scoped by company_id
+  const supabase = await createClient()
+
+  // 1) Get all rules with escalation enabled
+  const { data: rules, error: rulesError } = await supabase
+    .from("alert_rules")
+    .select("id, company_id, escalation_enabled, escalation_delay_minutes, priority")
+    .eq("escalation_enabled", true)
+    .eq("is_active", true)
+
+  if (rulesError) {
+    console.error("[processAlertEscalations] Failed to load alert rules:", rulesError)
+    return { error: rulesError.message || "Failed to load alert rules", data: null }
+  }
+
+  if (!rules || rules.length === 0) {
+    return { data: { escalated: 0 }, error: null }
+  }
+
+  let escalatedCount = 0
+
+  for (const rule of rules) {
+    const delayMinutes =
+      rule.escalation_delay_minutes && rule.escalation_delay_minutes > 0
+        ? rule.escalation_delay_minutes
+        : 30
+
+    // Threshold timestamp: alerts created before this are eligible
+    const threshold = new Date(Date.now() - delayMinutes * 60 * 1000).toISOString()
+
+    // 2) Find alerts for this rule that are overdue for escalation
+    const { data: alerts, error: alertsError } = await supabase
+      .from("alerts")
+      .select("*")
+      .eq("company_id", rule.company_id)
+      .eq("alert_rule_id", rule.id)
+      .eq("status", "active")
+      .eq("escalated", false)
+      .lte("created_at", threshold)
+
+    if (alertsError) {
+      console.error("[processAlertEscalations] Failed to load alerts:", alertsError)
+      continue
+    }
+
+    if (!alerts || alerts.length === 0) {
+      continue
+    }
+
+    // 3) Find escalation targets: manager/admin/owner in this company
+    const { data: managers } = await supabase
+      .from("users")
+      .select("id, role")
+      .eq("company_id", rule.company_id)
+      .in("role", ["manager", "admin", "owner"])
+
+    const managerIds = managers?.map((u: any) => u.id) || []
+    if (managerIds.length === 0) {
+      // No managers to escalate to; skip
+      continue
+    }
+
+    for (const alert of alerts) {
+      try {
+        // 4) Mark alert as escalated (single-shot)
+        const { error: updateError } = await supabase
+          .from("alerts")
+          .update({
+            escalated: true,
+            escalation_level: (alert.escalation_level || 0) + 1,
+            escalated_at: new Date().toISOString(),
+          })
+          .eq("id", alert.id)
+          .eq("company_id", rule.company_id)
+
+        if (updateError) {
+          console.error("[processAlertEscalations] Failed to update alert:", updateError)
+          continue
+        }
+
+        escalatedCount++
+
+        // 5) Send escalation notifications to managers
+        const escalationTitle = `[ESCALATION] ${alert.title}`
+        const escalationMessage =
+          alert.message ||
+          "This alert has not been acknowledged within the configured escalation window."
+
+        // Use same notification type mapping as createAlert
+        const getNotificationType = (
+          eventType: string,
+        ): "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" => {
+          if (eventType.includes("maintenance") || eventType.includes("service")) {
+            return "maintenance_alert"
+          }
+          if (eventType.includes("payment") || eventType.includes("settlement")) {
+            return "payment_reminder"
+          }
+          if (eventType.includes("route")) {
+            return "route_update"
+          }
+          return "load_update"
+        }
+
+        const notificationType = getNotificationType(alert.event_type)
+
+        for (const managerId of managerIds) {
+          // In-app escalation notification
+          await supabase
+            .from("notifications")
+            .insert({
+              user_id: managerId,
+              title: escalationTitle,
+              message: escalationMessage,
+              type: "alert",
+              priority: "critical",
+              metadata: {
+                alert_id: alert.id,
+                escalated: true,
+                escalation_level: (alert.escalation_level || 0) + 1,
+              },
+              read: false,
+            })
+            .catch(() => {})
+
+          // Email escalation (best-effort)
+          await sendNotification(managerId, notificationType, {
+            title: escalationTitle,
+            message: escalationMessage,
+            status: alert.status,
+            origin: alert.metadata?.origin,
+            destination: alert.metadata?.destination,
+            shipmentNumber: alert.metadata?.shipment_number,
+          }).catch(() => {})
+        }
+      } catch (error: any) {
+        console.error("[processAlertEscalations] Error processing alert:", error)
+      }
+    }
+  }
+
+  return { data: { escalated: escalatedCount }, error: null }
+}
+
+/**
  * Acknowledge alert
  */
 export async function acknowledgeAlert(id: string) {

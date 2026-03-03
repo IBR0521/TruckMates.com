@@ -56,6 +56,75 @@ export async function generateBOLPDF(bolId: string): Promise<{
     return text.replace(/[&<>"']/g, (m) => map[m])
   }
 
+  // CRITICAL FIX 4: Convert signature URL to base64 data URI to prevent expiration
+  async function convertSignatureToBase64(signatureUrl: string | null | undefined): Promise<string | null> {
+    if (!signatureUrl) return null
+
+    try {
+      // If already a data URI, return as-is
+      if (signatureUrl.startsWith('data:')) {
+        return signatureUrl
+      }
+
+      // Handle Supabase Storage URLs - try to fetch using Supabase client if it's a storage URL
+      let imageData: ArrayBuffer | null = null
+      let contentType = 'image/png'
+
+      // Check if it's a Supabase Storage URL
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      if (supabaseUrl && signatureUrl.includes(supabaseUrl)) {
+        // Extract path from URL
+        const urlPath = signatureUrl.split('/storage/v1/object/public/')[1] || 
+                       signatureUrl.split('/storage/v1/object/sign/')[1]?.split('?')[0]
+        
+        if (urlPath) {
+          // Try to download using Supabase client
+          const { data, error } = await supabase.storage
+            .from(urlPath.split('/')[0]) // Get bucket name
+            .download(urlPath.split('/').slice(1).join('/')) // Get file path
+          
+          if (!error && data) {
+            imageData = await data.arrayBuffer()
+            contentType = data.type || 'image/png'
+          }
+        }
+      }
+
+      // Fallback: fetch directly if not Supabase Storage or if Supabase fetch failed
+      if (!imageData) {
+        const response = await fetch(signatureUrl)
+        if (!response.ok) {
+          console.warn(`[BOL PDF] Failed to fetch signature image: ${signatureUrl}`)
+          return null
+        }
+        imageData = await response.arrayBuffer()
+        contentType = response.headers.get('content-type') || 'image/png'
+      }
+
+      // Convert to buffer and then to base64
+      const buffer = Buffer.from(imageData)
+      const base64 = buffer.toString('base64')
+      
+      return `data:${contentType};base64,${base64}`
+    } catch (error) {
+      console.error(`[BOL PDF] Error converting signature to base64:`, error)
+      return null
+    }
+  }
+
+  // Convert all signature URLs to base64 data URIs
+  const shipperSignatureDataUri = bol.shipper_signature?.signature_url 
+    ? await convertSignatureToBase64(bol.shipper_signature.signature_url)
+    : null
+  
+  const driverSignatureDataUri = bol.driver_signature?.signature_url
+    ? await convertSignatureToBase64(bol.driver_signature.signature_url)
+    : null
+  
+  const consigneeSignatureDataUri = bol.consignee_signature?.signature_url
+    ? await convertSignatureToBase64(bol.consignee_signature.signature_url)
+    : null
+
   // Generate HTML for PDF
   const html = `
     <!DOCTYPE html>
@@ -289,8 +358,8 @@ export async function generateBOLPDF(bolId: string): Promise<{
       <div class="signature-section">
         <div class="signature-box">
           <div class="section-title">SHIPPER SIGNATURE</div>
-          ${bol.shipper_signature?.signature_url ? `
-            <img src="${bol.shipper_signature.signature_url}" class="signature-image" alt="Shipper signature" />
+          ${shipperSignatureDataUri ? `
+            <img src="${shipperSignatureDataUri}" class="signature-image" alt="Shipper signature" />
           ` : ''}
           <div class="signature-line">
             <div class="signature-label">
@@ -306,8 +375,8 @@ export async function generateBOLPDF(bolId: string): Promise<{
 
         <div class="signature-box">
           <div class="section-title">DRIVER SIGNATURE</div>
-          ${bol.driver_signature?.signature_url ? `
-            <img src="${escapeHtml(bol.driver_signature.signature_url)}" class="signature-image" alt="Driver signature" />
+          ${driverSignatureDataUri ? `
+            <img src="${driverSignatureDataUri}" class="signature-image" alt="Driver signature" />
           ` : ''}
           <div class="signature-line">
             <div class="signature-label">
@@ -326,8 +395,8 @@ export async function generateBOLPDF(bolId: string): Promise<{
       <div class="signature-section">
         <div class="signature-box">
           <div class="section-title">CONSIGNEE SIGNATURE</div>
-          ${bol.consignee_signature.signature_url ? `
-            <img src="${escapeHtml(bol.consignee_signature.signature_url)}" class="signature-image" alt="Consignee signature" />
+          ${consigneeSignatureDataUri ? `
+            <img src="${consigneeSignatureDataUri}" class="signature-image" alt="Consignee signature" />
           ` : ''}
           <div class="signature-line">
             <div class="signature-label">
@@ -351,5 +420,75 @@ export async function generateBOLPDF(bolId: string): Promise<{
   `
 
   return { html, error: null }
+}
+
+/**
+ * Generate BOL PDF as actual PDF file (using Puppeteer)
+ */
+export async function generateBOLPDFFile(bolId: string): Promise<{
+  pdf: Buffer | null
+  error: string | null
+}> {
+  try {
+    // First generate the HTML
+    const htmlResult = await generateBOLPDF(bolId)
+    
+    if (htmlResult.error || !htmlResult.html) {
+      return { pdf: null, error: htmlResult.error || "Failed to generate HTML" }
+    }
+
+    // Convert HTML to PDF using Puppeteer
+    let pdfBuffer: Buffer | null = null
+    
+    try {
+      const puppeteer = await import("puppeteer").catch(() => null)
+      
+      if (!puppeteer) {
+        return { 
+          pdf: null, 
+          error: "PDF generation requires Puppeteer. Please install puppeteer package: npm install puppeteer" 
+        }
+      }
+
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      })
+      
+      try {
+        const page = await browser.newPage()
+        await page.setContent(htmlResult.html, { waitUntil: 'networkidle0' })
+        
+        // Generate PDF
+        pdfBuffer = await page.pdf({
+          format: 'Letter',
+          printBackground: true,
+          margin: {
+            top: '0.5in',
+            right: '0.5in',
+            bottom: '0.5in',
+            left: '0.5in',
+          },
+        })
+      } finally {
+        await browser.close()
+      }
+    } catch (error: any) {
+      console.error("[generateBOLPDFFile] PDF generation error:", error)
+      return { 
+        pdf: null, 
+        error: `Failed to generate PDF: ${error?.message || "Unknown error"}` 
+      }
+    }
+
+    if (!pdfBuffer) {
+      return { pdf: null, error: "Failed to generate PDF buffer" }
+    }
+
+    return { pdf: pdfBuffer, error: null }
+  } catch (error: any) {
+    console.error("[generateBOLPDFFile] Error:", error)
+    return { pdf: null, error: error?.message || "Failed to generate BOL PDF" }
+  }
 }
 

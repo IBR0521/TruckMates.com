@@ -20,10 +20,26 @@ export async function getIntegrationSettings() {
     return { error: result.error || "No company found", data: null }
   }
 
-  // HIGH FIX 4: Select only non-sensitive fields - never return API keys to client
   const { data, error } = await supabase
     .from("company_integrations")
-    .select("id, company_id, quickbooks_enabled, quickbooks_company_id, stripe_enabled, paypal_enabled, google_maps_enabled, resend_enabled, resend_from_email, created_at, updated_at")
+    .select(`
+      id,
+      company_id,
+      quickbooks_enabled,
+      quickbooks_company_id,
+      quickbooks_api_key,
+      stripe_enabled,
+      stripe_api_key,
+      paypal_enabled,
+      paypal_client_id,
+      google_maps_enabled,
+      google_maps_api_key,
+      resend_enabled,
+      resend_api_key,
+      resend_from_email,
+      created_at,
+      updated_at
+    `)
     .eq("company_id", result.company_id)
     .single()
 
@@ -31,7 +47,7 @@ export async function getIntegrationSettings() {
     return { error: error.message, data: null }
   }
 
-  // Return defaults if no settings exist (without API keys)
+  // Return defaults if no settings exist (without exposing API keys)
   if (!data) {
     return {
       data: {
@@ -39,27 +55,40 @@ export async function getIntegrationSettings() {
         quickbooks_company_id: "",
         stripe_enabled: false,
         paypal_enabled: false,
-        google_maps_enabled: false,
-        resend_enabled: false,
+        google_maps_enabled: true, // platform-wide default
+        resend_enabled: true, // platform-wide default
         resend_from_email: "",
+        has_quickbooks_credentials: false,
+        has_stripe_api_key: false,
+        has_paypal_client_id: false,
+        has_google_maps_api_key: false,
+        has_resend_api_key: false,
       },
       error: null,
     }
   }
   
-  // HIGH FIX 4: Obfuscate any API keys that might have been returned
-  // Return obfuscated display strings only
-  const obfuscatedData = {
-    ...data,
-    quickbooks_api_key: data.quickbooks_api_key ? "sk_...xxxx" : "",
-    quickbooks_api_secret: data.quickbooks_api_secret ? "***" : "",
-    stripe_api_key: data.stripe_api_key ? "sk_live_...xxxx" : "",
-    paypal_client_id: data.paypal_client_id ? "***" : "",
-    google_maps_api_key: data.google_maps_api_key ? "AIza...xxxx" : "",
-    resend_api_key: data.resend_api_key ? "re_...xxxx" : "",
+  // Never return raw API keys to the client – only expose boolean "has_*" flags.
+  // Treat either a platform env var OR a per-company key as "configured".
+  const hasPlatformGoogleMapsKey = !!process.env.GOOGLE_MAPS_API_KEY
+  const hasPlatformResendKey = !!process.env.RESEND_API_KEY
+
+  const safeData = {
+    quickbooks_enabled: !!data.quickbooks_enabled,
+    quickbooks_company_id: data.quickbooks_company_id || "",
+    stripe_enabled: !!data.stripe_enabled,
+    paypal_enabled: !!data.paypal_enabled,
+    google_maps_enabled: data.google_maps_enabled !== false,
+    resend_enabled: data.resend_enabled !== false,
+    resend_from_email: data.resend_from_email || "",
+    has_quickbooks_credentials: !!(data.quickbooks_api_key || data.quickbooks_api_secret),
+    has_stripe_api_key: !!data.stripe_api_key,
+    has_paypal_client_id: !!data.paypal_client_id,
+    has_google_maps_api_key: !!(data.google_maps_api_key || hasPlatformGoogleMapsKey),
+    has_resend_api_key: !!(data.resend_api_key || hasPlatformResendKey),
   }
 
-  return { data: obfuscatedData, error: null }
+  return { data: safeData, error: null }
 }
 
 export async function updateIntegrationSettings(settings: {
@@ -154,5 +183,53 @@ export async function updateIntegrationSettings(settings: {
 
   revalidatePath("/dashboard/settings/integration")
   return { success: true, error: null }
+}
+
+/**
+ * Check if email service is configured (for dashboard banner)
+ * Only returns true if user is a manager/owner/admin
+ */
+export async function checkEmailServiceConfigured() {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { configured: false, isManager: false }
+  }
+
+  // Check if user is a manager/owner/admin
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role, company_id")
+    .eq("id", user.id)
+    .single()
+
+  const MANAGER_ROLES = ["manager", "admin", "owner", "super_admin", "operations_manager"]
+  const isManager = userData && MANAGER_ROLES.includes(userData.role)
+
+  if (!isManager || !userData?.company_id) {
+    return { configured: false, isManager: false }
+  }
+
+  // Check if Resend API key is configured (platform-wide)
+  const hasPlatformKey = !!process.env.RESEND_API_KEY
+
+  // Check if integration is enabled for this company
+  const { data: integrations } = await supabase
+    .from("company_integrations")
+    .select("resend_enabled, resend_api_key")
+    .eq("company_id", userData.company_id)
+    .single()
+
+  const isEnabled = integrations?.resend_enabled !== false // Default to true if not set
+  const hasCompanyKey = !!integrations?.resend_api_key
+
+  // Email is configured if platform key exists OR (company key exists AND integration is enabled)
+  const configured = hasPlatformKey || (hasCompanyKey && isEnabled)
+
+  return { configured, isManager: true }
 }
 

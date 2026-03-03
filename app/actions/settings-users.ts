@@ -208,9 +208,319 @@ export async function removeUser(userId: string) {
   return { success: true, error: null }
 }
 
+/**
+ * Invite a new user to the company
+ */
+export async function inviteUser(data: {
+  email: string
+  role: string
+}) {
+  const supabase = await createClient()
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
 
+  // Check if current user is manager
+  const { data: currentUser } = await supabase
+    .from("users")
+    .select("role, company_id, full_name")
+    .eq("id", user.id)
+    .single()
+
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!currentUser || !MANAGER_ROLES.includes(currentUser.role)) {
+    return { error: "Only managers can invite users", data: null }
+  }
+
+  if (!currentUser.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  // Validate email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(data.email)) {
+    return { error: "Invalid email address", data: null }
+  }
+
+  // Validate role
+  const VALID_ROLES = ["dispatcher", "safety_compliance", "financial_controller", "driver", "user"]
+  if (!VALID_ROLES.includes(data.role)) {
+    return { error: `Invalid role: ${data.role}. Must be one of: ${VALID_ROLES.join(", ")}`, data: null }
+  }
+
+  // Check if user already exists with this email
+  const { data: existingUser } = await supabase
+    .from("users")
+    .select("id, company_id")
+    .eq("email", data.email.toLowerCase())
+    .maybeSingle()
+
+  if (existingUser) {
+    if (existingUser.company_id === currentUser.company_id) {
+      return { error: "A user with this email already exists in your company", data: null }
+    } else {
+      return { error: "A user with this email already exists in another company", data: null }
+    }
+  }
+
+  // Check if there's already a pending invitation for this email
+  const { data: existingInvitation } = await supabase
+    .from("invitation_codes")
+    .select("id, status")
+    .eq("email", data.email.toLowerCase())
+    .eq("company_id", currentUser.company_id)
+    .eq("status", "pending")
+    .maybeSingle()
+
+  if (existingInvitation) {
+    return { error: "An invitation has already been sent to this email address", data: null }
+  }
+
+  // Generate unique invitation code
+  const invitationCode = crypto.randomUUID()
+
+  // Create invitation (expires in 30 days)
+  const expiresAt = new Date()
+  expiresAt.setDate(expiresAt.getDate() + 30)
+
+  const { data: invitation, error: inviteError } = await supabase
+    .from("invitation_codes")
+    .insert({
+      company_id: currentUser.company_id,
+      email: data.email.toLowerCase(),
+      invitation_code: invitationCode,
+      created_by: user.id,
+      status: "pending",
+      expires_at: expiresAt.toISOString(),
+    })
+    .select("id, invitation_code, email, expires_at")
+    .single()
+
+  if (inviteError) {
+    return { error: inviteError.message || "Failed to create invitation", data: null }
+  }
+
+  // Send invitation email
+  try {
+    const { getResendClient } = await import("@/app/actions/notifications")
+    const resend = await getResendClient(currentUser.company_id)
+
+    if (!resend) {
+      // If email service is not configured, still create the invitation
+      // User can manually share the invitation link
+      console.warn("[INVITE USER] Email service not configured, invitation created but email not sent")
+      return {
+        data: {
+          invitation,
+          emailSent: false,
+          invitationLink: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/register?invitation=${invitationCode}`,
+        },
+        error: null,
+      }
+    }
+
+    // Get company name
+    const { data: company } = await supabase
+      .from("companies")
+      .select("name")
+      .eq("id", currentUser.company_id)
+      .single()
+
+    const companyName = company?.name || "Your Company"
+    const inviterName = currentUser.full_name || "A team member"
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    const invitationLink = `${appUrl}/register?invitation=${invitationCode}`
+
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #4F46E5; color: white; padding: 30px; border-radius: 8px 8px 0 0; text-align: center; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+          .button { display: inline-block; padding: 14px 28px; background: #4F46E5; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; }
+          .info-box { background: white; padding: 20px; border-radius: 6px; border-left: 4px solid #4F46E5; margin: 20px 0; }
+          .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>You're Invited!</h1>
+          </div>
+          <div class="content">
+            <p>Dear ${data.email},</p>
+            
+            <p><strong>${inviterName}</strong> has invited you to join <strong>${companyName}</strong> on TruckMates Logistics Platform.</p>
+            
+            <div class="info-box">
+              <p style="margin: 0;"><strong>Your Role:</strong> ${data.role.charAt(0).toUpperCase() + data.role.slice(1).replace(/_/g, " ")}</p>
+              <p style="margin: 10px 0 0 0;"><strong>Invitation Expires:</strong> ${new Date(expiresAt).toLocaleDateString()}</p>
+            </div>
+            
+            <div style="text-align: center;">
+              <a href="${invitationLink}" class="button">Accept Invitation</a>
+            </div>
+            
+            <p style="font-size: 12px; color: #6b7280; margin-top: 20px;">
+              Or copy and paste this link into your browser:<br>
+              <a href="${invitationLink}" style="color: #4F46E5; word-break: break-all;">${invitationLink}</a>
+            </p>
+            
+            <p style="margin-top: 30px;">
+              If you didn't expect this invitation, you can safely ignore this email.
+            </p>
+          </div>
+          <div class="footer">
+            <p>This is an automated message from TruckMates Logistics Platform.</p>
+            <p>Please do not reply to this email.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+
+    const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
+    const emailResult = await resend.emails.send({
+      from: fromEmail,
+      to: data.email,
+      subject: `You're Invited to Join ${companyName} on TruckMates`,
+      html: emailHtml,
+    })
+
+    if (emailResult.error) {
+      console.error("[INVITE USER] Email send error:", emailResult.error)
+      // Still return success since invitation was created
+      return {
+        data: {
+          invitation,
+          emailSent: false,
+          invitationLink,
+          emailError: emailResult.error.message,
+        },
+        error: null,
+      }
+    }
+
+    revalidatePath("/dashboard/settings/users")
+    return {
+      data: {
+        invitation,
+        emailSent: true,
+        invitationLink,
+      },
+      error: null,
+    }
+  } catch (error: any) {
+    console.error("[INVITE USER] Error sending email:", error)
+    // Still return success since invitation was created
+    return {
+      data: {
+        invitation,
+        emailSent: false,
+        invitationLink: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/register?invitation=${invitationCode}`,
+        emailError: error?.message || "Failed to send email",
+      },
+      error: null,
+    }
+  }
+}
+
+/**
+ * Get pending invitations for the company
+ */
+export async function getPendingInvitations() {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  // Check if current user is manager
+  const { data: currentUser } = await supabase
+    .from("users")
+    .select("role, company_id")
+    .eq("id", user.id)
+    .single()
+
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!currentUser || !MANAGER_ROLES.includes(currentUser.role)) {
+    return { error: "Only managers can view invitations", data: null }
+  }
+
+  if (!currentUser.company_id) {
+    return { error: "No company found", data: null }
+  }
+
+  const { data: invitations, error } = await supabase
+    .from("invitation_codes")
+    .select("id, email, invitation_code, status, created_at, expires_at, accepted_at")
+    .eq("company_id", currentUser.company_id)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    return { error: error.message, data: null }
+  }
+
+  return { data: invitations || [], error: null }
+}
+
+/**
+ * Cancel/delete an invitation
+ */
+export async function cancelInvitation(invitationId: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", success: false }
+  }
+
+  // Check if current user is manager
+  const { data: currentUser } = await supabase
+    .from("users")
+    .select("role, company_id")
+    .eq("id", user.id)
+    .single()
+
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!currentUser || !MANAGER_ROLES.includes(currentUser.role)) {
+    return { error: "Only managers can cancel invitations", success: false }
+  }
+
+  if (!currentUser.company_id) {
+    return { error: "No company found", success: false }
+  }
+
+  // Delete invitation (only if pending and belongs to company)
+  const { error } = await supabase
+    .from("invitation_codes")
+    .delete()
+    .eq("id", invitationId)
+    .eq("company_id", currentUser.company_id)
+    .eq("status", "pending")
+
+  if (error) {
+    return { error: error.message, success: false }
+  }
+
+  revalidatePath("/dashboard/settings/users")
+  return { success: true, error: null }
+}
 
 
 

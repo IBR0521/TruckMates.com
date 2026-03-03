@@ -16,9 +16,26 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { getCompanyUsers, updateUserRole, removeUser } from "@/app/actions/settings-users"
+import { getCompanyUsers, updateUserRole, removeUser, inviteUser, getPendingInvitations, cancelInvitation } from "@/app/actions/settings-users"
 import { toast } from "sonner"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { Plus, Mail, X, Clock, CheckCircle2 } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 
 export default function UsersSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -32,16 +49,35 @@ export default function UsersSettingsPage() {
     role: string
     status: string
   }>>([])
+  const [showInviteDialog, setShowInviteDialog] = useState(false)
+  const [isInviting, setIsInviting] = useState(false)
+  const [inviteForm, setInviteForm] = useState({
+    email: "",
+    role: "user",
+  })
+  const [pendingInvitations, setPendingInvitations] = useState<Array<{
+    id: string
+    email: string
+    invitation_code: string
+    status: string
+    created_at: string
+    expires_at: string
+    accepted_at: string | null
+  }>>([])
 
   useEffect(() => {
     async function loadUsers() {
       setIsLoading(true)
       try {
-        const result = await getCompanyUsers()
-        if (result.error) {
-          toast.error(result.error)
-        } else if (result.data) {
-          setUsers(result.data.map((u: any) => ({
+        const [usersResult, invitationsResult] = await Promise.all([
+          getCompanyUsers(),
+          getPendingInvitations(),
+        ])
+        
+        if (usersResult.error) {
+          toast.error(usersResult.error)
+        } else if (usersResult.data) {
+          setUsers(usersResult.data.map((u: any) => ({
             id: u.id,
             email: u.email,
             full_name: u.full_name,
@@ -49,6 +85,12 @@ export default function UsersSettingsPage() {
             role: u.role === "manager" ? "Manager" : u.role === "user" ? "Employee" : "Driver",
             status: "Active",
           })))
+        }
+
+        if (invitationsResult.error) {
+          console.error("Failed to load invitations:", invitationsResult.error)
+        } else if (invitationsResult.data) {
+          setPendingInvitations(invitationsResult.data)
         }
       } catch (error) {
         toast.error("Failed to load users")
@@ -118,6 +160,62 @@ export default function UsersSettingsPage() {
     }
   }
 
+  const handleInviteUser = async () => {
+    if (!inviteForm.email || !inviteForm.role) {
+      toast.error("Please fill in all fields")
+      return
+    }
+
+    setIsInviting(true)
+    try {
+      const result = await inviteUser({
+        email: inviteForm.email,
+        role: inviteForm.role,
+      })
+
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        if (result.data?.emailSent) {
+          toast.success(`Invitation sent to ${inviteForm.email}`)
+        } else {
+          toast.success(`Invitation created. Share this link: ${result.data?.invitationLink}`)
+        }
+        setShowInviteDialog(false)
+        setInviteForm({ email: "", role: "user" })
+        
+        // Reload invitations
+        const invitationsResult = await getPendingInvitations()
+        if (invitationsResult.data) {
+          setPendingInvitations(invitationsResult.data)
+        }
+      }
+    } catch (error) {
+      toast.error("Failed to send invitation")
+    } finally {
+      setIsInviting(false)
+    }
+  }
+
+  const handleCancelInvitation = async (invitationId: string, email: string) => {
+    if (!confirm(`Are you sure you want to cancel the invitation for ${email}?`)) {
+      return
+    }
+
+    const result = await cancelInvitation(invitationId)
+    
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success("Invitation cancelled")
+      // Reload invitations
+      const invitationsResult = await getPendingInvitations()
+      if (invitationsResult.data) {
+        setPendingInvitations(invitationsResult.data)
+      }
+    }
+  }
+
   return (
     <div className="w-full p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -148,7 +246,74 @@ export default function UsersSettingsPage() {
                   className="pl-10"
                 />
               </div>
+              <Button onClick={() => setShowInviteDialog(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Invite User
+              </Button>
             </div>
+
+            {/* Pending Invitations */}
+            {pendingInvitations.length > 0 && (
+              <div className="border rounded-lg p-4 bg-secondary/50">
+                <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <Mail className="w-4 h-4" />
+                  Pending Invitations ({pendingInvitations.filter(i => i.status === "pending").length})
+                </h3>
+                <div className="space-y-2">
+                  {pendingInvitations.map((invitation) => {
+                    const isExpired = new Date(invitation.expires_at) < new Date()
+                    const isPending = invitation.status === "pending" && !isExpired
+                    
+                    return (
+                      <div
+                        key={invitation.id}
+                        className="flex items-center justify-between p-3 bg-background rounded border"
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <Mail className="w-4 h-4 text-muted-foreground" />
+                          <div className="flex-1">
+                            <p className="font-medium">{invitation.email}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {isPending
+                                ? `Expires ${new Date(invitation.expires_at).toLocaleDateString()}`
+                                : invitation.status === "accepted"
+                                ? `Accepted ${invitation.accepted_at ? new Date(invitation.accepted_at).toLocaleDateString() : ""}`
+                                : "Expired"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={isPending ? "default" : invitation.status === "accepted" ? "secondary" : "destructive"}>
+                            {isPending ? (
+                              <>
+                                <Clock className="w-3 h-3 mr-1" />
+                                Pending
+                              </>
+                            ) : invitation.status === "accepted" ? (
+                              <>
+                                <CheckCircle2 className="w-3 h-3 mr-1" />
+                                Accepted
+                              </>
+                            ) : (
+                              "Expired"
+                            )}
+                          </Badge>
+                          {isPending && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleCancelInvitation(invitation.id, invitation.email)}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {isMobile ? (
               // Mobile: Card view
@@ -274,6 +439,61 @@ export default function UsersSettingsPage() {
           </div>
         </Card>
         )}
+
+        {/* Invite User Dialog */}
+        <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Invite User to Company</DialogTitle>
+              <DialogDescription>
+                Send an invitation email to add a new team member to your company.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Email Address</Label>
+                <Input
+                  type="email"
+                  placeholder="user@example.com"
+                  value={inviteForm.email}
+                  onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Role</Label>
+                <Select
+                  value={inviteForm.role}
+                  onValueChange={(value) => setInviteForm({ ...inviteForm, role: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">Employee</SelectItem>
+                    <SelectItem value="dispatcher">Dispatcher</SelectItem>
+                    <SelectItem value="safety_compliance">Safety & Compliance</SelectItem>
+                    <SelectItem value="financial_controller">Financial Controller</SelectItem>
+                    <SelectItem value="driver">Driver</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowInviteDialog(false)
+                  setInviteForm({ email: "", role: "user" })
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleInviteUser} disabled={isInviting}>
+                {isInviting ? "Sending..." : "Send Invitation"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

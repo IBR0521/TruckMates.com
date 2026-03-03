@@ -98,6 +98,7 @@ export async function createELDDevice(formData: {
   provider_device_id?: string
   api_key?: string
   api_secret?: string
+  api_endpoint?: string
   truck_id?: string
   status?: string
   firmware_version?: string
@@ -142,6 +143,7 @@ export async function createELDDevice(formData: {
   if (formData.provider_device_id) deviceData.provider_device_id = formData.provider_device_id
   if (formData.api_key) deviceData.api_key = formData.api_key
   if (formData.api_secret) deviceData.api_secret = formData.api_secret
+  if (formData.api_endpoint) deviceData.api_endpoint = formData.api_endpoint
   if (formData.truck_id) deviceData.truck_id = formData.truck_id
   if (formData.firmware_version) deviceData.firmware_version = formData.firmware_version
   if (formData.installation_date) deviceData.installation_date = formData.installation_date
@@ -171,6 +173,7 @@ export async function updateELDDevice(
     provider_device_id?: string
     api_key?: string
     api_secret?: string
+    api_endpoint?: string
     truck_id?: string
     status?: string
     firmware_version?: string
@@ -212,6 +215,7 @@ export async function updateELDDevice(
   if (formData.provider_device_id !== undefined) updateData.provider_device_id = formData.provider_device_id
   if (formData.api_key !== undefined) updateData.api_key = formData.api_key
   if (formData.api_secret !== undefined) updateData.api_secret = formData.api_secret
+  if (formData.api_endpoint !== undefined) updateData.api_endpoint = formData.api_endpoint
   if (formData.truck_id !== undefined) updateData.truck_id = formData.truck_id || null
   if (formData.status !== undefined) updateData.status = formData.status
   if (formData.firmware_version !== undefined) updateData.firmware_version = formData.firmware_version

@@ -1,16 +1,28 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Logo } from "@/components/logo"
 import { SetupWizard } from "@/components/account-setup/setup-wizard"
 import { getSetupStatus } from "@/app/actions/account-setup"
 import { toast } from "sonner"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Mail } from "lucide-react"
 
-export default function ManagerAccountSetupPage() {
+function ManagerAccountSetupContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = useState(true)
   const [showWizard, setShowWizard] = useState(false)
+  const [showEmailConfirmation, setShowEmailConfirmation] = useState(false)
+  
+  // Check if user just registered (from registration flow)
+  useEffect(() => {
+    const justRegistered = searchParams.get("registered") === "true"
+    if (justRegistered) {
+      setShowEmailConfirmation(true)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     checkSetupStatus()
@@ -76,9 +88,56 @@ export default function ManagerAccountSetupPage() {
             Let's get your account set up in just a few steps
           </p>
         </div>
+        
+        {/* Email Confirmation Alert */}
+        {showEmailConfirmation && (
+          <Alert className="mb-6 border-blue-500/50 bg-blue-500/10">
+            <Mail className="h-4 w-4 text-blue-600" />
+            <AlertDescription>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">
+                    Please confirm your email address
+                  </p>
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    We've sent a confirmation email to your inbox. Please check your email and click the confirmation link before continuing. 
+                    You won't be able to sign in until your email is confirmed.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowEmailConfirmation(false)}
+                  className="text-blue-800 dark:text-blue-200 hover:text-blue-900 dark:hover:text-blue-100"
+                  aria-label="Dismiss"
+                >
+                  ×
+                </button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <SetupWizard onComplete={handleComplete} />
       </div>
     </div>
+  )
+}
+
+export default function ManagerAccountSetupPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
+        <div className="w-full max-w-md">
+          <div className="flex justify-center mb-8">
+            <Logo size="lg" />
+          </div>
+          <div className="text-center">
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <ManagerAccountSetupContent />
+    </Suspense>
   )
 }
 

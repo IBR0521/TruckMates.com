@@ -18,6 +18,14 @@ export default function IntegrationSettingsPage() {
   const [integrations, setIntegrations] = useState({
     google_maps_enabled: true, // Auto-enabled (platform API key)
     resend_enabled: true, // Auto-enabled (platform API key)
+    quickbooks_enabled: false,
+    stripe_enabled: false,
+    paypal_enabled: false,
+    has_quickbooks_credentials: false,
+    has_stripe_api_key: false,
+    has_paypal_client_id: false,
+    has_google_maps_api_key: false,
+    has_resend_api_key: false,
   })
 
   useEffect(() => {
@@ -31,6 +39,14 @@ export default function IntegrationSettingsPage() {
           setIntegrations({
             google_maps_enabled: result.data.google_maps_enabled !== false, // Default to true
             resend_enabled: result.data.resend_enabled !== false, // Default to true
+            quickbooks_enabled: !!result.data.quickbooks_enabled,
+            stripe_enabled: !!result.data.stripe_enabled,
+            paypal_enabled: !!result.data.paypal_enabled,
+            has_quickbooks_credentials: !!result.data.has_quickbooks_credentials,
+            has_stripe_api_key: !!result.data.has_stripe_api_key,
+            has_paypal_client_id: !!result.data.has_paypal_client_id,
+            has_google_maps_api_key: !!result.data.has_google_maps_api_key,
+            has_resend_api_key: !!result.data.has_resend_api_key,
           })
         }
       } catch (error) {
@@ -61,85 +77,189 @@ export default function IntegrationSettingsPage() {
             <p className="text-muted-foreground">Loading...</p>
           </Card>
         ) : (
-          <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">Platform Integrations</h2>
-          <p className="text-sm text-muted-foreground mb-6">
-            These integrations are automatically available to all users. API keys are managed platform-wide.
-          </p>
-          
-          <div className="space-y-4">
-            {/* Google Maps */}
-            <div className="border rounded-lg p-4 bg-card">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold">Google Maps</h3>
-                    <Badge variant="outline" className="text-xs">Auto-Configured</Badge>
+          <Card className="p-6 space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold mb-2">Platform Integrations</h2>
+              <p className="text-sm text-muted-foreground">
+                These integrations are configured at the platform level. Some are fully active today, others are in progress.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Google Maps */}
+              <div className="border rounded-lg p-4 bg-card">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold">Google Maps</h3>
+                      <Badge variant="outline" className="text-xs">Auto-Configured</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Route optimization, distance calculations, and live map views.
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground">Route optimization and mapping features</p>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {integrations.has_google_maps_api_key ? (
+                      <>
+                        <CheckCircle2 className="w-5 h-5 text-green-500" />
+                        <span className="text-sm text-muted-foreground">Active</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-5 h-5 text-amber-500" />
+                        <span className="text-sm text-muted-foreground">Not Configured</span>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm text-muted-foreground">Active</span>
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3 h-3 text-green-500" />
+                    <span>Platform API key managed by TruckLogics</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {integrations.has_google_maps_api_key ? (
+                      <>
+                        <CheckCircle2 className="w-3 h-3 text-green-500" />
+                        <span>API key configured</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-3 h-3 text-amber-500" />
+                        <span>API key not configured yet</span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Route optimization, distance calculations, and mapping features are automatically available. 
-                  No configuration needed - API key is managed platform-wide.
+
+              {/* Email (Resend) */}
+              <div className="border rounded-lg p-4 bg-card">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold">Email Service</h3>
+                      <Badge variant="outline" className="text-xs">Auto-Configured</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Invoice emails, alerts, and notification delivery.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {integrations.has_resend_api_key ? (
+                      <>
+                        <CheckCircle2 className="w-5 h-5 text-green-500" />
+                        <span className="text-sm text-muted-foreground">Active</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-5 h-5 text-amber-500" />
+                        <span className="text-sm text-muted-foreground">Not Configured</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    {integrations.has_resend_api_key ? (
+                      <>
+                        <CheckCircle2 className="w-3 h-3 text-green-500" />
+                        <span>API key configured</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-3 h-3 text-amber-500" />
+                        <span>
+                          API key not configured – invoice reminders, driver alerts, and load updates will{' '}
+                          <span className="font-semibold">not be sent by email</span> until this is set up.
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3 h-3 text-green-500" />
+                    <span>Used for system emails and customer communication</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* QuickBooks Online */}
+              <div className="border rounded-lg p-4 bg-card">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold">QuickBooks Online</h3>
+                      <Badge variant="secondary" className="text-xs">Coming soon</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Sync invoices and payments between TruckLogics and QuickBooks Online.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <XCircle className="w-5 h-5 text-amber-500" />
+                    <span className="text-sm text-muted-foreground">Not yet available</span>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  OAuth connection and automatic sync are in development. You can&apos;t connect QuickBooks yet,
+                  but this integration is planned.
                 </p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <CheckCircle2 className="w-3 h-3 text-green-500" />
-                  <span>Route optimization enabled</span>
+              </div>
+
+              {/* Stripe */}
+              <div className="border rounded-lg p-4 bg-card">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold">Stripe</h3>
+                      <Badge variant="secondary" className="text-xs">Coming soon</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Accept card payments for invoices directly from customers.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <XCircle className="w-5 h-5 text-amber-500" />
+                    <span className="text-sm text-muted-foreground">Not yet available</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <CheckCircle2 className="w-3 h-3 text-green-500" />
-                  <span>Real-time traffic data enabled</span>
+                <p className="text-xs text-muted-foreground">
+                  Stripe checkout and hosted payment pages are planned, but not live yet in this environment.
+                </p>
+              </div>
+
+              {/* PayPal */}
+              <div className="border rounded-lg p-4 bg-card">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold">PayPal</h3>
+                      <Badge variant="secondary" className="text-xs">Coming soon</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Let customers pay invoices using their PayPal account or cards.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <XCircle className="w-5 h-5 text-amber-500" />
+                    <span className="text-sm text-muted-foreground">Not yet available</span>
+                  </div>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  PayPal checkout integration is not active yet. Any PayPal-related settings here will not trigger live sync.
+                </p>
               </div>
             </div>
 
-            {/* Resend Email */}
-            <div className="border rounded-lg p-4 bg-card">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold">Email Service</h3>
-                    <Badge variant="outline" className="text-xs">Auto-Configured</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">Send invoices and notifications via email</p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm text-muted-foreground">Active</span>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Email notifications, invoice emails, and customer communications are automatically enabled. 
-                  No configuration needed - email service is managed platform-wide.
-                </p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <CheckCircle2 className="w-3 h-3 text-green-500" />
-                  <span>Invoice emails enabled</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <CheckCircle2 className="w-3 h-3 text-green-500" />
-                  <span>Notification emails enabled</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Note about API keys */}
-          <Card className="p-4 bg-muted/50 border-dashed mt-6">
-            <p className="text-xs text-muted-foreground">
-              <strong>Note:</strong> Google Maps and Email Service integrations use platform-wide API keys 
-              configured by the administrator. Individual users don't need to configure API keys - these features are 
-              automatically available to all users.
-            </p>
+            {/* Note about API keys */}
+            <Card className="p-4 bg-muted/50 border-dashed">
+              <p className="text-xs text-muted-foreground">
+                <strong>Note:</strong> Google Maps and Email Service use platform-wide API keys configured by the administrator.
+                Billing integrations (QuickBooks, Stripe, PayPal) are under active development and marked as{" "}
+                <span className="font-semibold">Coming soon</span> until the full OAuth and sync flows are live.
+              </p>
+            </Card>
           </Card>
-        </Card>
         )}
       </div>
     </div>

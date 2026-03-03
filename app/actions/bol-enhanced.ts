@@ -61,10 +61,10 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
   }
 
   try {
-    // Get BOL data
+    // Get BOL data with explicit column selection
     const { data: bol, error: bolError } = await supabase
       .from("bols")
-      .select("*")
+      .select("id, company_id, bol_number, created_at, shipper_name, shipper_address, shipper_city, shipper_state, shipper_zip, shipper_phone, shipper_email, consignee_name, consignee_address, consignee_city, consignee_state, consignee_zip, consignee_phone, consignee_email, carrier_name, carrier_mc_number, carrier_dot_number, pickup_date, delivery_date, freight_charges, payment_terms, special_instructions, shipper_signature, driver_signature, consignee_signature, load_id, metadata")
       .eq("id", bolId)
       .eq("company_id", targetCompanyId)
       .single()
@@ -78,35 +78,74 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
       return { error: "BOL is not signed. Cannot store PDF until POD is captured.", data: null }
     }
 
-    // Generate PDF HTML
+    // Generate PDF HTML with embedded signatures
     const pdfResult = await generateBOLPDF(bolId)
     if (pdfResult.error || !pdfResult.html) {
       return { error: pdfResult.error || "Failed to generate PDF", data: null }
     }
 
-    // Convert HTML to PDF using a headless browser or PDF library
-    // For now, we'll store the HTML and convert it server-side when needed
-    // In production, you'd use puppeteer or similar to convert HTML to PDF
-
-    // CRITICAL FIX 4: Store as HTML for now (real PDF generation requires Puppeteer/Playwright)
-    // Note: This is an interim solution. For production, use @react-pdf/renderer or Puppeteer
-    const fileName = `bols/${targetCompanyId}/${bol.bol_number}-signed-${Date.now()}.html`
+    // CRITICAL FIX 4: Convert HTML to real PDF using Puppeteer
+    let pdfBuffer: Buffer | null = null
     
-    // Convert HTML to blob
-    const htmlBlob = new Blob([pdfResult.html], { type: "text/html" })
-    const file = new File([htmlBlob], `${bol.bol_number}-signed.html`, { type: "text/html" })
-    
-    // TODO: CRITICAL FIX 4 - Replace with real PDF generation:
-    // 1. Use @react-pdf/renderer on server or Edge Function
-    // 2. Or use Puppeteer/Playwright to convert HTML to PDF
-    // 3. Store with contentType: 'application/pdf' and .pdf extension
-    // 4. Convert embedded signature images to base64 data URIs to prevent expiration
+    try {
+      // Try to use Puppeteer for PDF generation
+      const puppeteer = await import("puppeteer").catch(() => null)
+      
+      if (puppeteer) {
+        const browser = await puppeteer.launch({
+          headless: true,
+          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        })
+        
+        try {
+          const page = await browser.newPage()
+          await page.setContent(pdfResult.html, { waitUntil: 'networkidle0' })
+          
+          // Generate PDF
+          pdfBuffer = await page.pdf({
+            format: 'Letter',
+            printBackground: true,
+            margin: {
+              top: '0.5in',
+              right: '0.5in',
+              bottom: '0.5in',
+              left: '0.5in',
+            },
+          })
+        } finally {
+          await browser.close()
+        }
+      } else {
+        // Fallback: If Puppeteer is not available, return error
+        return { 
+          error: "PDF generation requires Puppeteer. Please install puppeteer package: npm install puppeteer", 
+          data: null 
+        }
+      }
+    } catch (error: any) {
+      console.error("[storeSignedBOLPDF] PDF generation error:", error)
+      return { 
+        error: `Failed to generate PDF: ${error?.message || "Unknown error"}`, 
+        data: null 
+      }
+    }
 
-    // Upload to Supabase Storage
+    if (!pdfBuffer) {
+      return { error: "Failed to generate PDF buffer", data: null }
+    }
+
+    // Store as PDF file
+    const fileName = `bols/${targetCompanyId}/${bol.bol_number}-signed-${Date.now()}.pdf`
+    
+    // Convert PDF buffer to File/Blob
+    const pdfBlob = new Blob([pdfBuffer], { type: "application/pdf" })
+    const file = new File([pdfBlob], `${bol.bol_number}-signed.pdf`, { type: "application/pdf" })
+
+    // Upload to Supabase Storage as PDF
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("documents")
       .upload(fileName, file, {
-        contentType: "text/html",
+        contentType: "application/pdf",
         upsert: false,
       })
 

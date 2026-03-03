@@ -16,6 +16,7 @@ import { ROLES, type EmployeeRole } from "@/lib/roles"
 function EmployeeRegisterForm() {
   const searchParams = useSearchParams()
   const roleParam = searchParams.get("role") as EmployeeRole | null
+  const invitationCode = searchParams.get("invitation")
 
   // Roles that are allowed for self-registration (no managers or super admins)
   const selfRegisterRoles: EmployeeRole[] = [
@@ -34,6 +35,7 @@ function EmployeeRegisterForm() {
     password: "",
     role: defaultRole,
     companyId: "",
+    invitationCode: invitationCode || "",
   })
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
@@ -42,7 +44,10 @@ function EmployeeRegisterForm() {
     if (roleParam && selfRegisterRoles.includes(roleParam)) {
       setFormData(prev => ({ ...prev, role: roleParam }))
     }
-  }, [roleParam])
+    if (invitationCode) {
+      setFormData(prev => ({ ...prev, invitationCode }))
+    }
+  }, [roleParam, invitationCode])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -59,7 +64,8 @@ function EmployeeRegisterForm() {
         password: formData.password,
         role: formData.role,
         companyId: formData.companyId || undefined,
-      })
+        invitationCode: formData.invitationCode || undefined,
+      } as any)
 
       if (result.error) {
         toast.error(result.error)
@@ -67,7 +73,10 @@ function EmployeeRegisterForm() {
         return
       }
 
-      toast.success("Account created successfully!")
+      toast.success("Account created successfully!", {
+        description: "Please check your email and confirm your account before signing in.",
+        duration: 5000,
+      })
       setTimeout(() => {
         router.push("/dashboard")
       }, 500)
@@ -94,10 +103,12 @@ function EmployeeRegisterForm() {
 
         <Card className="bg-card border-border p-8">
           <h1 className="text-2xl font-bold text-foreground mb-2 text-center">
-            Employee Registration
+            {invitationCode ? "Accept Invitation" : "Employee Registration"}
           </h1>
           <p className="text-center text-muted-foreground mb-8">
-            Create your account and join a company
+            {invitationCode 
+              ? "You've been invited to join a company. Create your account to accept the invitation."
+              : "Create your account and join a company"}
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -163,20 +174,28 @@ function EmployeeRegisterForm() {
                 minLength={8}
               />
             </div>
-            <div>
-              <label className="text-sm font-medium text-foreground">Company ID (Optional)</label>
-              <Input
-                type="text"
-                name="companyId"
-                placeholder="Leave empty if you have an invitation"
-                value={formData.companyId}
-                onChange={handleChange}
-                className="mt-2 bg-input border-border text-foreground placeholder:text-muted-foreground"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                If you have a company invitation, you can enter the company ID here
-              </p>
-            </div>
+            {invitationCode ? (
+              <div className="p-3 bg-primary/10 border border-primary/20 rounded-md">
+                <p className="text-sm text-primary font-medium">
+                  ✓ Invitation code detected. Your account will be linked to the company automatically.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label className="text-sm font-medium text-foreground">Company ID or Invitation Code (Optional)</label>
+                <Input
+                  type="text"
+                  name="companyId"
+                  placeholder="Enter company ID or invitation code"
+                  value={formData.companyId}
+                  onChange={handleChange}
+                  className="mt-2 bg-input border-border text-foreground placeholder:text-muted-foreground"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  If you have a company invitation link, the code will be automatically filled in
+                </p>
+              </div>
+            )}
 
             <Button 
               type="submit" 

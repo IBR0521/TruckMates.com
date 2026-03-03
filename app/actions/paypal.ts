@@ -33,10 +33,15 @@ async function getPayPalAccessToken() {
 }
 
 // Create PayPal subscription with 7-day free trial
+// NOTE: Platform is currently free - this function returns a friendly message if called
 export async function createPayPalSubscription(planId: string) {
   try {
+    // Platform is free - no payment processing needed
     if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
-      return { error: "PayPal is not configured. Please contact support.", data: null }
+      return { 
+        error: "The platform is currently free and no subscription is required. All features are available at no cost.", 
+        data: null 
+      }
     }
 
     const supabase = await createClient()
@@ -63,22 +68,20 @@ export async function createPayPalSubscription(planId: string) {
       return { error: "No company found", data: null }
     }
 
-    // Get plan details
+    // Platform is currently free - no subscription needed
+    // Get plan details (if plans exist, otherwise return free platform message)
     const { data: plan, error: planError } = await supabase
       .from("subscription_plans")
-      .select("*")
+      .select("id, name, display_name, price_monthly, description")
       .eq("id", planId)
-      .single()
+      .maybeSingle()
 
-    if (planError) {
-      if (planError.code === "42P01" || planError.message.includes("does not exist")) {
-        return { error: "Subscription plans are not set up yet. Please contact support.", data: null }
+    // Platform is free - return friendly message if no plans exist
+    if (planError || !plan) {
+      return { 
+        error: "The platform is currently free and no subscription is required. All features are available at no cost.", 
+        data: null 
       }
-      return { error: planError.message || "Plan not found", data: null }
-    }
-
-    if (!plan) {
-      return { error: "Plan not found", data: null }
     }
 
     const accessToken = await getPayPalAccessToken()

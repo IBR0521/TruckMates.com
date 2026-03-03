@@ -115,7 +115,22 @@ export async function updateCompanyProfile(data: {
     }
 
     revalidatePath("/dashboard/settings/business")
-    return { data: company, error: null }
+
+    // Return only JSON-safe, minimal data to avoid Next.js coercion errors
+    const safeData = company
+      ? {
+          id: String(company.id),
+          name: String(company.name || ""),
+          business_address: company.business_address || "",
+          business_city: company.business_city || "",
+          business_state: company.business_state || "",
+          business_zip: company.business_zip || "",
+          business_phone: company.business_phone || "",
+          business_email: company.business_email || "",
+        }
+      : null
+
+    return { data: safeData, error: null }
   } catch (error: any) {
     return { error: error.message || "Failed to update company profile", data: null }
   }

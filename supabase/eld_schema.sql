@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS public.eld_devices (
   provider_device_id TEXT, -- Device ID from ELD provider
   api_key TEXT, -- Encrypted API key for provider integration
   api_secret TEXT, -- Encrypted API secret for provider integration
+  -- Geotab-specific: API endpoint / server URL (e.g., https://my.geotab.com)
+  api_endpoint TEXT,
   status TEXT DEFAULT 'active', -- 'active', 'inactive', 'maintenance', 'disconnected'
   last_sync_at TIMESTAMP WITH TIME ZONE,
   firmware_version TEXT,

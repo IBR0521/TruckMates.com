@@ -69,9 +69,12 @@ function SuperAdminRegisterForm() {
         return
       }
 
-      toast.success("Account created successfully!")
+      toast.success("Account created successfully!", {
+        description: "Please check your email and confirm your account before signing in.",
+        duration: 5000,
+      })
       setTimeout(() => {
-        router.push("/account-setup/manager")
+        router.push("/account-setup/manager?registered=true")
       }, 500)
     } catch (error: any) {
       toast.error(error?.message || "An error occurred. Please try again.")

@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Download, FileText, Calendar, Truck } from "lucide-react"
 import { useState, useEffect } from "react"
 import { toast } from "sonner"
-import { generateDVIRAuditPDF } from "@/app/actions/dvir-pdf"
 import { getTrucks } from "@/app/actions/trucks"
 
 export default function DVIRAuditPage() {
@@ -43,50 +42,56 @@ export default function DVIRAuditPage() {
 
     setIsGenerating(true)
     try {
-      const result = await generateDVIRAuditPDF({
-        truck_id: selectedTruck !== "all" ? selectedTruck : undefined,
-        start_date: startDate,
-        end_date: endDate,
-      })
+      const params = new URLSearchParams()
+      if (selectedTruck !== "all") params.set("truck_id", selectedTruck)
+      if (startDate) params.set("start_date", startDate)
+      if (endDate) params.set("end_date", endDate)
 
-      if (result.error) {
-        toast.error(result.error)
+      const response = await fetch(`/api/dvir/audit/pdf?${params.toString()}`)
+
+      if (!response.ok) {
+        let errorMessage = "Failed to generate DVIR audit report"
+        try {
+          const errorData = await response.json()
+          if (errorData?.error) errorMessage = errorData.error
+        } catch {
+          // Ignore JSON parse errors
+        }
+        toast.error(errorMessage)
         return
       }
 
-      // Create blob and download - note: this is HTML, not PDF
-      // For actual PDF generation, use a library like @react-pdf/renderer or jsPDF
-      const blob = new Blob([result.html], { type: "text/html" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `DVIR_Audit_${startDate}_${endDate}.html`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      
-      // Show info toast about HTML vs PDF
-      toast.info("Report downloaded as HTML. For PDF format, use your browser's Print to PDF feature.")
+      const contentType = response.headers.get("content-type")
 
-      // Also open in new window for printing
-      const printWindow = window.open("", "_blank")
-      if (printWindow) {
-        printWindow.document.write(result.html)
-        printWindow.document.close()
-        printWindow.focus()
-        // Auto-print after a short delay
-        setTimeout(() => {
-          printWindow.print()
-        }, 500)
+      if (contentType === "application/pdf") {
+        // Download actual PDF
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `DVIR_Audit_${startDate}_${endDate}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        toast.success("DVIR audit report downloaded as PDF")
       } else {
-        // Popup blocked - show user-friendly message
-        toast.warning("Popup was blocked. Please allow popups for this site to print the report, or use the downloaded HTML file.")
+        // Fallback: HTML response (if Puppeteer not available)
+        const html = await response.text()
+        const printWindow = window.open("", "_blank")
+        if (printWindow) {
+          printWindow.document.write(html)
+          printWindow.document.close()
+          setTimeout(() => {
+            printWindow.print()
+          }, 300)
+          toast.success("DVIR audit report opened (HTML fallback)")
+        } else {
+          toast.error("Please allow popups to view the DVIR audit report")
+        }
       }
-
-      toast.success("DVIR audit report generated successfully")
     } catch (error: any) {
-      toast.error("Failed to generate PDF: " + error.message)
+      toast.error("Failed to generate DVIR audit report: " + (error.message || "Unknown error"))
     } finally {
       setIsGenerating(false)
     }
@@ -180,8 +185,8 @@ export default function DVIRAuditPage() {
                 <p className="text-sm text-muted-foreground">
                   This report includes all DVIRs for the selected date range and truck. The report is formatted
                   for DOT audits and includes all required information: inspection dates, driver signatures,
-                  defects found, and corrective actions. The report is generated as HTML - use your browser's
-                  "Print to PDF" feature to create a PDF file for your records.
+                  defects found, and corrective actions. The report is generated as a real PDF file ready for
+                  professional use and compliance documentation.
                 </p>
               </div>
             </div>

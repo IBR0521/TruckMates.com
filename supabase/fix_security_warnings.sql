@@ -1016,19 +1016,10 @@ BEGIN
 END;
 $$;
 
--- Function: calculate_active_detention
-CREATE OR REPLACE FUNCTION public.calculate_active_detention(p_load_id UUID)
-RETURNS INTERVAL
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-BEGIN
-  -- Implementation depends on your function body
-  -- This is a placeholder - adjust based on actual implementation
-  RETURN INTERVAL '0';
-END;
-$$;
+-- NOTE: calculate_active_detention is now defined with proper company isolation
+-- in detention_tracking.sql as:
+--   CREATE OR REPLACE FUNCTION public.calculate_active_detention(p_company_id UUID) RETURNS TABLE (...)
+-- The old placeholder version with (p_load_id UUID) has been removed to avoid overload conflicts.
 
 -- Function: add_detention_to_invoice
 CREATE OR REPLACE FUNCTION public.add_detention_to_invoice(

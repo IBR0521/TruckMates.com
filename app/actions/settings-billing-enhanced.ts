@@ -28,15 +28,32 @@ export async function getSubscription(): Promise<{ data: any | null; error: stri
 
   const { data, error } = await supabase
     .from("company_subscriptions")
-    .select("*")
+    .select("id, company_id, plan_name, plan_display_name, status, billing_cycle, amount, currency, start_date, end_date, trial_end_date, cancelled_at, auto_renew, features")
     .eq("company_id", userData.company_id)
-    .single()
+    .maybeSingle()
 
   if (error && error.code !== 'PGRST116') {
     return { error: error.message || "Failed to fetch subscription", data: null }
   }
 
-  return { data: data || null, error: null }
+  // Platform is free - return default free subscription if none exists
+  if (!data) {
+    return { 
+      data: {
+        plan_name: "free",
+        plan_display_name: "Free",
+        status: "active",
+        billing_cycle: "monthly",
+        amount: 0,
+        currency: "USD",
+        auto_renew: false,
+        features: {},
+      }, 
+      error: null 
+    }
+  }
+
+  return { data, error: null }
 }
 
 /**
@@ -65,7 +82,7 @@ export async function getPaymentHistory(): Promise<{ data: any[] | null; error: 
 
   const { data, error } = await supabase
     .from("company_payment_history")
-    .select("*")
+    .select("id, company_id, subscription_id, amount, currency, payment_method, payment_method_last4, transaction_id, status, status_message, payment_date, processed_at, invoice_number, receipt_url, metadata, created_at, updated_at")
     .eq("company_id", userData.company_id)
     .order("payment_date", { ascending: false })
     .limit(50)
@@ -103,7 +120,7 @@ export async function getPaymentMethods(): Promise<{ data: any[] | null; error: 
 
   const { data, error } = await supabase
     .from("company_payment_methods")
-    .select("*")
+    .select("id, company_id, type, is_default, card_brand, card_last4, card_exp_month, card_exp_year, cardholder_name, bank_name, account_type, account_last4, routing_number, external_id, is_active, created_at, updated_at")
     .eq("company_id", userData.company_id)
     .eq("is_active", true)
     .order("is_default", { ascending: false })

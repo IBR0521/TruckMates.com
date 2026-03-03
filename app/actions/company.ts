@@ -93,3 +93,72 @@ export async function updateCompany(formData: FormData) {
   return { success: true }
 }
 
+/**
+ * Check if user is linked to a demo company and fix it
+ */
+export async function checkAndFixDemoCompanyLink() {
+  const supabase = await createClient()
+  
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) {
+    return { error: "Not authenticated", isLinkedToDemo: false }
+  }
+
+  // Get user's company
+  const { data: userData, error: userDataError } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  if (userDataError || !userData?.company_id) {
+    return { error: "No company found", isLinkedToDemo: false }
+  }
+
+  // Check if company is a demo company
+  const { data: company, error: companyError } = await supabase
+    .from("companies")
+    .select("id, name")
+    .eq("id", userData.company_id)
+    .single()
+
+  if (companyError) {
+    return { error: companyError.message, isLinkedToDemo: false }
+  }
+
+  const isDemoCompany = company.name === "Demo Logistics Company" || 
+                       company.name?.includes("Demo Logistics Company") ||
+                       company.name?.startsWith("Demo Logistics Co.")
+
+  if (isDemoCompany) {
+    // User is linked to demo company - create a new company for them
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    const userEmail = authUser?.email || `user-${user.id.substring(0, 8)}@example.com`
+    
+    const { data: newCompanyId, error: rpcError } = await supabase.rpc('create_company_for_user', {
+      p_name: `My Company (${userEmail})`,
+      p_email: userEmail,
+      p_phone: "",
+      p_user_id: user.id,
+      p_company_type: null
+    })
+
+    if (rpcError) {
+      return { 
+        error: `Failed to create new company: ${rpcError.message}`, 
+        isLinkedToDemo: true 
+      }
+    }
+
+    revalidatePath("/dashboard")
+    return { 
+      success: true, 
+      isLinkedToDemo: true, 
+      message: "Your account was linked to a demo company. A new company has been created for you.",
+      newCompanyId: String(newCompanyId)
+    }
+  }
+
+  return { success: true, isLinkedToDemo: false }
+}
+

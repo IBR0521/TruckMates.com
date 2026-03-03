@@ -51,8 +51,13 @@ ADD COLUMN IF NOT EXISTS detention_threshold_minutes INTEGER DEFAULT 120,
 ADD COLUMN IF NOT EXISTS detention_hourly_rate DECIMAL(10, 2) DEFAULT 50.00,
 ADD COLUMN IF NOT EXISTS detention_auto_bill BOOLEAN DEFAULT true;
 
+-- Clean up any old versions of calculate_active_detention to avoid overload conflicts
+DROP FUNCTION IF EXISTS public.calculate_active_detention();
+DROP FUNCTION IF EXISTS public.calculate_active_detention(UUID);
+
 -- Function to calculate current detention time for active visits
-CREATE OR REPLACE FUNCTION calculate_active_detention()
+-- UPDATED: Accept p_company_id to ensure multi-tenant isolation
+CREATE OR REPLACE FUNCTION calculate_active_detention(p_company_id UUID)
 RETURNS TABLE (
   zone_visit_id UUID,
   geofence_id UUID,
@@ -85,6 +90,8 @@ BEGIN
     AND zv.exit_timestamp IS NULL
     AND g.detention_enabled = true
     AND g.is_active = true
+    -- Enforce company isolation
+    AND g.company_id = p_company_id
     -- Only count visits that have exceeded threshold
     AND (EXTRACT(EPOCH FROM (NOW() - zv.entry_timestamp))::INTEGER / 60) > COALESCE(g.detention_threshold_minutes, 120);
 END;

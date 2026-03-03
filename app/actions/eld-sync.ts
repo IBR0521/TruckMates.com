@@ -552,13 +552,23 @@ async function syncGeotabData(device: any) {
     ]
     
     // Geotab server URL should be stored in a separate field, not provider_device_id
-    // For now, check if there's an api_endpoint field, otherwise use default
-    // provider_device_id is the device serial/ID, not the API endpoint
+    // Use api_endpoint from eld_devices when provided, with allowlist SSRF protection
     let baseUrl = "https://my.geotab.com/apiv1" // Default Geotab server
     
-    // If device has api_endpoint field, use it (future enhancement)
-    // For now, always use default since provider_device_id is not the URL
-    // TODO: Add api_endpoint column to eld_devices table for Geotab server URL
+    if (device.api_endpoint) {
+      try {
+        const url = new URL(device.api_endpoint)
+        const normalized = `${url.protocol}//${url.host}`
+        // Ensure endpoint is one of the allowed Geotab domains
+        if (allowedGeotabDomains.includes(normalized)) {
+          baseUrl = `${normalized}/apiv1`
+        } else {
+          console.warn("[Geotab] api_endpoint is not an allowed Geotab domain, using default:", normalized)
+        }
+      } catch {
+        console.warn("[Geotab] Invalid api_endpoint value, using default:", device.api_endpoint)
+      }
+    }
     
     // Geotab requires session-based authentication
     const sessionResponse = await fetch(`${baseUrl}/Authenticate`, {

@@ -32,6 +32,8 @@ import {
 import dynamic from "next/dynamic"
 import { Suspense } from "react"
 import { canCreateFeature } from "@/lib/feature-permissions"
+import { checkEmailServiceConfigured } from "@/app/actions/settings-integration"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 // Performance: Lazy load heavy components
 const ProfitEstimator = dynamic(() => import("@/components/dashboard/profit-estimator").then(mod => ({ default: mod.ProfitEstimator })), {
@@ -119,6 +121,18 @@ function TimeAgo({ timestamp }: { timestamp: string | null | undefined }) {
 export default function DashboardPage() {
   // Use React Query for automatic caching, deduplication, and background refetching
   const { data: dashboardData, isLoading, error } = useDashboardStats()
+  
+  // Check email service configuration (for managers/owners only)
+  const [emailServiceStatus, setEmailServiceStatus] = useState<{ configured: boolean; isManager: boolean } | null>(null)
+  const [dismissedEmailBanner, setDismissedEmailBanner] = useState(false)
+  
+  useEffect(() => {
+    async function checkEmailConfig() {
+      const result = await checkEmailServiceConfigured()
+      setEmailServiceStatus(result)
+    }
+    checkEmailConfig()
+  }, [])
 
   // Memoize stats to prevent unnecessary recalculations
   const stats = useMemo(() => {
@@ -278,6 +292,44 @@ export default function DashboardPage() {
       {/* Content Area */}
       <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
+          {/* Email Service Configuration Banner (for managers/owners only) */}
+          {emailServiceStatus?.isManager && !emailServiceStatus.configured && !dismissedEmailBanner && (
+            <Alert className="border-yellow-500/50 bg-yellow-500/10">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription>
+                <div className="flex items-start justify-between gap-4 w-full">
+                  <div className="flex-1">
+                    <p className="font-medium text-yellow-900 dark:text-yellow-100 mb-1">
+                      Email service not configured
+                    </p>
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                      Invoice reminders, driver alerts, and load updates will <strong>not be sent by email</strong> until this is set up.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className="border-yellow-600 text-yellow-900 dark:text-yellow-100 hover:bg-yellow-500/20"
+                    >
+                      <Link href="/dashboard/settings/integration">
+                        Configure Email
+                      </Link>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setDismissedEmailBanner(true)}
+                      className="text-yellow-800 dark:text-yellow-200 hover:bg-yellow-500/20"
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
           {/* Financial Overview Section */}
               <div className="grid md:grid-cols-4 gap-4">
             <Card className="border-border bg-card/50 p-6">

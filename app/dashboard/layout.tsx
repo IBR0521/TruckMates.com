@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { getCurrentUser } from "@/lib/auth/server"
+import { getSetupStatus } from "@/app/actions/account-setup"
 // AI Widget temporarily disabled - not ready for production
 // const FloatingAIWidget = dynamic(
 //   () => import("@/components/truckmates-ai/floating-widget"),
@@ -104,16 +105,26 @@ export default function DashboardLayout({
         const userResult = await getCurrentUser()
         if (userResult.data && isMounted) {
           const user = userResult.data
-          // Super Admin and manager always have company (they create it), so skip check for them
+          
+          // For Super Admin and manager roles, check if setup is complete
           if (user.role === "super_admin" || user.role === "manager") {
+            // Check if account setup is complete
+            const setupResult = await getSetupStatus()
+            if (setupResult.data && !setupResult.data.setup_complete && isMounted) {
+              // Setup not complete - redirect to setup wizard
+              hasChecked = true
+              router.push("/account-setup/manager")
+              return
+            }
             hasChecked = true
             return
           }
+          
           // For other roles, check if they have a company_id
-          // Note: Account setup flow will be reimplemented
           if (!user.company_id && isMounted) {
             hasChecked = true
-            // TODO: Implement new account setup flow
+            // Employees without company should be invited or join via invitation
+            // Don't redirect them to setup (they can't set up a company)
             return
           }
         }

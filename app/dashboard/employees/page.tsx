@@ -63,7 +63,6 @@ export default function EmployeesPage() {
     full_name: "",
     email: "",
     phone: "",
-    position: "",
     employee_status: "active",
   })
 
@@ -139,7 +138,6 @@ export default function EmployeesPage() {
       full_name: employee.full_name || "",
       email: employee.email || "",
       phone: employee.phone || "",
-      position: employee.position || "",
       employee_status: employee.employee_status || "active",
     })
     setShowEditDialog(true)
@@ -204,7 +202,7 @@ export default function EmployeesPage() {
     return (
       emp.full_name?.toLowerCase().includes(query) ||
       emp.email?.toLowerCase().includes(query) ||
-      emp.position?.toLowerCase().includes(query)
+      emp.phone?.toLowerCase().includes(query)
     )
   })
 
@@ -290,7 +288,6 @@ export default function EmployeesPage() {
                         <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Name</th>
                         <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Email</th>
                         <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Phone</th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Position</th>
                         <th className="text-left py-3 px-4 text-sm font-semibold text-foreground">Status</th>
                         <th className="text-right py-3 px-4 text-sm font-semibold text-foreground">Actions</th>
                       </tr>
@@ -306,9 +303,6 @@ export default function EmployeesPage() {
                           </td>
                           <td className="py-3 px-4">
                             <p className="text-muted-foreground">{employee.phone || "N/A"}</p>
-                          </td>
-                          <td className="py-3 px-4">
-                            <p className="text-muted-foreground">{employee.position || "N/A"}</p>
                           </td>
                           <td className="py-3 px-4">
                             <span
@@ -391,10 +385,6 @@ export default function EmployeesPage() {
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Phone</p>
                             <p className="text-sm text-foreground">{employee.phone || "N/A"}</p>
                           </div>
-                          <div>
-                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Position</p>
-                            <p className="text-sm text-foreground">{employee.position || "N/A"}</p>
-                          </div>
                         </div>
 
                         <div className="flex gap-2 pt-2 border-t border-border/30">
@@ -463,16 +453,6 @@ export default function EmployeesPage() {
                 type="tel"
                 value={editFormData.phone}
                 onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
-                className="mt-2"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-position">Position</Label>
-              <Input
-                id="edit-position"
-                value={editFormData.position}
-                onChange={(e) => setEditFormData({ ...editFormData, position: e.target.value })}
-                placeholder="e.g., Driver, Dispatcher, Admin"
                 className="mt-2"
               />
             </div>

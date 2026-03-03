@@ -74,6 +74,19 @@ export async function registerSuperAdmin(data: {
       return { data: null, error: errorMsg.substring(0, 200) }
     }
 
+    // DEV-ONLY: Auto-confirm email so local accounts can log in without waiting for email
+    try {
+      if (process.env.NODE_ENV !== "production") {
+        const { createAdminClient } = await import("@/lib/supabase/admin")
+        const adminSupabase = createAdminClient()
+        await adminSupabase.auth.admin.updateUserById(authData.user.id, {
+          email_confirm: true,
+        })
+      }
+    } catch {
+      // Ignore auto-confirm failure; Supabase will still enforce normal email confirmation
+    }
+
     // Step 3: Create company using RPC function (bypasses RLS)
     const rpcResult = await supabase.rpc('create_company_for_user', {
       p_name: data.companyName.trim(),
@@ -236,6 +249,19 @@ export async function registerEmployee(data: {
     if (authError || !authData.user) {
       const errorMsg = authError?.message || String(authError) || "Failed to create user"
       return { data: null, error: errorMsg.substring(0, 200) }
+    }
+
+    // DEV-ONLY: Auto-confirm email so invited accounts can log in without waiting for email
+    try {
+      if (process.env.NODE_ENV !== "production") {
+        const { createAdminClient } = await import("@/lib/supabase/admin")
+        const adminSupabase = createAdminClient()
+        await adminSupabase.auth.admin.updateUserById(authData.user.id, {
+          email_confirm: true,
+        })
+      }
+    } catch {
+      // Ignore auto-confirm failure; Supabase will still enforce normal email confirmation
     }
 
     // Update user record

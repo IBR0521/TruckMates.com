@@ -9,14 +9,7 @@ import { escapeHtml } from "@/lib/html-escape"
  * Generate DVIR Audit PDF HTML
  * Returns HTML that can be converted to PDF for audit purposes
  */
-export async function generateDVIRAuditPDF(filters?: {
-  truck_id?: string
-  start_date?: string
-  end_date?: string
-}): Promise<{
-  html: string
-  error: string | null
-}> {
+export async function generateDVIRAuditPDF(filters: any) {
   const supabase = await createClient()
 
   const {
@@ -366,12 +359,9 @@ export async function generateDVIRAuditPDF(filters?: {
     </html>
     `
 
-    return { html, error: null }
+  return { html, error: null }
   } catch (error: any) {
     console.error("[Generate DVIR Audit PDF] Error:", error)
     return { html: "", error: error.message || "Failed to generate DVIR audit PDF" }
   }
 }
-
-
-

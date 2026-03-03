@@ -250,6 +250,86 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Batch function to extract coordinates for multiple points at once
+-- This eliminates N+1 queries by processing all points in a single database call
+CREATE OR REPLACE FUNCTION get_batch_point_coordinates(p_points GEOGRAPHY[])
+RETURNS TABLE (
+  lat DECIMAL,
+  lng DECIMAL,
+  point_index INTEGER
+) AS $$
+DECLARE
+  point_geog GEOGRAPHY;
+  idx INTEGER := 0;
+BEGIN
+  FOREACH point_geog IN ARRAY p_points
+  LOOP
+    RETURN QUERY
+    SELECT
+      ST_Y(point_geog::geometry)::DECIMAL AS lat,
+      ST_X(point_geog::geometry)::DECIMAL AS lng,
+      idx AS point_index;
+    idx := idx + 1;
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Optimized function to find nearby addresses with coordinates already extracted
+-- This eliminates the need for separate coordinate extraction calls
+CREATE OR REPLACE FUNCTION find_nearby_addresses_with_coords(
+  p_company_id UUID,
+  p_latitude DECIMAL,
+  p_longitude DECIMAL,
+  p_radius_km DECIMAL DEFAULT 10.0,
+  p_category TEXT DEFAULT NULL,
+  p_limit INTEGER DEFAULT 10
+)
+RETURNS TABLE (
+  id UUID,
+  name TEXT,
+  company_name TEXT,
+  address_line1 TEXT,
+  city TEXT,
+  state TEXT,
+  zip_code TEXT,
+  category TEXT,
+  distance_km DECIMAL,
+  lat DECIMAL,
+  lng DECIMAL
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    ab.id,
+    ab.name,
+    ab.company_name,
+    ab.address_line1,
+    ab.city,
+    ab.state,
+    ab.zip_code,
+    ab.category,
+    ST_Distance(
+      ab.coordinates,
+      ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326)::GEOGRAPHY
+    ) / 1000.0 AS distance_km, -- Convert meters to km
+    ST_Y(ab.coordinates::geometry)::DECIMAL AS lat,
+    ST_X(ab.coordinates::geometry)::DECIMAL AS lng
+  FROM public.address_book ab
+  WHERE ab.company_id = p_company_id
+    AND ab.is_active = true
+    AND ab.coordinates IS NOT NULL
+    AND ab.geocoding_status = 'verified'
+    AND (p_category IS NULL OR ab.category = p_category)
+    AND ST_DWithin(
+      ab.coordinates,
+      ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326)::GEOGRAPHY,
+      p_radius_km * 1000 -- Convert km to meters
+    )
+  ORDER BY distance_km ASC
+  LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql;
+
 -- RLS Policies
 ALTER TABLE public.address_book ENABLE ROW LEVEL SECURITY;
 

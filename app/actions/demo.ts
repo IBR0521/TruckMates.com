@@ -81,56 +81,68 @@ export async function setupDemoCompany(userId: string | null) {
     let companyId: string | null = null
 
     if (userRecord?.company_id) {
-      companyId = userRecord.company_id
-      // Update role to super_admin for demo
-      await supabase
-        .from("users")
-        .update({ role: "super_admin" })
-        .eq("id", actualUserId)
-      
-      // Update auth metadata
-      await supabase.auth.updateUser({
-        data: {
-          role: "super_admin",
-        }
-      })
-    } else if (actualUserId) {
-      // Check if demo company already exists
-      const { data: existingCompany } = await supabase
+      // CRITICAL FIX: Check if user is linked to a demo company
+      const { data: company } = await supabase
         .from("companies")
-        .select("id")
-        .eq("name", DEMO_COMPANY_NAME)
-        .maybeSingle()
-
-      if (existingCompany) {
-        companyId = existingCompany.id
-        // Link user to existing company
-        await supabase
-          .from("users")
-          .update({
-            company_id: companyId,
-            role: "super_admin",
-          })
-          .eq("id", actualUserId)
-      } else {
-        // Use RPC function to create company (bypasses RLS)
+        .select("id, name")
+        .eq("id", userRecord.company_id)
+        .single()
+      
+      // If linked to demo company, don't use it - create a new one instead
+      if (company?.name === DEMO_COMPANY_NAME || company?.name?.includes("Demo Logistics Company")) {
+        // User is linked to demo company - create a new unique company for them
         const { data: newCompanyId, error: rpcError } = await supabase.rpc('create_company_for_user', {
-          p_name: DEMO_COMPANY_NAME,
+          p_name: `${DEMO_COMPANY_NAME} (${userEmail})`,
           p_email: userEmail,
           p_phone: "+1-555-DEMO",
           p_user_id: actualUserId,
           p_company_type: null
         })
-
+        
         if (rpcError) {
           return { 
-            error: `Failed to create demo company: ${rpcError.message}. Please ensure create_company_for_user function exists in Supabase.`, 
+            error: `Failed to create demo company: ${rpcError.message}`, 
             data: null 
           }
         }
-
+        
         companyId = newCompanyId
+      } else {
+        // User has a real company - use it
+        companyId = userRecord.company_id
+        // Update role to super_admin for demo
+        await supabase
+          .from("users")
+          .update({ role: "super_admin" })
+          .eq("id", actualUserId)
+        
+        // Update auth metadata
+        await supabase.auth.updateUser({
+          data: {
+            role: "super_admin",
+          }
+        })
       }
+    } else if (actualUserId) {
+      // CRITICAL FIX: Never link users to existing demo companies
+      // Each demo setup should create its own company to prevent data leaks
+      // Use RPC function to create a NEW company for this user (bypasses RLS)
+      const { data: newCompanyId, error: rpcError } = await supabase.rpc('create_company_for_user', {
+        p_name: `${DEMO_COMPANY_NAME} (${userEmail})`, // Make it unique per user
+        p_email: userEmail,
+        p_phone: "+1-555-DEMO",
+        p_user_id: actualUserId,
+        p_company_type: null
+      })
+
+      if (rpcError) {
+        return { 
+          error: `Failed to create demo company: ${rpcError.message}. Please ensure create_company_for_user function exists in Supabase.`, 
+          data: null 
+        }
+      }
+
+      companyId = newCompanyId
     }
 
     // Platform is now free - no subscription needed

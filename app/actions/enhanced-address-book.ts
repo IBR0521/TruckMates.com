@@ -361,26 +361,44 @@ export async function getAddressBookEntries(filters?: {
       return { data: [], error: error.message }
     }
 
-    // Extract coordinates in parallel (still N queries but parallel is better than sequential)
-    // TODO: Create a batch RPC function that accepts multiple points to reduce to 1 query
-    const entries: AddressBookEntry[] = await Promise.all(
-      (data || []).map(async (entry: any) => {
-        let coordinates: { lat: number; lng: number } | null = null
-        if (entry.coordinates) {
-          const { data: coordData } = await supabase.rpc("get_point_coordinates", {
-            point: entry.coordinates,
-          })
-          if (coordData) {
-            coordinates = { lat: coordData.lat, lng: coordData.lng }
-          }
-        }
-
-        return {
-          ...entry,
-          coordinates,
-        } as AddressBookEntry
+    // OPTIMIZED: Batch extract coordinates for all entries in a single RPC call
+    // This eliminates N+1 queries - processes all points at once
+    const entriesWithCoordinates = (data || []).filter((entry: any) => entry.coordinates)
+    const coordinatesArray = entriesWithCoordinates.map((entry: any) => entry.coordinates)
+    
+    let coordinatesMap: Map<number, { lat: number; lng: number }> = new Map()
+    
+    if (coordinatesArray.length > 0) {
+      // Single batch RPC call for all coordinates
+      const { data: batchCoords, error: coordError } = await supabase.rpc("get_batch_point_coordinates", {
+        p_points: coordinatesArray,
       })
-    )
+      
+      if (!coordError && batchCoords) {
+        // Map coordinates by index
+        batchCoords.forEach((coord: any) => {
+          coordinatesMap.set(coord.point_index, { lat: Number(coord.lat), lng: Number(coord.lng) })
+        })
+      }
+    }
+    
+    // Merge coordinates back into entries
+    let coordIndex = 0
+    const entries: AddressBookEntry[] = (data || []).map((entry: any) => {
+      let coordinates: { lat: number; lng: number } | null = null
+      if (entry.coordinates) {
+        const coords = coordinatesMap.get(coordIndex)
+        if (coords) {
+          coordinates = coords
+        }
+        coordIndex++
+      }
+      
+      return {
+        ...entry,
+        coordinates,
+      } as AddressBookEntry
+    })
 
     return { data: entries, error: null }
   } catch (error: any) {
@@ -418,7 +436,9 @@ export async function findNearbyAddresses(
   }
 
   try {
-    const { data, error } = await supabase.rpc("find_nearby_addresses", {
+    // OPTIMIZED: Use the new RPC function that returns coordinates directly
+    // This eliminates all coordinate extraction queries - single database call
+    const { data, error } = await supabase.rpc("find_nearby_addresses_with_coords", {
       p_company_id: result.company_id,
       p_latitude: latitude,
       p_longitude: longitude,
@@ -431,26 +451,11 @@ export async function findNearbyAddresses(
       return { data: null, error: error.message }
     }
 
-    // Batch extract coordinates in parallel (still N queries but parallel, better than sequential)
-    // TODO: Create a batch RPC function that accepts multiple points
-    const entries = await Promise.all(
-      (data || []).map(async (entry: any) => {
-        let coordinates: { lat: number; lng: number } | null = null
-        if (entry.coordinates) {
-          const { data: coordData } = await supabase.rpc("get_point_coordinates", {
-            point: entry.coordinates,
-          })
-          if (coordData) {
-            coordinates = { lat: coordData.lat, lng: coordData.lng }
-          }
-        }
-
-        return {
-          ...entry,
-          coordinates,
-        }
-      })
-    )
+    // Coordinates are already extracted in the RPC function - no additional queries needed
+    const entries = (data || []).map((entry: any) => ({
+      ...entry,
+      coordinates: entry.lat && entry.lng ? { lat: Number(entry.lat), lng: Number(entry.lng) } : null,
+    }))
 
     return { data: entries, error: null }
   } catch (error: any) {

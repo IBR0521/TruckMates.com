@@ -156,6 +156,11 @@ CREATE TABLE IF NOT EXISTS public.alerts (
   
   -- Metadata
   metadata JSONB, -- Additional context data
+
+  -- Escalation tracking
+  escalated BOOLEAN DEFAULT false,
+  escalation_level INTEGER DEFAULT 0,
+  escalated_at TIMESTAMP WITH TIME ZONE,
   acknowledged_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
   acknowledged_at TIMESTAMP WITH TIME ZONE,
   resolved_at TIMESTAMP WITH TIME ZONE,

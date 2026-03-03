@@ -249,32 +249,45 @@ export default function BillingSettingsPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">{subscription.plan_display_name || subscription.plan_name}</p>
+                  <p className="font-medium">{subscription.plan_display_name || subscription.plan_name || "Free"}</p>
                   <p className="text-sm text-muted-foreground">
-                    {subscription.billing_cycle === "monthly" ? "Monthly" : "Yearly"} billing
+                    {subscription.plan_name === "free" || subscription.amount === 0 
+                      ? "Platform is currently free" 
+                      : `${subscription.billing_cycle === "monthly" ? "Monthly" : "Yearly"} billing`}
                   </p>
                 </div>
                 <Badge variant={subscription.status === "active" ? "default" : "secondary"}>
-                  {subscription.status}
+                  {subscription.status === "active" ? "Active" : subscription.status}
                 </Badge>
               </div>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-muted-foreground">Amount</p>
                   <p className="font-medium">
-                    {subscription.currency_symbol || "$"}{subscription.amount.toFixed(2)}
+                    {subscription.amount === 0 
+                      ? "Free" 
+                      : `${subscription.currency_symbol || "$"}${(subscription.amount || 0).toFixed(2)}`}
                   </p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Next Billing</p>
+                  <p className="text-muted-foreground">
+                    {subscription.plan_name === "free" || subscription.amount === 0 ? "Status" : "Next Billing"}
+                  </p>
                   <p className="font-medium">
-                    {subscription.end_date ? new Date(subscription.end_date).toLocaleDateString() : "N/A"}
+                    {subscription.plan_name === "free" || subscription.amount === 0
+                      ? "No payment required"
+                      : subscription.end_date 
+                        ? new Date(subscription.end_date).toLocaleDateString() 
+                        : "N/A"}
                   </p>
                 </div>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No active subscription</p>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">No active subscription</p>
+              <p className="text-xs text-muted-foreground">The platform is currently free. All features are available at no cost.</p>
+            </div>
           )}
         </Card>
 

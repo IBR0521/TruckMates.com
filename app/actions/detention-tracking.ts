@@ -62,9 +62,10 @@ export async function getActiveDetentions() {
   }
 
   try {
-    // FIXED: RPC doesn't accept company_id, so we need to filter results by company
-    // TODO: Update calculate_active_detention RPC to accept p_company_id parameter
-    const { data: activeDetentions, error } = await supabase.rpc('calculate_active_detention')
+    // UPDATED: RPC now accepts p_company_id to enforce company isolation
+    const { data: activeDetentions, error } = await supabase.rpc('calculate_active_detention', {
+      p_company_id: company_id,
+    })
 
     if (error) {
       return { error: error.message || "Failed to get active detentions", data: null }
@@ -234,9 +235,10 @@ export async function checkAndCreateDetentions() {
   }
 
   try {
-    // FIXED: RPC doesn't accept company_id, so we need to filter results by company
-    // TODO: Update calculate_active_detention RPC to accept p_company_id parameter
-    const { data: activeDetentions, error: activeError } = await supabase.rpc('calculate_active_detention')
+    // UPDATED: RPC now accepts p_company_id to enforce company isolation
+    const { data: activeDetentions, error: activeError } = await supabase.rpc('calculate_active_detention', {
+      p_company_id: company_id,
+    })
 
     if (activeError) {
       return { error: activeError.message, data: null }
