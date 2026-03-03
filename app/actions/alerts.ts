@@ -101,9 +101,9 @@ export async function createAlertRule(formData: {
       send_sms: formData.send_sms || false,
       send_in_app: formData.send_in_app !== false,
       notify_users: formData.notify_users || [],
-      // NOTE: escalation_enabled is stored but not yet implemented
-      // The escalation feature (checking, scheduling, timers) is not implemented
-      // This field is stored for future use but currently has no effect
+      // Escalation feature: When enabled, alerts that remain unacknowledged
+      // past the escalation_delay_minutes threshold will be escalated to managers/admins.
+      // The escalation is processed by a cron job at /api/cron/alert-escalations
       escalation_enabled: formData.escalation_enabled || false,
       // FIXED: Add server-side validation for escalation_delay_minutes
       escalation_delay_minutes: formData.escalation_enabled 
@@ -650,7 +650,19 @@ export async function processAlertEscalations() {
     // 2) Find alerts for this rule that are overdue for escalation
     const { data: alerts, error: alertsError } = await supabase
       .from("alerts")
-      .select("*")
+      .select(`
+        id,
+        company_id,
+        alert_rule_id,
+        title,
+        message,
+        event_type,
+        status,
+        metadata,
+        escalated,
+        escalation_level,
+        created_at
+      `)
       .eq("company_id", rule.company_id)
       .eq("alert_rule_id", rule.id)
       .eq("status", "active")
