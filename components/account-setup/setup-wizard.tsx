@@ -499,7 +499,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
       {/* Step Indicators */}
       <div className="flex items-center justify-between mb-8">
-        {[1, 2, 3, 4, 5].map((step) => (
+        {[1, 2, 3, 4].map((step) => (
           <div key={step} className="flex items-center flex-1">
             <div className="flex flex-col items-center">
               {currentStep > step ? (
@@ -510,7 +510,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 <Circle className="w-8 h-8 text-muted-foreground" />
               )}
             </div>
-            {step < 5 && (
+            {step < 4 && (
               <div
                 className={`flex-1 h-0.5 mx-2 ${
                   currentStep > step ? "bg-green-500" : "bg-muted"
@@ -529,7 +529,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         <Button
           variant="outline"
           onClick={handleBack}
-          disabled={currentStep === 1 || isSaving || isImporting}
+          disabled={currentStep === 1 || isSaving}
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
@@ -537,9 +537,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
         <Button
           onClick={handleNext}
-          disabled={isSaving || isImporting}
+          disabled={isSaving}
         >
-          {currentStep === 5 ? (
+          {currentStep === 4 ? (
             "Complete Setup"
           ) : (
             <>
