@@ -54,12 +54,11 @@ export async function upsertDriverPayRule(rule: DriverPayRule) {
     return { error: "Not authenticated", data: null }
   }
 
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
-  }
+    const result = await getCachedUserCompany(user.id)
+    if (result.error || !result.company_id) {
+      return { error: result.error || "No company found", data: null }
+    }
 
-  try {
     // If updating existing rule, deactivate it first
     if (rule.id) {
       await supabase
@@ -105,7 +104,8 @@ export async function upsertDriverPayRule(rule: DriverPayRule) {
     revalidatePath("/dashboard/accounting/settlements")
     return { data, error: null }
   } catch (error: any) {
-    return { error: error?.message || "Failed to save pay rule", data: null }
+    console.error("[upsertDriverPayRule] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
 

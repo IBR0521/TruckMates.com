@@ -61,14 +61,13 @@ export async function getCustomerPerformanceMetrics(filters?: {
       return { error: "Not authenticated", data: null }
     }
 
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
+    const result = await getCachedUserCompany(user.id)
+    const company_id = result.company_id
 
-  if (!company_id) {
-    return { error: "No company found", data: null }
-  }
+    if (!company_id) {
+      return { error: "No company found", data: null }
+    }
 
-  try {
     // SECURITY FIX: Use explicit column selection instead of select("*")
     let query = supabase
       .from("crm_customer_performance")
@@ -127,7 +126,8 @@ export async function getCustomerPerformanceMetrics(filters?: {
 
     return { data: filteredData as CustomerPerformanceMetrics[], error: null }
   } catch (error: any) {
-    return { error: error.message || "Failed to get customer performance metrics", data: null }
+    console.error("[getCustomerPerformanceMetrics] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
 
