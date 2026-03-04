@@ -368,7 +368,7 @@ export async function createLoad(formData: {
       return { error: "Invalid truck selected", data: null }
     }
 
-    if (truck.status !== "available" && truck.status !== "in-use") {
+    if (truck.status !== "available" && truck.status !== "in_use") {
       return { error: "Cannot assign truck with status: " + truck.status, data: null }
     }
   }

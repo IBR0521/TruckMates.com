@@ -618,7 +618,7 @@ export async function bulkUpdateTruckStatus(ids: string[], status: string) {
   }
 
   // Validate status value
-  const validStatuses = ["available", "in-use", "maintenance", "out_of_service"]
+  const validStatuses = ["available", "in_use", "maintenance", "out_of_service"]
   if (!validStatuses.includes(status)) {
     return { error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`, data: null }
   }

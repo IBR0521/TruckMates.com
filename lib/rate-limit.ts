@@ -10,8 +10,14 @@
  * meaning the rate limit counter resets constantly and provides essentially no protection
  * in production. This is only a real problem if your API routes are being abused.
  * 
- * For production-grade rate limiting, swap to Upstash Redis (free tier available).
- * See the comments below for Upstash integration instructions.
+ * EXT-014 FIX: For production-grade rate limiting, use Upstash Redis (free tier available).
+ * 
+ * To enable Upstash Redis rate limiting:
+ * 1. Install: npm install @upstash/ratelimit @upstash/redis
+ * 2. Set environment variables: UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN
+ * 3. Uncomment the Upstash code block below and remove the in-memory fallback
+ * 
+ * See: https://upstash.com/docs/redis/overall/getstarted
  */
 
 interface RateLimitOptions {

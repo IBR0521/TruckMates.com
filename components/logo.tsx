@@ -26,10 +26,16 @@ export function Logo({ className = "", showText = true, size = "md" }: LogoProps
   }
 
   // Check if image exists on mount
+  // MEM-004 FIX: Only check if logo exists once, don't fire 404 on every mount
   useEffect(() => {
+    // Use placeholder if logo.png doesn't exist
     const img = new window.Image()
     img.onload = () => setImageLoaded(true)
-    img.onerror = () => setImageError(true)
+    img.onerror = () => {
+      setImageError(true)
+      setImageLoaded(false)
+    }
+    // Try logo.png first, but don't retry if it fails
     img.src = "/logo.png"
   }, [])
 
