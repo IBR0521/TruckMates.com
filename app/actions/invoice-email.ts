@@ -94,21 +94,21 @@ export async function sendInvoiceEmail(
 
     // Check rate limit for Resend API
     try {
-    const { checkApiUsage } = await import("@/lib/api-protection")
-    const rateCheck = await checkApiUsage("resend", "send_email")
-    if (!rateCheck.allowed) {
-      return {
-        error: rateCheck.reason || "Email rate limit exceeded. Please try again later.",
-        data: null
+      const { checkApiUsage } = await import("@/lib/api-protection")
+      const rateCheck = await checkApiUsage("resend", "send_email")
+      if (!rateCheck.allowed) {
+        return {
+          error: rateCheck.reason || "Email rate limit exceeded. Please try again later.",
+          data: null
+        }
       }
+    } catch (error) {
+      // If rate limit check fails, allow the call to proceed (fail open)
+      console.error("[Invoice Email] Rate limit check failed:", error)
     }
-  } catch (error) {
-    // If rate limit check fails, allow the call to proceed (fail open)
-    console.error("[Invoice Email] Rate limit check failed:", error)
-  }
 
-  // Get invoice
-  const { data: invoice, error: invoiceError } = await supabase
+    // Get invoice
+    const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
     .select(`
       *,
@@ -136,93 +136,92 @@ export async function sendInvoiceEmail(
   const settingsResult = await getCompanySettings()
   const settings = settingsResult.data || {}
 
-  // Get company info
-  const { data: company } = await supabase
-    .from("companies")
-    .select("name, email")
-    .eq("id", userData.company_id)
-    .single()
+    // Get company info
+    const { data: company } = await supabase
+      .from("companies")
+      .select("name, email")
+      .eq("id", userData.company_id)
+      .maybeSingle()
 
-  // Prepare email data
-  const customerEmail = invoice.loads?.customers?.email || invoice.customer_name
-  if (!customerEmail || !customerEmail.includes("@")) {
-    return { error: "Customer email is required and must be valid", data: null }
-  }
-  
-  const customerName = invoice.loads?.customers?.name || invoice.loads?.customers?.company_name || invoice.customer_name || "Customer"
-  const companyName = company?.name || settings.company_name_display || "Company"
-  const companyEmail = company?.email || process.env.RESEND_FROM_EMAIL || "noreply@truckmates.com"
-
-  // Build subject with token replacement
-  let subject = options?.subject || settings.invoice_email_subject || "Invoice {INVOICE_NUMBER} from {COMPANY_NAME}"
-  subject = subject
-    .replace(/{INVOICE_NUMBER}/g, invoice.invoice_number)
-    .replace(/{COMPANY_NAME}/g, companyName)
-    .replace(/{AMOUNT}/g, `$${Number(invoice.amount).toFixed(2)}`)
-
-  // Build body with token replacement
-  let bodyText = options?.body || settings.invoice_email_body || `Dear {CUSTOMER_NAME},\n\nPlease find attached invoice {INVOICE_NUMBER} for {AMOUNT}.\n\nPayment is due by {DUE_DATE}.\n\nThank you!`
-  bodyText = bodyText
-    .replace(/{CUSTOMER_NAME}/g, customerName)
-    .replace(/{INVOICE_NUMBER}/g, invoice.invoice_number)
-    .replace(/{AMOUNT}/g, `$${Number(invoice.amount).toFixed(2)}`)
-    .replace(/{DUE_DATE}/g, new Date(invoice.due_date).toLocaleDateString())
-    .replace(/{COMPANY_NAME}/g, companyName)
-
-  // Convert plain text to HTML for better email formatting
-  const bodyHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>${subject}</title>
-    </head>
-    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-      <div style="background-color: #f4f4f4; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
-        <h2 style="color: #2c3e50; margin-top: 0;">Invoice ${invoice.invoice_number}</h2>
-        <p style="margin: 5px 0;"><strong>Amount:</strong> $${Number(invoice.amount).toFixed(2)}</p>
-        <p style="margin: 5px 0;"><strong>Due Date:</strong> ${new Date(invoice.due_date).toLocaleDateString()}</p>
-        ${invoice.description ? `<p style="margin: 5px 0;"><strong>Description:</strong> ${escapeHtml(invoice.description)}</p>` : ""}
-      </div>
-      <div style="white-space: pre-wrap;">${bodyText.replace(/\n/g, "<br>")}</div>
-      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-      <p style="color: #666; font-size: 12px;">This is an automated email from ${companyName}. Please do not reply to this email.</p>
-    </body>
-    </html>
-  `
-
-  // Get Resend client
-  const resend = await getResendClient()
-  
-  if (!resend) {
-    // If Resend is not configured, log and return error
-    console.warn("[INVOICE EMAIL] Resend API key not configured. Email not sent.")
-    return { 
-      error: "Email service not configured. Please set RESEND_API_KEY in environment variables.", 
-      data: null 
+    // Prepare email data
+    const customerEmail = invoice.loads?.customers?.email || invoice.customer_name
+    if (!customerEmail || !customerEmail.includes("@")) {
+      return { error: "Customer email is required and must be valid", data: null }
     }
-  }
+    
+    const customerName = invoice.loads?.customers?.name || invoice.loads?.customers?.company_name || invoice.customer_name || "Customer"
+    const companyName = company?.name || settings.company_name_display || "Company"
+    const companyEmail = company?.email || process.env.RESEND_FROM_EMAIL || "noreply@truckmates.com"
 
-  // Prepare recipients
-  const toEmails = [customerEmail]
-  const ccEmails = options?.cc_emails || []
-  const bccEmails = options?.bcc_emails || []
-  
-  // Add company email to BCC if requested
-  if (options?.send_copy_to_company && companyEmail) {
-    bccEmails.push(companyEmail)
-  }
+    // Build subject with token replacement
+    let subject = options?.subject || settings.invoice_email_subject || "Invoice {INVOICE_NUMBER} from {COMPANY_NAME}"
+    subject = subject
+      .replace(/{INVOICE_NUMBER}/g, invoice.invoice_number)
+      .replace(/{COMPANY_NAME}/g, companyName)
+      .replace(/{AMOUNT}/g, `$${Number(invoice.amount).toFixed(2)}`)
 
-  // Get invoice PDF URL if available (for attachment)
-  let attachments: any[] = []
-  if (options?.include_bol || options?.auto_attach_documents) {
-    // Try to get BOL or invoice PDF
-    // This would need to be implemented based on your PDF generation setup
-    // For now, we'll skip attachments
-  }
+    // Build body with token replacement
+    let bodyText = options?.body || settings.invoice_email_body || `Dear {CUSTOMER_NAME},\n\nPlease find attached invoice {INVOICE_NUMBER} for {AMOUNT}.\n\nPayment is due by {DUE_DATE}.\n\nThank you!`
+    bodyText = bodyText
+      .replace(/{CUSTOMER_NAME}/g, customerName)
+      .replace(/{INVOICE_NUMBER}/g, invoice.invoice_number)
+      .replace(/{AMOUNT}/g, `$${Number(invoice.amount).toFixed(2)}`)
+      .replace(/{DUE_DATE}/g, new Date(invoice.due_date).toLocaleDateString())
+      .replace(/{COMPANY_NAME}/g, companyName)
 
-  try {
+    // Convert plain text to HTML for better email formatting
+    const bodyHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${subject}</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background-color: #f4f4f4; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+          <h2 style="color: #2c3e50; margin-top: 0;">Invoice ${invoice.invoice_number}</h2>
+          <p style="margin: 5px 0;"><strong>Amount:</strong> $${Number(invoice.amount).toFixed(2)}</p>
+          <p style="margin: 5px 0;"><strong>Due Date:</strong> ${new Date(invoice.due_date).toLocaleDateString()}</p>
+          ${invoice.description ? `<p style="margin: 5px 0;"><strong>Description:</strong> ${escapeHtml(invoice.description)}</p>` : ""}
+        </div>
+        <div style="white-space: pre-wrap;">${bodyText.replace(/\n/g, "<br>")}</div>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="color: #666; font-size: 12px;">This is an automated email from ${companyName}. Please do not reply to this email.</p>
+      </body>
+      </html>
+    `
+
+    // Get Resend client
+    const resend = await getResendClient()
+    
+    if (!resend) {
+      // If Resend is not configured, log and return error
+      console.warn("[INVOICE EMAIL] Resend API key not configured. Email not sent.")
+      return { 
+        error: "Email service not configured. Please set RESEND_API_KEY in environment variables.", 
+        data: null 
+      }
+    }
+
+    // Prepare recipients
+    const toEmails = [customerEmail]
+    const ccEmails = options?.cc_emails || []
+    const bccEmails = options?.bcc_emails || []
+    
+    // Add company email to BCC if requested
+    if (options?.send_copy_to_company && companyEmail) {
+      bccEmails.push(companyEmail)
+    }
+
+    // Get invoice PDF URL if available (for attachment)
+    let attachments: any[] = []
+    if (options?.include_bol || options?.auto_attach_documents) {
+      // Try to get BOL or invoice PDF
+      // This would need to be implemented based on your PDF generation setup
+      // For now, we'll skip attachments
+    }
+
     // Get from email (check env var, then database, then default)
     let fromEmail = process.env.RESEND_FROM_EMAIL
     if (!fromEmail) {
@@ -241,7 +240,7 @@ export async function sendInvoiceEmail(
               .from("company_integrations")
               .select("resend_from_email")
               .eq("company_id", result.company_id)
-              .single()
+              .maybeSingle()
 
             if (integrations?.resend_from_email) {
               fromEmail = integrations.resend_from_email
@@ -293,13 +292,6 @@ export async function sendInvoiceEmail(
       }, 
       error: null 
     }
-  } catch (error: any) {
-    console.error("[INVOICE EMAIL ERROR]", error)
-    return { 
-      error: `Failed to send email: ${error?.message || "Unknown error"}`, 
-      data: null 
-    }
-  }
 }
 
 
