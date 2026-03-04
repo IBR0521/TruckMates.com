@@ -74,13 +74,9 @@ export async function getIntegrationSettings() {
     }
   }
   
-  // CRITICAL FIX: Check environment variables for platform-wide API keys
-  // These are configured at deployment and work automatically for all users
-  const hasPlatformGoogleMapsKey = !!process.env.GOOGLE_MAPS_API_KEY
-  const hasPlatformResendKey = !!process.env.RESEND_API_KEY
-
   // If platform keys exist, services are automatically configured for all users
   // No per-company configuration needed - it just works
+  // Note: hasPlatformGoogleMapsKey and hasPlatformResendKey are already declared above
   const safeData = {
     quickbooks_enabled: !!data.quickbooks_enabled,
     quickbooks_company_id: data.quickbooks_company_id || "",
