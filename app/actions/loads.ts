@@ -33,21 +33,24 @@ async function sendNotificationsForLoadUpdate(loadData: any) {
       .select("id")
       .eq("company_id", userData.company_id)
 
-    // Send notifications to all users who want load updates
-    if (companyUsers) {
-      for (const companyUser of companyUsers) {
-        try {
-          await sendNotification(companyUser.id, "load_update", {
-            shipmentNumber: loadData.shipment_number,
-            status: loadData.status,
-            origin: loadData.origin,
-            destination: loadData.destination,
-          })
-        } catch (error) {
-          // Silently fail - don't block the main operation
-          console.error(`[NOTIFICATION] Failed to send to user ${companyUser.id}:`, error)
-        }
-      }
+    // LOG-003 FIX: Parallelize notifications using Promise.all instead of sequential for loop
+    // This reduces 20 sequential DB writes to 1 concurrent batch
+    if (companyUsers && companyUsers.length > 0) {
+      await Promise.all(
+        companyUsers.map(async (companyUser) => {
+          try {
+            await sendNotification(companyUser.id, "load_update", {
+              shipmentNumber: loadData.shipment_number,
+              status: loadData.status,
+              origin: loadData.origin,
+              destination: loadData.destination,
+            })
+          } catch (error) {
+            // Silently fail - don't block the main operation
+            console.error(`[NOTIFICATION] Failed to send to user ${companyUser.id}:`, error)
+          }
+        })
+      )
     }
   } catch (error) {
     // Silently fail - this is a background function, don't block main operations
@@ -538,13 +541,25 @@ export async function createLoad(formData: {
         const topTruckId = Object.entries(truckCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
 
         if (settings.auto_assign_driver && !finalDriverId && topDriverId) {
-          const { data: driver } = await supabase
-            .from("drivers")
-            .select("id, name, status")
-            .eq("id", topDriverId)
-            .eq("status", "active")
-            .single()
-          if (driver) finalDriverId = driver.id
+          // LOG-004 FIX: Check if driver is already on an active load before assigning
+          const { data: activeDriverLoads } = await supabase
+            .from("loads")
+            .select("id, shipment_number")
+            .eq("driver_id", topDriverId)
+            .in("status", ["scheduled", "in_transit"])
+            .eq("company_id", userData.company_id)
+            .limit(1)
+
+          // Only assign if driver is not already on an active load
+          if (!activeDriverLoads || activeDriverLoads.length === 0) {
+            const { data: driver } = await supabase
+              .from("drivers")
+              .select("id, name, status")
+              .eq("id", topDriverId)
+              .eq("status", "active")
+              .maybeSingle()
+            if (driver) finalDriverId = driver.id
+          }
         }
 
         if (settings.auto_assign_truck && !finalTruckId && topTruckId) {
