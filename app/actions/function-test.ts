@@ -33,8 +33,27 @@ import * as eldManualActions from "./eld-manual"
 
 /**
  * Comprehensive function test that tests EVERY function in the platform
+ * 
+ * EXT-011 FIX: Prevent this from running in production - it creates real data
+ * This should only be used in a dedicated test environment, not production
  */
 export async function testAllPlatformFunctions() {
+  // EXT-011: Block execution in production to prevent real data creation
+  if (process.env.NODE_ENV === "production") {
+    return { 
+      error: "testAllPlatformFunctions() is disabled in production to prevent real data creation. Use a dedicated test environment instead.", 
+      data: null 
+    }
+  }
+
+  // EXT-011: Additional safety check - require explicit test environment flag
+  if (!process.env.ALLOW_FUNCTION_TESTS || process.env.ALLOW_FUNCTION_TESTS !== "true") {
+    return { 
+      error: "Function tests are disabled. Set ALLOW_FUNCTION_TESTS=true in environment variables to enable (test environments only).", 
+      data: null 
+    }
+  }
+
   const supabase = await createClient()
   const {
     data: { user },
