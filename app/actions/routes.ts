@@ -119,36 +119,40 @@ export async function getRoute(id: string) {
       return { error: "Not authenticated", data: null }
     }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
+
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
+
+    const { data: route, error } = await supabase
+      .from("routes")
+      .select("*")
+      .eq("id", id)
+      .eq("company_id", userData.company_id)
+      .maybeSingle()
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    if (!route) {
+      return { error: "Route not found", data: null }
+    }
+
+    return { data: route, error: null }
+  } catch (error: any) {
+    console.error("[getRoute] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  const { data: route, error } = await supabase
-    .from("routes")
-    .select("*")
-    .eq("id", id)
-    .eq("company_id", userData.company_id)
-    .maybeSingle()
-
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  if (!route) {
-    return { error: "Route not found", data: null }
-  }
-
-  return { data: route, error: null }
 }
 
 // Manager roles that can create routes
