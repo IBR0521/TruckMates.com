@@ -20,58 +20,58 @@ export async function getUnassignedLoads() {
       return { error: "Not authenticated", data: null }
     }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
 
-  // SECURITY FIX: Use explicit column selection instead of select("*")
-  // MEDIUM FIX: Add limit to prevent unbounded queries
-  const { data: loads, error } = await supabase
-    .from("loads")
-    .select(`
-      id,
-      company_id,
-      shipment_number,
-      origin,
-      destination,
-      status,
-      priority,
-      driver_id,
-      truck_id,
-      load_date,
-      estimated_delivery,
-      weight,
-      weight_kg,
-      value,
-      rate,
-      total_rate,
-      created_at,
-      updated_at
-    `)
-    .eq("company_id", userData.company_id)
-    .or("driver_id.is.null,truck_id.is.null")
-    .not("status", "in", '("delivered","cancelled","completed")')
-    .order("created_at", { ascending: false })
-    .limit(500) // Reasonable limit for dispatch board
+    // SECURITY FIX: Use explicit column selection instead of select("*")
+    // MEDIUM FIX: Add limit to prevent unbounded queries
+    const { data: loads, error } = await supabase
+      .from("loads")
+      .select(`
+        id,
+        company_id,
+        shipment_number,
+        origin,
+        destination,
+        status,
+        priority,
+        driver_id,
+        truck_id,
+        load_date,
+        estimated_delivery,
+        weight,
+        weight_kg,
+        value,
+        rate,
+        total_rate,
+        created_at,
+        updated_at
+      `)
+      .eq("company_id", userData.company_id)
+      .or("driver_id.is.null,truck_id.is.null")
+      .not("status", "in", '("delivered","cancelled","completed")')
+      .order("created_at", { ascending: false })
+      .limit(500) // Reasonable limit for dispatch board
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    if (error) {
+      return { error: error.message, data: null }
+    }
 
-  // Additional filter for pending status loads that might have assignments
-  const unassignedLoads = loads?.filter((load: any) => 
-    !load.driver_id || !load.truck_id || load.status === "pending"
-  ) || []
+    // Additional filter for pending status loads that might have assignments
+    const unassignedLoads = loads?.filter((load: any) => 
+      !load.driver_id || !load.truck_id || load.status === "pending"
+    ) || []
 
     return { data: unassignedLoads, error: null }
   } catch (error: any) {

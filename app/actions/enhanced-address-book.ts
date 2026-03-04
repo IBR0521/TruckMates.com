@@ -264,6 +264,8 @@ export async function createAddressBookEntry(
  * Get all address book entries with filters
  */
 export async function getAddressBookEntries(filters?: {
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
   search?: string
   category?: AddressBookCategory | "all"
   is_active?: boolean

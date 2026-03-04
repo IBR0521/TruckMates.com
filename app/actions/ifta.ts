@@ -18,29 +18,29 @@ export async function getIFTAReports() {
       return { error: "Not authenticated", data: null }
     }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .maybeSingle()
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
 
-  const { data: reports, error } = await supabase
-    .from("ifta_reports")
-    .select("*")
-    .eq("company_id", userData.company_id)
-    .order("created_at", { ascending: false })
+    const { data: reports, error } = await supabase
+      .from("ifta_reports")
+      .select("*")
+      .eq("company_id", userData.company_id)
+      .order("created_at", { ascending: false })
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    if (error) {
+      return { error: error.message, data: null }
+    }
 
     return { data: reports, error: null }
   } catch (error: any) {
