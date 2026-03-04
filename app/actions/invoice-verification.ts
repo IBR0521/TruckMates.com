@@ -272,33 +272,53 @@ export async function batchVerifyInvoices() {
     let errors = 0
     const errorDetails: Array<{ invoice_id: string; error: string }> = []
 
-    // Verify each invoice
-    for (const invoice of invoices) {
-      try {
-        const { data: verification, error: verifyError } = await supabase.rpc(
-          "verify_invoice_three_way_match",
-          {
-            p_invoice_id: invoice.id,
-          }
-        )
+    // RCE-002 FIX: Batch verify invoices in parallel instead of sequential N+1 queries
+    // This prevents timeouts on Vercel's 30-second function limit
+    const verificationResults = await Promise.all(
+      invoices.map(async (invoice) => {
+        try {
+          const { data: verification, error: verifyError } = await supabase.rpc(
+            "verify_invoice_three_way_match",
+            {
+              p_invoice_id: invoice.id,
+            }
+          )
 
-        if (verifyError) {
-          errors++
-          errorDetails.push({
+          if (verifyError) {
+            return {
+              invoice_id: invoice.id,
+              success: false,
+              error: verifyError.message,
+            }
+          } else {
+            return {
+              invoice_id: invoice.id,
+              success: true,
+              error: null,
+            }
+          }
+        } catch (error: any) {
+          return {
             invoice_id: invoice.id,
-            error: verifyError.message,
-          })
-        } else {
-          verified++
+            success: false,
+            error: error.message || "Unknown error",
+          }
         }
-      } catch (error: any) {
+      })
+    )
+
+    // Count results
+    verificationResults.forEach((result) => {
+      if (result.success) {
+        verified++
+      } else {
         errors++
         errorDetails.push({
-          invoice_id: invoice.id,
-          error: error.message || "Unknown error",
+          invoice_id: result.invoice_id,
+          error: result.error || "Unknown error",
         })
       }
-    }
+    })
 
     revalidatePath("/dashboard/accounting/invoices")
 
