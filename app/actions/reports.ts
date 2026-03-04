@@ -187,118 +187,118 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
 
     const supabase = await createClient()
 
-  // Get ALL invoices (not just paid) - use created_at for reliable date filtering
-  // FIXED: Select only necessary columns and add limit
-  let revenueQuery = supabase
-    .from("invoices")
-    .select("id, amount, items, created_at, load_id")
-    .eq("company_id", companyId)
+    // Get ALL invoices (not just paid) - use created_at for reliable date filtering
+    // FIXED: Select only necessary columns and add limit
+    let revenueQuery = supabase
+      .from("invoices")
+      .select("id, amount, items, created_at, load_id")
+      .eq("company_id", companyId)
 
-  if (startDate) {
-    revenueQuery = revenueQuery.gte("created_at", startDate)
-  }
-  if (endDate) {
-    revenueQuery = revenueQuery.lte("created_at", endDate + "T23:59:59")
-  }
-
-  // FIXED: Add limit to prevent unbounded queries
-  const limit = 10000
-  const { data: invoices } = await revenueQuery.limit(limit)
-
-  // Also get revenue from loads
-  let loadQuery = supabase
-    .from("loads")
-    .select("total_rate, value, created_at")
-    .eq("company_id", companyId)
-
-  if (startDate) {
-    loadQuery = loadQuery.gte("created_at", startDate)
-  }
-  if (endDate) {
-    loadQuery = loadQuery.lte("created_at", endDate + "T23:59:59")
-  }
-
-  const { data: loads } = await loadQuery
-
-  // Get expenses
-  // FIXED: Select only necessary columns and add limit
-  let expensesQuery = supabase
-    .from("expenses")
-    .select("id, amount, category, date")
-    .eq("company_id", companyId)
-
-  if (startDate) {
-    expensesQuery = expensesQuery.gte("date", startDate)
-  }
-  if (endDate) {
-    expensesQuery = expensesQuery.lte("date", endDate)
-  }
-
-  // FIXED: Add limit to prevent unbounded queries
-  const expensesLimit = 10000
-  const { data: expenses } = await expensesQuery.limit(expensesLimit)
-
-  // FIXED: Track which loads have invoices to prevent double-counting
-  const loadIdsWithInvoices = new Set<string>()
-  
-  // Process invoices and track their load_ids
-  invoices?.forEach((invoice) => {
-    if (invoice.load_id) {
-      loadIdsWithInvoices.add(invoice.load_id)
+    if (startDate) {
+      revenueQuery = revenueQuery.gte("created_at", startDate)
     }
-  })
-  
-  // Calculate totals - combine invoices and loads (only loads without invoices)
-  let totalRevenue = invoices?.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0) || 0
-  
-  // FIXED: Only add revenue from loads that don't have invoices
-  if (loads) {
-    const loadRevenue = loads
-      .filter((load) => !load.id || !loadIdsWithInvoices.has(load.id)) // Only loads without invoices
-      .reduce((sum, load) => {
-        return sum + (Number(load.total_rate) || Number(load.value) || 0)
-      }, 0)
-    totalRevenue += loadRevenue
-  }
-  
-  const totalExpenses = expenses?.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0) || 0
-  const netProfit = totalRevenue - totalExpenses
-
-  // Revenue breakdown
-  const revenueBreakdown: Record<string, number> = {}
-  
-  // Process invoices
-  invoices?.forEach((invoice) => {
-    const items = (invoice.items as any[]) || []
-    if (items.length > 0) {
-      items.forEach((item: any) => {
-        const category = item.category || "Load Revenue"
-        revenueBreakdown[category] = (revenueBreakdown[category] || 0) + (Number(item.amount) || 0)
-      })
-    } else {
-      // If no items, count as load revenue
-      revenueBreakdown["Load Revenue"] = (revenueBreakdown["Load Revenue"] || 0) + (Number(invoice.amount) || 0)
+    if (endDate) {
+      revenueQuery = revenueQuery.lte("created_at", endDate + "T23:59:59")
     }
-  })
-  
-  // FIXED: Process loads - only add to breakdown if no invoice exists (avoid double-counting)
-  if (loads) {
-    const loadRevenue = loads
-      .filter((load) => !load.id || !loadIdsWithInvoices.has(load.id)) // Only loads without invoices
-      .reduce((sum, load) => {
-        return sum + (Number(load.total_rate) || Number(load.value) || 0)
-      }, 0)
-    if (loadRevenue > 0) {
-      revenueBreakdown["Load Revenue"] = (revenueBreakdown["Load Revenue"] || 0) + loadRevenue
-    }
-  }
 
-  // Expense breakdown by category
-  const expenseBreakdown: Record<string, number> = {}
-  expenses?.forEach((expense) => {
-    const category = expense.category || "Other"
-    expenseBreakdown[category] = (expenseBreakdown[category] || 0) + (Number(expense.amount) || 0)
-  })
+    // FIXED: Add limit to prevent unbounded queries
+    const limit = 10000
+    const { data: invoices } = await revenueQuery.limit(limit)
+
+    // Also get revenue from loads
+    let loadQuery = supabase
+      .from("loads")
+      .select("total_rate, value, created_at")
+      .eq("company_id", companyId)
+
+    if (startDate) {
+      loadQuery = loadQuery.gte("created_at", startDate)
+    }
+    if (endDate) {
+      loadQuery = loadQuery.lte("created_at", endDate + "T23:59:59")
+    }
+
+    const { data: loads } = await loadQuery
+
+    // Get expenses
+    // FIXED: Select only necessary columns and add limit
+    let expensesQuery = supabase
+      .from("expenses")
+      .select("id, amount, category, date")
+      .eq("company_id", companyId)
+
+    if (startDate) {
+      expensesQuery = expensesQuery.gte("date", startDate)
+    }
+    if (endDate) {
+      expensesQuery = expensesQuery.lte("date", endDate)
+    }
+
+    // FIXED: Add limit to prevent unbounded queries
+    const expensesLimit = 10000
+    const { data: expenses } = await expensesQuery.limit(expensesLimit)
+
+    // FIXED: Track which loads have invoices to prevent double-counting
+    const loadIdsWithInvoices = new Set<string>()
+    
+    // Process invoices and track their load_ids
+    invoices?.forEach((invoice) => {
+      if (invoice.load_id) {
+        loadIdsWithInvoices.add(invoice.load_id)
+      }
+    })
+    
+    // Calculate totals - combine invoices and loads (only loads without invoices)
+    let totalRevenue = invoices?.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0) || 0
+    
+    // FIXED: Only add revenue from loads that don't have invoices
+    if (loads) {
+      const loadRevenue = loads
+        .filter((load) => !load.id || !loadIdsWithInvoices.has(load.id)) // Only loads without invoices
+        .reduce((sum, load) => {
+          return sum + (Number(load.total_rate) || Number(load.value) || 0)
+        }, 0)
+      totalRevenue += loadRevenue
+    }
+    
+    const totalExpenses = expenses?.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0) || 0
+    const netProfit = totalRevenue - totalExpenses
+
+    // Revenue breakdown
+    const revenueBreakdown: Record<string, number> = {}
+    
+    // Process invoices
+    invoices?.forEach((invoice) => {
+      const items = (invoice.items as any[]) || []
+      if (items.length > 0) {
+        items.forEach((item: any) => {
+          const category = item.category || "Load Revenue"
+          revenueBreakdown[category] = (revenueBreakdown[category] || 0) + (Number(item.amount) || 0)
+        })
+      } else {
+        // If no items, count as load revenue
+        revenueBreakdown["Load Revenue"] = (revenueBreakdown["Load Revenue"] || 0) + (Number(invoice.amount) || 0)
+      }
+    })
+    
+    // FIXED: Process loads - only add to breakdown if no invoice exists (avoid double-counting)
+    if (loads) {
+      const loadRevenue = loads
+        .filter((load) => !load.id || !loadIdsWithInvoices.has(load.id)) // Only loads without invoices
+        .reduce((sum, load) => {
+          return sum + (Number(load.total_rate) || Number(load.value) || 0)
+        }, 0)
+      if (loadRevenue > 0) {
+        revenueBreakdown["Load Revenue"] = (revenueBreakdown["Load Revenue"] || 0) + loadRevenue
+      }
+    }
+
+    // Expense breakdown by category
+    const expenseBreakdown: Record<string, number> = {}
+    expenses?.forEach((expense) => {
+      const category = expense.category || "Other"
+      expenseBreakdown[category] = (expenseBreakdown[category] || 0) + (Number(expense.amount) || 0)
+    })
 
     return {
       data: {

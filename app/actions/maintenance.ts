@@ -150,13 +150,13 @@ export async function createMaintenance(formData: {
     return { error: error.message, data: null }
   }
 
-  revalidatePath("/dashboard/maintenance")
-  
-  // Trigger webhook
-  try {
-    const { triggerWebhook } = await import("./webhooks")
-    await triggerWebhook(userData.company_id, "maintenance.scheduled", {
-      maintenance_id: data.id,
+    revalidatePath("/dashboard/maintenance")
+    
+    // Trigger webhook
+    try {
+      const { triggerWebhook } = await import("./webhooks")
+      await triggerWebhook(userData.company_id, "maintenance.scheduled", {
+        maintenance_id: data.id,
       truck_id: formData.truck_id,
       service_type: formData.service_type,
       scheduled_date: formData.scheduled_date,
