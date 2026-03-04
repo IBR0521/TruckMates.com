@@ -116,7 +116,12 @@ export function GooglePlacesAutocomplete({
     loadGoogleMaps()
   }, [])
 
-  // Initialize Autocomplete (using old API for now - new API may not be fully available)
+  // Initialize Autocomplete
+  // CRH-003 FIX: Google Maps Places Autocomplete API is deprecated (as of 2024)
+  // Migration path: Use PlaceAutocompleteElement web component when available
+  // Current status: Old API still works but will be removed in future versions
+  // TODO: Migrate to PlaceAutocompleteElement when Google makes it fully available
+  // Reference: https://developers.google.com/maps/documentation/javascript/places-autocomplete-element
   useEffect(() => {
     if (!isGoogleMapsLoaded || !inputRef.current || !window.google?.maps?.places?.Autocomplete) {
       return
@@ -131,8 +136,9 @@ export function GooglePlacesAutocomplete({
     let debounceTimeout: NodeJS.Timeout | null = null
 
     try {
-      // Use the old Autocomplete API (it still works, just deprecated)
+      // CRH-003: Using deprecated Autocomplete API - will need migration to PlaceAutocompleteElement
       // The deprecation notice says it will continue to work for at least 12 months
+      // When migrating, use: <gmp-place-autocomplete> web component instead
       const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
         types: ['address'],
         fields: [
