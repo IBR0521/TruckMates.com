@@ -40,122 +40,122 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
 
     const supabase = await createClient()
   
-  // Get ALL invoices (not just paid) - use created_at for reliable date filtering
-  // FIXED: Select only necessary columns and add limit
-  let invoiceQuery = supabase
-    .from("invoices")
-    .select("id, amount, customer_name, created_at, load_id")
-    .eq("company_id", companyId)
+    // Get ALL invoices (not just paid) - use created_at for reliable date filtering
+    // FIXED: Select only necessary columns and add limit
+    let invoiceQuery = supabase
+      .from("invoices")
+      .select("id, amount, customer_name, created_at, load_id")
+      .eq("company_id", companyId)
 
-  if (startDate) {
-    invoiceQuery = invoiceQuery.gte("created_at", startDate)
-  }
-  if (endDate) {
-    invoiceQuery = invoiceQuery.lte("created_at", endDate + "T23:59:59")
-  }
-
-  // FIXED: Add limit to prevent unbounded queries
-  const limit = 10000 // Reasonable limit for report generation
-  const { data: invoices, error: invoiceError } = await invoiceQuery
-    .order("created_at", { ascending: false })
-    .limit(limit)
-
-  // Also get loads data as fallback/supplement
-  // FIXED: Add limit to prevent unbounded queries
-  let loadQuery = supabase
-    .from("loads")
-    .select("id, shipment_number, customer_id, total_rate, value, created_at")
-    .eq("company_id", companyId)
-
-  if (startDate) {
-    loadQuery = loadQuery.gte("created_at", startDate)
-  }
-  if (endDate) {
-    loadQuery = loadQuery.lte("created_at", endDate + "T23:59:59")
-  }
-
-  // Use the same limit variable declared above
-  const { data: loads } = await loadQuery
-    .order("created_at", { ascending: false })
-    .limit(limit)
-
-  // Get customers for loads
-  const customerIds = loads?.map(l => l.customer_id).filter(Boolean) || []
-  let customers = null
-  if (customerIds.length > 0) {
-    const { data } = await supabase
-      .from("customers")
-      .select("id, name")
-      .in("id", customerIds)
-    customers = data
-  }
-
-  const customerMap = new Map<string, string>()
-  customers?.forEach(c => customerMap.set(c.id, c.name))
-
-  // Calculate revenue by customer
-  const revenueByCustomer: Record<
-    string,
-    { customer: string; loads: number; revenue: number; avgPerLoad: number }
-  > = {}
-
-  // FIXED: Track which loads have invoices to prevent double-counting
-  const loadIdsWithInvoices = new Set<string>()
-  
-  // Process invoices
-  invoices?.forEach((invoice) => {
-    const customer = invoice.customer_name || "Unknown Customer"
-    if (!revenueByCustomer[customer]) {
-      revenueByCustomer[customer] = {
-        customer,
-        loads: 0,
-        revenue: 0,
-        avgPerLoad: 0,
-      }
+    if (startDate) {
+      invoiceQuery = invoiceQuery.gte("created_at", startDate)
     }
-    revenueByCustomer[customer].revenue += Number(invoice.amount) || 0
-    revenueByCustomer[customer].loads += 1
+    if (endDate) {
+      invoiceQuery = invoiceQuery.lte("created_at", endDate + "T23:59:59")
+    }
+
+    // FIXED: Add limit to prevent unbounded queries
+    const limit = 10000 // Reasonable limit for report generation
+    const { data: invoices, error: invoiceError } = await invoiceQuery
+      .order("created_at", { ascending: false })
+      .limit(limit)
+
+    // Also get loads data as fallback/supplement
+    // FIXED: Add limit to prevent unbounded queries
+    let loadQuery = supabase
+      .from("loads")
+      .select("id, shipment_number, customer_id, total_rate, value, created_at")
+      .eq("company_id", companyId)
+
+    if (startDate) {
+      loadQuery = loadQuery.gte("created_at", startDate)
+    }
+    if (endDate) {
+      loadQuery = loadQuery.lte("created_at", endDate + "T23:59:59")
+    }
+
+    // Use the same limit variable declared above
+    const { data: loads } = await loadQuery
+      .order("created_at", { ascending: false })
+      .limit(limit)
+
+    // Get customers for loads
+    const customerIds = loads?.map(l => l.customer_id).filter(Boolean) || []
+    let customers = null
+    if (customerIds.length > 0) {
+      const { data } = await supabase
+        .from("customers")
+        .select("id, name")
+        .in("id", customerIds)
+      customers = data
+    }
+
+    const customerMap = new Map<string, string>()
+    customers?.forEach(c => customerMap.set(c.id, c.name))
+
+    // Calculate revenue by customer
+    const revenueByCustomer: Record<
+      string,
+      { customer: string; loads: number; revenue: number; avgPerLoad: number }
+    > = {}
+
+    // FIXED: Track which loads have invoices to prevent double-counting
+    const loadIdsWithInvoices = new Set<string>()
     
-    // Track load_id from invoice to avoid double-counting
-    if (invoice.load_id) {
-      loadIdsWithInvoices.add(invoice.load_id)
-    }
-  })
-
-  // FIXED: Process loads - only add revenue if no invoice exists for that load
-  if (loads) {
-    loads.forEach((load: any) => {
-      // Skip if this load already has an invoice
-      if (load.id && loadIdsWithInvoices.has(load.id)) {
-        return
-      }
-      
-      const customerName = load.customer_id ? (customerMap.get(load.customer_id) || "Unknown Customer") : "Unknown Customer"
-      const amount = Number(load.total_rate) || Number(load.value) || 0
-      
-      if (amount > 0) {
-        if (!revenueByCustomer[customerName]) {
-          revenueByCustomer[customerName] = {
-            customer: customerName,
-            loads: 0,
-            revenue: 0,
-            avgPerLoad: 0,
-          }
+    // Process invoices
+    invoices?.forEach((invoice) => {
+      const customer = invoice.customer_name || "Unknown Customer"
+      if (!revenueByCustomer[customer]) {
+        revenueByCustomer[customer] = {
+          customer,
+          loads: 0,
+          revenue: 0,
+          avgPerLoad: 0,
         }
-        revenueByCustomer[customerName].revenue += amount
-        revenueByCustomer[customerName].loads += 1
+      }
+      revenueByCustomer[customer].revenue += Number(invoice.amount) || 0
+      revenueByCustomer[customer].loads += 1
+      
+      // Track load_id from invoice to avoid double-counting
+      if (invoice.load_id) {
+        loadIdsWithInvoices.add(invoice.load_id)
       }
     })
-  }
 
-  // Calculate averages
-  Object.values(revenueByCustomer).forEach((item) => {
-    item.avgPerLoad = item.loads > 0 ? item.revenue / item.loads : 0
-  })
+    // FIXED: Process loads - only add revenue if no invoice exists for that load
+    if (loads) {
+      loads.forEach((load: any) => {
+        // Skip if this load already has an invoice
+        if (load.id && loadIdsWithInvoices.has(load.id)) {
+          return
+        }
+        
+        const customerName = load.customer_id ? (customerMap.get(load.customer_id) || "Unknown Customer") : "Unknown Customer"
+        const amount = Number(load.total_rate) || Number(load.value) || 0
+        
+        if (amount > 0) {
+          if (!revenueByCustomer[customerName]) {
+            revenueByCustomer[customerName] = {
+              customer: customerName,
+              loads: 0,
+              revenue: 0,
+              avgPerLoad: 0,
+            }
+          }
+          revenueByCustomer[customerName].revenue += amount
+          revenueByCustomer[customerName].loads += 1
+        }
+      })
+    }
 
-  const totalRevenue = Object.values(revenueByCustomer).reduce((sum, item) => sum + item.revenue, 0)
-  const totalLoads = Object.values(revenueByCustomer).reduce((sum, item) => sum + item.loads, 0)
-  const avgPerLoad = totalLoads > 0 ? totalRevenue / totalLoads : 0
+    // Calculate averages
+    Object.values(revenueByCustomer).forEach((item) => {
+      item.avgPerLoad = item.loads > 0 ? item.revenue / item.loads : 0
+    })
+
+    const totalRevenue = Object.values(revenueByCustomer).reduce((sum, item) => sum + item.revenue, 0)
+    const totalLoads = Object.values(revenueByCustomer).reduce((sum, item) => sum + item.loads, 0)
+    const avgPerLoad = totalLoads > 0 ? totalRevenue / totalLoads : 0
 
     return {
       data: {
