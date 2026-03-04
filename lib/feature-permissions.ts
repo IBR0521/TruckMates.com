@@ -254,51 +254,66 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
 
 // Check if role can view feature
 export function canViewFeature(role: EmployeeRole, feature: FeatureCategory): boolean {
+  // CRITICAL FIX: Super admin ALWAYS has access to everything
+  if (role === "super_admin") return true
+  
   const permissions = ROLE_FEATURE_PERMISSIONS[role]
   if (!permissions) return false
   
-  // Super admin has all access
-  if (permissions.view.includes("all")) return true
+  // Check if role has "all" access
+  if (permissions.view.includes("all" as any)) return true
   
   return permissions.view.includes(feature)
 }
 
 // Check if role can create in feature
 export function canCreateFeature(role: EmployeeRole, feature: FeatureCategory): boolean {
+  // CRITICAL FIX: Super admin ALWAYS has access to everything
+  if (role === "super_admin") return true
+  
   const permissions = ROLE_FEATURE_PERMISSIONS[role]
   if (!permissions) return false
   
-  if (permissions.create.includes("all")) return true
+  if (permissions.create.includes("all" as any)) return true
   
   return permissions.create.includes(feature)
 }
 
 // Check if role can edit in feature
 export function canEditFeature(role: EmployeeRole, feature: FeatureCategory): boolean {
+  // CRITICAL FIX: Super admin ALWAYS has access to everything
+  if (role === "super_admin") return true
+  
   const permissions = ROLE_FEATURE_PERMISSIONS[role]
   if (!permissions) return false
   
-  if (permissions.edit.includes("all")) return true
+  if (permissions.edit.includes("all" as any)) return true
   
   return permissions.edit.includes(feature)
 }
 
 // Check if role can delete in feature
 export function canDeleteFeature(role: EmployeeRole, feature: FeatureCategory): boolean {
+  // CRITICAL FIX: Super admin ALWAYS has access to everything
+  if (role === "super_admin") return true
+  
   const permissions = ROLE_FEATURE_PERMISSIONS[role]
   if (!permissions) return false
   
-  if (permissions.delete.includes("all")) return true
+  if (permissions.delete.includes("all" as any)) return true
   
   return permissions.delete.includes(feature)
 }
 
 // Check if role can manage feature
 export function canManageFeature(role: EmployeeRole, feature: FeatureCategory): boolean {
+  // CRITICAL FIX: Super admin ALWAYS has access to everything
+  if (role === "super_admin") return true
+  
   const permissions = ROLE_FEATURE_PERMISSIONS[role]
   if (!permissions) return false
   
-  if (permissions.manage.includes("all")) return true
+  if (permissions.manage.includes("all" as any)) return true
   
   return permissions.manage.includes(feature)
 }
