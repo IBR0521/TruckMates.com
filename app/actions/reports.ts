@@ -157,14 +157,18 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
   const totalLoads = Object.values(revenueByCustomer).reduce((sum, item) => sum + item.loads, 0)
   const avgPerLoad = totalLoads > 0 ? totalRevenue / totalLoads : 0
 
-  return {
-    data: {
-      revenueByCustomer: Object.values(revenueByCustomer),
-      totalRevenue,
-      totalLoads,
-      avgPerLoad,
-    },
-    error: null,
+    return {
+      data: {
+        revenueByCustomer: Object.values(revenueByCustomer),
+        totalRevenue,
+        totalLoads,
+        avgPerLoad,
+      },
+      error: null,
+    }
+  } catch (error: any) {
+    console.error("[getRevenueReport] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
 
