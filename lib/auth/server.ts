@@ -21,14 +21,19 @@ export async function getCurrentUser() {
     const employeeRole = user.user_metadata?.employee_role || null
 
     // Get user profile from database
+    // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select("id, email, full_name, role, company_id, phone, created_at, updated_at")
       .eq("id", user.id)
-      .single()
+      .maybeSingle()
 
-    if (userError || !userData) {
-      return { data: null, error: userError?.message || "User not found" }
+    if (userError) {
+      return { data: null, error: userError.message || "Failed to fetch user data" }
+    }
+
+    if (!userData) {
+      return { data: null, error: "User not found" }
     }
 
     // Priority: auth metadata employee_role > users table role
@@ -79,13 +84,18 @@ export async function getAuthContext() {
     }
 
     // Get user with company_id
+    // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select("id, company_id, role")
       .eq("id", user.id)
-      .single()
+      .maybeSingle()
 
-    if (userError || !userData) {
+    if (userError) {
+      return { user: null, companyId: null, error: userError.message || "Failed to fetch user data" }
+    }
+
+    if (!userData) {
       return { user: null, companyId: null, error: "User not found" }
     }
 

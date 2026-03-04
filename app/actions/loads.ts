@@ -140,11 +140,12 @@ export async function getLoad(id: string) {
       return { error: "Not authenticated", data: null }
     }
 
+    // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", user.id)
-      .single()
+      .maybeSingle()
 
     if (userError) {
       console.error("[getLoad] Error fetching user:", userError)
