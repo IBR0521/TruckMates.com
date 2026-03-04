@@ -85,6 +85,10 @@ export async function getNotificationPreferences() {
     }
 
     return { data, error: null }
+  } catch (error: any) {
+    console.error("[getNotificationPreferences] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 export async function updateNotificationPreferences(preferences: {
