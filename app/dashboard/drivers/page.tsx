@@ -174,7 +174,8 @@ function DriversPageContent() {
       // Filtered drivers will update automatically via useMemo
       
       toast.error(result.error || "Failed to update")
-      throw new Error(result.error)
+      // CRH-001 FIX: Removed throw - toast already shows error to user
+      return
     }
     // Success - no toast, no reload, UI already updated optimistically
   }

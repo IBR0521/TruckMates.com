@@ -151,7 +151,8 @@ export default function TrucksPage() {
     if (result.error) {
       await loadTrucks()
       toast.error(result.error || "Failed to update")
-      throw new Error(result.error)
+      // CRH-001 FIX: Removed throw - toast already shows error to user
+      return
     }
   }
 

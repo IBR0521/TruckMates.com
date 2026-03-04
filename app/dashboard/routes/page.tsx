@@ -181,7 +181,8 @@ export default function RoutesPage() {
     if (result.error) {
       await loadRoutes()
       toast.error(result.error || "Failed to update")
-      throw new Error(result.error)
+      // CRH-001 FIX: Removed throw - toast already shows error to user
+      return
     }
   }
 

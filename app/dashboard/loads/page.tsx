@@ -182,7 +182,8 @@ export default function LoadsPage() {
       // Revert on error
       await loadLoads()
       toast.error(result.error || "Failed to update")
-      throw new Error(result.error)
+      // CRH-001 FIX: Removed throw - toast already shows error to user
+      return
     }
     // Success - no need to reload, UI already updated
   }

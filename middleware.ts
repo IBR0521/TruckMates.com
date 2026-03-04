@@ -44,7 +44,9 @@ export async function middleware(request: NextRequest) {
     const isProtectedRoute = 
       request.nextUrl.pathname.startsWith('/dashboard') ||
       request.nextUrl.pathname.startsWith('/marketplace/dashboard') ||
-      request.nextUrl.pathname.startsWith('/account-setup')
+      request.nextUrl.pathname.startsWith('/account-setup') ||
+      request.nextUrl.pathname.startsWith('/portal') ||
+      request.nextUrl.pathname.startsWith('/tracking')
 
     if (isProtectedRoute && !user) {
       const url = request.nextUrl.clone()

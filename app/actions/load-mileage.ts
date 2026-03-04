@@ -1,7 +1,21 @@
 "use server"
 
+import { createClient } from "@/lib/supabase/server"
+
 // Calculate mileage between two addresses using Google Maps Distance Matrix API
+// SEC-003 FIX: Added authentication check
 export async function calculateMileage(origin: string, destination: string): Promise<{ miles: number | null; error: string | null }> {
+  // SEC-003: Add authentication check
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { miles: null, error: "Unauthorized. Please log in to use this feature." }
+  }
+
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
   
   if (!apiKey) {
