@@ -206,6 +206,23 @@ export async function createFirstTruck(data: {
 /**
  * Complete setup
  */
+// Auto-enable platform integrations (Google Maps, Email Service) for new companies
+async function enablePlatformIntegrations(companyId: string) {
+  try {
+    const supabase = await createClient()
+    const { error } = await supabase.rpc('auto_enable_platform_integrations', {
+      p_company_id: companyId
+    })
+    if (error) {
+      console.warn('[SETUP] Failed to auto-enable platform integrations:', error.message)
+      // Don't fail setup if this fails - it's optional
+    }
+  } catch (error) {
+    console.warn('[SETUP] Error enabling platform integrations:', error)
+    // Don't fail setup if this fails
+  }
+}
+
 export async function completeSetup() {
   const supabase = await createClient()
 
@@ -263,6 +280,10 @@ export async function completeSetup() {
         data: null 
       }
     }
+
+    // CRITICAL FIX: Auto-enable platform integrations (Google Maps, Email Service)
+    // These use platform-wide API keys and work automatically for all users
+    await enablePlatformIntegrations(company_id)
 
     // CRITICAL FIX: Force revalidation of all paths and clear Next.js cache
     revalidatePath("/dashboard")

@@ -111,7 +111,22 @@ export async function registerSuperAdmin(data: {
     // Convert to string - handle both UUID and TEXT return types
     const companyId = typeof companyIdRaw === 'string' ? companyIdRaw : String(companyIdRaw)
 
-    // Step 4: Return success without fetching company (avoid Date serialization issues)
+    // Step 4: Auto-enable platform integrations (Google Maps, Email Service)
+    // These use platform-wide API keys and work automatically for all users
+    try {
+      const { error: integrationError } = await supabase.rpc('auto_enable_platform_integrations', {
+        p_company_id: companyId
+      })
+      if (integrationError) {
+        console.warn('[REGISTRATION] Failed to auto-enable platform integrations:', integrationError.message)
+        // Don't fail registration if this fails - it's optional
+      }
+    } catch (error) {
+      console.warn('[REGISTRATION] Error enabling platform integrations:', error)
+      // Don't fail registration if this fails
+    }
+
+    // Step 5: Return success without fetching company (avoid Date serialization issues)
     // The RPC function already created everything, we just need to return success
     const result = {
       data: {
