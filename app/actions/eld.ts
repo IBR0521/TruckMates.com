@@ -66,34 +66,38 @@ export async function getELDDevice(id: string) {
       return { error: "Not authenticated", data: null }
     }
 
-  // OPTIMIZATION: Use cached user company lookup for consistency
-  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
-  const result = await getCachedUserCompany(user.id)
-  
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
-  }
-  
-  const company_id = result.company_id
+    // OPTIMIZATION: Use cached user company lookup for consistency
+    const { getCachedUserCompany } = await import("@/lib/query-optimizer")
+    const result = await getCachedUserCompany(user.id)
+    
+    if (result.error || !result.company_id) {
+      return { error: result.error || "No company found", data: null }
+    }
+    
+    const company_id = result.company_id
 
-  const { data: device, error } = await supabase
-    .from("eld_devices")
-    .select(`
-      *,
-      trucks:truck_id (
-        id,
-        truck_number,
-        make,
-        model
-      )
-    `)
-    .eq("id", id)
-    .eq("company_id", company_id)
-    .single()
+    const { data: device, error } = await supabase
+      .from("eld_devices")
+      .select(`
+        *,
+        trucks:truck_id (
+          id,
+          truck_number,
+          make,
+          model
+        )
+      `)
+      .eq("id", id)
+      .eq("company_id", company_id)
+      .maybeSingle()
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    if (!device) {
+      return { error: "ELD device not found", data: null }
+    }
 
     return { data: device, error: null }
   } catch (error: any) {

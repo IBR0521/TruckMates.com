@@ -53,19 +53,25 @@ export async function getTrucks(filters?: {
     return { error: error.message, data: null, count: 0 }
   }
 
-  return { data: trucks || [], error: null, count: count || 0 }
+    return { data: trucks || [], error: null, count: count || 0 }
+  } catch (error: any) {
+    console.error("[getTrucks] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
+  }
 }
 
 export async function getTruck(id: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   const { data: userData, error: userError } = await supabase
     .from("users")
@@ -96,7 +102,11 @@ export async function getTruck(id: string) {
     return { error: "Truck not found", data: null }
   }
 
-  return { data: truck, error: null }
+    return { data: truck, error: null }
+  } catch (error: any) {
+    console.error("[getTruck] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 export async function createTruck(formData: {

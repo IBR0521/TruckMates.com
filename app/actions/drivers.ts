@@ -11,13 +11,15 @@ export async function getDrivers(filters?: {
   limit?: number
   offset?: number
 }) {
-  // Check permission
-  const permission = await checkViewPermission("drivers")
-  if (!permission.allowed) {
-    return { error: permission.error || "You don't have permission to view drivers", data: null, count: 0 }
-  }
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // Check permission
+    const permission = await checkViewPermission("drivers")
+    if (!permission.allowed) {
+      return { error: permission.error || "You don't have permission to view drivers", data: null, count: 0 }
+    }
 
-  const supabase = await createClient()
+    const supabase = await createClient()
 
   // Get current user
   const {
@@ -61,19 +63,25 @@ export async function getDrivers(filters?: {
     return { error: error.message, data: null, count: 0 }
   }
 
-  return { data: drivers || [], error: null, count: count || 0 }
+    return { data: drivers || [], error: null, count: count || 0 }
+  } catch (error: any) {
+    console.error("[getDrivers] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
+  }
 }
 
 export async function getDriver(id: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   const result = await getCachedUserCompany(user.id)
   if (result.error || !result.company_id) {

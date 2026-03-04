@@ -78,37 +78,37 @@ export async function getBOL(id: string) {
       return { error: "Not authenticated", data: null }
     }
 
-  // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
+    // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .maybeSingle()
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
 
-  const { data, error } = await supabase
-    .from("bols")
-    .select("*")
-    .eq("id", id)
-    .eq("company_id", userData.company_id)
-    .maybeSingle()
+    const { data, error } = await supabase
+      .from("bols")
+      .select("*")
+      .eq("id", id)
+      .eq("company_id", userData.company_id)
+      .maybeSingle()
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    if (error) {
+      return { error: error.message, data: null }
+    }
 
-  if (!data) {
-    return { error: "BOL not found", data: null }
-  }
+    if (!data) {
+      return { error: "BOL not found", data: null }
+    }
 
-  return { data, error: null }
+    return { data, error: null }
 }
 
 /**

@@ -80,45 +80,45 @@ export async function getInvoice(id: string) {
       return { error: "Not authenticated", data: null }
     }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .maybeSingle()
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
 
-  const { data: invoice, error } = await supabase
-    .from("invoices")
-    .select(`
-      *,
-      loads:load_id (
-        id,
-        shipment_number,
-        origin,
-        destination,
-        company_name
-      )
-    `)
-    .eq("id", id)
-    .eq("company_id", userData.company_id)
-    .maybeSingle()
+    const { data: invoice, error } = await supabase
+      .from("invoices")
+      .select(`
+        *,
+        loads:load_id (
+          id,
+          shipment_number,
+          origin,
+          destination,
+          company_name
+        )
+      `)
+      .eq("id", id)
+      .eq("company_id", userData.company_id)
+      .maybeSingle()
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    if (error) {
+      return { error: error.message, data: null }
+    }
 
-  if (!invoice) {
-    return { error: "Invoice not found", data: null }
-  }
+    if (!invoice) {
+      return { error: "Invoice not found", data: null }
+    }
 
-  return { data: invoice, error: null }
+    return { data: invoice, error: null }
 }
 
 export async function getExpenses(filters?: {
