@@ -17,41 +17,41 @@ export async function getCompanyUsers() {
       return { error: "Not authenticated", data: null }
     }
 
-  // HIGH FIX 8: Add role check - only managers can list all company users
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
+    // HIGH FIX 8: Add role check - only managers can list all company users
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role, company_id")
+      .eq("id", user.id)
+      .single()
 
-  const MANAGER_ROLES = ["super_admin", "operations_manager"]
-  if (!userData || !MANAGER_ROLES.includes(userData.role)) {
-    return { error: "Only managers can view company users", data: null }
-  }
+    const MANAGER_ROLES = ["super_admin", "operations_manager"]
+    if (!userData || !MANAGER_ROLES.includes(userData.role)) {
+      return { error: "Only managers can view company users", data: null }
+    }
 
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
-  }
+    const result = await getCachedUserCompany(user.id)
+    if (result.error || !result.company_id) {
+      return { error: result.error || "No company found", data: null }
+    }
 
-  // Get all users in the company
-  const { data: users, error } = await supabase
-    .from("users")
-    .select("id, email, full_name, phone, role, created_at")
-    .eq("company_id", result.company_id)
-    .order("created_at", { ascending: false })
+    // Get all users in the company
+    const { data: users, error } = await supabase
+      .from("users")
+      .select("id, email, full_name, phone, role, created_at")
+      .eq("company_id", result.company_id)
+      .order("created_at", { ascending: false })
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    if (error) {
+      return { error: error.message, data: null }
+    }
 
-  // Map to include status (active by default)
-  const usersWithStatus = users.map((u) => ({
-    ...u,
-    status: "Active", // You can add a status field to users table if needed
-  }))
+    // Map to include status (active by default)
+    const usersWithStatus = users.map((u) => ({
+      ...u,
+      status: "Active", // You can add a status field to users table if needed
+    }))
 
-  return { data: usersWithStatus, error: null }
+    return { data: usersWithStatus, error: null }
 }
 
 export async function updateUserRole(userId: string, newRole: string) {

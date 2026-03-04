@@ -58,33 +58,33 @@ export async function getNotificationPreferences() {
       return { error: "Not authenticated", data: null }
     }
 
-  const { data, error } = await supabase
-    .from("notification_preferences")
-    .select("*")
-    .eq("user_id", user.id)
-    .single()
+    const { data, error } = await supabase
+      .from("notification_preferences")
+      .select("*")
+      .eq("user_id", user.id)
+      .single()
 
-  if (error && error.code !== "PGRST116") { // PGRST116 = no rows returned
-    return { error: error.message, data: null }
-  }
-
-  // If no preferences exist, return defaults
-  if (!data) {
-    return {
-      data: {
-        email_alerts: true,
-        sms_alerts: true,
-        weekly_reports: false,
-        route_updates: true,
-        load_updates: true,
-        maintenance_alerts: true,
-        payment_reminders: true,
-      },
-      error: null,
+    if (error && error.code !== "PGRST116") { // PGRST116 = no rows returned
+      return { error: error.message, data: null }
     }
-  }
 
-  return { data, error: null }
+    // If no preferences exist, return defaults
+    if (!data) {
+      return {
+        data: {
+          email_alerts: true,
+          sms_alerts: true,
+          weekly_reports: false,
+          route_updates: true,
+          load_updates: true,
+          maintenance_alerts: true,
+          payment_reminders: true,
+        },
+        error: null,
+      }
+    }
+
+    return { data, error: null }
 }
 
 export async function updateNotificationPreferences(preferences: {

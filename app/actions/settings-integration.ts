@@ -17,85 +17,85 @@ export async function getIntegrationSettings() {
       return { error: "Not authenticated", data: null }
     }
 
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
-  }
-
-  const { data, error } = await supabase
-    .from("company_integrations")
-    .select(`
-      id,
-      company_id,
-      quickbooks_enabled,
-      quickbooks_company_id,
-      quickbooks_api_key,
-      stripe_enabled,
-      stripe_api_key,
-      paypal_enabled,
-      paypal_client_id,
-      google_maps_enabled,
-      google_maps_api_key,
-      resend_enabled,
-      resend_api_key,
-      resend_from_email,
-      created_at,
-      updated_at
-    `)
-    .eq("company_id", result.company_id)
-    .single()
-
-  if (error && error.code !== "PGRST116") {
-    return { error: error.message, data: null }
-  }
-
-  // CRITICAL FIX: Check platform environment variables first
-  // These work automatically for all users - no per-company config needed
-  const hasPlatformGoogleMapsKey = !!process.env.GOOGLE_MAPS_API_KEY
-  const hasPlatformResendKey = !!process.env.RESEND_API_KEY
-
-  // Return defaults if no settings exist (without exposing API keys)
-  if (!data) {
-    return {
-      data: {
-        quickbooks_enabled: false,
-        quickbooks_company_id: "",
-        stripe_enabled: false,
-        paypal_enabled: false,
-        google_maps_enabled: true, // platform-wide default
-        resend_enabled: true, // platform-wide default
-        resend_from_email: "",
-        has_quickbooks_credentials: false,
-        has_stripe_api_key: false,
-        has_paypal_client_id: false,
-        // Platform keys work automatically - check env vars
-        has_google_maps_api_key: hasPlatformGoogleMapsKey,
-        has_resend_api_key: hasPlatformResendKey,
-      },
-      error: null,
+    const result = await getCachedUserCompany(user.id)
+    if (result.error || !result.company_id) {
+      return { error: result.error || "No company found", data: null }
     }
-  }
-  
-  // If platform keys exist, services are automatically configured for all users
-  // No per-company configuration needed - it just works
-  // Note: hasPlatformGoogleMapsKey and hasPlatformResendKey are already declared above
-  const safeData = {
-    quickbooks_enabled: !!data.quickbooks_enabled,
-    quickbooks_company_id: data.quickbooks_company_id || "",
-    stripe_enabled: !!data.stripe_enabled,
-    paypal_enabled: !!data.paypal_enabled,
-    google_maps_enabled: data.google_maps_enabled !== false,
-    resend_enabled: data.resend_enabled !== false,
-    resend_from_email: data.resend_from_email || "",
-    has_quickbooks_credentials: !!(data.quickbooks_api_key || data.quickbooks_api_secret),
-    has_stripe_api_key: !!data.stripe_api_key,
-    has_paypal_client_id: !!data.paypal_client_id,
-    // Platform keys take priority - if they exist, service is configured
-    has_google_maps_api_key: hasPlatformGoogleMapsKey || !!data.google_maps_api_key,
-    has_resend_api_key: hasPlatformResendKey || !!data.resend_api_key,
-  }
 
-  return { data: safeData, error: null }
+    const { data, error } = await supabase
+      .from("company_integrations")
+      .select(`
+        id,
+        company_id,
+        quickbooks_enabled,
+        quickbooks_company_id,
+        quickbooks_api_key,
+        stripe_enabled,
+        stripe_api_key,
+        paypal_enabled,
+        paypal_client_id,
+        google_maps_enabled,
+        google_maps_api_key,
+        resend_enabled,
+        resend_api_key,
+        resend_from_email,
+        created_at,
+        updated_at
+      `)
+      .eq("company_id", result.company_id)
+      .single()
+
+    if (error && error.code !== "PGRST116") {
+      return { error: error.message, data: null }
+    }
+
+    // CRITICAL FIX: Check platform environment variables first
+    // These work automatically for all users - no per-company config needed
+    const hasPlatformGoogleMapsKey = !!process.env.GOOGLE_MAPS_API_KEY
+    const hasPlatformResendKey = !!process.env.RESEND_API_KEY
+
+    // Return defaults if no settings exist (without exposing API keys)
+    if (!data) {
+      return {
+        data: {
+          quickbooks_enabled: false,
+          quickbooks_company_id: "",
+          stripe_enabled: false,
+          paypal_enabled: false,
+          google_maps_enabled: true, // platform-wide default
+          resend_enabled: true, // platform-wide default
+          resend_from_email: "",
+          has_quickbooks_credentials: false,
+          has_stripe_api_key: false,
+          has_paypal_client_id: false,
+          // Platform keys work automatically - check env vars
+          has_google_maps_api_key: hasPlatformGoogleMapsKey,
+          has_resend_api_key: hasPlatformResendKey,
+        },
+        error: null,
+      }
+    }
+    
+    // If platform keys exist, services are automatically configured for all users
+    // No per-company configuration needed - it just works
+    // Note: hasPlatformGoogleMapsKey and hasPlatformResendKey are already declared above
+    const safeData = {
+      quickbooks_enabled: !!data.quickbooks_enabled,
+      quickbooks_company_id: data.quickbooks_company_id || "",
+      stripe_enabled: !!data.stripe_enabled,
+      paypal_enabled: !!data.paypal_enabled,
+      google_maps_enabled: data.google_maps_enabled !== false,
+      resend_enabled: data.resend_enabled !== false,
+      resend_from_email: data.resend_from_email || "",
+      has_quickbooks_credentials: !!(data.quickbooks_api_key || data.quickbooks_api_secret),
+      has_stripe_api_key: !!data.stripe_api_key,
+      has_paypal_client_id: !!data.paypal_client_id,
+      // Platform keys take priority - if they exist, service is configured
+      has_google_maps_api_key: hasPlatformGoogleMapsKey || !!data.google_maps_api_key,
+      has_resend_api_key: hasPlatformResendKey || !!data.resend_api_key,
+    }
+
+    return { data: safeData, error: null }
 }
 
 export async function updateIntegrationSettings(settings: {
