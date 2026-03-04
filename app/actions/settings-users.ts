@@ -5,15 +5,17 @@ import { revalidatePath } from "next/cache"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 
 export async function getCompanyUsers() {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   // HIGH FIX 8: Add role check - only managers can list all company users
   const { data: userData } = await supabase
