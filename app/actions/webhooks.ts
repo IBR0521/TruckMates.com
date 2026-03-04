@@ -51,20 +51,26 @@ export async function getWebhooks() {
     return { error: error.message, data: null }
   }
 
-  return { data, error: null }
+    return { data, error: null }
+  } catch (error: any) {
+    console.error("[getWebhooks] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 // Get single webhook
 export async function getWebhook(id: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   const result = await getCachedUserCompany(user.id)
   if (result.error || !result.company_id) {
@@ -82,7 +88,11 @@ export async function getWebhook(id: string) {
     return { error: error.message, data: null }
   }
 
-  return { data, error: null }
+    return { data, error: null }
+  } catch (error: any) {
+    console.error("[getWebhook] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 // Create webhook
