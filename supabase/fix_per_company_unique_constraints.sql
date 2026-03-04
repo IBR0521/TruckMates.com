@@ -21,6 +21,8 @@ DROP INDEX IF EXISTS trucks_truck_number_key;
 DO $$
 DECLARE
   dup_record RECORD;
+  truck_id_to_keep UUID;
+  truck_id_to_delete UUID;
 BEGIN
   FOR dup_record IN
     SELECT company_id, truck_number, COUNT(*) as cnt, array_agg(id ORDER BY created_at DESC) as ids
@@ -29,11 +31,57 @@ BEGIN
     GROUP BY company_id, truck_number
     HAVING COUNT(*) > 1
   LOOP
-    -- Delete all but the most recent one
-    DELETE FROM public.trucks
-    WHERE company_id = dup_record.company_id
-      AND truck_number = dup_record.truck_number
-      AND id != dup_record.ids[1];
+    truck_id_to_keep := dup_record.ids[1]; -- Keep the newest one
+    
+    -- For each duplicate truck (except the one we're keeping)
+    FOR i IN 2..array_length(dup_record.ids, 1) LOOP
+      truck_id_to_delete := dup_record.ids[i];
+      
+      -- Update foreign key references to point to the truck we're keeping
+      -- 1. Update drivers.truck_id
+      UPDATE public.drivers
+      SET truck_id = truck_id_to_keep
+      WHERE truck_id = truck_id_to_delete;
+      
+      -- 2. Update routes.truck_id
+      UPDATE public.routes
+      SET truck_id = truck_id_to_keep
+      WHERE truck_id = truck_id_to_delete;
+      
+      -- 3. Update loads.truck_id
+      UPDATE public.loads
+      SET truck_id = truck_id_to_keep
+      WHERE truck_id = truck_id_to_delete;
+      
+      -- 4. Update expenses.truck_id
+      UPDATE public.expenses
+      SET truck_id = truck_id_to_keep
+      WHERE truck_id = truck_id_to_delete;
+      
+      -- 5. Update maintenance.truck_id
+      UPDATE public.maintenance
+      SET truck_id = truck_id_to_keep
+      WHERE truck_id = truck_id_to_delete;
+      
+      -- 6. Update eld_devices.truck_id
+      UPDATE public.eld_devices
+      SET truck_id = truck_id_to_keep
+      WHERE truck_id = truck_id_to_delete;
+      
+      -- 7. Update dvir.truck_id
+      UPDATE public.dvir
+      SET truck_id = truck_id_to_keep
+      WHERE truck_id = truck_id_to_delete;
+      
+      -- 8. Update eld_logs.truck_id
+      UPDATE public.eld_logs
+      SET truck_id = truck_id_to_keep
+      WHERE truck_id = truck_id_to_delete;
+      
+      -- Now safe to delete the duplicate truck
+      DELETE FROM public.trucks
+      WHERE id = truck_id_to_delete;
+    END LOOP;
   END LOOP;
 END $$;
 
@@ -226,6 +274,8 @@ DROP INDEX IF EXISTS drivers_license_number_key;
 DO $$
 DECLARE
   dup_record RECORD;
+  driver_id_to_keep UUID;
+  driver_id_to_delete UUID;
 BEGIN
   -- Find and delete duplicate license numbers within the same company
   FOR dup_record IN
@@ -235,11 +285,52 @@ BEGIN
     GROUP BY company_id, license_number
     HAVING COUNT(*) > 1
   LOOP
-    -- Delete all but the most recent one (keep the first ID which is the newest)
-    DELETE FROM public.drivers
-    WHERE company_id = dup_record.company_id
-      AND license_number = dup_record.license_number
-      AND id != dup_record.ids[1]; -- Keep the first (newest) one
+    driver_id_to_keep := dup_record.ids[1]; -- Keep the newest one
+    
+    -- For each duplicate driver (except the one we're keeping)
+    FOR i IN 2..array_length(dup_record.ids, 1) LOOP
+      driver_id_to_delete := dup_record.ids[i];
+      
+      -- Update foreign key references to point to the driver we're keeping
+      -- 1. Update trucks.current_driver_id
+      UPDATE public.trucks
+      SET current_driver_id = driver_id_to_keep
+      WHERE current_driver_id = driver_id_to_delete;
+      
+      -- 2. Update routes.driver_id
+      UPDATE public.routes
+      SET driver_id = driver_id_to_keep
+      WHERE driver_id = driver_id_to_delete;
+      
+      -- 3. Update loads.driver_id
+      UPDATE public.loads
+      SET driver_id = driver_id_to_keep
+      WHERE driver_id = driver_id_to_delete;
+      
+      -- 4. Update expenses.driver_id
+      UPDATE public.expenses
+      SET driver_id = driver_id_to_keep
+      WHERE driver_id = driver_id_to_delete;
+      
+      -- 5. Update dvir.driver_id
+      UPDATE public.dvir
+      SET driver_id = driver_id_to_keep
+      WHERE driver_id = driver_id_to_delete;
+      
+      -- 6. Update eld_logs.driver_id
+      UPDATE public.eld_logs
+      SET driver_id = driver_id_to_keep
+      WHERE driver_id = driver_id_to_delete;
+      
+      -- 7. Update settlements.driver_id
+      UPDATE public.settlements
+      SET driver_id = driver_id_to_keep
+      WHERE driver_id = driver_id_to_delete;
+      
+      -- Now safe to delete the duplicate driver
+      DELETE FROM public.drivers
+      WHERE id = driver_id_to_delete;
+    END LOOP;
   END LOOP;
 END $$;
 
