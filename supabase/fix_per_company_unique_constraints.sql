@@ -1,0 +1,168 @@
+-- ============================================================================
+-- Fix Unique Constraints to be Per-Company (Multi-Tenant Isolation)
+-- ============================================================================
+-- This migration changes global unique constraints to per-company constraints
+-- Each company should be able to have their own "Truck-001", "LOAD-001", etc.
+-- ============================================================================
+
+-- ============================================================================
+-- TRUCKS TABLE: Change truck_number from global unique to per-company unique
+-- ============================================================================
+
+-- Drop the global unique constraint on truck_number
+ALTER TABLE public.trucks 
+DROP CONSTRAINT IF EXISTS trucks_truck_number_key;
+
+-- Drop any unique index on truck_number
+DROP INDEX IF EXISTS trucks_truck_number_key;
+
+-- Create per-company unique constraint (company_id, truck_number)
+-- This allows each company to have their own "Truck-001"
+CREATE UNIQUE INDEX IF NOT EXISTS idx_trucks_company_truck_number_unique 
+ON public.trucks(company_id, truck_number)
+WHERE company_id IS NOT NULL;
+
+-- Add constraint name for easier management
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'trucks_company_truck_number_unique'
+  ) THEN
+    ALTER TABLE public.trucks
+    ADD CONSTRAINT trucks_company_truck_number_unique 
+    UNIQUE (company_id, truck_number);
+  END IF;
+END $$;
+
+-- ============================================================================
+-- LOADS TABLE: Change shipment_number from global unique to per-company unique
+-- ============================================================================
+
+-- Drop global unique constraint if it exists
+ALTER TABLE public.loads 
+DROP CONSTRAINT IF EXISTS loads_shipment_number_key;
+
+DROP INDEX IF EXISTS loads_shipment_number_key;
+
+-- Create per-company unique constraint
+CREATE UNIQUE INDEX IF NOT EXISTS idx_loads_company_shipment_number_unique 
+ON public.loads(company_id, shipment_number)
+WHERE company_id IS NOT NULL AND shipment_number IS NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'loads_company_shipment_number_unique'
+  ) THEN
+    ALTER TABLE public.loads
+    ADD CONSTRAINT loads_company_shipment_number_unique 
+    UNIQUE (company_id, shipment_number);
+  END IF;
+END $$;
+
+-- ============================================================================
+-- INVOICES TABLE: Change invoice_number from global unique to per-company unique
+-- ============================================================================
+
+-- Drop global unique constraint if it exists
+ALTER TABLE public.invoices 
+DROP CONSTRAINT IF EXISTS invoices_invoice_number_key;
+
+DROP INDEX IF EXISTS invoices_invoice_number_key;
+
+-- Create per-company unique constraint
+CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_company_invoice_number_unique 
+ON public.invoices(company_id, invoice_number)
+WHERE company_id IS NOT NULL AND invoice_number IS NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'invoices_company_invoice_number_unique'
+  ) THEN
+    ALTER TABLE public.invoices
+    ADD CONSTRAINT invoices_company_invoice_number_unique 
+    UNIQUE (company_id, invoice_number);
+  END IF;
+END $$;
+
+-- ============================================================================
+-- BOLS TABLE: Change bol_number from global unique to per-company unique
+-- ============================================================================
+
+-- Drop global unique constraint if it exists
+ALTER TABLE public.bols 
+DROP CONSTRAINT IF EXISTS bols_bol_number_key;
+
+DROP INDEX IF EXISTS bols_bol_number_key;
+
+-- Create per-company unique constraint
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bols_company_bol_number_unique 
+ON public.bols(company_id, bol_number)
+WHERE company_id IS NOT NULL AND bol_number IS NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'bols_company_bol_number_unique'
+  ) THEN
+    ALTER TABLE public.bols
+    ADD CONSTRAINT bols_company_bol_number_unique 
+    UNIQUE (company_id, bol_number);
+  END IF;
+END $$;
+
+-- ============================================================================
+-- ELD_DEVICES TABLE: Change device_serial_number from global unique to per-company unique
+-- ============================================================================
+
+-- Drop global unique constraint if it exists
+ALTER TABLE public.eld_devices 
+DROP CONSTRAINT IF EXISTS eld_devices_device_serial_number_key;
+
+DROP INDEX IF EXISTS eld_devices_device_serial_number_key;
+
+-- Create per-company unique constraint
+-- Note: Serial numbers should still be globally unique for hardware tracking
+-- But we'll allow per-company for demo/test devices
+CREATE UNIQUE INDEX IF NOT EXISTS idx_eld_devices_company_serial_unique 
+ON public.eld_devices(company_id, device_serial_number)
+WHERE company_id IS NOT NULL AND device_serial_number IS NOT NULL;
+
+-- ============================================================================
+-- DRIVERS TABLE: Change license_number from global unique to per-company unique
+-- ============================================================================
+
+-- Drop global unique constraint if it exists
+ALTER TABLE public.drivers 
+DROP CONSTRAINT IF EXISTS drivers_license_number_key;
+
+DROP INDEX IF EXISTS drivers_license_number_key;
+
+-- Create per-company unique constraint
+-- Each company can have their own driver with the same license number
+-- (though in reality licenses are unique, this allows flexibility)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_drivers_company_license_unique 
+ON public.drivers(company_id, license_number)
+WHERE company_id IS NOT NULL AND license_number IS NOT NULL;
+
+-- ============================================================================
+-- COMMENTS
+-- ============================================================================
+
+COMMENT ON CONSTRAINT trucks_company_truck_number_unique ON public.trucks IS 
+  'Truck numbers must be unique per company, allowing multiple companies to use the same truck number';
+
+COMMENT ON CONSTRAINT loads_company_shipment_number_unique ON public.loads IS 
+  'Shipment numbers must be unique per company, allowing multiple companies to use the same shipment number';
+
+COMMENT ON CONSTRAINT invoices_company_invoice_number_unique ON public.invoices IS 
+  'Invoice numbers must be unique per company, allowing multiple companies to use the same invoice number';
+
+COMMENT ON CONSTRAINT bols_company_bol_number_unique ON public.bols IS 
+  'BOL numbers must be unique per company, allowing multiple companies to use the same BOL number';
+
