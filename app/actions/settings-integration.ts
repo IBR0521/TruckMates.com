@@ -220,41 +220,30 @@ export async function checkEmailServiceConfigured() {
   }
 
   // CRITICAL FIX: Platform-wide API keys work automatically for all users
-  // If RESEND_API_KEY is set in environment, email service is configured
-  // Check both NEXT_PUBLIC_ and direct env var names (Next.js handles both)
-  const hasPlatformKey = !!(
-    process.env.RESEND_API_KEY || 
-    process.env.NEXT_PUBLIC_RESEND_API_KEY ||
-    process.env.RESEND_API_KEY?.trim()
-  )
-
-  // Check if integration is enabled for this company (optional override)
+  // Check if integration record exists and is enabled (we auto-create with enabled=true)
   const { data: integrations } = await supabase
     .from("company_integrations")
     .select("resend_enabled, resend_api_key")
     .eq("company_id", userData.company_id)
     .maybeSingle() // Use maybeSingle to handle case where record doesn't exist
 
-  // If no integration record exists, default to enabled (platform key works automatically)
-  const isEnabled = integrations?.resend_enabled !== false // Default to true if not set
+  // Check environment variable (platform-wide key)
+  const hasPlatformKey = !!(
+    process.env.RESEND_API_KEY || 
+    process.env.NEXT_PUBLIC_RESEND_API_KEY
+  )
+
+  // If integration record exists and resend_enabled is true, email is configured
+  // We auto-create integration records with resend_enabled=true for all new companies
+  const isEnabled = integrations?.resend_enabled === true
   const hasCompanyKey = !!integrations?.resend_api_key
 
   // Email is configured if:
-  // 1. Platform key exists (automatic - works for everyone)
-  // 2. OR company has its own key AND integration is enabled
-  // Platform key takes priority - it works for everyone automatically
-  const configured = hasPlatformKey || (hasCompanyKey && isEnabled)
-  
-  // DEBUG: Log for troubleshooting (remove in production)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[EMAIL CONFIG CHECK]', {
-      hasPlatformKey,
-      hasCompanyKey,
-      isEnabled,
-      configured,
-      envVarExists: !!process.env.RESEND_API_KEY
-    })
-  }
+  // 1. Platform key exists in environment (automatic - works for everyone)
+  // 2. OR integration record exists with resend_enabled=true (auto-created during setup)
+  // 3. OR company has its own key
+  // Since we auto-create integrations with enabled=true, most companies will have it configured
+  const configured = hasPlatformKey || isEnabled || hasCompanyKey
 
   return { configured, isManager: true }
 }
