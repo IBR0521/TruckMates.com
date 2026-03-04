@@ -147,15 +147,10 @@ export async function setupDemoCompany(userId: string | null) {
 
     // Platform is now free - no subscription needed
 
-    // Automatically populate demo data (non-blocking - don't fail if this errors)
-    if (companyId) {
-      // Run in background - don't wait for it
-      supabase.rpc('populate_demo_data_for_company', {
-        p_company_id: companyId
-      }).catch(() => {
-        // Silently fail - company is created, data can populate later
-      })
-    }
+    // CRITICAL FIX: DO NOT automatically populate demo data for real accounts
+    // Demo data should ONLY be populated for explicit demo accounts (via /demo/setup)
+    // Real users should start with a clean account
+    // Removed automatic demo data population to prevent real accounts from getting demo data
 
     // Return success
     return { 
