@@ -161,11 +161,15 @@ export async function createMaintenance(formData: {
       service_type: formData.service_type,
       scheduled_date: formData.scheduled_date,
     })
-  } catch (error) {
-    console.warn("[createMaintenance] Webhook trigger failed:", error)
+    } catch (error) {
+      console.warn("[createMaintenance] Webhook trigger failed:", error)
+    }
+    
+    return { data, error: null }
+  } catch (error: any) {
+    console.error("[createMaintenance] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
-  
-  return { data, error: null }
 }
 
 export async function getMaintenanceById(id: string) {

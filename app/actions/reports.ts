@@ -339,104 +339,104 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
 
     const supabase = await createClient()
 
-  // FIXED: Select only necessary fields, not all columns (exclude sensitive calculation_details, pay_rule_id, etc.)
-  let settlementsQuery = supabase
-    .from("settlements")
-    .select("id, driver_id, period_start, period_end, net_pay, status, created_at, updated_at")
-    .eq("company_id", companyId)
-    .eq("status", "paid")
+    // FIXED: Select only necessary fields, not all columns (exclude sensitive calculation_details, pay_rule_id, etc.)
+    let settlementsQuery = supabase
+      .from("settlements")
+      .select("id, driver_id, period_start, period_end, net_pay, status, created_at, updated_at")
+      .eq("company_id", companyId)
+      .eq("status", "paid")
 
-  if (startDate) {
-    settlementsQuery = settlementsQuery.gte("period_start", startDate)
-  }
-  if (endDate) {
-    settlementsQuery = settlementsQuery.lte("period_end", endDate)
-  }
-
-  // LOW FIX: Sort by period_end (pay period) instead of created_at for proper chronological display
-  const { data: settlements, error } = await settlementsQuery.order("period_end", { ascending: false })
-
-  if (error) return { error: error.message, data: null }
-
-  // Get driver details
-  const { data: drivers } = await supabase
-    .from("drivers")
-    .select("id, name")
-    .eq("company_id", companyId)
-
-  // Create driver lookup map
-  const driverMap = new Map<string, string>()
-  drivers?.forEach((driver) => {
-    driverMap.set(driver.id, driver.name)
-  })
-
-  // FIXED: Use user's timezone for year boundary, not server UTC
-  // Get user's timezone from their profile or default to UTC
-  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
-  const now = new Date()
-  const userYear = new Intl.DateTimeFormat("en-US", { timeZone: userTimezone, year: "numeric" }).format(now)
-  const currentYear = parseInt(userYear)
-  
-  const { data: allYearSettlements } = await supabase
-    .from("settlements")
-    .select("driver_id, net_pay")
-    .eq("company_id", companyId)
-    .eq("status", "paid")
-    .gte("period_start", `${currentYear}-01-01`)
-    .lte("period_end", `${currentYear}-12-31`)
-
-  // Calculate YTD by driver
-  const ytdByDriver: Record<string, number> = {}
-  allYearSettlements?.forEach((settlement) => {
-    const driverId = settlement.driver_id
-    ytdByDriver[driverId] = (ytdByDriver[driverId] || 0) + (Number(settlement.net_pay) || 0)
-  })
-
-  // Calculate payments by driver for selected period
-  const paymentsByDriver: Record<
-    string,
-    {
-      driverId: string
-      driverName: string
-      loads: number
-      totalPay: number
-      avgPerLoad: number
-      ytd: number
+    if (startDate) {
+      settlementsQuery = settlementsQuery.gte("period_start", startDate)
     }
-  > = {}
+    if (endDate) {
+      settlementsQuery = settlementsQuery.lte("period_end", endDate)
+    }
 
-  settlements?.forEach((settlement) => {
-    const driverId = settlement.driver_id
-    const driverName = driverMap.get(driverId) || "Unknown Driver"
-    const loads = Array.isArray(settlement.loads) ? settlement.loads.length : 0
+    // LOW FIX: Sort by period_end (pay period) instead of created_at for proper chronological display
+    const { data: settlements, error } = await settlementsQuery.order("period_end", { ascending: false })
 
-    if (!paymentsByDriver[driverId]) {
-      paymentsByDriver[driverId] = {
-        driverId,
-        driverName,
-        loads: 0,
-        totalPay: 0,
-        avgPerLoad: 0,
-        ytd: ytdByDriver[driverId] || 0,
+    if (error) return { error: error.message, data: null }
+
+    // Get driver details
+    const { data: drivers } = await supabase
+      .from("drivers")
+      .select("id, name")
+      .eq("company_id", companyId)
+
+    // Create driver lookup map
+    const driverMap = new Map<string, string>()
+    drivers?.forEach((driver) => {
+      driverMap.set(driver.id, driver.name)
+    })
+
+    // FIXED: Use user's timezone for year boundary, not server UTC
+    // Get user's timezone from their profile or default to UTC
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+    const now = new Date()
+    const userYear = new Intl.DateTimeFormat("en-US", { timeZone: userTimezone, year: "numeric" }).format(now)
+    const currentYear = parseInt(userYear)
+    
+    const { data: allYearSettlements } = await supabase
+      .from("settlements")
+      .select("driver_id, net_pay")
+      .eq("company_id", companyId)
+      .eq("status", "paid")
+      .gte("period_start", `${currentYear}-01-01`)
+      .lte("period_end", `${currentYear}-12-31`)
+
+    // Calculate YTD by driver
+    const ytdByDriver: Record<string, number> = {}
+    allYearSettlements?.forEach((settlement) => {
+      const driverId = settlement.driver_id
+      ytdByDriver[driverId] = (ytdByDriver[driverId] || 0) + (Number(settlement.net_pay) || 0)
+    })
+
+    // Calculate payments by driver for selected period
+    const paymentsByDriver: Record<
+      string,
+      {
+        driverId: string
+        driverName: string
+        loads: number
+        totalPay: number
+        avgPerLoad: number
+        ytd: number
       }
-    }
+    > = {}
 
-    paymentsByDriver[driverId].loads += loads
-    paymentsByDriver[driverId].totalPay += Number(settlement.net_pay) || 0
-  })
+    settlements?.forEach((settlement) => {
+      const driverId = settlement.driver_id
+      const driverName = driverMap.get(driverId) || "Unknown Driver"
+      const loads = Array.isArray(settlement.loads) ? settlement.loads.length : 0
 
-  // Calculate averages
-  Object.values(paymentsByDriver).forEach((item) => {
-    item.avgPerLoad = item.loads > 0 ? item.totalPay / item.loads : 0
-  })
+      if (!paymentsByDriver[driverId]) {
+        paymentsByDriver[driverId] = {
+          driverId,
+          driverName,
+          loads: 0,
+          totalPay: 0,
+          avgPerLoad: 0,
+          ytd: ytdByDriver[driverId] || 0,
+        }
+      }
 
-  const totalPaid = settlements?.reduce((sum, s) => sum + (Number(s.net_pay) || 0), 0) || 0
-  const totalLoads = settlements?.reduce((sum, s) => {
-    const loads = Array.isArray(s.loads) ? s.loads.length : 0
-    return sum + loads
-  }, 0) || 0
-  const avgPerDriver = Object.keys(paymentsByDriver).length > 0 ? totalPaid / Object.keys(paymentsByDriver).length : 0
-  const avgPerLoad = totalLoads > 0 ? totalPaid / totalLoads : 0
+      paymentsByDriver[driverId].loads += loads
+      paymentsByDriver[driverId].totalPay += Number(settlement.net_pay) || 0
+    })
+
+    // Calculate averages
+    Object.values(paymentsByDriver).forEach((item) => {
+      item.avgPerLoad = item.loads > 0 ? item.totalPay / item.loads : 0
+    })
+
+    const totalPaid = settlements?.reduce((sum, s) => sum + (Number(s.net_pay) || 0), 0) || 0
+    const totalLoads = settlements?.reduce((sum, s) => {
+      const loads = Array.isArray(s.loads) ? s.loads.length : 0
+      return sum + loads
+    }, 0) || 0
+    const avgPerDriver = Object.keys(paymentsByDriver).length > 0 ? totalPaid / Object.keys(paymentsByDriver).length : 0
+    const avgPerLoad = totalLoads > 0 ? totalPaid / totalLoads : 0
 
   // FIXED: Return only aggregated data, not full settlement objects
   return {
