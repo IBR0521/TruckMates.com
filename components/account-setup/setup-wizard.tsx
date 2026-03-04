@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { CheckCircle2, Circle, Building2, User, Truck, Sparkles, ArrowRight, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
-import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
+import { MapboxAddressAutocomplete } from "@/components/mapbox-address-autocomplete"
 import {
   updateCompanyProfile,
   createFirstDriver,
@@ -174,7 +174,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             <div className="space-y-4">
               <div>
                 <Label>Business Address</Label>
-                <GooglePlacesAutocomplete
+                <MapboxAddressAutocomplete
                   value={companyProfile.business_address}
                   onChange={(value) => setCompanyProfile({ ...companyProfile, business_address: value })}
                   onPlaceSelect={(address) => {
@@ -197,7 +197,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                     if (addressLine1 || city || state || zip) {
                       toast.success("Address fields auto-filled")
                     } else {
-                      console.warn('[SetupWizard] No address components parsed from Google Places')
+                      console.warn('[SetupWizard] No address components parsed from Mapbox')
                     }
                   }}
                   placeholder="Enter business address"
