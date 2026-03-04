@@ -2,6 +2,22 @@
  * Simple in-memory cache for server actions
  * Use for frequently accessed, rarely changing data
  * Server-side only - cleanup happens on access
+ * 
+ * CRH-007 WARNING: In-memory cache is per-request in serverless environments (Vercel)
+ * This means:
+ * - Cache is NOT shared between requests
+ * - Cache resets on every cold start
+ * - Cache is per-instance (multiple instances = multiple caches)
+ * 
+ * For production use, consider:
+ * - Redis for shared cache across instances
+ * - Upstash Redis (serverless-compatible)
+ * - Vercel KV (built-in key-value store)
+ * 
+ * Current implementation is suitable for:
+ * - Development environments
+ * - Single-instance deployments
+ * - Short-lived caching within a single request lifecycle
  */
 
 interface CacheEntry<T> {
