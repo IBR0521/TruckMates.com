@@ -52,12 +52,14 @@ export async function getCustomerPerformanceMetrics(filters?: {
   min_loads?: number
   min_revenue?: number
 }): Promise<{ data: CustomerPerformanceMetrics[] | null; error: string | null }> {
-  const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (authError || !user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   const result = await getCachedUserCompany(user.id)
   const company_id = result.company_id
