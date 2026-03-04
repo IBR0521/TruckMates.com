@@ -78,6 +78,11 @@ BEGIN
       SET truck_id = truck_id_to_keep
       WHERE truck_id = truck_id_to_delete;
       
+      -- 9. Update documents.truck_id
+      UPDATE public.documents
+      SET truck_id = truck_id_to_keep
+      WHERE truck_id = truck_id_to_delete;
+      
       -- Now safe to delete the duplicate truck
       DELETE FROM public.trucks
       WHERE id = truck_id_to_delete;
@@ -326,6 +331,18 @@ BEGIN
       UPDATE public.settlements
       SET driver_id = driver_id_to_keep
       WHERE driver_id = driver_id_to_delete;
+      
+      -- 8. Update documents.driver_id
+      UPDATE public.documents
+      SET driver_id = driver_id_to_keep
+      WHERE driver_id = driver_id_to_delete;
+      
+      -- 9. Update driver_onboarding.driver_id (if table exists)
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'driver_onboarding') THEN
+        UPDATE public.driver_onboarding
+        SET driver_id = driver_id_to_keep
+        WHERE driver_id = driver_id_to_delete;
+      END IF;
       
       -- Now safe to delete the duplicate driver
       DELETE FROM public.drivers
