@@ -178,14 +178,27 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   value={companyProfile.business_address}
                   onChange={(value) => setCompanyProfile({ ...companyProfile, business_address: value })}
                   onPlaceSelect={(address) => {
+                    console.log('[SetupWizard] Address selected:', address)
+                    // Use the parsed values if they exist and are non-empty, otherwise keep previous values
+                    const city = address.city?.trim()
+                    const state = address.state?.trim()
+                    const zip = address.zip_code?.trim()
+                    const addressLine1 = address.address_line1?.trim()
+                    
                     setCompanyProfile({
                       ...companyProfile,
-                      business_address: address.address_line1?.trim() || companyProfile.business_address,
-                      business_city: address.city?.trim() || companyProfile.business_city,
-                      business_state: address.state?.trim() || companyProfile.business_state,
-                      business_zip: address.zip_code?.trim() || companyProfile.business_zip,
+                      business_address: addressLine1 || companyProfile.business_address,
+                      business_city: city || companyProfile.business_city,
+                      business_state: state || companyProfile.business_state,
+                      business_zip: zip || companyProfile.business_zip,
                     })
-                    toast.success("Address fields auto-filled")
+                    
+                    // Show toast if we got any new data
+                    if (addressLine1 || city || state || zip) {
+                      toast.success("Address fields auto-filled")
+                    } else {
+                      console.warn('[SetupWizard] No address components parsed from Google Places')
+                    }
                   }}
                   placeholder="Enter business address"
                   id="business_address"
