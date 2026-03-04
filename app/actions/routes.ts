@@ -71,39 +71,43 @@ export async function getRoutes(filters?: {
       return { error: "Not authenticated", data: null }
     }
 
-  // Use optimized helper with caching
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-  const companyError = result.error
+    // Use optimized helper with caching
+    const result = await getCachedUserCompany(user.id)
+    const company_id = result.company_id
+    const companyError = result.error
 
-  if (companyError || !company_id) {
-    return { error: companyError || "No company found", data: null }
+    if (companyError || !company_id) {
+      return { error: companyError || "No company found", data: null }
+    }
+
+    // Build query with selective columns and pagination
+    let query = supabase
+      .from("routes")
+      .select("id, name, origin, destination, status, driver_id, truck_id, priority, created_at, updated_at", { count: "exact" })
+      .eq("company_id", company_id)
+      .order("created_at", { ascending: false })
+
+    // Apply filters
+    if (filters?.status) {
+      query = query.eq("status", filters.status)
+    }
+
+    // Apply pagination (default limit 25 for faster initial loads, max 100)
+    const limit = Math.min(filters?.limit || 25, 100)
+    const offset = filters?.offset || 0
+    query = query.range(offset, offset + limit - 1)
+
+    const { data: routes, error, count } = await query
+
+    if (error) {
+      return { error: error.message, data: null, count: 0 }
+    }
+
+    return { data: routes || [], error: null, count: count || 0 }
+  } catch (error: any) {
+    console.error("[getRoutes] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
   }
-
-  // Build query with selective columns and pagination
-  let query = supabase
-    .from("routes")
-    .select("id, name, origin, destination, status, driver_id, truck_id, priority, created_at, updated_at", { count: "exact" })
-    .eq("company_id", company_id)
-    .order("created_at", { ascending: false })
-
-  // Apply filters
-  if (filters?.status) {
-    query = query.eq("status", filters.status)
-  }
-
-  // Apply pagination (default limit 25 for faster initial loads, max 100)
-  const limit = Math.min(filters?.limit || 25, 100)
-  const offset = filters?.offset || 0
-  query = query.range(offset, offset + limit - 1)
-
-  const { data: routes, error, count } = await query
-
-  if (error) {
-    return { error: error.message, data: null, count: 0 }
-  }
-
-  return { data: routes || [], error: null, count: count || 0 }
 }
 
 export async function getRoute(id: string) {
