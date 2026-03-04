@@ -1,11 +1,9 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
 import { createDriver } from "./drivers"
 import { createTruck } from "./trucks"
-import { setupDemoCompany } from "./demo"
 
 /**
  * Get account setup status
@@ -22,20 +20,23 @@ export async function getSetupStatus() {
     return { error: "Not authenticated", data: null }
   }
 
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
+  // CRITICAL FIX: Don't use cached company_id - fetch fresh from database
+  // This ensures we get the latest setup_complete status
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
 
-  if (!company_id) {
+  if (userError || !userData?.company_id) {
     return { error: "No company found", data: null }
   }
 
+  const company_id = userData.company_id
+
   try {
-    // NOTE:
-    // The base companies table (from auth/schema.sql) only has:
-    //   address, phone, email
-    // It does NOT have business_address / business_phone columns.
-    // To avoid schema cache errors, we read from the existing columns and
-    // treat them as the basic company info for setup.
+    // CRITICAL FIX: Always fetch fresh data, no caching
+    // This ensures setup_complete is always up-to-date
     const { data: company, error } = await supabase
       .from("companies")
       .select("id, name, address, phone, setup_complete, setup_completed_at, setup_data")
@@ -175,29 +176,6 @@ export async function createFirstTruck(data: {
 }
 
 /**
- * Import demo data
- */
-export async function importDemoData() {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  try {
-    const result = await setupDemoCompany(user.id)
-    return result
-  } catch (error: any) {
-    return { error: error.message || "Failed to import demo data", data: null }
-  }
-}
-
-/**
  * Complete setup
  */
 export async function completeSetup() {
@@ -232,10 +210,18 @@ export async function completeSetup() {
       return { error: error.message, data: null }
     }
 
-    // Revalidate all paths that check setup status
+    // CRITICAL FIX: Force revalidation of all paths and clear Next.js cache
     revalidatePath("/dashboard")
     revalidatePath("/account-setup/manager")
     revalidatePath("/", "layout") // Revalidate root layout to clear any cached redirects
+    
+    // Also revalidate the setup status check itself
+    // This ensures getSetupStatus() will return fresh data
+    revalidatePath("/", "page")
+    
+    // CRITICAL FIX: Add a small delay to ensure database write is committed
+    // This prevents race conditions where the redirect check happens before the update is visible
+    await new Promise(resolve => setTimeout(resolve, 100))
     
     // Return minimal JSON-safe response - no database row, just success flag
     return {

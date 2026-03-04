@@ -110,13 +110,21 @@ export default function DashboardLayout({
           // These are the roles that can set up a company
           if (user.role === "super_admin" || user.role === "operations_manager") {
             // Check if account setup is complete
+            // CRITICAL FIX: Always fetch fresh data, don't rely on cache
             const setupResult = await getSetupStatus()
-            if (setupResult.data && !setupResult.data.setup_complete && isMounted) {
+            
+            // Only redirect if:
+            // 1. We got valid data
+            // 2. Setup is explicitly NOT complete (not just missing/null)
+            // 3. Component is still mounted
+            if (setupResult.data && setupResult.data.setup_complete === false && isMounted) {
               // Setup not complete - redirect to setup wizard
               hasChecked = true
               router.push("/account-setup/manager")
               return
             }
+            
+            // If setup is complete or we couldn't determine status, allow access
             hasChecked = true
             return
           }
