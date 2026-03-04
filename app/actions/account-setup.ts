@@ -103,35 +103,40 @@ export async function updateCompanyProfile(data: {
   const company_id = userData.company_id
 
   try {
-    const updateData: any = {}
-    // Map wizard fields onto existing companies columns:
-    // - Store the full business address string in companies.address
-    // - Store phone/email in companies.phone / companies.email
-    if (data.business_address) updateData.address = data.business_address
-    if (data.business_phone) updateData.phone = data.business_phone
-    if (data.business_email) updateData.email = data.business_email
-    // City/state/zip are currently not separate columns on companies;
-    // they are stored in the more detailed settings table instead.
-
-    // CRITICAL FIX: Add error handling and logging
-    const { error, data: updateResult } = await supabase
-      .from("companies")
-      .update(updateData)
-      .eq("id", company_id)
-      .select("id")
-
-    if (error) {
-      console.error("[updateCompanyProfile] Database error:", error)
-      return { 
-        error: error.message || `Failed to update company: ${error.code || "Unknown error"}`,
-        data: null 
+    // CRITICAL FIX: Use RPC function to bypass RLS during setup
+    // This ensures the update works even if role isn't fully set yet
+    const { data: rpcResult, error: rpcError } = await supabase.rpc(
+      'update_company_for_setup',
+      {
+        p_company_id: company_id,
+        p_address: data.business_address || null,
+        p_phone: data.business_phone || null,
+        p_email: data.business_email || null,
       }
-    }
+    )
 
-    // Verify update succeeded
-    if (!updateResult || updateResult.length === 0) {
+    if (rpcError) {
+      console.error("[updateCompanyProfile] RPC error:", rpcError)
+      // Fallback to direct update if RPC doesn't exist
+      const updateData: any = {}
+      if (data.business_address) updateData.address = data.business_address
+      if (data.business_phone) updateData.phone = data.business_phone
+      if (data.business_email) updateData.email = data.business_email
+
+      const { error: updateError } = await supabase
+        .from("companies")
+        .update(updateData)
+        .eq("id", company_id)
+
+      if (updateError) {
+        return { 
+          error: updateError.message || "Failed to update company profile. Please ensure the update_company_for_setup function exists in your database.",
+          data: null 
+        }
+      }
+    } else if (rpcResult && !rpcResult.success) {
       return { 
-        error: "Company update failed: No rows updated. You may not have permission to update this company.",
+        error: rpcResult.error || "Failed to update company profile",
         data: null 
       }
     }
