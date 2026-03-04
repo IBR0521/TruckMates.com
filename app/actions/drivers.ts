@@ -83,59 +83,63 @@ export async function getDriver(id: string) {
       return { error: "Not authenticated", data: null }
     }
 
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+    const result = await getCachedUserCompany(user.id)
+    if (result.error || !result.company_id) {
+      return { error: result.error || "No company found", data: null }
+    }
+
+    // SECURITY FIX: Use explicit column selection instead of select("*")
+    const { data: driver, error } = await supabase
+      .from("drivers")
+      .select(`
+        id,
+        company_id,
+        name,
+        email,
+        phone,
+        status,
+        license_number,
+        license_expiry,
+        license_state,
+        license_type,
+        license_endorsements,
+        driver_id,
+        employee_type,
+        address,
+        city,
+        state,
+        zip,
+        emergency_contact_name,
+        emergency_contact_phone,
+        emergency_contact_relationship,
+        date_of_birth,
+        hire_date,
+        pay_rate_type,
+        pay_rate,
+        notes,
+        custom_fields,
+        truck_id,
+        created_at,
+        updated_at,
+        trucks:truck_id (id, truck_number, make, model)
+      `)
+      .eq("id", id)
+      .eq("company_id", result.company_id)
+      .maybeSingle()
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    if (!driver) {
+      return { error: "Driver not found", data: null }
+    }
+
+    return { data: driver, error: null }
+  } catch (error: any) {
+    console.error("[getDriver] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
-
-  // SECURITY FIX: Use explicit column selection instead of select("*")
-  const { data: driver, error } = await supabase
-    .from("drivers")
-    .select(`
-      id,
-      company_id,
-      name,
-      email,
-      phone,
-      status,
-      license_number,
-      license_expiry,
-      license_state,
-      license_type,
-      license_endorsements,
-      driver_id,
-      employee_type,
-      address,
-      city,
-      state,
-      zip,
-      emergency_contact_name,
-      emergency_contact_phone,
-      emergency_contact_relationship,
-      date_of_birth,
-      hire_date,
-      pay_rate_type,
-      pay_rate,
-      notes,
-      custom_fields,
-      truck_id,
-      created_at,
-      updated_at,
-      trucks:truck_id (id, truck_number, make, model)
-    `)
-    .eq("id", id)
-    .eq("company_id", result.company_id)
-    .maybeSingle()
-
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  if (!driver) {
-    return { error: "Driver not found", data: null }
-  }
-
-  return { data: driver, error: null }
 }
 
 export async function createDriver(formData: {
