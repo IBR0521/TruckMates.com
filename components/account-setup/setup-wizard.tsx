@@ -6,14 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
-import { CheckCircle2, Circle, Building2, User, Truck, Sparkles, ArrowRight, ArrowLeft } from "lucide-react"
+import { CheckCircle2, Circle, Building2, User, Truck, ArrowRight, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 import {
   updateCompanyProfile,
   createFirstDriver,
   createFirstTruck,
-  importDemoData,
   completeSetup,
 } from "@/app/actions/account-setup"
 
@@ -23,7 +22,7 @@ interface SetupWizardProps {
 
 export function SetupWizard({ onComplete }: SetupWizardProps) {
   const [currentStep, setCurrentStep] = useState(1)
-  const totalSteps = 6
+  const totalSteps = 5 // Removed demo data step - real users don't need it
 
   // Step 1: Company Profile
   const [companyProfile, setCompanyProfile] = useState({
@@ -54,9 +53,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   })
   const [skipTruck, setSkipTruck] = useState(false)
 
-  // Step 4: Demo Data
-  const [importDemo, setImportDemo] = useState(false)
-  const [isImporting, setIsImporting] = useState(false)
+  // Step 4 removed - demo data import is not needed for real users
 
   const [isSaving, setIsSaving] = useState(false)
 
@@ -172,26 +169,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
           setIsSaving(false)
         }
       }
-      setCurrentStep(4)
+      setCurrentStep(4) // Skip demo data step, go directly to completion
     } else if (currentStep === 4) {
-      // Import demo data or skip
-      if (importDemo) {
-        setIsImporting(true)
-        try {
-          const result = await importDemoData()
-          if (result.error) {
-            toast.error(result.error)
-            return
-          }
-          toast.success("Demo data imported!")
-        } catch (error: any) {
-          toast.error("Failed to import demo data")
-        } finally {
-          setIsImporting(false)
-        }
-      }
-      setCurrentStep(5)
-    } else if (currentStep === 5) {
       // Complete setup
       setIsSaving(true)
       try {
@@ -476,43 +455,6 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         )
 
       case 4:
-        return (
-          <div className="space-y-6">
-            <div className="text-center mb-8">
-              <Sparkles className="w-16 h-16 text-primary mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-foreground mb-2">Import Demo Data?</h2>
-              <p className="text-muted-foreground">
-                We can add sample drivers, trucks, and loads to help you learn the platform
-              </p>
-            </div>
-
-            <Card className="p-6 border-2">
-              <div className="flex items-center gap-3 mb-4">
-                <input
-                  type="checkbox"
-                  id="import-demo"
-                  checked={importDemo}
-                  onChange={(e) => setImportDemo(e.target.checked)}
-                  className="w-4 h-4"
-                />
-                <Label htmlFor="import-demo" className="cursor-pointer text-lg font-semibold">
-                  Yes, import demo data
-                </Label>
-              </div>
-              <p className="text-sm text-muted-foreground ml-7">
-                This will add sample drivers, trucks, loads, and routes to your account. You can delete them later if needed.
-              </p>
-            </Card>
-
-            {isImporting && (
-              <div className="text-center py-4">
-                <p className="text-muted-foreground">Importing demo data...</p>
-              </div>
-            )}
-          </div>
-        )
-
-      case 5:
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">

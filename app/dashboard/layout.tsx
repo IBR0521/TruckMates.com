@@ -106,8 +106,9 @@ export default function DashboardLayout({
         if (userResult.data && isMounted) {
           const user = userResult.data
           
-          // For Super Admin and manager roles, check if setup is complete
-          if (user.role === "super_admin" || user.role === "manager") {
+          // For Super Admin and operations_manager roles, check if setup is complete
+          // These are the roles that can set up a company
+          if (user.role === "super_admin" || user.role === "operations_manager") {
             // Check if account setup is complete
             const setupResult = await getSetupStatus()
             if (setupResult.data && !setupResult.data.setup_complete && isMounted) {

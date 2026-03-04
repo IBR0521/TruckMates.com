@@ -232,7 +232,10 @@ export async function completeSetup() {
       return { error: error.message, data: null }
     }
 
+    // Revalidate all paths that check setup status
     revalidatePath("/dashboard")
+    revalidatePath("/account-setup/manager")
+    revalidatePath("/", "layout") // Revalidate root layout to clear any cached redirects
     
     // Return minimal JSON-safe response - no database row, just success flag
     return {
