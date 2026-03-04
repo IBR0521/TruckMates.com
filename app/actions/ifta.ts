@@ -205,19 +205,8 @@ export async function createIFTAReport(formData: {
     const quarterNumber = quarter === "Q1" ? 1 : quarter === "Q2" ? 2 : quarter === "Q3" ? 3 : 4
     const taxRatesResult = await getIFTATaxRatesForQuarter(quarterNumber, year)
     
-    // Use dynamic rates if available, otherwise fallback to defaults
-    const STATE_FUEL_TAX_RATES: Record<string, number> = taxRatesResult.data || {
-      AL: 0.19, AK: 0.08, AZ: 0.19, AR: 0.22, CA: 0.36,
-      CO: 0.21, CT: 0.35, DE: 0.22, FL: 0.20, GA: 0.19,
-      HI: 0.16, ID: 0.25, IL: 0.38, IN: 0.33, IA: 0.24,
-      KS: 0.24, KY: 0.26, LA: 0.20, ME: 0.30, MD: 0.27,
-      MA: 0.24, MI: 0.19, MN: 0.28, MS: 0.18, MO: 0.17,
-      MT: 0.27, NE: 0.25, NV: 0.23, NH: 0.23, NJ: 0.31,
-      NM: 0.17, NY: 0.33, NC: 0.24, ND: 0.23, OH: 0.28,
-      OK: 0.20, OR: 0.18, PA: 0.32, RI: 0.34, SC: 0.16,
-      SD: 0.24, TN: 0.20, TX: 0.20, UT: 0.24, VT: 0.26,
-      VA: 0.16, WA: 0.38, WV: 0.20, WI: 0.30, WY: 0.24, DC: 0.24,
-    }
+    // EXT-009 FIX: Use dynamic rates from database if available, otherwise fallback to shared constants
+    const STATE_FUEL_TAX_RATES: Record<string, number> = taxRatesResult.data || SHARED_RATES
 
     // Get fuel purchases for the quarter
     const { data: fuelPurchases } = await supabase
@@ -243,7 +232,7 @@ export async function createIFTAReport(formData: {
       const miles = parseFloat(stateData.total_miles?.toString() || "0")
       totalMiles += miles
 
-      const taxRate = STATE_FUEL_TAX_RATES[stateCode] || 0.25
+      const taxRate = getFuelTaxRate(stateCode, 0.25) // EXT-009: Use shared function
       // FIXED: Zero gallons is valid data, not missing data. Use explicit undefined check.
       const fuelGallons = fuelByState[stateCode] !== undefined ? fuelByState[stateCode] : Math.round(miles / 6.5)
       // FIXED: Tax rate is in $/gallon, not percentage. Calculate: gallons * rate
