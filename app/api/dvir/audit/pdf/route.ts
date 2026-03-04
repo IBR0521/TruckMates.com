@@ -45,10 +45,28 @@ export async function GET(req: NextRequest) {
     }
 
     // Convert HTML to PDF using Puppeteer
+    // CRH-002 FIX: Use puppeteer-core + @sparticuz/chromium for serverless (reduces bundle from ~300MB to ~50MB)
     try {
-      const puppeteerModule: any = await import("puppeteer").catch(() => null)
+      let puppeteer: any
+      let executablePath: string | undefined
+      let chromiumArgs: string[] | undefined
 
-      if (!puppeteerModule) {
+      // Try puppeteer-core first (for serverless/Vercel)
+      try {
+        const puppeteerCore = await import("puppeteer-core").catch(() => null)
+        const chromium = await import("@sparticuz/chromium").catch(() => null)
+        
+        if (puppeteerCore && chromium) {
+          puppeteer = puppeteerCore
+          executablePath = await chromium.executablePath()
+          chromiumArgs = chromium.args
+        }
+      } catch {
+        // Fallback to regular puppeteer for local development
+        puppeteer = await import("puppeteer").catch(() => null)
+      }
+
+      if (!puppeteer) {
         // Fallback: return HTML if Puppeteer is not available
         return new NextResponse(htmlResult.html, {
           headers: {
@@ -58,9 +76,10 @@ export async function GET(req: NextRequest) {
         })
       }
 
-      const browser = await puppeteerModule.launch({
+      const browser = await puppeteer.launch({
         headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        args: chromiumArgs || ["--no-sandbox", "--disable-setuid-sandbox"],
+        ...(executablePath && { executablePath }),
       })
 
       try {
