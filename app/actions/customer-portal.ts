@@ -101,68 +101,37 @@ export async function createCustomerPortalAccess(formData: {
       return { error: "Only managers can create portal access", data: null }
     }
 
-  // Verify customer belongs to company
-  const { data: customer } = await supabase
-    .from("customers")
-    .select("*")
-    .eq("id", formData.customer_id)
-    .eq("company_id", userData.company_id)
-    .single()
-
-  if (!customer) {
-    return { error: "Customer not found", data: null }
-  }
-
-  // Check if access already exists
-  const { data: existingAccess } = await supabase
-    .from("customer_portal_access")
-    .select("*")
-    .eq("customer_id", formData.customer_id)
-    .eq("company_id", userData.company_id)
-    .single()
-
-  // Preserve existing token if updating, only generate new one if creating
-  const accessToken = existingAccess?.access_token || generateAccessToken()
-  const expiresAt = formData.expires_days
-    ? new Date(Date.now() + formData.expires_days * 24 * 60 * 60 * 1000).toISOString()
-    : null
-
-  let data, error
-
-  if (existingAccess) {
-    // Update existing access - preserve token unless explicitly regenerating
-    const updateData: any = {
-      portal_url: formData.portal_url || null,
-      can_view_location: formData.can_view_location || false,
-      can_submit_loads: formData.can_submit_loads || false,
-      email_notifications: formData.email_notifications !== false,
-      sms_notifications: formData.sms_notifications || false,
-      expires_at: expiresAt,
-      is_active: true,
-    }
-    
-    // Only update token if it's different (new generation)
-    if (accessToken !== existingAccess.access_token) {
-      updateData.access_token = accessToken
-    }
-    
-    const { data: updated, error: updateError } = await supabase
-      .from("customer_portal_access")
-      .update(updateData)
-      .eq("id", existingAccess.id)
-      .select()
+    // Verify customer belongs to company
+    const { data: customer } = await supabase
+      .from("customers")
+      .select("*")
+      .eq("id", formData.customer_id)
+      .eq("company_id", userData.company_id)
       .single()
 
-    data = updated
-    error = updateError
-  } else {
-    // Create new access
-    const { data: created, error: createError } = await supabase
+    if (!customer) {
+      return { error: "Customer not found", data: null }
+    }
+
+    // Check if access already exists
+    const { data: existingAccess } = await supabase
       .from("customer_portal_access")
-      .insert({
-        company_id: userData.company_id,
-        customer_id: formData.customer_id,
-        access_token: accessToken,
+      .select("*")
+      .eq("customer_id", formData.customer_id)
+      .eq("company_id", userData.company_id)
+      .single()
+
+    // Preserve existing token if updating, only generate new one if creating
+    const accessToken = existingAccess?.access_token || generateAccessToken()
+    const expiresAt = formData.expires_days
+      ? new Date(Date.now() + formData.expires_days * 24 * 60 * 60 * 1000).toISOString()
+      : null
+
+    let data, error
+
+    if (existingAccess) {
+      // Update existing access - preserve token unless explicitly regenerating
+      const updateData: any = {
         portal_url: formData.portal_url || null,
         can_view_location: formData.can_view_location || false,
         can_submit_loads: formData.can_submit_loads || false,
@@ -170,37 +139,68 @@ export async function createCustomerPortalAccess(formData: {
         sms_notifications: formData.sms_notifications || false,
         expires_at: expiresAt,
         is_active: true,
-      })
-      .select()
-      .single()
+      }
+      
+      // Only update token if it's different (new generation)
+      if (accessToken !== existingAccess.access_token) {
+        updateData.access_token = accessToken
+      }
+      
+      const { data: updated, error: updateError } = await supabase
+        .from("customer_portal_access")
+        .update(updateData)
+        .eq("id", existingAccess.id)
+        .select()
+        .single()
 
-    data = created
-    error = createError
-  }
+      data = updated
+      error = updateError
+    } else {
+      // Create new access
+      const { data: created, error: createError } = await supabase
+        .from("customer_portal_access")
+        .insert({
+          company_id: userData.company_id,
+          customer_id: formData.customer_id,
+          access_token: accessToken,
+          portal_url: formData.portal_url || null,
+          can_view_location: formData.can_view_location || false,
+          can_submit_loads: formData.can_submit_loads || false,
+          email_notifications: formData.email_notifications !== false,
+          sms_notifications: formData.sms_notifications || false,
+          expires_at: expiresAt,
+          is_active: true,
+        })
+        .select()
+        .single()
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  // Send email notification if enabled and customer has email
-  if (formData.email_notifications !== false && customer.email) {
-    try {
-      await sendPortalAccessEmail({
-        customerEmail: customer.email,
-        customerName: customer.name || customer.company_name || "Customer",
-        portalUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://truckmates.com"}/portal/${accessToken}`,
-        companyName: userData.company_id ? (await supabase.from("companies").select("name").eq("id", userData.company_id).single()).data?.name || "TruckMates" : "TruckMates",
-        expiresAt: expiresAt,
-      })
-    } catch (emailError) {
-      // Don't fail the whole operation if email fails
-      console.error("Failed to send portal access email:", emailError)
+      data = created
+      error = createError
     }
-  }
 
-  revalidatePath("/dashboard/settings/customer-portal")
-  revalidatePath(`/dashboard/customers/${formData.customer_id}`)
-  return { data, error: null }
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    // Send email notification if enabled and customer has email
+    if (formData.email_notifications !== false && customer.email) {
+      try {
+        await sendPortalAccessEmail({
+          customerEmail: customer.email,
+          customerName: customer.name || customer.company_name || "Customer",
+          portalUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://truckmates.com"}/portal/${accessToken}`,
+          companyName: userData.company_id ? (await supabase.from("companies").select("name").eq("id", userData.company_id).single()).data?.name || "TruckMates" : "TruckMates",
+          expiresAt: expiresAt,
+        })
+      } catch (emailError) {
+        // Don't fail the whole operation if email fails
+        console.error("Failed to send portal access email:", emailError)
+      }
+    }
+
+    revalidatePath("/dashboard/settings/customer-portal")
+    revalidatePath(`/dashboard/customers/${formData.customer_id}`)
+    return { data, error: null }
 }
 
 /**
