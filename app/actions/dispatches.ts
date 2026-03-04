@@ -96,55 +96,59 @@ export async function getUnassignedRoutes() {
       return { error: "Not authenticated", data: null }
     }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
+
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
+
+    // SECURITY FIX: Use explicit column selection instead of select("*")
+    // MEDIUM FIX: Add limit to prevent unbounded queries
+    const { data: routes, error } = await supabase
+      .from("routes")
+      .select(`
+        id,
+        company_id,
+        name,
+        origin,
+        destination,
+        status,
+        priority,
+        driver_id,
+        truck_id,
+        distance,
+        estimated_time,
+        created_at,
+        updated_at
+      `)
+      .eq("company_id", userData.company_id)
+      .or("driver_id.is.null,truck_id.is.null")
+      .not("status", "in", '("completed","cancelled")')
+      .order("created_at", { ascending: false })
+      .limit(500) // Reasonable limit for dispatch board
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    // Additional filter for pending status routes that might have assignments
+    const unassignedRoutes = routes?.filter((route: any) => 
+      !route.driver_id || !route.truck_id || route.status === "pending"
+    ) || []
+
+    return { data: unassignedRoutes, error: null }
+  } catch (error: any) {
+    console.error("[getUnassignedRoutes] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  // SECURITY FIX: Use explicit column selection instead of select("*")
-  // MEDIUM FIX: Add limit to prevent unbounded queries
-  const { data: routes, error } = await supabase
-    .from("routes")
-    .select(`
-      id,
-      company_id,
-      name,
-      origin,
-      destination,
-      status,
-      priority,
-      driver_id,
-      truck_id,
-      distance,
-      estimated_time,
-      created_at,
-      updated_at
-    `)
-    .eq("company_id", userData.company_id)
-    .or("driver_id.is.null,truck_id.is.null")
-    .not("status", "in", '("completed","cancelled")')
-    .order("created_at", { ascending: false })
-    .limit(500) // Reasonable limit for dispatch board
-
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  // Additional filter for pending status routes that might have assignments
-  const unassignedRoutes = routes?.filter((route: any) => 
-    !route.driver_id || !route.truck_id || route.status === "pending"
-  ) || []
-
-  return { data: unassignedRoutes, error: null }
 }
 
 /**

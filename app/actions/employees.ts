@@ -47,63 +47,63 @@ export async function getEmployees() {
       data: { user },
     } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  // Check if user is a manager - try using RPC function first
-  let userRole: string | null = null
-  let companyId: string | null = null
-
-  try {
-    const { data: roleData, error: roleError } = await supabase.rpc("get_user_role_and_company")
-    if (!roleError && roleData && Array.isArray(roleData) && roleData.length > 0) {
-      userRole = roleData[0].role
-      companyId = roleData[0].company_id
+    if (!user) {
+      return { error: "Not authenticated", data: null }
     }
-  } catch (error) {
-    // RPC function might not exist, use fallback
-  }
 
-  // Fallback: try direct query
-  if (!userRole || !companyId) {
-    const { data: userData, error: userError } = await supabase
+    // Check if user is a manager - try using RPC function first
+    let userRole: string | null = null
+    let companyId: string | null = null
+
+    try {
+      const { data: roleData, error: roleError } = await supabase.rpc("get_user_role_and_company")
+      if (!roleError && roleData && Array.isArray(roleData) && roleData.length > 0) {
+        userRole = roleData[0].role
+        companyId = roleData[0].company_id
+      }
+    } catch (error) {
+      // RPC function might not exist, use fallback
+    }
+
+    // Fallback: try direct query
+    if (!userRole || !companyId) {
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("role, company_id")
+        .eq("id", user.id)
+        .single()
+
+      if (userError) {
+        return { error: userError.message || "Failed to fetch user data", data: null }
+      }
+
+      if (userData) {
+        userRole = userData.role
+        companyId = userData.company_id
+      }
+    }
+
+    if (!userRole || !MANAGER_ROLES.includes(userRole)) {
+      return { error: "Only managers can view employees", data: null }
+    }
+
+    if (!companyId) {
+      return { error: "No company found", data: null }
+    }
+
+    // HIGH FIX 1: Select only necessary columns to prevent exposing sensitive internal fields
+    const { data: employees, error } = await supabase
       .from("users")
-      .select("role, company_id")
-      .eq("id", user.id)
-      .single()
+      .select("id, full_name, email, phone, employee_status, role, created_at")
+      .eq("company_id", companyId)
+      .neq("id", user.id) // Exclude the manager
+      .order("created_at", { ascending: false })
 
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
+    if (error) {
+      return { error: error.message, data: null }
     }
 
-    if (userData) {
-      userRole = userData.role
-      companyId = userData.company_id
-    }
-  }
-
-  if (!userRole || !MANAGER_ROLES.includes(userRole)) {
-    return { error: "Only managers can view employees", data: null }
-  }
-
-  if (!companyId) {
-    return { error: "No company found", data: null }
-  }
-
-  // HIGH FIX 1: Select only necessary columns to prevent exposing sensitive internal fields
-  const { data: employees, error } = await supabase
-    .from("users")
-    .select("id, full_name, email, phone, employee_status, role, created_at")
-    .eq("company_id", companyId)
-    .neq("id", user.id) // Exclude the manager
-    .order("created_at", { ascending: false })
-
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  return { data: employees, error: null }
+    return { data: employees, error: null }
   } catch (error: any) {
     console.error("[EMPLOYEES] Error in getEmployees:", error)
     return { error: error?.message || "Failed to fetch employees", data: null }
