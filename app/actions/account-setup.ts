@@ -220,22 +220,25 @@ export async function completeSetup() {
   }
 
   try {
-    const { data: company, error } = await supabase
+    const { error } = await supabase
       .from("companies")
       .update({
         setup_complete: true,
         setup_completed_at: new Date().toISOString(),
       })
       .eq("id", company_id)
-      .select()
-      .single()
 
     if (error) {
       return { error: error.message, data: null }
     }
 
     revalidatePath("/dashboard")
-    return { data: company, error: null }
+    
+    // Return minimal JSON-safe response - no database row, just success flag
+    return {
+      data: { success: true, company_id: String(company_id) },
+      error: null,
+    }
   } catch (error: any) {
     return { error: error.message || "Failed to complete setup", data: null }
   }
