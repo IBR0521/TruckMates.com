@@ -26,11 +26,13 @@ export type WebhookEventType =
 
 // Get all webhooks for company
 export async function getWebhooks() {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
     if (!user) {
       return { error: "Not authenticated", data: null }
