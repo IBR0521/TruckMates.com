@@ -9,15 +9,17 @@ export async function getBOLs(filters?: {
   status?: string
   search?: string
 }) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
   const { data: userData, error: userError } = await supabase
@@ -64,15 +66,17 @@ export async function getBOLs(filters?: {
 
 // Get single BOL
 export async function getBOL(id: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
   const { data: userData, error: userError } = await supabase

@@ -5,15 +5,17 @@ import { revalidatePath } from "next/cache"
 
 // Get all ELD devices for a company
 export async function getELDDevices() {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   // OPTIMIZATION: Use cached user company lookup for consistency
   const { getCachedUserCompany } = await import("@/lib/query-optimizer")
@@ -43,20 +45,26 @@ export async function getELDDevices() {
     return { error: error.message, data: null }
   }
 
-  return { data: devices, error: null }
+    return { data: devices, error: null }
+  } catch (error: any) {
+    console.error("[getELDDevices] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 // Get a single ELD device
 export async function getELDDevice(id: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   // OPTIMIZATION: Use cached user company lookup for consistency
   const { getCachedUserCompany } = await import("@/lib/query-optimizer")
@@ -87,7 +95,11 @@ export async function getELDDevice(id: string) {
     return { error: error.message, data: null }
   }
 
-  return { data: device, error: null }
+    return { data: device, error: null }
+  } catch (error: any) {
+    console.error("[getELDDevice] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 // Create ELD device

@@ -12,15 +12,17 @@ export async function getInvoices(filters?: {
   limit?: number
   offset?: number
 }) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   // Use optimized helper with caching
   const result = await getCachedUserCompany(user.id)
@@ -57,20 +59,26 @@ export async function getInvoices(filters?: {
     return { error: error.message, data: null, count: 0 }
   }
 
-  return { data: invoices || [], error: null, count: count || 0 }
+    return { data: invoices || [], error: null, count: count || 0 }
+  } catch (error: any) {
+    console.error("[getInvoices] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
+  }
 }
 
 // Get single invoice
 export async function getInvoice(id: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   const { data: userData, error: userError } = await supabase
     .from("users")
