@@ -96,6 +96,10 @@ export async function getIntegrationSettings() {
     }
 
     return { data: safeData, error: null }
+  } catch (error: any) {
+    console.error("[getIntegrationSettings] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 export async function updateIntegrationSettings(settings: {
