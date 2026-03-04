@@ -16,6 +16,27 @@ DROP CONSTRAINT IF EXISTS trucks_truck_number_key;
 -- Drop any unique index on truck_number
 DROP INDEX IF EXISTS trucks_truck_number_key;
 
+-- CRITICAL: Clean up duplicate truck numbers within the same company first
+-- Keep only the most recent truck record for each (company_id, truck_number) pair
+DO $$
+DECLARE
+  dup_record RECORD;
+BEGIN
+  FOR dup_record IN
+    SELECT company_id, truck_number, COUNT(*) as cnt, array_agg(id ORDER BY created_at DESC) as ids
+    FROM public.trucks
+    WHERE company_id IS NOT NULL AND truck_number IS NOT NULL
+    GROUP BY company_id, truck_number
+    HAVING COUNT(*) > 1
+  LOOP
+    -- Delete all but the most recent one
+    DELETE FROM public.trucks
+    WHERE company_id = dup_record.company_id
+      AND truck_number = dup_record.truck_number
+      AND id != dup_record.ids[1];
+  END LOOP;
+END $$;
+
 -- Create per-company unique constraint (company_id, truck_number)
 -- This allows each company to have their own "Truck-001"
 CREATE UNIQUE INDEX IF NOT EXISTS idx_trucks_company_truck_number_unique 
@@ -45,6 +66,25 @@ DROP CONSTRAINT IF EXISTS loads_shipment_number_key;
 
 DROP INDEX IF EXISTS loads_shipment_number_key;
 
+-- Clean up duplicate shipment numbers within the same company
+DO $$
+DECLARE
+  dup_record RECORD;
+BEGIN
+  FOR dup_record IN
+    SELECT company_id, shipment_number, COUNT(*) as cnt, array_agg(id ORDER BY created_at DESC) as ids
+    FROM public.loads
+    WHERE company_id IS NOT NULL AND shipment_number IS NOT NULL
+    GROUP BY company_id, shipment_number
+    HAVING COUNT(*) > 1
+  LOOP
+    DELETE FROM public.loads
+    WHERE company_id = dup_record.company_id
+      AND shipment_number = dup_record.shipment_number
+      AND id != dup_record.ids[1];
+  END LOOP;
+END $$;
+
 -- Create per-company unique constraint
 CREATE UNIQUE INDEX IF NOT EXISTS idx_loads_company_shipment_number_unique 
 ON public.loads(company_id, shipment_number)
@@ -72,6 +112,25 @@ DROP CONSTRAINT IF EXISTS invoices_invoice_number_key;
 
 DROP INDEX IF EXISTS invoices_invoice_number_key;
 
+-- Clean up duplicate invoice numbers within the same company
+DO $$
+DECLARE
+  dup_record RECORD;
+BEGIN
+  FOR dup_record IN
+    SELECT company_id, invoice_number, COUNT(*) as cnt, array_agg(id ORDER BY created_at DESC) as ids
+    FROM public.invoices
+    WHERE company_id IS NOT NULL AND invoice_number IS NOT NULL
+    GROUP BY company_id, invoice_number
+    HAVING COUNT(*) > 1
+  LOOP
+    DELETE FROM public.invoices
+    WHERE company_id = dup_record.company_id
+      AND invoice_number = dup_record.invoice_number
+      AND id != dup_record.ids[1];
+  END LOOP;
+END $$;
+
 -- Create per-company unique constraint
 CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_company_invoice_number_unique 
 ON public.invoices(company_id, invoice_number)
@@ -98,6 +157,25 @@ ALTER TABLE public.bols
 DROP CONSTRAINT IF EXISTS bols_bol_number_key;
 
 DROP INDEX IF EXISTS bols_bol_number_key;
+
+-- Clean up duplicate BOL numbers within the same company
+DO $$
+DECLARE
+  dup_record RECORD;
+BEGIN
+  FOR dup_record IN
+    SELECT company_id, bol_number, COUNT(*) as cnt, array_agg(id ORDER BY created_at DESC) as ids
+    FROM public.bols
+    WHERE company_id IS NOT NULL AND bol_number IS NOT NULL
+    GROUP BY company_id, bol_number
+    HAVING COUNT(*) > 1
+  LOOP
+    DELETE FROM public.bols
+    WHERE company_id = dup_record.company_id
+      AND bol_number = dup_record.bol_number
+      AND id != dup_record.ids[1];
+  END LOOP;
+END $$;
 
 -- Create per-company unique constraint
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bols_company_bol_number_unique 
@@ -142,6 +220,28 @@ ALTER TABLE public.drivers
 DROP CONSTRAINT IF EXISTS drivers_license_number_key;
 
 DROP INDEX IF EXISTS drivers_license_number_key;
+
+-- CRITICAL: Clean up duplicate license numbers within the same company first
+-- Keep only the most recent driver record for each (company_id, license_number) pair
+DO $$
+DECLARE
+  dup_record RECORD;
+BEGIN
+  -- Find and delete duplicate license numbers within the same company
+  FOR dup_record IN
+    SELECT company_id, license_number, COUNT(*) as cnt, array_agg(id ORDER BY created_at DESC) as ids
+    FROM public.drivers
+    WHERE company_id IS NOT NULL AND license_number IS NOT NULL
+    GROUP BY company_id, license_number
+    HAVING COUNT(*) > 1
+  LOOP
+    -- Delete all but the most recent one (keep the first ID which is the newest)
+    DELETE FROM public.drivers
+    WHERE company_id = dup_record.company_id
+      AND license_number = dup_record.license_number
+      AND id != dup_record.ids[1]; -- Keep the first (newest) one
+  END LOOP;
+END $$;
 
 -- Create per-company unique constraint
 -- Each company can have their own driver with the same license number
