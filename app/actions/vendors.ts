@@ -22,47 +22,47 @@ export async function getVendors(filters?: {
     return { error: "Not authenticated", data: null }
   }
 
-  // Use optimized helper with caching
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-  const companyError = result.error
+    // Use optimized helper with caching
+    const result = await getCachedUserCompany(user.id)
+    const company_id = result.company_id
+    const companyError = result.error
 
-  if (companyError || !company_id) {
-    return { error: companyError || "No company found", data: null }
-  }
+    if (companyError || !company_id) {
+      return { error: companyError || "No company found", data: null }
+    }
 
-  // Build query with selective columns and pagination
-  let query = supabase
-    .from("vendors")
-    .select("id, name, company_name, email, phone, status, vendor_type, created_at", { count: "exact" })
-    .eq("company_id", company_id)
-    .order("created_at", { ascending: false })
+    // Build query with selective columns and pagination
+    let query = supabase
+      .from("vendors")
+      .select("id, name, company_name, email, phone, status, vendor_type, created_at", { count: "exact" })
+      .eq("company_id", company_id)
+      .order("created_at", { ascending: false })
 
-  if (filters?.status) {
-    query = query.eq("status", filters.status)
-  }
+    if (filters?.status) {
+      query = query.eq("status", filters.status)
+    }
 
-  // Support both vendor_type (new) and service_provided (legacy)
-  if (filters?.vendor_type) {
-    query = query.or(`vendor_type.eq.${filters.vendor_type},service_provided.eq.${filters.vendor_type}`)
-  }
+    // Support both vendor_type (new) and service_provided (legacy)
+    if (filters?.vendor_type) {
+      query = query.or(`vendor_type.eq.${filters.vendor_type},service_provided.eq.${filters.vendor_type}`)
+    }
 
-  if (filters?.search) {
-    query = query.or(
-      `name.ilike.%${filters.search}%,company_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`
-    )
-  }
+    if (filters?.search) {
+      query = query.or(
+        `name.ilike.%${filters.search}%,company_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`
+      )
+    }
 
-  // Apply pagination (default limit 25 for faster initial loads, max 100)
-  const limit = Math.min(filters?.limit || 25, 100)
-  const offset = filters?.offset || 0
-  query = query.range(offset, offset + limit - 1)
+    // Apply pagination (default limit 25 for faster initial loads, max 100)
+    const limit = Math.min(filters?.limit || 25, 100)
+    const offset = filters?.offset || 0
+    query = query.range(offset, offset + limit - 1)
 
-  const { data, error, count } = await query
+    const { data, error, count } = await query
 
-  if (error) {
-    return { error: error.message, data: null, count: 0 }
-  }
+    if (error) {
+      return { error: error.message, data: null, count: 0 }
+    }
 
     return { data: data || [], error: null, count: count || 0 }
   } catch (error: any) {
