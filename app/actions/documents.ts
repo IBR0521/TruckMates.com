@@ -9,13 +9,15 @@ export async function getDocuments(filters?: {
   limit?: number
   offset?: number
 }) {
-  // FIXED: Add RBAC check
-  const permissionCheck = await checkViewPermission("documents")
-  if (!permissionCheck.allowed) {
-    return { error: permissionCheck.error || "You don't have permission to view documents", data: null, count: 0 }
-  }
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // FIXED: Add RBAC check
+    const permissionCheck = await checkViewPermission("documents")
+    if (!permissionCheck.allowed) {
+      return { error: permissionCheck.error || "You don't have permission to view documents", data: null, count: 0 }
+    }
 
-  const supabase = await createClient()
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -53,13 +55,15 @@ export async function getDocuments(filters?: {
 }
 
 export async function deleteDocument(id: string) {
-  // FIXED: Add RBAC check
-  const permissionCheck = await checkDeletePermission("documents")
-  if (!permissionCheck.allowed) {
-    return { error: permissionCheck.error || "You don't have permission to delete documents" }
-  }
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // FIXED: Add RBAC check
+    const permissionCheck = await checkDeletePermission("documents")
+    if (!permissionCheck.allowed) {
+      return { error: permissionCheck.error || "You don't have permission to delete documents" }
+    }
 
-  const supabase = await createClient()
+    const supabase = await createClient()
 
   const {
     data: { user },
