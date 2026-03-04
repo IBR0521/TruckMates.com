@@ -46,7 +46,8 @@ export async function getCurrentUser() {
         email: String(userData.email),
         full_name: userData.full_name ? String(userData.full_name) : null,
         role: String(finalRole),
-        employee_role: employeeRole ? String(employeeRole) : null, // Include for compatibility
+        // EXT-002 FIX: employee_role removed - only use role from database
+        // Removed employee_role field to prevent confusion and ensure security
         company_id: userData.company_id ? String(userData.company_id) : null,
         phone: userData.phone ? String(userData.phone) : null,
         created_at: userData.created_at ? String(userData.created_at) : null,
