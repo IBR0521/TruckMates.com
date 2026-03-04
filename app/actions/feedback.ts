@@ -183,38 +183,38 @@ export async function getFeedback(filters?: {
       error: authError,
     } = await supabase.auth.getUser()
 
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (authError || !user) {
+      return { error: "Not authenticated", data: null }
+    }
 
-  // Build query - users can only see their own feedback
-  let query = supabase
-    .from("feedback")
-    .select("id, type, category, title, message, priority, status, created_at, updated_at", { count: "exact" })
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
+    // Build query - users can only see their own feedback
+    let query = supabase
+      .from("feedback")
+      .select("id, type, category, title, message, priority, status, created_at, updated_at", { count: "exact" })
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
 
-  // Apply filters
-  if (filters?.type) {
-    query = query.eq("type", filters.type)
-  }
+    // Apply filters
+    if (filters?.type) {
+      query = query.eq("type", filters.type)
+    }
 
-  if (filters?.status) {
-    query = query.eq("status", filters.status)
-  }
+    if (filters?.status) {
+      query = query.eq("status", filters.status)
+    }
 
-  // Apply pagination (default limit 25, max 100)
-  const limit = Math.min(filters?.limit || 25, 100)
-  const offset = filters?.offset || 0
-  query = query.range(offset, offset + limit - 1)
+    // Apply pagination (default limit 25, max 100)
+    const limit = Math.min(filters?.limit || 25, 100)
+    const offset = filters?.offset || 0
+    query = query.range(offset, offset + limit - 1)
 
-  const { data: feedback, error, count } = await query
+    const { data: feedback, error, count } = await query
 
-  if (error) {
-    return { error: error.message, data: null, count: 0 }
-  }
+    if (error) {
+      return { error: error.message, data: null, count: 0 }
+    }
 
-  return { data: feedback || [], error: null, count: count || 0 }
+    return { data: feedback || [], error: null, count: count || 0 }
   } catch (error: any) {
     console.error("[FEEDBACK] Error in getFeedback:", error)
     return { error: error?.message || "Failed to fetch feedback", data: null, count: 0 }
