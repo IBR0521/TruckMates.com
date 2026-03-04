@@ -221,21 +221,40 @@ export async function checkEmailServiceConfigured() {
 
   // CRITICAL FIX: Platform-wide API keys work automatically for all users
   // If RESEND_API_KEY is set in environment, email service is configured
-  const hasPlatformKey = !!process.env.RESEND_API_KEY
+  // Check both NEXT_PUBLIC_ and direct env var names (Next.js handles both)
+  const hasPlatformKey = !!(
+    process.env.RESEND_API_KEY || 
+    process.env.NEXT_PUBLIC_RESEND_API_KEY ||
+    process.env.RESEND_API_KEY?.trim()
+  )
 
   // Check if integration is enabled for this company (optional override)
   const { data: integrations } = await supabase
     .from("company_integrations")
     .select("resend_enabled, resend_api_key")
     .eq("company_id", userData.company_id)
-    .single()
+    .maybeSingle() // Use maybeSingle to handle case where record doesn't exist
 
+  // If no integration record exists, default to enabled (platform key works automatically)
   const isEnabled = integrations?.resend_enabled !== false // Default to true if not set
   const hasCompanyKey = !!integrations?.resend_api_key
 
-  // Email is configured if platform key exists (automatic) OR (company key exists AND integration is enabled)
+  // Email is configured if:
+  // 1. Platform key exists (automatic - works for everyone)
+  // 2. OR company has its own key AND integration is enabled
   // Platform key takes priority - it works for everyone automatically
   const configured = hasPlatformKey || (hasCompanyKey && isEnabled)
+  
+  // DEBUG: Log for troubleshooting (remove in production)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[EMAIL CONFIG CHECK]', {
+      hasPlatformKey,
+      hasCompanyKey,
+      isEnabled,
+      configured,
+      envVarExists: !!process.env.RESEND_API_KEY
+    })
+  }
 
   return { configured, isManager: true }
 }
