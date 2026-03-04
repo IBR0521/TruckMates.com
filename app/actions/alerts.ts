@@ -76,55 +76,59 @@ export async function createAlertRule(formData: {
       return { error: "Not authenticated", data: null }
     }
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
+    const { data: userData } = await supabase
+      .from("users")
+      .select("company_id, role")
+      .eq("id", user.id)
+      .maybeSingle()
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
+
+    // FIXED: Allow admin and owner roles to create alert rules
+    if (!['manager', 'admin', 'owner'].includes(userData.role || '')) {
+      return { error: "Only managers, admins, and owners can create alert rules", data: null }
+    }
+
+    const { data, error } = await supabase
+      .from("alert_rules")
+      .insert({
+        company_id: userData.company_id,
+        name: formData.name,
+        description: formData.description || null,
+        event_type: formData.event_type,
+        conditions: formData.conditions,
+        send_email: formData.send_email || false,
+        send_sms: formData.send_sms || false,
+        send_in_app: formData.send_in_app !== false,
+        notify_users: formData.notify_users || [],
+        // Escalation feature: When enabled, alerts that remain unacknowledged
+        // past the escalation_delay_minutes threshold will be escalated to managers/admins.
+        // The escalation is processed by a cron job at /api/cron/alert-escalations
+        escalation_enabled: formData.escalation_enabled || false,
+        // FIXED: Add server-side validation for escalation_delay_minutes
+        escalation_delay_minutes: formData.escalation_enabled 
+          ? (formData.escalation_delay_minutes && formData.escalation_delay_minutes >= 1 && formData.escalation_delay_minutes <= 1440
+            ? formData.escalation_delay_minutes 
+            : 30)
+          : null,
+        priority: formData.priority || 'normal',
+        is_active: true,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    revalidatePath("/dashboard/settings/alerts")
+    return { data, error: null }
+  } catch (error: any) {
+    console.error("[createAlertRule] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
-
-  // FIXED: Allow admin and owner roles to create alert rules
-  if (!['manager', 'admin', 'owner'].includes(userData.role || '')) {
-    return { error: "Only managers, admins, and owners can create alert rules", data: null }
-  }
-
-  const { data, error } = await supabase
-    .from("alert_rules")
-    .insert({
-      company_id: userData.company_id,
-      name: formData.name,
-      description: formData.description || null,
-      event_type: formData.event_type,
-      conditions: formData.conditions,
-      send_email: formData.send_email || false,
-      send_sms: formData.send_sms || false,
-      send_in_app: formData.send_in_app !== false,
-      notify_users: formData.notify_users || [],
-      // Escalation feature: When enabled, alerts that remain unacknowledged
-      // past the escalation_delay_minutes threshold will be escalated to managers/admins.
-      // The escalation is processed by a cron job at /api/cron/alert-escalations
-      escalation_enabled: formData.escalation_enabled || false,
-      // FIXED: Add server-side validation for escalation_delay_minutes
-      escalation_delay_minutes: formData.escalation_enabled 
-        ? (formData.escalation_delay_minutes && formData.escalation_delay_minutes >= 1 && formData.escalation_delay_minutes <= 1440
-          ? formData.escalation_delay_minutes 
-          : 30)
-        : null,
-      priority: formData.priority || 'normal',
-      is_active: true,
-    })
-    .select()
-    .single()
-
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  revalidatePath("/dashboard/settings/alerts")
-  return { data, error: null }
 }
 
 /**
