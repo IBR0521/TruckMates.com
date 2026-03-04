@@ -174,16 +174,18 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
 
 // Profit & Loss Report
 export async function getProfitLossReport(startDate?: string, endDate?: string) {
-  // FIXED: Add RBAC check - only authorized roles can view financial reports
-  const permissionCheck = await checkViewPermission("reports")
-  if (!permissionCheck.allowed) {
-    return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
-  }
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // FIXED: Add RBAC check - only authorized roles can view financial reports
+    const permissionCheck = await checkViewPermission("reports")
+    if (!permissionCheck.allowed) {
+      return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
+    }
 
-  const companyId = await getCompanyId()
-  if (!companyId) return { error: "Not authenticated", data: null }
+    const companyId = await getCompanyId()
+    if (!companyId) return { error: "Not authenticated", data: null }
 
-  const supabase = await createClient()
+    const supabase = await createClient()
 
   // Get ALL invoices (not just paid) - use created_at for reliable date filtering
   // FIXED: Select only necessary columns and add limit
@@ -298,38 +300,44 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
     expenseBreakdown[category] = (expenseBreakdown[category] || 0) + (Number(expense.amount) || 0)
   })
 
-  return {
-    data: {
-      totalRevenue,
-      totalExpenses,
-      netProfit,
-      revenueBreakdown: Object.entries(revenueBreakdown).map(([category, amount]) => ({
-        category,
-        amount,
-        percentage: totalRevenue > 0 ? (amount / totalRevenue) * 100 : 0,
-      })),
-      expenseBreakdown: Object.entries(expenseBreakdown).map(([category, amount]) => ({
-        category,
-        amount,
-        percentage: totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0,
-      })),
-    },
-    error: null,
+    return {
+      data: {
+        totalRevenue,
+        totalExpenses,
+        netProfit,
+        revenueBreakdown: Object.entries(revenueBreakdown).map(([category, amount]) => ({
+          category,
+          amount,
+          percentage: totalRevenue > 0 ? (amount / totalRevenue) * 100 : 0,
+        })),
+        expenseBreakdown: Object.entries(expenseBreakdown).map(([category, amount]) => ({
+          category,
+          amount,
+          percentage: totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0,
+        })),
+      },
+      error: null,
+    }
+  } catch (error: any) {
+    console.error("[getProfitLossReport] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
 
 // Driver Payments Report
 export async function getDriverPaymentsReport(startDate?: string, endDate?: string) {
-  // FIXED: Add RBAC check - only authorized roles can view financial reports
-  const permissionCheck = await checkViewPermission("reports")
-  if (!permissionCheck.allowed) {
-    return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
-  }
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // FIXED: Add RBAC check - only authorized roles can view financial reports
+    const permissionCheck = await checkViewPermission("reports")
+    if (!permissionCheck.allowed) {
+      return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
+    }
 
-  const companyId = await getCompanyId()
-  if (!companyId) return { error: "Not authenticated", data: null }
+    const companyId = await getCompanyId()
+    if (!companyId) return { error: "Not authenticated", data: null }
 
-  const supabase = await createClient()
+    const supabase = await createClient()
 
   // FIXED: Select only necessary fields, not all columns (exclude sensitive calculation_details, pay_rule_id, etc.)
   let settlementsQuery = supabase
