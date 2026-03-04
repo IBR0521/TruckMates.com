@@ -4,110 +4,132 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 
 export async function getCompany() {
-  const supabase = await createClient()
-  
-  // Get current user
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  if (userError || !user) {
-    return { error: "Not authenticated" }
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
+    
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+      return { error: "Not authenticated" }
+    }
+
+    // Get user's company_id
+    const { data: userData, error: userDataError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    if (userDataError) {
+      return { error: userDataError.message || "Failed to fetch user data" }
+    }
+
+    if (!userData?.company_id) {
+      return { error: "No company found" }
+    }
+
+    // Get company data
+    const { data: company, error: companyError } = await supabase
+      .from("companies")
+      .select("*")
+      .eq("id", userData.company_id)
+      .maybeSingle()
+
+    if (companyError) {
+      return { error: companyError.message || "Failed to fetch company data" }
+    }
+
+    if (!company) {
+      return { error: "Company not found" }
+    }
+
+    return { data: company }
+  } catch (error: any) {
+    console.error("[getCompany] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred" }
   }
-
-  // Get user's company_id
-  const { data: userData, error: userDataError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userDataError || !userData?.company_id) {
-    return { error: "No company found" }
-  }
-
-  // Get company data
-  const { data: company, error: companyError } = await supabase
-    .from("companies")
-    .select("*")
-    .eq("id", userData.company_id)
-    .single()
-
-  if (companyError) {
-    return { error: companyError.message }
-  }
-
-  return { data: company }
 }
 
 export async function updateCompany(formData: FormData) {
-  const supabase = await createClient()
-  
-  // Get current user
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  if (userError || !user) {
-    return { success: false, error: "Not authenticated" }
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
+    
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+      return { success: false, error: "Not authenticated" }
+    }
+
+    // Get user's company_id
+    const { data: userData, error: userDataError } = await supabase
+      .from("users")
+      .select("company_id, role")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    if (userDataError) {
+      return { success: false, error: userDataError.message || "Failed to fetch user data" }
+    }
+
+    if (!userData?.company_id) {
+      return { success: false, error: "No company found" }
+    }
+
+    // SEC-006 FIX: Use correct role names - super_admin and operations_manager (not "manager")
+    const MANAGER_ROLES = ["super_admin", "operations_manager"]
+    if (!MANAGER_ROLES.includes(userData.role)) {
+      return { success: false, error: "Only managers can update company information" }
+    }
+
+    const name = formData.get("name") as string
+    const email = formData.get("email") as string
+    const phone = formData.get("phone") as string
+    const companyType = formData.get("company_type") as string | null
+
+    // Validate company_type
+    const validCompanyTypes = ['broker', 'carrier', 'both', null]
+    const normalizedCompanyType = companyType === "regular" || companyType === "" ? null : companyType
+    if (normalizedCompanyType && !validCompanyTypes.includes(normalizedCompanyType)) {
+      return { success: false, error: "Invalid company type" }
+    }
+
+    // Update company
+    const { error: updateError } = await supabase
+      .from("companies")
+      .update({
+        name,
+        email,
+        phone,
+        company_type: normalizedCompanyType || null,
+      })
+      .eq("id", userData.company_id)
+
+    if (updateError) {
+      return { success: false, error: updateError.message }
+    }
+
+    revalidatePath("/dashboard/settings")
+    return { success: true }
+  } catch (error: any) {
+    console.error("[updateCompany] Unexpected error:", error)
+    return { success: false, error: error?.message || "An unexpected error occurred" }
   }
-
-  // Get user's company_id
-  const { data: userData, error: userDataError } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userDataError) {
-    return { success: false, error: userDataError.message || "Failed to fetch user data" }
-  }
-
-  if (!userData?.company_id) {
-    return { success: false, error: "No company found" }
-  }
-
-  // SEC-006 FIX: Use correct role names - super_admin and operations_manager (not "manager")
-  const MANAGER_ROLES = ["super_admin", "operations_manager"]
-  if (!MANAGER_ROLES.includes(userData.role)) {
-    return { success: false, error: "Only managers can update company information" }
-  }
-
-  const name = formData.get("name") as string
-  const email = formData.get("email") as string
-  const phone = formData.get("phone") as string
-  const companyType = formData.get("company_type") as string | null
-
-  // Validate company_type
-  const validCompanyTypes = ['broker', 'carrier', 'both', null]
-  const normalizedCompanyType = companyType === "regular" || companyType === "" ? null : companyType
-  if (normalizedCompanyType && !validCompanyTypes.includes(normalizedCompanyType)) {
-    return { success: false, error: "Invalid company type" }
-  }
-
-  // Update company
-  const { error: updateError } = await supabase
-    .from("companies")
-    .update({
-      name,
-      email,
-      phone,
-      company_type: normalizedCompanyType || null,
-    })
-    .eq("id", userData.company_id)
-
-  if (updateError) {
-    return { success: false, error: updateError.message }
-  }
-
-  revalidatePath("/dashboard/settings")
-  return { success: true }
 }
 
 /**
  * Check if user is linked to a demo company and fix it
  */
 export async function checkAndFixDemoCompanyLink() {
-  const supabase = await createClient()
-  
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  if (userError || !user) {
-    return { error: "Not authenticated", isLinkedToDemo: false }
-  }
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
+    
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+      return { error: "Not authenticated", isLinkedToDemo: false }
+    }
 
   // Get user's company
   const { data: userData, error: userDataError } = await supabase

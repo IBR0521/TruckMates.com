@@ -10,15 +10,17 @@ export async function getParts(filters?: {
   low_stock?: boolean
   search?: string
 }) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   const result = await getCachedUserCompany(user.id)
   if (result.error || !result.company_id) {
@@ -43,26 +45,28 @@ export async function getParts(filters?: {
     query = query.or(`name.ilike.%${filters.search}%,part_number.ilike.%${filters.search}%,description.ilike.%${filters.search}%`)
   }
 
-  const { data, error } = await query
+    const { data, error } = await query
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    if (error) {
+      return { error: error.message, data: null }
+    }
 
-  return { data, error: null }
+    return { data, error: null }
 }
 
 // Get single part
 export async function getPart(id: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   const result = await getCachedUserCompany(user.id)
   if (result.error || !result.company_id) {
@@ -80,11 +84,15 @@ export async function getPart(id: string) {
     return { error: error.message, data: null }
   }
 
-  if (!data) {
-    return { error: "Part not found", data: null }
-  }
+    if (!data) {
+      return { error: "Part not found", data: null }
+    }
 
-  return { data, error: null }
+    return { data, error: null }
+  } catch (error: any) {
+    console.error("[getPart] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 // Create part
