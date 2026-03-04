@@ -83,23 +83,23 @@ export async function createCustomerPortalAccess(formData: {
       return { error: "Not authenticated", data: null }
     }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id, role")
+      .eq("id", user.id)
+      .single()
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
 
-  if (userData.role !== 'manager') {
-    return { error: "Only managers can create portal access", data: null }
-  }
+    if (userData.role !== 'manager') {
+      return { error: "Only managers can create portal access", data: null }
+    }
 
   // Verify customer belongs to company
   const { data: customer } = await supabase

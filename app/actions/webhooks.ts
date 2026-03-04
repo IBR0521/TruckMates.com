@@ -72,21 +72,25 @@ export async function getWebhook(id: string) {
       return { error: "Not authenticated", data: null }
     }
 
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
-  }
+    const result = await getCachedUserCompany(user.id)
+    if (result.error || !result.company_id) {
+      return { error: result.error || "No company found", data: null }
+    }
 
-  const { data, error } = await supabase
-    .from("webhooks")
-    .select("*")
-    .eq("id", id)
-    .eq("company_id", result.company_id)
-    .single()
+    const { data, error } = await supabase
+      .from("webhooks")
+      .select("*")
+      .eq("id", id)
+      .eq("company_id", result.company_id)
+      .maybeSingle()
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    if (!data) {
+      return { error: "Webhook not found", data: null }
+    }
 
     return { data, error: null }
   } catch (error: any) {
