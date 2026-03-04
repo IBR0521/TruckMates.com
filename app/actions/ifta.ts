@@ -6,15 +6,17 @@ import { getELDMileageData } from "./eld"
 import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 
 export async function getIFTAReports() {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   const { data: userData, error: userError } = await supabase
     .from("users")
@@ -40,7 +42,11 @@ export async function getIFTAReports() {
     return { error: error.message, data: null }
   }
 
-  return { data: reports, error: null }
+    return { data: reports, error: null }
+  } catch (error: any) {
+    console.error("[getIFTAReports] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 export async function deleteIFTAReport(id: string) {

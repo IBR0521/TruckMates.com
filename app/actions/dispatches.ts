@@ -8,15 +8,17 @@ import { checkEditPermission } from "@/lib/server-permissions"
  * Get unassigned loads (loads without driver or truck assigned, or with pending status)
  */
 export async function getUnassignedLoads() {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   const { data: userData, error: userError } = await supabase
     .from("users")
@@ -71,22 +73,28 @@ export async function getUnassignedLoads() {
     !load.driver_id || !load.truck_id || load.status === "pending"
   ) || []
 
-  return { data: unassignedLoads, error: null }
+    return { data: unassignedLoads, error: null }
+  } catch (error: any) {
+    console.error("[getUnassignedLoads] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 /**
  * Get unassigned routes (routes without driver or truck assigned, or with pending status)
  */
 export async function getUnassignedRoutes() {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
   const { data: userData, error: userError } = await supabase
     .from("users")
