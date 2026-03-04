@@ -65,12 +65,11 @@ export async function getInvoiceVerification(invoiceId: string) {
       return { error: "Not authenticated", data: null }
     }
 
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
-  }
+    const result = await getCachedUserCompany(user.id)
+    if (result.error || !result.company_id) {
+      return { error: result.error || "No company found", data: null }
+    }
 
-  try {
     const { data, error } = await supabase
       .from("invoice_verifications")
       .select(`
@@ -98,20 +97,21 @@ export async function getInvoiceVerification(invoiceId: string) {
       `)
       .eq("invoice_id", invoiceId)
       .eq("company_id", result.company_id)
-      .single()
+      .maybeSingle()
 
     if (error) {
-      if (error.code === "PGRST116") {
-        // No verification record found - invoice hasn't been verified yet
-        return { data: null, error: null }
-      }
       return { error: error.message, data: null }
+    }
+
+    if (!data) {
+      // No verification record found - invoice hasn't been verified yet
+      return { data: null, error: null }
     }
 
     return { data, error: null }
   } catch (error: any) {
-    console.error("[Invoice Verification] Error:", error)
-    return { error: error?.message || "Failed to get verification", data: null }
+    console.error("[getInvoiceVerification] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
 
