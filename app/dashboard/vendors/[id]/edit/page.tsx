@@ -26,7 +26,7 @@ import { getVendor, updateVendor } from "@/app/actions/vendors"
 import { useRouter } from "next/navigation"
 import { use } from "react"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
-import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
+import { MapboxAddressAutocomplete } from "@/components/mapbox-address-autocomplete"
 
 export default function EditVendorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -275,20 +275,28 @@ export default function EditVendorPage({ params }: { params: Promise<{ id: strin
           <FormSection title="Address" icon={<MapPin className="w-5 h-5" />}>
             <FormGrid cols={2}>
               <div className="md:col-span-2">
-                <GooglePlacesAutocomplete
+                <MapboxAddressAutocomplete
                   value={formData.address_line1 || ""}
                   onChange={(value) => setFormData({ ...formData, address_line1: value })}
                   onPlaceSelect={(address) => {
-                    setFormData(prev => ({
-                      ...prev,
-                      address_line1: address.address_line1?.trim() || prev.address_line1,
-                      address_line2: address.address_line2?.trim() ?? prev.address_line2,
-                      // Use parsed value if it exists, otherwise keep previous value
-                      city: address.city?.trim() ?? prev.city,
-                      state: address.state?.trim() ?? prev.state,
-                      zip: address.zip_code?.trim() ?? prev.zip,
-                      country: address.country?.trim() ?? prev.country ?? 'USA',
-                    }))
+                    setFormData(prev => {
+                      const city = address.city?.trim()
+                      const state = address.state?.trim()
+                      const zip = address.zip_code?.trim()
+                      const addressLine1 = address.address_line1?.trim()
+                      const country = address.country?.trim()
+
+                      return {
+                        ...prev,
+                        address_line1: addressLine1 || prev.address_line1,
+                        address_line2: address.address_line2?.trim() ?? prev.address_line2,
+                        // Use parsed value if it exists, otherwise keep previous value
+                        city: city ?? prev.city,
+                        state: state ?? prev.state,
+                        zip: zip ?? prev.zip,
+                        country: country ?? prev.country ?? "USA",
+                      }
+                    })
                     toast.success("Address fields auto-filled")
                   }}
                   placeholder="Enter address (auto-fills city, state, zip)"

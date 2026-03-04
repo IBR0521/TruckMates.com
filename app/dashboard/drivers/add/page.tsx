@@ -28,7 +28,7 @@ import { createDriver } from "@/app/actions/drivers"
 import { useRouter } from "next/navigation"
 import { getTrucks } from "@/app/actions/trucks"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
-import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
+import { MapboxAddressAutocomplete } from "@/components/mapbox-address-autocomplete"
 
 export default function AddDriverPage() {
   const router = useRouter()
@@ -215,19 +215,28 @@ export default function AddDriverPage() {
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <GooglePlacesAutocomplete
+                      <MapboxAddressAutocomplete
                         value={formData.address || ""}
                         onChange={(value) => setFormData({ ...formData, address: value })}
                         onPlaceSelect={(address) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            address: address.address_line1?.trim() || prev.address,
-                            // Only update if we have new data, otherwise keep existing
-                            city: address.city?.trim() || prev.city,
-                            state: address.state?.trim() || prev.state,
-                            zip: address.zip_code?.trim() || prev.zip,
-                          }))
-                          toast.success("Address fields auto-filled")
+                          setFormData(prev => {
+                            const city = address.city?.trim()
+                            const state = address.state?.trim()
+                            const zip = address.zip_code?.trim()
+                            const addressLine1 = address.address_line1?.trim()
+
+                            return {
+                              ...prev,
+                              address: addressLine1 || prev.address,
+                              // Only update if we have new data, otherwise keep existing
+                              city: city || prev.city,
+                              state: state || prev.state,
+                              zip: zip || prev.zip,
+                            }
+                          })
+                          if (address.address_line1 || address.city || address.state || address.zip_code) {
+                            toast.success("Address fields auto-filled")
+                          }
                         }}
                         placeholder="Enter address (auto-fills city, state, zip)"
                         label="Address"

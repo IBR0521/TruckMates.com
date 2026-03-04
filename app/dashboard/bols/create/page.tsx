@@ -20,7 +20,7 @@ import { createBOL, getBOLTemplates } from "@/app/actions/bol"
 import { getLoads } from "@/app/actions/loads"
 import { useRouter } from "next/navigation"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
-import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
+import { MapboxAddressAutocomplete } from "@/components/mapbox-address-autocomplete"
 
 export default function CreateBOLPage() {
   const router = useRouter()
@@ -282,19 +282,28 @@ export default function CreateBOLPage() {
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <GooglePlacesAutocomplete
+                  <MapboxAddressAutocomplete
                     value={formData.shipper_address || ""}
                     onChange={(value) => setFormData({ ...formData, shipper_address: value })}
                     onPlaceSelect={(address) => {
-                      setFormData(prev => ({
-                        ...prev,
-                        shipper_address: address.address_line1?.trim() || prev.shipper_address,
-                        // Use parsed value if it exists, otherwise keep previous value
-                        shipper_city: address.city?.trim() ?? prev.shipper_city,
-                        shipper_state: address.state?.trim() ?? prev.shipper_state,
-                        shipper_zip: address.zip_code?.trim() ?? prev.shipper_zip,
-                      }))
-                      toast.success("Shipper address fields auto-filled")
+                      setFormData(prev => {
+                        const city = address.city?.trim()
+                        const state = address.state?.trim()
+                        const zip = address.zip_code?.trim()
+                        const addressLine1 = address.address_line1?.trim()
+
+                        return {
+                          ...prev,
+                          shipper_address: addressLine1 || prev.shipper_address,
+                          // Use parsed value if it exists, otherwise keep previous value
+                          shipper_city: city ?? prev.shipper_city,
+                          shipper_state: state ?? prev.shipper_state,
+                          shipper_zip: zip ?? prev.shipper_zip,
+                        }
+                      })
+                      if (address.address_line1 || address.city || address.state || address.zip_code) {
+                        toast.success("Shipper address fields auto-filled")
+                      }
                     }}
                     placeholder="Enter shipper address (auto-fills city, state, zip)"
                     label="Address"
@@ -378,19 +387,28 @@ export default function CreateBOLPage() {
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <GooglePlacesAutocomplete
+                  <MapboxAddressAutocomplete
                     value={formData.consignee_address || ""}
                     onChange={(value) => setFormData({ ...formData, consignee_address: value })}
                     onPlaceSelect={(address) => {
-                      setFormData(prev => ({
-                        ...prev,
-                        consignee_address: address.address_line1?.trim() || prev.consignee_address,
-                        // Use parsed value if it exists, otherwise keep previous value
-                        consignee_city: address.city?.trim() ?? prev.consignee_city,
-                        consignee_state: address.state?.trim() ?? prev.consignee_state,
-                        consignee_zip: address.zip_code?.trim() ?? prev.consignee_zip,
-                      }))
-                      toast.success("Consignee address fields auto-filled")
+                      setFormData(prev => {
+                        const city = address.city?.trim()
+                        const state = address.state?.trim()
+                        const zip = address.zip_code?.trim()
+                        const addressLine1 = address.address_line1?.trim()
+
+                        return {
+                          ...prev,
+                          consignee_address: addressLine1 || prev.consignee_address,
+                          // Use parsed value if it exists, otherwise keep previous value
+                          consignee_city: city ?? prev.consignee_city,
+                          consignee_state: state ?? prev.consignee_state,
+                          consignee_zip: zip ?? prev.consignee_zip,
+                        }
+                      })
+                      if (address.address_line1 || address.city || address.state || address.zip_code) {
+                        toast.success("Consignee address fields auto-filled")
+                      }
                     }}
                     placeholder="Enter consignee address (auto-fills city, state, zip)"
                     label="Address"

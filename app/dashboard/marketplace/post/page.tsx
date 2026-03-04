@@ -1,9 +1,23 @@
 "use client"
 
-import { MarketplaceComingSoon } from "@/components/marketplace-coming-soon"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { toast } from "sonner"
+import { MapboxAddressAutocomplete } from "@/components/mapbox-address-autocomplete"
+import { postLoadToMarketplace } from "@/app/actions/marketplace"
 
 export default function PostLoadPage() {
-  return <MarketplaceComingSoon />
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
@@ -75,11 +89,12 @@ export default function PostLoadPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <Label>Origin *</Label>
-                  <GooglePlacesAutocomplete
+                  <MapboxAddressAutocomplete
                     value={formData.origin}
                     onChange={(value) => setFormData({ ...formData, origin: value })}
                     onPlaceSelect={(address) => {
-                      setFormData({ ...formData, origin: address.address_line1?.trim() || formData.origin })
+                      const addressLine1 = address.address_line1?.trim()
+                      setFormData({ ...formData, origin: addressLine1 || formData.origin })
                     }}
                     placeholder="Enter origin address"
                     id="origin"
@@ -88,11 +103,12 @@ export default function PostLoadPage() {
 
                 <div>
                   <Label>Destination *</Label>
-                  <GooglePlacesAutocomplete
+                  <MapboxAddressAutocomplete
                     value={formData.destination}
                     onChange={(value) => setFormData({ ...formData, destination: value })}
                     onPlaceSelect={(address) => {
-                      setFormData({ ...formData, destination: address.address_line1?.trim() || formData.destination })
+                      const addressLine1 = address.address_line1?.trim()
+                      setFormData({ ...formData, destination: addressLine1 || formData.destination })
                     }}
                     placeholder="Enter destination address"
                     id="destination"
