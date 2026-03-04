@@ -110,14 +110,20 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
         if (!isMounted) return
         
         if (result?.data) {
-          // Get employee_role from metadata or fallback to role
-          const employeeRole = (result.data as any).employee_role || result.data.role
-          const mappedRole = mapLegacyRole(employeeRole) as EmployeeRole
-          setUserRole(mappedRole)
-          
-          // Check if role is a manager role
-          const managerRoles: EmployeeRole[] = ["super_admin", "operations_manager"]
-          setIsManager(managerRoles.includes(mappedRole))
+          // EXT-002 FIX: Only use role from database (ground truth) - no metadata check
+          // getCurrentUser() now only returns role from users table, not from JWT metadata
+          const role = result.data.role
+          if (role) {
+            const mappedRole = mapLegacyRole(role) as EmployeeRole
+            setUserRole(mappedRole)
+            
+            // Check if role is a manager role
+            const managerRoles: EmployeeRole[] = ["super_admin", "operations_manager"]
+            setIsManager(managerRoles.includes(mappedRole))
+          } else {
+            setIsManager(false)
+            setUserRole(null)
+          }
         } else {
           setIsManager(false)
           setUserRole(null)
