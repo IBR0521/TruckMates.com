@@ -433,15 +433,23 @@ export async function createLoad(formData: {
       return location.toLowerCase().replace(/,/g, "").replace(/\s+/g, " ").trim()
     }
 
+    // LOG-002 FIX: Push matching into DB query instead of fetching ALL routes
+    // This reduces 500 routes loaded into memory to a single indexed query
+    const loadOriginNormalized = normalizeLocation(formData.origin)
+    const loadDestNormalized = normalizeLocation(formData.destination)
+    const originFirstWord = loadOriginNormalized.split(" ")[0]
+    const destFirstWord = loadDestNormalized.split(" ")[0]
+
+    // Query with LIKE filters at DB level - much more efficient
     const { data: existingRoutes } = await supabase
       .from("routes")
-      .select("*")
+      .select("id, origin, destination")
       .eq("company_id", userData.company_id)
+      .or(`origin.ilike.%${loadOriginNormalized}%,origin.ilike.%${originFirstWord}%,destination.ilike.%${loadDestNormalized}%,destination.ilike.%${destFirstWord}%`)
+      .limit(10) // Limit results for performance
 
-    if (existingRoutes) {
-      const loadOriginNormalized = normalizeLocation(formData.origin)
-      const loadDestNormalized = normalizeLocation(formData.destination)
-
+    if (existingRoutes && existingRoutes.length > 0) {
+      // Fine-tune match in JavaScript (only on limited results)
       const matchingRoute = existingRoutes.find((route: any) => {
         const routeOriginNormalized = normalizeLocation(route.origin || "")
         const routeDestNormalized = normalizeLocation(route.destination || "")
