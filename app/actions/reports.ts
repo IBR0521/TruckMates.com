@@ -27,16 +27,18 @@ async function getCompanyId() {
 
 // Revenue Report
 export async function getRevenueReport(startDate?: string, endDate?: string) {
-  // FIXED: Add RBAC check - only authorized roles can view financial reports
-  const permissionCheck = await checkViewPermission("reports")
-  if (!permissionCheck.allowed) {
-    return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
-  }
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // FIXED: Add RBAC check - only authorized roles can view financial reports
+    const permissionCheck = await checkViewPermission("reports")
+    if (!permissionCheck.allowed) {
+      return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
+    }
 
-  const companyId = await getCompanyId()
-  if (!companyId) return { error: "Not authenticated", data: null }
+    const companyId = await getCompanyId()
+    if (!companyId) return { error: "Not authenticated", data: null }
 
-  const supabase = await createClient()
+    const supabase = await createClient()
   
   // Get ALL invoices (not just paid) - use created_at for reliable date filtering
   // FIXED: Select only necessary columns and add limit
