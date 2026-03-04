@@ -24,12 +24,11 @@ import Link from "next/link"
 import { toast } from "sonner"
 import { getCustomer, updateCustomer } from "@/app/actions/customers"
 import { useRouter } from "next/navigation"
-import { use } from "react"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
-export default function EditCustomerPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function EditCustomerPage({ params }: { params: { id: string } }) {
+  const { id } = params
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)

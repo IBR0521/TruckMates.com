@@ -62,6 +62,64 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
   const progress = (currentStep / totalSteps) * 100
 
+  // Helper to parse city/state/zip from a free-form address string as a fallback
+  function parseCityStateZipFromAddress(address: string) {
+    const result = {
+      city: "",
+      state: "",
+      zip: "",
+    }
+
+    if (!address) return result
+
+    const parts = address.split(",").map((p) => p.trim()).filter(Boolean)
+    if (parts.length < 2) return result
+
+    // Example formats:
+    // - "Chicago Ridge Mall, Oak Lawn, IL, USA"
+    // - "123 Main St, Oak Lawn, IL 60453, USA"
+    // - "123 Main St, London SW1A 1AA, UK"
+    const countryPart = parts[parts.length - 1]
+    const stateZipPart = parts[parts.length - 2]
+    const cityPart =
+      parts.length >= 3 ? parts[parts.length - 3] : parts[parts.length - 2]
+
+    // Try to extract state and zip from the second-to-last part
+    if (stateZipPart) {
+      // US-style: "IL" or "IL 60453" or "IL 60453-1234"
+      const usMatch = stateZipPart.match(
+        /\b([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?\b/
+      )
+      if (usMatch) {
+        result.state = usMatch[1]
+        if (usMatch[2]) {
+          result.zip = usMatch[2]
+        }
+      } else {
+        // UK/EU style postcode (e.g., "SW1A 1AA")
+        const postcodeMatch = stateZipPart.match(
+          /\b([A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2})\b/i
+        )
+        if (postcodeMatch) {
+          result.zip = postcodeMatch[1].toUpperCase()
+        }
+      }
+    }
+
+    // City: prefer the third-to-last part if it exists, otherwise use second-to-last
+    if (cityPart) {
+      // Avoid using pure state abbreviations or postcodes as city
+      const isStateLike = /^[A-Z]{2,3}$/.test(cityPart) && !/\d/.test(cityPart)
+      const isPostcodeLike =
+        /\d/.test(cityPart) || /^[A-Z]{1,2}\d/.test(cityPart)
+      if (!isStateLike && !isPostcodeLike) {
+        result.city = cityPart
+      }
+    }
+
+    return result
+  }
+
   async function handleNext() {
     if (currentStep === 1) {
       // Save company profile
@@ -176,28 +234,44 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 <Label>Business Address</Label>
                 <GooglePlacesAutocomplete
                   value={companyProfile.business_address}
-                  onChange={(value) => setCompanyProfile({ ...companyProfile, business_address: value })}
+                  onChange={(value) =>
+                    setCompanyProfile((prev) => ({
+                      ...prev,
+                      business_address: value,
+                    }))
+                  }
                   onPlaceSelect={(address) => {
-                    console.log('[SetupWizard] Address selected:', address)
-                    // Use the parsed values if they exist and are non-empty, otherwise keep previous values
-                    const city = address.city?.trim()
-                    const state = address.state?.trim()
-                    const zip = address.zip_code?.trim()
+                    console.log("[SetupWizard] Address selected:", address)
                     const addressLine1 = address.address_line1?.trim()
-                    
-                    setCompanyProfile({
-                      ...companyProfile,
-                      business_address: addressLine1 || companyProfile.business_address,
-                      business_city: city || companyProfile.business_city,
-                      business_state: state || companyProfile.business_state,
-                      business_zip: zip || companyProfile.business_zip,
-                    })
-                    
+                    let city = address.city?.trim() || ""
+                    let state = address.state?.trim() || ""
+                    let zip = address.zip_code?.trim() || ""
+
+                    // Fallback: parse from the full address string if needed
+                    const rawAddress =
+                      addressLine1 || companyProfile.business_address
+                    if ((!city || !state || !zip) && rawAddress) {
+                      const parsed = parseCityStateZipFromAddress(rawAddress)
+                      city = city || parsed.city
+                      state = state || parsed.state
+                      zip = zip || parsed.zip
+                    }
+
+                    setCompanyProfile((prev) => ({
+                      ...prev,
+                      business_address: addressLine1 || prev.business_address,
+                      business_city: city || prev.business_city,
+                      business_state: state || prev.business_state,
+                      business_zip: zip || prev.business_zip,
+                    }))
+
                     // Show toast if we got any new data
                     if (addressLine1 || city || state || zip) {
                       toast.success("Address fields auto-filled")
                     } else {
-                      console.warn('[SetupWizard] No address components parsed from Google Places')
+                      console.warn(
+                        "[SetupWizard] No address components parsed from Google Places or fallback parser"
+                      )
                     }
                   }}
                   placeholder="Enter business address"

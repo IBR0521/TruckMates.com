@@ -30,9 +30,15 @@ export async function getSetupStatus() {
   }
 
   try {
+    // NOTE:
+    // The base companies table (from auth/schema.sql) only has:
+    //   address, phone, email
+    // It does NOT have business_address / business_phone columns.
+    // To avoid schema cache errors, we read from the existing columns and
+    // treat them as the basic company info for setup.
     const { data: company, error } = await supabase
       .from("companies")
-      .select("id, name, setup_complete, setup_completed_at, setup_data")
+      .select("id, name, address, phone, setup_complete, setup_completed_at, setup_data")
       .eq("id", company_id)
       .single()
 
@@ -40,19 +46,12 @@ export async function getSetupStatus() {
       return { error: error.message, data: null }
     }
 
-    // Check if company has basic info (address, phone)
-    const { data: companyDetails } = await supabase
-      .from("companies")
-      .select("business_address, business_phone")
-      .eq("id", company_id)
-      .single()
-
-    const hasBasicInfo = companyDetails?.business_address && companyDetails?.business_phone
+    const hasBasicInfo = !!(company?.address && company?.phone)
 
     return {
       data: {
-        setup_complete: company?.setup_complete || false,
-        setup_completed_at: company?.setup_completed_at || null,
+        setup_complete: company?.setup_complete ?? false,
+        setup_completed_at: company?.setup_completed_at ?? null,
         has_basic_info: hasBasicInfo || false,
         setup_data: company?.setup_data || {},
       },
@@ -95,20 +94,19 @@ export async function updateCompanyProfile(data: {
 
   try {
     const updateData: any = {}
-    if (data.business_address) updateData.business_address = data.business_address
-    if (data.business_city) updateData.business_city = data.business_city
-    if (data.business_state) updateData.business_state = data.business_state
-    if (data.business_zip) updateData.business_zip = data.business_zip
-    if (data.business_phone) updateData.business_phone = data.business_phone
-    if (data.business_email) updateData.business_email = data.business_email
-    if (data.timezone) updateData.timezone = data.timezone
+    // Map wizard fields onto existing companies columns:
+    // - Store the full business address string in companies.address
+    // - Store phone/email in companies.phone / companies.email
+    if (data.business_address) updateData.address = data.business_address
+    if (data.business_phone) updateData.phone = data.business_phone
+    if (data.business_email) updateData.email = data.business_email
+    // City/state/zip are currently not separate columns on companies;
+    // they are stored in the more detailed settings table instead.
 
-    const { data: company, error } = await supabase
+    const { error } = await supabase
       .from("companies")
       .update(updateData)
       .eq("id", company_id)
-      .select()
-      .single()
 
     if (error) {
       return { error: error.message, data: null }
@@ -116,21 +114,11 @@ export async function updateCompanyProfile(data: {
 
     revalidatePath("/dashboard/settings/business")
 
-    // Return only JSON-safe, minimal data to avoid Next.js coercion errors
-    const safeData = company
-      ? {
-          id: String(company.id),
-          name: String(company.name || ""),
-          business_address: company.business_address || "",
-          business_city: company.business_city || "",
-          business_state: company.business_state || "",
-          business_zip: company.business_zip || "",
-          business_phone: company.business_phone || "",
-          business_email: company.business_email || "",
-        }
-      : null
-
-    return { data: safeData, error: null }
+    // Return minimal JSON-safe response - no database row, just success flag
+    return {
+      data: { success: true },
+      error: null,
+    }
   } catch (error: any) {
     return { error: error.message || "Failed to update company profile", data: null }
   }
