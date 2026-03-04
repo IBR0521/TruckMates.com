@@ -21,47 +21,47 @@ export async function getBOLs(filters?: {
       return { error: "Not authenticated", data: null }
     }
 
-  // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
+    // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .maybeSingle()
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
 
-  let query = supabase
-    .from("bols")
-    .select("*")
-    .eq("company_id", userData.company_id)
-    .order("created_at", { ascending: false })
+    let query = supabase
+      .from("bols")
+      .select("*")
+      .eq("company_id", userData.company_id)
+      .order("created_at", { ascending: false })
 
-  if (filters?.load_id) {
-    query = query.eq("load_id", filters.load_id)
-  }
+    if (filters?.load_id) {
+      query = query.eq("load_id", filters.load_id)
+    }
 
-  if (filters?.status) {
-    query = query.eq("status", filters.status)
-  }
+    if (filters?.status) {
+      query = query.eq("status", filters.status)
+    }
 
-  // MEDIUM FIX 3: Add server-side search support
-  if (filters?.search) {
-    query = query.or(`bol_number.ilike.%${filters.search}%,shipper_name.ilike.%${filters.search}%,consignee_name.ilike.%${filters.search}%`)
-  }
+    // MEDIUM FIX 3: Add server-side search support
+    if (filters?.search) {
+      query = query.or(`bol_number.ilike.%${filters.search}%,shipper_name.ilike.%${filters.search}%,consignee_name.ilike.%${filters.search}%`)
+    }
 
-  const { data, error } = await query
+    const { data, error } = await query
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    if (error) {
+      return { error: error.message, data: null }
+    }
 
-  return { data, error: null }
+    return { data, error: null }
 }
 
 // Get single BOL
