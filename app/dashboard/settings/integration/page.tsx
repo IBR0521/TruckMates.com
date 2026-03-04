@@ -117,19 +117,17 @@ export default function IntegrationSettingsPage() {
                     <CheckCircle2 className="w-3 h-3 text-green-500" />
                     <span>Platform API key managed by TruckLogics</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {integrations.has_google_maps_api_key ? (
-                      <>
-                        <CheckCircle2 className="w-3 h-3 text-green-500" />
-                        <span>API key configured</span>
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="w-3 h-3 text-amber-500" />
-                        <span>API key not configured yet</span>
-                      </>
-                    )}
-                  </div>
+                  {integrations.has_google_maps_api_key ? (
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3 h-3 text-green-500" />
+                      <span>API key configured - Google Maps is fully functional</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <XCircle className="w-3 h-3 text-amber-500" />
+                      <span>API key not configured - contact platform administrator</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -160,26 +158,32 @@ export default function IntegrationSettingsPage() {
                   </div>
                 </div>
                 <div className="space-y-1 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    {integrations.has_resend_api_key ? (
-                      <>
+                  {integrations.has_resend_api_key ? (
+                    <>
+                      <div className="flex items-center gap-2">
                         <CheckCircle2 className="w-3 h-3 text-green-500" />
-                        <span>API key configured</span>
-                      </>
-                    ) : (
-                      <>
+                        <span>API key configured - Email service is fully functional</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-3 h-3 text-green-500" />
+                        <span>Used for invoice emails, alerts, and notifications</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
                         <XCircle className="w-3 h-3 text-amber-500" />
                         <span>
                           API key not configured – invoice reminders, driver alerts, and load updates will{' '}
                           <span className="font-semibold">not be sent by email</span> until this is set up.
                         </span>
-                      </>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3 h-3 text-green-500" />
-                    <span>Used for system emails and customer communication</span>
-                  </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <XCircle className="w-3 h-3 text-amber-500" />
+                        <span>Contact platform administrator to configure email service</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 

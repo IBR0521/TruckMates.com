@@ -47,6 +47,11 @@ export async function getIntegrationSettings() {
     return { error: error.message, data: null }
   }
 
+  // CRITICAL FIX: Check platform environment variables first
+  // These work automatically for all users - no per-company config needed
+  const hasPlatformGoogleMapsKey = !!process.env.GOOGLE_MAPS_API_KEY
+  const hasPlatformResendKey = !!process.env.RESEND_API_KEY
+
   // Return defaults if no settings exist (without exposing API keys)
   if (!data) {
     return {
@@ -61,18 +66,21 @@ export async function getIntegrationSettings() {
         has_quickbooks_credentials: false,
         has_stripe_api_key: false,
         has_paypal_client_id: false,
-        has_google_maps_api_key: false,
-        has_resend_api_key: false,
+        // Platform keys work automatically - check env vars
+        has_google_maps_api_key: hasPlatformGoogleMapsKey,
+        has_resend_api_key: hasPlatformResendKey,
       },
       error: null,
     }
   }
   
-  // Never return raw API keys to the client – only expose boolean "has_*" flags.
-  // Treat either a platform env var OR a per-company key as "configured".
+  // CRITICAL FIX: Check environment variables for platform-wide API keys
+  // These are configured at deployment and work automatically for all users
   const hasPlatformGoogleMapsKey = !!process.env.GOOGLE_MAPS_API_KEY
   const hasPlatformResendKey = !!process.env.RESEND_API_KEY
 
+  // If platform keys exist, services are automatically configured for all users
+  // No per-company configuration needed - it just works
   const safeData = {
     quickbooks_enabled: !!data.quickbooks_enabled,
     quickbooks_company_id: data.quickbooks_company_id || "",
@@ -84,8 +92,9 @@ export async function getIntegrationSettings() {
     has_quickbooks_credentials: !!(data.quickbooks_api_key || data.quickbooks_api_secret),
     has_stripe_api_key: !!data.stripe_api_key,
     has_paypal_client_id: !!data.paypal_client_id,
-    has_google_maps_api_key: !!(data.google_maps_api_key || hasPlatformGoogleMapsKey),
-    has_resend_api_key: !!(data.resend_api_key || hasPlatformResendKey),
+    // Platform keys take priority - if they exist, service is configured
+    has_google_maps_api_key: hasPlatformGoogleMapsKey || !!data.google_maps_api_key,
+    has_resend_api_key: hasPlatformResendKey || !!data.resend_api_key,
   }
 
   return { data: safeData, error: null }
@@ -214,10 +223,11 @@ export async function checkEmailServiceConfigured() {
     return { configured: false, isManager: false }
   }
 
-  // Check if Resend API key is configured (platform-wide)
+  // CRITICAL FIX: Platform-wide API keys work automatically for all users
+  // If RESEND_API_KEY is set in environment, email service is configured
   const hasPlatformKey = !!process.env.RESEND_API_KEY
 
-  // Check if integration is enabled for this company
+  // Check if integration is enabled for this company (optional override)
   const { data: integrations } = await supabase
     .from("company_integrations")
     .select("resend_enabled, resend_api_key")
@@ -227,7 +237,8 @@ export async function checkEmailServiceConfigured() {
   const isEnabled = integrations?.resend_enabled !== false // Default to true if not set
   const hasCompanyKey = !!integrations?.resend_api_key
 
-  // Email is configured if platform key exists OR (company key exists AND integration is enabled)
+  // Email is configured if platform key exists (automatic) OR (company key exists AND integration is enabled)
+  // Platform key takes priority - it works for everyone automatically
   const configured = hasPlatformKey || (hasCompanyKey && isEnabled)
 
   return { configured, isManager: true }
