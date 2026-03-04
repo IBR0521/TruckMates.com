@@ -32,24 +32,24 @@ export async function getWebhooks() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
-  }
+    const result = await getCachedUserCompany(user.id)
+    if (result.error || !result.company_id) {
+      return { error: result.error || "No company found", data: null }
+    }
 
-  const { data, error } = await supabase
-    .from("webhooks")
-    .select("*")
-    .eq("company_id", result.company_id)
-    .order("created_at", { ascending: false })
+    const { data, error } = await supabase
+      .from("webhooks")
+      .select("*")
+      .eq("company_id", result.company_id)
+      .order("created_at", { ascending: false })
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    if (error) {
+      return { error: error.message, data: null }
+    }
 
     return { data, error: null }
   } catch (error: any) {
