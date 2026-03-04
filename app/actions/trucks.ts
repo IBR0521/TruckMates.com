@@ -11,47 +11,49 @@ export async function getTrucks(filters?: {
   limit?: number
   offset?: number
 }) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
-  // Use optimized helper with caching
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-  const companyError = result.error
+    // Use optimized helper with caching
+    const result = await getCachedUserCompany(user.id)
+    const company_id = result.company_id
+    const companyError = result.error
 
-  if (companyError || !company_id) {
-    return { error: companyError || "No company found", data: null }
-  }
+    if (companyError || !company_id) {
+      return { error: companyError || "No company found", data: null }
+    }
 
-  // Build query with selective columns and pagination
-  let query = supabase
-    .from("trucks")
-    .select("id, truck_number, make, model, year, status, current_driver_id, mileage, fuel_level, created_at", { count: "exact" })
-    .eq("company_id", company_id)
-    .order("created_at", { ascending: false })
+    // Build query with selective columns and pagination
+    let query = supabase
+      .from("trucks")
+      .select("id, truck_number, make, model, year, status, current_driver_id, mileage, fuel_level, created_at", { count: "exact" })
+      .eq("company_id", company_id)
+      .order("created_at", { ascending: false })
 
-  // Apply filters
-  if (filters?.status) {
-    query = query.eq("status", filters.status)
-  }
+    // Apply filters
+    if (filters?.status) {
+      query = query.eq("status", filters.status)
+    }
 
-  // Apply pagination (default limit 25 for faster initial loads, max 100)
-  const limit = Math.min(filters?.limit || 25, 100)
-  const offset = filters?.offset || 0
-  query = query.range(offset, offset + limit - 1)
+    // Apply pagination (default limit 25 for faster initial loads, max 100)
+    const limit = Math.min(filters?.limit || 25, 100)
+    const offset = filters?.offset || 0
+    query = query.range(offset, offset + limit - 1)
 
-  const { data: trucks, error, count } = await query
+    const { data: trucks, error, count } = await query
 
-  if (error) {
-    return { error: error.message, data: null, count: 0 }
-  }
+    if (error) {
+      return { error: error.message, data: null, count: 0 }
+    }
 
     return { data: trucks || [], error: null, count: count || 0 }
   } catch (error: any) {
