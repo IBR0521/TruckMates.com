@@ -400,17 +400,24 @@ export async function createLoad(formData: {
       return { error: "Invalid shipment number", data: null }
     }
 
-    // Check for duplicate shipment number
+    // DAT-006 FIX: TOCTOU race condition - non-atomic check-then-insert
+    // Two dispatchers can create loads with the same shipment number simultaneously
+    // The proper fix is a unique constraint at DB level: (company_id, shipment_number)
+    // For now, we'll rely on the DB constraint and handle the error gracefully
+    // Note: This check reduces but doesn't eliminate the race condition
     const { data: existingLoad } = await supabase
       .from("loads")
       .select("id")
       .eq("company_id", userData.company_id)
       .eq("shipment_number", shipmentNumber)
-      .single()
+      .maybeSingle()
 
     if (existingLoad) {
       return { error: "Shipment number already exists", data: null }
     }
+    // DAT-006: The actual protection comes from the unique constraint in the database
+    // If two requests pass this check simultaneously, the DB will reject the second insert
+    // with error code 23505 (unique violation), which should be handled in the insert below
   }
 
   let routeId = formData.route_id || null
@@ -857,6 +864,28 @@ export async function updateLoad(
   const wasDelivered = currentLoad?.status === "delivered"
   const willBeDelivered = formData.status === "delivered"
 
+  // DAT-002 FIX: Validate status transitions to prevent invalid state changes
+  // Define allowed transitions - delivered loads cannot revert to pending
+  if (formData.status && formData.status !== currentLoad.status) {
+    const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+      pending: ["scheduled", "cancelled"],
+      scheduled: ["in_transit", "cancelled"],
+      in_transit: ["delivered", "cancelled"],
+      delivered: [], // Delivered loads cannot transition to any other state
+      cancelled: [], // Cancelled loads cannot transition to any other state
+    }
+
+    const currentStatus = currentLoad.status || "pending"
+    const allowedNextStatuses = ALLOWED_TRANSITIONS[currentStatus] || []
+    
+    if (!allowedNextStatuses.includes(formData.status)) {
+      return { 
+        error: `Invalid status transition: Cannot change load status from "${currentStatus}" to "${formData.status}". Allowed transitions: ${allowedNextStatuses.join(", ") || "none"}`,
+        data: null 
+      }
+    }
+  }
+
   // Build update data and track changes for audit trail
   const updateData: any = {}
   const changes: Array<{ field: string; old_value: any; new_value: any }> = []
@@ -1191,6 +1220,38 @@ export async function deleteLoad(id: string) {
   const result = await getCachedUserCompany(user.id)
   if (result.error || !result.company_id) {
     return { error: result.error || "No company found" }
+  }
+
+  // DAT-003 FIX: Prevent deletion of active in-transit loads
+  // Fetch load status before delete to prevent destroying audit trail of live shipments
+  const { data: loadToDelete, error: loadError } = await supabase
+    .from("loads")
+    .select("status, shipment_number")
+    .eq("id", id)
+    .eq("company_id", result.company_id)
+    .maybeSingle()
+
+  if (loadError) {
+    return { error: loadError.message || "Failed to fetch load details" }
+  }
+
+  if (!loadToDelete) {
+    return { error: "Load not found" }
+  }
+
+  // DAT-003: Block deletion of in-transit loads - they must be cancelled first
+  if (loadToDelete.status === "in_transit") {
+    return { 
+      error: `Cannot delete a load that is in transit. Please cancel the load first if needed. Load: ${loadToDelete.shipment_number}` 
+    }
+  }
+
+  // Only allow deleting pending, scheduled, or cancelled loads
+  const allowedStatusesForDeletion = ["pending", "scheduled", "cancelled"]
+  if (!allowedStatusesForDeletion.includes(loadToDelete.status)) {
+    return { 
+      error: `Cannot delete a load with status "${loadToDelete.status}". Only pending, scheduled, or cancelled loads can be deleted.` 
+    }
   }
 
   const { error } = await supabase

@@ -32,15 +32,19 @@ export async function autoGenerateInvoiceOnPOD(loadId: string) {
   }
 
   try {
-    // Check if invoice already exists for this load
-    const { data: existingInvoice } = await supabase
+    // DAT-007 FIX: Use maybeSingle() instead of single() to handle multiple invoices gracefully
+    // If a load has more than one invoice (due to duplicate clicks, API race, or duplicateInvoice function),
+    // .single() throws PGRST116. Use maybeSingle() and check array length instead.
+    const { data: existingInvoices, error: invoiceCheckError } = await supabase
       .from("invoices")
       .select("id")
       .eq("load_id", loadId)
       .eq("company_id", company_id)
-      .single()
 
-    if (existingInvoice) {
+    // DAT-007: Check if any invoices exist (handles both single and multiple invoices)
+    if (existingInvoices && existingInvoices.length > 0) {
+      // Return the first invoice ID if multiple exist
+      const existingInvoice = existingInvoices[0]
       return {
         data: {
           invoiceId: existingInvoice.id,

@@ -560,10 +560,11 @@ export async function createInvoice(formData: {
     return { error: "Invalid due date format (use YYYY-MM-DD)", data: null }
   }
 
+  // DAT-005 FIX: Validate that due_date is after issue_date (not equal or before)
   const issueDate = new Date(formData.issue_date)
   const dueDate = new Date(formData.due_date)
-  if (dueDate < issueDate) {
-    return { error: "Due date must be after or equal to issue date", data: null }
+  if (dueDate <= issueDate) {
+    return { error: "Due date must be after issue date", data: null }
   }
 
   // Validate load if provided
