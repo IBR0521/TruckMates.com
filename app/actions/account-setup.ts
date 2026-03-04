@@ -218,24 +218,50 @@ export async function completeSetup() {
     return { error: "Not authenticated", data: null }
   }
 
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
+  // CRITICAL FIX: Fetch company_id directly, don't use cache during setup
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
 
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  if (userError || !userData?.company_id) {
+    return { error: "No company found. Please complete registration first.", data: null }
   }
 
-  try {
-    const { error } = await supabase
-      .from("companies")
-      .update({
-        setup_complete: true,
-        setup_completed_at: new Date().toISOString(),
-      })
-      .eq("id", company_id)
+  const company_id = userData.company_id
 
-    if (error) {
-      return { error: error.message, data: null }
+  try {
+    // CRITICAL FIX: Use RPC function to bypass RLS during setup
+    // This ensures the update works even if role isn't fully set yet
+    const { data: rpcResult, error: rpcError } = await supabase.rpc(
+      'update_company_setup_complete',
+      {
+        p_company_id: company_id,
+      }
+    )
+
+    if (rpcError) {
+      // Fallback to direct update if RPC doesn't exist
+      const { error: updateError } = await supabase
+        .from("companies")
+        .update({
+          setup_complete: true,
+          setup_completed_at: new Date().toISOString(),
+        })
+        .eq("id", company_id)
+
+      if (updateError) {
+        return { 
+          error: updateError.message || "Failed to complete setup. Please ensure the update_company_setup_complete function exists in your database.",
+          data: null 
+        }
+      }
+    } else if (rpcResult && !rpcResult.success) {
+      return { 
+        error: rpcResult.error || "Failed to complete setup",
+        data: null 
+      }
     }
 
     // CRITICAL FIX: Force revalidation of all paths and clear Next.js cache
