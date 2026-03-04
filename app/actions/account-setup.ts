@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache"
 import { createDriver } from "./drivers"
 import { createTruck } from "./trucks"
 
+// Note: getCachedUserCompany removed - using direct queries for setup to avoid cache issues
+
 /**
  * Get account setup status
  */
@@ -86,12 +88,19 @@ export async function updateCompanyProfile(data: {
     return { error: "Not authenticated", data: null }
   }
 
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
+  // CRITICAL FIX: Fetch company_id directly, don't use cache during setup
+  // This ensures we get the correct company even if cache is stale
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
 
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  if (userError || !userData?.company_id) {
+    return { error: "No company found. Please complete registration first.", data: null }
   }
+
+  const company_id = userData.company_id
 
   try {
     const updateData: any = {}
@@ -104,13 +113,27 @@ export async function updateCompanyProfile(data: {
     // City/state/zip are currently not separate columns on companies;
     // they are stored in the more detailed settings table instead.
 
-    const { error } = await supabase
+    // CRITICAL FIX: Add error handling and logging
+    const { error, data: updateResult } = await supabase
       .from("companies")
       .update(updateData)
       .eq("id", company_id)
+      .select("id")
 
     if (error) {
-      return { error: error.message, data: null }
+      console.error("[updateCompanyProfile] Database error:", error)
+      return { 
+        error: error.message || `Failed to update company: ${error.code || "Unknown error"}`,
+        data: null 
+      }
+    }
+
+    // Verify update succeeded
+    if (!updateResult || updateResult.length === 0) {
+      return { 
+        error: "Company update failed: No rows updated. You may not have permission to update this company.",
+        data: null 
+      }
     }
 
     revalidatePath("/dashboard/settings/business")
