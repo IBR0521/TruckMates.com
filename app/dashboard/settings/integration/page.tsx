@@ -258,8 +258,12 @@ export default function IntegrationSettingsPage() {
             {/* Note about API keys */}
             <Card className="p-4 bg-muted/50 border-dashed">
               <p className="text-xs text-muted-foreground">
-                <strong>Note:</strong> Google Maps and Email Service use platform-wide API keys configured by the administrator.
-                Billing integrations (QuickBooks, Stripe, PayPal) are under active development and marked as{" "}
+                <strong>Platform Services:</strong> Google Maps and Email Service use platform-wide API keys configured by the platform administrator.
+                These services are automatically enabled for all companies and work immediately after account creation.
+                You don't need to configure anything - they're ready to use!
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                <strong>Coming Soon:</strong> Billing integrations (QuickBooks, Stripe, PayPal) are under active development and marked as{" "}
                 <span className="font-semibold">Coming soon</span> until the full OAuth and sync flows are live.
               </p>
             </Card>
