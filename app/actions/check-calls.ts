@@ -42,40 +42,44 @@ export async function getCheckCalls(filters?: {
       return { error: "No company found", data: null }
     }
 
-  let query = supabase
-    .from("check_calls")
-    .select("*")
-    .eq("company_id", userData.company_id)
-    .order("scheduled_time", { ascending: false })
+    let query = supabase
+      .from("check_calls")
+      .select("*")
+      .eq("company_id", userData.company_id)
+      .order("scheduled_time", { ascending: false })
 
-  if (filters?.load_id) {
-    query = query.eq("load_id", filters.load_id)
-  }
-  if (filters?.route_id) {
-    query = query.eq("route_id", filters.route_id)
-  }
-  if (filters?.driver_id) {
-    query = query.eq("driver_id", filters.driver_id)
-  }
-  if (filters?.status) {
-    query = query.eq("status", filters.status)
-  }
-  if (filters?.start_date) {
-    query = query.gte("scheduled_time", filters.start_date)
-  }
-  if (filters?.end_date) {
-    query = query.lte("scheduled_time", filters.end_date)
-  }
+    if (filters?.load_id) {
+      query = query.eq("load_id", filters.load_id)
+    }
+    if (filters?.route_id) {
+      query = query.eq("route_id", filters.route_id)
+    }
+    if (filters?.driver_id) {
+      query = query.eq("driver_id", filters.driver_id)
+    }
+    if (filters?.status) {
+      query = query.eq("status", filters.status)
+    }
+    if (filters?.start_date) {
+      query = query.gte("scheduled_time", filters.start_date)
+    }
+    if (filters?.end_date) {
+      query = query.lte("scheduled_time", filters.end_date)
+    }
 
-  const { data, error } = await query
+    const { data, error } = await query
 
-  if (error) {
-    const result = handleDbError(error, [])
-    if (result.error) return result
-    return { data: result.data, error: null }
+    if (error) {
+      const result = handleDbError(error, [])
+      if (result.error) return result
+      return { data: result.data, error: null }
+    }
+
+    return { data: data || [], error: null }
+  } catch (error: any) {
+    console.error("[getCheckCalls] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
-
-  return { data: data || [], error: null }
 }
 
 /**
