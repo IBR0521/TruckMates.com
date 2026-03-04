@@ -1295,6 +1295,36 @@ export async function bulkDeleteLoads(ids: string[]) {
     return { error: "No company found", data: null }
   }
 
+  // DAT-004 FIX: Check for active in-transit loads before bulk delete
+  // Prevent deleting loads that are currently in transit
+  const { data: loadsToDelete } = await supabase
+    .from("loads")
+    .select("id, shipment_number, status")
+    .in("id", ids)
+    .eq("company_id", userData.company_id)
+
+  if (loadsToDelete) {
+    const inTransitLoads = loadsToDelete.filter(l => l.status === "in_transit")
+    if (inTransitLoads.length > 0) {
+      const shipmentNumbers = inTransitLoads.map(l => l.shipment_number).join(", ")
+      return { 
+        error: `Cannot delete loads that are in transit: ${shipmentNumbers}. Please cancel them first if needed.`,
+        data: null 
+      }
+    }
+
+    // Only allow deleting pending, scheduled, or cancelled loads
+    const allowedStatuses = ["pending", "scheduled", "cancelled"]
+    const blockedLoads = loadsToDelete.filter(l => !allowedStatuses.includes(l.status))
+    if (blockedLoads.length > 0) {
+      const shipmentNumbers = blockedLoads.map(l => l.shipment_number).join(", ")
+      return { 
+        error: `Cannot delete loads with status other than pending, scheduled, or cancelled: ${shipmentNumbers}`,
+        data: null 
+      }
+    }
+  }
+
   const { error } = await supabase
     .from("loads")
     .delete()

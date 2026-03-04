@@ -540,6 +540,50 @@ export async function bulkDeleteTrucks(ids: string[]) {
     return { error: "No company found", data: null }
   }
 
+  // DAT-004 FIX: Check for active assignments before bulk delete
+  // Prevent deleting trucks that are in_use or assigned to active loads
+  const { data: trucksToDelete } = await supabase
+    .from("trucks")
+    .select("id, truck_number, status")
+    .in("id", ids)
+    .eq("company_id", userData.company_id)
+
+  if (trucksToDelete) {
+    const inUseTrucks = trucksToDelete.filter(t => t.status === "in_use")
+    if (inUseTrucks.length > 0) {
+      const truckNumbers = inUseTrucks.map(t => t.truck_number).join(", ")
+      return { 
+        error: `Cannot delete trucks that are in use: ${truckNumbers}. Please complete or cancel their active loads first.`,
+        data: null 
+      }
+    }
+  }
+
+  // Also check for active loads assigned to these trucks
+  const { data: activeLoads } = await supabase
+    .from("loads")
+    .select("id, truck_id, shipment_number, status")
+    .in("truck_id", ids)
+    .in("status", ["scheduled", "in_transit"])
+    .eq("company_id", userData.company_id)
+
+  if (activeLoads && activeLoads.length > 0) {
+    const blockedTruckIds = [...new Set(activeLoads.map(load => load.truck_id))]
+    const blockedTrucks = await supabase
+      .from("trucks")
+      .select("id, truck_number")
+      .in("id", blockedTruckIds)
+      .eq("company_id", userData.company_id)
+
+    if (blockedTrucks.data && blockedTrucks.data.length > 0) {
+      const truckNumbers = blockedTrucks.data.map(t => t.truck_number).join(", ")
+      return { 
+        error: `Cannot delete trucks with active loads: ${truckNumbers}. Please complete or cancel their loads first.`,
+        data: null 
+      }
+    }
+  }
+
   const { error } = await supabase
     .from("trucks")
     .delete()

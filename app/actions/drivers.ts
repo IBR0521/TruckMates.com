@@ -651,6 +651,32 @@ export async function bulkDeleteDrivers(ids: string[]) {
     return { error: "No company found", data: null }
   }
 
+  // DAT-004 FIX: Check for active assignments before bulk delete
+  // Prevent deleting drivers who are currently on active loads
+  const { data: activeLoads } = await supabase
+    .from("loads")
+    .select("id, driver_id, shipment_number, status")
+    .in("driver_id", ids)
+    .in("status", ["scheduled", "in_transit"])
+    .eq("company_id", userData.company_id)
+
+  if (activeLoads && activeLoads.length > 0) {
+    const blockedDriverIds = [...new Set(activeLoads.map(load => load.driver_id))]
+    const blockedDrivers = await supabase
+      .from("drivers")
+      .select("id, name")
+      .in("id", blockedDriverIds)
+      .eq("company_id", userData.company_id)
+
+    if (blockedDrivers.data && blockedDrivers.data.length > 0) {
+      const driverNames = blockedDrivers.data.map(d => d.name).join(", ")
+      return { 
+        error: `Cannot delete drivers with active loads: ${driverNames}. Please reassign or complete their loads first.`,
+        data: null 
+      }
+    }
+  }
+
   const { error } = await supabase
     .from("drivers")
     .delete()
