@@ -25,7 +25,7 @@ import { toast } from "sonner"
 import { createCustomer } from "@/app/actions/customers"
 import { useRouter } from "next/navigation"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
-import { MapboxAddressAutocomplete } from "@/components/mapbox-address-autocomplete"
+import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
 export default function AddCustomerPage() {
   const router = useRouter()
@@ -257,31 +257,21 @@ export default function AddCustomerPage() {
             <FormSection title="Physical Address" icon={<MapPin className="w-5 h-5" />}>
               <FormGrid cols={2}>
                 <div className="md:col-span-2">
-                  <MapboxAddressAutocomplete
+                  <GooglePlacesAutocomplete
                     value={formData.physical_address_line1 || ""}
                     onChange={(value) => setFormData({ ...formData, physical_address_line1: value })}
                     onPlaceSelect={(address) => {
-                      setFormData(prev => {
-                        const city = address.city?.trim()
-                        const state = address.state?.trim()
-                        const zip = address.zip_code?.trim()
-                        const addressLine1 = address.address_line1?.trim()
-                        const country = address.country?.trim()
-
-                        return {
-                          ...prev,
-                          physical_address_line1: addressLine1 || prev.physical_address_line1,
-                          physical_address_line2: address.address_line2?.trim() ?? prev.physical_address_line2,
-                          // Use parsed value if it exists, otherwise keep previous value
-                          physical_city: city ?? prev.physical_city,
-                          physical_state: state ?? prev.physical_state,
-                          physical_zip: zip ?? prev.physical_zip,
-                          physical_country: country ?? prev.physical_country ?? "USA",
-                        }
-                      })
-                      if (address.address_line1 || address.city || address.state || address.zip_code || address.country) {
-                        toast.success("Address fields auto-filled")
-                      }
+                      setFormData(prev => ({
+                        ...prev,
+                        physical_address_line1: address.address_line1?.trim() || prev.physical_address_line1,
+                        physical_address_line2: address.address_line2?.trim() ?? prev.physical_address_line2,
+                        // Use parsed value if it exists, otherwise keep previous value
+                        physical_city: address.city?.trim() ?? prev.physical_city,
+                        physical_state: address.state?.trim() ?? prev.physical_state,
+                        physical_zip: address.zip_code?.trim() ?? prev.physical_zip,
+                        physical_country: address.country?.trim() ?? prev.physical_country ?? 'USA',
+                      }))
+                      toast.success("Address fields auto-filled")
                     }}
                     placeholder="Enter address (auto-fills city, state, zip)"
                     label="Address Line 1"

@@ -14,7 +14,7 @@ import { Save, Building2, FileText, Gauge, Info, Globe, DollarSign, Calendar, Im
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { generateEIN } from "@/app/actions/settings-ein"
-import { MapboxAddressAutocomplete } from "@/components/mapbox-address-autocomplete"
+import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
 export default function BusinessSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -394,27 +394,19 @@ export default function BusinessSettingsPage() {
               <Separator />
 
               <div>
-                <MapboxAddressAutocomplete
+                <GooglePlacesAutocomplete
                   value={settings.business_address || ""}
                   onChange={(value) => setSettings({ ...settings, business_address: value })}
                   onPlaceSelect={(address) => {
-                    setSettings(prev => {
-                      const city = address.city?.trim()
-                      const state = address.state?.trim()
-                      const zip = address.zip_code?.trim()
-                      const addressLine1 = address.address_line1?.trim()
-                      const country = address.country?.trim()
-
-                      return {
-                        ...prev,
-                        business_address: addressLine1 || prev.business_address,
-                        // Use parsed value if it exists, otherwise keep previous value
-                        business_city: city ?? prev.business_city,
-                        business_state: state ?? prev.business_state,
-                        business_zip: zip ?? prev.business_zip,
-                        business_country: country ?? prev.business_country ?? "USA",
-                      }
-                    })
+                    setSettings(prev => ({
+                      ...prev,
+                      business_address: address.address_line1?.trim() || prev.business_address,
+                      // Use parsed value if it exists, otherwise keep previous value
+                      business_city: address.city?.trim() ?? prev.business_city,
+                      business_state: address.state?.trim() ?? prev.business_state,
+                      business_zip: address.zip_code?.trim() ?? prev.business_zip,
+                      business_country: address.country?.trim() ?? prev.business_country ?? 'USA',
+                    }))
                     toast.success("Address fields auto-filled")
                   }}
                   placeholder="Enter business address (auto-fills city, state, zip)"

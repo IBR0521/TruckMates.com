@@ -46,7 +46,7 @@ import { createLoadDeliveryPoint } from "@/app/actions/load-delivery-points"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { getAddressBookEntries, incrementAddressUsage, type AddressBookEntry } from "@/app/actions/enhanced-address-book"
 import { BookOpen } from "lucide-react"
-import { MapboxAddressAutocomplete } from "@/components/mapbox-address-autocomplete"
+import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
 export default function AddLoadPage() {
   const router = useRouter()
@@ -507,25 +507,18 @@ export default function AddLoadPage() {
                           <div className="grid md:grid-cols-2 gap-3">
                             <Input placeholder="Name *" value={newShipper.name} onChange={(e) => setNewShipper(prev => ({ ...prev, name: e.target.value }))} />
                             <div className="md:col-span-2">
-                              <MapboxAddressAutocomplete
+                              <GooglePlacesAutocomplete
                                 value={newShipper.address}
                                 onChange={(value) => setNewShipper(prev => ({ ...prev, address: value }))}
                                 onPlaceSelect={(address) => {
-                                  setNewShipper(prev => {
-                                    const city = address.city?.trim()
-                                    const state = address.state?.trim()
-                                    const zip = address.zip_code?.trim()
-                                    const addressLine1 = address.address_line1?.trim()
-
-                                    return {
-                                      ...prev,
-                                      // Use parsed value if it exists, otherwise keep previous value
-                                      address: addressLine1 ?? prev.address,
-                                      city: city ?? prev.city,
-                                      state: state ?? prev.state,
-                                      zip: zip ?? prev.zip,
-                                    }
-                                  })
+                                  setNewShipper(prev => ({
+                                    ...prev,
+                                    // Use parsed value if it exists, otherwise keep previous value
+                                    address: address.address_line1?.trim() ?? prev.address,
+                                    city: address.city?.trim() ?? prev.city,
+                                    state: address.state?.trim() ?? prev.state,
+                                    zip: address.zip_code?.trim() ?? prev.zip,
+                                  }))
                                 }}
                                 placeholder="Enter shipper address (auto-fills city, state, zip)"
                                 label="Address"
@@ -561,28 +554,21 @@ export default function AddLoadPage() {
                       )}
                 </div>
                 <div className="md:col-span-2">
-                      <MapboxAddressAutocomplete
+                      <GooglePlacesAutocomplete
                         value={formData.origin}
                         onChange={(value) => setFormData(prev => ({ ...prev, origin: value }))}
                         onPlaceSelect={(address) => {
-                          setFormData(prev => {
-                            const city = address.city || ""
-                            const state = address.state || ""
-                            const zip = address.zip_code || ""
-                            const addressLine1 = address.address_line1
-
-                            return {
-                              ...prev,
-                              origin: addressLine1
-                                ? `${addressLine1}, ${city}, ${state} ${zip}`.trim()
-                                : prev.origin,
-                              // Use parsed value if it exists, otherwise keep previous value
-                              shipperAddress: addressLine1?.trim() ?? prev.shipperAddress,
-                              shipperCity: address.city?.trim() ?? prev.shipperCity,
-                              shipperState: address.state?.trim() ?? prev.shipperState,
-                              shipperZip: address.zip_code?.trim() ?? prev.shipperZip,
-                            }
-                          })
+                          setFormData(prev => ({
+                            ...prev,
+                            origin: address.address_line1 
+                              ? `${address.address_line1}, ${address.city || ''}, ${address.state || ''} ${address.zip_code || ''}`.trim()
+                              : prev.origin,
+                            // Use parsed value if it exists, otherwise keep previous value
+                            shipperAddress: address.address_line1?.trim() ?? prev.shipperAddress,
+                            shipperCity: address.city?.trim() ?? prev.shipperCity,
+                            shipperState: address.state?.trim() ?? prev.shipperState,
+                            shipperZip: address.zip_code?.trim() ?? prev.shipperZip,
+                          }))
                         }}
                         placeholder="Enter pickup location (auto-fills address details)"
                         label="Pickup Location"
@@ -692,25 +678,18 @@ export default function AddLoadPage() {
                               <div className="grid md:grid-cols-2 gap-3">
                                 <Input placeholder="Name *" value={newConsignee.name} onChange={(e) => setNewConsignee(prev => ({ ...prev, name: e.target.value }))} />
                                 <div className="md:col-span-2">
-                                  <MapboxAddressAutocomplete
+                                  <GooglePlacesAutocomplete
                                     value={newConsignee.address}
                                     onChange={(value) => setNewConsignee(prev => ({ ...prev, address: value }))}
                                     onPlaceSelect={(address) => {
-                                      setNewConsignee(prev => {
-                                        const city = address.city?.trim()
-                                        const state = address.state?.trim()
-                                        const zip = address.zip_code?.trim()
-                                        const addressLine1 = address.address_line1?.trim()
-
-                                        return {
-                                          ...prev,
-                                          // Use parsed value if it exists, otherwise keep previous value
-                                          address: addressLine1 ?? prev.address,
-                                          city: city ?? prev.city,
-                                          state: state ?? prev.state,
-                                          zip: zip ?? prev.zip,
-                                        }
-                                      })
+                                      setNewConsignee(prev => ({
+                                        ...prev,
+                                        // Use parsed value if it exists, otherwise keep previous value
+                                        address: address.address_line1?.trim() ?? prev.address,
+                                        city: address.city?.trim() ?? prev.city,
+                                        state: address.state?.trim() ?? prev.state,
+                                        zip: address.zip_code?.trim() ?? prev.zip,
+                                      }))
                                     }}
                                     placeholder="Enter consignee address (auto-fills city, state, zip)"
                                     label="Address"
@@ -746,28 +725,21 @@ export default function AddLoadPage() {
                           )}
                 </div>
                 <div className="md:col-span-2">
-                      <MapboxAddressAutocomplete
+                      <GooglePlacesAutocomplete
                         value={formData.destination}
                         onChange={(value) => setFormData(prev => ({ ...prev, destination: value }))}
                         onPlaceSelect={(address) => {
-                          setFormData(prev => {
-                            const city = address.city || ""
-                            const state = address.state || ""
-                            const zip = address.zip_code || ""
-                            const addressLine1 = address.address_line1
-
-                            return {
-                              ...prev,
-                              destination: addressLine1
-                                ? `${addressLine1}, ${city}, ${state} ${zip}`.trim()
-                                : prev.destination,
-                              // Use parsed value if it exists, otherwise keep previous value
-                              consigneeAddress: addressLine1?.trim() ?? prev.consigneeAddress,
-                              consigneeCity: address.city?.trim() ?? prev.consigneeCity,
-                              consigneeState: address.state?.trim() ?? prev.consigneeState,
-                              consigneeZip: address.zip_code?.trim() ?? prev.consigneeZip,
-                            }
-                          })
+                          setFormData(prev => ({
+                            ...prev,
+                            destination: address.address_line1 
+                              ? `${address.address_line1}, ${address.city || ''}, ${address.state || ''} ${address.zip_code || ''}`.trim()
+                              : prev.destination,
+                            // Use parsed value if it exists, otherwise keep previous value
+                            consigneeAddress: address.address_line1?.trim() ?? prev.consigneeAddress,
+                            consigneeCity: address.city?.trim() ?? prev.consigneeCity,
+                            consigneeState: address.state?.trim() ?? prev.consigneeState,
+                            consigneeZip: address.zip_code?.trim() ?? prev.consigneeZip,
+                          }))
                         }}
                         placeholder="Enter drop off location (auto-fills address details)"
                         label="Drop Off Location"
