@@ -261,6 +261,15 @@ export async function createDVIR(formData: {
       return { error: "If defects are found, you must add at least one defect. Otherwise, set defects_found to false.", data: null }
     }
 
+    // CRH-006 FIX: Driver signature is required for DOT compliance (FMCSA 49 CFR §396.11)
+    // An unsigned DVIR is non-compliant and can result in DOT violations during audits
+    if (!formData.driver_signature) {
+      return { 
+        error: "Driver signature is required for DOT compliance. Please sign the DVIR before submitting.", 
+        data: null 
+      }
+    }
+
     // Determine status based on defects
     let status = "passed"
     if (formData.defects_found && formData.defects && formData.defects.length > 0) {
@@ -293,6 +302,7 @@ export async function createDVIR(formData: {
         defects: formData.defects && formData.defects.length > 0 ? formData.defects : null,
         notes: formData.notes ? sanitizeString(formData.notes, 1000) : null,
         corrective_action: formData.corrective_action ? sanitizeString(formData.corrective_action, 1000) : null,
+        // CRH-006 FIX: Driver signature is required for DOT compliance (FMCSA 49 CFR §396.11)
         driver_signature: formData.driver_signature || null,
         driver_signature_date: formData.driver_signature ? new Date().toISOString() : null,
       })

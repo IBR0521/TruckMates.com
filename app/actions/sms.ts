@@ -211,21 +211,42 @@ function generateSMSMessage(
 }
 
 // Send SMS to driver (for dispatch notifications)
+// EXT-005 FIX: Add company ownership check to prevent cross-company PII exposure
 export async function sendSMSToDriver(
   driverId: string,
   message: string
 ) {
   const supabase = await createClient()
 
-  // Get driver phone number
+  // EXT-005: Get authenticated user's company_id first
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { sent: false, error: "Not authenticated" }
+  }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (!userData?.company_id) {
+    return { sent: false, error: "User company not found" }
+  }
+
+  // EXT-005: Verify driver belongs to user's company before accessing phone number
   const { data: driver } = await supabase
     .from("drivers")
     .select("phone")
     .eq("id", driverId)
-    .single()
+    .eq("company_id", userData.company_id) // CRITICAL: Company ownership check
+    .maybeSingle()
 
   if (!driver?.phone) {
-    return { sent: false, error: "Driver phone number not found" }
+    return { sent: false, error: "Driver phone number not found or access denied" }
   }
 
   return await sendSMS(driver.phone, message)

@@ -35,10 +35,12 @@ export async function createFakeELDDevice(config: {
     return { error: authError || "Not authenticated", data: null }
   }
 
+  // EXT-004 FIX: Never allow callers to override company_id - always use authenticated user's company
+  // This prevents cross-company device injection attacks
   const deviceSerial = `FAKE-${Date.now()}-${Math.random().toString(36).substring(7)}`
   
   const deviceData = {
-    company_id: config.company_id || companyId,
+    company_id: companyId, // Always use authenticated user's company - never allow override
     device_name: config.device_name,
     device_serial_number: deviceSerial,
     provider: "truckmates_simulator",

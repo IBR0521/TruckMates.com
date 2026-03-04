@@ -17,9 +17,19 @@ function getStripe() {
   }
 }
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || ""
+// EXT-003 FIX: Don't default to empty string - return 503 if not configured
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
 export async function POST(request: NextRequest) {
+  // EXT-003: Check webhook secret before processing
+  if (!webhookSecret) {
+    console.error('[Stripe] STRIPE_WEBHOOK_SECRET not configured')
+    return NextResponse.json(
+      { error: 'Webhook not configured' },
+      { status: 503 }
+    )
+  }
+
   const body = await request.text()
   const headersList = await headers()
   const signature = headersList.get("stripe-signature")

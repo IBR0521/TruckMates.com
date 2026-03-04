@@ -23,17 +23,22 @@ export async function getUserRole(): Promise<EmployeeRole | null> {
       return null
     }
 
-    // Get employee_role from metadata or fallback to role
-    const employeeRole = user.user_metadata?.employee_role || null
-
-    // Get role from users table
+    // EXT-002 FIX: NEVER trust JWT user_metadata for authorization - it's user-controlled
+    // Only read role from database (ground truth) which can only be modified by admins
+    // Remove the user_metadata check entirely to prevent RBAC bypass
+    
+    // Get role from users table (ground truth - only modifiable by admins)
     const { data: userData } = await supabase
       .from("users")
       .select("role")
       .eq("id", user.id)
-      .single()
+      .maybeSingle()
 
-    const role = employeeRole || userData?.role || null
+    if (!userData) {
+      return null
+    }
+
+    const role = userData.role || null
     return role ? (mapLegacyRole(role) as EmployeeRole) : null
   } catch (error) {
     console.error("Error getting user role:", error)

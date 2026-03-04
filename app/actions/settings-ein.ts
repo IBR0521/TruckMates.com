@@ -45,7 +45,8 @@ export async function generateEIN(): Promise<{ data: { ein: string; id: string }
 
   try {
     // Generate a unique EIN number (format: XX-XXXXXXX)
-    let newEIN: string
+    // CRH-005 FIX: Initialize newEIN to prevent "used before assignment" error
+    let newEIN: string = ""
     let exists = true
     let attempts = 0
     const maxAttempts = 10
@@ -62,13 +63,14 @@ export async function generateEIN(): Promise<{ data: { ein: string; id: string }
         .from("company_ein_numbers")
         .select("id")
         .eq("ein_number", newEIN)
-        .single()
+        .maybeSingle()
 
       exists = !!existing
       attempts++
     }
 
-    if (exists) {
+    // CRH-005 FIX: Check if we failed to generate a unique EIN before using it
+    if (exists || !newEIN) {
       return { error: "Failed to generate unique EIN after multiple attempts", data: null }
     }
 

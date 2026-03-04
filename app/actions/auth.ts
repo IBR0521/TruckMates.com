@@ -97,8 +97,20 @@ export async function registerSuperAdmin(data: {
     })
 
     // Handle RPC errors - ensure error is serializable
+    // SEC-005 FIX: If company creation fails, delete orphaned auth user to prevent account lockout
     if (rpcResult.error) {
       const errorMsg = rpcResult.error?.message || String(rpcResult.error) || "Failed to create company"
+      
+      // SEC-005: Delete orphaned auth user if company creation failed
+      try {
+        const { createAdminClient } = await import("@/lib/supabase/admin")
+        const adminSupabase = createAdminClient()
+        await adminSupabase.auth.admin.deleteUser(authData.user.id)
+      } catch (deleteError) {
+        console.error('[REGISTRATION] Failed to delete orphaned auth user:', deleteError)
+        // Continue even if deletion fails - log the error
+      }
+      
       return { data: null, error: String(errorMsg).substring(0, 200) }
     }
 

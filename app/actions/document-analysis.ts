@@ -729,10 +729,15 @@ ACTION:
     })
 
     // Call OpenAI Vision API
+    // CRH-008 FIX: Add request timeout to prevent hanging on slow/unreachable OpenAI
     let openaiResponse: Response
     const modelUsed = "gpt-4o" // Using gpt-4o which has vision capabilities
     
     try {
+      // CRH-008: Add 30-second timeout to prevent Vercel function timeout (60s max)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 seconds
+      
       openaiResponse = await fetch(
         "https://api.openai.com/v1/chat/completions",
         {
@@ -741,6 +746,7 @@ ACTION:
         "Content-Type": "application/json",
             "Authorization": `Bearer ${OPENAI_API_KEY}`
       },
+      signal: controller.signal, // CRH-008: Add abort signal for timeout
       body: JSON.stringify({
             model: modelUsed,
         messages: messages,
@@ -751,10 +757,15 @@ ACTION:
         }
       )
     } catch (fetchError: any) {
+      // CRH-008: Clear timeout on error
+      clearTimeout(timeoutId)
       return {
         error: `Failed to connect to OpenAI API: ${fetchError?.message || "Network error"}. Please check your internet connection and try again.`,
         data: null
       }
+    } finally {
+      // CRH-008: Always clear timeout
+      clearTimeout(timeoutId)
     }
 
     if (!openaiResponse.ok) {

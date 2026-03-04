@@ -459,9 +459,11 @@ export async function createLoad(formData: {
         // Create a new route automatically
         const routeName = `${formData.origin} → ${formData.destination}`
         
-        // Calculate estimated distance and time (simplified - in real app, use mapping API)
-        const estimatedDistance = "Calculating..." // Could use Google Maps API here
-        const estimatedTime = "Calculating..." // Could use Google Maps API here
+        // DAT-008 FIX: Don't store placeholder UI text in database - use null instead
+        // UI can display "Calculating..." when these fields are null
+        // If you want to calculate immediately, await Google Maps API call here before inserting
+        const estimatedDistance = null // Will be calculated later or shown as "Calculating..." in UI
+        const estimatedTime = null // Will be calculated later or shown as "Calculating..." in UI
 
         const routeResult = await createRoute({
           name: routeName,
@@ -702,6 +704,20 @@ export async function createLoad(formData: {
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  // DAT-001 FIX: Update truck status to "in_use" when load is created with truck_id
+  if (data.truck_id) {
+    try {
+      await supabase
+        .from("trucks")
+        .update({ status: "in_use" })
+        .eq("id", data.truck_id)
+        .eq("company_id", userData.company_id)
+    } catch (truckUpdateError) {
+      console.warn("[createLoad] Failed to update truck status:", truckUpdateError)
+      // Don't fail load creation if truck status update fails
+    }
   }
 
   // Auto-schedule check calls if load has driver

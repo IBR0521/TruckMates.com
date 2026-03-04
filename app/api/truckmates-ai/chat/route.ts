@@ -23,12 +23,14 @@ export async function POST(request: NextRequest) {
     }
 
     // SECURITY: Rate limit (10 requests per minute per user)
-    const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown"
-    const rateLimitResult = await rateLimit({
-      limit: 10,
-      window: 60,
-      identifier: `ai-chat-${user.id}`,
-    })
+    // EXT-006 FIX: Correct function signature - rateLimit(identifierString, options)
+    const rateLimitResult = await rateLimit(
+      `ai-chat-${user.id}`, // identifier as first parameter (string)
+      {
+        limit: 10,
+        window: 60,
+      }
+    )
 
     if (!rateLimitResult.success) {
       return NextResponse.json(

@@ -51,14 +51,19 @@ export async function updateCompany(formData: FormData) {
     .from("users")
     .select("company_id, role")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
-  if (userDataError || !userData?.company_id) {
+  if (userDataError) {
+    return { success: false, error: userDataError.message || "Failed to fetch user data" }
+  }
+
+  if (!userData?.company_id) {
     return { success: false, error: "No company found" }
   }
 
-  // Only managers can update company
-  if (userData.role !== "manager") {
+  // SEC-006 FIX: Use correct role names - super_admin and operations_manager (not "manager")
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!MANAGER_ROLES.includes(userData.role)) {
     return { success: false, error: "Only managers can update company information" }
   }
 

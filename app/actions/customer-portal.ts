@@ -360,11 +360,27 @@ export async function getCustomerPortalLoads(token: string) {
   const portalAccess = portalResult.data
   const supabase = await createClient()
 
-  // Get loads for this customer - use strict customer_id matching only
+  // SEC-004 FIX: Replace SELECT * with explicit column allowlist
+  // Customers should never see internal_notes, financial fields, or internal route metadata
   let query = supabase
     .from("loads")
     .select(`
-      *,
+      id,
+      shipment_number,
+      origin,
+      destination,
+      status,
+      load_date,
+      estimated_delivery,
+      pickup_time,
+      delivery_time,
+      weight,
+      weight_kg,
+      contents,
+      pieces,
+      pallets,
+      special_instructions,
+      customer_reference,
       driver:drivers(name, phone),
       truck:trucks(truck_number, make, model),
       route:routes(name, origin, destination, status)
@@ -400,13 +416,30 @@ export async function getCustomerPortalLoad(token: string, loadId: string) {
   const portalAccess = portalResult.data
   const supabase = await createClient()
 
+  // SEC-004 FIX: Replace SELECT * with explicit column allowlist
+  // Exclude internal_notes, value, rate, margin, and all internal route fields
   const { data: load, error } = await supabase
     .from("loads")
     .select(`
-      *,
-      driver:drivers(name, phone, email),
+      id,
+      shipment_number,
+      origin,
+      destination,
+      status,
+      load_date,
+      estimated_delivery,
+      pickup_time,
+      delivery_time,
+      weight,
+      weight_kg,
+      contents,
+      pieces,
+      pallets,
+      special_instructions,
+      customer_reference,
+      driver:drivers(name, phone),
       truck:trucks(truck_number, make, model),
-      route:routes(*),
+      route:routes(name, origin, destination, status),
       invoices:invoices(*)
     `)
     .eq("id", loadId)

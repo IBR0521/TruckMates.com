@@ -56,6 +56,22 @@ export async function middleware(request: NextRequest) {
 
     return response
   } catch (error) {
+    // EXT-001 FIX: Fail closed, not open - redirect to login on any error
+    // If Supabase is unreachable, don't allow unauthenticated access to protected routes
+    const isProtectedRoute = 
+      request.nextUrl.pathname.startsWith('/dashboard') ||
+      request.nextUrl.pathname.startsWith('/marketplace/dashboard') ||
+      request.nextUrl.pathname.startsWith('/account-setup') ||
+      request.nextUrl.pathname.startsWith('/portal') ||
+      request.nextUrl.pathname.startsWith('/tracking')
+    
+    if (isProtectedRoute) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
+    
+    // For public routes, allow through even on error
     return NextResponse.next({ request })
   }
 }

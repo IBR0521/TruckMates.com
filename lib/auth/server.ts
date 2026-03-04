@@ -17,9 +17,9 @@ export async function getCurrentUser() {
       return { data: null, error: "Not authenticated" }
     }
 
-    // Get employee_role from auth metadata (primary source)
-    const employeeRole = user.user_metadata?.employee_role || null
-
+    // EXT-002 FIX: NEVER trust JWT user_metadata for authorization - it's user-controlled
+    // Only read role from database (ground truth) which can only be modified by admins
+    
     // Get user profile from database
     // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
     const { data: userData, error: userError } = await supabase
@@ -36,8 +36,8 @@ export async function getCurrentUser() {
       return { data: null, error: "User not found" }
     }
 
-    // Priority: auth metadata employee_role > users table role
-    const finalRole = employeeRole || userData.role || 'driver'
+    // Use database role only (ground truth - only modifiable by admins)
+    const finalRole = userData.role || 'driver'
 
     // Return only primitives - ensure JSON serializable
     return {
