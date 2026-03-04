@@ -75,34 +75,34 @@ export async function getTruck(id: string) {
       return { error: "Not authenticated", data: null }
     }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
 
-  const { data: truck, error } = await supabase
-    .from("trucks")
-    .select("*")
-    .eq("id", id)
-    .eq("company_id", userData.company_id)
-    .maybeSingle()
+    const { data: truck, error } = await supabase
+      .from("trucks")
+      .select("*")
+      .eq("id", id)
+      .eq("company_id", userData.company_id)
+      .maybeSingle()
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    if (error) {
+      return { error: error.message, data: null }
+    }
 
-  if (!truck) {
-    return { error: "Truck not found", data: null }
-  }
+    if (!truck) {
+      return { error: "Truck not found", data: null }
+    }
 
     return { data: truck, error: null }
   } catch (error: any) {

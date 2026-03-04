@@ -267,101 +267,101 @@ export async function createFeedback(formData: {
       error: authError,
     } = await supabase.auth.getUser()
 
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  // Get user's company_id
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-  const companyError = result.error
-
-  if (companyError || !company_id) {
-    return { error: companyError || "No company found", data: null }
-  }
-
-  // Validate and sanitize input
-  const title = sanitizeString(formData.title.trim())
-  const message = sanitizeString(formData.message.trim())
-
-  if (!title || title.length < 3) {
-    return { error: "Title must be at least 3 characters long", data: null }
-  }
-
-  if (!message || message.length < 10) {
-    return { error: "Message must be at least 10 characters long", data: null }
-  }
-
-  // Validate type
-  const validTypes = ["feedback", "suggestion", "bug_report", "feature_request"]
-  if (!validTypes.includes(formData.type)) {
-    return { error: "Invalid feedback type", data: null }
-  }
-
-  // Validate priority if provided
-  if (formData.priority) {
-    const validPriorities = ["low", "normal", "high", "urgent"]
-    if (!validPriorities.includes(formData.priority)) {
-      return { error: "Invalid priority level", data: null }
+    if (authError || !user) {
+      return { error: "Not authenticated", data: null }
     }
-  }
 
-  // Get user info for email notification (use provided info or fallback to database)
-  const { data: userData } = await supabase
-    .from("users")
-    .select("email, full_name")
-    .eq("id", user.id)
-    .single()
+    // Get user's company_id
+    const result = await getCachedUserCompany(user.id)
+    const company_id = result.company_id
+    const companyError = result.error
 
-  // Use provided user info or fallback to database user info
-  const feedbackUserName = formData.userName 
-    ? `${formData.userName}${formData.userSurname ? ` ${formData.userSurname}` : ''}`
-    : userData?.full_name || "User"
-  const feedbackUserEmail = formData.userEmail || userData?.email || "Unknown"
+    if (companyError || !company_id) {
+      return { error: companyError || "No company found", data: null }
+    }
 
-  // Get company name for email
-  const { data: companyData } = await supabase
-    .from("companies")
-    .select("name")
-    .eq("id", company_id)
-    .single()
+    // Validate and sanitize input
+    const title = sanitizeString(formData.title.trim())
+    const message = sanitizeString(formData.message.trim())
 
-  // Insert feedback
-  const { data: feedback, error } = await supabase
-    .from("feedback")
-    .insert({
-      user_id: user.id,
-      company_id: company_id,
+    if (!title || title.length < 3) {
+      return { error: "Title must be at least 3 characters long", data: null }
+    }
+
+    if (!message || message.length < 10) {
+      return { error: "Message must be at least 10 characters long", data: null }
+    }
+
+    // Validate type
+    const validTypes = ["feedback", "suggestion", "bug_report", "feature_request"]
+    if (!validTypes.includes(formData.type)) {
+      return { error: "Invalid feedback type", data: null }
+    }
+
+    // Validate priority if provided
+    if (formData.priority) {
+      const validPriorities = ["low", "normal", "high", "urgent"]
+      if (!validPriorities.includes(formData.priority)) {
+        return { error: "Invalid priority level", data: null }
+      }
+    }
+
+    // Get user info for email notification (use provided info or fallback to database)
+    const { data: userData } = await supabase
+      .from("users")
+      .select("email, full_name")
+      .eq("id", user.id)
+      .single()
+
+    // Use provided user info or fallback to database user info
+    const feedbackUserName = formData.userName 
+      ? `${formData.userName}${formData.userSurname ? ` ${formData.userSurname}` : ''}`
+      : userData?.full_name || "User"
+    const feedbackUserEmail = formData.userEmail || userData?.email || "Unknown"
+
+    // Get company name for email
+    const { data: companyData } = await supabase
+      .from("companies")
+      .select("name")
+      .eq("id", company_id)
+      .single()
+
+    // Insert feedback
+    const { data: feedback, error } = await supabase
+      .from("feedback")
+      .insert({
+        user_id: user.id,
+        company_id: company_id,
+        type: formData.type,
+        category: formData.category ? sanitizeString(formData.category) : null,
+        title: title,
+        message: message,
+        priority: formData.priority || "normal",
+        status: "open",
+      })
+      .select()
+      .single()
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    // Send email notification (non-blocking)
+    sendFeedbackEmail({
       type: formData.type,
-      category: formData.category ? sanitizeString(formData.category) : null,
       title: title,
       message: message,
       priority: formData.priority || "normal",
-      status: "open",
+      userName: feedbackUserName,
+      userEmail: feedbackUserEmail,
+      companyName: companyData?.name,
+    }).catch((emailError) => {
+      // Don't fail the feedback submission if email fails
+      console.error("[FEEDBACK] Failed to send email notification:", emailError)
     })
-    .select()
-    .single()
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  // Send email notification (non-blocking)
-  sendFeedbackEmail({
-    type: formData.type,
-    title: title,
-    message: message,
-    priority: formData.priority || "normal",
-    userName: feedbackUserName,
-    userEmail: feedbackUserEmail,
-    companyName: companyData?.name,
-  }).catch((emailError) => {
-    // Don't fail the feedback submission if email fails
-    console.error("[FEEDBACK] Failed to send email notification:", emailError)
-  })
-
-  revalidatePath("/dashboard/feedback")
-  return { data: feedback, error: null }
+    revalidatePath("/dashboard/feedback")
+    return { data: feedback, error: null }
   } catch (error: any) {
     console.error("[FEEDBACK] Error in createFeedback:", error)
     return { error: error?.message || "Failed to create feedback", data: null }
