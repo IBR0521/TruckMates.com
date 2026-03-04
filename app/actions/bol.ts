@@ -19,11 +19,12 @@ export async function getBOLs(filters?: {
     return { error: "Not authenticated", data: null }
   }
 
+  // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -73,11 +74,12 @@ export async function getBOL(id: string) {
     return { error: "Not authenticated", data: null }
   }
 
+  // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -141,11 +143,12 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
     return { error: "Not authenticated", data: null }
   }
 
+  // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -283,11 +286,12 @@ export async function createBOL(formData: {
     return { error: "Not authenticated", data: null }
   }
 
+  // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -513,11 +517,12 @@ export async function updateBOLPOD(
     return { error: "Not authenticated", data: null }
   }
 
+  // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -590,11 +595,12 @@ export async function getBOLTemplates() {
     return { error: "Not authenticated", data: null }
   }
 
+  // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -636,11 +642,12 @@ export async function createBOLTemplate(formData: {
     return { error: "Not authenticated", data: null }
   }
 
+  // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("company_id")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
