@@ -331,7 +331,7 @@ export async function generateSettlementPDF(settlementId: string): Promise<{
               <div class="calculation-row text-bold">Bonuses:</div>
               ${calculationDetails.bonuses.map((bonus: any) => `
               <div class="calculation-row bonus-item">
-                <span>${bonus.description || bonus.type}</span>
+                <span>${escapeHtml(bonus.description || bonus.type)}</span>
                 <span>${formatCurrency(bonus.amount || 0)}</span>
               </div>
               `).join("")}

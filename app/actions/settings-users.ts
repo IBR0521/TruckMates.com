@@ -358,7 +358,7 @@ export async function inviteUser(data: {
           <div class="content">
             <p>Dear ${data.email},</p>
             
-            <p><strong>${inviterName}</strong> has invited you to join <strong>${companyName}</strong> on TruckMates Logistics Platform.</p>
+            <p><strong>${escapeHtml(inviterName)}</strong> has invited you to join <strong>${escapeHtml(companyName)}</strong> on TruckMates Logistics Platform.</p>
             
             <div class="info-box">
               <p style="margin: 0;"><strong>Your Role:</strong> ${data.role.charAt(0).toUpperCase() + data.role.slice(1).replace(/_/g, " ")}</p>

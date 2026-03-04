@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCompanySettings } from "./number-formats"
 import { revalidatePath } from "next/cache"
+import { escapeHtml } from "@/lib/html-escape"
 
 // Helper to get Resend client (checks both env var and database)
 async function getResendClient() {
@@ -182,7 +183,7 @@ export async function sendInvoiceEmail(
         <h2 style="color: #2c3e50; margin-top: 0;">Invoice ${invoice.invoice_number}</h2>
         <p style="margin: 5px 0;"><strong>Amount:</strong> $${Number(invoice.amount).toFixed(2)}</p>
         <p style="margin: 5px 0;"><strong>Due Date:</strong> ${new Date(invoice.due_date).toLocaleDateString()}</p>
-        ${invoice.description ? `<p style="margin: 5px 0;"><strong>Description:</strong> ${invoice.description}</p>` : ""}
+        ${invoice.description ? `<p style="margin: 5px 0;"><strong>Description:</strong> ${escapeHtml(invoice.description)}</p>` : ""}
       </div>
       <div style="white-space: pre-wrap;">${bodyText.replace(/\n/g, "<br>")}</div>
       <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">

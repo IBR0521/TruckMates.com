@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { revalidatePath } from "next/cache"
 import { sanitizeString } from "@/lib/validation"
+import { escapeHtml } from "@/lib/html-escape"
 
 // Initialize Resend for email notifications (uses platform API key)
 async function getResendClient() {
@@ -117,19 +118,19 @@ async function sendFeedbackEmail(feedbackData: {
           </div>
           
           <div class="info-row">
-            <span class="info-label">From:</span> ${feedbackData.userName} (${feedbackData.userEmail})
+            <span class="info-label">From:</span> ${escapeHtml(feedbackData.userName)} (${escapeHtml(feedbackData.userEmail)})
           </div>
-          ${feedbackData.companyName ? `<div class="info-row"><span class="info-label">Company:</span> ${feedbackData.companyName}</div>` : ''}
+          ${feedbackData.companyName ? `<div class="info-row"><span class="info-label">Company:</span> ${escapeHtml(feedbackData.companyName)}</div>` : ''}
           <div class="info-row">
             <span class="info-label">Priority:</span> 
             <span class="priority-badge" style="background: ${priorityColors[feedbackData.priority] || '#2563eb'}">
-              ${feedbackData.priority.charAt(0).toUpperCase() + feedbackData.priority.slice(1)}
+              ${escapeHtml(feedbackData.priority.charAt(0).toUpperCase() + feedbackData.priority.slice(1))}
             </span>
           </div>
           
           <div class="message-box">
-            <h3 style="margin-top: 0; color: #1f2937;">${feedbackData.title}</h3>
-            <p style="white-space: pre-wrap; margin-bottom: 0;">${feedbackData.message}</p>
+            <h3 style="margin-top: 0; color: #1f2937;">${escapeHtml(feedbackData.title)}</h3>
+            <p style="white-space: pre-wrap; margin-bottom: 0;">${escapeHtml(feedbackData.message)}</p>
           </div>
           
           <p style="margin-top: 30px;">
