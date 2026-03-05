@@ -438,21 +438,25 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
     const avgPerDriver = Object.keys(paymentsByDriver).length > 0 ? totalPaid / Object.keys(paymentsByDriver).length : 0
     const avgPerLoad = totalLoads > 0 ? totalPaid / totalLoads : 0
 
-  // FIXED: Return only aggregated data, not full settlement objects
-  return {
-    data: {
-      // Don't return full settlements array - only return aggregated summary
-      paymentsByDriver: Object.values(paymentsByDriver),
-      totalPaid,
-      totalLoads,
-      avgPerDriver,
-      avgPerLoad,
-      period: {
-        start: startDate || null,
-        end: endDate || null,
+    // FIXED: Return only aggregated data, not full settlement objects
+    return {
+      data: {
+        // Don't return full settlements array - only return aggregated summary
+        paymentsByDriver: Object.values(paymentsByDriver),
+        totalPaid,
+        totalLoads,
+        avgPerDriver,
+        avgPerLoad,
+        period: {
+          start: startDate || null,
+          end: endDate || null,
+        },
       },
-    },
-    error: null,
+      error: null,
+    }
+  } catch (error: any) {
+    console.error("[getDriverPaymentsReport] Unexpected error:", error)
+    return { error: error?.message || "Failed to get driver payments report", data: null }
   }
 }
 
