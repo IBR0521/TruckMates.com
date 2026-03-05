@@ -18,12 +18,14 @@ export async function calculateRemainingHOS(driverId: string, date?: string) {
   const targetDate = date || new Date().toISOString().split('T')[0]
 
   // Get all logs for the driver for the current day
+  // V3-007 FIX: Add LIMIT (single day should be safe, but add limit for safety)
   const { data: logs, error } = await supabase
     .from("eld_logs")
     .select("*")
     .eq("driver_id", driverId)
     .eq("log_date", targetDate)
     .order("start_time", { ascending: true })
+    .limit(500) // V3-007: Limit per day (should be more than enough for one day)
 
   if (error) {
     return { error: error.message, data: null }
@@ -120,6 +122,7 @@ export async function getDriverScorecard(driverId: string, startDate?: string, e
   const end = endDate || new Date().toISOString().split('T')[0]
 
   // Get logs
+  // V3-007 FIX: Add LIMIT to prevent OOM on large date ranges
   const { data: logs, error: logsError } = await supabase
     .from("eld_logs")
     .select("*")
@@ -127,6 +130,7 @@ export async function getDriverScorecard(driverId: string, startDate?: string, e
     .eq("company_id", userData.company_id)
     .gte("log_date", start)
     .lte("log_date", end)
+    .limit(10000) // V3-007: Limit to 10k records to prevent OOM
 
   if (logsError) {
     return { error: logsError.message, data: null }

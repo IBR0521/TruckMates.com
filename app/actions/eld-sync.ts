@@ -27,7 +27,9 @@ async function syncKeepTruckinData(device: any) {
     const fallbackUrl = "https://api.keeptruckin.com/v1"
     
     // Sync HOS Logs
-    let logsResponse = await fetch(`${apiBaseUrl}/logs?device_id=${device.provider_device_id}`, {
+    // V3-009 FIX: Encode provider_device_id to prevent URL manipulation
+    const encodedDeviceId = encodeURIComponent(device.provider_device_id)
+    let logsResponse = await fetch(`${apiBaseUrl}/logs?device_id=${encodedDeviceId}`, {
       headers: {
         'X-Api-Key': device.api_key,
         'X-Api-Secret': device.api_secret,
@@ -277,7 +279,8 @@ async function syncSamsaraData(device: any) {
   try {
     // Samsara uses different endpoint structure
     const baseUrl = "https://api.samsara.com"
-    const vehicleId = device.provider_device_id
+    // V3-009 FIX: Encode provider_device_id to prevent URL manipulation
+    const vehicleId = encodeURIComponent(device.provider_device_id)
 
     // Sync HOS Logs - Correct Samsara v2 API endpoint
     // Get driver IDs first if available

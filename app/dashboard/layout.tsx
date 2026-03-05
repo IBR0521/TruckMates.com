@@ -51,6 +51,7 @@ export default function DashboardLayout({
   }, [])
 
   // Save sidebar collapse state to localStorage and handle resize - client only
+  // V3-005 FIX: Remove sidebarCollapsed from deps to prevent infinite render loop
   useEffect(() => {
     if (!mounted || typeof window === "undefined") return
 
@@ -64,12 +65,25 @@ export default function DashboardLayout({
     window.addEventListener("resize", handleResize)
     handleResize() // Check on mount
 
-    if (window.innerWidth >= 1024) {
-      localStorage.setItem("sidebarCollapsed", JSON.stringify(sidebarCollapsed))
+    // Use a ref to track previous width to avoid re-renders
+    let previousWidth = window.innerWidth
+    const checkAndSave = () => {
+      if (window.innerWidth >= 1024 && window.innerWidth !== previousWidth) {
+        localStorage.setItem("sidebarCollapsed", JSON.stringify(sidebarCollapsed))
+        previousWidth = window.innerWidth
+      }
     }
+    
+    // Only save to localStorage on resize, not on every sidebarCollapsed change
+    const resizeHandler = () => {
+      handleResize()
+      checkAndSave()
+    }
+    
+    window.addEventListener("resize", resizeHandler)
 
-    return () => window.removeEventListener("resize", handleResize)
-  }, [sidebarCollapsed, mounted])
+    return () => window.removeEventListener("resize", resizeHandler)
+  }, [mounted]) // V3-005 FIX: Only depend on mounted, not sidebarCollapsed
 
   // Check if user has a company_id, redirect to account setup if not
   useEffect(() => {

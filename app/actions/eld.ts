@@ -503,6 +503,7 @@ export async function getELDMileageData(filters: {
   const company_id = result.company_id
 
   // Get mileage data from ELD logs for the specified trucks and date range
+  // V3-007 FIX: Add LIMIT to prevent OOM on large datasets
   const { data: logs, error } = await supabase
     .from("eld_logs")
     .select("truck_id, miles_driven, log_date, location_start, location_end")
@@ -512,6 +513,7 @@ export async function getELDMileageData(filters: {
     .lte("log_date", filters.end_date)
     .eq("log_type", "driving")
     .not("miles_driven", "is", null)
+    .limit(10000) // V3-007: Limit to 10k records to prevent OOM
 
   if (error) {
     return { error: error.message, data: null }

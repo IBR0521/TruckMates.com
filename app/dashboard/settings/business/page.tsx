@@ -13,7 +13,7 @@ import { getCompanySettings, updateCompanySettings } from "@/app/actions/number-
 import { Save, Building2, FileText, Gauge, Info, Globe, DollarSign, Calendar, Image, Sparkles, MapPin } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
-import { generateEIN } from "@/app/actions/settings-ein"
+import { updateEIN } from "@/app/actions/settings-ein"
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
 export default function BusinessSettingsPage() {
@@ -72,7 +72,6 @@ export default function BusinessSettingsPage() {
     business_country: "United States",
   })
   const [previewNumber, setPreviewNumber] = useState("")
-  const [isGeneratingEIN, setIsGeneratingEIN] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -163,22 +162,8 @@ export default function BusinessSettingsPage() {
     }
   }
 
-  async function handleGenerateEIN() {
-    setIsGeneratingEIN(true)
-    try {
-      const result = await generateEIN()
-      if (result.error) {
-        toast.error(result.error)
-      } else if (result.data) {
-        setSettings({ ...settings, ein_number: result.data.ein, tax_id: result.data.ein })
-        toast.success(`EIN ${result.data.ein} generated and saved successfully`)
-      }
-    } catch (error: any) {
-      toast.error("Failed to generate EIN")
-    } finally {
-      setIsGeneratingEIN(false)
-    }
-  }
+  // V3-003 FIX: Removed handleGenerateEIN - fake EIN generation is illegal
+  // Users must enter their real IRS-issued EIN
 
 
   if (isLoading) {
@@ -290,27 +275,21 @@ export default function BusinessSettingsPage() {
 
               <div>
                 <Label htmlFor="ein_number">EIN (Employer Identification Number)</Label>
-                <div className="flex gap-2 mt-2">
-                  <Input
-                    id="ein_number"
-                    value={settings.ein_number}
-                    onChange={(e) => setSettings({ ...settings, ein_number: e.target.value, tax_id: e.target.value })}
-                    placeholder="12-3456789"
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleGenerateEIN}
-                    disabled={isGeneratingEIN}
-                  >
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    {isGeneratingEIN ? "Generating..." : "Generate"}
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Generate a unique EIN number in TruckMates or enter your existing EIN
-                </p>
+                <Input
+                  id="ein_number"
+                  value={settings.ein_number}
+                  onChange={(e) => setSettings({ ...settings, ein_number: e.target.value, tax_id: e.target.value })}
+                  placeholder="12-3456789"
+                  className="mt-2"
+                  pattern="\d{2}-\d{7}"
+                  title="EIN must be in format XX-XXXXXXX (e.g., 12-3456789)"
+                />
+                <Alert className="mt-2">
+                  <AlertDescription className="text-sm">
+                    <strong>Important:</strong> Enter your real IRS-issued EIN. EINs are issued by the IRS and cannot be generated. 
+                    Using a fake EIN on tax filings (IFTA, W-9, 1099) is illegal and constitutes tax fraud.
+                  </AlertDescription>
+                </Alert>
               </div>
 
               <div>

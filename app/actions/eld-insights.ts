@@ -35,6 +35,7 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
   const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
   // Get logs
+  // V3-007 FIX: Add LIMIT and date range end to prevent OOM
   let logsQuery = supabase
     .from("eld_logs")
     .select(`
@@ -44,6 +45,8 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
     `)
     .eq("company_id", userData.company_id)
     .gte("log_date", startDate)
+    .lte("log_date", new Date().toISOString().split('T')[0]) // Add end date
+    .limit(5000) // V3-007: Limit to prevent OOM
 
   if (driverId) {
     logsQuery = logsQuery.eq("driver_id", driverId)
@@ -56,6 +59,7 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
   }
 
   // Get violations
+  // V3-007 FIX: Add LIMIT and date range end to prevent OOM
   let violationsQuery = supabase
     .from("eld_events")
     .select(`
@@ -64,6 +68,8 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
     `)
     .eq("company_id", userData.company_id)
     .gte("event_time", startDate)
+    .lte("event_time", new Date().toISOString()) // Add end date
+    .limit(1000) // V3-007: Limit to prevent OOM
 
   if (driverId) {
     violationsQuery = violationsQuery.eq("driver_id", driverId)

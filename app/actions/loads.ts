@@ -560,10 +560,12 @@ export async function createLoad(formData: {
 
           // Only assign if driver is not already on an active load
           if (!activeDriverLoads || activeDriverLoads.length === 0) {
+            // V3-002 FIX: Add company_id filter to prevent cross-tenant data access
             const { data: driver } = await supabase
               .from("drivers")
               .select("id, name, status")
               .eq("id", topDriverId)
+              .eq("company_id", company_id)
               .eq("status", "active")
               .maybeSingle()
             if (driver) finalDriverId = driver.id
@@ -571,12 +573,14 @@ export async function createLoad(formData: {
         }
 
         if (settings.auto_assign_truck && !finalTruckId && topTruckId) {
+          // V3-002 FIX: Add company_id filter to prevent cross-tenant data access
           const { data: truck } = await supabase
             .from("trucks")
             .select("id, truck_number, status")
             .eq("id", topTruckId)
+            .eq("company_id", company_id)
             .in("status", ["available", "in_use"])
-            .single()
+            .maybeSingle()
           if (truck) finalTruckId = truck.id
         }
       }
@@ -1611,33 +1615,39 @@ export async function getLoadSuggestions(origin?: string, destination?: string) 
       const topTruckId = Object.entries(truckCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
 
       if (topDriverId) {
+        // V3-002 FIX: Add company_id filter to prevent cross-tenant data access
         const { data: driver } = await supabase
           .from("drivers")
           .select("id, name, status")
           .eq("id", topDriverId)
+          .eq("company_id", company_id)
           .eq("status", "active")
-          .single()
+          .maybeSingle()
         if (driver) suggestions.suggestedDriver = driver
       }
 
       if (topTruckId) {
+        // V3-002 FIX: Add company_id filter to prevent cross-tenant data access
         const { data: truck } = await supabase
           .from("trucks")
           .select("id, truck_number, status")
           .eq("id", topTruckId)
+          .eq("company_id", company_id)
           .in("status", ["available", "in_use"])
-          .single()
+          .maybeSingle()
         if (truck) suggestions.suggestedTruck = truck
       }
 
       // Get last used customer
       const lastLoad = recentLoads[0]
       if (lastLoad.customer_id) {
+        // V3-002 FIX: Add company_id filter to prevent cross-tenant data access
         const { data: customer } = await supabase
           .from("customers")
           .select("id, name, company_name")
           .eq("id", lastLoad.customer_id)
-          .single()
+          .eq("company_id", company_id)
+          .maybeSingle()
         if (customer) suggestions.lastUsedCustomer = customer
       }
     }

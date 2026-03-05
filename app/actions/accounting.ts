@@ -604,15 +604,19 @@ export async function createInvoice(formData: {
   let subtotal = finalAmount
 
   // Apply tax if enabled
+  // V3-006 FIX: Round at each step to prevent float precision errors
   if (settings.tax_enabled && settings.default_tax_rate) {
     if (settings.tax_inclusive) {
       // Tax is included in the amount, calculate subtotal
-      subtotal = finalAmount / (1 + settings.default_tax_rate / 100)
-      taxAmount = finalAmount - subtotal
+      // Round to 2 decimal places to prevent float precision errors
+      subtotal = Math.round((finalAmount / (1 + settings.default_tax_rate / 100)) * 100) / 100
+      taxAmount = Math.round((finalAmount - subtotal) * 100) / 100
+      // Ensure final amount matches exactly
+      finalAmount = Math.round((subtotal + taxAmount) * 100) / 100
     } else {
       // Tax is added to the amount
-      taxAmount = (subtotal * settings.default_tax_rate) / 100
-      finalAmount = subtotal + taxAmount
+      taxAmount = Math.round((subtotal * settings.default_tax_rate / 100) * 100) / 100
+      finalAmount = Math.round((subtotal + taxAmount) * 100) / 100
     }
   }
 

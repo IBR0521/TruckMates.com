@@ -273,10 +273,12 @@ export async function sendInvoiceEmail(
     }
 
     // Update invoice status to "sent"
+    // V3-001 FIX: Add company_id filter to prevent IDOR
     await supabase
       .from("invoices")
       .update({ status: "sent" })
       .eq("id", invoiceId)
+      .eq("company_id", userData.company_id)
 
     revalidatePath("/dashboard/accounting/invoices")
     revalidatePath(`/dashboard/accounting/invoices/${invoiceId}`)
