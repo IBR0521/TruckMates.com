@@ -57,12 +57,12 @@ export async function getAddressBookContacts(filters?: {
     if (!filters?.type || filters.type === "all" || filters.type === "customer") {
       let customerQuery = supabase
         .from("customers")
-        .select("*")
+        .select("id, name, company_name, email, phone, address_line1, address_line2, city, state, zip, status, customer_type, payment_terms")
         .eq("company_id", userData.company_id)
 
       if (filters?.status) {
         customerQuery = customerQuery.eq("status", filters.status)
-      }
+      } 
 
       if (filters?.search) {
         customerQuery = customerQuery.or(
@@ -70,10 +70,11 @@ export async function getAddressBookContacts(filters?: {
         )
       }
 
-      const { data: customers, error: customersError } = await customerQuery
+      // V3-007 FIX: Add LIMIT to prevent unbounded queries
+      const { data: customers, error: customersError } = await customerQuery.limit(1000)
 
       if (!customersError && customers) {
-        customers.forEach((customer) => {
+        customers.forEach((customer: any) => {
           const address = [customer.address_line1, customer.address_line2]
             .filter(Boolean)
             .join(", ")
@@ -102,7 +103,7 @@ export async function getAddressBookContacts(filters?: {
     if (!filters?.type || filters.type === "all" || filters.type === "vendor") {
       let vendorQuery = supabase
         .from("vendors")
-        .select("*")
+        .select("id, name, company_name, email, phone, address_line1, address_line2, city, state, zip, status, vendor_type, payment_terms")
         .eq("company_id", userData.company_id)
 
       if (filters?.status) {
@@ -115,10 +116,11 @@ export async function getAddressBookContacts(filters?: {
         )
       }
 
-      const { data: vendors, error: vendorsError } = await vendorQuery
+      // V3-007 FIX: Add LIMIT to prevent unbounded queries
+      const { data: vendors, error: vendorsError } = await vendorQuery.limit(1000)
 
       if (!vendorsError && vendors) {
-        vendors.forEach((vendor) => {
+        vendors.forEach((vendor: any) => {
           const address = [vendor.address_line1, vendor.address_line2]
             .filter(Boolean)
             .join(", ")
@@ -147,7 +149,7 @@ export async function getAddressBookContacts(filters?: {
     if (!filters?.type || filters.type === "all" || filters.type === "driver") {
       let driverQuery = supabase
         .from("drivers")
-        .select("*")
+        .select("id, name, email, phone, address, city, state, zip, status, license_number, license_expiry")
         .eq("company_id", userData.company_id)
 
       if (filters?.status) {
@@ -160,10 +162,11 @@ export async function getAddressBookContacts(filters?: {
         )
       }
 
-      const { data: drivers, error: driversError } = await driverQuery
+      // V3-007 FIX: Add LIMIT to prevent unbounded queries
+      const { data: drivers, error: driversError } = await driverQuery.limit(1000)
 
       if (!driversError && drivers) {
-        drivers.forEach((driver) => {
+        drivers.forEach((driver: any) => {
           allContacts.push({
             id: driver.id,
             type: "driver",
@@ -198,10 +201,11 @@ export async function getAddressBookContacts(filters?: {
         )
       }
 
-      const { data: employees, error: employeesError } = await employeeQuery
+      // V3-007 FIX: Add LIMIT to prevent unbounded queries
+      const { data: employees, error: employeesError } = await employeeQuery.limit(1000)
 
       if (!employeesError && employees) {
-        employees.forEach((employee) => {
+        employees.forEach((employee: any) => {
           allContacts.push({
             id: employee.id,
             type: "employee",
@@ -240,7 +244,8 @@ export async function getAddressBookContacts(filters?: {
 
     return { data: filteredContacts, error: null }
   } catch (error: any) {
-    return { data: [], error: error.message || "Failed to fetch contacts" }
+    console.error("[getAddressBookContacts] Unexpected error:", error)
+    return { data: [], error: error?.message || "Failed to fetch contacts" }
   }
 }
 
@@ -276,6 +281,16 @@ export async function getAddressBookContact(
     return { data: null, error: "No company found" }
   }
 
+  // V3-014 FIX: Validate input parameters
+  if (!id || typeof id !== "string" || id.trim().length === 0) {
+    return { data: null, error: "Invalid contact ID" }
+  }
+
+  if (!type || !["customer", "vendor", "driver", "employee"].includes(type)) {
+    return { data: null, error: "Invalid contact type" }
+  }
+
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     let contact: any = null
 
@@ -283,10 +298,10 @@ export async function getAddressBookContact(
       case "customer": {
         const { data, error } = await supabase
           .from("customers")
-          .select("*")
+          .select("id, name, company_name, email, phone, address_line1, address_line2, city, state, zip, status, customer_type, payment_terms")
           .eq("id", id)
           .eq("company_id", userData.company_id)
-          .single()
+          .maybeSingle()
 
         if (error || !data) break
 
@@ -316,7 +331,7 @@ export async function getAddressBookContact(
       case "vendor": {
         const { data, error } = await supabase
           .from("vendors")
-          .select("*")
+          .select("id, name, company_name, email, phone, address_line1, address_line2, city, state, zip, status, vendor_type, payment_terms")
           .eq("id", id)
           .eq("company_id", userData.company_id)
           .maybeSingle()
@@ -349,7 +364,7 @@ export async function getAddressBookContact(
       case "driver": {
         const { data, error } = await supabase
           .from("drivers")
-          .select("*")
+          .select("id, name, email, phone, address, city, state, zip, status, license_number, license_expiry")
           .eq("id", id)
           .eq("company_id", userData.company_id)
           .maybeSingle()
@@ -402,7 +417,8 @@ export async function getAddressBookContact(
 
     return { data: contact, error: contact ? null : "Contact not found" }
   } catch (error: any) {
-    return { data: null, error: error.message || "Failed to fetch contact" }
+    console.error("[getAddressBookContact] Unexpected error:", error)
+    return { data: null, error: error?.message || "Failed to fetch contact" }
   }
 }
 
