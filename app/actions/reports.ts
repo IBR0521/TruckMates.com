@@ -461,14 +461,14 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
 }
 
 // Get monthly revenue trend
-export async function getMonthlyRevenueTrend(months: number = 6) {
-  // FIXED: Add RBAC check
-  const permissionCheck = await checkViewPermission("reports")
-  if (!permissionCheck.allowed) {
-    return { error: permissionCheck.error || "You don't have permission to view reports", data: [] }
-  }
-
+export async function getMonthlyRevenueTrend(months = 6) {
   try {
+    // RBAC: only allow users with reports permission
+    const permissionCheck = await checkViewPermission("reports")
+    if (!permissionCheck.allowed) {
+      return { error: permissionCheck.error || "You don't have permission to view reports", data: [] }
+    }
+
     const companyId = await getCompanyId()
     if (!companyId) {
       return { error: "Not authenticated", data: [] }
@@ -480,90 +480,83 @@ export async function getMonthlyRevenueTrend(months: number = 6) {
     startDate.setMonth(startDate.getMonth() - months)
     startDate.setDate(1) // Start of first month
 
-    // Get ALL invoices for revenue calculation (including pending/overdue)
-    // Also try to get revenue from loads if invoices don't have data
-    const { data: invoices, error: invoiceError } = await supabase
+    // Invoices
+    const { data: invoices } = await supabase
       .from("invoices")
-      .select("issue_date, amount, status, created_at")
+      .select("id, load_id, issue_date, amount, created_at")
       .eq("company_id", companyId)
       .gte("created_at", startDate.toISOString())
       .lte("created_at", endDate.toISOString())
       .order("created_at", { ascending: true })
 
-    // MEDIUM FIX: Add limit to prevent unbounded queries even with date range
-    // Also get revenue from loads (value field) as fallback
+    // Loads (fallback revenue source)
     const { data: loads } = await supabase
       .from("loads")
-      .select("created_at, value, total_rate")
+      .select("id, created_at, value, total_rate")
       .eq("company_id", companyId)
       .gte("created_at", startDate.toISOString())
       .lte("created_at", endDate.toISOString())
-      .limit(10000) // Reasonable limit for 6 months of data
+      .limit(10000)
 
-    // Group by month - combine invoices and loads
     const monthlyData: Record<string, number> = {}
-    
-    // Process invoices (use issue_date if available, otherwise created_at)
-    if (invoices) {
-      invoices.forEach((invoice) => {
-        let date: Date | null = null
-        if (invoice.issue_date) {
-          date = new Date(invoice.issue_date)
-        } else if (invoice.created_at) {
-          date = new Date(invoice.created_at)
-        }
-        
-        if (!date || isNaN(date.getTime())) return
-        
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-        const amount = Number(invoice.amount) || 0
-        if (amount > 0) {
-          monthlyData[monthKey] = (monthlyData[monthKey] || 0) + amount
-        }
-      })
-    }
 
-    // FIXED: Track which loads have invoices to prevent double-counting
+    // Helper to normalize a Date into YYYY-MM string
+    const toMonthKey = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+
+    // Process invoices first
+    invoices?.forEach((invoice: any) => {
+      let date: Date | null = null
+      if (invoice.issue_date) {
+        date = new Date(invoice.issue_date)
+      } else if (invoice.created_at) {
+        date = new Date(invoice.created_at)
+      }
+      if (!date || Number.isNaN(date.getTime())) return
+
+      const monthKey = toMonthKey(date)
+      const amount = Number(invoice.amount) || 0
+      if (amount > 0) {
+        monthlyData[monthKey] = (monthlyData[monthKey] || 0) + amount
+      }
+    })
+
+    // Track loads that already have invoices so we don't double‑count
     const loadIdsWithInvoices = new Set<string>()
-    invoices?.forEach((invoice) => {
+    invoices?.forEach((invoice: any) => {
       if (invoice.load_id) {
         loadIdsWithInvoices.add(invoice.load_id)
       }
     })
-    
-    // Process loads - only add if no invoice exists for that load
-    if (loads) {
-      loads.forEach((load) => {
-        if (!load.created_at) return
-        // Skip if this load already has an invoice
-        if (load.id && loadIdsWithInvoices.has(load.id)) {
-          return
-        }
-        
-        const date = new Date(load.created_at)
-        if (isNaN(date.getTime())) return
-        
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-        const amount = Number(load.total_rate) || Number(load.value) || 0
-        if (amount > 0) {
-          // FIXED: Add full amount, not 0.5 - we've already filtered out loads with invoices
-          monthlyData[monthKey] = (monthlyData[monthKey] || 0) + amount
-        }
-      })
-    }
 
-    // Generate all months in range (even if no data) for consistent chart display
-    const trend: Array<{ month: string; amount: number }> = []
+    // Add load revenue only when there is no invoice for that load
+    loads?.forEach((load: any) => {
+      if (!load.created_at) return
+      if (load.id && loadIdsWithInvoices.has(load.id)) return
+
+      const date = new Date(load.created_at)
+      if (Number.isNaN(date.getTime())) return
+
+      const monthKey = toMonthKey(date)
+      const amount = Number(load.total_rate) || Number(load.value) || 0
+      if (amount > 0) {
+        monthlyData[monthKey] = (monthlyData[monthKey] || 0) + amount
+      }
+    })
+
+    // Build a stable array of months for charting
+    const trend: Array<{ month: string; amount: number; amountInThousands: number; unit: string }> = []
     for (let i = months - 1; i >= 0; i--) {
       const date = new Date()
       date.setMonth(date.getMonth() - i)
-      date.setDate(1) // First day of month
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+      date.setDate(1)
+      const monthKey = toMonthKey(date)
+      const total = monthlyData[monthKey] || 0
       trend.push({
         month: monthKey,
-        amount: monthlyData[monthKey] || 0, // FIXED: Store full amount, not divided by 1000
-        amountInThousands: (monthlyData[monthKey] || 0) / 1000, // Provide both for backward compatibility
-        unit: "dollars", // FIXED: Add unit metadata
+        amount: total,
+        amountInThousands: total / 1000,
+        unit: "dollars",
       })
     }
 
