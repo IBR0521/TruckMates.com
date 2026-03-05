@@ -36,11 +36,13 @@ export async function getBOLs(filters?: {
       return { error: "No company found", data: null }
     }
 
+    // V3-007 FIX: Replace select(*) with explicit columns and add LIMIT
     let query = supabase
       .from("bols")
-      .select("*")
+      .select("id, bol_number, load_id, template_id, shipper_name, consignee_name, carrier_name, pickup_date, delivery_date, freight_charges, status, created_at, updated_at")
       .eq("company_id", userData.company_id)
       .order("created_at", { ascending: false })
+      .limit(1000)
 
     if (filters?.load_id) {
       query = query.eq("load_id", filters.load_id)
@@ -62,12 +64,21 @@ export async function getBOLs(filters?: {
     }
 
     return { data, error: null }
+  } catch (error: any) {
+    console.error("[getBOLs] Unexpected error:", error)
+    return { data: null, error: error?.message || "An unexpected error occurred" }
+  }
 }
 
 // Get single BOL
 export async function getBOL(id: string) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
+    // V3-014 FIX: Validate input parameters
+    if (!id || typeof id !== "string" || id.trim().length === 0) {
+      return { error: "Invalid BOL ID", data: null }
+    }
+
     const supabase = await createClient()
 
     const {
@@ -93,9 +104,10 @@ export async function getBOL(id: string) {
       return { error: "No company found", data: null }
     }
 
+    // V3-007 FIX: Replace select(*) with explicit columns
     const { data, error } = await supabase
       .from("bols")
-      .select("*")
+      .select("id, company_id, bol_number, load_id, template_id, shipper_name, shipper_address, shipper_city, shipper_state, shipper_zip, shipper_phone, shipper_email, consignee_name, consignee_address, consignee_city, consignee_state, consignee_zip, consignee_phone, consignee_email, carrier_name, carrier_mc_number, carrier_dot_number, pickup_date, delivery_date, freight_charges, payment_terms, special_instructions, shipper_signature, driver_signature, consignee_signature, status, created_at, updated_at, metadata")
       .eq("id", id)
       .eq("company_id", userData.company_id)
       .maybeSingle()
@@ -109,6 +121,10 @@ export async function getBOL(id: string) {
     }
 
     return { data, error: null }
+  } catch (error: any) {
+    console.error("[getBOL] Unexpected error:", error)
+    return { data: null, error: error?.message || "An unexpected error occurred" }
+  }
 }
 
 /**
@@ -137,7 +153,14 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
   } | null
   error: string | null
 }> {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!loadId || typeof loadId !== "string" || loadId.trim().length === 0) {
+      return { error: "Invalid load ID", data: null }
+    }
+
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -197,7 +220,7 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
       `)
       .eq("id", loadId)
       .eq("company_id", userData.company_id)
-      .single()
+      .maybeSingle()
 
     if (loadError || !load) {
       return { error: loadError?.message || "Load not found", data: null }
@@ -234,7 +257,7 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
       .from("companies")
       .select("name, mc_number, dot_number")
       .eq("id", userData.company_id)
-      .single()
+      .maybeSingle()
 
     return {
       data: {
@@ -242,13 +265,20 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
         ...consigneeData,
         pickup_date: load.load_date || undefined,
         delivery_date: load.estimated_delivery || undefined,
-        freight_charges: load.rate || load.value || load.total_rate || undefined,
+        // V3-013 FIX: Guard parseFloat against NaN
+        freight_charges: (() => {
+          const rate = load.rate || load.value || load.total_rate
+          if (!rate) return undefined
+          const parsed = typeof rate === "number" ? rate : parseFloat(String(rate))
+          return isNaN(parsed) || !isFinite(parsed) ? undefined : parsed
+        })(),
         special_instructions: load.special_instructions || load.pickup_instructions || load.delivery_instructions || undefined,
       },
       error: null,
     }
   } catch (error: any) {
-    return { error: error.message || "Failed to get BOL data from load", data: null }
+    console.error("[getBOLDataFromLoad] Unexpected error:", error)
+    return { error: error?.message || "Failed to get BOL data from load", data: null }
   }
 }
 
@@ -280,70 +310,77 @@ export async function createBOL(formData: {
   special_instructions?: string
   auto_populate?: boolean // If true, auto-populate from load data
 }) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!formData.load_id || typeof formData.load_id !== "string" || formData.load_id.trim().length === 0) {
+      return { error: "Load ID is required", data: null }
+    }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const supabase = await createClient()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
+    // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .maybeSingle()
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
-  // Auto-populate from load if requested or if fields are missing
-  // LOW FIX 3: Destructure auto_populate before merging to prevent leak
-  const { auto_populate, ...restFormData } = formData
-  let bolData: any = { ...restFormData }
-  if (auto_populate || !restFormData.shipper_name || !restFormData.consignee_name) {
-    const loadData = await getBOLDataFromLoad(restFormData.load_id)
-    if (loadData.data) {
-      // Merge: formData takes precedence, but fill in missing fields from load
-      bolData = {
-        ...loadData.data,
-        ...restFormData, // Form data overrides auto-populated data
-        load_id: restFormData.load_id, // Preserve load_id
-        template_id: restFormData.template_id,
-        payment_terms: restFormData.payment_terms,
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
+
+    // Auto-populate from load if requested or if fields are missing
+    // LOW FIX 3: Destructure auto_populate before merging to prevent leak
+    const { auto_populate, ...restFormData } = formData
+    let bolData: any = { ...restFormData }
+    if (auto_populate || !restFormData.shipper_name || !restFormData.consignee_name) {
+      const loadData = await getBOLDataFromLoad(restFormData.load_id)
+      if (loadData.data) {
+        // Merge: formData takes precedence, but fill in missing fields from load
+        bolData = {
+          ...loadData.data,
+          ...restFormData, // Form data overrides auto-populated data
+          load_id: restFormData.load_id, // Preserve load_id
+          template_id: restFormData.template_id,
+          payment_terms: restFormData.payment_terms,
+        }
       }
     }
-  }
 
-  // Get company info for carrier if not provided
-  if (!bolData.carrier_name || !bolData.carrier_mc_number) {
-    const { data: company } = await supabase
-      .from("companies")
-      .select("name, mc_number, dot_number")
-      .eq("id", userData.company_id)
-      .single()
+    // Get company info for carrier if not provided
+    if (!bolData.carrier_name || !bolData.carrier_mc_number) {
+      const { data: company } = await supabase
+        .from("companies")
+        .select("name, mc_number, dot_number")
+        .eq("id", userData.company_id)
+        .maybeSingle()
 
-    if (company) {
-      bolData.carrier_name = bolData.carrier_name || company.name || undefined
-      bolData.carrier_mc_number = bolData.carrier_mc_number || company.mc_number || undefined
-      bolData.carrier_dot_number = bolData.carrier_dot_number || company.dot_number || undefined
+      if (company) {
+        bolData.carrier_name = bolData.carrier_name || company.name || undefined
+        bolData.carrier_mc_number = bolData.carrier_mc_number || company.mc_number || undefined
+        bolData.carrier_dot_number = bolData.carrier_dot_number || company.dot_number || undefined
+      }
     }
-  }
 
-  // CRITICAL FIX 2 & MEDIUM FIX 1: Generate unique BOL number using crypto.randomUUID to prevent collisions
-  const bolNumber = `BOL-${crypto.randomUUID().split('-')[0].toUpperCase()}-${Date.now().toString(36).toUpperCase()}`
+    // CRITICAL FIX 2 & MEDIUM FIX 1: Generate unique BOL number using crypto.randomUUID to prevent collisions
+    const bolNumber = `BOL-${crypto.randomUUID().split('-')[0].toUpperCase()}-${Date.now().toString(36).toUpperCase()}`
 
-  const { data, error } = await supabase
-    .from("bols")
-    .insert({
+    const { data, error } = await supabase
+      .from("bols")
+      .insert({
       company_id: userData.company_id,
       load_id: bolData.load_id,
       bol_number: bolNumber,
@@ -367,7 +404,12 @@ export async function createBOL(formData: {
       carrier_dot_number: bolData.carrier_dot_number || null,
       pickup_date: bolData.pickup_date || null,
       delivery_date: bolData.delivery_date || null,
-      freight_charges: bolData.freight_charges || null,
+      // V3-013 FIX: Guard parseFloat against NaN
+      freight_charges: (() => {
+        if (!bolData.freight_charges) return null
+        const charges = typeof bolData.freight_charges === "number" ? bolData.freight_charges : parseFloat(String(bolData.freight_charges))
+        return isNaN(charges) || !isFinite(charges) ? null : charges
+      })(),
       payment_terms: bolData.payment_terms || null,
       special_instructions: bolData.special_instructions || null,
       status: "draft",
@@ -375,12 +417,16 @@ export async function createBOL(formData: {
     .select()
     .single()
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    if (error) {
+      return { error: error.message, data: null }
+    }
 
-  revalidatePath("/dashboard/bols")
-  return { data, error: null }
+    revalidatePath("/dashboard/bols")
+    return { data, error: null }
+  } catch (error: any) {
+    console.error("[createBOL] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 // Update BOL signature
@@ -394,110 +440,133 @@ export async function updateBOLSignature(
     ip_address?: string
   }
 ) {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  // SECURITY FIX 3: Role check - consignee signatures should only be added by authorized users
-  // Drivers and dispatchers can sign as driver, but consignee requires manager/admin/owner or external consignee
-  if (signatureType === "consignee" && !["manager", "admin", "owner", "dispatcher"].includes(userData.role || "")) {
-    // Allow if user is external (not in users table) or has special permission
-    // For now, we'll allow it but log it
-    console.warn(`[BOL] Consignee signature added by user with role: ${userData.role}`)
-  }
-
-  const signatureField = `${signatureType}_signature`
-
-  // Get current BOL to check status and signatures
-  const { data: currentBOL } = await supabase
-    .from("bols")
-    .select("status, shipper_signature, driver_signature, consignee_signature")
-    .eq("id", bolId)
-    .eq("company_id", userData.company_id)
-    .single()
-
-  if (!currentBOL) {
-    return { error: "BOL not found", data: null }
-  }
-
-  // HIGH FIX 3: Enforce signature order - shipper before driver, driver before consignee
-  if (signatureType === "driver" && !(currentBOL as any).shipper_signature) {
-    return { error: "Shipper must sign before driver", data: null }
-  }
-  if (signatureType === "consignee" && !(currentBOL as any).driver_signature) {
-    return { error: "Driver must sign before consignee", data: null }
-  }
-
-  // Reject if BOL is already delivered or completed
-  if (["delivered", "completed"].includes((currentBOL as any).status)) {
-    return { error: `Cannot update signature on ${(currentBOL as any).status} BOL`, data: null }
-  }
-
-  const updateData: any = {
-    [signatureField]: signatureData,
-  }
-
-  // Check if we should update status to 'signed'
-  // At minimum, driver signature should be required
-  const hasDriverSignature = signatureType === "driver" || (currentBOL as any).driver_signature
-
-  if (hasDriverSignature && (currentBOL as any).status === "draft") {
-    updateData.status = "signed"
-  }
-
-  // If consignee signature is being added (POD captured), update status to delivered
-  if (signatureType === "consignee" && updateData.consignee_signature) {
-    updateData.status = "delivered"
-  }
-
-  const { data, error } = await supabase
-    .from("bols")
-    .update(updateData)
-    .eq("id", bolId)
-    .eq("company_id", userData.company_id)
-    .select()
-    .single()
-
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  // Auto-store PDF if BOL is completed (has consignee signature)
-  if (data && data.consignee_signature && signatureType === "consignee") {
-    try {
-      const { autoStoreBOLPDFOnCompletion } = await import("./bol-enhanced")
-      await autoStoreBOLPDFOnCompletion(bolId, userData.company_id).catch((err) => {
-        console.error("Failed to auto-store BOL PDF:", err)
-        // Don't fail if PDF storage fails
-      })
-    } catch (error) {
-      console.error("Error importing bol-enhanced:", error)
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!bolId || typeof bolId !== "string" || bolId.trim().length === 0) {
+      return { error: "Invalid BOL ID", data: null }
     }
-  }
+    if (!signatureType || !["shipper", "driver", "consignee"].includes(signatureType)) {
+      return { error: "Invalid signature type", data: null }
+    }
+    if (!signatureData.signature_url || typeof signatureData.signature_url !== "string") {
+      return { error: "Signature URL is required", data: null }
+    }
+    if (!signatureData.signed_by || typeof signatureData.signed_by !== "string") {
+      return { error: "Signed by is required", data: null }
+    }
+    if (!signatureData.signed_at || typeof signatureData.signed_at !== "string") {
+      return { error: "Signed at is required", data: null }
+    }
 
-  revalidatePath("/dashboard/bols")
-  revalidatePath(`/dashboard/bols/${bolId}`)
-  return { data, error: null }
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id, role")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
+
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
+
+    // SECURITY FIX 3: Role check - consignee signatures should only be added by authorized users
+    // Drivers and dispatchers can sign as driver, but consignee requires manager/admin/owner or external consignee
+    if (signatureType === "consignee" && !["manager", "admin", "owner", "dispatcher"].includes(userData.role || "")) {
+      // Allow if user is external (not in users table) or has special permission
+      // For now, we'll allow it but log it
+      console.warn(`[BOL] Consignee signature added by user with role: ${userData.role}`)
+    }
+
+    const signatureField = `${signatureType}_signature`
+
+    // Get current BOL to check status and signatures
+    const { data: currentBOL } = await supabase
+      .from("bols")
+      .select("status, shipper_signature, driver_signature, consignee_signature")
+      .eq("id", bolId)
+      .eq("company_id", userData.company_id)
+      .maybeSingle()
+
+    if (!currentBOL) {
+      return { error: "BOL not found", data: null }
+    }
+
+    // HIGH FIX 3: Enforce signature order - shipper before driver, driver before consignee
+    if (signatureType === "driver" && !(currentBOL as any).shipper_signature) {
+      return { error: "Shipper must sign before driver", data: null }
+    }
+    if (signatureType === "consignee" && !(currentBOL as any).driver_signature) {
+      return { error: "Driver must sign before consignee", data: null }
+    }
+
+    // Reject if BOL is already delivered or completed
+    if (["delivered", "completed"].includes((currentBOL as any).status)) {
+      return { error: `Cannot update signature on ${(currentBOL as any).status} BOL`, data: null }
+    }
+
+    const updateData: any = {
+      [signatureField]: signatureData,
+    }
+
+    // Check if we should update status to 'signed'
+    // At minimum, driver signature should be required
+    const hasDriverSignature = signatureType === "driver" || (currentBOL as any).driver_signature
+
+    if (hasDriverSignature && (currentBOL as any).status === "draft") {
+      updateData.status = "signed"
+    }
+
+    // If consignee signature is being added (POD captured), update status to delivered
+    if (signatureType === "consignee" && updateData.consignee_signature) {
+      updateData.status = "delivered"
+    }
+
+    const { data, error } = await supabase
+      .from("bols")
+      .update(updateData)
+      .eq("id", bolId)
+      .eq("company_id", userData.company_id)
+      .select()
+      .single()
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    // Auto-store PDF if BOL is completed (has consignee signature)
+    if (data && data.consignee_signature && signatureType === "consignee") {
+      try {
+        const { autoStoreBOLPDFOnCompletion } = await import("./bol-enhanced")
+        await autoStoreBOLPDFOnCompletion(bolId, userData.company_id).catch((err) => {
+          console.error("Failed to auto-store BOL PDF:", err)
+          // Don't fail if PDF storage fails
+        })
+      } catch (error) {
+        console.error("Error importing bol-enhanced:", error)
+      }
+    }
+
+    revalidatePath("/dashboard/bols")
+    revalidatePath(`/dashboard/bols/${bolId}`)
+    return { data, error: null }
+  } catch (error: any) {
+    console.error("[updateBOLSignature] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 // Update BOL Proof of Delivery
@@ -511,85 +580,98 @@ export async function updateBOLPOD(
     pod_delivery_condition?: string
   }
 ) {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  const updateData: any = {}
-  if (podData.pod_photos !== undefined) updateData.pod_photos = podData.pod_photos
-  if (podData.pod_notes !== undefined) updateData.pod_notes = podData.pod_notes
-  if (podData.pod_received_by !== undefined) updateData.pod_received_by = podData.pod_received_by
-  if (podData.pod_received_date !== undefined) updateData.pod_received_date = podData.pod_received_date
-  if (podData.pod_delivery_condition !== undefined) updateData.pod_delivery_condition = podData.pod_delivery_condition
-
-  // LOW FIX 1: Only update status if not already delivered or completed
-  const { data: currentBOL } = await supabase
-    .from("bols")
-    .select("status")
-    .eq("id", bolId)
-    .eq("company_id", userData.company_id)
-    .single()
-
-  if (currentBOL && !["delivered", "completed"].includes(currentBOL.status)) {
-    if (podData.pod_received_date || podData.pod_received_by) {
-      updateData.status = "delivered"
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!bolId || typeof bolId !== "string" || bolId.trim().length === 0) {
+      return { error: "Invalid BOL ID", data: null }
     }
-  }
 
-  const { data, error } = await supabase
-    .from("bols")
-    .update(updateData)
-    .eq("id", bolId)
-    .eq("company_id", userData.company_id)
-    .select()
-    .single()
+    const supabase = await createClient()
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  // Auto-store PDF if BOL is completed (has consignee signature)
-  if (data && (data as any).consignee_signature) {
-    try {
-      const { autoStoreBOLPDFOnCompletion } = await import("./bol-enhanced")
-      await autoStoreBOLPDFOnCompletion(bolId, userData.company_id).catch((err) => {
-        console.error("Failed to auto-store BOL PDF:", err)
-        // Don't fail if PDF storage fails
-      })
-    } catch (error) {
-      console.error("Error importing bol-enhanced:", error)
+    if (!user) {
+      return { error: "Not authenticated", data: null }
     }
-  }
 
-  revalidatePath("/dashboard/bols")
-  revalidatePath(`/dashboard/bols/${bolId}`)
-  return { data, error: null }
+    // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
+
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
+
+    const updateData: any = {}
+    if (podData.pod_photos !== undefined) updateData.pod_photos = podData.pod_photos
+    if (podData.pod_notes !== undefined) updateData.pod_notes = podData.pod_notes
+    if (podData.pod_received_by !== undefined) updateData.pod_received_by = podData.pod_received_by
+    if (podData.pod_received_date !== undefined) updateData.pod_received_date = podData.pod_received_date
+    if (podData.pod_delivery_condition !== undefined) updateData.pod_delivery_condition = podData.pod_delivery_condition
+
+    // LOW FIX 1: Only update status if not already delivered or completed
+    const { data: currentBOL } = await supabase
+      .from("bols")
+      .select("status")
+      .eq("id", bolId)
+      .eq("company_id", userData.company_id)
+      .maybeSingle()
+
+    if (currentBOL && !["delivered", "completed"].includes(currentBOL.status)) {
+      if (podData.pod_received_date || podData.pod_received_by) {
+        updateData.status = "delivered"
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("bols")
+      .update(updateData)
+      .eq("id", bolId)
+      .eq("company_id", userData.company_id)
+      .select()
+      .single()
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    // Auto-store PDF if BOL is completed (has consignee signature)
+    if (data && (data as any).consignee_signature) {
+      try {
+        const { autoStoreBOLPDFOnCompletion } = await import("./bol-enhanced")
+        await autoStoreBOLPDFOnCompletion(bolId, userData.company_id).catch((err) => {
+          console.error("Failed to auto-store BOL PDF:", err)
+          // Don't fail if PDF storage fails
+        })
+      } catch (error) {
+        console.error("Error importing bol-enhanced:", error)
+      }
+    }
+
+    revalidatePath("/dashboard/bols")
+    revalidatePath(`/dashboard/bols/${bolId}`)
+    return { data, error: null }
+  } catch (error: any) {
+    console.error("[updateBOLPOD] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 // Get BOL templates
 export async function getBOLTemplates() {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -614,18 +696,24 @@ export async function getBOLTemplates() {
     return { error: "No company found", data: null }
   }
 
+  // V3-007 FIX: Replace select(*) with explicit columns and add LIMIT
   const { data, error } = await supabase
     .from("bol_templates")
-    .select("*")
+    .select("id, name, description, is_default, template_html, template_fields, created_at, updated_at")
     .eq("company_id", userData.company_id)
     .order("is_default", { ascending: false })
     .order("created_at", { ascending: false })
+    .limit(100)
 
   if (error) {
     return { error: error.message, data: null }
   }
 
   return { data, error: null }
+  } catch (error: any) {
+    console.error("[getBOLTemplates] Unexpected error:", error)
+    return { data: null, error: error?.message || "An unexpected error occurred" }
+  }
 }
 
 // Create BOL template
@@ -636,7 +724,14 @@ export async function createBOLTemplate(formData: {
   template_html?: string
   template_fields?: any
 }) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!formData.name || typeof formData.name !== "string" || formData.name.trim().length === 0) {
+      return { error: "Template name is required", data: null }
+    }
+
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -688,6 +783,9 @@ export async function createBOLTemplate(formData: {
 
   revalidatePath("/dashboard/bols/templates")
   return { data, error: null }
+  } catch (error: any) {
+    console.error("[createBOLTemplate] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
-
 
