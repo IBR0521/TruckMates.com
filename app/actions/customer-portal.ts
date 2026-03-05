@@ -377,31 +377,35 @@ export async function getPortalAccessByToken(token: string) {
       .eq("is_active", true)
       .maybeSingle()
 
-  if (error) {
-    const result = handleDbError(error, null)
-    if (result.error) return { error: "Invalid or expired access token", data: null }
-    return { error: "Table not available. Please run the SQL schema.", data: null }
+    if (error) {
+      const result = handleDbError(error, null)
+      if (result.error) return { error: "Invalid or expired access token", data: null }
+      return { error: "Table not available. Please run the SQL schema.", data: null }
+    }
+
+    if (!data) {
+      return { error: "Invalid or expired access token", data: null }
+    }
+
+    // Check expiration
+    if (data.expires_at && new Date(data.expires_at) < new Date()) {
+      return { error: "Access token has expired", data: null }
+    }
+
+    // Update last accessed
+    await supabase
+      .from("customer_portal_access")
+      .update({
+        last_accessed_at: new Date().toISOString(),
+        access_count: (data.access_count || 0) + 1,
+      })
+      .eq("id", data.id)
+
+    return { data, error: null }
+  } catch (error: any) {
+    console.error("[getPortalAccessByToken] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
-
-  if (!data) {
-    return { error: "Invalid or expired access token", data: null }
-  }
-
-  // Check expiration
-  if (data.expires_at && new Date(data.expires_at) < new Date()) {
-    return { error: "Access token has expired", data: null }
-  }
-
-  // Update last accessed
-  await supabase
-    .from("customer_portal_access")
-    .update({
-      last_accessed_at: new Date().toISOString(),
-      access_count: (data.access_count || 0) + 1,
-    })
-    .eq("id", data.id)
-
-  return { data, error: null }
 }
 
 /**
@@ -771,27 +775,27 @@ export async function revokeCustomerPortalAccess(customerId: string) {
       .eq("id", user.id)
       .maybeSingle()
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
 
-  if (userData.role !== 'manager') {
-    return { error: "Only managers can revoke portal access", data: null }
-  }
+    if (userData.role !== 'manager') {
+      return { error: "Only managers can revoke portal access", data: null }
+    }
 
-  const { error } = await supabase
-    .from("customer_portal_access")
-    .update({ is_active: false })
-    .eq("customer_id", customerId)
-    .eq("company_id", userData.company_id)
+    const { error } = await supabase
+      .from("customer_portal_access")
+      .update({ is_active: false })
+      .eq("customer_id", customerId)
+      .eq("company_id", userData.company_id)
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    if (error) {
+      return { error: error.message, data: null }
+    }
 
     revalidatePath("/dashboard/settings/customer-portal")
     return { data: { success: true }, error: null }
@@ -800,4 +804,3 @@ export async function revokeCustomerPortalAccess(customerId: string) {
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
-
