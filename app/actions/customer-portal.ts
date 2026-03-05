@@ -31,7 +31,7 @@ async function getResendClient() {
           .from("company_integrations")
           .select("resend_enabled")
           .eq("company_id", result.company_id)
-          .single()
+          .maybeSingle()
 
         if (!integrations?.resend_enabled) {
           console.log("[RESEND] Integration not enabled for company")
@@ -73,6 +73,14 @@ export async function createCustomerPortalAccess(formData: {
 }) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
+    // V3-014 FIX: Validate input parameters
+    if (!formData.customer_id || typeof formData.customer_id !== "string" || formData.customer_id.trim().length === 0) {
+      return { error: "Customer ID is required", data: null }
+    }
+    if (formData.expires_days !== undefined && (typeof formData.expires_days !== "number" || formData.expires_days < 0)) {
+      return { error: "Expires days must be a non-negative number", data: null }
+    }
+
     const supabase = await createClient()
 
     const {
@@ -87,7 +95,7 @@ export async function createCustomerPortalAccess(formData: {
       .from("users")
       .select("company_id, role")
       .eq("id", user.id)
-      .single()
+      .maybeSingle()
 
     if (userError) {
       return { error: userError.message || "Failed to fetch user data", data: null }
@@ -152,8 +160,8 @@ export async function createCustomerPortalAccess(formData: {
         .from("customer_portal_access")
         .update(updateData)
         .eq("id", existingAccess.id)
-        .select()
-        .single()
+        .select("id, customer_id, company_id, access_token, portal_url, can_view_location, can_submit_loads, can_view_invoices, can_download_documents, email_notifications, sms_notifications, expires_at, is_active, access_count, last_accessed_at, created_at, updated_at")
+        .maybeSingle()
 
       data = updated
       error = updateError
@@ -173,8 +181,8 @@ export async function createCustomerPortalAccess(formData: {
           expires_at: expiresAt,
           is_active: true,
         })
-        .select()
-        .single()
+        .select("id, customer_id, company_id, access_token, portal_url, can_view_location, can_submit_loads, can_view_invoices, can_download_documents, email_notifications, sms_notifications, expires_at, is_active, access_count, last_accessed_at, created_at, updated_at")
+        .maybeSingle()
 
       data = created
       error = createError
@@ -191,7 +199,7 @@ export async function createCustomerPortalAccess(formData: {
           customerEmail: customer.email,
           customerName: customer.name || customer.company_name || "Customer",
           portalUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://truckmates.com"}/portal/${accessToken}`,
-          companyName: userData.company_id ? (await supabase.from("companies").select("name").eq("id", userData.company_id).single()).data?.name || "TruckMates" : "TruckMates",
+          companyName: userData.company_id ? (await supabase.from("companies").select("name").eq("id", userData.company_id).maybeSingle()).data?.name || "TruckMates" : "TruckMates",
           expiresAt: expiresAt,
         })
       } catch (emailError) {
@@ -207,6 +215,21 @@ export async function createCustomerPortalAccess(formData: {
     console.error("[createCustomerPortalAccess] Unexpected error:", error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text: string | null | undefined): string {
+  if (!text) return ''
+  const map: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;',
+  }
+  return text.replace(/[&<>"']/g, (m) => map[m])
 }
 
 /**
@@ -229,8 +252,9 @@ async function sendPortalAccessEmail(data: {
   const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://truckmates.com"
 
+  // V3-014 FIX: Escape HTML to prevent XSS
   const expiresText = data.expiresAt
-    ? `Your access will expire on ${new Date(data.expiresAt).toLocaleDateString()}.`
+    ? `Your access will expire on ${escapeHtml(new Date(data.expiresAt).toLocaleDateString())}.`
     : "Your access does not expire."
 
   const emailHtml = `
@@ -253,9 +277,9 @@ async function sendPortalAccessEmail(data: {
           <h1>Welcome to Your Customer Portal</h1>
         </div>
         <div class="content">
-          <p>Dear ${data.customerName},</p>
+          <p>Dear ${escapeHtml(data.customerName)},</p>
           
-          <p>You now have access to the ${data.companyName} customer portal. From here, you can:</p>
+          <p>You now have access to the ${escapeHtml(data.companyName)} customer portal. From here, you can:</p>
           
           <ul>
             <li>Track your loads in real-time</li>
@@ -267,12 +291,12 @@ async function sendPortalAccessEmail(data: {
           <div class="info-box">
             <p style="margin: 0;"><strong>Your Portal Access:</strong></p>
             <p style="margin: 10px 0 0 0; word-break: break-all;">
-              <a href="${data.portalUrl}" style="color: #4F46E5;">${data.portalUrl}</a>
+              <a href="${escapeHtml(data.portalUrl)}" style="color: #4F46E5;">${escapeHtml(data.portalUrl)}</a>
             </p>
           </div>
           
           <div style="text-align: center;">
-            <a href="${data.portalUrl}" class="button">Access Your Portal</a>
+            <a href="${escapeHtml(data.portalUrl)}" class="button">Access Your Portal</a>
           </div>
           
           <p style="font-size: 12px; color: #6b7280; margin-top: 20px;">
@@ -284,7 +308,7 @@ async function sendPortalAccessEmail(data: {
           </p>
         </div>
         <div class="footer">
-          <p>This is an automated message from ${data.companyName}.</p>
+          <p>This is an automated message from ${escapeHtml(data.companyName)}.</p>
           <p>Please do not reply to this email.</p>
         </div>
       </div>
