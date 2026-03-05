@@ -119,6 +119,10 @@ export async function getInvoice(id: string) {
     }
 
     return { data: invoice, error: null }
+  } catch (error: any) {
+    console.error("[getInvoice] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 export async function getExpenses(filters?: {
@@ -126,7 +130,9 @@ export async function getExpenses(filters?: {
   limit?: number
   offset?: number
 }) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -169,10 +175,16 @@ export async function getExpenses(filters?: {
   }
 
   return { data: expenses || [], error: null, count: count || 0 }
+  } catch (error: any) {
+    console.error("[getExpenses] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
+  }
 }
 
 export async function getSettlements() {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -213,6 +225,10 @@ export async function getSettlements() {
   }
 
   return { data: settlements, error: null }
+  } catch (error: any) {
+    console.error("[getSettlements] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 export async function updateInvoice(
@@ -227,7 +243,9 @@ export async function updateInvoice(
     [key: string]: any
   }
 ) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -257,6 +275,20 @@ export async function updateInvoice(
     return { error: permissionCheck.error || "You don't have permission to edit invoices", data: null }
   }
 
+  // V3-014 FIX: Validate negative amounts
+  if (formData.amount !== undefined && formData.amount < 0) {
+    return { error: "Amount must be non-negative", data: null }
+  }
+
+  // DAT-005 FIX: Validate due_date is after issue_date if both are provided
+  if (formData.issue_date && formData.due_date) {
+    const issueDate = new Date(formData.issue_date)
+    const dueDate = new Date(formData.due_date)
+    if (dueDate <= issueDate) {
+      return { error: "Due date must be after issue date", data: null }
+    }
+  }
+
   // Build update data
   const updateData: any = {}
   if (formData.status !== undefined) updateData.status = formData.status
@@ -281,10 +313,16 @@ export async function updateInvoice(
   revalidatePath("/dashboard/accounting/invoices")
   revalidatePath(`/dashboard/accounting/invoices/${id}`)
   return { data, error: null }
+  } catch (error: any) {
+    console.error("[updateInvoice] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 export async function duplicateInvoice(id: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -370,10 +408,16 @@ export async function duplicateInvoice(id: string) {
 
   revalidatePath("/dashboard/accounting/invoices")
   return { data: newInvoice, error: null }
+  } catch (error: any) {
+    console.error("[duplicateInvoice] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 export async function deleteInvoice(id: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -413,10 +457,16 @@ export async function deleteInvoice(id: string) {
 
   revalidatePath("/dashboard/accounting/invoices")
   return { error: null }
+  } catch (error: any) {
+    console.error("[deleteInvoice] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred" }
+  }
 }
 
 export async function deleteExpense(id: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -456,10 +506,16 @@ export async function deleteExpense(id: string) {
 
   revalidatePath("/dashboard/accounting/expenses")
   return { error: null }
+  } catch (error: any) {
+    console.error("[deleteExpense] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred" }
+  }
 }
 
 export async function deleteSettlement(id: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -499,6 +555,10 @@ export async function deleteSettlement(id: string) {
 
   revalidatePath("/dashboard/accounting/settlements")
   return { error: null }
+  } catch (error: any) {
+    console.error("[deleteSettlement] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred" }
+  }
 }
 
 // Create invoice
@@ -685,8 +745,8 @@ export async function createInvoice(formData: {
       await sendInvoiceEmail(data.id, {
         subject: settings.invoice_email_subject || "Invoice {INVOICE_NUMBER} from {COMPANY_NAME}",
         body: settings.invoice_email_body || "",
-        cc_emails: settings.cc_emails ? settings.cc_emails.split(',').map(e => e.trim()).filter(e => e.length > 0) : [],
-        bcc_emails: settings.bcc_emails ? settings.bcc_emails.split(',').map(e => e.trim()).filter(e => e.length > 0) : [],
+      cc_emails: settings.cc_emails ? settings.cc_emails.split(',').map((e: string) => e.trim()).filter((e: string) => e.length > 0) : [],
+      bcc_emails: settings.bcc_emails ? settings.bcc_emails.split(',').map((e: string) => e.trim()).filter((e: string) => e.length > 0) : [],
         send_copy_to_company: settings.send_copy_to_company || false,
         include_bol: settings.include_bol_in_invoice || false,
         auto_attach_documents: settings.auto_attach_documents || false,
@@ -717,7 +777,9 @@ export async function createInvoice(formData: {
 
 // Get load data for invoice auto-fill
 export async function getLoadForInvoice(loadId: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -753,6 +815,10 @@ export async function getLoadForInvoice(loadId: string) {
   }
 
   return { data: load, error: null }
+  } catch (error: any) {
+    console.error("[getLoadForInvoice] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 // Create expense
@@ -772,7 +838,9 @@ export async function createExpense(formData: {
   gallons?: number
   price_per_gallon?: number
 }) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -931,18 +999,38 @@ export async function createExpense(formData: {
       company_id: userData.company_id,
       category: sanitizeString(formData.category, 100).toLowerCase(),
       description: sanitizeString(formData.description, 500),
-      amount: typeof formData.amount === 'string' ? parseFloat(formData.amount) : formData.amount,
+      // V3-013 FIX: Guard parseFloat against NaN
+      amount: (() => {
+        const val = typeof formData.amount === 'string' ? parseFloat(formData.amount) : formData.amount
+        if (isNaN(val) || !isFinite(val)) {
+          throw new Error("Invalid amount: must be a valid number")
+        }
+        return val
+      })(),
       date: formData.date,
       vendor: formData.vendor || null,
       driver_id: formData.driver_id || null,
       truck_id: formData.truck_id || null,
-      mileage: formData.mileage ? (typeof formData.mileage === 'string' ? parseFloat(formData.mileage) : formData.mileage) : null,
+      // V3-013 FIX: Guard all parseFloat calls against NaN
+      mileage: formData.mileage ? (() => {
+        const val = typeof formData.mileage === 'string' ? parseFloat(formData.mileage) : formData.mileage
+        return (isNaN(val) || !isFinite(val)) ? null : val
+      })() : null,
       payment_method: formData.payment_method ? sanitizeString(formData.payment_method, 50) : null,
       receipt_url: formData.receipt_url ? sanitizeString(formData.receipt_url, 500) : null,
       has_receipt: formData.has_receipt || false,
-      fuel_level_after: formData.fuel_level_after ? (typeof formData.fuel_level_after === 'string' ? parseFloat(formData.fuel_level_after) : formData.fuel_level_after) : null,
-      gallons: formData.gallons ? (typeof formData.gallons === 'string' ? parseFloat(formData.gallons) : formData.gallons) : null,
-      price_per_gallon: formData.price_per_gallon ? (typeof formData.price_per_gallon === 'string' ? parseFloat(formData.price_per_gallon) : formData.price_per_gallon) : null,
+      fuel_level_after: formData.fuel_level_after ? (() => {
+        const val = typeof formData.fuel_level_after === 'string' ? parseFloat(formData.fuel_level_after) : formData.fuel_level_after
+        return (isNaN(val) || !isFinite(val)) ? null : val
+      })() : null,
+      gallons: formData.gallons ? (() => {
+        const val = typeof formData.gallons === 'string' ? parseFloat(formData.gallons) : formData.gallons
+        return (isNaN(val) || !isFinite(val)) ? null : val
+      })() : null,
+      price_per_gallon: formData.price_per_gallon ? (() => {
+        const val = typeof formData.price_per_gallon === 'string' ? parseFloat(formData.price_per_gallon) : formData.price_per_gallon
+        return (isNaN(val) || !isFinite(val)) ? null : val
+      })() : null,
       route_id: linkedRouteId,
       load_id: linkedLoadId,
     })
@@ -972,11 +1060,17 @@ export async function createExpense(formData: {
 
   revalidatePath("/dashboard/accounting/expenses")
   return { data, error: null }
+  } catch (error: any) {
+    console.error("[createExpense] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 // Get driver's loads for a specific period (for settlement calculation)
 export async function getDriverLoadsForPeriod(driverId: string, periodStart: string, periodEnd: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -1042,8 +1136,8 @@ export async function getDriverLoadsForPeriod(driverId: string, periodStart: str
 
     // Combine and deduplicate by id
     const loadMap = new Map()
-    ;(loadsWithDate || []).forEach(load => loadMap.set(load.id, load))
-    ;(loadsWithoutDate || []).forEach(load => {
+    ;(loadsWithDate || []).forEach((load: any) => loadMap.set(load.id, load))
+    ;(loadsWithoutDate || []).forEach((load: any) => {
       if (!loadMap.has(load.id)) {
         loadMap.set(load.id, load)
       }
@@ -1053,11 +1147,17 @@ export async function getDriverLoadsForPeriod(driverId: string, periodStart: str
   }
 
   return { data: allLoads, error: null }
+  } catch (error: any) {
+    console.error("[getDriverLoadsForPeriod] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 // Get driver's fuel expenses for a specific period (for settlement calculation)
 export async function getDriverFuelExpensesForPeriod(driverId: string, periodStart: string, periodEnd: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -1096,9 +1196,13 @@ export async function getDriverFuelExpensesForPeriod(driverId: string, periodSta
     return { error: error.message, data: null }
   }
 
-  const totalFuelExpense = expenses?.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0) || 0
+  const totalFuelExpense = expenses?.reduce((sum: number, exp: any) => sum + (Number(exp.amount) || 0), 0) || 0
 
   return { data: expenses || [], totalFuelExpense, error: null }
+  } catch (error: any) {
+    console.error("[getDriverFuelExpensesForPeriod] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null, totalFuelExpense: 0 }
+  }
 }
 
 // Create settlement with automatic calculations
@@ -1113,7 +1217,9 @@ export async function createSettlement(formData: {
   payment_method?: string
   notes?: string
 }) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -1205,7 +1311,7 @@ export async function createSettlement(formData: {
 
       const payCalculation = await calculateGrossPayFromRule({
         driverId: formData.driver_id,
-        loads: loads.map((load) => ({
+        loads: loads.map((load: any) => ({
           id: load.id,
           value: Number(load.value) || 0,
           miles: Number(load.miles) || undefined,
@@ -1223,7 +1329,7 @@ export async function createSettlement(formData: {
         payRuleId = payCalculation.data.pay_rule?.id || null
       } else {
         // Fallback: sum load values if pay rule not found
-        grossPay = loads.reduce((sum, load) => sum + (Number(load.value) || 0), 0)
+        grossPay = loads.reduce((sum: number, load: any) => sum + (Number(load.value) || 0), 0)
         calculationDetails = {
           base_pay: grossPay,
           method: "fallback_load_value_sum",
@@ -1233,7 +1339,7 @@ export async function createSettlement(formData: {
     } catch (error) {
       // Fallback: sum load values if pay rules engine fails
       console.error("Pay rules calculation error:", error)
-      grossPay = loads.reduce((sum, load) => sum + (Number(load.value) || 0), 0)
+      grossPay = loads.reduce((sum: number, load: any) => sum + (Number(load.value) || 0), 0)
       calculationDetails = {
         base_pay: grossPay,
         method: "fallback_load_value_sum",
@@ -1280,7 +1386,7 @@ export async function createSettlement(formData: {
   const netPay = grossPay - totalDeductions
 
   // Prepare loads data for JSONB
-  const loadsData = loads.map((load) => ({
+  const loadsData = loads.map((load: any) => ({
     id: load.id,
     shipment_number: load.shipment_number,
     value: load.value || 0,
@@ -1329,4 +1435,8 @@ export async function createSettlement(formData: {
 
   revalidatePath("/dashboard/accounting/settlements")
   return { data, error: null }
+  } catch (error: any) {
+    console.error("[createSettlement] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
