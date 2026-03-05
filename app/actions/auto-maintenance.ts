@@ -13,7 +13,14 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
   data: { scheduled: number; skipped: number } | null
   error: string | null
 }> {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!truckId || typeof truckId !== "string" || truckId.trim().length === 0) {
+      return { error: "Invalid truck ID", data: null }
+    }
+
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -40,7 +47,15 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
     return { error: truckError?.message || "Truck not found", data: null }
   }
 
-  const currentMileage = truck.current_mileage || 0
+  // V3-013 FIX: Guard parseFloat against NaN
+  const currentMileage = (() => {
+    const mileage = truck.current_mileage
+    if (typeof mileage === "number") {
+      return isNaN(mileage) || !isFinite(mileage) ? 0 : mileage
+    }
+    const parsed = parseFloat(String(mileage || 0))
+    return isNaN(parsed) || !isFinite(parsed) ? 0 : parsed
+  })()
 
   // Get last maintenance records for this truck
   const { data: recentMaintenance } = await supabase
@@ -66,6 +81,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
   let skipped = 0
 
   // Get all last completed services for this truck in a single query to avoid N+1
+  // V3-007 FIX: Add LIMIT to prevent unbounded queries
   const { data: allLastServices } = await supabase
     .from("maintenance")
     .select("service_type, current_mileage, scheduled_date")
@@ -74,14 +90,23 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
     .eq("status", "completed")
     .in("service_type", Object.keys(maintenanceIntervals))
     .order("scheduled_date", { ascending: false })
+    .limit(100)
 
   // Group by service_type and get most recent for each
   const lastServiceByType: Record<string, { current_mileage: number; scheduled_date: string }> = {}
   if (allLastServices) {
     for (const service of allLastServices) {
       if (!lastServiceByType[service.service_type]) {
+        // V3-013 FIX: Guard parseFloat against NaN
+        const mileage = service.current_mileage
+        const parsedMileage = typeof mileage === "number" 
+          ? (isNaN(mileage) || !isFinite(mileage) ? 0 : mileage)
+          : (() => {
+              const parsed = parseFloat(String(mileage || 0))
+              return isNaN(parsed) || !isFinite(parsed) ? 0 : parsed
+            })()
         lastServiceByType[service.service_type] = {
-          current_mileage: service.current_mileage || 0,
+          current_mileage: parsedMileage,
           scheduled_date: service.scheduled_date || "",
         }
       }
@@ -92,7 +117,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
   for (const [serviceType, interval] of Object.entries(maintenanceIntervals)) {
     // Check if this service is already scheduled
     const alreadyScheduled = recentMaintenance?.some(
-      (m) => m.service_type === serviceType && (m.status === "scheduled" || m.status === "in_progress")
+      (m: any) => m.service_type === serviceType && (m.status === "scheduled" || m.status === "in_progress")
     )
 
     if (alreadyScheduled) {
@@ -104,7 +129,10 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
     const lastService = lastServiceByType[serviceType]
 
     const lastServiceMileage = lastService?.current_mileage || 0
-    const milesSinceLastService = currentMileage - lastServiceMileage
+    // V3-013 FIX: Guard against NaN in calculation
+    const milesSinceLastService = isFinite(currentMileage) && isFinite(lastServiceMileage)
+      ? currentMileage - lastServiceMileage
+      : 0
 
     // If we've exceeded the interval, schedule maintenance
     if (milesSinceLastService >= interval) {
@@ -157,6 +185,10 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
     data: { scheduled, skipped },
     error: null,
   }
+  } catch (error: any) {
+    console.error("[autoScheduleMaintenanceFromMileage] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 /**
@@ -167,7 +199,9 @@ export async function autoScheduleMaintenanceForAllTrucks(): Promise<{
   data: { trucks_processed: number; total_scheduled: number; total_skipped: number } | null
   error: string | null
 }> {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -183,11 +217,13 @@ export async function autoScheduleMaintenanceForAllTrucks(): Promise<{
   }
 
   // Get all active trucks
+  // V3-007 FIX: Add LIMIT to prevent unbounded queries
   const { data: trucks, error: trucksError } = await supabase
     .from("trucks")
     .select("id")
     .eq("company_id", result.company_id)
     .eq("status", "active")
+    .limit(1000)
 
   if (trucksError) {
     return { error: trucksError.message, data: null }
@@ -219,6 +255,10 @@ export async function autoScheduleMaintenanceForAllTrucks(): Promise<{
       total_skipped: totalSkipped,
     },
     error: null,
+  }
+  } catch (error: any) {
+    console.error("[autoScheduleMaintenanceForAllTrucks] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
 
