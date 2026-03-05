@@ -9,72 +9,86 @@ import { checkViewPermission } from "@/lib/server-permissions"
  * FIXED: Server-side aggregation with limited column selection to prevent PII exposure
  */
 export async function getAnalyticsData(dateRange: number = 30) {
-  // FIXED: Add RBAC check
-  const permissionCheck = await checkViewPermission("reports")
-  if (!permissionCheck.allowed) {
-    return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
-  }
-
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
-  }
-
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
+    // FIXED: Add RBAC check
+    const permissionCheck = await checkViewPermission("reports")
+    if (!permissionCheck.allowed) {
+      return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
+    }
+
+    // V3-014 FIX: Validate input parameters
+    if (typeof dateRange !== "number" || dateRange < 1 || dateRange > 365) {
+      return { error: "Date range must be between 1 and 365 days", data: null }
+    }
+
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    const result = await getCachedUserCompany(user.id)
+    const company_id = result.company_id
+
+    if (!company_id) {
+      return { error: "No company found", data: null }
+    }
+
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - dateRange)
 
     // FIXED: Select only necessary columns, not all columns (prevents PII exposure)
+    // V3-007 FIX: Add LIMIT to prevent unbounded queries
     // Get loads statistics - only count and status fields
     const { data: loadsData, error: loadsError } = await supabase
       .from("loads")
       .select("id, status, estimated_delivery, actual_delivery, created_at")
       .eq("company_id", company_id)
       .gte("created_at", startDate.toISOString())
+      .limit(10000)
 
     if (loadsError) {
       return { error: loadsError.message, data: null }
     }
 
     // FIXED: Get trucks statistics - only count and status fields
+    // V3-007 FIX: Add LIMIT to prevent unbounded queries
     const { data: trucksData, error: trucksError } = await supabase
       .from("trucks")
       .select("id, status")
       .eq("company_id", company_id)
+      .limit(1000)
 
     if (trucksError) {
       return { error: trucksError.message, data: null }
     }
 
     // FIXED: Get drivers statistics - only count and status fields (no PII like SSN, DOB, address)
+    // V3-007 FIX: Add LIMIT to prevent unbounded queries
     const { data: driversData, error: driversError } = await supabase
       .from("drivers")
       .select("id, status")
       .eq("company_id", company_id)
+      .limit(1000)
 
     if (driversError) {
       return { error: driversError.message, data: null }
     }
 
     // Get invoices for revenue
+    // V3-007 FIX: Add LIMIT to prevent unbounded queries
     const { data: invoicesData, error: invoicesError } = await supabase
       .from("invoices")
       .select("amount, status, created_at")
       .eq("company_id", company_id)
       .gte("created_at", startDate.toISOString())
+      .limit(10000)
 
     if (invoicesError) {
       return { error: invoicesError.message, data: null }
@@ -95,28 +109,40 @@ export async function getAnalyticsData(dateRange: number = 30) {
 
     // Calculate statistics
     const totalLoads = loadsData?.length || 0
-    const activeLoads = loadsData?.filter((l) => l.status === "in_transit" || l.status === "scheduled").length || 0
-    const completedLoads = loadsData?.filter((l) => l.status === "delivered").length || 0
+    const activeLoads = loadsData?.filter((l: any) => l.status === "in_transit" || l.status === "scheduled").length || 0
+    const completedLoads = loadsData?.filter((l: any) => l.status === "delivered").length || 0
     
     // Calculate revenue from ALL invoices (not just paid)
-    let totalRevenue = invoicesData?.reduce((sum, inv) => sum + (parseFloat(inv.amount) || 0), 0) || 0
+    // V3-013 FIX: Guard parseFloat against NaN
+    let totalRevenue = invoicesData?.reduce((sum: number, inv: any) => {
+      const amount = parseFloat(inv.amount)
+      return sum + (isNaN(amount) || !isFinite(amount) ? 0 : amount)
+    }, 0) || 0
     
     // Add revenue from loads if invoices are low/empty
     if (totalRevenue === 0 && loadsWithRevenue) {
-      totalRevenue = loadsWithRevenue.reduce((sum, load) => {
-        return sum + (parseFloat(load.total_rate) || parseFloat(load.value) || 0)
+      totalRevenue = loadsWithRevenue.reduce((sum: number, load: any) => {
+        const rate = parseFloat(load.total_rate)
+        const value = parseFloat(load.value)
+        const amount = (!isNaN(rate) && isFinite(rate)) ? rate : ((!isNaN(value) && isFinite(value)) ? value : 0)
+        return sum + amount
       }, 0)
     }
     
-    const activeTrucks = trucksData?.filter((t) => t.status === "in_use").length || 0
-    const activeDrivers = driversData?.filter((d) => d.status === "active").length || 0
+    const activeTrucks = trucksData?.filter((t: any) => t.status === "in_use").length || 0
+    const activeDrivers = driversData?.filter((d: any) => d.status === "active").length || 0
     
-    const onTimeDeliveries = loadsData?.filter((l) => {
+    const onTimeDeliveries = loadsData?.filter((l: any) => {
       if (!l.estimated_delivery || !l.actual_delivery) return false
-      return new Date(l.actual_delivery) <= new Date(l.estimated_delivery)
+      const actualDate = new Date(l.actual_delivery)
+      const estimatedDate = new Date(l.estimated_delivery)
+      return !isNaN(actualDate.getTime()) && !isNaN(estimatedDate.getTime()) && actualDate <= estimatedDate
     }).length || 0
 
-    const averageRevenuePerLoad = completedLoads > 0 ? totalRevenue / completedLoads : 0
+    // V3-013 FIX: Guard against division by zero and NaN
+    const averageRevenuePerLoad = completedLoads > 0 && isFinite(totalRevenue) 
+      ? Math.round((totalRevenue / completedLoads) * 100) / 100 
+      : 0
 
     return {
       data: {
@@ -132,7 +158,8 @@ export async function getAnalyticsData(dateRange: number = 30) {
       error: null,
     }
   } catch (error: any) {
-    return { error: error.message || "Failed to load analytics", data: null }
+    console.error("[getAnalyticsData] Unexpected error:", error)
+    return { error: error?.message || "Failed to load analytics", data: null }
   }
 }
 
