@@ -414,7 +414,7 @@ export default function AlertsSettingsPage() {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="font-semibold text-lg">{rule.name}</h3>
-                        <Badge variant={rule.is_active ? "success" : "secondary"}>
+                        <Badge variant={rule.is_active ? "default" : "secondary"}>
                           {rule.is_active ? "Active" : "Inactive"}
                         </Badge>
                         <Badge variant="outline">{getEventTypeLabel(rule.event_type)}</Badge>

@@ -379,7 +379,7 @@ export function GooglePlacesAutocomplete({
         
         // Fallback: Parse from formatted_address if components are missing
         if (place.formatted_address) {
-          const formattedParts = place.formatted_address.split(',').map(p => p.trim())
+          const formattedParts = place.formatted_address.split(',').map((p: string) => p.trim())
           
           // If address_line1 is still empty, use first part
           if (!addressComponents.address_line1 && formattedParts.length > 0) {

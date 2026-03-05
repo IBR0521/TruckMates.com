@@ -68,6 +68,22 @@ export interface LoadDetails {
   special_instructions: string | null
   pickup_notes: string | null
   delivery_notes: string | null
+  shipper_address_book: {
+    id: string
+    name: string
+    company_name: string | null
+    custom_fields: Record<string, any> | null
+    geocoding_status: string | null
+    formatted_address: string | null
+  } | null
+  consignee_address_book: {
+    id: string
+    name: string
+    company_name: string | null
+    custom_fields: Record<string, any> | null
+    geocoding_status: string | null
+    formatted_address: string | null
+  } | null
 }
 
 export async function getLoadDetails(loadId: string): Promise<{

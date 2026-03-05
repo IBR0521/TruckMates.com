@@ -948,13 +948,15 @@ function GeofenceDrawingMap({
   zoneType,
   onShapeComplete,
 }: {
-  mapRef: React.RefObject<HTMLDivElement>
+  mapRef: React.RefObject<HTMLDivElement | null>
   mapInstanceRef: React.MutableRefObject<any>
   drawingManagerRef: React.MutableRefObject<any>
   drawnShapeRef: React.MutableRefObject<any>
   zoneType: "circle" | "polygon"
   onShapeComplete: (shape: any, center?: { lat: number; lng: number }, radius?: number) => void
 }) {
+  const localMapInstanceRef = useRef<any>(null)
+  
   useEffect(() => {
     if (!mapRef.current) return
 

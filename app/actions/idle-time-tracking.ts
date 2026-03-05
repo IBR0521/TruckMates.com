@@ -193,15 +193,15 @@ export async function getIdleTimeStats(filters?: {
     }
 
     // Calculate statistics
-    const totalMinutes = sessions?.reduce((sum, s) => sum + (s.duration_minutes || 0), 0) || 0
+    const totalMinutes = sessions?.reduce((sum: number, s: { duration_minutes: number | null; [key: string]: any }) => sum + (s.duration_minutes || 0), 0) || 0
     const totalHours = totalMinutes / 60
-    const totalFuelCost = sessions?.reduce((sum, s) => sum + (s.estimated_fuel_cost || 0), 0) || 0
+    const totalFuelCost = sessions?.reduce((sum: number, s: { estimated_fuel_cost: number | null; [key: string]: any }) => sum + (s.estimated_fuel_cost || 0), 0) || 0
     const totalSessions = sessions?.length || 0
     const avgDurationMinutes = totalSessions > 0 ? totalMinutes / totalSessions : 0
 
     // Group by truck
     const byTruck: Record<string, { minutes: number; cost: number; sessions: number }> = {}
-    sessions?.forEach(s => {
+    sessions?.forEach((s: { truck_id: string | null; duration_minutes: number | null; estimated_fuel_cost: number | null; [key: string]: any }) => {
       if (!s.truck_id) return
       if (!byTruck[s.truck_id]) {
         byTruck[s.truck_id] = { minutes: 0, cost: 0, sessions: 0 }
@@ -213,7 +213,7 @@ export async function getIdleTimeStats(filters?: {
 
     // Group by driver
     const byDriver: Record<string, { minutes: number; cost: number; sessions: number }> = {}
-    sessions?.forEach(s => {
+    sessions?.forEach((s: { driver_id: string | null; duration_minutes: number | null; estimated_fuel_cost: number | null; [key: string]: any }) => {
       if (!s.driver_id) return
       if (!byDriver[s.driver_id]) {
         byDriver[s.driver_id] = { minutes: 0, cost: 0, sessions: 0 }

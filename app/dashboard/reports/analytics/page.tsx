@@ -288,8 +288,7 @@ export default function AnalyticsPage() {
                       />
                       <p className="text-xs text-muted-foreground text-center">{formatMonth(item.month)}</p>
                       <p className="text-xs font-semibold text-foreground">
-                        {/* FIXED: Use amountInThousands if available, otherwise calculate from amount */}
-                        ${(item.amountInThousands !== undefined ? item.amountInThousands : (item.amount || 0) / 1000).toFixed(1)}k
+                        ${((item.amount || 0) / 1000).toFixed(1)}k
                       </p>
                     </div>
                   )

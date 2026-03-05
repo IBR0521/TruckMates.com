@@ -267,7 +267,7 @@ export default function GeneralSettingsPage() {
                   {companyData.company_type === "broker" && "You can post loads to the marketplace. Accepted loads will appear in your dashboard."}
                   {companyData.company_type === "carrier" && "You can accept loads from the marketplace. Accepted loads will automatically appear in your loads list."}
                   {companyData.company_type === "both" && "You can post and accept loads in the marketplace."}
-                  {(!companyData.company_type || companyData.company_type === "regular") && "Standard fleet management platform access. No marketplace access."}
+                  {!companyData.company_type && "Standard fleet management platform access. No marketplace access."}
                 </p>
               </div>
             </div>

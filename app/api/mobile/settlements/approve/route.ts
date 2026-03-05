@@ -101,11 +101,11 @@ export async function POST(request: NextRequest) {
 
       // Send SMS to first admin who opted in (if phone exists)
       if (admins && admins.length > 0 && admins[0].phone) {
-        await sendSMS({
-          to: admins[0].phone,
-          message: `${driverName} approved settlement ${settlement_id.substring(0, 8)}. Status: ${updatedSettlement.status}`,
+        await sendSMS(
+          admins[0].phone, 
+          `${driverName} approved settlement ${settlement_id.substring(0, 8)}. Status: ${updatedSettlement.status}`
           // Don't include net pay amount in SMS for privacy
-        }).catch((err) => console.error("SMS notification error:", err))
+        ).catch((err) => console.error("SMS notification error:", err))
       }
     } catch (notificationError) {
       // Don't fail approval if notification fails

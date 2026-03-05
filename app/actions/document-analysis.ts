@@ -649,19 +649,11 @@ ACTION:
           if (!canvasFn) {
             console.warn("[DOCUMENT_ANALYSIS] Canvas not available, skipping PDF to image conversion")
             // Return the PDF as-is without image conversion
+            // Note: We can't analyze PDF without converting to image, so return null for extractedData
             return {
-              data: {
-                type: "pdf",
-                text: "",
-                extractedData: {},
-                imageBase64: null,
-                metadata: {
-                  pageCount: pdfDocument.numPages,
-                  title: "PDF Document",
-                  size: base64SizeMB
-                }
-              },
-              error: null
+              data: null,
+              error: "PDF conversion to image is required for analysis, but canvas module is not available. Please install the canvas package or convert the PDF to an image manually.",
+              warning: `This PDF has ${pdfDocument.numPages} pages. Canvas module is required for PDF analysis.`
             }
           }
           
@@ -733,10 +725,13 @@ ACTION:
     let openaiResponse: Response
     const modelUsed = "gpt-4o" // Using gpt-4o which has vision capabilities
     
+    // CRH-008: Declare timeoutId outside try block so it's accessible in catch/finally
+    let timeoutId: NodeJS.Timeout | undefined
+    
     try {
       // CRH-008: Add 30-second timeout to prevent Vercel function timeout (60s max)
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 seconds
+      timeoutId = setTimeout(() => controller.abort(), 30000) // 30 seconds
       
       openaiResponse = await fetch(
         "https://api.openai.com/v1/chat/completions",
@@ -758,14 +753,14 @@ ACTION:
       )
     } catch (fetchError: any) {
       // CRH-008: Clear timeout on error
-      clearTimeout(timeoutId)
+      if (timeoutId) clearTimeout(timeoutId)
       return {
         error: `Failed to connect to OpenAI API: ${fetchError?.message || "Network error"}. Please check your internet connection and try again.`,
         data: null
       }
     } finally {
       // CRH-008: Always clear timeout
-      clearTimeout(timeoutId)
+      if (timeoutId) clearTimeout(timeoutId)
     }
 
     if (!openaiResponse.ok) {
@@ -939,6 +934,7 @@ export async function analyzeDocumentFromUrl(
     documentId: string
     extractedData: ExtractedData | null
     fileUrl: string
+    warning?: string | null
   } | null
   error: string | null
 }> {
@@ -1142,7 +1138,8 @@ Please try uploading a NEW document - old uploads may have incorrect URLs.`,
         data: {
           documentId: documentData.id,
           extractedData: null,
-          fileUrl: signedUrl
+          fileUrl: signedUrl,
+          warning: analysisResult.warning || null
         },
         error: `Document uploaded but analysis failed: ${analysisResult.error}`
       }

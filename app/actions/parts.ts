@@ -52,6 +52,10 @@ export async function getParts(filters?: {
     }
 
     return { data, error: null }
+  } catch (error: any) {
+    console.error("[getParts] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 // Get single part

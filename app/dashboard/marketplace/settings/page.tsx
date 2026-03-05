@@ -1,9 +1,11 @@
 "use client"
 
-import { MarketplaceComingSoon } from "@/components/marketplace-coming-soon"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { ArrowLeft } from "lucide-react"
 
 export default function MarketplaceSettingsPage() {
-  return <MarketplaceComingSoon />
   return (
     <div className="w-full bg-background">
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-6">

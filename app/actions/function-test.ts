@@ -389,7 +389,7 @@ export async function testAllPlatformFunctions() {
       if (routes.data && routes.data.length > 0) {
         const optResult = await routeOptimizationActions.optimizeMultiStopRoute(routes.data[0].id)
         pushTested("optimizeMultiStopRoute")
-        if (optResult.success || optResult.error) {
+        if (optResult.optimized || optResult.error) {
           pushPassed("optimizeMultiStopRoute")
         } else {
           pushFailed({ function: "optimizeMultiStopRoute", error: "No result" })
@@ -408,7 +408,7 @@ export async function testAllPlatformFunctions() {
               }))
             )
             pushTested("optimizeRouteOrder")
-            if (optOrder.optimizedOrder || optOrder.error) {
+            if (optOrder.optimizedOrder) {
               pushPassed("optimizeRouteOrder")
             } else {
               pushFailed({ function: "optimizeRouteOrder", error: "No result" })
@@ -459,7 +459,7 @@ export async function testAllPlatformFunctions() {
                 const loads = await customersActions.getCustomerLoads(customers.data[0].id)
                 pushTested("getCustomerLoads")
                 if (loads.data !== undefined) pushPassed("getCustomerLoads")
-                else pushFailed({ function: "getCustomerLoads", error: loads.error })
+                else pushFailed({ function: "getCustomerLoads", error: (loads as any).error || "Unknown error" })
               } catch (error: any) {
                 pushFailed({ function: "getCustomerLoads", error: error.message })
               }
@@ -468,7 +468,7 @@ export async function testAllPlatformFunctions() {
                 const invoices = await customersActions.getCustomerInvoices(customers.data[0].id)
                 pushTested("getCustomerInvoices")
                 if (invoices.data !== undefined) pushPassed("getCustomerInvoices")
-                else pushFailed({ function: "getCustomerInvoices", error: invoices.error })
+                else pushFailed({ function: "getCustomerInvoices", error: (invoices as any).error || "Unknown error" })
               } catch (error: any) {
                 pushFailed({ function: "getCustomerInvoices", error: error.message })
               }
@@ -477,7 +477,7 @@ export async function testAllPlatformFunctions() {
                 const history = await customersActions.getCustomerHistory(customers.data[0].id)
                 pushTested("getCustomerHistory")
                 if (history.data !== undefined) pushPassed("getCustomerHistory")
-                else pushFailed({ function: "getCustomerHistory", error: history.error })
+                else pushFailed({ function: "getCustomerHistory", error: (history as any).error || "Unknown error" })
               } catch (error: any) {
                 pushFailed({ function: "getCustomerHistory", error: error.message })
               }
@@ -684,7 +684,7 @@ export async function testAllPlatformFunctions() {
       const autoInvoices = await invoicesAutoActions.autoGenerateInvoicesFromLoads()
       pushTested("autoGenerateInvoicesFromLoads")
       if (autoInvoices.data !== undefined) pushPassed("autoGenerateInvoicesFromLoads")
-      else pushFailed({ function: "autoGenerateInvoicesFromLoads", error: autoInvoices.error })
+      else pushFailed({ function: "autoGenerateInvoicesFromLoads", error: (autoInvoices as any).error || "Unknown error" })
     } catch (error: any) {
       pushFailed({ function: "autoGenerateInvoicesFromLoads", error: error.message })
     }
@@ -703,7 +703,6 @@ export async function testAllPlatformFunctions() {
           period_end: periodEnd.toISOString().split("T")[0],
           gross_pay: 5000,
           fuel_deduction: 500,
-          net_pay: 4500,
         })
         pushTested("createSettlement")
         if (settlement.data) {
@@ -752,12 +751,12 @@ export async function testAllPlatformFunctions() {
     }
 
     try {
-      const templates = await bolActions.getBOLTemplates()
+      const templates = await (bolActions as any).getBOLTemplates()
       pushTested("getBOLTemplates")
       if (templates.data) pushPassed("getBOLTemplates")
-      else pushFailed({ function: "getBOLTemplates", error: templates.error })
+      else pushFailed({ function: "getBOLTemplates", error: templates.error || "Unknown error" })
     } catch (error: any) {
-      pushFailed({ function: "getBOLTemplates", error: templates.error })
+      pushFailed({ function: "getBOLTemplates", error: error.message || "Unknown error" })
     }
 
     // Test CREATE BOL
@@ -772,7 +771,7 @@ export async function testAllPlatformFunctions() {
         )
         
         if (loadWithoutBOL) {
-          const bol = await bolActions.createBOL({
+          const bol = await (bolActions as any).createBOL({
             load_id: loadWithoutBOL.id,
             shipper_name: `Test Shipper ${Date.now()}`,
             shipper_address: "123 Test St",
@@ -885,34 +884,39 @@ export async function testAllPlatformFunctions() {
 
           // Test ELD logs
           try {
-            const logs = await eldActions.getELDLogs({ deviceId: devices.data[0].id })
+            const logs = await eldActions.getELDLogs({ eld_device_id: devices.data[0].id })
             pushTested("getELDLogs")
             if (logs.data !== undefined) pushPassed("getELDLogs")
-            else pushFailed({ function: "getELDLogs", error: logs.error })
+            else pushFailed({ function: "getELDLogs", error: logs.error || "Unknown error" })
           } catch (error: any) {
             pushFailed({ function: "getELDLogs", error: error.message })
           }
 
           // Test ELD events
           try {
-            const events = await eldActions.getELDEvents({ deviceId: devices.data[0].id })
+            const events = await eldActions.getELDEvents({ eld_device_id: devices.data[0].id })
             pushTested("getELDEvents")
             if (events.data !== undefined) pushPassed("getELDEvents")
-            else pushFailed({ function: "getELDEvents", error: events.error })
+            else pushFailed({ function: "getELDEvents", error: events.error || "Unknown error" })
           } catch (error: any) {
             pushFailed({ function: "getELDEvents", error: error.message })
           }
 
           // Test ELD mileage data
           try {
-            const mileage = await eldActions.getELDMileageData({
-              deviceId: devices.data[0].id,
-              startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-              endDate: new Date().toISOString().split("T")[0],
-            })
-            pushTested("getELDMileageData")
-            if (mileage.data !== undefined) pushPassed("getELDMileageData")
-            else pushFailed({ function: "getELDMileageData", error: mileage.error })
+            const trucks = await trucksActions.getTrucks()
+            if (trucks.data && trucks.data.length > 0) {
+              const mileage = await eldActions.getELDMileageData({
+                truck_ids: [trucks.data[0].id],
+                start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+                end_date: new Date().toISOString().split("T")[0],
+              })
+              pushTested("getELDMileageData")
+              if (mileage.data !== undefined) pushPassed("getELDMileageData")
+              else pushFailed({ function: "getELDMileageData", error: (mileage as any).error || "Unknown error" })
+            } else {
+              pushSkipped({ function: "getELDMileageData", reason: "No trucks available" })
+            }
           } catch (error: any) {
             pushFailed({ function: "getELDMileageData", error: error.message })
           }
@@ -932,7 +936,7 @@ export async function testAllPlatformFunctions() {
           const remainingHOS = await eldAdvancedActions.calculateRemainingHOS(drivers.data[0].id)
           pushTested("calculateRemainingHOS")
           if (remainingHOS.data !== undefined) pushPassed("calculateRemainingHOS")
-          else pushFailed({ function: "calculateRemainingHOS", error: remainingHOS.error })
+          else pushFailed({ function: "calculateRemainingHOS", error: (remainingHOS as any).error || "Unknown error" })
         } catch (error: any) {
           pushFailed({ function: "calculateRemainingHOS", error: error.message })
         }
@@ -941,7 +945,7 @@ export async function testAllPlatformFunctions() {
           const scorecard = await eldAdvancedActions.getDriverScorecard(drivers.data[0].id)
           pushTested("getDriverScorecard")
           if (scorecard.data !== undefined) pushPassed("getDriverScorecard")
-          else pushFailed({ function: "getDriverScorecard", error: scorecard.error })
+          else pushFailed({ function: "getDriverScorecard", error: (scorecard as any).error || "Unknown error" })
         } catch (error: any) {
           pushFailed({ function: "getDriverScorecard", error: error.message })
         }
@@ -950,7 +954,7 @@ export async function testAllPlatformFunctions() {
           const recommendations = await eldInsightsActions.getDriverRecommendations(drivers.data[0].id)
           pushTested("getDriverRecommendations")
           if (recommendations.data !== undefined) pushPassed("getDriverRecommendations")
-          else pushFailed({ function: "getDriverRecommendations", error: recommendations.error })
+          else pushFailed({ function: "getDriverRecommendations", error: (recommendations as any).error || "Unknown error" })
         } catch (error: any) {
           pushFailed({ function: "getDriverRecommendations", error: error.message })
         }
@@ -963,7 +967,7 @@ export async function testAllPlatformFunctions() {
       const fleetHealth = await eldAdvancedActions.getFleetHealth()
       pushTested("getFleetHealth")
       if (fleetHealth.data !== undefined) pushPassed("getFleetHealth")
-      else pushFailed({ function: "getFleetHealth", error: fleetHealth.error })
+      else pushFailed({ function: "getFleetHealth", error: (fleetHealth as any).error || "Unknown error" })
     } catch (error: any) {
       pushFailed({ function: "getFleetHealth", error: error.message })
     }
@@ -972,7 +976,7 @@ export async function testAllPlatformFunctions() {
       const locations = await eldAdvancedActions.getRealtimeLocations()
       pushTested("getRealtimeLocations")
       if (locations.data !== undefined) pushPassed("getRealtimeLocations")
-      else pushFailed({ function: "getRealtimeLocations", error: locations.error })
+      else pushFailed({ function: "getRealtimeLocations", error: (locations as any).error || "Unknown error" })
     } catch (error: any) {
       pushFailed({ function: "getRealtimeLocations", error: error.message })
     }
@@ -981,7 +985,7 @@ export async function testAllPlatformFunctions() {
       const alerts = await eldAdvancedActions.getPredictiveAlerts()
       pushTested("getPredictiveAlerts")
       if (alerts.data !== undefined) pushPassed("getPredictiveAlerts")
-      else pushFailed({ function: "getPredictiveAlerts", error: alerts.error })
+      else pushFailed({ function: "getPredictiveAlerts", error: (alerts as any).error || "Unknown error" })
     } catch (error: any) {
       pushFailed({ function: "getPredictiveAlerts", error: error.message })
     }
@@ -990,7 +994,7 @@ export async function testAllPlatformFunctions() {
       const insights = await eldInsightsActions.generateELDInsights()
       pushTested("generateELDInsights")
       if (insights.data !== undefined) pushPassed("generateELDInsights")
-      else pushFailed({ function: "generateELDInsights", error: insights.error })
+      else pushFailed({ function: "generateELDInsights", error: (insights as any).error || "Unknown error" })
     } catch (error: any) {
       pushFailed({ function: "generateELDInsights", error: error.message })
     }
@@ -1241,9 +1245,7 @@ export async function testAllPlatformFunctions() {
       pushFailed({ function: "getEmployees", error: error.message })
     }
 
-    try {
-      // Invitation functions removed
-    }
+    // Invitation functions removed
 
     // ============================================
     // 19. NOTIFICATION FUNCTIONS
@@ -1253,9 +1255,9 @@ export async function testAllPlatformFunctions() {
       const preferences = await notificationsActions.getNotificationPreferences()
       pushTested("getNotificationPreferences")
       if (preferences.data) pushPassed("getNotificationPreferences")
-      else pushFailed({ function: "getNotificationPreferences", error: preferences.error })
+      else pushFailed({ function: "getNotificationPreferences", error: preferences.error || "Unknown error" })
     } catch (error: any) {
-      pushFailed({ function: "getNotificationPreferences", error: preferences.error })
+      pushFailed({ function: "getNotificationPreferences", error: error.message || "Unknown error" })
     }
 
     try {

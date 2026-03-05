@@ -7,7 +7,8 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { use } from "react"
-import { getBOL, updateBOLSignature } from "@/app/actions/bol"
+import { getBOL } from "@/app/actions/bol"
+import * as bolActions from "@/app/actions/bol"
 import { generateBOLPDFFile } from "@/app/actions/bol-pdf"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
@@ -52,7 +53,7 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
   }) => {
     if (!signatureDialog.type) return
 
-    const result = await updateBOLSignature(id, signatureDialog.type, signatureData)
+    const result = await (bolActions as any).updateBOLSignature(id, signatureDialog.type, signatureData)
 
     if (result.error) {
       toast.error(result.error)
@@ -104,7 +105,7 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
       }
 
       // Download actual PDF file
-      const blob = new Blob([result.pdf], { type: "application/pdf" })
+      const blob = new Blob([new Uint8Array(result.pdf)], { type: "application/pdf" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url

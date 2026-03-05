@@ -395,13 +395,13 @@ export async function getLoadSummary(loadId: string) {
 
     const summary = {
       total_delivery_points: deliveryPoints.length,
-      total_weight_kg: deliveryPoints.reduce((sum, dp) => sum + (parseFloat(dp.weight_kg) || 0), 0),
-      total_weight_lbs: deliveryPoints.reduce((sum, dp) => sum + (parseFloat(dp.weight_lbs) || 0), 0),
-      total_pieces: deliveryPoints.reduce((sum, dp) => sum + (dp.pieces || 0), 0),
-      total_pallets: deliveryPoints.reduce((sum, dp) => sum + (dp.pallets || 0), 0),
-      total_boxes: deliveryPoints.reduce((sum, dp) => sum + (dp.boxes || 0), 0),
-      total_carts: deliveryPoints.reduce((sum, dp) => sum + (dp.carts || 0), 0),
-      total_volume: deliveryPoints.reduce((sum, dp) => sum + (parseFloat(dp.volume_cubic_meters) || 0), 0),
+      total_weight_kg: deliveryPoints.reduce((sum: number, dp: { weight_kg: number | string | null; [key: string]: any }) => sum + (parseFloat(String(dp.weight_kg || 0)) || 0), 0),
+      total_weight_lbs: deliveryPoints.reduce((sum: number, dp: { weight_lbs: number | string | null; [key: string]: any }) => sum + (parseFloat(String(dp.weight_lbs || 0)) || 0), 0),
+      total_pieces: deliveryPoints.reduce((sum: number, dp: { pieces: number | null; [key: string]: any }) => sum + (dp.pieces || 0), 0),
+      total_pallets: deliveryPoints.reduce((sum: number, dp: { pallets: number | null; [key: string]: any }) => sum + (dp.pallets || 0), 0),
+      total_boxes: deliveryPoints.reduce((sum: number, dp: { boxes: number | null; [key: string]: any }) => sum + (dp.boxes || 0), 0),
+      total_carts: deliveryPoints.reduce((sum: number, dp: { carts: number | null; [key: string]: any }) => sum + (dp.carts || 0), 0),
+      total_volume: deliveryPoints.reduce((sum: number, dp: { volume_cubic_meters: number | string | null; [key: string]: any }) => sum + (parseFloat(String(dp.volume_cubic_meters || 0)) || 0), 0),
     }
 
     return { data: summary, error: null }

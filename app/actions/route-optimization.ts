@@ -446,6 +446,9 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
   optimizedStops?: Array<{ id: string; order: number }>
   distance?: number
   time?: number
+  fuelCost?: number
+  tollCost?: number
+  totalCost?: number
   error?: string
 }> {
   const supabase = await createClient()
@@ -492,7 +495,7 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
   }
 
   // Convert stops to optimization format
-  const stopsForOptimization = stops.map((stop) => ({
+  const stopsForOptimization = stops.map((stop: { id: string; address: string | null; coordinates: { lat: number; lng: number } | null; priority: string | null; time_window_1_open: string | null; time_window_1_close: string | null; [key: string]: any }) => ({
     id: stop.id,
     address: stop.address || "",
     lat: stop.coordinates?.lat,

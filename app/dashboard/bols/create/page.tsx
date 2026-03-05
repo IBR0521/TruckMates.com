@@ -16,7 +16,7 @@ import {
 import { ArrowLeft, FileText, Building2, MapPin, Package } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { createBOL, getBOLTemplates } from "@/app/actions/bol"
+import * as bolActions from "@/app/actions/bol"
 import { getLoads } from "@/app/actions/loads"
 import { useRouter } from "next/navigation"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
@@ -112,7 +112,7 @@ export default function CreateBOLPage() {
     // MEDIUM FIX 14: Filter out completed and cancelled loads
     const [loadsResult, templatesResult] = await Promise.all([
       getLoads({ status: undefined }), // Will filter client-side to exclude completed/cancelled
-      getBOLTemplates(),
+      (bolActions as any).getBOLTemplates(),
     ])
 
     if (loadsResult.data) {
@@ -147,7 +147,7 @@ export default function CreateBOLPage() {
       return
     }
 
-    const result = await createBOL({
+    const result = await (bolActions as any).createBOL({
       load_id: formData.load_id,
       template_id: formData.template_id || undefined,
       shipper_name: formData.shipper_name,

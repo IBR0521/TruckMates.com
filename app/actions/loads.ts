@@ -37,7 +37,7 @@ async function sendNotificationsForLoadUpdate(loadData: any) {
     // This reduces 20 sequential DB writes to 1 concurrent batch
     if (companyUsers && companyUsers.length > 0) {
       await Promise.all(
-        companyUsers.map(async (companyUser) => {
+        companyUsers.map(async (companyUser: { id: string; [key: string]: any }) => {
           try {
             await sendNotification(companyUser.id, "load_update", {
               shipmentNumber: loadData.shipment_number,
@@ -477,11 +477,11 @@ export async function createLoad(formData: {
         // Create a new route automatically
         const routeName = `${formData.origin} → ${formData.destination}`
         
-        // DAT-008 FIX: Don't store placeholder UI text in database - use null instead
-        // UI can display "Calculating..." when these fields are null
+        // DAT-008 FIX: Don't store placeholder UI text in database - use undefined instead
+        // UI can display "Calculating..." when these fields are undefined
         // If you want to calculate immediately, await Google Maps API call here before inserting
-        const estimatedDistance = null // Will be calculated later or shown as "Calculating..." in UI
-        const estimatedTime = null // Will be calculated later or shown as "Calculating..." in UI
+        const estimatedDistance: string | undefined = undefined // Will be calculated later or shown as "Calculating..." in UI
+        const estimatedTime: string | undefined = undefined // Will be calculated later or shown as "Calculating..." in UI
 
         const routeResult = await createRoute({
           name: routeName,
@@ -536,7 +536,7 @@ export async function createLoad(formData: {
         // Find most frequently used driver for this route
         const driverCounts: Record<string, number> = {}
         const truckCounts: Record<string, number> = {}
-        recentLoads.forEach((load) => {
+        recentLoads.forEach((load: { driver_id: string | null; truck_id: string | null; [key: string]: any }) => {
           if (load.driver_id) {
             driverCounts[load.driver_id] = (driverCounts[load.driver_id] || 0) + 1
           }
@@ -565,7 +565,7 @@ export async function createLoad(formData: {
               .from("drivers")
               .select("id, name, status")
               .eq("id", topDriverId)
-              .eq("company_id", company_id)
+              .eq("company_id", userData.company_id)
               .eq("status", "active")
               .maybeSingle()
             if (driver) finalDriverId = driver.id
@@ -578,7 +578,7 @@ export async function createLoad(formData: {
             .from("trucks")
             .select("id, truck_number, status")
             .eq("id", topTruckId)
-            .eq("company_id", company_id)
+            .eq("company_id", userData.company_id)
             .in("status", ["available", "in_use"])
             .maybeSingle()
           if (truck) finalTruckId = truck.id
@@ -1331,9 +1331,9 @@ export async function bulkDeleteLoads(ids: string[]) {
     .eq("company_id", userData.company_id)
 
   if (loadsToDelete) {
-    const inTransitLoads = loadsToDelete.filter(l => l.status === "in_transit")
+    const inTransitLoads = loadsToDelete.filter((l: { id: string; shipment_number: string; status: string; [key: string]: any }) => l.status === "in_transit")
     if (inTransitLoads.length > 0) {
-      const shipmentNumbers = inTransitLoads.map(l => l.shipment_number).join(", ")
+      const shipmentNumbers = inTransitLoads.map((l: { id: string; shipment_number: string; status: string; [key: string]: any }) => l.shipment_number).join(", ")
       return { 
         error: `Cannot delete loads that are in transit: ${shipmentNumbers}. Please cancel them first if needed.`,
         data: null 
@@ -1342,9 +1342,9 @@ export async function bulkDeleteLoads(ids: string[]) {
 
     // Only allow deleting pending, scheduled, or cancelled loads
     const allowedStatuses = ["pending", "scheduled", "cancelled"]
-    const blockedLoads = loadsToDelete.filter(l => !allowedStatuses.includes(l.status))
+    const blockedLoads = loadsToDelete.filter((l: { id: string; shipment_number: string; status: string; [key: string]: any }) => !allowedStatuses.includes(l.status))
     if (blockedLoads.length > 0) {
-      const shipmentNumbers = blockedLoads.map(l => l.shipment_number).join(", ")
+      const shipmentNumbers = blockedLoads.map((l: { id: string; shipment_number: string; status: string; [key: string]: any }) => l.shipment_number).join(", ")
       return { 
         error: `Cannot delete loads with status other than pending, scheduled, or cancelled: ${shipmentNumbers}`,
         data: null 
@@ -1602,7 +1602,7 @@ export async function getLoadSuggestions(origin?: string, destination?: string) 
       // Find most frequently used driver for this route
       const driverCounts: Record<string, number> = {}
       const truckCounts: Record<string, number> = {}
-      recentLoads.forEach((load) => {
+      recentLoads.forEach((load: { driver_id: string | null; truck_id: string | null; customer_id: string | null; [key: string]: any }) => {
         if (load.driver_id) {
           driverCounts[load.driver_id] = (driverCounts[load.driver_id] || 0) + 1
         }
@@ -1620,7 +1620,7 @@ export async function getLoadSuggestions(origin?: string, destination?: string) 
           .from("drivers")
           .select("id, name, status")
           .eq("id", topDriverId)
-          .eq("company_id", company_id)
+          .eq("company_id", userData.company_id)
           .eq("status", "active")
           .maybeSingle()
         if (driver) suggestions.suggestedDriver = driver
@@ -1632,7 +1632,7 @@ export async function getLoadSuggestions(origin?: string, destination?: string) 
           .from("trucks")
           .select("id, truck_number, status")
           .eq("id", topTruckId)
-          .eq("company_id", company_id)
+          .eq("company_id", userData.company_id)
           .in("status", ["available", "in_use"])
           .maybeSingle()
         if (truck) suggestions.suggestedTruck = truck
@@ -1646,7 +1646,7 @@ export async function getLoadSuggestions(origin?: string, destination?: string) 
           .from("customers")
           .select("id, name, company_name")
           .eq("id", lastLoad.customer_id)
-          .eq("company_id", company_id)
+          .eq("company_id", userData.company_id)
           .maybeSingle()
         if (customer) suggestions.lastUsedCustomer = customer
       }

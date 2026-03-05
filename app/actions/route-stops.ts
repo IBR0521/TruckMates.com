@@ -409,21 +409,21 @@ export async function getRouteSummary(routeId: string) {
 
     const summary = {
       total_stops: stops.length,
-      total_travel_time_minutes: stops.reduce((sum, stop) => sum + (stop.travel_time_minutes || 0), 0),
-      total_service_time_minutes: stops.reduce((sum, stop) => sum + (stop.service_time_minutes || 0), 0),
+      total_travel_time_minutes: stops.reduce((sum: number, stop: { travel_time_minutes: number | null; [key: string]: any }) => sum + (stop.travel_time_minutes || 0), 0),
+      total_service_time_minutes: stops.reduce((sum: number, stop: { service_time_minutes: number | null; [key: string]: any }) => sum + (stop.service_time_minutes || 0), 0),
       total_distance: 0, // Will be calculated from coordinates if available
-      total_carts: stops.reduce((sum, stop) => sum + (stop.carts || 0), 0),
-      total_boxes: stops.reduce((sum, stop) => sum + (stop.boxes || 0), 0),
-      total_pallets: stops.reduce((sum, stop) => sum + (stop.pallets || 0), 0),
-      total_orders: stops.reduce((sum, stop) => sum + (stop.orders || 0), 0),
-      delivery_carts: stops.filter(s => s.quantity_type === "delivery").reduce((sum, stop) => sum + (stop.carts || 0), 0),
-      delivery_boxes: stops.filter(s => s.quantity_type === "delivery").reduce((sum, stop) => sum + (stop.boxes || 0), 0),
-      delivery_pallets: stops.filter(s => s.quantity_type === "delivery").reduce((sum, stop) => sum + (stop.pallets || 0), 0),
-      delivery_orders: stops.filter(s => s.quantity_type === "delivery").reduce((sum, stop) => sum + (stop.orders || 0), 0),
-      pickup_carts: stops.filter(s => s.quantity_type === "pickup").reduce((sum, stop) => sum + (stop.carts || 0), 0),
-      pickup_boxes: stops.filter(s => s.quantity_type === "pickup").reduce((sum, stop) => sum + (stop.boxes || 0), 0),
-      pickup_pallets: stops.filter(s => s.quantity_type === "pickup").reduce((sum, stop) => sum + (stop.pallets || 0), 0),
-      pickup_orders: stops.filter(s => s.quantity_type === "pickup").reduce((sum, stop) => sum + (stop.orders || 0), 0),
+      total_carts: stops.reduce((sum: number, stop: { carts: number | null; [key: string]: any }) => sum + (stop.carts || 0), 0),
+      total_boxes: stops.reduce((sum: number, stop: { boxes: number | null; [key: string]: any }) => sum + (stop.boxes || 0), 0),
+      total_pallets: stops.reduce((sum: number, stop: { pallets: number | null; [key: string]: any }) => sum + (stop.pallets || 0), 0),
+      total_orders: stops.reduce((sum: number, stop: { orders: number | null; [key: string]: any }) => sum + (stop.orders || 0), 0),
+      delivery_carts: stops.filter((s: { quantity_type: string | null; [key: string]: any }) => s.quantity_type === "delivery").reduce((sum: number, stop: { carts: number | null; [key: string]: any }) => sum + (stop.carts || 0), 0),
+      delivery_boxes: stops.filter((s: { quantity_type: string | null; [key: string]: any }) => s.quantity_type === "delivery").reduce((sum: number, stop: { boxes: number | null; [key: string]: any }) => sum + (stop.boxes || 0), 0),
+      delivery_pallets: stops.filter((s: { quantity_type: string | null; [key: string]: any }) => s.quantity_type === "delivery").reduce((sum: number, stop: { pallets: number | null; [key: string]: any }) => sum + (stop.pallets || 0), 0),
+      delivery_orders: stops.filter((s: { quantity_type: string | null; [key: string]: any }) => s.quantity_type === "delivery").reduce((sum: number, stop: { orders: number | null; [key: string]: any }) => sum + (stop.orders || 0), 0),
+      pickup_carts: stops.filter((s: { quantity_type: string | null; [key: string]: any }) => s.quantity_type === "pickup").reduce((sum: number, stop: { carts: number | null; [key: string]: any }) => sum + (stop.carts || 0), 0),
+      pickup_boxes: stops.filter((s: { quantity_type: string | null; [key: string]: any }) => s.quantity_type === "pickup").reduce((sum: number, stop: { boxes: number | null; [key: string]: any }) => sum + (stop.boxes || 0), 0),
+      pickup_pallets: stops.filter((s: { quantity_type: string | null; [key: string]: any }) => s.quantity_type === "pickup").reduce((sum: number, stop: { pallets: number | null; [key: string]: any }) => sum + (stop.pallets || 0), 0),
+      pickup_orders: stops.filter((s: { quantity_type: string | null; [key: string]: any }) => s.quantity_type === "pickup").reduce((sum: number, stop: { orders: number | null; [key: string]: any }) => sum + (stop.orders || 0), 0),
     }
 
     return { data: summary, error: null }

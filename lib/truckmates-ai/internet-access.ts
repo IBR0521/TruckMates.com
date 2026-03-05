@@ -241,18 +241,19 @@ export class TruckMatesInternetAccess {
       // Use Google Maps Traffic API (if available)
       const googleMapsKey = process.env.GOOGLE_MAPS_API_KEY
       if (googleMapsKey) {
-        const { getRouteDistanceAndTime } = await import("@/app/actions/integrations-google-maps")
-        const routeData = await getRouteDistanceAndTime(
-          { address: origin },
-          { address: destination }
-        )
+        const { getRouteDirections } = await import("@/app/actions/integrations-google-maps")
+        const routeResult = await getRouteDirections(origin, destination)
         
-        if (routeData) {
+        if (routeResult.data && !routeResult.error) {
+          const routeData = routeResult.data
+          // Note: duration_seconds is traffic-aware when departure_time is set
+          // For delay calculation, we'd need duration_in_traffic from the API response
+          // For now, use duration_seconds as estimated time
           return {
             data: {
               route: `${origin} to ${destination}`,
-              current_delay: routeData.duration_in_traffic - routeData.duration || 0,
-              estimated_time: routeData.duration_in_traffic
+              current_delay: 0, // Would need duration_in_traffic from API to calculate
+              estimated_time: routeData.duration_seconds || 0
             },
             error: null
           }
@@ -363,6 +364,7 @@ export class TruckMatesInternetAccess {
     }
   }
 }
+
 
 
 

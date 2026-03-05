@@ -135,7 +135,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
 
     // Format results
     const expiring = {
-      documents: (expiringDocuments || []).map(doc => ({
+      documents: (expiringDocuments || []).map((doc: { id: string; name: string | null; type: string | null; expiry_date: string; truck_id: string | null; driver_id: string | null }) => ({
         id: doc.id,
         name: doc.name,
         type: doc.type,
@@ -147,7 +147,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
           (new Date(doc.expiry_date).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
         ),
       })),
-      driver_licenses: (expiringLicenses || []).map(driver => ({
+      driver_licenses: (expiringLicenses || []).map((driver: { id: string; name: string | null; license_number: string | null; license_expiry: string }) => ({
         id: driver.id,
         name: driver.name,
         license_number: driver.license_number,
@@ -157,7 +157,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
           (new Date(driver.license_expiry).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
         ),
       })),
-      truck_licenses: (expiringTruckLicenses || []).map(truck => ({
+      truck_licenses: (expiringTruckLicenses || []).map((truck: { id: string; truck_number: string | null; license_expiry_date: string }) => ({
         id: truck.id,
         name: truck.truck_number,
         expiry_date: truck.license_expiry_date,
@@ -166,7 +166,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
           (new Date(truck.license_expiry_date).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
         ),
       })),
-      truck_insurance: (expiringInsurance || []).map(truck => ({
+      truck_insurance: (expiringInsurance || []).map((truck: { id: string; truck_number: string | null; insurance_expiry_date: string }) => ({
         id: truck.id,
         name: truck.truck_number,
         expiry_date: truck.insurance_expiry_date,
@@ -178,7 +178,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
     }
 
     const expired = {
-      documents: (expiredDocuments || []).map(doc => ({
+      documents: (expiredDocuments || []).map((doc: { id: string; name: string | null; type: string | null; expiry_date: string; truck_id: string | null; driver_id: string | null }) => ({
         id: doc.id,
         name: doc.name,
         type: doc.type,
@@ -190,7 +190,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
           (today.getTime() - new Date(doc.expiry_date).getTime()) / (1000 * 60 * 60 * 24)
         ),
       })),
-      driver_licenses: (expiredLicenses || []).map(driver => ({
+      driver_licenses: (expiredLicenses || []).map((driver: { id: string; name: string | null; license_number: string | null; license_expiry: string }) => ({
         id: driver.id,
         name: driver.name,
         license_number: driver.license_number,
@@ -200,7 +200,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
           (today.getTime() - new Date(driver.license_expiry).getTime()) / (1000 * 60 * 60 * 24)
         ),
       })),
-      truck_licenses: (expiredTruckLicenses || []).map(truck => ({
+      truck_licenses: (expiredTruckLicenses || []).map((truck: { id: string; truck_number: string | null; license_expiry_date: string }) => ({
         id: truck.id,
         name: truck.truck_number,
         expiry_date: truck.license_expiry_date,
@@ -209,7 +209,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
           (today.getTime() - new Date(truck.license_expiry_date).getTime()) / (1000 * 60 * 60 * 24)
         ),
       })),
-      truck_insurance: (expiredInsurance || []).map(truck => ({
+      truck_insurance: (expiredInsurance || []).map((truck: { id: string; truck_number: string | null; insurance_expiry_date: string }) => ({
         id: truck.id,
         name: truck.truck_number,
         expiry_date: truck.insurance_expiry_date,

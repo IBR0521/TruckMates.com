@@ -165,7 +165,7 @@ function SuperAdminRegisterForm() {
                 {formData.companyType === "broker" && "You can post loads to the marketplace"}
                 {formData.companyType === "carrier" && "You can accept loads from the marketplace"}
                 {formData.companyType === "both" && "You can post and accept loads in the marketplace"}
-                {(!formData.companyType || formData.companyType === "regular") && "Standard fleet management platform access"}
+                {!formData.companyType && "Standard fleet management platform access"}
               </p>
             </div>
             <div>

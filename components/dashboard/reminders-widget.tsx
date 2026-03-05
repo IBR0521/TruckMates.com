@@ -27,6 +27,7 @@ export function RemindersWidget() {
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [completingId, setCompletingId] = useState<string | null>(null)
+  const [totalOverdueCount, setTotalOverdueCount] = useState(0)
 
   useEffect(() => {
     loadReminders()
@@ -58,7 +59,8 @@ export function RemindersWidget() {
       const upcoming = upcomingResult.data || []
 
       // MEDIUM FIX 5: Track total overdue count before slicing
-      const totalOverdueCount = overdue.length
+      const totalOverdue = overdue.length
+      setTotalOverdueCount(totalOverdue)
 
       // Combine and sort: overdue first, then by due date
       const allReminders = [
@@ -72,8 +74,8 @@ export function RemindersWidget() {
         return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
       })
 
-      // Store total overdue count in state for badge
-      setReminders(allReminders.slice(0, 5).map(r => ({ ...r, totalOverdueCount }))) // Show top 5
+      // Show top 5
+      setReminders(allReminders.slice(0, 5))
     } catch (error: any) {
       console.error("Error loading reminders:", error)
     } finally {
@@ -188,9 +190,9 @@ export function RemindersWidget() {
         <div className="flex items-center gap-3">
           <Bell className="w-5 h-5 text-muted-foreground" />
           <h3 className="text-lg font-semibold text-foreground">Reminders</h3>
-          {reminders.length > 0 && reminders[0].totalOverdueCount > 0 && (
+          {totalOverdueCount > 0 && (
             <Badge variant="destructive" className="ml-2">
-              {reminders[0].totalOverdueCount} Overdue
+              {totalOverdueCount} Overdue
             </Badge>
           )}
         </div>

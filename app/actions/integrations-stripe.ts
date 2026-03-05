@@ -42,14 +42,14 @@ async function getStripeClient() {
     // Dynamically import Stripe
     const stripe = (await import("stripe")).default
     return new stripe(integrations.stripe_api_key, {
-      apiVersion: "2024-11-20.acacia",
+      apiVersion: "2025-11-17.clover" as any,
     })
   }
 
   // Use environment variable
   const stripe = (await import("stripe")).default
   return new stripe(STRIPE_SECRET_KEY, {
-    apiVersion: "2024-11-20.acacia",
+    apiVersion: "2025-11-17.clover" as any,
   })
 }
 

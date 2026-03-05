@@ -474,10 +474,6 @@ export async function getCustomerPortalLoads(token: string) {
     console.error("[getCustomerPortalLoads] Unexpected error:", error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
-} catch (error: any) {
-    console.error("[getCustomerPortalLoads] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
-  }
 }
 
 /**
@@ -636,6 +632,10 @@ export async function getCustomerPortalDocuments(token: string, loadId?: string)
   }
 
   return { data: data || [], error: null }
+  } catch (error: any) {
+    console.error("[getCustomerPortalDocuments] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 /**

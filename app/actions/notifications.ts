@@ -258,7 +258,8 @@ export async function sendNotification(
   if (shouldNotifySMS) {
     try {
       const { sendSMSNotification } = await import("./sms")
-      const smsResult = await sendSMSNotification(userId, type, data)
+      // Type assertion: sendSMSNotification may not support all notification types
+      const smsResult = await sendSMSNotification(userId, type as "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "dispatch_assigned", data)
       results.sms = smsResult
     } catch (error: any) {
       console.error("[SMS NOTIFICATION ERROR]", error)
@@ -359,7 +360,7 @@ export async function sendNotification(
 
 // Helper function to generate email content
 function getEmailContent(
-  type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "dfm_matches_found" | "marketplace_load_accepted" | "marketplace_new_matching_load",
+  type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "reminder_due" | "dfm_matches_found" | "marketplace_load_accepted" | "marketplace_new_matching_load",
   data: any,
   userName: string
 ) {

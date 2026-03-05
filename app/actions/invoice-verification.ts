@@ -277,7 +277,7 @@ export async function batchVerifyInvoices() {
     // RCE-002 FIX: Batch verify invoices in parallel instead of sequential N+1 queries
     // This prevents timeouts on Vercel's 30-second function limit
     const verificationResults = await Promise.all(
-      invoices.map(async (invoice) => {
+      invoices.map(async (invoice: { id: string; [key: string]: any }) => {
         try {
           const { data: verification, error: verifyError } = await supabase.rpc(
             "verify_invoice_three_way_match",

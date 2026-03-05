@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
       // Try puppeteer-core first (for serverless/Vercel)
       try {
         const puppeteerCore = await import("puppeteer-core").catch(() => null)
+        // @ts-ignore - @sparticuz/chromium may not be installed in all environments
         const chromium = await import("@sparticuz/chromium").catch(() => null)
         
         if (puppeteerCore && chromium) {

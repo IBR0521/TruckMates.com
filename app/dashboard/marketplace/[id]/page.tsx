@@ -1,9 +1,18 @@
 "use client"
 
-import { MarketplaceComingSoon } from "@/components/marketplace-coming-soon"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { use } from "react"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { ArrowLeft, MapPin, Calendar, CheckCircle2 } from "lucide-react"
+import { toast } from "sonner"
+import { format } from "date-fns"
+import { getMarketplaceLoad, acceptMarketplaceLoad } from "@/app/actions/marketplace"
 
 export default function MarketplaceDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  return <MarketplaceComingSoon />
   const router = useRouter()
   const { id } = use(params)
   const [load, setLoad] = useState<any>(null)

@@ -28,6 +28,27 @@ declare global {
     google: any
     initGoogleMaps: () => void
   }
+  
+  namespace google {
+    namespace maps {
+      interface GeocoderResult {
+        geometry: {
+          location: {
+            lat(): number
+            lng(): number
+          }
+        }
+      }
+      enum GeocoderStatus {
+        OK = 'OK',
+        ERROR = 'ERROR',
+        INVALID_REQUEST = 'INVALID_REQUEST',
+        OVER_QUERY_LIMIT = 'OVER_QUERY_LIMIT',
+        REQUEST_DENIED = 'REQUEST_DENIED',
+        ZERO_RESULTS = 'ZERO_RESULTS'
+      }
+    }
+  }
 }
 
 export function GoogleMapsRoute({
@@ -191,7 +212,7 @@ export function GoogleMapsRoute({
         } else {
           try {
             const originResult = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
-              geocoder.geocode({ address: origin }, (results, status) => {
+              geocoder.geocode({ address: origin }, (results: google.maps.GeocoderResult[] | null, status: google.maps.GeocoderStatus) => {
                 if (status === window.google.maps.GeocoderStatus.OK && results && results.length > 0) {
                   resolve(results)
                 } else {
@@ -226,7 +247,7 @@ export function GoogleMapsRoute({
         } else {
           try {
             const destResult = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
-              geocoder.geocode({ address: destination }, (results, status) => {
+              geocoder.geocode({ address: destination }, (results: google.maps.GeocoderResult[] | null, status: google.maps.GeocoderStatus) => {
                 if (status === window.google.maps.GeocoderStatus.OK && results && results.length > 0) {
                   resolve(results)
                 } else {
@@ -306,7 +327,7 @@ export function GoogleMapsRoute({
                 }
                 const stopGeocoder = new window.google.maps.Geocoder()
                 const stopResult = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
-                  stopGeocoder.geocode({ address: stop.address || stop.location_name }, (results, status) => {
+                  stopGeocoder.geocode({ address: stop.address || stop.location_name }, (results: google.maps.GeocoderResult[] | null, status: google.maps.GeocoderStatus) => {
                     if (status === window.google.maps.GeocoderStatus.OK && results) {
                       resolve(results)
                     } else {

@@ -100,7 +100,12 @@ export default function SettingsPage() {
       if (userResult.error) {
         toast.error(userResult.error)
       } else if (userResult.data) {
-        setUserData(userResult.data)
+        setUserData({
+          full_name: userResult.data.full_name || "",
+          email: userResult.data.email || "",
+          phone: userResult.data.phone || "",
+          role: userResult.data.role || "",
+        })
         setIsManager(userResult.data.role === "manager")
         setUserFormData({
           full_name: userResult.data.full_name || "",

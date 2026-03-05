@@ -242,7 +242,7 @@ export async function updateELDDevice(
     .from("eld_devices")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", company_id)
+    .eq("company_id", userData.company_id)
     .select()
     .single()
 
@@ -286,7 +286,7 @@ export async function deleteELDDevice(id: string) {
     .from("eld_devices")
     .delete()
     .eq("id", id)
-    .eq("company_id", company_id)
+    .eq("company_id", userData.company_id)
 
   if (error) {
     return { error: error.message, data: null }
@@ -521,7 +521,7 @@ export async function getELDMileageData(filters: {
 
   // Aggregate mileage by truck
   const mileageByTruck: Record<string, number> = {}
-  logs?.forEach((log) => {
+  logs?.forEach((log: { truck_id: string | null; miles_driven: number | string | null; [key: string]: any }) => {
     if (log.truck_id && log.miles_driven) {
       mileageByTruck[log.truck_id] = (mileageByTruck[log.truck_id] || 0) + Number(log.miles_driven)
     }
@@ -566,7 +566,7 @@ export async function resolveELDEvent(eventId: string) {
       resolved_by: user.id,
     })
     .eq("id", eventId)
-    .eq("company_id", company_id)
+    .eq("company_id", userData.company_id)
     .select()
     .single()
 

@@ -37,7 +37,7 @@ export async function calculateRemainingHOS(driverId: string, date?: string) {
   let offDutyMinutes = 0
   let sleeperMinutes = 0
 
-  logs?.forEach((log) => {
+  logs?.forEach((log: { log_type: string; duration_minutes: number | null }) => {
     const duration = log.duration_minutes || 0
     switch (log.log_type) {
       case "driving":
@@ -151,16 +151,16 @@ export async function getDriverScorecard(driverId: string, startDate?: string, e
 
   // Calculate metrics
   const totalDrivingHours = logs
-    ?.filter((log) => log.log_type === "driving")
-    .reduce((sum, log) => sum + (log.duration_minutes || 0) / 60, 0) || 0
+    ?.filter((log: { log_type: string; duration_minutes: number | null }) => log.log_type === "driving")
+    .reduce((sum: number, log: { log_type: string; duration_minutes: number | null }) => sum + (log.duration_minutes || 0) / 60, 0) || 0
 
   const totalMiles = logs
-    ?.filter((log) => log.log_type === "driving")
-    .reduce((sum, log) => sum + (Number(log.miles_driven) || 0), 0) || 0
+    ?.filter((log: { log_type: string; miles_driven: number | string | null }) => log.log_type === "driving")
+    .reduce((sum: number, log: { log_type: string; miles_driven: number | string | null }) => sum + (Number(log.miles_driven) || 0), 0) || 0
 
-  const hosViolations = violations?.filter((v) => v.event_type === "hos_violation").length || 0
-  const speedingEvents = violations?.filter((v) => v.event_type === "speeding").length || 0
-  const hardBraking = violations?.filter((v) => v.event_type === "hard_brake").length || 0
+  const hosViolations = violations?.filter((v: { event_type: string }) => v.event_type === "hos_violation").length || 0
+  const speedingEvents = violations?.filter((v: { event_type: string }) => v.event_type === "speeding").length || 0
+  const hardBraking = violations?.filter((v: { event_type: string }) => v.event_type === "hard_brake").length || 0
   const totalViolations = violations?.length || 0
 
   // Calculate scores (0-100)
@@ -263,9 +263,9 @@ export async function getFleetHealth() {
 
   // Calculate metrics
   const totalDevices = devices?.length || 0
-  const activeDevices = devices?.filter((d) => d.status === "active").length || 0
+  const activeDevices = devices?.filter((d: { id: string; status: string; truck_id: string | null }) => d.status === "active").length || 0
   const totalViolations = activeViolations?.length || 0
-  const criticalViolations = activeViolations?.filter((v) => v.severity === "critical").length || 0
+  const criticalViolations = activeViolations?.filter((v: { id: string; severity: string; resolved: boolean }) => v.severity === "critical").length || 0
 
   // Calculate compliance score
   const totalDrivers = drivers?.length || 0
@@ -355,7 +355,7 @@ export async function getRealtimeLocations() {
 
   // Get most recent location per device
   const latestByDevice = new Map()
-  locations?.forEach((loc) => {
+  locations?.forEach((loc: { eld_device_id: string; timestamp: string; [key: string]: any }) => {
     const deviceId = loc.eld_device_id
     if (!latestByDevice.has(deviceId) || new Date(loc.timestamp) > new Date(latestByDevice.get(deviceId).timestamp)) {
       latestByDevice.set(deviceId, loc)

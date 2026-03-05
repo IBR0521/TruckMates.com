@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
         .in("status", ["scheduled", "in_transit", "assigned"])
 
       if (activeLoads) {
-        activeLoads.forEach((load) => {
+        activeLoads.forEach((load: { id: string; shipment_number: string; status: string; [key: string]: any }) => {
           dependencies.push({
             type: "active_load",
             id: load.id,
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
         .eq("current_driver_id", resourceId)
 
       if (trucks) {
-        trucks.forEach((truck) => {
+        trucks.forEach((truck: { id: string; truck_number: string; [key: string]: any }) => {
           dependencies.push({
             type: "assigned_truck",
             id: truck.id,
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
         .in("status", ["scheduled", "in_transit", "assigned"])
 
       if (activeLoads) {
-        activeLoads.forEach((load) => {
+        activeLoads.forEach((load: { id: string; shipment_number: string; status: string; [key: string]: any }) => {
           dependencies.push({
             type: "active_load",
             id: load.id,
@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
         .eq("load_id", resourceId)
 
       if (invoices && invoices.length > 0) {
-        invoices.forEach((invoice) => {
+        invoices.forEach((invoice: { id: string; invoice_number: string; status: string; [key: string]: any }) => {
           dependencies.push({
             type: "invoice",
             id: invoice.id,
@@ -189,7 +189,7 @@ export async function GET(request: NextRequest) {
         .eq("route_id", resourceId)
 
       if (loads && loads.length > 0) {
-        loads.forEach((load) => {
+        loads.forEach((load: { id: string; shipment_number: string; status: string; [key: string]: any }) => {
           dependencies.push({
             type: "assigned_load",
             id: load.id,
@@ -227,7 +227,7 @@ export async function GET(request: NextRequest) {
           .or(`customer_id.eq.${resourceId},company_name.eq.${customer.name}`)
 
         if (loads && loads.length > 0) {
-          loads.forEach((load) => {
+          loads.forEach((load: { id: string; shipment_number: string; status: string; [key: string]: any }) => {
             dependencies.push({
               type: "load",
               id: load.id,
@@ -244,7 +244,7 @@ export async function GET(request: NextRequest) {
           .or(`customer_id.eq.${resourceId},customer_name.eq.${customer.name}`)
 
         if (invoices && invoices.length > 0) {
-          invoices.forEach((invoice) => {
+          invoices.forEach((invoice: { id: string; invoice_number: string; status: string; [key: string]: any }) => {
             dependencies.push({
               type: "invoice",
               id: invoice.id,
@@ -269,7 +269,7 @@ export async function GET(request: NextRequest) {
           .or(`vendor_id.eq.${resourceId},vendor.eq.${vendor.name}`)
 
         if (expenses && expenses.length > 0) {
-          expenses.forEach((expense) => {
+          expenses.forEach((expense: { id: string; description: string | null; date: string | null; [key: string]: any }) => {
             dependencies.push({
               type: "expense",
               id: expense.id,
@@ -286,7 +286,7 @@ export async function GET(request: NextRequest) {
           .or(`vendor_id.eq.${resourceId},vendor.eq.${vendor.name}`)
 
         if (maintenance && maintenance.length > 0) {
-          maintenance.forEach((record) => {
+          maintenance.forEach((record: { id: string; service_type: string | null; scheduled_date: string | null; [key: string]: any }) => {
             dependencies.push({
               type: "maintenance",
               id: record.id,

@@ -459,7 +459,7 @@ export async function triggerWebhook(
   }
 
   // Deliver to all matching webhooks (async, don't wait)
-  webhooks.forEach((webhook) => {
+  webhooks.forEach((webhook: { id: string; [key: string]: any }) => {
     deliverWebhook(webhook.id, eventType, payload).catch((error) => {
       console.error(`[WEBHOOK] Failed to deliver webhook ${webhook.id}:`, error)
     })

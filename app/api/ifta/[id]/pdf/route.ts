@@ -43,7 +43,9 @@ export async function GET(
 
     // FIXED: Return actual PDF binary instead of HTML
     if (pdfResult.pdf) {
-      return new NextResponse(pdfResult.pdf, {
+      // Convert Buffer to Uint8Array for NextResponse compatibility
+      const pdfBuffer = new Uint8Array(pdfResult.pdf)
+      return new NextResponse(pdfBuffer, {
         headers: {
           "Content-Type": "application/pdf",
           "Content-Disposition": `attachment; filename="ifta-report-${id}.pdf"`,

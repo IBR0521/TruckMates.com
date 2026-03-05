@@ -199,7 +199,7 @@ export async function createReminder(formData: {
         .eq("company_id", userData.company_id)
         .in("role", ["manager", "admin", "owner"])
       if (managers) {
-        userIdsToNotify = managers.map(m => m.id)
+        userIdsToNotify = managers.map((m: { id: string; [key: string]: any }) => m.id)
       }
     }
 

@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { checkCreatePermission } from "@/lib/server-permissions"
 
 /**
  * Predict maintenance needs based on truck usage, mileage, and maintenance history
@@ -53,7 +54,7 @@ export async function predictMaintenanceNeeds(truckId?: string) {
   }
 
   // Get maintenance history for these trucks - use DISTINCT ON to get only most recent per service type per truck
-  const truckIds = trucks.map((t) => t.id)
+  const truckIds = trucks.map((t: { id: string; [key: string]: any }) => t.id)
   
   // Use a more efficient query: get only the most recent maintenance per service type per truck
   // This prevents loading entire history into memory
@@ -66,8 +67,8 @@ export async function predictMaintenanceNeeds(truckId?: string) {
     .limit(1000) // Cap at 1000 rows to prevent memory issues
 
   // Predict maintenance needs
-  const predictions = trucks.map((truck) => {
-    const truckMaintenance = maintenanceHistory?.filter((m) => m.truck_id === truck.id) || []
+  const predictions = trucks.map((truck: { id: string; truck_number: string; make: string | null; model: string | null; current_mileage: number | null; last_maintenance_mileage: number | null; last_maintenance_date: string | null; [key: string]: any }) => {
+    const truckMaintenance = maintenanceHistory?.filter((m: { truck_id: string; service_type: string; mileage: number | null; service_date: string; [key: string]: any }) => m.truck_id === truck.id) || []
     
     // Calculate miles since last maintenance
     const lastMaintenance = truckMaintenance[0]
@@ -145,7 +146,7 @@ export async function predictMaintenanceNeeds(truckId?: string) {
   })
 
   // Sort by priority
-  predictions.sort((a, b) => {
+  predictions.sort((a: { priority: string; [key: string]: any }, b: { priority: string; [key: string]: any }) => {
     const priorityOrder = { high: 3, medium: 2, low: 1 }
     return priorityOrder[b.priority as keyof typeof priorityOrder] - priorityOrder[a.priority as keyof typeof priorityOrder]
   })

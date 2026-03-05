@@ -133,7 +133,7 @@ export async function createMaintenance(formData: {
     .from("maintenance")
     .insert({
       company_id: userData.company_id,
-      truck_id: sanitizeString(formData.truck_id, 1, 100),
+      truck_id: sanitizeString(formData.truck_id, 100),
       service_type: sanitizedServiceType,
       scheduled_date: formData.scheduled_date,
       current_mileage: formData.current_mileage ? Number(formData.current_mileage) : null,

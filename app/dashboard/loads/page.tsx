@@ -167,12 +167,7 @@ export default function LoadsPage() {
       load.id === loadId ? { ...load, [field]: value } : load
     )
     setLoadsList(updatedLoads)
-    
-    // Update filtered list too
-    const updatedFiltered = filteredLoads.map(load => 
-      load.id === loadId ? { ...load, [field]: value } : load
-    )
-    setFilteredLoads(updatedFiltered)
+    // filteredLoads will automatically update via useMemo when loadsList changes
 
     // Then save to server
     const updateData: any = { [field]: value }
@@ -234,11 +229,7 @@ export default function LoadsPage() {
       load.id === id ? { ...load, status } : load
     )
     setLoadsList(updatedLoads)
-    
-    const updatedFiltered = filteredLoads.map(load => 
-      load.id === id ? { ...load, status } : load
-    )
-    setFilteredLoads(updatedFiltered)
+    // filteredLoads will automatically update via useMemo when loadsList changes
 
     const result = await updateLoad(id, { status })
     if (result.error) {

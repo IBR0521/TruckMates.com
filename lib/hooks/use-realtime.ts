@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
-import type { RealtimeChannel } from "@supabase/supabase-js"
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js"
 
 /**
  * Hook for real-time subscriptions to Supabase tables
@@ -51,7 +51,7 @@ export function useRealtimeSubscription<T = any>(
             table,
             filter: filter || undefined,
           },
-          (payload) => {
+          (payload: RealtimePostgresChangesPayload<any>) => {
             try {
               if (payload.eventType === "INSERT" && onInsert) {
                 onInsert(payload.new as T)
@@ -81,7 +81,7 @@ export function useRealtimeSubscription<T = any>(
             }
           }
         )
-        .subscribe((status) => {
+        .subscribe((status: "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "CHANNEL_ERROR") => {
           setIsConnected(status === "SUBSCRIBED")
           if (status === "CHANNEL_ERROR") {
             setError(new Error("Failed to subscribe to real-time updates"))
@@ -135,7 +135,7 @@ export function useRealtimeRecord<T = any>(
           table,
           filter: `id=eq.${recordId}`,
         },
-        (payload) => {
+        (payload: RealtimePostgresChangesPayload<any>) => {
           const updated = payload.new as T
           setRecord(updated)
           if (onUpdate) {
@@ -143,7 +143,7 @@ export function useRealtimeRecord<T = any>(
           }
         }
       )
-      .subscribe((status) => {
+      .subscribe((status: "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "CHANNEL_ERROR") => {
         setIsConnected(status === "SUBSCRIBED")
       })
 
@@ -226,7 +226,7 @@ export function useRealtimeNotifications() {
             table: "notifications",
             filter: `user_id=eq.${userId}`, // FIXED: Filter by user_id
           },
-          (payload) => {
+          (payload: RealtimePostgresChangesPayload<any>) => {
             const notification = payload.new
             // Only add if it's for this user
             if (notification.user_id === userId) {

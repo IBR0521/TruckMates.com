@@ -24,12 +24,12 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
   } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return { html: "", error: "Not authenticated" }
+    return { pdf: null, html: "", error: "Not authenticated" }
   }
 
   const result = await getCachedUserCompany(user.id)
   if (result.error || !result.company_id) {
-    return { html: "", error: result.error || "No company found" }
+    return { pdf: null, html: "", error: result.error || "No company found" }
   }
 
   try {
@@ -42,7 +42,7 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
       .single()
 
     if (reportError || !report) {
-      return { html: "", error: "IFTA report not found" }
+      return { pdf: null, html: "", error: "IFTA report not found" }
     }
 
     // Get company info

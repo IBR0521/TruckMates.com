@@ -75,14 +75,14 @@ export async function getFuelAnalytics(filters?: {
 
     // Calculate analytics
     const expenses = fuelExpenses || []
-    const totalFuelCost = expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
+    const totalFuelCost = expenses.reduce((sum: number, e: { id: string; amount: string | number; date: string; mileage: number | null; truck_id: string | null; description: string | null; gallons: number | string | null; price_per_gallon: number | string | null }) => sum + (parseFloat(String(e.amount)) || 0), 0)
     const totalFuelExpenses = expenses.length
 
     // Calculate MPG per truck
     const truckAnalytics: Record<string, any> = {}
     
     for (const truck of trucks || []) {
-      const truckExpenses = expenses.filter(e => e.truck_id === truck.id)
+      const truckExpenses = expenses.filter((e: { id: string; amount: string | number; date: string; mileage: number | null; truck_id: string | null; description: string | null; gallons: number | string | null; price_per_gallon: number | string | null }) => e.truck_id === truck.id)
       if (truckExpenses.length === 0) continue
 
       // Sort expenses by date (oldest first)
@@ -167,7 +167,7 @@ export async function getFuelAnalytics(filters?: {
       truckAnalytics[truck.id] = {
         truck_id: truck.id,
         truck_number: truck.truck_number,
-        total_fuel_cost: truckExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0),
+        total_fuel_cost: truckExpenses.reduce((sum: number, e: { id: string; amount: string | number; date: string; mileage: number | null; truck_id: string | null; description: string | null; gallons: number | string | null; price_per_gallon: number | string | null }) => sum + (parseFloat(String(e.amount)) || 0), 0),
         total_fuel_expenses: truckExpenses.length,
         total_miles: totalMiles,
         avg_mpg: avgMPG,
@@ -193,7 +193,7 @@ export async function getFuelAnalytics(filters?: {
     const monthlyTrends: Record<string, { cost: number; expenses: number; miles: number }> = {}
     
     // Group expenses by month and calculate total cost and count
-    expenses.forEach(expense => {
+    expenses.forEach((expense: { id: string; amount: string | number; date: string; mileage: number | null; truck_id: string | null; description: string | null; gallons: number | string | null; price_per_gallon: number | string | null }) => {
       const date = new Date(expense.date)
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
       
@@ -201,7 +201,7 @@ export async function getFuelAnalytics(filters?: {
         monthlyTrends[monthKey] = { cost: 0, expenses: 0, miles: 0 }
       }
       
-      monthlyTrends[monthKey].cost += parseFloat(expense.amount) || 0
+      monthlyTrends[monthKey].cost += parseFloat(String(expense.amount)) || 0
       monthlyTrends[monthKey].expenses += 1
     })
 
@@ -339,7 +339,7 @@ export async function getFuelCostPerRoute(filters?: {
     for (const route of routes || []) {
       // Try to match expenses to routes by truck_id and date
       // This is approximate - ideally expenses would have route_id
-      const routeExpenses = (fuelExpenses || []).filter(e => {
+      const routeExpenses = (fuelExpenses || []).filter((e: { id: string; amount: string | number; date: string; mileage: number | null; truck_id: string | null; [key: string]: any }) => {
         // Match by truck if route has truck_id
         if (route.truck_id && e.truck_id === route.truck_id) {
           return true
@@ -347,7 +347,7 @@ export async function getFuelCostPerRoute(filters?: {
         return false
       })
       
-      const totalCost = routeExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
+      const totalCost = routeExpenses.reduce((sum: number, e: { id: string; amount: string | number; date: string; mileage: number | null; truck_id: string | null; [key: string]: any }) => sum + (parseFloat(String(e.amount)) || 0), 0)
       
       if (routeExpenses.length > 0) {
         routeFuelCosts[route.id] = {

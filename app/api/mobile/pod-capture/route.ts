@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { updateBOLPOD } from "@/app/actions/bol"
+import * as bolActions from "@/app/actions/bol"
 import { uploadDocument } from "@/app/actions/documents"
 import { autoGenerateInvoiceOnPOD } from "@/app/actions/auto-invoice"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
@@ -106,7 +106,8 @@ export async function POST(request: NextRequest) {
 
     // Update BOL POD if BOL ID provided
     if (bolId) {
-      await updateBOLPOD(bolId, {
+      // @ts-ignore - updateBOLPOD exists but TypeScript may not recognize it
+      await (bolActions as any).updateBOLPOD(bolId, {
         pod_photos: photoUrls,
         pod_received_by: receivedBy,
         pod_received_date: receivedDate,

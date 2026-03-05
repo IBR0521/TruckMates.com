@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { exportToExcel } from "@/lib/export-utils"
 import { toast } from "sonner"
+import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -200,7 +201,7 @@ export default function RoutesPage() {
   }
 
   // Keyboard shortcuts
-  useListPageShortcuts(router, "/dashboard/routes/add", searchInputRef)
+  useListPageShortcuts(router, "/dashboard/routes/add", searchInputRef as React.RefObject<HTMLInputElement>)
 
   return (
     <div className="w-full">

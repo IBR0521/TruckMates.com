@@ -182,7 +182,7 @@ export async function getOptimalDriverSuggestions(
     
     // Group assignments by driver_id
     const assignmentsByDriver = new Map<string, any[]>()
-    existingAssignments?.forEach(load => {
+    existingAssignments?.forEach((load: { id: string; driver_id: string | null; load_date: string | null; estimated_delivery: string | null; origin: string | null; destination: string | null; shipment_number?: string }) => {
       if (load.driver_id) {
         if (!assignmentsByDriver.has(load.driver_id)) {
           assignmentsByDriver.set(load.driver_id, [])
@@ -190,7 +190,7 @@ export async function getOptimalDriverSuggestions(
         assignmentsByDriver.get(load.driver_id)!.push({ type: 'load', ...load })
       }
     })
-    existingRoutes?.forEach(route => {
+    existingRoutes?.forEach((route: { id: string; driver_id: string | null; route_start_time: string | null; estimated_arrival: string | null; origin: string | null; destination: string | null }) => {
       if (route.driver_id) {
         if (!assignmentsByDriver.has(route.driver_id)) {
           assignmentsByDriver.set(route.driver_id, [])
@@ -253,7 +253,7 @@ export async function getOptimalDriverSuggestions(
         .eq("company_id", company_id)
       
       const truckMap = new Map<string, any>()
-      allTrucks?.forEach(truck => truckMap.set(truck.id, truck))
+      allTrucks?.forEach((truck: { id: string; carrier_type: string | null; make: string | null; model: string | null }) => truckMap.set(truck.id, truck))
       
       // Equipment match (if truck has required equipment, +10 points)
       let equipmentMatch = false

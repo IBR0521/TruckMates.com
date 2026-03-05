@@ -276,7 +276,11 @@ export async function createCustomer(formData: {
       address_line1: (formData.address_line1 || formData.physical_address_line1) ? sanitizeString(formData.address_line1 || formData.physical_address_line1, 200) : null,
       address_line2: (formData.address_line2 || formData.physical_address_line2) ? sanitizeString(formData.address_line2 || formData.physical_address_line2, 200) : null,
       city: (formData.city || formData.physical_city) ? sanitizeString(formData.city || formData.physical_city, 100) : null,
-      state: (formData.state || formData.physical_state) ? (stateNameToCode(formData.state || formData.physical_state) || sanitizeString(formData.state || formData.physical_state, 2).toUpperCase()) : null,
+      state: (() => {
+        const stateValue = formData.state || formData.physical_state
+        if (!stateValue) return null
+        return stateNameToCode(stateValue) || sanitizeString(stateValue, 2).toUpperCase()
+      })(),
       zip: (formData.zip || formData.physical_zip) ? sanitizeString(formData.zip || formData.physical_zip, 10) : null,
       country: formData.country || formData.physical_country || "USA",
       tax_id: formData.tax_id || null,

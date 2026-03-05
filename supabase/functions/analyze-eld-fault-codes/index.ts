@@ -1,15 +1,24 @@
 // Supabase Edge Function: Analyze ELD Fault Codes
 // Automatically analyzes new ELD events with fault codes and creates maintenance work orders
 
+// @ts-ignore - Deno runtime import
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+// @ts-ignore - Deno runtime import
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+
+// Deno global type declaration for TypeScript
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined
+  }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })

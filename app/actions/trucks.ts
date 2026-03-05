@@ -174,7 +174,7 @@ export async function createTruck(formData: {
     vin: formData.vin,
     license_plate: formData.license_plate,
     year: formData.year,
-    mileage: formData.mileage,
+    mileage: formData.mileage ?? undefined,
   })
 
   if (!truckValidation.valid) {
@@ -561,9 +561,9 @@ export async function bulkDeleteTrucks(ids: string[]) {
     .eq("company_id", userData.company_id)
 
   if (trucksToDelete) {
-    const inUseTrucks = trucksToDelete.filter(t => t.status === "in_use")
+    const inUseTrucks = trucksToDelete.filter((t: { status: string; [key: string]: any }) => t.status === "in_use")
     if (inUseTrucks.length > 0) {
-      const truckNumbers = inUseTrucks.map(t => t.truck_number).join(", ")
+      const truckNumbers = inUseTrucks.map((t: { truck_number: string; [key: string]: any }) => t.truck_number).join(", ")
       return { 
         error: `Cannot delete trucks that are in use: ${truckNumbers}. Please complete or cancel their active loads first.`,
         data: null 
@@ -580,7 +580,7 @@ export async function bulkDeleteTrucks(ids: string[]) {
     .eq("company_id", userData.company_id)
 
   if (activeLoads && activeLoads.length > 0) {
-    const blockedTruckIds = [...new Set(activeLoads.map(load => load.truck_id))]
+    const blockedTruckIds = [...new Set(activeLoads.map((load: { truck_id: string | null; [key: string]: any }) => load.truck_id))]
     const blockedTrucks = await supabase
       .from("trucks")
       .select("id, truck_number")
@@ -588,7 +588,7 @@ export async function bulkDeleteTrucks(ids: string[]) {
       .eq("company_id", userData.company_id)
 
     if (blockedTrucks.data && blockedTrucks.data.length > 0) {
-      const truckNumbers = blockedTrucks.data.map(t => t.truck_number).join(", ")
+      const truckNumbers = blockedTrucks.data.map((t: { truck_number: string; [key: string]: any }) => t.truck_number).join(", ")
       return { 
         error: `Cannot delete trucks with active loads: ${truckNumbers}. Please complete or cancel their loads first.`,
         data: null 

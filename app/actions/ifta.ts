@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getELDMileageData } from "./eld"
 import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
+import { STATE_FUEL_TAX_RATES, getFuelTaxRate } from "@/lib/fuel-tax-rates"
 
 export async function getIFTAReports() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
@@ -144,7 +145,7 @@ export async function createIFTAReport(formData: {
       return { error: "Failed to validate trucks", data: null }
     }
 
-    const validTruckIds = ownedTrucks?.map(t => t.id) || []
+    const validTruckIds = ownedTrucks?.map((t: { id: string; [key: string]: any }) => t.id) || []
     if (validTruckIds.length !== formData.truck_ids.length) {
       return { error: "One or more trucks do not belong to your company", data: null }
     }
@@ -212,7 +213,7 @@ export async function createIFTAReport(formData: {
     const taxRatesResult = await getIFTATaxRatesForQuarter(quarterNumber, year)
     
     // EXT-009 FIX: Use dynamic rates from database if available, otherwise fallback to shared constants
-    const STATE_FUEL_TAX_RATES: Record<string, number> = taxRatesResult.data || SHARED_RATES
+    const taxRates: Record<string, number> = taxRatesResult.data || STATE_FUEL_TAX_RATES
 
     // Get fuel purchases for the quarter
     const { data: fuelPurchases } = await supabase
@@ -224,7 +225,7 @@ export async function createIFTAReport(formData: {
 
     // Aggregate fuel by state
     const fuelByState: Record<string, number> = {}
-    fuelPurchases?.forEach((purchase) => {
+    fuelPurchases?.forEach((purchase: { state: string; gallons: number | string | null; [key: string]: any }) => {
       const state = purchase.state
       if (!fuelByState[state]) {
         fuelByState[state] = 0
@@ -238,7 +239,7 @@ export async function createIFTAReport(formData: {
       const miles = parseFloat(stateData.total_miles?.toString() || "0")
       totalMiles += miles
 
-      const taxRate = getFuelTaxRate(stateCode, 0.25) // EXT-009: Use shared function
+      const taxRate = taxRates[stateCode] || getFuelTaxRate(stateCode, 0.25) // EXT-009: Use dynamic rates or fallback to shared function
       // FIXED: Zero gallons is valid data, not missing data. Use explicit undefined check.
       const fuelGallons = fuelByState[stateCode] !== undefined ? fuelByState[stateCode] : Math.round(miles / 6.5)
       // FIXED: Tax rate is in $/gallon, not percentage. Calculate: gallons * rate

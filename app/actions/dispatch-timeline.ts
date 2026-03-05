@@ -318,13 +318,17 @@ export async function getDriverTimelines(filters?: {
           if (coords.lat && coords.lng) {
             originCoords = { lat: coords.lat, lng: coords.lng }
           }
+          // Check if coordinates object has destination coordinates
+          if (coords.destination_lat && coords.destination_lng) {
+            destCoords = { lat: coords.destination_lat, lng: coords.destination_lng }
+          }
         } catch (error) {
           // Ignore coordinate parsing errors
         }
       }
 
       // Estimate drive time (simplified - would use PostGIS in production)
-      const driveTimeMinutes = originCoords && destCoords
+      const driveTimeMinutes = (originCoords && destCoords)
         ? await calculateDriveTime(originCoords.lat, originCoords.lng, destCoords.lat, destCoords.lng)
         : 480 // Default 8 hours if no coordinates
 

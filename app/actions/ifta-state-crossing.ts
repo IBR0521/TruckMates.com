@@ -33,8 +33,12 @@ async function reverseGeocodeCoordinates(latitude: number, longitude: number) {
     
     // Get API key (cached in module scope)
     if (!cachedApiKey || Date.now() - apiKeyCacheTime > API_KEY_CACHE_TTL) {
-      const { getGoogleMapsApiKey } = await import("./integrations-google-maps")
-      cachedApiKey = await getGoogleMapsApiKey()
+      // Get Google Maps API key from environment variable
+      const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || ""
+      if (!GOOGLE_MAPS_API_KEY) {
+        throw new Error("Google Maps API key not configured. Please contact support.")
+      }
+      cachedApiKey = GOOGLE_MAPS_API_KEY
       apiKeyCacheTime = Date.now()
     }
     const apiKey = cachedApiKey

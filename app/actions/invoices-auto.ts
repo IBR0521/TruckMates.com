@@ -55,7 +55,15 @@ export async function autoGenerateInvoicesFromLoads() {
     .eq("company_id", userData.company_id)
     .not("load_id", "is", null)
 
-  const existingLoadIds = new Set(existingInvoices?.map((inv) => inv.load_id) || [])
+  const existingLoadIds = new Set<string>()
+  if (existingInvoices && Array.isArray(existingInvoices)) {
+    for (let i = 0; i < existingInvoices.length; i++) {
+      const invoice = existingInvoices[i] as { load_id: string | null; [key: string]: any }
+      if (invoice && invoice.load_id) {
+        existingLoadIds.add(invoice.load_id)
+      }
+    }
+  }
 
   let generated = 0
   const errors: Array<{ load_id: string; error: string }> = []

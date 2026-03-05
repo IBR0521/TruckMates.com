@@ -53,7 +53,7 @@ export default function DVIRPage() {
       let filtered = dvirResult.data
       if (filters?.search) {
         filtered = filtered.filter(
-          (dvir) =>
+          (dvir: { drivers?: { name?: string | null } | null; trucks?: { truck_number?: string | null } | null; location?: string | null; [key: string]: any }) =>
             dvir.drivers?.name?.toLowerCase().includes(filters.search!.toLowerCase()) ||
             dvir.trucks?.truck_number?.toLowerCase().includes(filters.search!.toLowerCase()) ||
             dvir.location?.toLowerCase().includes(filters.search!.toLowerCase())

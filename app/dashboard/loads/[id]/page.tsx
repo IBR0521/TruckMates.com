@@ -261,7 +261,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           })
           
           // Sort by score (highest first)
-          scoredRoutes.sort((a, b) => b.score - a.score)
+          scoredRoutes.sort((a: { score: number; [key: string]: any }, b: { score: number; [key: string]: any }) => b.score - a.score)
           
           // If load has a route_id, prioritize that route
           if (loadResult.data.route_id) {
@@ -282,7 +282,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                 })
               }
               // Re-sort
-              scoredRoutes.sort((a, b) => b.score - a.score)
+              scoredRoutes.sort((a: { score: number; [key: string]: any }, b: { score: number; [key: string]: any }) => b.score - a.score)
             }
           }
           
@@ -439,7 +439,6 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
       const result = await createCustomerPortalAccess({
         customer_id: load.customer_id,
         can_view_location: true,
-        can_view_loads: true,
         email_notifications: true,
         expires_days: 90, // 90 days expiration
       })

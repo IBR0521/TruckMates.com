@@ -673,7 +673,7 @@ export async function bulkDeleteDrivers(ids: string[]) {
     .eq("company_id", userData.company_id)
 
   if (activeLoads && activeLoads.length > 0) {
-    const blockedDriverIds = [...new Set(activeLoads.map(load => load.driver_id))]
+    const blockedDriverIds = [...new Set(activeLoads.map((load: { id: string; driver_id: string | null; shipment_number: string | null; status: string }) => load.driver_id))]
     const blockedDrivers = await supabase
       .from("drivers")
       .select("id, name")
@@ -681,7 +681,7 @@ export async function bulkDeleteDrivers(ids: string[]) {
       .eq("company_id", userData.company_id)
 
     if (blockedDrivers.data && blockedDrivers.data.length > 0) {
-      const driverNames = blockedDrivers.data.map(d => d.name).join(", ")
+      const driverNames = blockedDrivers.data.map((d: { id: string; name: string | null }) => d.name).join(", ")
       return { 
         error: `Cannot delete drivers with active loads: ${driverNames}. Please reassign or complete their loads first.`,
         data: null 

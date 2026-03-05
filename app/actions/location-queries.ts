@@ -66,7 +66,7 @@ export async function findLocationsWithinRadius(
         .eq('eld_device_id', filters.device_id)
       
       if (locations) {
-        const locationIds = new Set(locations.map(l => l.id))
+        const locationIds = new Set(locations.map((l: { id: string; [key: string]: any }) => l.id))
         filteredData = filteredData.filter((d: any) => locationIds.has(d.id))
       }
     }
@@ -79,7 +79,7 @@ export async function findLocationsWithinRadius(
         .eq('truck_id', filters.truck_id)
       
       if (locations) {
-        const locationIds = new Set(locations.map(l => l.id))
+        const locationIds = new Set(locations.map((l: { id: string; [key: string]: any }) => l.id))
         filteredData = filteredData.filter((d: any) => locationIds.has(d.id))
       }
     }
@@ -213,7 +213,7 @@ export async function findNearestLocations(
 
       // Calculate distances using PostGIS for each location (fallback only)
       const locationsWithDistance = await Promise.all(
-        locations.map(async (loc) => {
+        locations.map(async (loc: { id: string; latitude: number; longitude: number; timestamp: string; speed: number | null; heading: number | null; eld_device_id: string | null; truck_id: string | null; driver_id: string | null; [key: string]: any }) => {
           const distanceResult = await calculateDistancePostGIS(
             centerLat,
             centerLng,

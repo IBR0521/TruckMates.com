@@ -617,14 +617,14 @@ export async function getDVIRStats(filters?: {
 
       const fallbackStats = {
         total: dvirs?.length || 0,
-        passed: dvirs?.filter((d) => d.status === "passed").length || 0,
-        failed: dvirs?.filter((d) => d.status === "failed").length || 0,
-        defects_corrected: dvirs?.filter((d) => d.status === "defects_corrected").length || 0,
-        with_defects: dvirs?.filter((d) => d.defects_found === true).length || 0,
-        unsafe: dvirs?.filter((d) => d.safe_to_operate === false).length || 0,
-        pre_trip: dvirs?.filter((d) => d.inspection_type === "pre_trip").length || 0,
-        post_trip: dvirs?.filter((d) => d.inspection_type === "post_trip").length || 0,
-        on_road: dvirs?.filter((d) => d.inspection_type === "on_road").length || 0,
+        passed: dvirs?.filter((d: { id: string; status: string; defects_found: boolean | null; safe_to_operate: boolean | null; inspection_type: string | null }) => d.status === "passed").length || 0,
+        failed: dvirs?.filter((d: { id: string; status: string; defects_found: boolean | null; safe_to_operate: boolean | null; inspection_type: string | null }) => d.status === "failed").length || 0,
+        defects_corrected: dvirs?.filter((d: { id: string; status: string; defects_found: boolean | null; safe_to_operate: boolean | null; inspection_type: string | null }) => d.status === "defects_corrected").length || 0,
+        with_defects: dvirs?.filter((d: { id: string; status: string; defects_found: boolean | null; safe_to_operate: boolean | null; inspection_type: string | null }) => d.defects_found === true).length || 0,
+        unsafe: dvirs?.filter((d: { id: string; status: string; defects_found: boolean | null; safe_to_operate: boolean | null; inspection_type: string | null }) => d.safe_to_operate === false).length || 0,
+        pre_trip: dvirs?.filter((d: { id: string; status: string; defects_found: boolean | null; safe_to_operate: boolean | null; inspection_type: string | null }) => d.inspection_type === "pre_trip").length || 0,
+        post_trip: dvirs?.filter((d: { id: string; status: string; defects_found: boolean | null; safe_to_operate: boolean | null; inspection_type: string | null }) => d.inspection_type === "post_trip").length || 0,
+        on_road: dvirs?.filter((d: { id: string; status: string; defects_found: boolean | null; safe_to_operate: boolean | null; inspection_type: string | null }) => d.inspection_type === "on_road").length || 0,
       }
 
       return { data: fallbackStats, error: null }

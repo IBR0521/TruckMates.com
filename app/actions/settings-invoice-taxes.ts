@@ -51,7 +51,7 @@ export async function getInvoiceTaxes(): Promise<{ data: InvoiceTax[] | null; er
   }
 
   // Parse JSONB fields
-  const taxes = (data || []).map((tax) => ({
+  const taxes = (data || []).map((tax: { state_codes: string[] | null; customer_ids: string[] | null; [key: string]: any }) => ({
     ...tax,
     state_codes: tax.state_codes || [],
     customer_ids: tax.customer_ids || [],

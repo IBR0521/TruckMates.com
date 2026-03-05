@@ -545,7 +545,7 @@ export async function bulkDeleteRoutes(ids: string[]) {
     .eq("company_id", userData.company_id)
 
   if (activeLoads && activeLoads.length > 0) {
-    const blockedRouteIds = [...new Set(activeLoads.map(load => load.route_id))]
+    const blockedRouteIds = [...new Set(activeLoads.map((load: { route_id: string | null; [key: string]: any }) => load.route_id))]
     const blockedRoutes = await supabase
       .from("routes")
       .select("id, name")
@@ -553,7 +553,7 @@ export async function bulkDeleteRoutes(ids: string[]) {
       .eq("company_id", userData.company_id)
 
     if (blockedRoutes.data && blockedRoutes.data.length > 0) {
-      const routeNames = blockedRoutes.data.map(r => r.name).join(", ")
+      const routeNames = blockedRoutes.data.map((r: { name: string; [key: string]: any }) => r.name).join(", ")
       return { 
         error: `Cannot delete routes with active loads: ${routeNames}. Please complete or cancel their loads first.`,
         data: null 
@@ -738,7 +738,7 @@ export async function getRouteSuggestions(origin?: string, destination?: string)
     if (recentRoutes && recentRoutes.length > 0) {
       const driverCounts: Record<string, number> = {}
       const truckCounts: Record<string, number> = {}
-      recentRoutes.forEach((route) => {
+      recentRoutes.forEach((route: { driver_id: string | null; truck_id: string | null; [key: string]: any }) => {
         if (route.driver_id) {
           driverCounts[route.driver_id] = (driverCounts[route.driver_id] || 0) + 1
         }

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { escapeHtml } from "@/lib/html-escape"
 
 /**
  * Settlement PDF Generation

@@ -67,3 +67,4 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.ifta_reports TO authenticated;
 
 
 
+

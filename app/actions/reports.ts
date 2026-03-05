@@ -80,7 +80,7 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
       .limit(limit)
 
     // Get customers for loads
-    const customerIds = loads?.map(l => l.customer_id).filter(Boolean) || []
+    const customerIds = loads?.map((l: { customer_id: string | null; [key: string]: any }) => l.customer_id).filter(Boolean) || []
     let customers = null
     if (customerIds.length > 0) {
       const { data } = await supabase
@@ -91,7 +91,7 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
     }
 
     const customerMap = new Map<string, string>()
-    customers?.forEach(c => customerMap.set(c.id, c.name))
+    customers?.forEach((c: { id: string; name: string; [key: string]: any }) => customerMap.set(c.id, c.name))
 
     // Calculate revenue by customer
     const revenueByCustomer: Record<
@@ -103,7 +103,7 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
     const loadIdsWithInvoices = new Set<string>()
     
     // Process invoices
-    invoices?.forEach((invoice) => {
+    invoices?.forEach((invoice: { customer_name: string | null; amount: number | string | null; load_id: string | null; [key: string]: any }) => {
       const customer = invoice.customer_name || "Unknown Customer"
       if (!revenueByCustomer[customer]) {
         revenueByCustomer[customer] = {
@@ -242,33 +242,33 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
     const loadIdsWithInvoices = new Set<string>()
     
     // Process invoices and track their load_ids
-    invoices?.forEach((invoice) => {
+    invoices?.forEach((invoice: { load_id: string | null; [key: string]: any }) => {
       if (invoice.load_id) {
         loadIdsWithInvoices.add(invoice.load_id)
       }
     })
     
     // Calculate totals - combine invoices and loads (only loads without invoices)
-    let totalRevenue = invoices?.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0) || 0
+    let totalRevenue = invoices?.reduce((sum: number, inv: { amount: number | string | null; [key: string]: any }) => sum + (Number(inv.amount) || 0), 0) || 0
     
     // FIXED: Only add revenue from loads that don't have invoices
     if (loads) {
       const loadRevenue = loads
-        .filter((load) => !load.id || !loadIdsWithInvoices.has(load.id)) // Only loads without invoices
-        .reduce((sum, load) => {
+        .filter((load: { id: string | null; [key: string]: any }) => !load.id || !loadIdsWithInvoices.has(load.id)) // Only loads without invoices
+        .reduce((sum: number, load: { total_rate: number | string | null; value: number | string | null; [key: string]: any }) => {
           return sum + (Number(load.total_rate) || Number(load.value) || 0)
         }, 0)
       totalRevenue += loadRevenue
     }
     
-    const totalExpenses = expenses?.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0) || 0
+    const totalExpenses = expenses?.reduce((sum: number, exp: { amount: number | string | null; [key: string]: any }) => sum + (Number(exp.amount) || 0), 0) || 0
     const netProfit = totalRevenue - totalExpenses
 
     // Revenue breakdown
     const revenueBreakdown: Record<string, number> = {}
     
     // Process invoices
-    invoices?.forEach((invoice) => {
+    invoices?.forEach((invoice: { items: any[] | null; amount: number | string | null; load_id: string | null; [key: string]: any }) => {
       const items = (invoice.items as any[]) || []
       if (items.length > 0) {
         items.forEach((item: any) => {
@@ -284,8 +284,8 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
     // FIXED: Process loads - only add to breakdown if no invoice exists (avoid double-counting)
     if (loads) {
       const loadRevenue = loads
-        .filter((load) => !load.id || !loadIdsWithInvoices.has(load.id)) // Only loads without invoices
-        .reduce((sum, load) => {
+        .filter((load: { id: string | null; [key: string]: any }) => !load.id || !loadIdsWithInvoices.has(load.id)) // Only loads without invoices
+        .reduce((sum: number, load: { total_rate: number | string | null; value: number | string | null; [key: string]: any }) => {
           return sum + (Number(load.total_rate) || Number(load.value) || 0)
         }, 0)
       if (loadRevenue > 0) {
@@ -295,7 +295,7 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
 
     // Expense breakdown by category
     const expenseBreakdown: Record<string, number> = {}
-    expenses?.forEach((expense) => {
+    expenses?.forEach((expense: { category: string | null; amount: number | string | null; [key: string]: any }) => {
       const category = expense.category || "Other"
       expenseBreakdown[category] = (expenseBreakdown[category] || 0) + (Number(expense.amount) || 0)
     })
@@ -366,7 +366,7 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
 
     // Create driver lookup map
     const driverMap = new Map<string, string>()
-    drivers?.forEach((driver) => {
+    drivers?.forEach((driver: { id: string; name: string; [key: string]: any }) => {
       driverMap.set(driver.id, driver.name)
     })
 
@@ -387,7 +387,7 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
 
     // Calculate YTD by driver
     const ytdByDriver: Record<string, number> = {}
-    allYearSettlements?.forEach((settlement) => {
+    allYearSettlements?.forEach((settlement: { driver_id: string; net_pay: number | string | null; [key: string]: any }) => {
       const driverId = settlement.driver_id
       ytdByDriver[driverId] = (ytdByDriver[driverId] || 0) + (Number(settlement.net_pay) || 0)
     })
@@ -405,7 +405,7 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
       }
     > = {}
 
-    settlements?.forEach((settlement) => {
+    settlements?.forEach((settlement: { driver_id: string; net_pay: number | string | null; loads: any[] | null; [key: string]: any }) => {
       const driverId = settlement.driver_id
       const driverName = driverMap.get(driverId) || "Unknown Driver"
       const loads = Array.isArray(settlement.loads) ? settlement.loads.length : 0
@@ -430,8 +430,8 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
       item.avgPerLoad = item.loads > 0 ? item.totalPay / item.loads : 0
     })
 
-    const totalPaid = settlements?.reduce((sum, s) => sum + (Number(s.net_pay) || 0), 0) || 0
-    const totalLoads = settlements?.reduce((sum, s) => {
+    const totalPaid = settlements?.reduce((sum: number, s: { net_pay: number | string | null; [key: string]: any }) => sum + (Number(s.net_pay) || 0), 0) || 0
+    const totalLoads = settlements?.reduce((sum: number, s: { loads: any[] | null; [key: string]: any }) => {
       const loads = Array.isArray(s.loads) ? s.loads.length : 0
       return sum + loads
     }, 0) || 0

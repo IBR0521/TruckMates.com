@@ -160,13 +160,15 @@ async function syncKeepTruckinData(device: any) {
         }
       })
 
+    let logsError: any = null
     if (logsToInsert.length > 0) {
-      const { error: logsError } = await supabase
+      const { error } = await supabase
         .from("eld_logs")
         .upsert(logsToInsert, { 
           onConflict: "eld_device_id,log_date,start_time,log_type",
           ignoreDuplicates: false 
         })
+      logsError = error
 
       if (logsError) {
         console.error("Error inserting ELD logs:", logsError)
@@ -198,10 +200,12 @@ async function syncKeepTruckinData(device: any) {
       }
     })
 
+    let locationsError: any = null
     if (locationsToInsert.length > 0) {
-      const { error: locationsError } = await supabase
+      const { error } = await supabase
         .from("eld_locations")
         .insert(locationsToInsert)
+      locationsError = error
 
       if (locationsError) {
         console.error("Error inserting ELD locations:", locationsError)
@@ -229,10 +233,12 @@ async function syncKeepTruckinData(device: any) {
       metadata: event
     }))
 
+    let eventsError: any = null
     if (eventsToInsert.length > 0) {
-      const { error: eventsError } = await supabase
+      const { error } = await supabase
         .from("eld_events")
         .insert(eventsToInsert)
+      eventsError = error
 
       if (eventsError) {
         console.error("Error inserting ELD events:", eventsError)
@@ -709,13 +715,15 @@ async function syncGeotabData(device: any) {
         }
       })
 
+    let logsError: any = null
     if (logsToInsert.length > 0) {
-      const { error: logsError } = await supabase
+      const { error } = await supabase
         .from("eld_logs")
         .upsert(logsToInsert, { 
           onConflict: "eld_device_id,log_date,start_time,log_type",
           ignoreDuplicates: false 
         })
+      logsError = error
 
       if (logsError) {
         console.error("Error inserting ELD logs:", logsError)
@@ -765,10 +773,12 @@ async function syncGeotabData(device: any) {
         }
       })
 
+    let locationsError: any = null
     if (locationsToInsert.length > 0) {
-      const { error: locationsError } = await supabase
+      const { error } = await supabase
         .from("eld_locations")
         .insert(locationsToInsert)
+      locationsError = error
 
       if (locationsError) {
         console.error("Error inserting ELD locations:", locationsError)
@@ -805,10 +815,12 @@ async function syncGeotabData(device: any) {
       }
     })
 
+    let eventsError: any = null
     if (eventsToInsert.length > 0) {
-      const { error: eventsError } = await supabase
+      const { error } = await supabase
         .from("eld_events")
         .insert(eventsToInsert)
+      eventsError = error
 
       if (eventsError) {
         console.error("Error inserting ELD events:", eventsError)

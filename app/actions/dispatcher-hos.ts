@@ -67,7 +67,7 @@ export async function getAllDriversHOSStatus(): Promise<{
     }
 
     // Get truck numbers for drivers that have trucks assigned
-    const truckIds = drivers.filter(d => d.truck_id).map(d => d.truck_id) as string[]
+    const truckIds = drivers.filter((d: { id: string; truck_id: string | null }) => d.truck_id).map((d: { id: string; truck_id: string | null }) => d.truck_id) as string[]
     const trucksMap = new Map<string, string>()
     
     if (truckIds.length > 0) {
@@ -77,14 +77,14 @@ export async function getAllDriversHOSStatus(): Promise<{
         .in("id", truckIds)
       
       if (trucks) {
-        trucks.forEach(truck => {
-          trucksMap.set(truck.id, truck.truck_number)
+        trucks.forEach((truck: { id: string; truck_number: string | null }) => {
+          trucksMap.set(truck.id, truck.truck_number || "")
         })
       }
     }
 
     // Batch fetch all ELD logs for all drivers to avoid N+1 queries
-    const driverIds = drivers.map(d => d.id)
+    const driverIds = drivers.map((d: { id: string; truck_id: string | null }) => d.id)
     const eightDaysAgo = new Date()
     eightDaysAgo.setDate(eightDaysAgo.getDate() - 8)
     
@@ -99,7 +99,7 @@ export async function getAllDriversHOSStatus(): Promise<{
     // Group logs by driver_id
     const logsByDriver = new Map<string, typeof allLogs>()
     if (allLogs) {
-      allLogs.forEach(log => {
+      allLogs.forEach((log: { driver_id: string; log_type: string; duration_minutes: number | null; start_time: string; end_time: string | null }) => {
         if (!logsByDriver.has(log.driver_id)) {
           logsByDriver.set(log.driver_id, [])
         }
@@ -109,7 +109,7 @@ export async function getAllDriversHOSStatus(): Promise<{
 
     // Get HOS status for each driver (now using batched data)
     const driversWithHOS = await Promise.all(
-      drivers.map(async (driver) => {
+      drivers.map(async (driver: { id: string; name: string; truck_id: string | null }) => {
         const hosResult = await calculateRemainingHOS(driver.id)
         
         // Get current status from latest log (from batched data)
@@ -121,13 +121,13 @@ export async function getAllDriversHOSStatus(): Promise<{
           : "off_duty"
 
         // Calculate weekly on-duty hours (70-hour/8-day rule) from batched data
-        const weeklyLogs = driverLogs.filter(log => 
+        const weeklyLogs = driverLogs.filter((log: { driver_id: string; log_type: string; duration_minutes: number | null; start_time: string; end_time: string | null }) => 
           ["driving", "on_duty"].includes(log.log_type)
         )
 
         let weeklyOnDutyMinutes = 0
         if (weeklyLogs) {
-          weeklyOnDutyMinutes = weeklyLogs.reduce((sum, log) => {
+          weeklyOnDutyMinutes = weeklyLogs.reduce((sum: number, log: { driver_id: string; log_type: string; duration_minutes: number | null; start_time: string; end_time: string | null }) => {
             let duration = log.duration_minutes
             if (!duration && log.start_time && log.end_time) {
               duration = Math.floor((new Date(log.end_time).getTime() - new Date(log.start_time).getTime()) / 60000)

@@ -159,7 +159,7 @@ export async function getOnTimeDeliveryAnalytics(filters?: {
       return {
         ...customer,
         average_days_difference: Math.round(averageDaysDifference * 10) / 10,
-        on_time_percentage,
+        on_time_percentage: onTimePercentage,
         average_days_late: customer.late_loads > 0
           ? Math.round((customer.total_days_late / customer.late_loads) * 10) / 10
           : 0,

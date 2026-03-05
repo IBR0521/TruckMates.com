@@ -46,12 +46,16 @@ export async function getCompanyUsers() {
     }
 
     // Map to include status (active by default)
-    const usersWithStatus = users.map((u) => ({
+    const usersWithStatus = users.map((u: { id: string; email: string; full_name: string | null; phone: string | null; role: string; created_at: string; [key: string]: any }) => ({
       ...u,
       status: "Active", // You can add a status field to users table if needed
     }))
 
     return { data: usersWithStatus, error: null }
+  } catch (error: any) {
+    console.error("[getCompanyUsers] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 export async function updateUserRole(userId: string, newRole: string) {
@@ -309,7 +313,50 @@ export async function inviteUser(data: {
 
   // Send invitation email
   try {
-    const { getResendClient } = await import("@/app/actions/notifications")
+    // Helper function to get Resend client (similar to notifications.ts)
+    async function getResendClient(companyId?: string) {
+      const apiKey = process.env.RESEND_API_KEY
+      
+      if (!apiKey) {
+        return null
+      }
+
+      if (companyId) {
+        try {
+          const supabase = await createClient()
+          const { data: integrations } = await supabase
+            .from("company_integrations")
+            .select("resend_enabled")
+            .eq("company_id", companyId)
+            .single()
+
+          if (!integrations?.resend_enabled) {
+            return null
+          }
+        } catch (error) {
+          return null
+        }
+      }
+      
+      try {
+        const { Resend } = await import("resend")
+        return new Resend(apiKey)
+      } catch (error) {
+        return null
+      }
+    }
+
+    // Helper function to escape HTML
+    function escapeHtml(text: string | null | undefined): string {
+      if (!text) return ""
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;")
+    }
+
     const resend = await getResendClient(currentUser.company_id)
 
     if (!resend) {

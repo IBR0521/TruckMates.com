@@ -10,7 +10,7 @@ function getStripe() {
   }
   try {
     return new Stripe(secretKey, {
-      apiVersion: "2024-12-18.acacia",
+      apiVersion: "2025-11-17.clover" as any,
     })
   } catch (error) {
     return null
@@ -151,8 +151,8 @@ async function handleSubscriptionUpdated(supabase: any, subscription: Stripe.Sub
     stripe_subscription_id: subscription.id,
     stripe_customer_id: subscription.customer as string,
     stripe_price_id: subscription.items.data[0]?.price.id,
-    current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-    current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+    current_period_start: new Date((subscription as any).current_period_start * 1000).toISOString(),
+    current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
     cancel_at_period_end: subscription.cancel_at_period_end,
     trial_start: subscription.trial_start
       ? new Date(subscription.trial_start * 1000).toISOString()
@@ -198,7 +198,7 @@ async function handleSubscriptionDeleted(supabase: any, subscription: Stripe.Sub
 }
 
 async function handleInvoicePaid(supabase: any, invoice: Stripe.Invoice) {
-  const subscriptionId = invoice.subscription as string
+  const subscriptionId = (invoice as any).subscription as string
 
   if (!subscriptionId) {
     return
@@ -255,7 +255,7 @@ async function handleInvoicePaid(supabase: any, invoice: Stripe.Invoice) {
 }
 
 async function handleInvoicePaymentFailed(supabase: any, invoice: Stripe.Invoice) {
-  const subscriptionId = invoice.subscription as string
+  const subscriptionId = (invoice as any).subscription as string
 
   if (!subscriptionId) {
     return

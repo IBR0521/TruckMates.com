@@ -401,12 +401,14 @@ export async function generateIFTAReport(quarter: number, year: number) {
   const stateData: Record<string, { gallons: number; miles: number }> = {}
 
   // Aggregate fuel purchases by state
-  fuelPurchases?.forEach((purchase) => {
+  fuelPurchases?.forEach((purchase: { state: string; gallons: number | string | null; [key: string]: any }) => {
     const state = purchase.state
     if (!stateData[state]) {
       stateData[state] = { gallons: 0, miles: 0 }
     }
-    stateData[state].gallons += parseFloat(purchase.gallons.toString())
+    if (purchase.gallons != null) {
+      stateData[state].gallons += parseFloat(purchase.gallons.toString())
+    }
   })
 
   // Aggregate miles by state (simplified - in production, use actual route tracking)

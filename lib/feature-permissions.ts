@@ -34,6 +34,7 @@ export type FeatureCategory =
   | "invoicing"
   | "settlements"
   | "factoring"
+  | "all" // Special value for super admin - full access
 
 // Permission types
 export type PermissionType = "view" | "create" | "edit" | "delete" | "manage"
@@ -261,7 +262,7 @@ export function canViewFeature(role: EmployeeRole, feature: FeatureCategory): bo
   if (!permissions) return false
   
   // Check if role has "all" access
-  if (permissions.view.includes("all" as any)) return true
+  if (permissions.view.includes("all")) return true
   
   return permissions.view.includes(feature)
 }
@@ -274,7 +275,7 @@ export function canCreateFeature(role: EmployeeRole, feature: FeatureCategory): 
   const permissions = ROLE_FEATURE_PERMISSIONS[role]
   if (!permissions) return false
   
-  if (permissions.create.includes("all" as any)) return true
+  if (permissions.create.includes("all")) return true
   
   return permissions.create.includes(feature)
 }
@@ -287,7 +288,7 @@ export function canEditFeature(role: EmployeeRole, feature: FeatureCategory): bo
   const permissions = ROLE_FEATURE_PERMISSIONS[role]
   if (!permissions) return false
   
-  if (permissions.edit.includes("all" as any)) return true
+  if (permissions.edit.includes("all")) return true
   
   return permissions.edit.includes(feature)
 }
@@ -300,7 +301,7 @@ export function canDeleteFeature(role: EmployeeRole, feature: FeatureCategory): 
   const permissions = ROLE_FEATURE_PERMISSIONS[role]
   if (!permissions) return false
   
-  if (permissions.delete.includes("all" as any)) return true
+  if (permissions.delete.includes("all")) return true
   
   return permissions.delete.includes(feature)
 }
@@ -313,7 +314,7 @@ export function canManageFeature(role: EmployeeRole, feature: FeatureCategory): 
   const permissions = ROLE_FEATURE_PERMISSIONS[role]
   if (!permissions) return false
   
-  if (permissions.manage.includes("all" as any)) return true
+  if (permissions.manage.includes("all")) return true
   
   return permissions.manage.includes(feature)
 }
@@ -335,12 +336,24 @@ export function getAccessibleFeatures(role: EmployeeRole): {
   manage: FeatureCategory[]
   masked: FeatureCategory[]
 } {
-  return ROLE_FEATURE_PERMISSIONS[role] || {
-    view: [],
-    create: [],
-    edit: [],
-    delete: [],
-    manage: [],
-    masked: [],
+  const permissions = ROLE_FEATURE_PERMISSIONS[role]
+  if (!permissions) {
+    return {
+      view: [],
+      create: [],
+      edit: [],
+      delete: [],
+      manage: [],
+      masked: [],
+    }
+  }
+  
+  return {
+    view: permissions.view,
+    create: permissions.create,
+    edit: permissions.edit,
+    delete: permissions.delete,
+    manage: permissions.manage,
+    masked: permissions.masked || [],
   }
 }

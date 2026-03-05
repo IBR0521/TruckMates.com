@@ -245,7 +245,7 @@ export async function createGeofence(formData: {
   exit_load_status?: string
 }) {
   // Check permission
-  const permission = await checkCreatePermission("geofences")
+  const permission = await checkCreatePermission("fleet_map" as any)
   if (!permission.allowed) {
     return { error: permission.error || "You don't have permission to create geofences", data: null }
   }
@@ -359,9 +359,12 @@ export async function updateGeofence(id: string, formData: Partial<{
   city: string
   state: string
   zip_code: string
+  auto_update_load_status?: boolean
+  entry_load_status?: string
+  exit_load_status?: string
 }>) {
   // Check permission
-  const permission = await checkEditPermission("geofences")
+  const permission = await checkEditPermission("fleet_map" as any)
   if (!permission.allowed) {
     return { error: permission.error || "You don't have permission to edit geofences", data: null }
   }
@@ -464,7 +467,7 @@ export async function updateGeofence(id: string, formData: Partial<{
  */
 export async function deleteGeofence(id: string) {
   // Check permission
-  const permission = await checkDeletePermission("geofences")
+  const permission = await checkDeletePermission("fleet_map" as any)
   if (!permission.allowed) {
     return { error: permission.error || "You don't have permission to delete geofences", data: null }
   }
@@ -570,7 +573,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
     const events: any[] = []
 
     // Batch fetch all recent visits for this truck across all geofences
-    const geofenceIds = geofences.map(g => g.id)
+    const geofenceIds = geofences.map((g: { id: string; [key: string]: any }) => g.id)
     const { data: allRecentVisits } = await supabase
       .from("zone_visits")
       .select("*")
@@ -581,7 +584,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
     // Group visits by geofence_id (get most recent per geofence)
     const visitsByGeofence = new Map<string, any>()
     if (allRecentVisits) {
-      allRecentVisits.forEach(visit => {
+      allRecentVisits.forEach((visit: { geofence_id: string; [key: string]: any }) => {
         if (!visitsByGeofence.has(visit.geofence_id)) {
           visitsByGeofence.set(visit.geofence_id, visit)
         }
@@ -892,15 +895,15 @@ export async function getGeofencingStats(filters?: {
     const stats = {
       total_geofences: geofences?.length || 0,
       total_visits: visits?.length || 0,
-      entries: visits?.filter((v) => v.event_type === "entry").length || 0,
-      exits: visits?.filter((v) => v.event_type === "exit").length || 0,
+      entries: visits?.filter((v: { event_type: string; [key: string]: any }) => v.event_type === "entry").length || 0,
+      exits: visits?.filter((v: { event_type: string; [key: string]: any }) => v.event_type === "exit").length || 0,
       avg_duration_minutes:
-        visits?.filter((v) => v.duration_minutes && v.duration_minutes > 0).length > 0
+        visits?.filter((v: { duration_minutes: number | null; [key: string]: any }) => v.duration_minutes && v.duration_minutes > 0).length > 0
           ? Math.round(
               visits
-                .filter((v) => v.duration_minutes && v.duration_minutes > 0)
-                .reduce((sum, v) => sum + (v.duration_minutes || 0), 0) /
-                visits.filter((v) => v.duration_minutes && v.duration_minutes > 0).length
+                .filter((v: { duration_minutes: number | null; [key: string]: any }) => v.duration_minutes && v.duration_minutes > 0)
+                .reduce((sum: number, v: { duration_minutes: number | null; [key: string]: any }) => sum + (v.duration_minutes || 0), 0) /
+                visits.filter((v: { duration_minutes: number | null; [key: string]: any }) => v.duration_minutes && v.duration_minutes > 0).length
             )
           : null,
     }

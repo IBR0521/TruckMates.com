@@ -52,6 +52,10 @@ export async function getDocuments(filters?: {
   }
 
   return { data: documents || [], error: null, count: count || 0 }
+  } catch (error: any) {
+    console.error("[getDocuments] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
+  }
 }
 
 export async function deleteDocument(id: string) {
@@ -136,6 +140,10 @@ export async function deleteDocument(id: string) {
   
   revalidatePath("/dashboard/documents")
   return { error: null }
+  } catch (error: any) {
+    console.error("[deleteDocument] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred" }
+  }
 }
 
 // Bulk delete documents

@@ -182,8 +182,9 @@ export async function updateCompanySettings(settings: {
   ]
   
   for (const field of allowedFields) {
-    if (settings[field] !== undefined) {
-      updateData[field] = settings[field]
+    const settingsAny = settings as any
+    if (settingsAny[field] !== undefined) {
+      updateData[field] = settingsAny[field]
     }
   }
 

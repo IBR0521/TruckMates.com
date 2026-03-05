@@ -1,9 +1,27 @@
 "use client"
 
-import { MarketplaceComingSoon } from "@/components/marketplace-coming-soon"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { createClient } from "@/lib/supabase/client"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Truck, MapPin, Calendar, Search, User, LogIn, LayoutDashboard } from "lucide-react"
+import { toast } from "sonner"
+import { format } from "date-fns"
+import { getMarketplaceLoads } from "@/app/actions/marketplace"
+import { Logo } from "@/components/logo"
 
 export default function MarketplacePage() {
-  return <MarketplaceComingSoon />
   const router = useRouter()
   const supabase = createClient()
   const [loads, setLoads] = useState<any[]>([])

@@ -1,8 +1,17 @@
 // Supabase Edge Function: HOS Exception Alerts
 // Runs every 15 minutes to scan driver HOS status and send proactive alerts
 
+// @ts-ignore - Deno runtime import
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+// @ts-ignore - Deno runtime import
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+
+// Deno global type declaration for TypeScript
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined
+  }
+}
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? ""
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -19,7 +28,7 @@ interface HOSAlert {
   message: string
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 

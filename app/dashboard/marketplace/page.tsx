@@ -1,9 +1,24 @@
 "use client"
 
-import { MarketplaceComingSoon } from "@/components/marketplace-coming-soon"
+import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import { Plus, Settings, Truck, MapPin, Calendar } from "lucide-react"
+import { toast } from "sonner"
+import { format } from "date-fns"
+import { DetailPageLayout } from "@/components/dashboard/detail-page-layout"
+import { getMarketplaceLoads, getBrokerMarketplaceLoads, acceptMarketplaceLoad } from "@/app/actions/marketplace"
 
 export default function MarketplacePage() {
-  return <MarketplaceComingSoon />
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<"browse" | "my-loads">("browse")
   const [loads, setLoads] = useState<any[]>([])
@@ -98,7 +113,7 @@ export default function MarketplacePage() {
         </>
       }
     >
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "browse" | "my-loads")}>
+      <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as "browse" | "my-loads")}>
         <TabsList>
           <TabsTrigger value="browse">Browse Loads</TabsTrigger>
           <TabsTrigger value="my-loads">My Posted Loads</TabsTrigger>
@@ -117,7 +132,7 @@ export default function MarketplacePage() {
             </Card>
           ) : (
             <div className="grid gap-6">
-                {loads.filter(load => load && load.id).map((load) => (
+                {loads.filter((load: any) => load && load.id).map((load: any) => (
                   <Card key={load.id} className="p-6 hover:border-primary/50 transition-colors">
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                       <div className="flex-1">
@@ -217,7 +232,7 @@ export default function MarketplacePage() {
             </Card>
           ) : (
             <div className="grid gap-6">
-              {myLoads.filter(load => load && load.id).map((load) => (
+              {myLoads.filter((load: any) => load && load.id).map((load: any) => (
                 <Card key={load.id} className="p-6">
                   <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                     <div className="flex-1">

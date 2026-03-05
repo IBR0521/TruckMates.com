@@ -129,7 +129,7 @@ export async function importComdataFuelData(
       .eq("company_id", result.company_id)
 
     const truckMap = new Map<string, string>()
-    trucks?.forEach((truck) => {
+    trucks?.forEach((truck: { id: string; truck_number: string | null }) => {
       if (truck.truck_number) {
         truckMap.set(truck.truck_number.toLowerCase(), truck.id)
       }

@@ -397,10 +397,10 @@ async function autoCreateLoadsForMatchingCarriers(marketplaceLoadId: string) {
   }
 
   // Find matching carriers
-  const matchingCarriers = subscriptions.filter((sub) => {
+  const matchingCarriers = subscriptions.filter((sub: { origin_filter: string[] | null; destination_filter: string[] | null; min_rate: number | null; max_rate: number | null; [key: string]: any }) => {
     // Check origin filter
     if (sub.origin_filter && sub.origin_filter.length > 0) {
-      const originMatch = sub.origin_filter.some((filter) =>
+      const originMatch = sub.origin_filter.some((filter: string) =>
         marketplaceLoad.origin.toLowerCase().includes(filter.toLowerCase())
       )
       if (!originMatch) return false
@@ -408,7 +408,7 @@ async function autoCreateLoadsForMatchingCarriers(marketplaceLoadId: string) {
 
     // Check destination filter
     if (sub.destination_filter && sub.destination_filter.length > 0) {
-      const destMatch = sub.destination_filter.some((filter) =>
+      const destMatch = sub.destination_filter.some((filter: string) =>
         marketplaceLoad.destination.toLowerCase().includes(filter.toLowerCase())
       )
       if (!destMatch) return false

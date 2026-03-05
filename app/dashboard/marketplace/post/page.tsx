@@ -1,9 +1,27 @@
 "use client"
 
-import { MarketplaceComingSoon } from "@/components/marketplace-coming-soon"
+import type React from "react"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { ArrowLeft } from "lucide-react"
+import { toast } from "sonner"
+import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
+import { postLoadToMarketplace } from "@/app/actions/marketplace"
 
 export default function PostLoadPage() {
-  return <MarketplaceComingSoon />
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
@@ -77,8 +95,8 @@ export default function PostLoadPage() {
                   <Label>Origin *</Label>
                   <GooglePlacesAutocomplete
                     value={formData.origin}
-                    onChange={(value) => setFormData({ ...formData, origin: value })}
-                    onPlaceSelect={(address) => {
+                    onChange={(value: string) => setFormData({ ...formData, origin: value })}
+                    onPlaceSelect={(address: { address_line1?: string | null; [key: string]: any }) => {
                       setFormData({ ...formData, origin: address.address_line1?.trim() || formData.origin })
                     }}
                     placeholder="Enter origin address"
@@ -90,8 +108,8 @@ export default function PostLoadPage() {
                   <Label>Destination *</Label>
                   <GooglePlacesAutocomplete
                     value={formData.destination}
-                    onChange={(value) => setFormData({ ...formData, destination: value })}
-                    onPlaceSelect={(address) => {
+                    onChange={(value: string) => setFormData({ ...formData, destination: value })}
+                    onPlaceSelect={(address: { address_line1?: string | null; [key: string]: any }) => {
                       setFormData({ ...formData, destination: address.address_line1?.trim() || formData.destination })
                     }}
                     placeholder="Enter destination address"
@@ -105,7 +123,7 @@ export default function PostLoadPage() {
                     type="number"
                     step="0.01"
                     value={formData.rate}
-                    onChange={(e) => setFormData({ ...formData, rate: e.target.value })}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, rate: e.target.value })}
                     placeholder="0.00"
                     required
                   />
@@ -133,7 +151,7 @@ export default function PostLoadPage() {
                   <Label>Weight (Optional)</Label>
                   <Input
                     value={formData.weight}
-                    onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, weight: e.target.value })}
                     placeholder="e.g., 22,500 lbs"
                   />
                 </div>
@@ -163,7 +181,7 @@ export default function PostLoadPage() {
                   <Input
                     type="date"
                     value={formData.pickup_date}
-                    onChange={(e) => setFormData({ ...formData, pickup_date: e.target.value })}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, pickup_date: e.target.value })}
                   />
                 </div>
 
@@ -172,7 +190,7 @@ export default function PostLoadPage() {
                   <Input
                     type="date"
                     value={formData.delivery_date}
-                    onChange={(e) => setFormData({ ...formData, delivery_date: e.target.value })}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, delivery_date: e.target.value })}
                   />
                 </div>
               </div>
@@ -181,7 +199,7 @@ export default function PostLoadPage() {
                 <Label>Contents (Optional)</Label>
                 <Input
                   value={formData.contents}
-                  onChange={(e) => setFormData({ ...formData, contents: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, contents: e.target.value })}
                   placeholder="Describe the freight"
                 />
               </div>
@@ -190,7 +208,7 @@ export default function PostLoadPage() {
                 <Label>Notes (Optional)</Label>
                 <Textarea
                   value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="Additional notes for carriers"
                   rows={4}
                 />

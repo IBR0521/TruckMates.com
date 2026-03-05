@@ -32,3 +32,4 @@ You can also run the full gamification SQL file `supabase/gamification.sql` whic
 
 
 
+
