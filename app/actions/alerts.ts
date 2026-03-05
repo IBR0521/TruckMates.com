@@ -9,7 +9,9 @@ import { handleDbError } from "@/lib/db-helpers"
  * Get alert rules
  */
 export async function getAlertRules() {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -33,11 +35,13 @@ export async function getAlertRules() {
     return { error: "No company found", data: null }
   }
 
+  // V3-007 FIX: Replace select(*) with explicit columns and add LIMIT
   const { data, error } = await supabase
     .from("alert_rules")
-    .select("*")
+    .select("id, name, description, event_type, conditions, send_email, send_sms, send_in_app, notify_users, escalation_enabled, escalation_delay_minutes, priority, is_active, created_at, updated_at")
     .eq("company_id", userData.company_id)
     .order("created_at", { ascending: false })
+    .limit(1000)
 
   if (error) {
     const result = handleDbError(error, [])
@@ -46,6 +50,10 @@ export async function getAlertRules() {
   }
 
   return { data: data || [], error: null }
+  } catch (error: any) {
+    console.error("[getAlertRules] Unexpected error:", error)
+    return { data: [], error: error?.message || "An unexpected error occurred" }
+  }
 }
 
 /**
@@ -151,7 +159,14 @@ export async function updateAlertRule(
     is_active?: boolean
   }
 ) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
+
+    // V3-014 FIX: Validate input parameters
+    if (!ruleId || typeof ruleId !== "string" || ruleId.trim().length === 0) {
+      return { error: "Invalid rule ID", data: null }
+    }
 
   const {
     data: { user },
@@ -222,13 +237,24 @@ export async function updateAlertRule(
 
   revalidatePath("/dashboard/settings/alerts")
   return { data, error: null }
+  } catch (error: any) {
+    console.error("[updateAlertRule] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 /**
  * Delete alert rule
  */
 export async function deleteAlertRule(ruleId: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
+
+    // V3-014 FIX: Validate input parameters
+    if (!ruleId || typeof ruleId !== "string" || ruleId.trim().length === 0) {
+      return { error: "Invalid rule ID", data: null }
+    }
 
   const {
     data: { user },
@@ -277,13 +303,19 @@ export async function deleteAlertRule(ruleId: string) {
 
   revalidatePath("/dashboard/settings/alerts")
   return { data: { success: true }, error: null }
+  } catch (error: any) {
+    console.error("[deleteAlertRule] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 /**
  * Get alert counts by status and priority (efficient COUNT query)
  */
 export async function getAlertCounts() {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -320,6 +352,18 @@ export async function getAlertCounts() {
     },
     error: null
   }
+  } catch (error: any) {
+    console.error("[getAlertCounts] Unexpected error:", error)
+    return {
+      data: {
+        active: 0,
+        critical: 0,
+        acknowledged: 0,
+        resolved: 0,
+      },
+      error: error?.message || "An unexpected error occurred"
+    }
+  }
 }
 
 /**
@@ -332,7 +376,9 @@ export async function getAlerts(filters?: {
   limit?: number
   role_filter?: boolean // If true, filter by user role
 }) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -352,9 +398,10 @@ export async function getAlerts(filters?: {
     return { error: "No company found", data: null }
   }
 
+  // V3-007 FIX: Replace select(*) with explicit columns
   let query = supabase
     .from("alerts")
-    .select("*")
+    .select("id, alert_rule_id, title, message, event_type, priority, status, load_id, route_id, driver_id, truck_id, metadata, escalated, escalation_level, escalated_at, acknowledged_by, acknowledged_at, resolved_by, resolved_at, created_at, updated_at")
     .eq("company_id", userData.company_id)
     .order("created_at", { ascending: false })
 
@@ -394,9 +441,9 @@ export async function getAlerts(filters?: {
   if (filters?.event_type) {
     query = query.eq("event_type", filters.event_type)
   }
-  if (filters?.limit) {
-    query = query.limit(filters.limit)
-  }
+  // V3-007 FIX: Add default LIMIT if not provided
+  const limit = Math.min(filters?.limit || 100, 1000)
+  query = query.limit(limit)
 
   const { data, error } = await query
 
@@ -407,6 +454,10 @@ export async function getAlerts(filters?: {
   }
 
   return { data: data || [], error: null }
+  } catch (error: any) {
+    console.error("[getAlerts] Unexpected error:", error)
+    return { data: [], error: error?.message || "An unexpected error occurred" }
+  }
 }
 
 /**
@@ -424,7 +475,20 @@ export async function createAlert(formData: {
   truck_id?: string
   metadata?: any
 }) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
+
+    // V3-014 FIX: Validate required fields
+    if (!formData.title || typeof formData.title !== "string" || formData.title.trim().length === 0) {
+      return { error: "Title is required", data: null }
+    }
+    if (!formData.message || typeof formData.message !== "string" || formData.message.trim().length === 0) {
+      return { error: "Message is required", data: null }
+    }
+    if (!formData.event_type || typeof formData.event_type !== "string" || formData.event_type.trim().length === 0) {
+      return { error: "Event type is required", data: null }
+    }
 
   const {
     data: { user },
@@ -451,12 +515,13 @@ export async function createAlert(formData: {
   // Get alert rule if provided
   let alertRule = null
   if (formData.alert_rule_id) {
+    // V3-007 FIX: Replace select(*) with explicit columns
     const { data: rule } = await supabase
       .from("alert_rules")
-      .select("*")
+      .select("id, name, description, event_type, conditions, send_email, send_sms, send_in_app, notify_users, escalation_enabled, escalation_delay_minutes, priority, is_active")
       .eq("id", formData.alert_rule_id)
       .eq("company_id", userData.company_id)
-      .single()
+      .maybeSingle()
     alertRule = rule
   }
 
@@ -510,12 +575,12 @@ export async function createAlert(formData: {
           maintenance_manager: ["maintenance_due", "maintenance_overdue", "dvir_required"],
         }
         
-        const filteredUsers = companyUsers.filter((u) => {
+        const filteredUsers = companyUsers.filter((u: any) => {
           const allowedTypes = roleEventTypes[u.role || "driver"] || roleEventTypes.driver
           return allowedTypes.includes("*") || allowedTypes.includes(formData.event_type)
         })
         
-        notifyUserIds.push(...filteredUsers.map(u => u.id))
+        notifyUserIds.push(...filteredUsers.map((u: any) => u.id))
       }
     }
 
@@ -609,6 +674,10 @@ export async function createAlert(formData: {
 
   revalidatePath("/dashboard/alerts")
   return { data: alert, error: null }
+  } catch (error: any) {
+    console.error("[createAlert] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 /**
@@ -623,8 +692,10 @@ export async function createAlert(formData: {
  *   => mark escalated and send notifications to manager/admin/owner users.
  */
 export async function processAlertEscalations() {
-  // Use regular server client; RLS on alerts/alert_rules already scoped by company_id
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // Use regular server client; RLS on alerts/alert_rules already scoped by company_id
+    const supabase = await createClient()
 
   // 1) Get all rules with escalation enabled
   const { data: rules, error: rulesError } = await supabase
@@ -777,13 +848,24 @@ export async function processAlertEscalations() {
   }
 
   return { data: { escalated: escalatedCount }, error: null }
+  } catch (error: any) {
+    console.error("[processAlertEscalations] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: { escalated: 0 } }
+  }
 }
 
 /**
  * Acknowledge alert
  */
 export async function acknowledgeAlert(id: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
+
+    // V3-014 FIX: Validate input parameters
+    if (!id || typeof id !== "string" || id.trim().length === 0) {
+      return { error: "Invalid alert ID", data: null }
+    }
 
   const {
     data: { user },
@@ -825,13 +907,24 @@ export async function acknowledgeAlert(id: string) {
 
   revalidatePath("/dashboard/alerts")
   return { data, error: null }
+  } catch (error: any) {
+    console.error("[acknowledgeAlert] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 /**
  * Resolve alert
  */
 export async function resolveAlert(id: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
+
+    // V3-014 FIX: Validate input parameters
+    if (!id || typeof id !== "string" || id.trim().length === 0) {
+      return { error: "Invalid alert ID", data: null }
+    }
 
   const {
     data: { user },
@@ -875,5 +968,9 @@ export async function resolveAlert(id: string) {
 
   revalidatePath("/dashboard/alerts")
   return { data, error: null }
+  } catch (error: any) {
+    console.error("[resolveAlert] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
