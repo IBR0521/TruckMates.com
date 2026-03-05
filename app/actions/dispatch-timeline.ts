@@ -548,6 +548,23 @@ export async function checkAssignmentConflicts(
 
     // Get the new job details
     const supabase = await createClient()
+
+    // V3-004 FIX: Enforce company ownership when loading loads/routes
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    const companyResult = await getCachedUserCompany(user.id)
+    const companyId = companyResult.company_id
+
+    if (!companyId) {
+      return { error: companyResult.error || "No company found", data: null }
+    }
+
     let newJob: TimelineJob | null = null
 
     if (loadId) {
@@ -555,6 +572,7 @@ export async function checkAssignmentConflicts(
         .from("loads")
         .select("*")
         .eq("id", loadId)
+        .eq("company_id", companyId) // V3-004: Prevent cross-tenant load access
         .single()
 
       if (load) {
@@ -593,6 +611,7 @@ export async function checkAssignmentConflicts(
         .from("routes")
         .select("*")
         .eq("id", routeId)
+        .eq("company_id", companyId) // V3-004: Prevent cross-tenant route access
         .single()
 
       if (route) {

@@ -599,7 +599,16 @@ export async function createInvoice(formData: {
 
   // Apply invoice settings
   const paymentTerms = formData.payment_terms || settings.default_payment_terms || "Net 30"
-  let finalAmount = typeof formData.amount === 'string' ? parseFloat(formData.amount) : formData.amount
+  // V3-013 FIX: Guard parseFloat against NaN and invalid strings
+  let finalAmount: number =
+    typeof formData.amount === "string"
+      ? Number.parseFloat(formData.amount)
+      : Number(formData.amount)
+
+  if (!Number.isFinite(finalAmount) || Number.isNaN(finalAmount)) {
+    return { error: "Amount must be a valid number", data: null }
+  }
+
   let taxAmount = 0
   let subtotal = finalAmount
 

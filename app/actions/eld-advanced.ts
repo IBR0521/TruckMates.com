@@ -323,7 +323,8 @@ export async function getRealtimeLocations() {
   }
 
   // Get latest location for each device (last 5 minutes)
-  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+  // V3-007 FIX: Add LIMIT and restrict to last 24 hours to prevent OOM
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
   const { data: locations, error } = await supabase
     .from("eld_locations")
@@ -344,8 +345,9 @@ export async function getRealtimeLocations() {
       )
     `)
     .eq("company_id", userData.company_id)
-    .gte("timestamp", fiveMinutesAgo)
+    .gte("timestamp", oneDayAgo) // V3-007: Restrict to last 24 hours max
     .order("timestamp", { ascending: false })
+    .limit(1000) // V3-007: Limit to prevent OOM
 
   if (error) {
     return { error: error.message, data: null }

@@ -82,6 +82,14 @@ export async function checkAndNotifyBackhaulOpportunities(routeId: string) {
   }
 
   try {
+    // V3-004 FIX: Ensure route belongs to the authenticated user's company
+    const companyResult = await getCachedUserCompany(user.id)
+    const companyId = companyResult.company_id
+
+    if (!companyId) {
+      return { error: companyResult.error || "No company found", data: null }
+    }
+
     // Find backhaul opportunities
     const opportunitiesResult = await findBackhaulOpportunities(routeId, 2.0, 3)
 
@@ -94,6 +102,7 @@ export async function checkAndNotifyBackhaulOpportunities(routeId: string) {
       .from("routes")
       .select("id, name, driver_id, truck_id")
       .eq("id", routeId)
+      .eq("company_id", companyId) // V3-004: Prevent cross-tenant route access
       .single()
 
     if (!route) {

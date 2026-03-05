@@ -142,6 +142,7 @@ export async function getLoadDetails(loadId: string): Promise<{
           .from("brokers")
           .select("id, name, phone, email, w9_url, insurance_url")
           .eq("id", (load as any).broker_id)
+          .eq("company_id", company_id) // V3-004: Enforce company ownership for broker
           .single()
         if (brokerData) broker = brokerData
       } catch (error) {
@@ -155,6 +156,7 @@ export async function getLoadDetails(loadId: string): Promise<{
           .from("customers")
           .select("id, name, phone, email")
           .eq("id", (load as any).customer_id)
+          .eq("company_id", company_id) // V3-004: Enforce company ownership for customer
           .single()
         if (customerData) customer = customerData
       } catch (error) {
@@ -171,6 +173,7 @@ export async function getLoadDetails(loadId: string): Promise<{
       .from("load_delivery_points")
       .select("id, delivery_number, location_name, address, scheduled_delivery_date")
       .eq("load_id", loadId)
+      .eq("company_id", company_id) // V3-004: Enforce company ownership for delivery points
       .order("delivery_number", { ascending: true })
 
     // Get notes (if notes table exists)
@@ -180,6 +183,7 @@ export async function getLoadDetails(loadId: string): Promise<{
         .from("load_notes")
         .select("id, note, created_at, created_by")
         .eq("load_id", loadId)
+        .eq("company_id", company_id) // V3-004: Enforce company ownership for notes
         .order("created_at", { ascending: false })
         .limit(10)
       
