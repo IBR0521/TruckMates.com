@@ -7,7 +7,14 @@ export async function generateBOLPDF(bolId: string): Promise<{
   html: string
   error: string | null
 }> {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!bolId || typeof bolId !== "string" || bolId.trim().length === 0) {
+      return { html: "", error: "Invalid BOL ID" }
+    }
+
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -32,12 +39,13 @@ export async function generateBOLPDF(bolId: string): Promise<{
   }
 
   // Get BOL data
+  // V3-007 FIX: Replace select(*) with explicit columns
   const { data: bol, error } = await supabase
     .from("bols")
-    .select("*")
+    .select("id, company_id, bol_number, created_at, shipper_name, shipper_address, shipper_city, shipper_state, shipper_zip, shipper_phone, shipper_email, consignee_name, consignee_address, consignee_city, consignee_state, consignee_zip, consignee_phone, consignee_email, carrier_name, carrier_mc_number, carrier_dot_number, pickup_date, delivery_date, freight_charges, payment_terms, special_instructions, shipper_signature, driver_signature, consignee_signature, load_id, metadata")
     .eq("id", bolId)
     .eq("company_id", userData.company_id)
-    .single()
+    .maybeSingle()
 
   if (error || !bol) {
     return { html: "", error: "BOL not found" }
@@ -239,7 +247,14 @@ export async function generateBOLPDF(bolId: string): Promise<{
       <div class="header">
         <h1>BILL OF LADING</h1>
         <p>BOL Number: ${escapeHtml(bol.bol_number)}</p>
-        ${bol.created_at ? `<p>Date: ${escapeHtml(new Date(bol.created_at).toLocaleDateString())}</p>` : ''}
+        ${bol.created_at ? `<p>Date: ${escapeHtml((() => {
+          try {
+            const date = new Date(bol.created_at)
+            return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
+          } catch {
+            return ''
+          }
+        })())}</p>` : ''}
       </div>
 
       <div class="section two-column">
@@ -323,19 +338,36 @@ export async function generateBOLPDF(bolId: string): Promise<{
             ${bol.pickup_date ? `
             <div class="info-row">
               <div class="info-label">Pickup Date:</div>
-              <div class="info-value">${escapeHtml(new Date(bol.pickup_date).toLocaleDateString())}</div>
+              <div class="info-value">${escapeHtml((() => {
+                try {
+                  const date = new Date(bol.pickup_date)
+                  return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
+                } catch {
+                  return ''
+                }
+              })())}</div>
             </div>
             ` : ''}
             ${bol.delivery_date ? `
             <div class="info-row">
               <div class="info-label">Delivery Date:</div>
-              <div class="info-value">${escapeHtml(new Date(bol.delivery_date).toLocaleDateString())}</div>
+              <div class="info-value">${escapeHtml((() => {
+                try {
+                  const date = new Date(bol.delivery_date)
+                  return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
+                } catch {
+                  return ''
+                }
+              })())}</div>
             </div>
             ` : ''}
             ${bol.freight_charges ? `
             <div class="info-row">
               <div class="info-label">Freight Charges:</div>
-              <div class="info-value">$${escapeHtml(bol.freight_charges.toFixed(2))}</div>
+              <div class="info-value">$${escapeHtml((() => {
+                const charges = typeof bol.freight_charges === "number" ? bol.freight_charges : parseFloat(String(bol.freight_charges || 0))
+                return isNaN(charges) || !isFinite(charges) ? "0.00" : charges.toFixed(2)
+              })())}</div>
             </div>
             ` : ''}
             ${bol.payment_terms ? `
@@ -367,7 +399,14 @@ export async function generateBOLPDF(bolId: string): Promise<{
             </div>
             ${bol.shipper_signature?.signed_at ? `
             <div class="signature-label" style="font-size: 10px; margin-top: 5px;">
-              ${escapeHtml(new Date(bol.shipper_signature.signed_at).toLocaleString())}
+              ${escapeHtml((() => {
+                try {
+                  const date = new Date(bol.shipper_signature.signed_at)
+                  return isNaN(date.getTime()) ? '' : date.toLocaleString()
+                } catch {
+                  return ''
+                }
+              })())}
             </div>
             ` : ''}
           </div>
@@ -384,7 +423,14 @@ export async function generateBOLPDF(bolId: string): Promise<{
             </div>
             ${bol.driver_signature?.signed_at ? `
             <div class="signature-label" style="font-size: 10px; margin-top: 5px;">
-              ${escapeHtml(new Date(bol.driver_signature.signed_at).toLocaleString())}
+              ${escapeHtml((() => {
+                try {
+                  const date = new Date(bol.driver_signature.signed_at)
+                  return isNaN(date.getTime()) ? '' : date.toLocaleString()
+                } catch {
+                  return ''
+                }
+              })())}
             </div>
             ` : ''}
           </div>
@@ -404,7 +450,14 @@ export async function generateBOLPDF(bolId: string): Promise<{
             </div>
             ${bol.consignee_signature.signed_at ? `
             <div class="signature-label" style="font-size: 10px; margin-top: 5px;">
-              ${escapeHtml(new Date(bol.consignee_signature.signed_at).toLocaleString())}
+              ${escapeHtml((() => {
+                try {
+                  const date = new Date(bol.consignee_signature.signed_at)
+                  return isNaN(date.getTime()) ? '' : date.toLocaleString()
+                } catch {
+                  return ''
+                }
+              })())}
             </div>
             ` : ''}
           </div>
@@ -420,6 +473,10 @@ export async function generateBOLPDF(bolId: string): Promise<{
   `
 
   return { html, error: null }
+  } catch (error: any) {
+    console.error("[generateBOLPDF] Unexpected error:", error)
+    return { html: "", error: error?.message || "Failed to generate BOL PDF" }
+  }
 }
 
 /**
@@ -429,7 +486,13 @@ export async function generateBOLPDFFile(bolId: string): Promise<{
   pdf: Buffer | null
   error: string | null
 }> {
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
+    // V3-014 FIX: Validate input parameters
+    if (!bolId || typeof bolId !== "string" || bolId.trim().length === 0) {
+      return { pdf: null, error: "Invalid BOL ID" }
+    }
+
     // First generate the HTML
     const htmlResult = await generateBOLPDF(bolId)
     
@@ -449,6 +512,7 @@ export async function generateBOLPDFFile(bolId: string): Promise<{
 
       try {
         const puppeteerCore = await import("puppeteer-core").catch(() => null)
+        // @ts-ignore - @sparticuz/chromium is optional and may not be installed
         const chromium = await import("@sparticuz/chromium").catch(() => null)
         
         if (puppeteerCore && chromium) {
