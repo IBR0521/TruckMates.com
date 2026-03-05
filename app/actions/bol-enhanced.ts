@@ -17,50 +17,59 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
   data: { pdf_url: string } | null
   error: string | null
 }> {
-  // CRITICAL FIX 4: Use service-role client for storage operations to allow background execution
-  let targetCompanyId = companyId
-  let supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!bolId || typeof bolId !== "string" || bolId.trim().length === 0) {
+      return { error: "Invalid BOL ID", data: null }
+    }
+    if (companyId && (typeof companyId !== "string" || companyId.trim().length === 0)) {
+      return { error: "Invalid company ID", data: null }
+    }
 
-  if (!targetCompanyId) {
-    // Try to get company_id from BOL itself first (no auth required)
-    const { data: bolData } = await supabase
-      .from("bols")
-      .select("company_id")
-      .eq("id", bolId)
-      .single()
+    // CRITICAL FIX 4: Use service-role client for storage operations to allow background execution
+    let targetCompanyId = companyId
+    let supabase = await createClient()
 
-    if (bolData?.company_id) {
-      targetCompanyId = bolData.company_id
-    } else {
-      // Fallback: try to get from user session if available
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser()
+    if (!targetCompanyId) {
+      // Try to get company_id from BOL itself first (no auth required)
+      const { data: bolData } = await supabase
+        .from("bols")
+        .select("company_id")
+        .eq("id", bolId)
+        .maybeSingle()
 
-      if (!authError && user) {
-        const result = await getCachedUserCompany(user.id)
-        if (result.company_id) {
-          targetCompanyId = result.company_id
+      if (bolData?.company_id) {
+        targetCompanyId = bolData.company_id
+      } else {
+        // Fallback: try to get from user session if available
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser()
+
+        if (!authError && user) {
+          const result = await getCachedUserCompany(user.id)
+          if (result.company_id) {
+            targetCompanyId = result.company_id
+          }
+        }
+
+        if (!targetCompanyId) {
+          return { error: "Cannot determine company for BOL", data: null }
         }
       }
-
-      if (!targetCompanyId) {
-        return { error: "Cannot determine company for BOL", data: null }
-      }
     }
-  }
 
-  // Use service-role client for storage operations (bypasses RLS)
-  try {
-    const { createAdminClient } = await import("@/lib/supabase/admin")
-    supabase = createAdminClient()
-  } catch (error) {
-    // If admin client not available, continue with regular client
-    console.warn("[storeSignedBOLPDF] Admin client not available, using regular client")
-  }
+    // Use service-role client for storage operations (bypasses RLS)
+    try {
+      const { createAdminClient } = await import("@/lib/supabase/admin")
+      supabase = createAdminClient()
+    } catch (error) {
+      // If admin client not available, continue with regular client
+      console.warn("[storeSignedBOLPDF] Admin client not available, using regular client")
+    }
 
-  try {
     // Get BOL data with explicit column selection
     const { data: bol, error: bolError } = await supabase
       .from("bols")
@@ -96,6 +105,7 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
 
       try {
         const puppeteerCore = await import("puppeteer-core").catch(() => null)
+        // @ts-ignore - @sparticuz/chromium is optional and may not be installed
         const chromium = await import("@sparticuz/chromium").catch(() => null)
         
         if (puppeteerCore && chromium) {
@@ -156,7 +166,9 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
     const fileName = `bols/${targetCompanyId}/${bol.bol_number}-signed-${Date.now()}.pdf`
     
     // Convert PDF buffer to File/Blob
-    const pdfBlob = new Blob([pdfBuffer], { type: "application/pdf" })
+    // V3-013 FIX: Convert Buffer to Uint8Array for Blob compatibility
+    const pdfArray = new Uint8Array(pdfBuffer)
+    const pdfBlob = new Blob([pdfArray], { type: "application/pdf" })
     const file = new File([pdfBlob], `${bol.bol_number}-signed.pdf`, { type: "application/pdf" })
 
     // Upload to Supabase Storage as PDF
@@ -196,33 +208,17 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
       // Don't fail if metadata update fails
     }
 
-    // Also create a document record for audit trail
-    try {
-      const { createDocument } = await import("./documents")
-      await createDocument({
-        name: `BOL ${bol.bol_number} - Signed`,
-        type: "bol",
-        file_url: pdfUrl,
-        load_id: bol.load_id,
-        metadata: {
-          bol_id: bolId,
-          bol_number: bol.bol_number,
-          stored_at: new Date().toISOString(),
-        },
-      }).catch(() => {
-        // Document creation might fail, that's okay
-      })
-    } catch (error) {
-      console.error("Failed to create document record:", error)
-    }
+    // Also create a document record for audit trail (optional)
+    // Note: uploadDocument function exists but requires file upload, not just URL
+    // Skipping document record creation for now as it requires file re-upload
 
     revalidatePath(`/dashboard/bols/${bolId}`)
     revalidatePath("/dashboard/bols")
 
     return { data: { pdf_url: pdfUrl }, error: null }
   } catch (error: any) {
-    console.error("Unhandled error in storeSignedBOLPDF:", error)
-    return { error: error.message || "Failed to store BOL PDF", data: null }
+    console.error("[storeSignedBOLPDF] Unexpected error:", error)
+    return { error: error?.message || "Failed to store BOL PDF", data: null }
   }
 }
 
@@ -233,79 +229,93 @@ export async function autoStoreBOLPDFOnCompletion(bolId: string, companyId?: str
   data: { pdf_url: string } | null
   error: string | null
 }> {
-  // CRITICAL FIX 4: Use service-role client for storage operations to allow background execution
-  let targetCompanyId = companyId
-  let supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!bolId || typeof bolId !== "string" || bolId.trim().length === 0) {
+      return { error: "Invalid BOL ID", data: null }
+    }
+    if (companyId && (typeof companyId !== "string" || companyId.trim().length === 0)) {
+      return { error: "Invalid company ID", data: null }
+    }
 
-  if (!targetCompanyId) {
-    // Try to get company_id from BOL itself first (no auth required)
-    const { data: bolData } = await supabase
-      .from("bols")
-      .select("company_id")
-      .eq("id", bolId)
-      .single()
+    // CRITICAL FIX 4: Use service-role client for storage operations to allow background execution
+    let targetCompanyId = companyId
+    let supabase = await createClient()
 
-    if (bolData?.company_id) {
-      targetCompanyId = bolData.company_id
-    } else {
-      // Fallback: try to get from user session if available
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser()
+    if (!targetCompanyId) {
+      // Try to get company_id from BOL itself first (no auth required)
+      const { data: bolData } = await supabase
+        .from("bols")
+        .select("company_id")
+        .eq("id", bolId)
+        .maybeSingle()
 
-      if (!authError && user) {
-        const result = await getCachedUserCompany(user.id)
-        if (result.company_id) {
-          targetCompanyId = result.company_id
+      if (bolData?.company_id) {
+        targetCompanyId = bolData.company_id
+      } else {
+        // Fallback: try to get from user session if available
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser()
+
+        if (!authError && user) {
+          const result = await getCachedUserCompany(user.id)
+          if (result.company_id) {
+            targetCompanyId = result.company_id
+          }
+        }
+
+        if (!targetCompanyId) {
+          return { error: "Cannot determine company for BOL", data: null }
+        }
+      }
+    }
+
+    // Use service-role client for storage operations (bypasses RLS)
+    try {
+      const { createAdminClient } = await import("@/lib/supabase/admin")
+      supabase = createAdminClient()
+    } catch (error) {
+      // If admin client not available, continue with regular client
+      console.warn("[autoStoreBOLPDFOnCompletion] Admin client not available, using regular client")
+    }
+
+    try {
+      // Check if BOL is completed (has consignee signature)
+      const { data: bol, error: bolError } = await supabase
+        .from("bols")
+        .select("id, consignee_signature, metadata")
+        .eq("id", bolId)
+        .eq("company_id", targetCompanyId)
+        .maybeSingle()
+
+      if (bolError || !bol) {
+        return { error: bolError?.message || "BOL not found", data: null }
+      }
+
+      // Check if PDF already stored
+      if (bol.metadata && (bol.metadata as any).signed_pdf_url) {
+        return {
+          data: { pdf_url: (bol.metadata as any).signed_pdf_url },
+          error: null,
         }
       }
 
-      if (!targetCompanyId) {
-        return { error: "Cannot determine company for BOL", data: null }
+      // Only store if consignee signature exists (POD captured)
+      if (bol.consignee_signature) {
+        return await storeSignedBOLPDF(bolId, targetCompanyId)
       }
+
+      return { error: "BOL is not completed. POD signature required.", data: null }
+    } catch (error: any) {
+      console.error("[autoStoreBOLPDFOnCompletion] Inner error:", error)
+      return { error: error?.message || "Failed to auto-store BOL PDF", data: null }
     }
-  }
-
-  // Use service-role client for storage operations (bypasses RLS)
-  try {
-    const { createAdminClient } = await import("@/lib/supabase/admin")
-    supabase = createAdminClient()
-  } catch (error) {
-    // If admin client not available, continue with regular client
-    console.warn("[autoStoreBOLPDFOnCompletion] Admin client not available, using regular client")
-  }
-
-  try {
-    // Check if BOL is completed (has consignee signature)
-    const { data: bol, error: bolError } = await supabase
-      .from("bols")
-      .select("id, consignee_signature, metadata")
-      .eq("id", bolId)
-      .eq("company_id", targetCompanyId)
-      .single()
-
-    if (bolError || !bol) {
-      return { error: bolError?.message || "BOL not found", data: null }
-    }
-
-    // Check if PDF already stored
-    if (bol.metadata && (bol.metadata as any).signed_pdf_url) {
-      return {
-        data: { pdf_url: (bol.metadata as any).signed_pdf_url },
-        error: null,
-      }
-    }
-
-    // Only store if consignee signature exists (POD captured)
-    if (bol.consignee_signature) {
-      return await storeSignedBOLPDF(bolId, targetCompanyId)
-    }
-
-    return { error: "BOL is not completed. POD signature required.", data: null }
   } catch (error: any) {
-    console.error("Unhandled error in autoStoreBOLPDFOnCompletion:", error)
-    return { error: error.message || "Failed to auto-store BOL PDF", data: null }
+    console.error("[autoStoreBOLPDFOnCompletion] Unexpected error:", error)
+    return { error: error?.message || "Failed to auto-store BOL PDF", data: null }
   }
 }
 
