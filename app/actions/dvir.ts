@@ -19,18 +19,16 @@ export async function getDVIRs(filters?: {
   limit?: number
   offset?: number
 }) {
-  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
-  try {
-    const supabase = await createClient()
+  const supabase = await createClient()
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
 
-    if (authError || !user) {
-      return { error: "Not authenticated", data: null }
-    }
+  if (authError || !user) {
+    return { error: "Not authenticated", data: null }
+  }
 
   const result = await getCachedUserCompany(user.id)
   const company_id = result.company_id
