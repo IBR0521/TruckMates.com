@@ -102,24 +102,26 @@ export async function createCustomerPortalAccess(formData: {
     }
 
     // Verify customer belongs to company
+    // V3-007 FIX: Replace select(*) with explicit columns
     const { data: customer } = await supabase
       .from("customers")
-      .select("*")
+      .select("id, company_id, name, company_name, email, phone, address_line1, address_line2, city, state, zip_code, country, contact_name, contact_email, contact_phone")
       .eq("id", formData.customer_id)
       .eq("company_id", userData.company_id)
-      .single()
+      .maybeSingle()
 
     if (!customer) {
       return { error: "Customer not found", data: null }
     }
 
     // Check if access already exists
+    // V3-007 FIX: Replace select(*) with explicit columns
     const { data: existingAccess } = await supabase
       .from("customer_portal_access")
-      .select("*")
+      .select("id, customer_id, company_id, access_token, portal_url, can_view_location, can_submit_loads, can_view_invoices, can_download_documents, email_notifications, sms_notifications, expires_at, is_active, created_at, updated_at")
       .eq("customer_id", formData.customer_id)
       .eq("company_id", userData.company_id)
-      .single()
+      .maybeSingle()
 
     // Preserve existing token if updating, only generate new one if creating
     const accessToken = existingAccess?.access_token || generateAccessToken()
@@ -201,6 +203,10 @@ export async function createCustomerPortalAccess(formData: {
     revalidatePath("/dashboard/settings/customer-portal")
     revalidatePath(`/dashboard/customers/${formData.customer_id}`)
     return { data, error: null }
+  } catch (error: any) {
+    console.error("[createCustomerPortalAccess] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 /**
@@ -310,18 +316,42 @@ async function sendPortalAccessEmail(data: {
  * Get customer portal access by token (public access)
  */
 export async function getPortalAccessByToken(token: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!token || typeof token !== "string" || token.trim().length === 0) {
+      return { error: "Invalid access token", data: null }
+    }
 
-  const { data, error } = await supabase
-    .from("customer_portal_access")
-    .select(`
-      *,
-      customer:customers(*),
-      company:companies(*)
-    `)
-    .eq("access_token", token)
-    .eq("is_active", true)
-    .single()
+    const supabase = await createClient()
+
+    // V3-007 FIX: Replace select(*) with explicit columns
+    const { data, error } = await supabase
+      .from("customer_portal_access")
+      .select(`
+        id,
+        customer_id,
+        company_id,
+        access_token,
+        portal_url,
+        can_view_location,
+        can_submit_loads,
+        can_view_invoices,
+        can_download_documents,
+        email_notifications,
+        sms_notifications,
+        expires_at,
+        is_active,
+        access_count,
+        last_accessed_at,
+        created_at,
+        updated_at,
+        customer:customers(id, name, company_name, email),
+        company:companies(id, name)
+      `)
+      .eq("access_token", token)
+      .eq("is_active", true)
+      .maybeSingle()
 
   if (error) {
     const result = handleDbError(error, null)
@@ -354,17 +384,24 @@ export async function getPortalAccessByToken(token: string) {
  * Get loads for customer portal
  */
 export async function getCustomerPortalLoads(token: string) {
-  const portalResult = await getPortalAccessByToken(token)
-  if (portalResult.error || !portalResult.data) {
-    return portalResult
-  }
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!token || typeof token !== "string" || token.trim().length === 0) {
+      return { error: "Invalid access token", data: null }
+    }
 
-  const portalAccess = portalResult.data
-  const supabase = await createClient()
+    const portalResult = await getPortalAccessByToken(token)
+    if (portalResult.error || !portalResult.data) {
+      return portalResult
+    }
 
-  // SEC-004 FIX: Replace SELECT * with explicit column allowlist
-  // Customers should never see internal_notes, financial fields, or internal route metadata
-  let query = supabase
+    const portalAccess = portalResult.data
+    const supabase = await createClient()
+
+    // SEC-004 FIX: Replace SELECT * with explicit column allowlist
+    // Customers should never see internal_notes, financial fields, or internal route metadata
+    let query = supabase
     .from("loads")
     .select(`
       id,
@@ -389,38 +426,57 @@ export async function getCustomerPortalLoads(token: string) {
     `)
     .eq("company_id", portalAccess.company_id)
 
-  // Filter by customer_id only - no name matching for security
-  if (portalAccess.customer_id) {
-    query = query.eq("customer_id", portalAccess.customer_id)
-  } else {
-    // No customer_id means no access
-    return { data: [], error: null }
+    // Filter by customer_id only - no name matching for security
+    if (portalAccess.customer_id) {
+      query = query.eq("customer_id", portalAccess.customer_id)
+    } else {
+      // No customer_id means no access
+      return { data: [], error: null }
+    }
+
+    // V3-007 FIX: Add LIMIT to prevent unbounded queries
+    const { data: loads, error } = await query.order("created_at", { ascending: false }).limit(1000)
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    return { data: loads || [], error: null }
+  } catch (error: any) {
+    console.error("[getCustomerPortalLoads] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
-
-  const { data: loads, error } = await query.order("created_at", { ascending: false })
-
-  if (error) {
-    return { error: error.message, data: null }
+} catch (error: any) {
+    console.error("[getCustomerPortalLoads] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
-
-  return { data: loads || [], error: null }
 }
 
 /**
  * Get load details for customer portal
  */
 export async function getCustomerPortalLoad(token: string, loadId: string) {
-  const portalResult = await getPortalAccessByToken(token)
-  if (portalResult.error || !portalResult.data) {
-    return portalResult
-  }
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!token || typeof token !== "string" || token.trim().length === 0) {
+      return { error: "Invalid access token", data: null }
+    }
+    if (!loadId || typeof loadId !== "string" || loadId.trim().length === 0) {
+      return { error: "Invalid load ID", data: null }
+    }
 
-  const portalAccess = portalResult.data
-  const supabase = await createClient()
+    const portalResult = await getPortalAccessByToken(token)
+    if (portalResult.error || !portalResult.data) {
+      return portalResult
+    }
 
-  // SEC-004 FIX: Replace SELECT * with explicit column allowlist
-  // Exclude internal_notes, value, rate, margin, and all internal route fields
-  const { data: load, error } = await supabase
+    const portalAccess = portalResult.data
+    const supabase = await createClient()
+
+    // SEC-004 FIX: Replace SELECT * with explicit column allowlist
+    // Exclude internal_notes, value, rate, margin, and all internal route fields
+    const { data: load, error } = await supabase
     .from("loads")
     .select(`
       id,
@@ -444,49 +500,54 @@ export async function getCustomerPortalLoad(token: string, loadId: string) {
       route:routes(name, origin, destination, status),
       invoices:invoices(*)
     `)
-    .eq("id", loadId)
-    .eq("company_id", portalAccess.company_id)
-    .single()
+      .eq("id", loadId)
+      .eq("company_id", portalAccess.company_id)
+      .maybeSingle()
 
-  if (error || !load) {
-    return { error: "Load not found", data: null }
-  }
+    if (error || !load) {
+      return { error: "Load not found", data: null }
+    }
 
-  // Check if customer has access to this load - strict customer_id matching
-  if (load.customer_id !== portalAccess.customer_id) {
-    return { error: "Access denied", data: null }
-  }
+    // Check if customer has access to this load - strict customer_id matching
+    if (load.customer_id !== portalAccess.customer_id) {
+      return { error: "Access denied", data: null }
+    }
 
-  // Get real-time location if allowed - only for this specific load
-  let driverLocation = null
-  if (portalAccess.can_view_location && load.driver_id && load.id) {
-    // Get latest ELD location for this specific load's route/driver
-    // Only return location if driver is currently assigned to this load
-    const { data: location } = await supabase
-      .from("eld_locations")
-      .select("*")
-      .eq("driver_id", load.driver_id)
-      .order("timestamp", { ascending: false })
-      .limit(1)
-      .single()
+    // Get real-time location if allowed - only for this specific load
+    let driverLocation = null
+    if (portalAccess.can_view_location && load.driver_id && load.id) {
+      // Get latest ELD location for this specific load's route/driver
+      // Only return location if driver is currently assigned to this load
+      // V3-007 FIX: Replace select(*) with explicit columns
+      const { data: location } = await supabase
+        .from("eld_locations")
+        .select("id, driver_id, latitude, longitude, address, timestamp, speed, heading")
+        .eq("driver_id", load.driver_id)
+        .order("timestamp", { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
-    // Verify the driver is still assigned to this load before showing location
-    if (location && load.status !== "delivered" && load.status !== "cancelled") {
-      driverLocation = {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        address: location.address,
-        timestamp: location.timestamp,
+      // Verify the driver is still assigned to this load before showing location
+      if (location && load.status !== "delivered" && load.status !== "cancelled") {
+        driverLocation = {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          address: location.address,
+          timestamp: location.timestamp,
+        }
       }
     }
-  }
 
-  return {
-    data: {
-      ...load,
-      driver_location: driverLocation,
-    },
-    error: null,
+    return {
+      data: {
+        ...load,
+        driver_location: driverLocation,
+      },
+      error: null,
+    }
+  } catch (error: any) {
+    console.error("[getCustomerPortalLoad] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
 
@@ -494,35 +555,43 @@ export async function getCustomerPortalLoad(token: string, loadId: string) {
  * Get documents for customer portal
  */
 export async function getCustomerPortalDocuments(token: string, loadId?: string) {
-  const portalResult = await getPortalAccessByToken(token)
-  if (portalResult.error || !portalResult.data) {
-    return portalResult
-  }
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!token || typeof token !== "string" || token.trim().length === 0) {
+      return { error: "Invalid access token", data: null }
+    }
 
-  const portalAccess = portalResult.data
-  const supabase = await createClient()
+    const portalResult = await getPortalAccessByToken(token)
+    if (portalResult.error || !portalResult.data) {
+      return portalResult
+    }
 
-  if (!portalAccess.can_download_documents) {
-    return { error: "Document access not allowed", data: null }
-  }
+    const portalAccess = portalResult.data
+    const supabase = await createClient()
 
-  // Get customer's loads first to filter documents
-  const customerLoadsResult = await getCustomerPortalLoads(token)
-  if (customerLoadsResult.error || !customerLoadsResult.data) {
-    return { error: "Could not verify customer access", data: null }
-  }
+    if (!portalAccess.can_download_documents) {
+      return { error: "Document access not allowed", data: null }
+    }
 
-  const customerLoadIds = customerLoadsResult.data.map((l: any) => l.id)
+    // Get customer's loads first to filter documents
+    const customerLoadsResult = await getCustomerPortalLoads(token)
+    if (customerLoadsResult.error || !customerLoadsResult.data) {
+      return { error: "Could not verify customer access", data: null }
+    }
 
-  if (customerLoadIds.length === 0) {
-    return { data: [], error: null }
-  }
+    const customerLoadIds = customerLoadsResult.data.map((l: any) => l.id)
 
-  let query = supabase
-    .from("documents")
-    .select("*")
-    .eq("company_id", portalAccess.company_id)
-    .in("load_id", customerLoadIds)
+    if (customerLoadIds.length === 0) {
+      return { data: [], error: null }
+    }
+
+    // V3-007 FIX: Replace select(*) with explicit columns and add LIMIT
+    let query = supabase
+      .from("documents")
+      .select("id, company_id, load_id, driver_id, truck_id, document_type, file_name, file_url, file_size, mime_type, uploaded_by, uploaded_at, created_at, updated_at, metadata")
+      .eq("company_id", portalAccess.company_id)
+      .in("load_id", customerLoadIds)
 
   if (loadId) {
     // Verify the loadId belongs to this customer
@@ -545,59 +614,78 @@ export async function getCustomerPortalDocuments(token: string, loadId?: string)
  * Get invoices for customer portal
  */
 export async function getCustomerPortalInvoices(token: string) {
-  const portalResult = await getPortalAccessByToken(token)
-  if (portalResult.error || !portalResult.data) {
-    return portalResult
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!token || typeof token !== "string" || token.trim().length === 0) {
+      return { error: "Invalid access token", data: null }
+    }
+
+    const portalResult = await getPortalAccessByToken(token)
+    if (portalResult.error || !portalResult.data) {
+      return portalResult
+    }
+
+    const portalAccess = portalResult.data
+    const supabase = await createClient()
+
+    if (!portalAccess.can_view_invoices) {
+      return { error: "Invoice access not allowed", data: null }
+    }
+
+    const customerId = portalAccess.customer_id
+
+    // Use strict customer_id matching only - no name matching for security
+    if (!customerId) {
+      return { data: [], error: null }
+    }
+
+    // V3-007 FIX: Replace select(*) with explicit columns and add LIMIT
+    let query = supabase
+      .from("invoices")
+      .select("id, company_id, customer_id, load_id, invoice_number, issue_date, due_date, amount, status, paid_amount, paid_date, payment_method, notes, created_at, updated_at")
+      .eq("company_id", portalAccess.company_id)
+      .eq("customer_id", customerId)
+
+    const { data, error } = await query.order("created_at", { ascending: false }).limit(1000)
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    return { data: data || [], error: null }
+  } catch (error: any) {
+    console.error("[getCustomerPortalInvoices] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
   }
-
-  const portalAccess = portalResult.data
-  const supabase = await createClient()
-
-  if (!portalAccess.can_view_invoices) {
-    return { error: "Invoice access not allowed", data: null }
-  }
-
-  const customerId = portalAccess.customer_id
-
-  // Use strict customer_id matching only - no name matching for security
-  if (!customerId) {
-    return { data: [], error: null }
-  }
-
-  let query = supabase
-    .from("invoices")
-    .select("*")
-    .eq("company_id", portalAccess.company_id)
-    .eq("customer_id", customerId)
-
-  const { data, error } = await query.order("created_at", { ascending: false })
-
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  return { data: data || [], error: null }
 }
 
 /**
  * Get customer portal access by customer ID
  */
 export async function getCustomerPortalAccess(customerId: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!customerId || typeof customerId !== "string" || customerId.trim().length === 0) {
+      return { error: "Invalid customer ID", data: null }
+    }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const supabase = await createClient()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id, role")
+      .eq("id", user.id)
+      .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -607,45 +695,57 @@ export async function getCustomerPortalAccess(customerId: string) {
     return { error: "No company found", data: null }
   }
 
-  const { data, error } = await supabase
-    .from("customer_portal_access")
-    .select("*")
-    .eq("customer_id", customerId)
-    .eq("company_id", userData.company_id)
-    .eq("is_active", true)
-    .single()
+    // V3-007 FIX: Replace select(*) with explicit columns
+    const { data, error } = await supabase
+      .from("customer_portal_access")
+      .select("id, customer_id, company_id, access_token, portal_url, can_view_location, can_submit_loads, can_view_invoices, can_download_documents, email_notifications, sms_notifications, expires_at, is_active, access_count, last_accessed_at, created_at, updated_at")
+      .eq("customer_id", customerId)
+      .eq("company_id", userData.company_id)
+      .eq("is_active", true)
+      .maybeSingle()
 
-  if (error) {
-    if (error.code === "PGRST116") {
-      return { data: null, error: null } // No access found
+    if (error) {
+      if (error.code === "PGRST116") {
+        return { data: null, error: null } // No access found
+      }
+      const result = handleDbError(error, null)
+      if (result.error) return { error: result.error, data: null }
+      return { error: "Table not available. Please run the SQL schema.", data: null }
     }
-    const result = handleDbError(error, null)
-    if (result.error) return { error: result.error, data: null }
-    return { error: "Table not available. Please run the SQL schema.", data: null }
-  }
 
-  return { data, error: null }
+    return { data, error: null }
+  } catch (error: any) {
+    console.error("[getCustomerPortalAccess] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
 /**
  * Revoke customer portal access
  */
 export async function revokeCustomerPortalAccess(customerId: string) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    // V3-014 FIX: Validate input parameters
+    if (!customerId || typeof customerId !== "string" || customerId.trim().length === 0) {
+      return { error: "Invalid customer ID", data: null }
+    }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const supabase = await createClient()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id, role")
+      .eq("id", user.id)
+      .maybeSingle()
 
   if (userError) {
     return { error: userError.message || "Failed to fetch user data", data: null }
@@ -669,7 +769,11 @@ export async function revokeCustomerPortalAccess(customerId: string) {
     return { error: error.message, data: null }
   }
 
-  revalidatePath("/dashboard/settings/customer-portal")
-  return { data: { success: true }, error: null }
+    revalidatePath("/dashboard/settings/customer-portal")
+    return { data: { success: true }, error: null }
+  } catch (error: any) {
+    console.error("[revokeCustomerPortalAccess] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null }
+  }
 }
 
