@@ -61,8 +61,10 @@ export async function GET(req: NextRequest) {
         
         if (puppeteerCore && chromium) {
           puppeteer = puppeteerCore
-          executablePath = await chromium.executablePath()
-          chromiumArgs = chromium.args
+          // @ts-ignore - @sparticuz/chromium types may not be complete
+          executablePath = await (chromium as any).executablePath()
+          // @ts-ignore - @sparticuz/chromium types may not be complete
+          chromiumArgs = (chromium as any).args
         }
       } catch {
         // Fallback to regular puppeteer for local development
