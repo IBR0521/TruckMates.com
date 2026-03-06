@@ -48,12 +48,13 @@ export function usePagination<T>(
       }
       
       if (result.data) {
+        const newData = result.data
         if (reset) {
-          setData(result.data)
+          setData(newData)
           setOffset(initialLimit)
           setCurrentPage(1)
         } else {
-          setData(prev => [...prev, ...result.data])
+          setData(prev => [...prev, ...newData])
           setOffset(prev => prev + initialLimit)
           setCurrentPage(prev => prev + 1)
         }
