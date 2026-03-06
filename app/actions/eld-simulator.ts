@@ -22,17 +22,34 @@ interface SimulatorConfig {
 
 /**
  * Create a fake ELD device for testing
+ * BUG-069 FIX: Must not be accessible in production - violates FMCSA ELD compliance
  */
 export async function createFakeELDDevice(config: {
   device_name: string
   truck_id?: string
   company_id?: string
 }) {
+  // BUG-069 FIX: Block in production
+  if (process.env.NODE_ENV === "production") {
+    return { error: "ELD Simulator is not available in production", data: null }
+  }
+
   const supabase = await createClient()
   const { companyId, error: authError } = await getAuthContext()
   
   if (authError || !companyId) {
     return { error: authError || "Not authenticated", data: null }
+  }
+
+  // BUG-069 FIX: Require super_admin role
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", (await supabase.auth.getUser()).data.user?.id)
+    .single()
+
+  if (userData?.role !== "super_admin") {
+    return { error: "Only super admins can use the ELD Simulator", data: null }
   }
 
   // EXT-004 FIX: Never allow callers to override company_id - always use authenticated user's company
@@ -68,8 +85,14 @@ export async function createFakeELDDevice(config: {
 
 /**
  * Simulate GPS location update
+ * BUG-069 FIX: Must not be accessible in production
  */
 export async function simulateLocationUpdate(config: SimulatorConfig) {
+  // BUG-069 FIX: Block in production
+  if (process.env.NODE_ENV === "production") {
+    return { error: "ELD Simulator is not available in production", data: null }
+  }
+
   const supabase = await createClient()
   const { companyId } = await getAuthContext()
   
@@ -138,6 +161,7 @@ export async function simulateLocationUpdate(config: SimulatorConfig) {
 
 /**
  * Simulate HOS log entry
+ * BUG-069 FIX: Must not be accessible in production
  */
 export async function simulateHOSLog(config: {
   device_id: string
@@ -146,6 +170,11 @@ export async function simulateHOSLog(config: {
   log_type: "driving" | "on_duty" | "off_duty" | "sleeper_berth"
   duration_minutes?: number
 }) {
+  // BUG-069 FIX: Block in production
+  if (process.env.NODE_ENV === "production") {
+    return { error: "ELD Simulator is not available in production", data: null }
+  }
+
   const supabase = await createClient()
   const { companyId } = await getAuthContext()
   
@@ -187,6 +216,7 @@ export async function simulateHOSLog(config: {
 
 /**
  * Simulate ELD event/violation
+ * BUG-069 FIX: Must not be accessible in production
  */
 export async function simulateELDEvent(config: {
   device_id: string
@@ -197,6 +227,11 @@ export async function simulateELDEvent(config: {
   title?: string
   description?: string
 }) {
+  // BUG-069 FIX: Block in production
+  if (process.env.NODE_ENV === "production") {
+    return { error: "ELD Simulator is not available in production", data: null }
+  }
+
   const supabase = await createClient()
   const { companyId } = await getAuthContext()
   

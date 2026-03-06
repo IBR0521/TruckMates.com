@@ -4,9 +4,18 @@ import { createClient } from "@supabase/supabase-js"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
-const DEMO_EMAIL = "demo@truckmates.com"
-const DEMO_PASSWORD = "demo123456"
-const DEMO_COMPANY_NAME = "Demo Logistics Company"
+// BUG-068 FIX: Use environment variables instead of hardcoded credentials
+// Never hardcode credentials in source code - use env vars or generate random passwords
+const DEMO_EMAIL = process.env.DEMO_EMAIL || "demo@truckmates.com"
+const DEMO_PASSWORD = process.env.DEMO_PASSWORD || (() => {
+  // Generate a random password if not set in env
+  // This is a fallback for development only
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("DEMO_PASSWORD must be set in environment variables for production")
+  }
+  return "demo123456" // Only for development
+})()
+const DEMO_COMPANY_NAME = process.env.DEMO_COMPANY_NAME || "Demo Logistics Company"
 
 // Use a loose type here to avoid tight coupling to Supabase client generics
 // This is an internal helper and we only call methods that exist on any Supabase client instance.

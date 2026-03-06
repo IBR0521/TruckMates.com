@@ -366,6 +366,36 @@ export async function deliverWebhook(
     return { success: false, error: deliveryError.message }
   }
 
+  // BUG-067 FIX: Re-validate resolved IP address before delivery to prevent DNS rebinding SSRF
+  // An attacker can register a webhook with a valid domain, then change DNS to point to internal IPs
+  let resolvedIp: string
+  try {
+    const parsedUrl = new URL(webhook.url)
+    // Resolve DNS to get actual IP address
+    const dns = await import("dns").then(m => m.promises)
+    const addresses = await dns.resolve4(parsedUrl.hostname).catch(() => [])
+    if (addresses.length === 0) {
+      return { success: false, error: "Failed to resolve webhook URL hostname" }
+    }
+    resolvedIp = addresses[0]
+    
+    // BUG-067 FIX: Check resolved IP against private IP blocklist
+    const privateIpPatterns = [
+      /^127\./,           // 127.0.0.0/8 (localhost)
+      /^10\./,            // 10.0.0.0/8 (private)
+      /^192\.168\./,      // 192.168.0.0/16 (private)
+      /^172\.(1[6-9]|2\d|3[01])\./, // 172.16.0.0/12 (private)
+      /^169\.254\./,      // 169.254.0.0/16 (link-local, AWS metadata)
+    ]
+    
+    if (privateIpPatterns.some(pattern => pattern.test(resolvedIp))) {
+      return { success: false, error: "Webhook URL resolves to private/internal IP address - SSRF protection" }
+    }
+  } catch (dnsError: any) {
+    // If DNS resolution fails, block the request
+    return { success: false, error: `DNS resolution failed: ${dnsError.message}` }
+  }
+
   // Attempt delivery
   try {
     const response = await fetch(webhook.url, {

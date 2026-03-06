@@ -732,6 +732,35 @@ export async function rateBroker(formData: {
     return { data: null, error: companyError || "No company found" }
   }
 
+  // BUG-066 FIX: Require at least one of load_id or marketplace_load_id to be present
+  if (!formData.load_id && !formData.marketplace_load_id) {
+    return { data: null, error: "Either load_id or marketplace_load_id is required to rate a broker" }
+  }
+
+  // BUG-066 FIX: Verify the load actually connects both companies
+  if (formData.load_id) {
+    const { data: load } = await supabase
+      .from("loads")
+      .select("customer_id, company_id")
+      .eq("id", formData.load_id)
+      .single()
+    
+    if (!load || (load.customer_id !== formData.broker_company_id && load.company_id !== company_id)) {
+      return { data: null, error: "Load does not connect your company with the rated broker" }
+    }
+  } else if (formData.marketplace_load_id) {
+    const { data: marketplaceLoad } = await supabase
+      .from("load_marketplace")
+      .select("broker_id, matched_carrier_id")
+      .eq("id", formData.marketplace_load_id)
+      .single()
+    
+    if (!marketplaceLoad || 
+        (marketplaceLoad.broker_id !== formData.broker_company_id || marketplaceLoad.matched_carrier_id !== company_id)) {
+      return { data: null, error: "Marketplace load does not connect your company with the rated broker" }
+    }
+  }
+
   const { data, error } = await supabase
     .from("broker_ratings")
     .insert({
@@ -799,6 +828,35 @@ export async function rateCarrier(formData: {
 
   if (userData?.role !== "manager") {
     return { data: null, error: "Only managers can rate carriers" }
+  }
+
+  // BUG-066 FIX: Require at least one of load_id or marketplace_load_id to be present
+  if (!formData.load_id && !formData.marketplace_load_id) {
+    return { data: null, error: "Either load_id or marketplace_load_id is required to rate a carrier" }
+  }
+
+  // BUG-066 FIX: Verify the load actually connects both companies
+  if (formData.load_id) {
+    const { data: load } = await supabase
+      .from("loads")
+      .select("customer_id, company_id")
+      .eq("id", formData.load_id)
+      .single()
+    
+    if (!load || (load.customer_id !== company_id && load.company_id !== formData.carrier_company_id)) {
+      return { data: null, error: "Load does not connect your company with the rated carrier" }
+    }
+  } else if (formData.marketplace_load_id) {
+    const { data: marketplaceLoad } = await supabase
+      .from("load_marketplace")
+      .select("broker_id, matched_carrier_id")
+      .eq("id", formData.marketplace_load_id)
+      .single()
+    
+    if (!marketplaceLoad || 
+        (marketplaceLoad.broker_id !== company_id || marketplaceLoad.matched_carrier_id !== formData.carrier_company_id)) {
+      return { data: null, error: "Marketplace load does not connect your company with the rated carrier" }
+    }
   }
 
   const { data, error } = await supabase
