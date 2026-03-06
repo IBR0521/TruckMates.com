@@ -29,7 +29,11 @@ CREATE TABLE IF NOT EXISTS public.broker_ratings (
   
   -- One rating per load per carrier
   UNIQUE(carrier_company_id, load_id),
-  UNIQUE(carrier_company_id, marketplace_load_id)
+  UNIQUE(carrier_company_id, marketplace_load_id),
+  
+  -- BUG-066 FIX: Require at least one of load_id or marketplace_load_id
+  -- Prevents brokers from rating carriers they have never transacted with
+  CHECK (load_id IS NOT NULL OR marketplace_load_id IS NOT NULL)
 );
 
 -- Carrier Ratings (brokers rate carriers)
@@ -60,7 +64,11 @@ CREATE TABLE IF NOT EXISTS public.carrier_ratings (
   
   -- One rating per load per broker
   UNIQUE(broker_company_id, load_id),
-  UNIQUE(broker_company_id, marketplace_load_id)
+  UNIQUE(broker_company_id, marketplace_load_id),
+  
+  -- BUG-066 FIX: Require at least one of load_id or marketplace_load_id
+  -- Prevents brokers from rating carriers they have never transacted with
+  CHECK (load_id IS NOT NULL OR marketplace_load_id IS NOT NULL)
 );
 
 -- Broker Statistics (aggregated from ratings)
