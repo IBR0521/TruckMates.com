@@ -370,7 +370,7 @@ export async function acceptMarketplaceLoad(marketplaceLoadId: string) {
   revalidatePath("/dashboard/marketplace")
   revalidatePath("/dashboard/loads")
 
-  return { data: { marketplaceLoad: updatedMarketplaceLoad, createdLoad }, error: null }
+  return { data: { marketplaceLoad, createdLoad }, error: null }
 }
 
 /**

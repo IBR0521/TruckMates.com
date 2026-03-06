@@ -168,6 +168,33 @@ export async function createTruck(formData: {
     return { error: "No company found", data: null }
   }
 
+  // BUG-061 FIX: Check subscription plan limits before creating truck
+  const { data: subscription } = await supabase
+    .from("subscriptions")
+    .select(`
+      plan_id,
+      subscription_plans!inner(max_vehicles)
+    `)
+    .eq("company_id", userData.company_id)
+    .eq("status", "active")
+    .single()
+
+  if (subscription?.subscription_plans?.max_vehicles) {
+    // Count current active trucks
+    const { count: currentTruckCount } = await supabase
+      .from("trucks")
+      .select("*", { count: "exact", head: true })
+      .eq("company_id", userData.company_id)
+      .eq("status", "active")
+
+    if (currentTruckCount !== null && currentTruckCount >= subscription.subscription_plans.max_vehicles) {
+      return {
+        error: `Vehicle limit reached. Your plan allows ${subscription.subscription_plans.max_vehicles} vehicles. Please upgrade your subscription to add more vehicles.`,
+        data: null
+      }
+    }
+  }
+
   // Professional validation
   const truckValidation = validateTruckData({
     truck_number: formData.truck_number,
