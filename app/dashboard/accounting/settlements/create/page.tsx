@@ -112,7 +112,7 @@ export default function CreateSettlementPage() {
           }
         } else {
           // If no pay rate, sum load values as estimate
-          calculatedGrossPay = loads.reduce((sum, load) => sum + (Number(load.value) || 0), 0)
+          calculatedGrossPay = loads.reduce((sum: number, load: any) => sum + (Number(load.value) || 0), 0)
           calculationBreakdown = `Sum of ${loads.length} load values = $${calculatedGrossPay.toFixed(2)} (Note: Set driver pay rate for accurate calculation)`
         }
       }
