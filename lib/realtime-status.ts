@@ -31,7 +31,7 @@ export async function checkRealtimeStatus(): Promise<{
       }, 3000)
 
       testChannel
-        .subscribe((status) => {
+        .subscribe((status: "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "CHANNEL_ERROR") => {
           clearTimeout(timeout)
           
           if (status === "SUBSCRIBED") {
@@ -91,7 +91,7 @@ export async function testRealtimeSubscription(
             resolve({ working: true })
           }
         )
-        .subscribe((status) => {
+        .subscribe((status: "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "CHANNEL_ERROR") => {
           if (status === "SUBSCRIBED") {
             // Subscription successful - realtime is enabled for this table
             setTimeout(() => {
