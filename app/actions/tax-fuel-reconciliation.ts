@@ -33,7 +33,7 @@ export async function getFuelPurchases(filters?: {
 
   let query = supabase
     .from("fuel_purchases")
-    .select("*, trucks:truck_id(id, truck_number), drivers:driver_id(id, name)", { count: "exact" })
+    .select("*", { count: "exact" })
     .eq("company_id", result.company_id)
     .order("purchase_date", { ascending: false })
 

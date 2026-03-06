@@ -120,8 +120,7 @@ export async function getDriver(id: string) {
         custom_fields,
         truck_id,
         created_at,
-        updated_at,
-        trucks:truck_id (id, truck_number, make, model)
+        updated_at
       `)
       .eq("id", id)
       .eq("company_id", result.company_id)
@@ -133,6 +132,21 @@ export async function getDriver(id: string) {
 
     if (!driver) {
       return { error: "Driver not found", data: null }
+    }
+
+    // Fetch truck data separately if truck_id exists (since there's no FK relationship)
+    if (driver.truck_id) {
+      const { data: truck } = await supabase
+        .from("trucks")
+        .select("id, truck_number, make, model")
+        .eq("id", driver.truck_id)
+        .eq("company_id", result.company_id)
+        .maybeSingle()
+      
+      // Add truck data to driver object
+      if (truck) {
+        (driver as any).truck = truck
+      }
     }
 
     return { data: driver, error: null }
