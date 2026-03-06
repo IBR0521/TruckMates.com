@@ -141,7 +141,7 @@ export async function processAIRequest(
                       function_name: call.name,
                       arguments: call.arguments,
                       result_preview: typeof result === 'object' ? JSON.stringify(result).substring(0, 500) : String(result).substring(0, 500),
-                      message_preview: message.substring(0, 200)
+                      message_preview: request.message.substring(0, 200)
                     }
                   }).catch((err: any) => {
                     // Log error but don't fail the AI action
