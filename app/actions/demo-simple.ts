@@ -8,6 +8,28 @@ const DEMO_EMAIL = "demo@truckmates.com"
 const DEMO_PASSWORD = "demo123456"
 const DEMO_COMPANY_NAME = "Demo Logistics Company"
 
+// Use a loose type here to avoid tight coupling to Supabase client generics
+// This is an internal helper and we only call methods that exist on any Supabase client instance.
+async function markDemoCompanySetupComplete(adminClient: any, companyId: string) {
+  try {
+    // Mark setup as complete so demo users are never sent through the onboarding wizard
+    await adminClient
+      .from("companies")
+      .update({
+        setup_complete: true,
+        setup_completed_at: new Date().toISOString(),
+        // Flag this company as demo in setup_data without overwriting any existing data
+        setup_data: {
+          is_demo: true,
+        },
+      } as any)
+      .eq("id", companyId)
+  } catch (error) {
+    console.warn("Failed to mark demo company setup complete:", error)
+    // Don't block demo access if this fails
+  }
+}
+
 export async function createDemoAndSignIn() {
   try {
     // Use service role key to bypass RLS and create user directly
@@ -183,6 +205,9 @@ export async function createDemoAndSignIn() {
           // If timeout or function missing, continue anyway - company is created
           if (errorMsg.includes('timed out') || errorMsg.includes('does not exist') || (errorMsg.includes('function') && errorMsg.includes('not found'))) {
             console.warn("Demo data population failed, but continuing with company creation:", errorMsg)
+            if (companyId) {
+              await markDemoCompanySetupComplete(adminClient, companyId)
+            }
             // Don't fail - company is created, data can populate later
             return { 
               success: true, 
@@ -196,6 +221,9 @@ export async function createDemoAndSignIn() {
           
           // For other errors, also continue but warn
           console.warn("Demo data population had an error, but continuing:", errorMsg)
+          if (companyId) {
+            await markDemoCompanySetupComplete(adminClient, companyId)
+          }
           return { 
             success: true,
             userId, 
@@ -243,6 +271,9 @@ export async function createDemoAndSignIn() {
         // Don't fail on timeout or missing function - company is created
         if (errorMsg.includes('timed out') || errorMsg.includes('does not exist') || (errorMsg.includes('function') && errorMsg.includes('not found'))) {
           console.warn("Demo data population failed, but continuing with company creation:", errorMsg)
+          if (companyId) {
+            await markDemoCompanySetupComplete(adminClient, companyId)
+          }
           return { 
             success: true,
             userId, 
@@ -255,6 +286,9 @@ export async function createDemoAndSignIn() {
         
         // For other errors, continue anyway
         console.warn("Demo data population had an exception, but continuing:", errorMsg)
+        if (companyId) {
+          await markDemoCompanySetupComplete(adminClient, companyId)
+        }
         return { 
           success: true,
           userId, 
@@ -264,7 +298,12 @@ export async function createDemoAndSignIn() {
       }
     }
 
-    // Success - client will handle sign-in
+    // Success - mark setup complete so demo users skip the onboarding wizard
+    if (companyId) {
+      await markDemoCompanySetupComplete(adminClient, companyId)
+    }
+
+    // Client will handle sign-in
     return { success: true, userId, companyId }
   } catch (error: any) {
     return { error: error?.message || "Failed to create demo" }

@@ -1,12 +1,13 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
-import { CheckCircle2, Circle, Building2, User, Truck, ArrowRight, ArrowLeft } from "lucide-react"
+import { CheckCircle2, Circle, Building2, User, Truck, ArrowRight, ArrowLeft, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 import {
@@ -21,6 +22,7 @@ interface SetupWizardProps {
 }
 
 export function SetupWizard({ onComplete }: SetupWizardProps) {
+  const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const totalSteps = 5 // Removed demo data step - real users don't need it
 
@@ -206,6 +208,36 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               <p className="text-muted-foreground">
                 Add your business address and contact information to get started
               </p>
+            </div>
+
+            {/* Try Demo Option */}
+            <div className="border-2 border-dashed border-primary/30 rounded-lg p-6 bg-primary/5 mb-6">
+              <div className="flex items-start gap-4">
+                <Sparkles className="w-6 h-6 text-primary mt-1 flex-shrink-0" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-foreground mb-1">Want to try the demo instead?</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Skip the setup and explore TruckMates with pre-loaded sample data. You can always set up your real account later.
+                  </p>
+                  <Button
+                    onClick={() => router.push("/demo/setup")}
+                    variant="outline"
+                    className="w-full border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                  >
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Try Demo Platform
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">Or continue with manual setup</span>
+              </div>
             </div>
 
             <div className="space-y-4">
