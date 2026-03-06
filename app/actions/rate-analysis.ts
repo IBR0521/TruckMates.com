@@ -307,15 +307,17 @@ async function getInternalRateSuggestion(
     const recentLoads = similarLoads.filter((l: { origin?: string | null; destination?: string | null; rate?: number | null; created_at?: string | null }) =>
       new Date(l.created_at || 0) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     )
-    const olderLoads = similarLoads.filter((l: { origin?: string | null; destination?: string | null; rate?: number | null; created_at?: string | null }) =>
-      l.created_at && new Date(l.created_at) <= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) &&
-      new Date(l.created_at) > new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
-    )
+    const olderLoads = similarLoads.filter((l: { origin?: string | null; destination?: string | null; rate?: number | null; created_at?: string | null }) => {
+      if (!l.created_at) return false
+      const createdAt = new Date(l.created_at)
+      return createdAt <= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) &&
+        createdAt > new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+    })
 
     let trend: 'up' | 'down' | 'stable' = 'stable'
     if (recentLoads.length > 0 && olderLoads.length > 0) {
-      const recentAvg = recentLoads.reduce((sum, l) => sum + (l.rate || 0), 0) / recentLoads.length
-      const olderAvg = olderLoads.reduce((sum, l) => sum + (l.rate || 0), 0) / olderLoads.length
+      const recentAvg = recentLoads.reduce((sum: number, l: { origin?: string | null; destination?: string | null; rate?: number | null; created_at?: string | null }) => sum + (l.rate || 0), 0) / recentLoads.length
+      const olderAvg = olderLoads.reduce((sum: number, l: { origin?: string | null; destination?: string | null; rate?: number | null; created_at?: string | null }) => sum + (l.rate || 0), 0) / olderLoads.length
       const change = ((recentAvg - olderAvg) / olderAvg) * 100
       
       if (change > 5) trend = 'up'
