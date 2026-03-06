@@ -304,10 +304,10 @@ async function getInternalRateSuggestion(
     const maxRate = Math.max(...rates)
 
     // Determine trend (compare last 30 days vs previous 30 days)
-    const recentLoads = similarLoads.filter(l => 
-      new Date(l.created_at) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    const recentLoads = similarLoads.filter((l: { origin?: string | null; destination?: string | null; rate?: number | null; created_at?: string | null }) =>
+      new Date(l.created_at || 0) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     )
-    const olderLoads = similarLoads.filter(l => 
+    const olderLoads = similarLoads.filter((l: { origin?: string | null; destination?: string | null; rate?: number | null; created_at?: string | null }) =>
       new Date(l.created_at) <= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) &&
       new Date(l.created_at) > new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
     )
