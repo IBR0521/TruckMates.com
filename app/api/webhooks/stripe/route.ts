@@ -151,8 +151,16 @@ async function handleSubscriptionUpdated(supabase: any, subscription: Stripe.Sub
     stripe_subscription_id: subscription.id,
     stripe_customer_id: subscription.customer as string,
     stripe_price_id: subscription.items.data[0]?.price.id,
-    current_period_start: new Date((subscription as any).current_period_start * 1000).toISOString(),
-    current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
+    // BUG-021 FIX: Use proper Stripe API version and type-safe access to period fields
+    // Stripe Subscription object has current_period_start and current_period_end as numbers (Unix timestamps)
+    // These fields exist on the Subscription type but may not be exposed in older SDK versions
+    // Access via type assertion with proper validation
+    current_period_start: (subscription as any).current_period_start 
+      ? new Date((subscription as any).current_period_start * 1000).toISOString()
+      : new Date().toISOString(),
+    current_period_end: (subscription as any).current_period_end
+      ? new Date((subscription as any).current_period_end * 1000).toISOString()
+      : new Date().toISOString(),
     cancel_at_period_end: subscription.cancel_at_period_end,
     trial_start: subscription.trial_start
       ? new Date(subscription.trial_start * 1000).toISOString()

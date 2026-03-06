@@ -83,9 +83,27 @@ export async function importComdataFuelData(
   }
 
   try {
+    // BUG-071 FIX: Add size and row count limits to prevent DoS attacks
+    const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
+    const MAX_ROWS = 10000 // Maximum 10,000 rows
+    
+    if (fileContent.length > MAX_FILE_SIZE) {
+      return { 
+        error: `File size exceeds maximum allowed size of ${MAX_FILE_SIZE / 1024 / 1024}MB. Please split your file into smaller chunks.`, 
+        data: null 
+      }
+    }
+    
     const rows = parseCSV(fileContent)
     if (rows.length < 2) {
       return { error: "CSV file must have at least a header row and one data row", data: null }
+    }
+    
+    if (rows.length > MAX_ROWS) {
+      return { 
+        error: `File contains ${rows.length} rows, which exceeds the maximum allowed ${MAX_ROWS} rows. Please split your file into smaller chunks.`, 
+        data: null 
+      }
     }
 
     const headerRow = (rows[0] || []).map((h) => (h || "").toLowerCase().trim())

@@ -179,13 +179,21 @@ export function validateRequiredString(value: string | undefined | null, minLeng
 
 /**
  * Sanitize string input (remove dangerous characters, trim)
+ * BUG-014 FIX: Enhanced sanitization - remove more dangerous characters
+ * Note: For HTML content, use a proper sanitization library like DOMPurify
  */
 export function sanitizeString(input: string | undefined | null, maxLength?: number): string {
   if (!input || typeof input !== 'string') return ''
   let sanitized = input.trim()
   
-  // Remove potentially dangerous characters
-  sanitized = sanitized.replace(/[<>]/g, '')
+  // BUG-014 FIX: Remove potentially dangerous characters beyond just <>
+  // Remove angle brackets, quotes, backticks, and common XSS vectors
+  sanitized = sanitized
+    .replace(/[<>]/g, '') // Remove angle brackets
+    .replace(/['"]/g, '') // Remove quotes
+    .replace(/[`]/g, '') // Remove backticks
+    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .replace(/on\w+\s*=/gi, '') // Remove event handlers (onclick=, onerror=, etc.)
   
   // Limit length if specified
   if (maxLength && sanitized.length > maxLength) {
@@ -336,14 +344,12 @@ export function validateDriverData(data: {
     errors.push('Invalid license expiry date format (use YYYY-MM-DD)')
   }
 
-  if (data.license_expiry) {
-    const expiryDate = new Date(data.license_expiry)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    if (expiryDate < today) {
-      errors.push('License expiry date cannot be in the past')
-    }
-  }
+  // BUG-023 FIX: Only validate license expiry date on creation/activation, not on edits
+  // This allows editing drivers with expired licenses (they'll show a warning badge in UI)
+  // The validation should be done at the action level, not here
+  // Removed: License expiry date cannot be in the past validation
+  // Reason: When editing a driver with an expired license, we should allow the edit
+  // and show a warning badge in the UI instead of blocking the update
 
   return {
     valid: errors.length === 0,

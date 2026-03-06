@@ -3,12 +3,15 @@ import { createClient } from "@/lib/supabase/server"
 import { getAuthContext } from "@/lib/auth/server"
 
 /**
- * Mobile API: Get driver settlements
- * GET /api/mobile/settlements
+ * Mobile API: Get single settlement details
+ * GET /api/mobile/settlements/[id]
  * 
- * Returns pending and recent settlements for the authenticated driver
+ * BUG-025 FIX: Changed from POST to GET for proper REST semantics and HTTP caching
  */
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
     const { companyId, userId, error: authError } = await getAuthContext()
 
@@ -17,6 +20,11 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createClient()
+    const settlementId = params.id
+
+    if (!settlementId) {
+      return NextResponse.json({ error: "Settlement ID is required" }, { status: 400 })
+    }
 
     // Get driver ID from user
     const { data: driver, error: driverError } = await supabase
@@ -30,45 +38,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Driver not found" }, { status: 404 })
     }
 
-    // Get settlements for this driver
-    const { data: settlements, error: settlementsError } = await supabase
+    // Get settlement details
+    const { data: settlement, error: settlementError } = await supabase
       .from("settlements")
       .select(`
-        id,
-        period_start,
-        period_end,
-        gross_pay,
-        total_deductions,
-        net_pay,
-        status,
-        driver_approved,
-        driver_approved_at,
-        pdf_url,
-        calculation_details,
-        created_at
+        *,
+        pay_rule:pay_rule_id (
+          id,
+          pay_type,
+          base_rate_per_mile,
+          base_percentage,
+          base_flat_rate
+        )
       `)
+      .eq("id", settlementId)
       .eq("company_id", companyId)
       .eq("driver_id", driver.id)
-      .order("created_at", { ascending: false })
-      .limit(50)
+      .single()
 
-    if (settlementsError) {
-      return NextResponse.json({ error: settlementsError.message }, { status: 500 })
+    if (settlementError || !settlement) {
+      return NextResponse.json({ error: "Settlement not found" }, { status: 404 })
     }
 
     return NextResponse.json({
       success: true,
-      data: settlements || [],
+      data: settlement,
     })
   } catch (error: any) {
-    console.error("Get settlements error:", error)
+    console.error("Get settlement error:", error)
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
   }
 }
-
-// BUG-025 FIX: Removed POST handler for settlement details
-// Settlement details are now handled by GET /api/mobile/settlements/[id]/route.ts
-// This provides proper REST semantics and enables HTTP caching
-
-
 

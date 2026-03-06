@@ -36,9 +36,25 @@ export class TruckMatesAIEngine {
   private model: string
 
   constructor() {
-    // Point to your self-hosted Ollama instance
-    // Default: localhost for development, can be configured for production
-    this.baseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434"
+    // BUG-022 FIX: Check OLLAMA_BASE_URL at startup and throw clear error if missing in production
+    const ollamaBaseUrl = process.env.OLLAMA_BASE_URL
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1'
+    
+    if (!ollamaBaseUrl) {
+      if (isProduction) {
+        throw new Error(
+          'OLLAMA_BASE_URL environment variable is required in production. ' +
+          'Please configure it in your deployment environment variables. ' +
+          'The AI engine cannot connect to localhost in serverless environments.'
+        )
+      }
+      // In development, default to localhost but warn
+      console.warn('[AI Engine] OLLAMA_BASE_URL not set, defaulting to localhost:11434 (development only)')
+      this.baseUrl = "http://localhost:11434"
+    } else {
+      this.baseUrl = ollamaBaseUrl
+    }
+    
     // Use Llama 3.1 8B (recommended) or Mistral 7B
     this.model = process.env.OLLAMA_MODEL || "llama3.1:8b"
   }

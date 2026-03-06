@@ -281,13 +281,13 @@ export async function getSettlements(): Promise<
 
 /**
  * Get settlement details
+ * BUG-025 FIX: Changed from POST to GET for proper REST semantics and HTTP caching
  */
 export async function getSettlementDetails(
   settlementId: string
 ): Promise<APIResponse<any>> {
-  return apiRequest('/mobile/settlements', {
-    method: 'POST',
-    body: JSON.stringify({ settlement_id: settlementId }),
+  return apiRequest(`/mobile/settlements/${settlementId}`, {
+    method: 'GET',
   })
 }
 

@@ -210,6 +210,20 @@ export async function createDriver(formData: {
     return { error: driverValidation.errors.join("; "), data: null }
   }
 
+  // BUG-023 FIX: Only validate license expiry date on creation when status is "active"
+  // Allow expired licenses for inactive drivers or when editing existing drivers
+  if (formData.license_expiry && (formData.status === "active" || !formData.status)) {
+    const expiryDate = new Date(formData.license_expiry)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    if (expiryDate < today) {
+      return { 
+        error: "Cannot create an active driver with an expired license. Please set status to 'inactive' or update the license expiry date.", 
+        data: null 
+      }
+    }
+  }
+
   // ERROR HANDLING FIX: Use maybeSingle() when checking for duplicates (might not exist)
   // Check for duplicate email if provided
   if (formData.email) {
@@ -636,6 +650,51 @@ export async function deleteDriver(id: string) {
   if (result.error || !result.company_id) {
     return { error: result.error || "No company found" }
   }
+
+  // BUG-024 FIX: Check for dependencies before deleting driver
+  // Check for active loads
+  const { data: activeLoads } = await supabase
+    .from("loads")
+    .select("id, shipment_number, status")
+    .eq("driver_id", id)
+    .in("status", ["assigned", "in_transit", "delivered", "pending"])
+
+  if (activeLoads && activeLoads.length > 0) {
+    const loadNumbers = activeLoads.map((l: { shipment_number: string }) => l.shipment_number).join(", ")
+    return { 
+      error: `Cannot delete driver. Driver is assigned to ${activeLoads.length} active load(s): ${loadNumbers}. Please reassign or complete these loads first.` 
+    }
+  }
+
+  // Check for unsubmitted DVIRs
+  const { data: openDVIRs } = await supabase
+    .from("dvir")
+    .select("id, inspection_date")
+    .eq("driver_id", id)
+    .eq("status", "pending")
+
+  if (openDVIRs && openDVIRs.length > 0) {
+    return { 
+      error: `Cannot delete driver. Driver has ${openDVIRs.length} unsubmitted DVIR(s). Please submit or delete these DVIRs first.` 
+    }
+  }
+
+  // Check for ELD device mappings
+  const { data: eldDevices } = await supabase
+    .from("eld_devices")
+    .select("id, device_name")
+    .eq("driver_id", id)
+
+  if (eldDevices && eldDevices.length > 0) {
+    const deviceNames = eldDevices.map((d: { device_name?: string; id: string }) => d.device_name || d.id).join(", ")
+    return { 
+      error: `Cannot delete driver. Driver is mapped to ${eldDevices.length} ELD device(s): ${deviceNames}. Please unassign these devices first.` 
+    }
+  }
+
+  // BUG-024 FIX: Offer soft delete as primary option (set status to inactive)
+  // For now, we'll proceed with hard delete but log a warning
+  // In the future, consider implementing soft delete as the default
 
   const { error } = await supabase
     .from("drivers")

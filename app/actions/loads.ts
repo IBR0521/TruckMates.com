@@ -27,19 +27,29 @@ async function sendNotificationsForLoadUpdate(loadData: any) {
 
     if (userError || !userData?.company_id) return
 
-    // Get all users in the company
-    const { data: companyUsers } = await supabase
-      .from("users")
-      .select("id")
-      .eq("company_id", userData.company_id)
+    // BUG-018 FIX: Filter notifications by relevance - only notify assigned driver, dispatcher, and managers
+    // Get assigned driver if load has one
+    let assignedDriverId: string | null = null
+    if (loadData.driver_id) {
+      assignedDriverId = loadData.driver_id
+    }
 
-    // LOG-003 FIX: Parallelize notifications using Promise.all instead of sequential for loop
-    // This reduces 20 sequential DB writes to 1 concurrent batch
-    if (companyUsers && companyUsers.length > 0) {
+    // Get relevant users: assigned driver, dispatchers, and managers only
+    const { data: relevantUsers } = await supabase
+      .from("users")
+      .select("id, role")
+      .eq("company_id", userData.company_id)
+      .or(
+        `id.eq.${assignedDriverId || '00000000-0000-0000-0000-000000000000'},` + // Assigned driver
+        `role.in.(dispatcher,manager,safety_manager,owner)` // Relevant roles
+      )
+
+    // BUG-018 FIX: Only send notifications to relevant users, not all company users
+    if (relevantUsers && relevantUsers.length > 0) {
       await Promise.all(
-        companyUsers.map(async (companyUser: { id: string; [key: string]: any }) => {
+        relevantUsers.map(async (relevantUser: { id: string; role: string; [key: string]: any }) => {
           try {
-            await sendNotification(companyUser.id, "load_update", {
+            await sendNotification(relevantUser.id, "load_update", {
               shipmentNumber: loadData.shipment_number,
               status: loadData.status,
               origin: loadData.origin,
@@ -47,7 +57,7 @@ async function sendNotificationsForLoadUpdate(loadData: any) {
             })
           } catch (error) {
             // Silently fail - don't block the main operation
-            console.error(`[NOTIFICATION] Failed to send to user ${companyUser.id}:`, error)
+            console.error(`[NOTIFICATION] Failed to send to user ${relevantUser.id}:`, error)
           }
         })
       )

@@ -172,8 +172,37 @@ export async function updateUserPassword(currentPassword: string, newPassword: s
       return { data: null, error: "Not authenticated" }
     }
 
-    // Verify current password by attempting to sign in
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    // BUG-072 FIX: Add minimum password length validation
+    const MIN_PASSWORD_LENGTH = 8
+    if (!newPassword || newPassword.length < MIN_PASSWORD_LENGTH) {
+      return { 
+        data: null, 
+        error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long` 
+      }
+    }
+
+    // BUG-072 FIX: Verify current password using Supabase's verifyOtp or check user session
+    // Instead of signInWithPassword (which creates a ghost session), use the existing session
+    // We'll verify by attempting to update with current password first, then update to new
+    // Actually, Supabase doesn't provide a direct way to verify password without signIn
+    // So we'll use a workaround: get the current session and verify it's valid
+    
+    // Get current session to verify user is authenticated
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    if (sessionError || !session) {
+      return { data: null, error: "Session expired. Please log in again." }
+    }
+
+    // BUG-072 FIX: Use updateUser with current password verification via a different method
+    // Since Supabase doesn't support password verification without signIn, we'll use
+    // the admin API to verify, or accept that we need to sign in but immediately sign out
+    // Actually, the best approach is to use Supabase's built-in password update
+    // which requires re-authentication, but we can verify the session is still valid
+    
+    // Verify current password by attempting to sign in (creates temporary session)
+    const tempSupabase = await createClient()
+    const { error: signInError } = await tempSupabase.auth.signInWithPassword({
       email: user.email!,
       password: currentPassword,
     })
@@ -182,7 +211,10 @@ export async function updateUserPassword(currentPassword: string, newPassword: s
       return { data: null, error: "Current password is incorrect" }
     }
 
-    // Update password
+    // BUG-072 FIX: Immediately sign out the temporary session to prevent ghost sessions
+    await tempSupabase.auth.signOut()
+
+    // Update password using the original session
     const { error: updateError } = await supabase.auth.updateUser({
       password: newPassword,
     })

@@ -123,14 +123,31 @@ export async function POST(request: NextRequest) {
 
         if (!userData?.company_id) break
 
-        // Get plan from subscription (you'll need to store plan_id when creating subscription)
-        // For now, we'll need to get it from metadata or subscription details
-        const planName = subscription.plan_id // You'll need to map this to your plan_id
+        // BUG-020 FIX: Map PayPal plan_id to internal plan_id using metadata or mapping table
+        // PayPal's plan_id is a PayPal-generated string, not our internal UUID
+        // We should store our plan_id in subscription metadata when creating the subscription
+        const paypalPlanId = subscription.plan_id // PayPal's internal plan ID (e.g., "P-7ML4271244454362WXNWU5NQ")
+        const internalPlanId = subscription.custom_id || subscription.plan_id // Try custom_id first (where we store our plan_id)
+        
+        // If custom_id is not set, try to find plan by PayPal plan_id mapping
+        // This requires a mapping table or storing plan_id in subscription metadata
+        let finalPlanId = internalPlanId
+        
+        if (!internalPlanId || internalPlanId === paypalPlanId) {
+          // BUG-020 FIX: Query for plan mapping or use default plan
+          // For now, log error and use a default plan or fail
+          console.error(`[PayPal Webhook] No internal plan_id found for PayPal plan ${paypalPlanId}. Subscription metadata should include plan_id when creating subscription.`)
+          // Optionally: Query a plan_mappings table or use a default plan
+          // For now, we'll fail gracefully
+          return NextResponse.json({ 
+            error: `Plan mapping not found for PayPal plan ${paypalPlanId}. Please ensure plan_id is stored in subscription metadata.` 
+          }, { status: 400 })
+        }
 
         // Update or create subscription in database
         await supabase.from("subscriptions").upsert({
           company_id: userData.company_id,
-          plan_id: planName, // You'll need to map PayPal plan to your plan_id
+          plan_id: finalPlanId, // BUG-020 FIX: Use mapped internal plan_id, not PayPal's plan_id
           status: "trialing",
           paypal_subscription_id: subscriptionId,
           current_period_start: new Date().toISOString(),

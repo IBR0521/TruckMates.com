@@ -51,6 +51,12 @@ export async function getIFTAReports() {
 }
 
 export async function deleteIFTAReport(id: string) {
+  // BUG-015 FIX: Move permission check before any database queries
+  const permissionCheck = await checkDeletePermission("ifta")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to delete IFTA reports" }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -73,12 +79,6 @@ export async function deleteIFTAReport(id: string) {
 
   if (!userData?.company_id) {
     return { error: "No company found" }
-  }
-
-  // RBAC check
-  const permissionCheck = await checkDeletePermission("ifta")
-  if (!permissionCheck.allowed) {
-    return { error: permissionCheck.error || "You don't have permission to delete IFTA reports" }
   }
 
   const { error } = await supabase

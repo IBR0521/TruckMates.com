@@ -16,11 +16,18 @@ export async function createClient() {
 
   if (isPlaceholder) {
     const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1'
-    console.warn('Missing Supabase environment variables - app will work in limited mode')
+    
+    // BUG-016 FIX: Throw error in production instead of silently using mock client
     if (isProduction) {
-      console.warn('Production environment detected. Please configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel project settings → Environment Variables → Production, then redeploy.')
+      throw new Error(
+        'CRITICAL: Supabase environment variables are missing in production. ' +
+        'Please configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in ' +
+        'Vercel project settings → Environment Variables → Production, then redeploy.'
+      )
     }
-    // Return a mock client that won't crash the app
+    
+    // In development, log warning but allow mock client
+    console.warn('Missing Supabase environment variables - app will work in limited mode (development only)')
     const cookieStore = await cookies()
     return createServerClient(
       'https://placeholder.supabase.co',
