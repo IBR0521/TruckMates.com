@@ -581,13 +581,27 @@ export async function updateDriver(
       custom_fields,
       truck_id,
       created_at,
-      updated_at,
-      trucks:truck_id (id, truck_number, make, model)
+      updated_at
     `)
     .single()
 
   if (error) {
     return { error: error.message, data: null }
+  }
+
+  // Fetch truck data separately if truck_id exists (since there's no FK relationship)
+  if (data?.truck_id) {
+    const { data: truck } = await supabase
+      .from("trucks")
+      .select("id, truck_number, make, model")
+      .eq("id", data.truck_id)
+      .eq("company_id", result.company_id)
+      .maybeSingle()
+    
+    // Add truck data to driver object
+    if (truck) {
+      (data as any).truck = truck
+    }
   }
 
   // CRITICAL FIX: Ensure data is JSON-serializable for Next.js server actions
