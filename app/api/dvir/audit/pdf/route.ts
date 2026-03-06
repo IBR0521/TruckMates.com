@@ -53,9 +53,10 @@ export async function GET(req: NextRequest) {
 
       // Try puppeteer-core first (for serverless/Vercel)
       try {
-        const puppeteerCore = await import("puppeteer-core").catch(() => null)
+        // @ts-ignore - webpackIgnore: true prevents bundling these optional dependencies
+        const puppeteerCore = await import(/* webpackIgnore: true */ "puppeteer-core").catch(() => null)
         // @ts-ignore - @sparticuz/chromium may not be installed in all environments
-        const chromium = await import("@sparticuz/chromium").catch(() => null)
+        const chromium = await import(/* webpackIgnore: true */ "@sparticuz/chromium").catch(() => null)
         
         if (puppeteerCore && chromium) {
           puppeteer = puppeteerCore
@@ -64,7 +65,8 @@ export async function GET(req: NextRequest) {
         }
       } catch {
         // Fallback to regular puppeteer for local development
-        puppeteer = await import("puppeteer").catch(() => null)
+        // @ts-ignore - webpackIgnore: true prevents bundling this optional dependency
+        puppeteer = await import(/* webpackIgnore: true */ "puppeteer").catch(() => null)
       }
 
       if (!puppeteer) {
