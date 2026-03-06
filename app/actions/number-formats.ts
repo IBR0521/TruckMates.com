@@ -311,37 +311,26 @@ export async function generateInvoiceNumber(): Promise<{ data: string | null; er
   const settings = settingsResult.data
   const format = settings.invoice_number_format || 'INV-{YEAR}-{MONTH}-{SEQUENCE}'
 
-  // MEDIUM FIX 7: Use RPC function for atomic sequence increment
-  let sequence: number
-  try {
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('increment_invoice_number_sequence', {
-      p_company_id: userData.company_id
-    })
-    
-    if (!rpcError && rpcResult !== null && rpcResult !== undefined) {
-      sequence = typeof rpcResult === 'number' ? rpcResult : parseInt(String(rpcResult), 10)
-    } else {
-      sequence = settings.invoice_number_sequence || 1
-      const { error: updateError } = await supabase
-        .from("company_settings")
-        .update({ invoice_number_sequence: sequence + 1 })
-        .eq("company_id", userData.company_id)
-      
-      if (updateError) {
-        return { error: `Failed to update sequence: ${updateError.message}`, data: null }
+  // BUG-043 FIX: Use atomic RPC function for sequence increment - fail loudly if RPC doesn't exist
+  const { data: rpcResult, error: rpcError } = await supabase.rpc('increment_invoice_number_sequence', {
+    p_company_id: userData.company_id
+  })
+  
+  if (rpcError) {
+    if (rpcError.message?.includes('function') || rpcError.message?.includes('does not exist')) {
+      return { 
+        error: 'Atomic sequence increment function not found. Please run fix_atomic_sequence_increment.sql migration.', 
+        data: null 
       }
     }
-  } catch (error) {
-    sequence = settings.invoice_number_sequence || 1
-    const { error: updateError } = await supabase
-      .from("company_settings")
-      .update({ invoice_number_sequence: sequence + 1 })
-      .eq("company_id", userData.company_id)
-    
-    if (updateError) {
-      return { error: `Failed to update sequence: ${updateError.message}`, data: null }
-    }
+    return { error: `Failed to increment sequence: ${rpcError.message}`, data: null }
   }
+  
+  if (rpcResult === null || rpcResult === undefined) {
+    return { error: 'Sequence increment returned null. Please check database configuration.', data: null }
+  }
+  
+  const sequence = typeof rpcResult === 'number' ? rpcResult : parseInt(String(rpcResult), 10)
 
   const { data: company } = await supabase
     .from("companies")
@@ -390,37 +379,26 @@ export async function generateDispatchNumber(): Promise<{ data: string | null; e
   const settings = settingsResult.data
   const format = settings.dispatch_number_format || 'DISP-{YEAR}-{SEQUENCE}'
 
-  // MEDIUM FIX 7: Use RPC function for atomic sequence increment
-  let sequence: number
-  try {
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('increment_dispatch_number_sequence', {
-      p_company_id: userData.company_id
-    })
-    
-    if (!rpcError && rpcResult !== null && rpcResult !== undefined) {
-      sequence = typeof rpcResult === 'number' ? rpcResult : parseInt(String(rpcResult), 10)
-    } else {
-      sequence = settings.dispatch_number_sequence || 1
-      const { error: updateError } = await supabase
-        .from("company_settings")
-        .update({ dispatch_number_sequence: sequence + 1 })
-        .eq("company_id", userData.company_id)
-      
-      if (updateError) {
-        return { error: `Failed to update sequence: ${updateError.message}`, data: null }
+  // BUG-043 FIX: Use atomic RPC function for sequence increment - fail loudly if RPC doesn't exist
+  const { data: rpcResult, error: rpcError } = await supabase.rpc('increment_dispatch_number_sequence', {
+    p_company_id: userData.company_id
+  })
+  
+  if (rpcError) {
+    if (rpcError.message?.includes('function') || rpcError.message?.includes('does not exist')) {
+      return { 
+        error: 'Atomic sequence increment function not found. Please run fix_atomic_sequence_increment.sql migration.', 
+        data: null 
       }
     }
-  } catch (error) {
-    sequence = settings.dispatch_number_sequence || 1
-    const { error: updateError } = await supabase
-      .from("company_settings")
-      .update({ dispatch_number_sequence: sequence + 1 })
-      .eq("company_id", userData.company_id)
-    
-    if (updateError) {
-      return { error: `Failed to update sequence: ${updateError.message}`, data: null }
-    }
+    return { error: `Failed to increment sequence: ${rpcError.message}`, data: null }
   }
+  
+  if (rpcResult === null || rpcResult === undefined) {
+    return { error: 'Sequence increment returned null. Please check database configuration.', data: null }
+  }
+  
+  const sequence = typeof rpcResult === 'number' ? rpcResult : parseInt(String(rpcResult), 10)
 
   const { data: company } = await supabase
     .from("companies")
@@ -469,37 +447,26 @@ export async function generateBOLNumber(): Promise<{ data: string | null; error:
   const settings = settingsResult.data
   const format = settings.bol_number_format || 'BOL-{YEAR}-{SEQUENCE}'
 
-  // MEDIUM FIX 7: Use RPC function for atomic sequence increment
-  let sequence: number
-  try {
-    const { data: rpcResult, error: rpcError } = await supabase.rpc('increment_bol_number_sequence', {
-      p_company_id: userData.company_id
-    })
-    
-    if (!rpcError && rpcResult !== null && rpcResult !== undefined) {
-      sequence = typeof rpcResult === 'number' ? rpcResult : parseInt(String(rpcResult), 10)
-    } else {
-      sequence = settings.bol_number_sequence || 1
-      const { error: updateError } = await supabase
-        .from("company_settings")
-        .update({ bol_number_sequence: sequence + 1 })
-        .eq("company_id", userData.company_id)
-      
-      if (updateError) {
-        return { error: `Failed to update sequence: ${updateError.message}`, data: null }
+  // BUG-043 FIX: Use atomic RPC function for sequence increment - fail loudly if RPC doesn't exist
+  const { data: rpcResult, error: rpcError } = await supabase.rpc('increment_bol_number_sequence', {
+    p_company_id: userData.company_id
+  })
+  
+  if (rpcError) {
+    if (rpcError.message?.includes('function') || rpcError.message?.includes('does not exist')) {
+      return { 
+        error: 'Atomic sequence increment function not found. Please run fix_atomic_sequence_increment.sql migration.', 
+        data: null 
       }
     }
-  } catch (error) {
-    sequence = settings.bol_number_sequence || 1
-    const { error: updateError } = await supabase
-      .from("company_settings")
-      .update({ bol_number_sequence: sequence + 1 })
-      .eq("company_id", userData.company_id)
-    
-    if (updateError) {
-      return { error: `Failed to update sequence: ${updateError.message}`, data: null }
-    }
+    return { error: `Failed to increment sequence: ${rpcError.message}`, data: null }
   }
+  
+  if (rpcResult === null || rpcResult === undefined) {
+    return { error: 'Sequence increment returned null. Please check database configuration.', data: null }
+  }
+  
+  const sequence = typeof rpcResult === 'number' ? rpcResult : parseInt(String(rpcResult), 10)
 
   const { data: company } = await supabase
     .from("companies")
@@ -511,5 +478,8 @@ export async function generateBOLNumber(): Promise<{ data: string | null; error:
 
   return { data: number, error: null }
 }
+
+
+
 
 
