@@ -153,39 +153,36 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
   } | null
   error: string | null
 }> {
-  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
-    // V3-014 FIX: Validate input parameters
+    // Validate input
     if (!loadId || typeof loadId !== "string" || loadId.trim().length === 0) {
       return { error: "Invalid load ID", data: null }
     }
 
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
-  // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .maybeSingle()
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
 
-  try {
     // Get load with address book entries
     const { data: load, error: loadError } = await supabase
       .from("loads")
@@ -226,11 +223,9 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
       return { error: loadError?.message || "Load not found", data: null }
     }
 
-    // Priority: Address Book > Load fields > Empty
     const shipperAddressBook = (load as any).shipper_address_book
     const consigneeAddressBook = (load as any).consignee_address_book
 
-    // Build shipper data
     const shipperData = {
       shipper_name: shipperAddressBook?.company_name || shipperAddressBook?.name || load.shipper_name || "",
       shipper_address: shipperAddressBook?.address_line1 || load.shipper_address || undefined,
@@ -241,7 +236,6 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
       shipper_email: shipperAddressBook?.email || load.shipper_contact_email || undefined,
     }
 
-    // Build consignee data
     const consigneeData = {
       consignee_name: consigneeAddressBook?.company_name || consigneeAddressBook?.name || load.consignee_name || "",
       consignee_address: consigneeAddressBook?.address_line1 || load.consignee_address || undefined,
@@ -252,8 +246,8 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
       consignee_email: consigneeAddressBook?.email || load.consignee_contact_email || undefined,
     }
 
-    // Get company info for carrier
-    const { data: company } = await supabase
+    // Optionally fetch carrier info (kept for future use)
+    await supabase
       .from("companies")
       .select("name, mc_number, dot_number")
       .eq("id", userData.company_id)
@@ -265,14 +259,14 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
         ...consigneeData,
         pickup_date: load.load_date || undefined,
         delivery_date: load.estimated_delivery || undefined,
-        // V3-013 FIX: Guard parseFloat against NaN
         freight_charges: (() => {
           const rate = load.rate || load.value || load.total_rate
           if (!rate) return undefined
           const parsed = typeof rate === "number" ? rate : parseFloat(String(rate))
           return isNaN(parsed) || !isFinite(parsed) ? undefined : parsed
         })(),
-        special_instructions: load.special_instructions || load.pickup_instructions || load.delivery_instructions || undefined,
+        special_instructions:
+          load.special_instructions || load.pickup_instructions || load.delivery_instructions || undefined,
       },
       error: null,
     }
