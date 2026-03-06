@@ -61,44 +61,74 @@ export async function upsertDriverPayRule(rule: DriverPayRule) {
       return { error: result.error || "No company found", data: null }
     }
 
-    // If updating existing rule, deactivate it first
-    if (rule.id) {
-      await supabase
+    // BUG-012 FIX: Use RPC function for atomic transaction (deactivate old + insert new)
+    // This ensures if insert fails, old rule remains active
+    const { data, error } = await supabase.rpc('update_driver_pay_rule', {
+      p_rule_id: rule.id || null,
+      p_company_id: result.company_id,
+      p_driver_id: rule.driver_id,
+      p_pay_type: rule.pay_type,
+      p_base_rate_per_mile: rule.base_rate_per_mile || null,
+      p_base_percentage: rule.base_percentage || null,
+      p_base_flat_rate: rule.base_flat_rate || null,
+      p_bonuses: rule.bonuses || [],
+      p_deductions: rule.deductions || [],
+      p_minimum_pay_guarantee: rule.minimum_pay_guarantee || null,
+      p_effective_from: rule.effective_from,
+      p_effective_to: rule.effective_to || null,
+      p_is_active: rule.is_active !== false,
+    })
+
+    // If RPC doesn't exist, fallback to manual transaction (less safe)
+    if (error && error.message?.includes('does not exist')) {
+      // Fallback: Manual transaction (not atomic, but better than nothing)
+      // First deactivate old rule if updating
+      if (rule.id) {
+        await supabase
+          .from("driver_pay_rules")
+          .update({ is_active: false })
+          .eq("id", rule.id)
+      }
+
+      // Deactivate other active rules for this driver
+      if (rule.is_active !== false) {
+        await supabase
+          .from("driver_pay_rules")
+          .update({ is_active: false })
+          .eq("driver_id", rule.driver_id)
+          .eq("is_active", true)
+      }
+
+      // Insert new rule
+      const { data: insertData, error: insertError } = await supabase
         .from("driver_pay_rules")
-        .update({ is_active: false })
-        .eq("id", rule.id)
+        .insert({
+          company_id: result.company_id,
+          driver_id: rule.driver_id,
+          pay_type: rule.pay_type,
+          base_rate_per_mile: rule.base_rate_per_mile || null,
+          base_percentage: rule.base_percentage || null,
+          base_flat_rate: rule.base_flat_rate || null,
+          bonuses: rule.bonuses || [],
+          deductions: rule.deductions || [],
+          minimum_pay_guarantee: rule.minimum_pay_guarantee || null,
+          effective_from: rule.effective_from,
+          effective_to: rule.effective_to || null,
+          is_active: rule.is_active !== false,
+          notes: rule.notes || null,
+        })
+        .select()
+        .single()
+
+      if (insertError) {
+        return { error: insertError.message, data: null }
+      }
+
+      revalidatePath("/dashboard/accounting/settlements")
+      return { data: insertData, error: null }
     }
 
-    // If activating a new rule, deactivate other active rules for this driver
-    if (rule.is_active !== false) {
-      await supabase
-        .from("driver_pay_rules")
-        .update({ is_active: false })
-        .eq("driver_id", rule.driver_id)
-        .eq("is_active", true)
-    }
-
-    // Insert new rule
-    const { data, error } = await supabase
-      .from("driver_pay_rules")
-      .insert({
-        company_id: result.company_id,
-        driver_id: rule.driver_id,
-        pay_type: rule.pay_type,
-        base_rate_per_mile: rule.base_rate_per_mile || null,
-        base_percentage: rule.base_percentage || null,
-        base_flat_rate: rule.base_flat_rate || null,
-        bonuses: rule.bonuses || [],
-        deductions: rule.deductions || [],
-        minimum_pay_guarantee: rule.minimum_pay_guarantee || null,
-        effective_from: rule.effective_from,
-        effective_to: rule.effective_to || null,
-        is_active: rule.is_active !== false,
-        notes: rule.notes || null,
-      })
-      .select()
-      .single()
-
+    // If RPC succeeded
     if (error) {
       return { error: error.message, data: null }
     }

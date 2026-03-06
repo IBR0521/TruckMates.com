@@ -41,7 +41,12 @@ export async function POST(request: NextRequest) {
       ? "https://api-m.paypal.com"
       : "https://api-m.sandbox.paypal.com"
 
-    const webhookId = process.env.PAYPAL_WEBHOOK_ID || ""
+    // BUG-006 FIX: Fail immediately if PAYPAL_WEBHOOK_ID is not set
+    const webhookId = process.env.PAYPAL_WEBHOOK_ID
+    if (!webhookId) {
+      console.error("[PayPal Webhook] PAYPAL_WEBHOOK_ID not configured")
+      return NextResponse.json({ error: "Not configured" }, { status: 503 })
+    }
     
     // Get signature headers
     const transmissionId = request.headers.get("paypal-transmission-id")

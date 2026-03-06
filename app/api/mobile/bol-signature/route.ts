@@ -81,35 +81,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // HIGH FIX 4: Extract full storage path correctly (not just filename)
-    let filePath = uploadResult.data.file_url
-    // Try to extract path from Supabase Storage URL format
-    const pathMatch = filePath.match(/\/storage\/v1\/object\/(?:public|sign)\/documents\/([^?]+)/)
-    if (pathMatch) {
-      filePath = decodeURIComponent(pathMatch[1])
-    } else {
-      // If URL format doesn't match, try extracting from path after /documents/
-      const documentsIndex = filePath.indexOf('/documents/')
-      if (documentsIndex !== -1) {
-        filePath = filePath.substring(documentsIndex + '/documents/'.length).split('?')[0]
-      } else if (filePath.includes('/')) {
-        // Last resort: use full path, not just filename
-        const parts = filePath.split('/')
-        const documentsIdx = parts.findIndex((p: string) => p === 'documents')
-        if (documentsIdx !== -1 && documentsIdx < parts.length - 1) {
-          filePath = parts.slice(documentsIdx + 1).join('/').split('?')[0]
-        } else {
-          filePath = filePath.split('/').pop() || filePath
-        }
-      }
+    // BUG-011 FIX: uploadDocument stores the storage path in file_url field (not a full URL)
+    // Use it directly - no need to extract from URL
+    const filePath = uploadResult.data.file_url
+    
+    if (!filePath) {
+      return NextResponse.json(
+        { error: "Failed to get file path from upload" },
+        { status: 500 }
+      )
     }
     
-    // Get signed URL for the uploaded document using full path
+    // Get signed URL for the uploaded document using the path
     const { data: signedUrlData } = await supabase.storage
       .from("documents")
       .createSignedUrl(filePath, 31536000) // 1 year
 
-    const signatureUrl = signedUrlData?.signedUrl || filePath
+    const signatureUrl = signedUrlData?.signedUrl || uploadResult.data.file_url
 
     // FIXED: Sanitize signedByName to prevent impersonation
     const sanitizedSignedByName = sanitizeString(signedByName, 100)

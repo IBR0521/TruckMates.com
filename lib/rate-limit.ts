@@ -58,12 +58,42 @@ export async function rateLimit(
   const now = Date.now()
   const reset = now + window * 1000
 
-  // Use Upstash Redis in production if configured
-  // Note: Upstash packages are optional - if not installed, falls back to in-memory
-  // Skip Upstash entirely if packages aren't available (prevents build-time analysis)
-  // Users can install @upstash/ratelimit and @upstash/redis if they want Redis-based rate limiting
+  // BUG-003 FIX: Try to use Upstash Redis if configured (for production)
+  // In-memory store resets on every serverless cold start, providing no protection
+  try {
+    const redisUrl = process.env.UPSTASH_REDIS_REST_URL
+    const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
+    
+    if (redisUrl && redisToken) {
+      // Use Upstash Redis for production-grade rate limiting
+      // @ts-ignore - Optional dependency, may not be installed
+      const { Ratelimit } = await import(/* webpackIgnore: true */ "@upstash/ratelimit")
+      // @ts-ignore - Optional dependency, may not be installed
+      const { Redis } = await import(/* webpackIgnore: true */ "@upstash/redis")
+      
+      const redis = new Redis({ url: redisUrl, token: redisToken })
+      const ratelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(limit, `${window} s`),
+      })
+      
+      const result = await ratelimit.limit(identifier)
+      return {
+        success: result.success,
+        limit,
+        remaining: result.remaining,
+        reset: result.reset,
+      }
+    }
+  } catch (error) {
+    // If Upstash is not configured or fails, fall back to in-memory
+    // BUG-003: Log warning in production that rate limiting is ineffective
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('[RATE_LIMIT] Upstash Redis not configured - using in-memory store (resets on cold start, no protection)')
+    }
+  }
 
-  // Fallback to in-memory store
+  // Fallback to in-memory store (BUG-003: Ineffective in serverless production)
   const current = memoryStore.get(key)
   
   if (!current || current.reset < now) {

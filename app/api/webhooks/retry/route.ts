@@ -24,15 +24,21 @@ export async function POST(request: NextRequest) {
     const { createClient } = await import("@/lib/supabase/server")
     const supabase = await createClient()
 
-    // Get all deliveries that need retry
+    // BUG-007 FIX: Use proper Supabase filter instead of non-existent .raw() method
+    // Get all deliveries that need retry (attempts < max_attempts)
     const { data: deliveries } = await supabase
       .from("webhook_deliveries")
       .select("id, webhook_id, event_type, payload, attempts, max_attempts")
       .eq("status", "retrying")
       .lte("next_retry_at", new Date().toISOString())
-      .lt("attempts", supabase.raw("max_attempts"))
+    
+    // Filter in JavaScript since Supabase doesn't support column comparison in filter
+    // This is acceptable for a cron job that runs infrequently
+    const filteredDeliveries = (deliveries || []).filter(
+      (delivery: any) => delivery.attempts < delivery.max_attempts
+    )
 
-    if (!deliveries || deliveries.length === 0) {
+    if (!filteredDeliveries || filteredDeliveries.length === 0) {
       return NextResponse.json({
         success: true,
         message: "No webhook deliveries to retry",
@@ -44,7 +50,7 @@ export async function POST(request: NextRequest) {
     let failed = 0
 
     // Retry each delivery
-    for (const delivery of deliveries) {
+    for (const delivery of filteredDeliveries) {
       const result = await retryWebhookDelivery(delivery.id)
       if (result.error) {
         failed++

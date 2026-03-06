@@ -230,20 +230,11 @@ export async function registerEmployee(data: {
           }
         }
       } else {
-        // Not an invitation code, try as companyId (backward compatibility)
-        const { data: company, error: companyError } = await supabase
-          .from("companies")
-          .select("id")
-          .eq("id", invitationCode)
-          .maybeSingle()
-
-        if (!companyError && company) {
-          companyId = company.id
-        } else {
-          return { 
-            data: null, 
-            error: "Invalid invitation code or company ID. Please use a valid invitation link or contact your administrator." 
-          }
+        // BUG-013 FIX: Remove backward compatibility that allows direct company_id UUID
+        // This was a security hole - anyone could register to any company by guessing UUIDs
+        return { 
+          data: null, 
+          error: "Invalid invitation code. Please use a valid invitation link or contact your administrator." 
         }
       }
     } else {

@@ -3,9 +3,19 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { createInvoice } from "./accounting"
+import { checkCreatePermission } from "@/lib/server-permissions"
 
+// BUG-010 FIX: Add try/catch and permission check
 export async function autoGenerateInvoicesFromLoads() {
-  const supabase = await createClient()
+  // BUG-010 FIX: Add permission check
+  const permission = await checkCreatePermission("accounting")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to create invoices", data: null }
+  }
+
+  // BUG-010 FIX: Add try/catch wrapper
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -68,89 +78,140 @@ export async function autoGenerateInvoicesFromLoads() {
   let generated = 0
   const errors: Array<{ load_id: string; error: string }> = []
 
-  // Generate invoice for each load
+  // BUG-008 FIX: Batch invoice creation instead of sequential loop to prevent timeout
+  // First, get all customer names in one query
+  const customerIds = [...new Set(loads.map((l: any) => l.customer_id).filter(Boolean) as string[])]
+  const customerMap = new Map<string, string>()
+  
+  if (customerIds.length > 0) {
+    const { data: customers } = await supabase
+      .from("customers")
+      .select("id, name, company_name")
+      .in("id", customerIds)
+    
+    if (customers) {
+      for (const customer of customers) {
+        customerMap.set(customer.id, customer.company_name || customer.name || "Unknown Customer")
+      }
+    }
+  }
+
+  // Prepare all invoice data for batch insert
+  const invoiceData: Array<{
+    company_id: string
+    customer_name: string
+    load_id: string
+    amount: number
+    issue_date: string
+    due_date: string
+    payment_terms: string
+    description: string
+    status: string
+    invoice_number?: string
+  }> = []
+
+  const issueDate = new Date().toISOString().split("T")[0]
+  const dueDate = new Date()
+  dueDate.setDate(dueDate.getDate() + 30)
+  const dueDateStr = dueDate.toISOString().split("T")[0]
+
   for (const load of loads) {
     // Skip if invoice already exists for this load
     if (existingLoadIds.has(load.id)) {
       continue
     }
 
+    // Get customer name
+    const customerName = load.customer_id 
+      ? (customerMap.get(load.customer_id) || load.company_name || "Unknown Customer")
+      : (load.company_name || "Unknown Customer")
+
+    // Calculate invoice amount
+    const amount = Number(load.total_revenue || load.estimated_revenue || load.value || 0)
+
+    if (amount <= 0) {
+      errors.push({
+        load_id: load.id,
+        error: "Load has no revenue value",
+      })
+      continue
+    }
+
+    invoiceData.push({
+      company_id: userData.company_id,
+      customer_name: customerName,
+      load_id: load.id,
+      amount: amount,
+      issue_date: issueDate,
+      due_date: dueDateStr,
+      payment_terms: "Net 30",
+      description: `Invoice for load ${load.shipment_number}`,
+      status: "pending",
+    })
+  }
+
+  // BUG-008 FIX: Batch insert invoices in chunks of 50 to avoid timeout
+  const chunkSize = 50
+  for (let i = 0; i < invoiceData.length; i += chunkSize) {
+    const chunk = invoiceData.slice(i, i + chunkSize)
+    
     try {
-      // Get customer name
-      let customerName = load.company_name || "Unknown Customer"
-      
-      if (load.customer_id) {
-        const { data: customer } = await supabase
-          .from("customers")
-          .select("name, company_name")
-          .eq("id", load.customer_id)
-          .single()
-        
-        if (customer) {
-          customerName = customer.company_name || customer.name || customerName
+      const { data: insertedInvoices, error: insertError } = await supabase
+        .from("invoices")
+        .insert(chunk)
+        .select("id, load_id")
+
+      if (insertError) {
+        // If batch insert fails, add all in chunk to errors
+        for (const invoice of chunk) {
+          errors.push({
+            load_id: invoice.load_id,
+            error: insertError.message || "Failed to create invoice",
+          })
         }
-      }
-
-      // Calculate invoice amount
-      const amount = Number(load.total_revenue || load.estimated_revenue || load.value || 0)
-
-      if (amount <= 0) {
-        errors.push({
-          load_id: load.id,
-          error: "Load has no revenue value",
-        })
         continue
       }
 
-      // Calculate due date (30 days from today)
-      const issueDate = new Date().toISOString().split("T")[0]
-      const dueDate = new Date()
-      dueDate.setDate(dueDate.getDate() + 30)
-      const dueDateStr = dueDate.toISOString().split("T")[0]
-
-      // Create invoice
-      const invoiceResult = await createInvoice({
-        customer_name: customerName,
-        load_id: load.id,
-        amount: amount,
-        issue_date: issueDate,
-        due_date: dueDateStr,
-        payment_terms: "Net 30",
-        description: `Invoice for load ${load.shipment_number}`,
-      })
-
-      if (invoiceResult.error) {
-        errors.push({
-          load_id: load.id,
-          error: invoiceResult.error,
-        })
-      } else {
-        // Update load with invoice_id
-        await supabase
-          .from("loads")
-          .update({ invoice_id: invoiceResult.data?.id })
-          .eq("id", load.id)
-
-        generated++
+      // Update loads with invoice_ids
+      if (insertedInvoices && insertedInvoices.length > 0) {
+        for (const invoice of insertedInvoices) {
+          if (invoice.load_id) {
+            await supabase
+              .from("loads")
+              .update({ invoice_id: invoice.id })
+              .eq("id", invoice.load_id)
+          }
+        }
+        generated += insertedInvoices.length
       }
     } catch (error: any) {
-      errors.push({
-        load_id: load.id,
-        error: error.message || "Unknown error",
-      })
+      // If batch fails, add all in chunk to errors
+      for (const invoice of chunk) {
+        errors.push({
+          load_id: invoice.load_id,
+          error: error.message || "Unknown error",
+        })
+      }
     }
   }
 
-  revalidatePath("/dashboard/accounting/invoices")
-  revalidatePath("/dashboard/loads")
+    revalidatePath("/dashboard/accounting/invoices")
+    revalidatePath("/dashboard/loads")
 
-  return {
-    data: {
-      generated,
-      message: `Successfully generated ${generated} invoice(s) from ${loads.length} delivered load(s)`,
-      errors,
-    },
-    error: null,
+    return {
+      data: {
+        generated,
+        message: `Successfully generated ${generated} invoice(s) from ${loads.length} delivered load(s)`,
+        errors,
+      },
+      error: null,
+    }
+  } catch (error: any) {
+    console.error("[autoGenerateInvoicesFromLoads] Unexpected error:", error)
+    return { 
+      error: error?.message || "An unexpected error occurred while generating invoices", 
+      data: null 
+    }
   }
 }
 

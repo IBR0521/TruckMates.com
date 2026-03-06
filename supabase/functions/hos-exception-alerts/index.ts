@@ -32,23 +32,37 @@ serve(async (req: Request) => {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-    // Get all active drivers
-    const { data: drivers, error: driversError } = await supabase
-      .from("drivers")
-      .select("id, name, company_id, phone")
-      .eq("status", "active")
-
-    if (driversError || !drivers) {
+    // BUG-005 FIX: Process drivers per company to avoid cross-company PII leak
+    // First, get all companies
+    const { data: companies, error: companiesError } = await supabase
+      .from("companies")
+      .select("id")
+    
+    if (companiesError || !companies) {
       return new Response(
-        JSON.stringify({ error: "Failed to fetch drivers", details: driversError }),
+        JSON.stringify({ error: "Failed to fetch companies", details: companiesError }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       )
     }
 
-    const alerts: HOSAlert[] = []
+    const allAlerts: HOSAlert[] = []
 
-    // Check each driver's HOS status
-    for (const driver of drivers) {
+    // Process each company separately
+    for (const company of companies) {
+      // BUG-005 FIX: Scope driver query by company_id
+      const { data: drivers, error: driversError } = await supabase
+        .from("drivers")
+        .select("id, name, company_id, phone")
+        .eq("status", "active")
+        .eq("company_id", company.id)
+
+      if (driversError || !drivers) {
+        console.error(`[HOS Alerts] Error fetching drivers for company ${company.id}:`, driversError)
+        continue // Skip this company, continue with others
+      }
+
+      // Check each driver's HOS status
+      for (const driver of drivers) {
       try {
         // Calculate remaining HOS using RPC function
         const { data: hosData, error: hosError } = await supabase.rpc("calculate_remaining_hos", {
@@ -64,7 +78,7 @@ serve(async (req: Request) => {
 
         // Alert 1: Approaching 11-hour driving limit (< 2 hours remaining)
         if (remaining_driving < 2 && remaining_driving > 0) {
-          alerts.push({
+          allAlerts.push({
             driver_id: driver.id,
             driver_name: driver.name,
             company_id: driver.company_id,
@@ -76,7 +90,7 @@ serve(async (req: Request) => {
 
         // Alert 2: Break required (30-minute break needed after 8 hours)
         if (needs_break) {
-          alerts.push({
+          allAlerts.push({
             driver_id: driver.id,
             driver_name: driver.name,
             company_id: driver.company_id,
@@ -88,7 +102,7 @@ serve(async (req: Request) => {
         // FIXED: Prioritize alerts - if driving limit reached, don't also fire on-duty limit
         // Alert 3: Driving limit reached (0 hours remaining) - highest priority
         if (remaining_driving <= 0) {
-          alerts.push({
+          allAlerts.push({
             driver_id: driver.id,
             driver_name: driver.name,
             company_id: driver.company_id,
@@ -97,7 +111,7 @@ serve(async (req: Request) => {
           })
         } else if (remaining_on_duty <= 0) {
           // Alert 5: On-duty limit reached (only if driving limit not reached)
-          alerts.push({
+          allAlerts.push({
             driver_id: driver.id,
             driver_name: driver.name,
             company_id: driver.company_id,
@@ -106,7 +120,7 @@ serve(async (req: Request) => {
           })
         } else if (remaining_on_duty < 1 && remaining_on_duty > 0) {
           // Alert 4: On-duty limit approaching (< 1 hour remaining, only if driving limit not reached)
-          alerts.push({
+          allAlerts.push({
             driver_id: driver.id,
             driver_name: driver.name,
             company_id: driver.company_id,
@@ -121,9 +135,12 @@ serve(async (req: Request) => {
       }
     }
 
+      } // End of driver loop
+    } // End of company loop
+
     // Send alerts via SMS and store in database
     const sentAlerts = []
-    for (const alert of alerts) {
+    for (const alert of allAlerts) {
       try {
         // FIXED: Store alert in alerts table, not eld_events
         // eld_events is for raw telemetry, alerts is for operational alerts
