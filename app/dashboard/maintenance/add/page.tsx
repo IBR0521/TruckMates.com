@@ -76,7 +76,7 @@ export default function AddMaintenancePage() {
       priority: formData.priority,
       estimated_cost: formData.estimated_cost ? Number(formData.estimated_cost) : undefined,
       notes: formData.notes || undefined,
-      vendor_id: formData.vendor_id || undefined,
+      vendor: formData.vendor_id ? vendors.find((v) => v.id === formData.vendor_id)?.name || undefined : undefined,
     })
 
     setIsSubmitting(false)
