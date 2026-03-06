@@ -287,6 +287,33 @@ export async function inviteUser(data: {
     return { error: "An invitation has already been sent to this email address", data: null }
   }
 
+  // BUG-061 FIX: Check subscription plan limits before inviting user
+  const { data: subscription } = await supabase
+    .from("subscriptions")
+    .select(`
+      plan_id,
+      subscription_plans!inner(max_users)
+    `)
+    .eq("company_id", currentUser.company_id)
+    .eq("status", "active")
+    .single()
+
+  if (subscription?.subscription_plans?.max_users) {
+    // Count current active users
+    const { count: currentUserCount } = await supabase
+      .from("users")
+      .select("*", { count: "exact", head: true })
+      .eq("company_id", currentUser.company_id)
+      .eq("employee_status", "active")
+
+    if (currentUserCount !== null && currentUserCount >= subscription.subscription_plans.max_users) {
+      return {
+        error: `User limit reached. Your plan allows ${subscription.subscription_plans.max_users} users. Please upgrade your subscription to invite more users.`,
+        data: null
+      }
+    }
+  }
+
   // Generate unique invitation code
   const invitationCode = crypto.randomUUID()
 

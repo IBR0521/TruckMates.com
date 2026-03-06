@@ -40,13 +40,49 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { message, conversationHistory, threadId, stream } = body
+    let { message, conversationHistory, threadId, stream } = body
 
+    // BUG-049 FIX: Validate and sanitize conversationHistory to prevent prompt injection
+    // BUG-058 FIX: Enforce message length limit to prevent DoS
     if (!message || typeof message !== 'string') {
       return NextResponse.json(
         { error: "Message is required" },
         { status: 400 }
       )
+    }
+
+    // BUG-058 FIX: Enforce strict message length limit (4000 characters)
+    if (message.length > 4000) {
+      return NextResponse.json(
+        { error: "Message exceeds maximum length of 4000 characters" },
+        { status: 400 }
+      )
+    }
+
+    // BUG-049 FIX: Validate conversationHistory - only allow "user" or "assistant" roles
+    // Cap history to 20 messages and enforce per-message length limit (2000 chars)
+    if (conversationHistory && Array.isArray(conversationHistory)) {
+      const sanitizedHistory = conversationHistory
+        .slice(0, 20) // Cap to 20 messages
+        .filter((msg: any) => {
+          // Only allow "user" or "assistant" roles
+          if (!msg.role || (msg.role !== "user" && msg.role !== "assistant")) {
+            return false
+          }
+          // Enforce content length limit
+          if (msg.content && typeof msg.content === 'string' && msg.content.length > 2000) {
+            return false
+          }
+          return true
+        })
+        .map((msg: any) => ({
+          role: msg.role, // Only "user" or "assistant"
+          content: typeof msg.content === 'string' ? msg.content.substring(0, 2000) : String(msg.content || '')
+        }))
+      
+      conversationHistory = sanitizedHistory
+    } else {
+      conversationHistory = []
     }
 
     // If streaming requested, use streaming response
@@ -113,16 +149,12 @@ async function streamAIResponse(
           return
         }
 
-        // Stream response word by word for better UX
-        const words = result.response.split(' ')
-        for (let i = 0; i < words.length; i++) {
-          const word = words[i] + (i < words.length - 1 ? ' ' : '')
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ content: word })}\n\n`)
-          )
-          // Small delay for smooth streaming
-          await new Promise(resolve => setTimeout(resolve, 20))
-        }
+        // BUG-053 FIX: Remove artificial delay - return full response immediately
+        // The 20ms delay per word causes long responses to exceed serverless function limits
+        // Return the full response in one chunk instead of word-by-word
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ content: result.response })}\n\n`)
+        )
 
         // Send actions if any
         if (result.actions && result.actions.length > 0) {

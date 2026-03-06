@@ -268,17 +268,26 @@ export async function acceptMarketplaceLoad(marketplaceLoadId: string) {
     return { data: null, error: "Only carrier companies can accept loads from marketplace. Please update your company type in settings." }
   }
 
-  // Get marketplace load
-  const { data: marketplaceLoad, error: loadError } = await supabase
+  // BUG-058 FIX: Use atomic conditional update to prevent TOCTOU race condition
+  // Update status atomically - only proceed if exactly 1 row was modified
+  const { data: updatedLoad, error: updateError } = await supabase
     .from("load_marketplace")
-    .select("*")
+    .update({ 
+      status: "accepted",
+      matched_carrier_id: company_id,
+      matched_at: new Date().toISOString()
+    })
     .eq("id", marketplaceLoadId)
-    .eq("status", "available")
+    .eq("status", "available") // Atomic condition: only update if still available
+    .select()
     .single()
 
-  if (loadError || !marketplaceLoad) {
-    return { data: null, error: "Load not found or already accepted" }
+  if (updateError || !updatedLoad) {
+    return { data: null, error: "Load not found or already accepted by another carrier" }
   }
+
+  // Use the updated load data
+  const marketplaceLoad = updatedLoad
 
   // Convert marketplace load to TruckMates load format
   const loadData = {
@@ -322,25 +331,20 @@ export async function acceptMarketplaceLoad(marketplaceLoadId: string) {
     return { data: null, error: createError || "Failed to create load" }
   }
 
-  // Update marketplace load status
-  const { data: updatedMarketplaceLoad, error: updateError } = await supabase
+  // BUG-058 FIX: Update created_load_id (status already updated atomically above)
+  const { error: updateLoadIdError } = await supabase
     .from("load_marketplace")
     .update({
-      status: "accepted",
-      matched_carrier_id: company_id,
-      matched_at: new Date().toISOString(),
       created_load_id: createdLoad.id,
     })
     .eq("id", marketplaceLoadId)
-    .select()
-    .single()
 
-  if (updateError) {
-    console.error("[acceptMarketplaceLoad] Update error:", updateError)
-    // Load was created, but marketplace update failed - still return success
+  if (updateLoadIdError) {
+    console.error("[acceptMarketplaceLoad] Failed to update created_load_id:", updateLoadIdError)
+    // Load was created and status updated, but load_id update failed - log but continue
   }
 
-  // Notify broker
+  // Notify broker (use marketplaceLoad which was set from updatedLoad above)
   try {
     const { data: brokerUsers } = await supabase
       .from("users")

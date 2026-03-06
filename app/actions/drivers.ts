@@ -197,6 +197,33 @@ export async function createDriver(formData: {
     return { error: "No company found", data: null }
   }
 
+  // BUG-061 FIX: Check subscription plan limits before creating driver
+  const { data: subscription } = await supabase
+    .from("subscriptions")
+    .select(`
+      plan_id,
+      subscription_plans!inner(max_drivers)
+    `)
+    .eq("company_id", userData.company_id)
+    .eq("status", "active")
+    .single()
+
+  if (subscription?.subscription_plans?.max_drivers) {
+    // Count current active drivers
+    const { count: currentDriverCount } = await supabase
+      .from("drivers")
+      .select("*", { count: "exact", head: true })
+      .eq("company_id", userData.company_id)
+      .eq("status", "active")
+
+    if (currentDriverCount !== null && currentDriverCount >= subscription.subscription_plans.max_drivers) {
+      return {
+        error: `Driver limit reached. Your plan allows ${subscription.subscription_plans.max_drivers} drivers. Please upgrade your subscription to add more drivers.`,
+        data: null
+      }
+    }
+  }
+
   // Professional validation
   const driverValidation = validateDriverData({
     name: formData.name,

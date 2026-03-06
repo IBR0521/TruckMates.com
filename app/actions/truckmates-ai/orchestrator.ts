@@ -115,6 +115,44 @@ export async function processAIRequest(
           try {
             const result = await func.handler(call.arguments)
             actions.push({ function: call.name, result })
+            
+            // BUG-051 FIX: Log AI function calls in audit trail
+            try {
+              const { createClient } = await import("@/lib/supabase/server")
+              const supabase = await createClient()
+              const { data: { user } } = await supabase.auth.getUser()
+              
+              if (user) {
+                const { data: userData } = await supabase
+                  .from("users")
+                  .select("company_id")
+                  .eq("id", user.id)
+                  .single()
+                
+                if (userData?.company_id) {
+                  await supabase.from("audit_logs").insert({
+                    company_id: userData.company_id,
+                    user_id: user.id,
+                    action_type: `ai_${call.name}`,
+                    resource_type: call.name.replace('create_', '').replace('update_', '').replace('delete_', ''),
+                    resource_id: result?.id || null,
+                    details: {
+                      source: "ai_chat",
+                      function_name: call.name,
+                      arguments: call.arguments,
+                      result_preview: typeof result === 'object' ? JSON.stringify(result).substring(0, 500) : String(result).substring(0, 500),
+                      message_preview: message.substring(0, 200)
+                    }
+                  }).catch((err: any) => {
+                    // Log error but don't fail the AI action
+                    console.error("[AI Orchestrator] Failed to create audit log:", err)
+                  })
+                }
+              }
+            } catch (auditError: any) {
+              // Log error but don't fail the AI action
+              console.error("[AI Orchestrator] Audit logging error:", auditError)
+            }
           } catch (error: any) {
             actions.push({ 
               function: call.name, 

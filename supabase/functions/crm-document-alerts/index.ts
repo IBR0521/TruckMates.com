@@ -13,15 +13,27 @@ declare const Deno: {
   }
 }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-}
+// BUG-048 FIX: Remove CORS wildcard - this function should never be called from browser
+// BUG-048 FIX: Add CRON_SECRET authentication like daily-reminders-check
+const CRON_SECRET = Deno.env.get("CRON_SECRET")
 
 serve(async (req: Request) => {
-  // Handle CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders })
+  // BUG-048 FIX: Require CRON_SECRET authentication
+  const authHeader = req.headers.get("Authorization")
+  const providedSecret = authHeader?.replace("Bearer ", "")
+  
+  if (!CRON_SECRET) {
+    return new Response(
+      JSON.stringify({ error: "CRON_SECRET not configured - endpoint disabled" }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    )
+  }
+  
+  if (providedSecret !== CRON_SECRET) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { "Content-Type": "application/json" } }
+    )
   }
 
   try {
@@ -44,7 +56,7 @@ serve(async (req: Request) => {
       return new Response(
         JSON.stringify({ message: "No expiring documents found", count: 0 }),
         {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json" },
           status: 200,
         }
       )
@@ -59,7 +71,7 @@ serve(async (req: Request) => {
       return new Response(
         JSON.stringify({ message: "All expiring documents have been alerted", count: 0 }),
         {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json" },
           status: 200,
         }
       )
@@ -70,12 +82,19 @@ serve(async (req: Request) => {
     const alerts: any[] = []
 
     for (const companyId of companyIds) {
-      // Get company users (managers/admins)
+      // BUG-057 FIX: Use actual role values that exist in the schema
+      // Get company users (super_admin, operations_manager)
       const { data: users, error: usersError } = await supabaseClient
         .from("users")
         .select("id, email, full_name, role")
         .eq("company_id", companyId)
-        .in("role", ["manager", "admin", "owner"])
+        .in("role", ["super_admin", "operations_manager"])
+      
+      // BUG-057 FIX: Log warning if no users found for a company
+      if (!users || users.length === 0) {
+        console.warn(`[CRM Document Alerts] No eligible users found for company ${companyId}`)
+        continue
+      }
 
       if (usersError || !users) continue
 
@@ -186,7 +205,7 @@ serve(async (req: Request) => {
         alerts,
       }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         status: 200,
       }
     )
@@ -194,7 +213,7 @@ serve(async (req: Request) => {
     return new Response(
       JSON.stringify({ error: error.message || "Failed to process document alerts" }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         status: 500,
       }
     )

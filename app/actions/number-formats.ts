@@ -50,6 +50,16 @@ export async function getCompanySettings() {
     return { error: "No company found", data: null }
   }
 
+  // BUG-064 FIX: Add RBAC check - filter sensitive fields for non-admin roles
+  const { data: currentUser } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+  
+  const userRole = currentUser?.role || 'driver'
+  const isAdmin = userRole === 'super_admin' || userRole === 'operations_manager'
+
   // Get or create company settings
   let { data: settings, error } = await supabase
     .from("company_settings")
@@ -82,6 +92,16 @@ export async function getCompanySettings() {
   } else if (error) {
     // MEDIUM FIX 16: Return error instead of hardcoded defaults
     return { error: `Failed to fetch settings: ${error.message}`, data: null }
+  }
+
+  // BUG-064 FIX: Filter sensitive fields for non-admin roles
+  if (!isAdmin && settings) {
+    const filteredSettings = { ...settings }
+    // Remove sensitive financial/tax information
+    delete filteredSettings.ein_number
+    delete filteredSettings.owner_name
+    delete filteredSettings.dba_name
+    return { data: filteredSettings, error: null }
   }
 
   return { data: settings, error: null }

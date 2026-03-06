@@ -103,8 +103,13 @@ export async function sendInvoiceEmail(
         }
       }
     } catch (error) {
-      // If rate limit check fails, allow the call to proceed (fail open)
+      // BUG-065 FIX: Fail closed instead of fail open for billing-adjacent operations
+      // Deny the request if rate limit check throws rather than allowing it
       console.error("[Invoice Email] Rate limit check failed:", error)
+      return {
+        error: "Rate limit check failed. Please try again later.",
+        data: null
+      }
     }
 
     // Get invoice
