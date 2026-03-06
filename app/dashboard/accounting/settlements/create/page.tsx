@@ -102,7 +102,7 @@ export default function CreateSettlementPage() {
           const payRateNum = Number(payRate) || 0
           if (payRateNum <= 1) {
             // Percentage: multiply each load value by pay rate
-            const totalLoadValue = loads.reduce((sum, load) => sum + (Number(load.value) || 0), 0)
+            const totalLoadValue = loads.reduce((sum: number, load: any) => sum + (Number(load.value) || 0), 0)
             calculatedGrossPay = totalLoadValue * payRateNum
             calculationBreakdown = `${loads.length} loads × $${totalLoadValue.toFixed(2)} total value × ${(payRateNum * 100).toFixed(1)}% = $${calculatedGrossPay.toFixed(2)}`
           } else {
