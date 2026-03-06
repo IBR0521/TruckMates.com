@@ -308,7 +308,7 @@ async function getInternalRateSuggestion(
       new Date(l.created_at || 0) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     )
     const olderLoads = similarLoads.filter((l: { origin?: string | null; destination?: string | null; rate?: number | null; created_at?: string | null }) =>
-      new Date(l.created_at) <= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) &&
+      l.created_at && new Date(l.created_at) <= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) &&
       new Date(l.created_at) > new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
     )
 
