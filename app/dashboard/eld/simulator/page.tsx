@@ -34,6 +34,9 @@ import { getELDDevices } from "@/app/actions/eld"
 import { getTrucks } from "@/app/actions/trucks"
 import { getDrivers } from "@/app/actions/drivers"
 
+// BUG-069 FIX: ELD Simulator must not be accessible in production
+// This is a dev testing tool that allows injection of fake GPS and HOS data
+// Violates FMCSA ELD compliance if accessible in production
 export default function ELDSimulatorPage() {
   const [isRunning, setIsRunning] = useState(false)
   const [deviceId, setDeviceId] = useState<string>("")
@@ -46,11 +49,36 @@ export default function ELDSimulatorPage() {
   const [trucks, setTrucks] = useState<any[]>([])
   const [drivers, setDrivers] = useState<any[]>([])
   const [simulatorInterval, setSimulatorInterval] = useState<NodeJS.Timeout | null>(null)
+  const [isProduction, setIsProduction] = useState(false)
   const [stats, setStats] = useState({
     locationsSent: 0,
     logsSent: 0,
     eventsSent: 0,
   })
+
+  useEffect(() => {
+    // BUG-069 FIX: Check if we're in production (client-side check)
+    setIsProduction(
+      typeof window !== 'undefined' && 
+      (process.env.NEXT_PUBLIC_NODE_ENV === "production" || 
+       (!window.location.hostname.includes('localhost') && 
+        !window.location.hostname.includes('127.0.0.1')))
+    )
+  }, [])
+
+  // BUG-069 FIX: Block access in production
+  if (isProduction) {
+    return (
+      <div className="p-6">
+        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-6 text-center">
+          <h1 className="text-2xl font-bold text-destructive mb-2">Access Denied</h1>
+          <p className="text-muted-foreground">
+            The ELD Simulator is a development tool and is not available in production.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   useEffect(() => {
     loadData()
