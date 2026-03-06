@@ -201,7 +201,7 @@ export default function RoutesPage() {
   }
 
   // Keyboard shortcuts
-  useListPageShortcuts(router, "/dashboard/routes/add", searchInputRef as React.RefObject<HTMLInputElement>)
+  useListPageShortcuts(router, "/dashboard/routes/add", searchInputRef)
 
   return (
     <div className="w-full">

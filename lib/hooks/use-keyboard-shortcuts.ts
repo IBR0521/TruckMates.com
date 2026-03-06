@@ -49,7 +49,7 @@ export function useKeyboardShortcuts(shortcuts: KeyboardShortcut[], enabled: boo
 export function useListPageShortcuts(
   router: ReturnType<typeof useRouter>,
   addPath: string,
-  searchRef?: React.RefObject<HTMLInputElement>
+  searchRef?: React.RefObject<HTMLInputElement | null>
 ) {
   useKeyboardShortcuts(
     [
