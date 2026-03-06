@@ -283,7 +283,7 @@ async function getInternalRateSuggestion(
     }
 
     // Filter loads by similar origin/destination (simplified matching)
-    const similarLoads = historicalLoads.filter(load => {
+    const similarLoads = historicalLoads.filter((load: { origin?: string | null; destination?: string | null; rate?: number | null; created_at?: string | null }) => {
       const originMatch = load.origin?.toLowerCase().includes(origin.toLowerCase().split(',')[0]) ||
                          origin.toLowerCase().includes(load.origin?.toLowerCase().split(',')[0] || '')
       const destMatch = load.destination?.toLowerCase().includes(destination.toLowerCase().split(',')[0]) ||
