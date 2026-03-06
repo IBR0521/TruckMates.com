@@ -4,9 +4,9 @@ import { useEffect } from "react"
 
 export function SkipLink({ targetId = "main-content", label = "Skip to main content" }: { targetId?: string; label?: string }) {
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: Event) => {
       // Allow skip link to be activated with Enter or Space
-      if (e.key === "Enter" || e.key === " ") {
+      if (e instanceof KeyboardEvent && (e.key === "Enter" || e.key === " ")) {
         const target = document.getElementById(targetId)
         if (target) {
           e.preventDefault()
