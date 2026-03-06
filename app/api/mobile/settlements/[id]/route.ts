@@ -10,7 +10,7 @@ import { getAuthContext } from "@/lib/auth/server"
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { companyId, userId, error: authError } = await getAuthContext()
@@ -19,8 +19,9 @@ export async function GET(
       return NextResponse.json({ error: authError || "Not authenticated" }, { status: 401 })
     }
 
+    // Next.js 15: params is now a Promise and must be awaited
+    const { id: settlementId } = await params
     const supabase = await createClient()
-    const settlementId = params.id
 
     if (!settlementId) {
       return NextResponse.json({ error: "Settlement ID is required" }, { status: 400 })
