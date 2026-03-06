@@ -1,6 +1,7 @@
 "use server"
 
-import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission, type FeatureCategory } from "./server-permissions"
+import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "./server-permissions"
+import { type FeatureCategory } from "./feature-permissions"
 
 /**
  * Wrapper to check permissions before executing an action
