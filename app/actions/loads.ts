@@ -451,11 +451,18 @@ export async function createLoad(formData: {
     const destFirstWord = loadDestNormalized.split(" ")[0]
 
     // Query with LIKE filters at DB level - much more efficient
+    // BUG-035 FIX: Sanitize search strings to prevent PostgREST filter injection
+    const sanitizeForOr = (str: string) => str.replace(/[,()]/g, '').replace(/\.(eq|neq|gt|gte|lt|lte|like|ilike|is|in|cs|cd|ov|sl|sr|nxr|nxl|adj|not)/gi, '').replace(/%/g, '').trim().substring(0, 200)
+    const safeOrigin = sanitizeForOr(loadOriginNormalized)
+    const safeOriginFirst = sanitizeForOr(originFirstWord)
+    const safeDest = sanitizeForOr(loadDestNormalized)
+    const safeDestFirst = sanitizeForOr(destFirstWord)
+    
     const { data: existingRoutes } = await supabase
       .from("routes")
       .select("id, origin, destination")
       .eq("company_id", userData.company_id)
-      .or(`origin.ilike.%${loadOriginNormalized}%,origin.ilike.%${originFirstWord}%,destination.ilike.%${loadDestNormalized}%,destination.ilike.%${destFirstWord}%`)
+      .or(`origin.ilike.%${safeOrigin}%,origin.ilike.%${safeOriginFirst}%,destination.ilike.%${safeDest}%,destination.ilike.%${safeDestFirst}%`)
       .limit(10) // Limit results for performance
 
     if (existingRoutes && existingRoutes.length > 0) {
@@ -534,11 +541,16 @@ export async function createLoad(formData: {
   if ((settings.auto_assign_driver || settings.auto_assign_truck) && formData.origin && formData.destination) {
     try {
       // Get suggestions directly (avoid circular import by calling the logic inline)
+      // BUG-035 FIX: Sanitize search strings to prevent PostgREST filter injection
+      const sanitizeForOr = (str: string) => (str || '').replace(/[,()]/g, '').replace(/\.(eq|neq|gt|gte|lt|lte|like|ilike|is|in|cs|cd|ov|sl|sr|nxr|nxl|adj|not)/gi, '').replace(/%/g, '').trim().substring(0, 200)
+      const safeOrigin = sanitizeForOr(formData.origin || '')
+      const safeDest = sanitizeForOr(formData.destination || '')
+      
       const { data: recentLoads } = await supabase
         .from("loads")
         .select("driver_id, truck_id, customer_id")
         .eq("company_id", userData.company_id)
-        .or(`origin.ilike.%${formData.origin}%,destination.ilike.%${formData.destination}%`)
+        .or(`origin.ilike.%${safeOrigin}%,destination.ilike.%${safeDest}%`)
         .order("created_at", { ascending: false })
         .limit(5)
 
@@ -1600,11 +1612,16 @@ export async function getLoadSuggestions(origin?: string, destination?: string) 
 
   // Suggest driver based on route history (if origin/destination provided)
   if (origin && destination) {
+    // BUG-035 FIX: Sanitize search strings to prevent PostgREST filter injection
+    const sanitizeForOr = (str: string) => (str || '').replace(/[,()]/g, '').replace(/\.(eq|neq|gt|gte|lt|lte|like|ilike|is|in|cs|cd|ov|sl|sr|nxr|nxl|adj|not)/gi, '').replace(/%/g, '').trim().substring(0, 200)
+    const safeOrigin = sanitizeForOr(origin)
+    const safeDest = sanitizeForOr(destination)
+    
     const { data: recentLoads } = await supabase
       .from("loads")
       .select("driver_id, truck_id, customer_id")
       .eq("company_id", userData.company_id)
-      .or(`origin.ilike.%${origin}%,destination.ilike.%${destination}%`)
+      .or(`origin.ilike.%${safeOrigin}%,destination.ilike.%${safeDest}%`)
       .order("created_at", { ascending: false })
       .limit(5)
 

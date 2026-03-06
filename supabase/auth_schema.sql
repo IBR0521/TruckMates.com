@@ -92,6 +92,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.create_company_for_user(TEXT, TEXT, TEXT, UUID, TEXT) TO authenticated;
 
 -- Step 4: Create trigger function to auto-create user record
+-- BUG-034 FIX: Never trust raw_user_meta_data.role - always default to 'driver'
+-- Role escalation must happen via server-side SECURITY DEFINER RPC functions
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER 
 LANGUAGE plpgsql
@@ -104,13 +106,14 @@ BEGIN
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'driver')
+    'driver' -- BUG-034 FIX: Hardcoded default, never trust metadata for role
   )
   ON CONFLICT (id) DO UPDATE
   SET 
     email = EXCLUDED.email,
     full_name = COALESCE(EXCLUDED.full_name, users.full_name),
-    role = COALESCE(EXCLUDED.role, users.role);
+    -- BUG-034 FIX: Never update role from metadata on conflict
+    role = users.role; -- Keep existing role, don't update from metadata
   RETURN NEW;
 END;
 $$;

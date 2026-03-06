@@ -75,8 +75,10 @@ export async function registerSuperAdmin(data: {
     }
 
     // DEV-ONLY: Auto-confirm email so local accounts can log in without waiting for email
+    // BUG-045 FIX: Use explicit environment variable instead of NODE_ENV check
+    // This prevents auto-confirmation in staging/QA environments
     try {
-      if (process.env.NODE_ENV !== "production") {
+      if (process.env.NODE_ENV === "development" && process.env.ALLOW_AUTO_CONFIRM_EMAIL === "true") {
         const { createAdminClient } = await import("@/lib/supabase/admin")
         const adminSupabase = createAdminClient()
         await adminSupabase.auth.admin.updateUserById(authData.user.id, {
@@ -270,8 +272,10 @@ export async function registerEmployee(data: {
     }
 
     // DEV-ONLY: Auto-confirm email so invited accounts can log in without waiting for email
+    // BUG-045 FIX: Use explicit environment variable instead of NODE_ENV check
+    // This prevents auto-confirmation in staging/QA environments
     try {
-      if (process.env.NODE_ENV !== "production") {
+      if (process.env.NODE_ENV === "development" && process.env.ALLOW_AUTO_CONFIRM_EMAIL === "true") {
         const { createAdminClient } = await import("@/lib/supabase/admin")
         const adminSupabase = createAdminClient()
         await adminSupabase.auth.admin.updateUserById(authData.user.id, {

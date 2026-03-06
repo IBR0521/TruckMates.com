@@ -23,6 +23,17 @@ export async function extractFuelPurchaseFromReceipt(
   } | null
   error: string | null
 }> {
+  // BUG-040 FIX: Add authentication check to prevent unauthorized API usage
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: "Not authenticated", data: null }
+  }
+
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     return { error: "OpenAI API key not configured", data: null }

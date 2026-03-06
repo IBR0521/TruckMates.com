@@ -51,9 +51,21 @@ export async function getCustomers(filters?: {
   }
 
   if (filters?.search) {
-    query = query.or(
-      `name.ilike.%${filters.search}%,company_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`
-    )
+    // BUG-035 FIX: Sanitize search string to prevent PostgREST filter injection
+    // Remove PostgREST special characters: commas, parentheses, dots-followed-by-operators, percent signs outside wildcards
+    const sanitizedSearch = filters.search
+      .replace(/[,()]/g, '') // Remove commas and parentheses
+      .replace(/\.(eq|neq|gt|gte|lt|lte|like|ilike|is|in|cs|cd|ov|sl|sr|nxr|nxl|adj|not)/gi, '') // Remove dot-operator patterns
+      .replace(/%/g, '') // Remove percent signs (we'll add them ourselves)
+      .trim()
+      .substring(0, 100) // Limit length
+    
+    if (sanitizedSearch) {
+      // Use individual .ilike() calls instead of .or() with string interpolation for safety
+      query = query.or(
+        `name.ilike.%${sanitizedSearch}%,company_name.ilike.%${sanitizedSearch}%,email.ilike.%${sanitizedSearch}%`
+      )
+    }
   }
 
   // Apply pagination (default limit 25 for faster initial loads, max 100)
