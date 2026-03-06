@@ -26,9 +26,10 @@ import { getCustomer, updateCustomer } from "@/app/actions/customers"
 import { useRouter } from "next/navigation"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
+import { use } from "react"
 
-export default function EditCustomerPage({ params }: { params: { id: string } }) {
-  const { id } = params
+export default function EditCustomerPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)

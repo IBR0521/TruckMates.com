@@ -27,8 +27,10 @@ import { useRouter } from "next/navigation"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
-export default function EditVendorPage({ params }: { params: { id: string } }) {
-  const { id } = params
+import { use } from "react"
+
+export default function EditVendorPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
