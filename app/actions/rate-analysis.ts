@@ -297,8 +297,8 @@ async function getInternalRateSuggestion(
 
     // Calculate statistics
     const rates = similarLoads.map((l: { origin?: string | null; destination?: string | null; rate?: number | null; created_at?: string | null }) => l.rate).filter((r: number | null | undefined): r is number => r !== null && r !== undefined && r > 0)
-    const averageRate = rates.reduce((a, b) => a + b, 0) / rates.length
-    const sortedRates = [...rates].sort((a, b) => a - b)
+    const averageRate = rates.reduce((a: number, b: number) => a + b, 0) / rates.length
+    const sortedRates = [...rates].sort((a: number, b: number) => a - b)
     const medianRate = sortedRates[Math.floor(sortedRates.length / 2)]
     const minRate = Math.min(...rates)
     const maxRate = Math.max(...rates)
