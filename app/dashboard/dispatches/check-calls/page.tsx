@@ -72,7 +72,7 @@ export default function CheckCallsPage() {
   function getStatusBadge(status: string) {
     switch (status) {
       case "completed":
-        return <Badge variant="success"><CheckCircle2 className="w-3 h-3 mr-1" />Completed</Badge>
+        return <Badge variant="default"><CheckCircle2 className="w-3 h-3 mr-1" />Completed</Badge>
       case "missed":
         return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Missed</Badge>
       case "overdue":
