@@ -107,10 +107,12 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
         // @ts-ignore - webpackIgnore: true prevents bundling these optional dependencies
         const puppeteerCore = await import(/* webpackIgnore: true */ "puppeteer-core").catch(() => null)
         // @ts-ignore - @sparticuz/chromium is optional and may not be installed
-        const chromium = await import(/* webpackIgnore: true */ "@sparticuz/chromium").catch(() => null)
+        const chromiumModule = await import(/* webpackIgnore: true */ "@sparticuz/chromium").catch(() => null)
         
-        if (puppeteerCore && chromium) {
+        if (puppeteerCore && chromiumModule) {
           puppeteer = puppeteerCore
+          // @sparticuz/chromium may export as default or named export
+          const chromium = chromiumModule.default || chromiumModule
           executablePath = await chromium.executablePath()
           chromiumArgs = chromium.args
         }
