@@ -56,7 +56,8 @@ export async function GET(req: NextRequest) {
         // @ts-ignore - webpackIgnore: true prevents bundling these optional dependencies
         const puppeteerCore = await import(/* webpackIgnore: true */ "puppeteer-core").catch(() => null)
         // @ts-ignore - @sparticuz/chromium may not be installed in all environments
-        const chromium = await import(/* webpackIgnore: true */ "@sparticuz/chromium").catch(() => null)
+        const chromiumModule = await import(/* webpackIgnore: true */ "@sparticuz/chromium").catch(() => null)
+        const chromium = chromiumModule?.default || chromiumModule
         
         if (puppeteerCore && chromium) {
           puppeteer = puppeteerCore
