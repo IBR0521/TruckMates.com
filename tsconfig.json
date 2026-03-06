@@ -37,6 +37,7 @@
   ],
   "exclude": [
     "node_modules",
-    "EXAMPLE_DRIVERS_PAGE_WITH_SUPABASE.tsx"
+    "EXAMPLE_DRIVERS_PAGE_WITH_SUPABASE.tsx",
+    "truckmates-eld-mobile/**/*"
   ]
 }
