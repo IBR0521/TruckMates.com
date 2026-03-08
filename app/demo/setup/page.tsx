@@ -29,16 +29,27 @@ function DemoSetupContent() {
       try {
         const result = await createDemoAndSignIn()
         
-        if (result.error) {
-          // If there's a warning but demo was created, continue anyway
-          if (result.warning) {
-            console.warn("Demo setup warning:", result.warning)
-            // Continue - company is created, data might populate later
-          } else {
-            setErrorMessage(result.error)
-            setStatus("error")
-            return
-          }
+        // Check if there's an error (not just a warning)
+        if (result.error && !('warning' in result)) {
+          setErrorMessage(result.error)
+          setStatus("error")
+          return
+        }
+        
+        // If there's a warning but demo was created, continue anyway
+        if ('warning' in result && result.warning) {
+          console.warn("Demo setup warning:", result.warning)
+          // Continue - company is created, data might populate later
+        }
+        
+        // If there's an error but also a warning, treat it as a warning (demo was created)
+        if (result.error && 'warning' in result && result.warning) {
+          console.warn("Demo setup warning:", result.warning)
+          // Continue - company is created, data might populate later
+        } else if (result.error && !('warning' in result)) {
+          setErrorMessage(result.error)
+          setStatus("error")
+          return
         }
 
         // Sign in on client side to establish session
