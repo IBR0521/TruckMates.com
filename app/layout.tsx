@@ -3,12 +3,18 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { ThemeProvider } from "@/components/theme-provider"
-import { QueryProvider } from "@/components/providers/query-provider"
+import dynamic from "next/dynamic"
 import { KeyboardShortcutsProvider } from "@/components/keyboard-shortcuts"
 import { GlobalSearch } from "@/components/global-search"
 import { Toaster } from "sonner"
 import { ErrorBoundary } from "@/app/error-boundary"
 import "./globals.css"
+
+// Dynamically import QueryProvider to avoid static generation issues
+const QueryProvider = dynamic(
+  () => import("@/components/providers/query-provider").then(mod => ({ default: mod.QueryProvider })),
+  { ssr: true } // Keep SSR but load dynamically to avoid build-time issues
+)
 
 // Load fonts - must be const at module scope
 const geist = Geist({ 
@@ -75,3 +81,4 @@ export default function RootLayout({
     </html>
   )
 }
+
