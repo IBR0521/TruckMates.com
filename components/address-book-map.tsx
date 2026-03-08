@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Loader2, MapPin, AlertCircle } from "lucide-react"
@@ -35,6 +35,19 @@ export function AddressBookMap({ entries }: AddressBookMapProps) {
   const infoWindowsRef = useRef<Map<string, any>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const containerReadyRef = useRef(false)
+
+  // Callback ref to ensure container is attached before initializing
+  const setMapRef = (node: HTMLDivElement | null) => {
+    if (node) {
+      mapRef.current = node
+      containerReadyRef.current = true
+      // Don't call initializeMap here - let useEffect handle it
+      // This ensures React is fully initialized before calling hooks
+    } else {
+      containerReadyRef.current = false
+    }
+  }
 
   useEffect(() => {
     // Don't load map if there are no entries
@@ -43,8 +56,16 @@ export function AddressBookMap({ entries }: AddressBookMapProps) {
       return
     }
 
-    // Load Google Maps script
-    const loadMap = async () => {
+    // Wait a tick to ensure DOM is ready and ref is attached
+    const initTimer = setTimeout(() => {
+      // Check if container is ready
+      if (!mapRef.current || !containerReadyRef.current) {
+        // Container not ready yet, will retry on next render
+        return
+      }
+
+      // Load Google Maps script
+      const loadMap = async () => {
       let apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
       // If not in env, try to fetch from API route (uses GOOGLE_MAPS_API_KEY)
@@ -66,8 +87,9 @@ export function AddressBookMap({ entries }: AddressBookMapProps) {
         return
       }
 
-      // Check if Google Maps is already loaded
-      if (window.google && window.google.maps) {
+      // Check if Google Maps is already loaded and container is ready
+      // Must check that Map constructor is available, not just that maps object exists
+      if (window.google?.maps?.Map && typeof window.google.maps.Map === 'function' && containerReadyRef.current) {
         initializeMap()
         return
       }
@@ -85,7 +107,8 @@ export function AddressBookMap({ entries }: AddressBookMapProps) {
       if (existingScript) {
         // Wait for existing script to load
         const checkGoogleMaps = setInterval(() => {
-          if (window.google && window.google.maps) {
+          // Check that Map constructor is available, not just that maps object exists
+          if (window.google?.maps?.Map && typeof window.google.maps.Map === 'function' && containerReadyRef.current) {
             clearInterval(checkGoogleMaps)
             clearTimeout(timeoutId)
             initializeMap()
@@ -110,7 +133,17 @@ export function AddressBookMap({ entries }: AddressBookMapProps) {
       script.defer = true
       script.onload = () => {
         clearTimeout(timeoutId)
-        initializeMap()
+        // Wait for container to be ready before initializing
+        if (containerReadyRef.current) {
+          initializeMap()
+        } else {
+          // Retry after a short delay if container not ready yet
+          setTimeout(() => {
+            if (containerReadyRef.current) {
+              initializeMap()
+            }
+          }, 100)
+        }
       }
       script.onerror = () => {
         clearTimeout(timeoutId)
@@ -119,13 +152,16 @@ export function AddressBookMap({ entries }: AddressBookMapProps) {
       }
       document.head.appendChild(script)
 
-      return () => {
-        clearTimeout(timeoutId)
+        return () => {
+          clearTimeout(timeoutId)
+        }
       }
-    }
 
-    loadMap()
-  }, [])
+      loadMap()
+    }, 50) // Small delay to ensure ref is attached
+
+    return () => clearTimeout(initTimer)
+  }, [entries.length]) // Re-run if entries change
 
   useEffect(() => {
     if (mapInstanceRef.current && entries.length > 0) {
@@ -134,17 +170,25 @@ export function AddressBookMap({ entries }: AddressBookMapProps) {
   }, [entries])
 
   const initializeMap = () => {
-    if (!mapRef.current) {
-      console.error("Map container ref is not available")
-      setLoadError("Map container not found")
-      setIsLoading(false)
+    // Double-check container is ready
+    if (!mapRef.current || !containerReadyRef.current) {
+      console.warn("[AddressBookMap] Map container ref not available yet, will retry")
+      // Don't set error, just wait - the callback ref will retry
       return
     }
 
-    if (!window.google || !window.google.maps) {
-      console.error("Google Maps API is not loaded")
-      setLoadError("Google Maps API failed to load. Please refresh the page.")
-      setIsLoading(false)
+    // Check if Google Maps API is fully loaded with Map constructor
+    if (!window.google || !window.google.maps || typeof window.google.maps.Map !== 'function') {
+      console.warn("[AddressBookMap] Google Maps API not fully loaded yet, will retry")
+      // Retry after a short delay
+      setTimeout(() => {
+        if (window.google?.maps?.Map && typeof window.google.maps.Map === 'function') {
+          initializeMap()
+        } else {
+          setLoadError("Google Maps API failed to load. Please refresh the page.")
+          setIsLoading(false)
+        }
+      }, 200)
       return
     }
 
@@ -158,6 +202,11 @@ export function AddressBookMap({ entries }: AddressBookMapProps) {
           const avgLng = validEntries.reduce((sum, e) => sum + (e.coordinates?.lng || 0), 0) / validEntries.length
           center = { lat: avgLat, lng: avgLng }
         }
+      }
+
+      // Double-check Map constructor is available before using it
+      if (typeof window.google.maps.Map !== 'function') {
+        throw new Error("Google Maps Map constructor is not available")
       }
 
       const map = new window.google.maps.Map(mapRef.current, {
@@ -178,9 +227,10 @@ export function AddressBookMap({ entries }: AddressBookMapProps) {
       mapInstanceRef.current = map
       setIsLoading(false)
       updateMarkers()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error initializing map:", error)
-      setLoadError(`Error initializing Google Maps: ${error.message || "Unknown error"}`)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error"
+      setLoadError(`Error initializing Google Maps: ${errorMessage}`)
       setIsLoading(false)
     }
   }
@@ -298,17 +348,8 @@ export function AddressBookMap({ entries }: AddressBookMapProps) {
     )
   }
 
-  if (isLoading) {
-    return (
-      <Card className="border border-border/50 p-8 text-center">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto mb-4" />
-        <p className="text-muted-foreground mb-2">Loading map...</p>
-        <p className="text-xs text-muted-foreground">
-          This may take a few seconds. If it takes longer than 30 seconds, please check your API key.
-        </p>
-      </Card>
-    )
-  }
+  // Loading state is now handled inline with the map container
+  // This ensures the container is always rendered for the ref to attach
 
   // Don't try to load map if no entries
   if (entries.length === 0) {
@@ -354,9 +395,18 @@ export function AddressBookMap({ entries }: AddressBookMapProps) {
     )
   }
 
+  // Always render the container, even when loading, so the ref can attach
   return (
-    <div className="w-full h-[600px] rounded-lg overflow-hidden border border-border">
-      <div ref={mapRef} className="w-full h-full" />
+    <div className="w-full h-[600px] rounded-lg overflow-hidden border border-border relative">
+      <div ref={setMapRef} className="w-full h-full" />
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-secondary/20 z-10">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+            <p className="text-sm text-muted-foreground">Loading map...</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

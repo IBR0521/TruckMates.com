@@ -60,9 +60,10 @@ export async function getInvoices(filters?: {
     }
 
     return { data: invoices || [], error: null, count: count || 0 }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[getInvoices] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: errorMessage, data: null, count: 0 }
   }
 }
 
@@ -94,10 +95,11 @@ export async function getInvoice(id: string) {
       return { error: "No company found", data: null }
     }
 
+    // V3-007 FIX: Replace select(*) with explicit columns
     const { data: invoice, error } = await supabase
       .from("invoices")
       .select(`
-        *,
+        id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, stripe_invoice_id, stripe_payment_intent_id, created_at, updated_at,
         loads:load_id (
           id,
           shipment_number,
@@ -119,9 +121,10 @@ export async function getInvoice(id: string) {
     }
 
     return { data: invoice, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[getInvoice] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: errorMessage, data: null }
   }
 }
 
@@ -134,50 +137,51 @@ export async function getExpenses(filters?: {
   try {
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
-  // Use optimized helper with caching
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-  const companyError = result.error
+    // Use optimized helper with caching
+    const result = await getCachedUserCompany(user.id)
+    const company_id = result.company_id
+    const companyError = result.error
 
-  if (companyError || !company_id) {
-    return { error: companyError || "No company found", data: null }
-  }
+    if (companyError || !company_id) {
+      return { error: companyError || "No company found", data: null }
+    }
 
-  // Build query with selective columns and pagination
-  let query = supabase
-    .from("expenses")
-    .select("id, category, description, amount, date, driver_id, truck_id, vendor, payment_method, created_at", { count: "exact" })
-    .eq("company_id", company_id)
-    .order("created_at", { ascending: false })
+    // Build query with selective columns and pagination
+    let query = supabase
+      .from("expenses")
+      .select("id, category, description, amount, date, driver_id, truck_id, vendor, payment_method, created_at", { count: "exact" })
+      .eq("company_id", company_id)
+      .order("created_at", { ascending: false })
 
-  // Apply filters
-  if (filters?.category) {
-    query = query.eq("category", filters.category)
-  }
+    // Apply filters
+    if (filters?.category) {
+      query = query.eq("category", filters.category)
+    }
 
-  // Apply pagination (default limit 25 for faster initial loads, max 100)
-  const limit = Math.min(filters?.limit || 25, 100)
-  const offset = filters?.offset || 0
-  query = query.range(offset, offset + limit - 1)
+    // Apply pagination (default limit 25 for faster initial loads, max 100)
+    const limit = Math.min(filters?.limit || 25, 100)
+    const offset = filters?.offset || 0
+    query = query.range(offset, offset + limit - 1)
 
-  const { data: expenses, error, count } = await query
+    const { data: expenses, error, count } = await query
 
-  if (error) {
-    return { error: error.message, data: null, count: 0 }
-  }
+    if (error) {
+      return { error: error.message, data: null, count: 0 }
+    }
 
-  return { data: expenses || [], error: null, count: count || 0 }
-  } catch (error: any) {
+    return { data: expenses || [], error: null, count: count || 0 }
+  } catch (error: unknown) {
     console.error("[getExpenses] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: errorMessage, data: null, count: 0 }
   }
 }
 
@@ -208,10 +212,11 @@ export async function getSettlements() {
     return { error: "No company found", data: null }
   }
 
+  // V3-007 FIX: Replace select(*) with explicit columns and add LIMIT
   const { data: settlements, error } = await supabase
     .from("settlements")
     .select(`
-      *,
+      id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, net_pay, status, paid_date, payment_method, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at,
       drivers:driver_id (
         id,
         name
@@ -219,15 +224,17 @@ export async function getSettlements() {
     `)
     .eq("company_id", userData.company_id)
     .order("created_at", { ascending: false })
+    .limit(1000)
 
   if (error) {
     return { error: error.message, data: null }
   }
 
   return { data: settlements, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[getSettlements] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: errorMessage, data: null }
   }
 }
 
@@ -247,75 +254,77 @@ export async function updateInvoice(
   try {
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  // RBAC check
-  const permissionCheck = await checkEditPermission("invoicing")
-  if (!permissionCheck.allowed) {
-    return { error: permissionCheck.error || "You don't have permission to edit invoices", data: null }
-  }
-
-  // V3-014 FIX: Validate negative amounts
-  if (formData.amount !== undefined && formData.amount < 0) {
-    return { error: "Amount must be non-negative", data: null }
-  }
-
-  // DAT-005 FIX: Validate due_date is after issue_date if both are provided
-  if (formData.issue_date && formData.due_date) {
-    const issueDate = new Date(formData.issue_date)
-    const dueDate = new Date(formData.due_date)
-    if (dueDate <= issueDate) {
-      return { error: "Due date must be after issue date", data: null }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
     }
-  }
 
-  // Build update data
-  const updateData: any = {}
-  if (formData.status !== undefined) updateData.status = formData.status
-  if (formData.amount !== undefined) updateData.amount = formData.amount
-  if (formData.issue_date !== undefined) updateData.issue_date = formData.issue_date
-  if (formData.due_date !== undefined) updateData.due_date = formData.due_date
-  if (formData.payment_terms !== undefined) updateData.payment_terms = formData.payment_terms
-  if (formData.description !== undefined) updateData.description = formData.description
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .maybeSingle()
 
-  const { data, error } = await supabase
-    .from("invoices")
-    .update(updateData)
-    .eq("id", id)
-    .eq("company_id", userData.company_id)
-    .select()
-    .single()
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
-  if (error) {
-    return { error: error.message, data: null }
-  }
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
 
-  revalidatePath("/dashboard/accounting/invoices")
-  revalidatePath(`/dashboard/accounting/invoices/${id}`)
-  return { data, error: null }
-  } catch (error: any) {
+    // RBAC check
+    const permissionCheck = await checkEditPermission("invoicing")
+    if (!permissionCheck.allowed) {
+      return { error: permissionCheck.error || "You don't have permission to edit invoices", data: null }
+    }
+
+    // V3-014 FIX: Validate negative amounts
+    if (formData.amount !== undefined && formData.amount < 0) {
+      return { error: "Amount must be non-negative", data: null }
+    }
+
+    // DAT-005 FIX: Validate due_date is after issue_date if both are provided
+    if (formData.issue_date && formData.due_date) {
+      const issueDate = new Date(formData.issue_date)
+      const dueDate = new Date(formData.due_date)
+      if (dueDate <= issueDate) {
+        return { error: "Due date must be after issue date", data: null }
+      }
+    }
+
+    // Build update data
+    const updateData: any = {}
+    if (formData.status !== undefined) updateData.status = formData.status
+    if (formData.amount !== undefined) updateData.amount = formData.amount
+    if (formData.issue_date !== undefined) updateData.issue_date = formData.issue_date
+    if (formData.due_date !== undefined) updateData.due_date = formData.due_date
+    if (formData.payment_terms !== undefined) updateData.payment_terms = formData.payment_terms
+    if (formData.description !== undefined) updateData.description = formData.description
+
+    // V3-007 FIX: Replace implicit select() with explicit columns
+    const { data, error } = await supabase
+      .from("invoices")
+      .update(updateData)
+      .eq("id", id)
+      .eq("company_id", userData.company_id)
+      .select("id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, created_at, updated_at")
+      .single()
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    revalidatePath("/dashboard/accounting/invoices")
+    revalidatePath(`/dashboard/accounting/invoices/${id}`)
+    return { data, error: null }
+  } catch (error: unknown) {
     console.error("[updateInvoice] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: errorMessage, data: null }
   }
 }
 
@@ -347,9 +356,11 @@ export async function duplicateInvoice(id: string) {
   }
 
   // Get the original invoice
+  // V3-007 FIX: Replace select(*) with explicit columns
+  // Include all columns needed for duplication
   const { data: originalInvoice, error: fetchError } = await supabase
     .from("invoices")
-    .select("*")
+    .select("id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, created_at, updated_at")
     .eq("id", id)
     .eq("company_id", userData.company_id)
     .single()
@@ -378,7 +389,7 @@ export async function duplicateInvoice(id: string) {
   delete duplicateData.updated_at
   delete duplicateData.paid_at
   delete duplicateData.stripe_invoice_id
-  delete duplicateData.stripe_payment_id
+  delete duplicateData.stripe_payment_intent_id
   duplicateData.invoice_number = numberResult.data
   duplicateData.status = "draft" // Reset to draft
   duplicateData.issue_date = new Date().toISOString().split("T")[0] // Today's date
@@ -396,10 +407,11 @@ export async function duplicateInvoice(id: string) {
   issueDate.setDate(issueDate.getDate() + days)
   duplicateData.due_date = issueDate.toISOString().split("T")[0]
 
+  // V3-007 FIX: Replace implicit select() with explicit columns
   const { data: newInvoice, error: createError } = await supabase
     .from("invoices")
     .insert(duplicateData)
-    .select()
+    .select("id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, created_at, updated_at")
     .single()
 
   if (createError) {
@@ -408,9 +420,10 @@ export async function duplicateInvoice(id: string) {
 
   revalidatePath("/dashboard/accounting/invoices")
   return { data: newInvoice, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[duplicateInvoice] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: errorMessage, data: null }
   }
 }
 
@@ -456,10 +469,11 @@ export async function deleteInvoice(id: string) {
   if (error) return { error: error.message }
 
   revalidatePath("/dashboard/accounting/invoices")
-  return { error: null }
-  } catch (error: any) {
+    return { error: null }
+  } catch (error: unknown) {
     console.error("[deleteInvoice] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred" }
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: errorMessage }
   }
 }
 
@@ -572,7 +586,9 @@ export async function createInvoice(formData: {
   description?: string
   items?: any[]
 }) {
-  const supabase = await createClient()
+  // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
+  try {
+    const supabase = await createClient()
 
   const {
     data: { user },
@@ -727,10 +743,11 @@ export async function createInvoice(formData: {
     invoiceData.subtotal = subtotal
   }
 
+  // V3-007 FIX: Replace implicit select() with explicit columns
   const { data, error } = await supabase
     .from("invoices")
     .insert(invoiceData)
-    .select()
+    .select("id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, created_at, updated_at")
     .single()
 
   if (error) {
@@ -772,7 +789,11 @@ export async function createInvoice(formData: {
     console.warn("[createInvoice] Webhook trigger failed:", error)
   }
   
-  return { data, error: null }
+    return { data, error: null }
+  } catch (error: any) {
+    console.error("[createInvoice] Unexpected error:", error)
+    return { error: error?.message || "Failed to create invoice", data: null }
+  }
 }
 
 // Get load data for invoice auto-fill
@@ -842,33 +863,33 @@ export async function createExpense(formData: {
   try {
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .maybeSingle()
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
 
-  // RBAC check
-  const permissionCheck = await checkCreatePermission("accounting")
-  if (!permissionCheck.allowed) {
-    return { error: permissionCheck.error || "You don't have permission to create expenses", data: null }
-  }
+    // RBAC check
+    const permissionCheck = await checkCreatePermission("accounting")
+    if (!permissionCheck.allowed) {
+      return { error: permissionCheck.error || "You don't have permission to create expenses", data: null }
+    }
 
   // Professional validation
   if (!validateRequiredString(formData.category, 1, 100)) {
@@ -1034,7 +1055,8 @@ export async function createExpense(formData: {
       route_id: linkedRouteId,
       load_id: linkedLoadId,
     })
-    .select()
+    // V3-007 FIX: Replace implicit select() with explicit columns
+    .select("id, company_id, category, description, amount, date, vendor, driver_id, truck_id, mileage, payment_method, receipt_url, has_receipt, route_id, load_id, fuel_level_after, gallons, price_per_gallon, created_at, updated_at")
     .single()
 
   if (error) {
@@ -1221,33 +1243,33 @@ export async function createSettlement(formData: {
   try {
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
 
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .maybeSingle()
 
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
 
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
 
-  // RBAC check
-  const permissionCheck = await checkCreatePermission("settlements")
-  if (!permissionCheck.allowed) {
-    return { error: permissionCheck.error || "You don't have permission to create settlements", data: null }
-  }
+    // RBAC check
+    const permissionCheck = await checkCreatePermission("settlements")
+    if (!permissionCheck.allowed) {
+      return { error: permissionCheck.error || "You don't have permission to create settlements", data: null }
+    }
 
   // Validate driver_id belongs to company
   const { data: driver, error: driverError } = await supabase
@@ -1413,7 +1435,8 @@ export async function createSettlement(formData: {
       pay_rule_id: payRuleId,
       calculation_details: calculationDetails,
     })
-    .select()
+    // V3-007 FIX: Replace implicit select() with explicit columns
+    .select("id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, net_pay, status, paid_date, payment_method, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at")
     .single()
 
   if (error) {

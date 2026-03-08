@@ -72,7 +72,18 @@ import {
   type CreateAddressBookEntryInput,
 } from "@/app/actions/enhanced-address-book"
 import { exportToExcel } from "@/lib/export-utils"
-import { AddressBookMap } from "@/components/address-book-map"
+import dynamic from "next/dynamic"
+
+// Dynamically import AddressBookMap to avoid SSR issues
+const AddressBookMap = dynamic(() => import("@/components/address-book-map").then(mod => ({ default: mod.AddressBookMap })), {
+  ssr: false,
+  loading: () => (
+    <Card className="border border-border/50 p-8 text-center">
+      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto mb-4" />
+      <p className="text-muted-foreground">Loading map...</p>
+    </Card>
+  )
+})
 
 const CATEGORY_ICONS: Record<AddressBookCategory, any> = {
   shipper: Package,
@@ -164,8 +175,14 @@ export default function EnhancedAddressBookPage() {
 
       if (result.error) {
         toast.error(result.error)
+        setEntries([]) // Set empty array on error to prevent UI crashes
       } else {
-        setEntries(result.data)
+        // ADDRESS-BOOK FIX: Add defensive check to ensure data is an array
+        if (result.data && Array.isArray(result.data)) {
+          setEntries(result.data)
+        } else {
+          setEntries([])
+        }
       }
     } catch (error) {
       toast.error("Failed to load address book entries")
@@ -482,6 +499,11 @@ export default function EnhancedAddressBookPage() {
   }
 
   const handleExport = () => {
+    // ADDRESS-BOOK FIX: Add defensive check before using .map()
+    if (!Array.isArray(entries)) {
+      toast.error("No entries to export")
+      return
+    }
     const exportData = entries.map((entry) => ({
       Name: entry.name,
       "Company Name": entry.company_name || "",
@@ -609,18 +631,19 @@ export default function EnhancedAddressBookPage() {
           </Card>
         ) : viewMode === "map" ? (
           (() => {
-            const verifiedEntries = entries.filter(e => e.coordinates && e.geocoding_status === "verified")
+            // ADDRESS-BOOK FIX: Add defensive check before using .filter()
+            const verifiedEntries = Array.isArray(entries) ? entries.filter(e => e.coordinates && e.geocoding_status === "verified") : []
             if (verifiedEntries.length === 0) {
               return (
                 <Card className="border border-border/50 p-8 text-center">
                   <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                   <p className="text-muted-foreground mb-2">No addresses to display</p>
                   <p className="text-sm text-muted-foreground mb-4">
-                    {entries.length > 0
+                    {Array.isArray(entries) && entries.length > 0
                       ? `${entries.length} address${entries.length !== 1 ? "es" : ""} found, but none are verified with coordinates. Verify addresses to see them on the map.`
                       : "Add addresses to see them on the map."}
                   </p>
-                  {entries.length > 0 && (
+                  {Array.isArray(entries) && entries.length > 0 && (
                     <Button onClick={() => setViewMode("list")} variant="outline">
                       Switch to List View
                     </Button>
@@ -628,20 +651,21 @@ export default function EnhancedAddressBookPage() {
                 </Card>
               )
             }
-            return <AddressBookMap entries={verifiedEntries} />
+            // Render map component directly - no IIFE needed
+            return verifiedEntries.length > 0 ? <AddressBookMap entries={verifiedEntries} /> : null
           })()
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {entries.map((entry) => {
+            {Array.isArray(entries) && entries.map((entry) => {
               const Icon = CATEGORY_ICONS[entry.category]
               return (
               <Card
                   key={entry.id}
                 className="border-border p-4 hover:border-primary/50 transition cursor-pointer"
               >
-                <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2 flex-1">
-                    <div className="p-2 rounded-md bg-primary/10 text-primary">
+                <div className="flex items-start justify-between mb-3 gap-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="p-2 rounded-md bg-primary/10 text-primary flex-shrink-0">
                         <Icon className="w-4 h-4" />
                     </div>
                       <div className="flex-1 min-w-0">
@@ -651,7 +675,7 @@ export default function EnhancedAddressBookPage() {
                       )}
                     </div>
                   </div>
-                    <Badge className="bg-primary/20 text-primary border-primary/50">
+                    <Badge className="bg-primary/20 text-primary border-primary/50 flex-shrink-0 whitespace-nowrap">
                       {CATEGORY_LABELS[entry.category]}
                     </Badge>
                 </div>
@@ -735,22 +759,22 @@ export default function EnhancedAddressBookPage() {
         )}
 
         {/* Summary */}
-        {!isLoading && entries.length > 0 && (
+        {!isLoading && Array.isArray(entries) && entries.length > 0 && (
           <div className="mt-6 p-4 bg-secondary/30 rounded-lg border border-border">
             <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
                 {viewMode === "map" ? (
                   <>
-                    Showing {entries.filter(e => e.coordinates && e.geocoding_status === "verified").length} of {entries.length} address{entries.length !== 1 ? "es" : ""} on map
-                    {entries.filter(e => e.coordinates && e.geocoding_status === "verified").length < entries.length && (
+                    Showing {Array.isArray(entries) ? entries.filter(e => e.coordinates && e.geocoding_status === "verified").length : 0} of {Array.isArray(entries) ? entries.length : 0} address{Array.isArray(entries) && entries.length !== 1 ? "es" : ""} on map
+                    {Array.isArray(entries) && entries.filter(e => e.coordinates && e.geocoding_status === "verified").length < entries.length && (
                       <span className="text-xs text-muted-foreground ml-2">
-                        ({entries.length - entries.filter(e => e.coordinates && e.geocoding_status === "verified").length} need verification)
+                        ({Array.isArray(entries) ? entries.length - entries.filter(e => e.coordinates && e.geocoding_status === "verified").length : 0} need verification)
                       </span>
                     )}
                   </>
                 ) : (
                   <>
-                    Showing {entries.length} address{entries.length !== 1 ? "es" : ""}
+                    Showing {Array.isArray(entries) ? entries.length : 0} address{Array.isArray(entries) && entries.length !== 1 ? "es" : ""}
                     {categoryFilter !== "all" && ` (${CATEGORY_LABELS[categoryFilter]} only)`}
                   </>
                 )}

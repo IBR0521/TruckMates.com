@@ -799,7 +799,7 @@ export default function Home() {
       {/* CTA Section */}
       <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent relative overflow-hidden" suppressHydrationWarning>
         <div className="absolute inset-0 bg-grid-pattern opacity-5" />
-        <div className="max-w-4xl mx-auto text-center relative z-10">
+        <div className="max-w-4xl mx-auto text-center relative z-10" suppressHydrationWarning>
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
             <Award className="w-4 h-4 text-primary" />
             <span className="text-sm font-medium text-primary">Trusted by Logistics Companies</span>
