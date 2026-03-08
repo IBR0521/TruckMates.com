@@ -42,22 +42,13 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
   //       suspend because React will throw away the client on the initial
   //       render if it suspends and there is no boundary
   // Use lazy initialization to ensure React is available
-  // Defensive check: Ensure React is available before using hooks
-  // During static generation, React might not be fully initialized
-  try {
-    const [queryClient] = useState(() => {
-      return getQueryClient()
-    })
+  const [queryClient] = useState(() => {
+    return getQueryClient()
+  })
 
-    return (
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
-    )
-  } catch (error) {
-    // If React hooks fail (e.g., during static generation), return children without provider
-    // This allows static pages to be generated without React Query
-    console.warn('[QueryProvider] Failed to initialize, skipping provider:', error)
-    return <>{children}</>
-  }
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  )
 }
