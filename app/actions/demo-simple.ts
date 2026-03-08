@@ -1,8 +1,6 @@
 "use server"
 
 import { createClient } from "@supabase/supabase-js"
-import { cookies } from "next/headers"
-import { redirect } from "next/navigation"
 
 // BUG-068 FIX: Use environment variables instead of hardcoded credentials
 // Never hardcode credentials in source code - use env vars or generate random passwords
