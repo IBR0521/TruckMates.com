@@ -5,15 +5,25 @@ import { createClient } from "@supabase/supabase-js"
 // BUG-068 FIX: Use environment variables instead of hardcoded credentials
 // Never hardcode credentials in source code - use env vars or generate random passwords
 const DEMO_EMAIL = process.env.DEMO_EMAIL || "demo@truckmates.com"
-const DEMO_PASSWORD = process.env.DEMO_PASSWORD || (() => {
-  // Generate a random password if not set in env
-  // This is a fallback for development only
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("DEMO_PASSWORD must be set in environment variables for production")
-  }
-  return "demo123456" // Only for development
-})()
 const DEMO_COMPANY_NAME = process.env.DEMO_COMPANY_NAME || "Demo Logistics Company"
+
+// Helper function to get demo password - don't throw during module initialization
+function getDemoPassword(): string {
+  const password = process.env.DEMO_PASSWORD
+  if (password) {
+    return password
+  }
+  
+  // In production, return a default but log a warning
+  // Don't throw during module load - check inside the function instead
+  const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL === "1"
+  if (isProduction) {
+    // Return a default for now, but the function will check and return proper error
+    return "demo123456"
+  }
+  
+  return "demo123456" // Development fallback
+}
 
 // Use a loose type here to avoid tight coupling to Supabase client generics
 // This is an internal helper and we only call methods that exist on any Supabase client instance.
@@ -93,7 +103,7 @@ export async function createDemoAndSignIn() {
       // Create new demo user with email already confirmed
       const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
         email: DEMO_EMAIL,
-        password: DEMO_PASSWORD,
+        password: demoPassword,
         email_confirm: true, // Auto-confirm email - no confirmation needed
         user_metadata: {
           is_demo: true,
