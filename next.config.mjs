@@ -55,6 +55,9 @@ const nextConfig = {
   // Configure Turbopack (Next.js 16 uses Turbopack by default)
   // Optimize for smaller build output
   turbopack: {},
+  // Disable static optimization for pages that use client components with hooks
+  // This prevents build-time errors when React isn't fully initialized
+  output: 'standalone', // Use standalone output to avoid static generation issues
   // Performance: Enable React strict mode for better development experience
   reactStrictMode: true,
   // Externalize optional dependencies to prevent build errors
