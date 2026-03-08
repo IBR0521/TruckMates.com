@@ -2,27 +2,9 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
-import { ThemeProvider } from "@/components/theme-provider"
-import dynamic from "next/dynamic"
-import { Toaster } from "sonner"
+import { ClientProviders } from "@/components/providers/client-providers"
 import { ErrorBoundary } from "@/app/error-boundary"
 import "./globals.css"
-
-// Dynamically import all client components to avoid static generation issues
-const QueryProvider = dynamic(
-  () => import("@/components/providers/query-provider").then(mod => ({ default: mod.QueryProvider })),
-  { ssr: false } // Disable SSR to prevent build-time React hooks errors
-)
-
-const KeyboardShortcutsProvider = dynamic(
-  () => import("@/components/keyboard-shortcuts").then(mod => ({ default: mod.KeyboardShortcutsProvider })),
-  { ssr: false }
-)
-
-const GlobalSearch = dynamic(
-  () => import("@/components/global-search").then(mod => ({ default: mod.GlobalSearch })),
-  { ssr: false }
-)
 
 // Load fonts - must be const at module scope
 const geist = Geist({ 
@@ -74,15 +56,9 @@ export default function RootLayout({
           Skip to main content
         </a>
         <ErrorBoundary>
-          <QueryProvider>
-            <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-              <KeyboardShortcutsProvider>
-                {children}
-                <GlobalSearch />
-              </KeyboardShortcutsProvider>
-              <Toaster />
-            </ThemeProvider>
-          </QueryProvider>
+          <ClientProviders>
+            {children}
+          </ClientProviders>
         </ErrorBoundary>
         <Analytics />
       </body>
