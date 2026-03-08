@@ -29,24 +29,14 @@ function DemoSetupContent() {
       try {
         const result = await createDemoAndSignIn()
         
-        // Check if there's an error (not just a warning)
-        if (result.error && !('warning' in result)) {
-          setErrorMessage(result.error)
-          setStatus("error")
-          return
-        }
-        
-        // If there's a warning but demo was created, continue anyway
+        // Check if there's a warning (demo was created but with issues)
         if ('warning' in result && result.warning) {
           console.warn("Demo setup warning:", result.warning)
           // Continue - company is created, data might populate later
         }
         
-        // If there's an error but also a warning, treat it as a warning (demo was created)
-        if (result.error && 'warning' in result && result.warning) {
-          console.warn("Demo setup warning:", result.warning)
-          // Continue - company is created, data might populate later
-        } else if (result.error && !('warning' in result)) {
+        // Check if there's an error (and no warning, meaning it failed)
+        if (result.error && !('warning' in result)) {
           setErrorMessage(result.error)
           setStatus("error")
           return
