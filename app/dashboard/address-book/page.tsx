@@ -75,7 +75,7 @@ import { exportToExcel } from "@/lib/export-utils"
 import dynamic from "next/dynamic"
 
 // Dynamically import AddressBookMap to avoid SSR issues
-const AddressBookMap = dynamic(() => import("@/components/address-book-map").then(mod => ({ default: mod.AddressBookMap })), {
+const AddressBookMap = dynamic(() => import("@/components/address-book-map"), {
   ssr: false,
   loading: () => (
     <Card className="border border-border/50 p-8 text-center">

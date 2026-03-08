@@ -28,7 +28,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   other: "#6B7280", // Gray
 }
 
-export function AddressBookMap({ entries }: AddressBookMapProps) {
+function AddressBookMap({ entries }: AddressBookMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const markersRef = useRef<Map<string, any>>(new Map())
@@ -411,3 +411,4 @@ export function AddressBookMap({ entries }: AddressBookMapProps) {
   )
 }
 
+export default AddressBookMap
