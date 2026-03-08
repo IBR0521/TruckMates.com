@@ -1,7 +1,7 @@
 "use client"
 
+import React, { useState } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { useState } from "react"
 
 // Create a client instance with optimized defaults for better performance
 function makeQueryClient() {
@@ -41,7 +41,14 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
   //       have a suspense boundary between this and the code that may
   //       suspend because React will throw away the client on the initial
   //       render if it suspends and there is no boundary
-  const queryClient = useState(() => getQueryClient())[0]
+  // Use lazy initialization to ensure React is available
+  const [queryClient] = useState(() => {
+    // Ensure we're in a client environment
+    if (typeof window === 'undefined') {
+      return makeQueryClient()
+    }
+    return getQueryClient()
+  })
 
   return (
     <QueryClientProvider client={queryClient}>
