@@ -34,6 +34,17 @@ interface ClientProvidersProps {
 }
 
 export function ClientProviders({ children }: ClientProvidersProps) {
+  const [mounted, setMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Don't render providers until mounted (client-side only)
+  if (!mounted) {
+    return <>{children}</>
+  }
+
   return (
     <QueryProvider>
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>

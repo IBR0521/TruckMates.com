@@ -6,10 +6,6 @@ import { Logo } from "@/components/logo"
 import { createDemoAndSignIn } from "@/app/actions/demo-simple"
 import { Loader2 } from "lucide-react"
 
-// Force dynamic rendering - never cache this page
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
 function DemoSetupContent() {
   const router = useRouter()
   const [status, setStatus] = useState<"loading" | "error">("loading")
