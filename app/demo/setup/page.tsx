@@ -2,19 +2,39 @@
 
 import { useEffect, useState, Suspense } from "react"
 import { useRouter } from "next/navigation"
-import { Logo } from "@/components/logo"
-import { createDemoAndSignIn } from "@/app/actions/demo-simple"
+import dynamic from "next/dynamic"
 import { Loader2 } from "lucide-react"
+
+// Dynamically import Logo to prevent SSR issues
+const Logo = dynamic(() => import("@/components/logo").then(mod => ({ default: mod.Logo })), {
+  ssr: false,
+  loading: () => <div className="h-16 w-48 bg-muted animate-pulse rounded" />
+})
+
+// Dynamically import the server action to prevent evaluation during SSR
+const createDemoAndSignIn = dynamic(
+  () => import("@/app/actions/demo-simple").then(mod => ({ default: mod.createDemoAndSignIn })),
+  { ssr: false }
+)
 
 function DemoSetupContent() {
   const router = useRouter()
   const [status, setStatus] = useState<"loading" | "error">("loading")
   const [errorMessage, setErrorMessage] = useState("")
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+
     async function handleDemo() {
       try {
-        const result = await createDemoAndSignIn()
+        // Dynamically import the action function
+        const { createDemoAndSignIn: createDemo } = await import("@/app/actions/demo-simple")
+        const result = await createDemo()
         
         if (result.error) {
           // If there's a warning but demo was created, continue anyway
@@ -74,7 +94,7 @@ function DemoSetupContent() {
     }
 
     handleDemo()
-  }, [router])
+  }, [router, mounted])
 
   if (status === "error") {
     const isProduction = typeof window !== 'undefined' && 
