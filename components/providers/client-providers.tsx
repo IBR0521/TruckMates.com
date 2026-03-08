@@ -2,12 +2,15 @@
 
 import React from "react"
 import dynamic from "next/dynamic"
-import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "sonner"
 
-// Dynamically import all client components with ssr: false
+// Dynamically import all client components with ssr: false to prevent SSR issues
 const QueryProvider = dynamic(
   () => import("@/components/providers/query-provider").then(mod => ({ default: mod.QueryProvider })),
+  { ssr: false }
+)
+
+const ThemeProvider = dynamic(
+  () => import("@/components/theme-provider").then(mod => ({ default: mod.ThemeProvider })),
   { ssr: false }
 )
 
@@ -18,6 +21,11 @@ const KeyboardShortcutsProvider = dynamic(
 
 const GlobalSearch = dynamic(
   () => import("@/components/global-search").then(mod => ({ default: mod.GlobalSearch })),
+  { ssr: false }
+)
+
+const Toaster = dynamic(
+  () => import("sonner").then(mod => ({ default: mod.Toaster })),
   { ssr: false }
 )
 

@@ -7,6 +7,10 @@ import Link from "next/link"
 import { Logo } from "@/components/logo"
 import { useRouter } from "next/navigation"
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default function DemoPage() {
   const router = useRouter()
   
