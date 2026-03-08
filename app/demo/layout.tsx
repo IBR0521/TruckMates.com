@@ -1,3 +1,5 @@
+import type React from "react"
+
 // Force dynamic rendering for all demo routes
 // This prevents static generation which was causing revalidate() errors
 export const dynamic = 'force-dynamic'
