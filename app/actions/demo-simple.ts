@@ -72,6 +72,12 @@ export async function createDemoAndSignIn() {
         : "Supabase service role key missing. Please add SUPABASE_SERVICE_ROLE_KEY to your .env.local file."
       return { error: errorMsg }
     }
+    
+    // Get demo password - check if it's set in production
+    const demoPassword = getDemoPassword()
+    if (isProduction && !process.env.DEMO_PASSWORD) {
+      console.warn("[createDemoAndSignIn] DEMO_PASSWORD not set in production - using default. This should be set in Vercel environment variables.")
+    }
 
     // Create admin client with service role key
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
