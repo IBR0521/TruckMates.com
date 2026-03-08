@@ -312,8 +312,18 @@ export async function createDemoAndSignIn() {
 
     // Client will handle sign-in
     return { success: true, userId, companyId }
-  } catch (error: any) {
-    return { error: error?.message || "Failed to create demo" }
+  } catch (error: unknown) {
+    // Log the full error for debugging
+    console.error("[createDemoAndSignIn] Error:", error)
+    
+    // Return a user-friendly error message
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : typeof error === 'string' 
+        ? error 
+        : "Failed to create demo. Please check your environment variables and try again."
+    
+    return { error: errorMessage }
   }
 }
 
