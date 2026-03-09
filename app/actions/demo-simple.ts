@@ -7,22 +7,13 @@ import { createClient } from "@supabase/supabase-js"
 const DEMO_EMAIL = process.env.DEMO_EMAIL || "demo@truckmates.com"
 const DEMO_COMPANY_NAME = process.env.DEMO_COMPANY_NAME || "Demo Logistics Company"
 
-// Helper function to get demo password - validate at call time
+// Helper: use DEMO_PASSWORD if set; otherwise a public default so demo is open during free trial.
 function getDemoPassword(): string {
   const password = process.env.DEMO_PASSWORD
   if (password) {
     return password
   }
-
-  // In production, require DEMO_PASSWORD to be set explicitly.
-  const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL === "1"
-  if (isProduction) {
-    throw new Error(
-      "DEMO_PASSWORD is not configured. Set DEMO_PASSWORD in your environment (Vercel project settings or .env) before using the demo endpoint.",
-    )
-  }
-
-  // Development fallback only
+  // Default so anyone can try the demo without configuring env (platform is free for 3 months).
   return "demo123456"
 }
 
@@ -74,7 +65,6 @@ export async function createDemoAndSignIn() {
       return { error: errorMsg }
     }
     
-    // Get demo password - throws in production if DEMO_PASSWORD is not configured
     const demoPassword = getDemoPassword()
 
     // Create admin client with service role key
