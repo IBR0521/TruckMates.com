@@ -2,11 +2,11 @@
   "crons": [
     {
       "path": "/api/cron/sync-eld",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/cron/alert-escalations",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 0 * * *"
     }
   ],
   "functions": {
