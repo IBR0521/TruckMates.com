@@ -43,7 +43,7 @@ async function getStripeClient() {
     const stripe = (await import("stripe")).default
     return new stripe(integrations.stripe_api_key, {
       // Use a stable, public Stripe API version compatible with our usage
-      apiVersion: "2024-11-20.acacia",
+      apiVersion: "2025-11-17.clover",
     })
   }
 
@@ -51,7 +51,7 @@ async function getStripeClient() {
   const stripe = (await import("stripe")).default
   return new stripe(STRIPE_SECRET_KEY, {
     // Keep SDK and webhook handler aligned on the same Stripe version
-    apiVersion: "2024-11-20.acacia",
+    apiVersion: "2025-11-17.clover",
   })
 }
 
