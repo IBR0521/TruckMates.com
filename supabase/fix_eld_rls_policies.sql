@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Fix ELD RLS Policies - Update role check from 'manager' to correct roles
 -- ============================================================================
--- The RLS policies currently check for role = 'manager', but the actual
+-- The RLS policies currently check for role IN ('super_admin','operations_manager'), but the actual
 -- manager roles are 'super_admin' and 'operations_manager'
 -- ============================================================================
 

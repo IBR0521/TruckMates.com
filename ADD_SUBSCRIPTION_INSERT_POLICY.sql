@@ -24,7 +24,7 @@ CREATE POLICY "Managers can insert subscriptions for their company"
       SELECT company_id 
       FROM public.users 
       WHERE id = auth.uid() 
-      AND role = 'manager'
+      AND role IN ('super_admin','operations_manager')
     )
   );
 

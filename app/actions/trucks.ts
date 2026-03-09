@@ -503,48 +503,91 @@ export async function updateTruck(
 }
 
 export async function deleteTruck(id: string) {
-  // Check permission
-  const permission = await checkDeletePermission("vehicles")
-  if (!permission.allowed) {
-    return { error: permission.error || "You don't have permission to delete trucks" }
+  try {
+    // Check permission
+    const permission = await checkDeletePermission("vehicles")
+    if (!permission.allowed) {
+      return { error: permission.error || "You don't have permission to delete trucks" }
+    }
+
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { error: "Not authenticated" }
+    }
+
+    // Basic UUID validation
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!id || !uuidRegex.test(id)) {
+      return { error: "Invalid truck ID format" }
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data" }
+    }
+
+    if (!userData?.company_id) {
+      return { error: "No company found" }
+    }
+
+    // Dependency checks mirroring bulkDeleteTrucks safeguards
+    const { data: truck } = await supabase
+      .from("trucks")
+      .select("id, truck_number, status")
+      .eq("id", id)
+      .eq("company_id", userData.company_id)
+      .maybeSingle()
+
+    if (!truck) {
+      return { error: "Truck not found" }
+    }
+
+    if (truck.status === "in_use") {
+      return {
+        error: `Cannot delete truck ${truck.truck_number || ""} while it is in use. Please complete or cancel active loads first.`,
+      }
+    }
+
+    const { data: activeLoads } = await supabase
+      .from("loads")
+      .select("id, shipment_number, status")
+      .eq("truck_id", id)
+      .in("status", ["scheduled", "in_transit"])
+      .eq("company_id", userData.company_id)
+
+    if (activeLoads && activeLoads.length > 0) {
+      const loadNumbers = activeLoads.map((l: { shipment_number: string | null }) => l.shipment_number).join(", ")
+      return {
+        error: `Cannot delete truck. It is assigned to active loads: ${loadNumbers}. Please reassign or complete these loads first.`,
+      }
+    }
+
+    const { error } = await supabase
+      .from("trucks")
+      .delete()
+      .eq("id", id)
+      .eq("company_id", userData.company_id)
+
+    if (error) {
+      return { error: error.message }
+    }
+
+    revalidatePath("/dashboard/trucks")
+    return { error: null }
+  } catch (error: any) {
+    console.error("[deleteTruck] Unexpected error:", error)
+    return { error: error?.message || "Failed to delete truck" }
   }
-
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data" }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found" }
-  }
-
-  const { error } = await supabase
-    .from("trucks")
-    .delete()
-    .eq("id", id)
-    .eq("company_id", userData.company_id)
-
-  if (error) {
-    return { error: error.message }
-  }
-
-  revalidatePath("/dashboard/trucks")
-  return { error: null }
 }
 
 // Bulk operations for workflow optimization

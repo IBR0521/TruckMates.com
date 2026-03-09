@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Fix is_user_manager() function to check for correct manager roles
 -- ============================================================================
--- The function currently checks for role = 'manager', but the actual
+-- The function currently checks for role IN ('super_admin','operations_manager'), but the actual
 -- manager roles are 'super_admin' and 'operations_manager'
 -- ============================================================================
 

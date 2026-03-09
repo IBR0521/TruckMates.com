@@ -39,7 +39,7 @@ async function syncKeepTruckinData(device: any) {
     
     // Fallback to old domain if new one fails
     if (!logsResponse.ok && logsResponse.status === 404) {
-      logsResponse = await fetch(`${fallbackUrl}/logs?device_id=${device.provider_device_id}`, {
+      logsResponse = await fetch(`${fallbackUrl}/logs?device_id=${encodedDeviceId}`, {
         headers: {
           'X-Api-Key': device.api_key,
           'X-Api-Secret': device.api_secret,
@@ -56,7 +56,7 @@ async function syncKeepTruckinData(device: any) {
     const logs = logsData.logs || []
 
     // Sync Locations
-    let locationsResponse = await fetch(`${apiBaseUrl}/locations?device_id=${device.provider_device_id}`, {
+    let locationsResponse = await fetch(`${apiBaseUrl}/locations?device_id=${encodedDeviceId}`, {
       headers: {
         'X-Api-Key': device.api_key,
         'X-Api-Secret': device.api_secret,
@@ -66,7 +66,7 @@ async function syncKeepTruckinData(device: any) {
     
     // Fallback to old domain if new one fails
     if (!locationsResponse.ok && locationsResponse.status === 404) {
-      locationsResponse = await fetch(`${fallbackUrl}/locations?device_id=${device.provider_device_id}`, {
+      locationsResponse = await fetch(`${fallbackUrl}/locations?device_id=${encodedDeviceId}`, {
         headers: {
           'X-Api-Key': device.api_key,
           'X-Api-Secret': device.api_secret,
@@ -79,7 +79,7 @@ async function syncKeepTruckinData(device: any) {
     const locations = locationsData.locations || []
 
     // Sync Events/Violations
-    let eventsResponse = await fetch(`${apiBaseUrl}/violations?device_id=${device.provider_device_id}`, {
+    let eventsResponse = await fetch(`${apiBaseUrl}/violations?device_id=${encodedDeviceId}`, {
       headers: {
         'X-Api-Key': device.api_key,
         'X-Api-Secret': device.api_secret,
@@ -89,7 +89,7 @@ async function syncKeepTruckinData(device: any) {
     
     // Fallback to old domain if new one fails
     if (!eventsResponse.ok && eventsResponse.status === 404) {
-      eventsResponse = await fetch(`${fallbackUrl}/violations?device_id=${device.provider_device_id}`, {
+      eventsResponse = await fetch(`${fallbackUrl}/violations?device_id=${encodedDeviceId}`, {
         headers: {
           'X-Api-Key': device.api_key,
           'X-Api-Secret': device.api_secret,

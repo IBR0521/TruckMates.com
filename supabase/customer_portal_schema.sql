@@ -62,7 +62,7 @@ DROP POLICY IF EXISTS "Managers can create portal access" ON public.customer_por
 CREATE POLICY "Managers can create portal access" ON public.customer_portal_access
   FOR INSERT WITH CHECK (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -71,7 +71,7 @@ DROP POLICY IF EXISTS "Managers can update portal access" ON public.customer_por
 CREATE POLICY "Managers can update portal access" ON public.customer_portal_access
   FOR UPDATE USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -80,7 +80,7 @@ DROP POLICY IF EXISTS "Managers can delete portal access" ON public.customer_por
 CREATE POLICY "Managers can delete portal access" ON public.customer_portal_access
   FOR DELETE USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 

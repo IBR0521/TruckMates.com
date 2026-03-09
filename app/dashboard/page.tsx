@@ -201,9 +201,9 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full min-h-full bg-background">
       {/* Page Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
+      <div className="border-b border-border bg-card/80 backdrop-blur-sm px-4 md:px-8 py-4 md:py-6">
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>

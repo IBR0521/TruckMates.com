@@ -106,7 +106,7 @@ CREATE POLICY "Managers can insert delivery points"
   ON public.load_delivery_points FOR INSERT
   WITH CHECK (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -114,7 +114,7 @@ CREATE POLICY "Managers can update delivery points"
   ON public.load_delivery_points FOR UPDATE
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -122,7 +122,7 @@ CREATE POLICY "Managers can delete delivery points"
   ON public.load_delivery_points FOR DELETE
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 

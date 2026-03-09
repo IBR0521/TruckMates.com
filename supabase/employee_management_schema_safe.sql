@@ -44,7 +44,7 @@ CREATE POLICY "Managers can view invitations for their company"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -53,7 +53,7 @@ CREATE POLICY "Managers can create invitations for their company"
   WITH CHECK (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
     AND created_by = auth.uid()
   );
@@ -63,7 +63,7 @@ CREATE POLICY "Managers can update invitations for their company"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -72,7 +72,7 @@ CREATE POLICY "Managers can delete invitations for their company"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -97,7 +97,7 @@ CREATE POLICY "Managers can view employees in their company"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -106,7 +106,7 @@ CREATE POLICY "Managers can update employees in their company"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
     AND id != auth.uid()
     AND role != 'manager'
@@ -114,7 +114,7 @@ CREATE POLICY "Managers can update employees in their company"
   WITH CHECK (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
     AND role != 'manager'
   );
@@ -124,7 +124,7 @@ CREATE POLICY "Managers can delete employees from their company"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
     AND role != 'manager'
     AND id != auth.uid()

@@ -18,47 +18,72 @@ export async function getMarketplaceLoads(filters?: {
   limit?: number
   offset?: number
 }) {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  let query = supabase
-    .from("load_marketplace")
-    .select(`
-      *,
-      broker:broker_id(id, name)
-    `, { count: "exact" })
-    .eq("status", "available")
-    .order("created_at", { ascending: false })
+    let query = supabase
+      .from("load_marketplace")
+      .select(
+        `
+        id,
+        origin,
+        destination,
+        weight,
+        weight_kg,
+        contents,
+        value,
+        rate,
+        rate_type,
+        pickup_date,
+        delivery_date,
+        equipment_type,
+        status,
+        auto_create_enabled,
+        created_at,
+        broker:broker_id (
+          id,
+          name
+        )
+      `,
+        { count: "exact" },
+      )
+      .eq("status", "available")
+      .order("created_at", { ascending: false })
 
-  // Apply filters
-  if (filters?.origin) {
-    query = query.ilike("origin", `%${filters.origin}%`)
-  }
-  if (filters?.destination) {
-    query = query.ilike("destination", `%${filters.destination}%`)
-  }
-  if (filters?.minRate) {
-    query = query.gte("rate", filters.minRate)
-  }
-  if (filters?.maxRate) {
-    query = query.lte("rate", filters.maxRate)
-  }
-  if (filters?.equipmentType) {
-    query = query.eq("equipment_type", filters.equipmentType)
-  }
+    // Apply filters
+    if (filters?.origin) {
+      query = query.ilike("origin", `%${filters.origin}%`)
+    }
+    if (filters?.destination) {
+      query = query.ilike("destination", `%${filters.destination}%`)
+    }
+    if (filters?.minRate) {
+      query = query.gte("rate", filters.minRate)
+    }
+    if (filters?.maxRate) {
+      query = query.lte("rate", filters.maxRate)
+    }
+    if (filters?.equipmentType) {
+      query = query.eq("equipment_type", filters.equipmentType)
+    }
 
-  // Apply pagination
-  const limit = Math.min(filters?.limit || 25, 100)
-  const offset = filters?.offset || 0
-  query = query.range(offset, offset + limit - 1)
+    // Apply pagination
+    const limit = Math.min(filters?.limit || 25, 100)
+    const offset = filters?.offset || 0
+    query = query.range(offset, offset + limit - 1)
 
-  const { data, error, count } = await query
+    const { data, error, count } = await query
 
-  if (error) {
-    console.error("[getMarketplaceLoads] Error:", error)
-    return { data: null, error: error.message, count: 0 }
+    if (error) {
+      console.error("[getMarketplaceLoads] Error:", error)
+      return { data: null, error: error.message, count: 0 }
+    }
+
+    return { data: data || [], error: null, count: count || 0 }
+  } catch (error: any) {
+    console.error("[getMarketplaceLoads] Unexpected error:", error)
+    return { data: null, error: error?.message || "Failed to load marketplace loads", count: 0 }
   }
-
-  return { data: data || [], error: null, count: count || 0 }
 }
 
 /**

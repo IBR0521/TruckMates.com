@@ -38,10 +38,10 @@ async function sendNotificationsForRouteUpdate(routeData: any) {
       .from("users")
       .select("id, role")
       .eq("company_id", userData.company_id)
-      .or(
-        `id.eq.${assignedDriverId || '00000000-0000-0000-0000-000000000000'},` + // Assigned driver
-        `role.in.(dispatcher,manager,safety_manager,owner)` // Relevant roles
-      )
+      .or([
+        assignedDriverId ? `id.eq.${assignedDriverId}` : "",
+        "role.in.(dispatcher,manager,safety_manager,owner)",
+      ].filter(Boolean).join(","))
 
     // BUG-044 FIX: Only send notifications to relevant users, not all company users
     if (relevantUsers && relevantUsers.length > 0) {

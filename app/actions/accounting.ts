@@ -355,6 +355,12 @@ export async function duplicateInvoice(id: string) {
     return { error: "No company found", data: null }
   }
 
+  // RBAC check
+  const permissionCheck = await checkCreatePermission("invoicing")
+  if (!permissionCheck.allowed) {
+    return { error: permissionCheck.error || "You don't have permission to duplicate invoices", data: null }
+  }
+
   // Get the original invoice
   // V3-007 FIX: Replace select(*) with explicit columns
   // Include all columns needed for duplication
@@ -369,17 +375,11 @@ export async function duplicateInvoice(id: string) {
     return { error: "Invoice not found", data: null }
   }
 
-  // Generate new invoice number
+  // Generate new invoice number (only after RBAC passes)
   const { generateInvoiceNumber } = await import("./number-formats")
   const numberResult = await generateInvoiceNumber()
   if (numberResult.error || !numberResult.data) {
     return { error: numberResult.error || "Failed to generate invoice number", data: null }
-  }
-
-  // RBAC check
-  const permissionCheck = await checkCreatePermission("invoicing")
-  if (!permissionCheck.allowed) {
-    return { error: permissionCheck.error || "You don't have permission to duplicate invoices", data: null }
   }
 
   // Create duplicate with new invoice number and reset status

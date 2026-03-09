@@ -34,7 +34,7 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.users 
     WHERE id = (SELECT auth.uid()) 
-    AND role = 'manager'
+    AND role IN ('super_admin','operations_manager')
     AND company_id IS NOT NULL
   );
 $$;
@@ -580,7 +580,7 @@ CREATE POLICY "Users can insert audit logs for their company"
 -- Replace: auth.uid() -> (select auth.uid())
 -- Replace: SELECT company_id FROM users WHERE id = auth.uid() 
 --      -> (select get_user_company_id())
--- Replace: role = 'manager' AND id = auth.uid()
+-- Replace: role IN ('super_admin','operations_manager') AND id = auth.uid()
 --      -> (select is_user_manager())
 
 -- ============================================================================

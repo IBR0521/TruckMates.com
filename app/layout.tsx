@@ -49,8 +49,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geist.variable} ${geistMono.variable} font-sans antialiased`} suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body className={`${geist.variable} ${geistMono.variable} font-sans antialiased bg-background text-foreground`} suppressHydrationWarning>
         {/* Accessibility: Skip to main content link */}
         <a href="#main-content" className="skip-link">
           Skip to main content

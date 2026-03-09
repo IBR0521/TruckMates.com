@@ -287,7 +287,7 @@ CREATE POLICY "Managers can update their company"
   USING (
     id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -310,7 +310,7 @@ CREATE POLICY "Managers can insert drivers"
   WITH CHECK (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -319,7 +319,7 @@ CREATE POLICY "Managers can update drivers"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -328,7 +328,7 @@ CREATE POLICY "Managers can delete drivers"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -353,7 +353,7 @@ CREATE POLICY "Managers can manage trucks"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -374,7 +374,7 @@ CREATE POLICY "Managers can manage routes"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -395,7 +395,7 @@ CREATE POLICY "Managers can manage loads"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -416,7 +416,7 @@ CREATE POLICY "Managers can manage invoices"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -437,7 +437,7 @@ CREATE POLICY "Managers can manage expenses"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -458,7 +458,7 @@ CREATE POLICY "Managers can manage settlements"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -479,7 +479,7 @@ CREATE POLICY "Managers can manage maintenance"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -500,7 +500,7 @@ CREATE POLICY "Managers can manage IFTA reports"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -521,7 +521,7 @@ CREATE POLICY "Managers can manage documents"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 

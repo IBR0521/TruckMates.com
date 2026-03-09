@@ -136,7 +136,7 @@ CREATE POLICY "Managers can insert subscriptions for their company"
   ON public.subscriptions FOR INSERT
   WITH CHECK (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -144,7 +144,7 @@ CREATE POLICY "Managers can update their company's subscription"
   ON public.subscriptions FOR UPDATE
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 

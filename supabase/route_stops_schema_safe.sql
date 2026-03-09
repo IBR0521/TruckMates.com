@@ -101,7 +101,7 @@ CREATE POLICY "Managers can insert route stops"
   ON public.route_stops FOR INSERT
   WITH CHECK (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -109,7 +109,7 @@ CREATE POLICY "Managers can update route stops"
   ON public.route_stops FOR UPDATE
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -117,7 +117,7 @@ CREATE POLICY "Managers can delete route stops"
   ON public.route_stops FOR DELETE
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 

@@ -13,64 +13,70 @@ export async function getChatThreads(filters?: {
   driver_id?: string
   thread_type?: string
 }) {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
+
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
+
+    let query = supabase
+      .from("chat_threads")
+      .select(
+        "id, company_id, load_id, route_id, driver_id, thread_type, title, participants, last_message_at, last_message_by",
+      )
+      .eq("company_id", userData.company_id)
+      // SECURITY: Only threads where the current user is a participant
+      .contains("participants", [user.id])
+      .order("last_message_at", { ascending: false })
+
+    if (filters?.load_id) {
+      query = query.eq("load_id", filters.load_id)
+    }
+    if (filters?.route_id) {
+      query = query.eq("route_id", filters.route_id)
+    }
+    if (filters?.driver_id) {
+      query = query.eq("driver_id", filters.driver_id)
+    }
+    if (filters?.thread_type) {
+      query = query.eq("thread_type", filters.thread_type)
+    }
+
+    // Add a reasonable upper bound to avoid unbounded result sets
+    query = query.limit(200)
+
+    const { data: threads, error } = await query
+
+    if (error) {
+      const result = handleDbError(error, [])
+      if (result.error) return result
+      return { data: result.data, error: null }
+    }
+
+    return { data: threads || [], error: null }
+  } catch (error: any) {
+    console.error("[getChatThreads] Unexpected error:", error)
+    return { error: error?.message || "Failed to load chat threads", data: null }
   }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  let query = supabase
-    .from("chat_threads")
-    .select("*")
-    .eq("company_id", userData.company_id)
-    .order("last_message_at", { ascending: false })
-
-  if (filters?.load_id) {
-    query = query.eq("load_id", filters.load_id)
-  }
-  if (filters?.route_id) {
-    query = query.eq("route_id", filters.route_id)
-  }
-  if (filters?.driver_id) {
-    query = query.eq("driver_id", filters.driver_id)
-  }
-  if (filters?.thread_type) {
-    query = query.eq("thread_type", filters.thread_type)
-  }
-
-  const { data: threads, error } = await query
-
-  if (error) {
-    const result = handleDbError(error, [])
-    if (result.error) return result
-    return { data: result.data, error: null }
-  }
-
-  // Filter threads where user is a participant
-  const userThreads = threads?.filter((thread: any) => {
-    const participants = thread.participants || []
-    return participants.includes(user.id)
-  }) || []
-
-  return { data: userThreads, error: null }
 }
 
 /**

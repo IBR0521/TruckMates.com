@@ -22,7 +22,7 @@ CREATE POLICY "Managers can insert ELD devices for other providers"
   ON public.eld_devices FOR INSERT
   WITH CHECK (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
     AND (provider IS NULL OR provider != 'truckmates_mobile') -- Other providers require manager role
   );

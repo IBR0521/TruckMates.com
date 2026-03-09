@@ -53,31 +53,10 @@ async function calculateDriveTime(
   destinationLat: number,
   destinationLng: number
 ): Promise<number> {
-  const supabase = await createClient()
-
-  try {
-    // Use PostGIS ST_Distance to calculate distance
-    const { data, error } = await supabase.rpc("calculate_drive_time", {
-      origin_lat: originLat,
-      origin_lng: originLng,
-      destination_lat: destinationLat,
-      destination_lng: destinationLng,
-    })
-
-    if (error || !data) {
-      // Fallback to Haversine + average speed (55 mph)
-      const distance = haversineDistance(originLat, originLng, destinationLat, destinationLng)
-      return Math.ceil((distance / 55) * 60) // Convert to minutes
-    }
-
-    // Handle array response (PostgreSQL returns table as array)
-    const result = Array.isArray(data) ? data[0] : data
-    return result?.drive_time_minutes || Math.ceil((result?.distance_miles || 0) / 55 * 60)
-  } catch (error) {
-    // Fallback calculation
-    const distance = haversineDistance(originLat, originLng, destinationLat, destinationLng)
-    return Math.ceil((distance / 55) * 60)
-  }
+  // To avoid N+1 RPC calls per job, rely on a lightweight
+  // Haversine-based estimate instead of querying PostGIS for each segment.
+  const distance = haversineDistance(originLat, originLng, destinationLat, destinationLng)
+  return Math.ceil((distance / 55) * 60) // Approximate minutes at 55 mph
 }
 
 /**

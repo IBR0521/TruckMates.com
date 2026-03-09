@@ -671,84 +671,91 @@ export async function updateDriver(
 }
 
 export async function deleteDriver(id: string) {
-  // Check permission
-  const permission = await checkDeletePermission("drivers")
-  if (!permission.allowed) {
-    return { error: permission.error || "You don't have permission to delete drivers" }
-  }
-
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found" }
-  }
-
-  // BUG-024 FIX: Check for dependencies before deleting driver
-  // Check for active loads
-  const { data: activeLoads } = await supabase
-    .from("loads")
-    .select("id, shipment_number, status")
-    .eq("driver_id", id)
-    .in("status", ["assigned", "in_transit", "delivered", "pending"])
-
-  if (activeLoads && activeLoads.length > 0) {
-    const loadNumbers = activeLoads.map((l: { shipment_number: string }) => l.shipment_number).join(", ")
-    return { 
-      error: `Cannot delete driver. Driver is assigned to ${activeLoads.length} active load(s): ${loadNumbers}. Please reassign or complete these loads first.` 
+  try {
+    // Check permission
+    const permission = await checkDeletePermission("drivers")
+    if (!permission.allowed) {
+      return { error: permission.error || "You don't have permission to delete drivers" }
     }
-  }
 
-  // Check for unsubmitted DVIRs
-  const { data: openDVIRs } = await supabase
-    .from("dvir")
-    .select("id, inspection_date")
-    .eq("driver_id", id)
-    .eq("status", "pending")
+    const supabase = await createClient()
 
-  if (openDVIRs && openDVIRs.length > 0) {
-    return { 
-      error: `Cannot delete driver. Driver has ${openDVIRs.length} unsubmitted DVIR(s). Please submit or delete these DVIRs first.` 
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { error: "Not authenticated" }
     }
-  }
 
-  // Check for ELD device mappings
-  const { data: eldDevices } = await supabase
-    .from("eld_devices")
-    .select("id, device_name")
-    .eq("driver_id", id)
-
-  if (eldDevices && eldDevices.length > 0) {
-    const deviceNames = eldDevices.map((d: { device_name?: string; id: string }) => d.device_name || d.id).join(", ")
-    return { 
-      error: `Cannot delete driver. Driver is mapped to ${eldDevices.length} ELD device(s): ${deviceNames}. Please unassign these devices first.` 
+    // Basic UUID validation
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!id || !uuidRegex.test(id)) {
+      return { error: "Invalid driver ID format" }
     }
+
+    const result = await getCachedUserCompany(user.id)
+    if (result.error || !result.company_id) {
+      return { error: result.error || "No company found" }
+    }
+
+    // BUG-024 FIX: Check for dependencies before deleting driver
+    // Check for active loads
+    const { data: activeLoads } = await supabase
+      .from("loads")
+      .select("id, shipment_number, status")
+      .eq("driver_id", id)
+      .in("status", ["assigned", "in_transit", "delivered", "pending"])
+
+    if (activeLoads && activeLoads.length > 0) {
+      const loadNumbers = activeLoads.map((l: { shipment_number: string }) => l.shipment_number).join(", ")
+      return {
+        error: `Cannot delete driver. Driver is assigned to ${activeLoads.length} active load(s): ${loadNumbers}. Please reassign or complete these loads first.`,
+      }
+    }
+
+    // Check for unsubmitted DVIRs
+    const { data: openDVIRs } = await supabase
+      .from("dvir")
+      .select("id, inspection_date")
+      .eq("driver_id", id)
+      .eq("status", "pending")
+
+    if (openDVIRs && openDVIRs.length > 0) {
+      return {
+        error: `Cannot delete driver. Driver has ${openDVIRs.length} unsubmitted DVIR(s). Please submit or delete these DVIRs first.`,
+      }
+    }
+
+    // Check for ELD device mappings
+    const { data: eldDevices } = await supabase
+      .from("eld_devices")
+      .select("id, device_name")
+      .eq("driver_id", id)
+
+    if (eldDevices && eldDevices.length > 0) {
+      const deviceNames = eldDevices.map((d: { device_name?: string; id: string }) => d.device_name || d.id).join(", ")
+      return {
+        error: `Cannot delete driver. Driver is mapped to ${eldDevices.length} ELD device(s): ${deviceNames}. Please unassign these devices first.`,
+      }
+    }
+
+    const { error } = await supabase
+      .from("drivers")
+      .delete()
+      .eq("id", id)
+      .eq("company_id", result.company_id)
+
+    if (error) {
+      return { error: error.message }
+    }
+
+    revalidatePath("/dashboard/drivers")
+    return { error: null }
+  } catch (error: any) {
+    console.error("[deleteDriver] Unexpected error:", error)
+    return { error: error?.message || "Failed to delete driver" }
   }
-
-  // BUG-024 FIX: Offer soft delete as primary option (set status to inactive)
-  // For now, we'll proceed with hard delete but log a warning
-  // In the future, consider implementing soft delete as the default
-
-  const { error } = await supabase
-    .from("drivers")
-    .delete()
-    .eq("id", id)
-    .eq("company_id", result.company_id)
-
-  if (error) {
-    return { error: error.message }
-  }
-
-  revalidatePath("/dashboard/drivers")
-  return { error: null }
 }
 
 // Bulk operations for workflow optimization

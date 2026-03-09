@@ -98,7 +98,7 @@ CREATE POLICY "Managers can manage tax rates in their company"
   USING (
     company_id IN (
       SELECT company_id FROM public.users 
-      WHERE id = auth.uid() AND role = 'manager'
+      WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 

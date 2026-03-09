@@ -170,7 +170,7 @@ CREATE POLICY "Brokers can create ratings for carriers"
   ON public.carrier_ratings FOR INSERT
   WITH CHECK (
     broker_company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -178,7 +178,7 @@ CREATE POLICY "Brokers can update their own ratings"
   ON public.carrier_ratings FOR UPDATE
   USING (
     broker_company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -193,7 +193,7 @@ CREATE POLICY "Brokers can update their own statistics"
   ON public.broker_statistics FOR ALL
   USING (
     broker_company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 

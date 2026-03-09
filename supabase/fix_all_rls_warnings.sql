@@ -31,7 +31,7 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.users 
     WHERE id = (SELECT auth.uid()) 
-    AND role = 'manager'
+    AND role IN ('super_admin','operations_manager')
     AND company_id IS NOT NULL
   );
 $$;

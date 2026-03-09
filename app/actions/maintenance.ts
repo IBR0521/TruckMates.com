@@ -5,42 +5,65 @@ import { revalidatePath } from "next/cache"
 import { sanitizeString, validateRequiredString, validateDate, validatePositiveNumber } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
-export async function getMaintenance() {
-  const supabase = await createClient()
+export async function getMaintenance(filters?: {
+  status?: string
+  limit?: number
+  offset?: number
+}) {
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+    if (!user) {
+      return { error: "Not authenticated", data: null, count: 0 }
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null, count: 0 }
+    }
+
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null, count: 0 }
+    }
+
+    let query = supabase
+      .from("maintenance")
+      .select(
+        "id, company_id, truck_id, service_type, scheduled_date, completed_date, status, priority, estimated_cost, actual_cost, vendor, current_mileage, created_at",
+        { count: "exact" },
+      )
+      .eq("company_id", userData.company_id)
+      .order("created_at", { ascending: false })
+
+    if (filters?.status) {
+      query = query.eq("status", filters.status)
+    }
+
+    // Pagination: default 25, max 100
+    const limit = Math.min(filters?.limit || 25, 100)
+    const offset = filters?.offset || 0
+    query = query.range(offset, offset + limit - 1)
+
+    const { data: maintenance, error, count } = await query
+
+    if (error) {
+      return { error: error.message, data: null, count: 0 }
+    }
+
+    return { data: maintenance || [], error: null, count: count || 0 }
+  } catch (error: any) {
+    console.error("[getMaintenance] Unexpected error:", error)
+    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
   }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  const { data: maintenance, error } = await supabase
-    .from("maintenance")
-    .select("*")
-    .eq("company_id", userData.company_id)
-    .order("created_at", { ascending: false })
-
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  return { data: maintenance, error: null }
 }
 
 export async function createMaintenance(formData: {

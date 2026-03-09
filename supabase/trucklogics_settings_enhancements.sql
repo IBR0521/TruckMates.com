@@ -35,7 +35,7 @@ CREATE POLICY "Managers can manage EIN numbers"
   ON public.company_ein_numbers FOR ALL
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -114,7 +114,7 @@ CREATE POLICY "Managers can manage accessorials"
   ON public.company_accessorials FOR ALL
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -165,7 +165,7 @@ CREATE POLICY "Managers can manage invoice taxes"
   ON public.company_invoice_taxes FOR ALL
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -307,7 +307,7 @@ CREATE POLICY "Managers can manage payment methods"
   ON public.company_payment_methods FOR ALL
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 

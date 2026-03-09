@@ -121,62 +121,82 @@ export async function createELDDevice(formData: {
   installation_date?: string
   notes?: string
 }) {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id, role")
+      .eq("id", user.id)
+      .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to load user", data: null }
+    }
+
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
+
+    // Only real manager roles can create ELD devices
+    const allowedRoles = ["super_admin", "operations_manager"]
+    if (!allowedRoles.includes(userData.role)) {
+      return { error: "You don't have permission to create ELD devices", data: null }
+    }
+
+    // Basic server-side validation so we fail fast with clear errors
+    if (!formData.device_name?.trim()) {
+      return { error: "Device name is required", data: null }
+    }
+    if (!formData.device_serial_number?.trim()) {
+      return { error: "Device serial number is required", data: null }
+    }
+    if (!formData.provider?.trim()) {
+      return { error: "Provider is required", data: null }
+    }
+
+    // Build insert data
+    const deviceData: any = {
+      company_id: userData.company_id,
+      device_name: formData.device_name.trim(),
+      device_serial_number: formData.device_serial_number.trim(),
+      provider: formData.provider.trim(),
+      status: formData.status || "active",
+    }
+
+    if (formData.provider_device_id) deviceData.provider_device_id = formData.provider_device_id.trim()
+    if (formData.api_key) deviceData.api_key = formData.api_key
+    if (formData.api_secret) deviceData.api_secret = formData.api_secret
+    if (formData.api_endpoint) deviceData.api_endpoint = formData.api_endpoint
+    if (formData.truck_id) deviceData.truck_id = formData.truck_id
+    if (formData.firmware_version) deviceData.firmware_version = formData.firmware_version
+    if (formData.installation_date) deviceData.installation_date = formData.installation_date
+    if (formData.notes) deviceData.notes = formData.notes
+
+    const { data, error } = await supabase
+      .from("eld_devices")
+      .insert(deviceData)
+      .select()
+      .single()
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    revalidatePath("/dashboard/eld")
+    return { data, error: null }
+  } catch (error: any) {
+    console.error("[createELDDevice] Unexpected error:", error)
+    return { error: error?.message || "Failed to create ELD device", data: null }
   }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  // LOW FIX: Remove phantom roles - only real roles exist
-  const allowedRoles = ['super_admin', 'operations_manager']
-  if (!allowedRoles.includes(userData.role)) {
-    return { error: "You don't have permission to create ELD devices", data: null }
-  }
-
-  // Build insert data
-  const deviceData: any = {
-    company_id: userData.company_id,
-    device_name: formData.device_name,
-    device_serial_number: formData.device_serial_number,
-    provider: formData.provider,
-    status: formData.status || "active",
-  }
-
-  if (formData.provider_device_id) deviceData.provider_device_id = formData.provider_device_id
-  if (formData.api_key) deviceData.api_key = formData.api_key
-  if (formData.api_secret) deviceData.api_secret = formData.api_secret
-  if (formData.api_endpoint) deviceData.api_endpoint = formData.api_endpoint
-  if (formData.truck_id) deviceData.truck_id = formData.truck_id
-  if (formData.firmware_version) deviceData.firmware_version = formData.firmware_version
-  if (formData.installation_date) deviceData.installation_date = formData.installation_date
-  if (formData.notes) deviceData.notes = formData.notes
-
-  const { data, error } = await supabase
-    .from("eld_devices")
-    .insert(deviceData)
-    .select()
-    .single()
-
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  revalidatePath("/dashboard/eld")
-  return { data, error: null }
 }
 
 // Update ELD device
@@ -197,103 +217,130 @@ export async function updateELDDevice(
     notes?: string
   }
 ) {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id, role")
+      .eq("id", user.id)
+      .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to load user", data: null }
+    }
+
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
+
+    const allowedRoles = ["super_admin", "operations_manager"]
+    if (!allowedRoles.includes(userData.role)) {
+      return { error: "You don't have permission to update ELD devices", data: null }
+    }
+
+    // Build update data
+    const updateData: any = {}
+    if (formData.device_name !== undefined) updateData.device_name = formData.device_name
+    if (formData.device_serial_number !== undefined) updateData.device_serial_number = formData.device_serial_number
+    if (formData.provider !== undefined) updateData.provider = formData.provider
+    if (formData.provider_device_id !== undefined) updateData.provider_device_id = formData.provider_device_id
+    if (formData.api_key !== undefined) updateData.api_key = formData.api_key
+    if (formData.api_secret !== undefined) updateData.api_secret = formData.api_secret
+    if (formData.api_endpoint !== undefined) updateData.api_endpoint = formData.api_endpoint
+    if (formData.truck_id !== undefined) updateData.truck_id = formData.truck_id || null
+    if (formData.status !== undefined) updateData.status = formData.status
+    if (formData.firmware_version !== undefined) updateData.firmware_version = formData.firmware_version
+    if (formData.installation_date !== undefined) updateData.installation_date = formData.installation_date || null
+    if (formData.notes !== undefined) updateData.notes = formData.notes
+
+    if (Object.keys(updateData).length === 0) {
+      return { error: "No changes provided", data: null }
+    }
+
+    const { data, error } = await supabase
+      .from("eld_devices")
+      .update(updateData)
+      .eq("id", id)
+      .eq("company_id", userData.company_id)
+      .select()
+      .single()
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    revalidatePath("/dashboard/eld")
+    return { data, error: null }
+  } catch (error: any) {
+    console.error("[updateELDDevice] Unexpected error:", error)
+    return { error: error?.message || "Failed to update ELD device", data: null }
   }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  // RBAC: Allow managers, admins, and owners to manage ELD devices
-  const allowedRoles = ['super_admin', 'operations_manager']
-  if (!allowedRoles.includes(userData.role)) {
-    return { error: "You don't have permission to update ELD devices", data: null }
-  }
-
-  // Build update data
-  const updateData: any = {}
-  if (formData.device_name !== undefined) updateData.device_name = formData.device_name
-  if (formData.device_serial_number !== undefined) updateData.device_serial_number = formData.device_serial_number
-  if (formData.provider !== undefined) updateData.provider = formData.provider
-  if (formData.provider_device_id !== undefined) updateData.provider_device_id = formData.provider_device_id
-  if (formData.api_key !== undefined) updateData.api_key = formData.api_key
-  if (formData.api_secret !== undefined) updateData.api_secret = formData.api_secret
-  if (formData.api_endpoint !== undefined) updateData.api_endpoint = formData.api_endpoint
-  if (formData.truck_id !== undefined) updateData.truck_id = formData.truck_id || null
-  if (formData.status !== undefined) updateData.status = formData.status
-  if (formData.firmware_version !== undefined) updateData.firmware_version = formData.firmware_version
-  if (formData.installation_date !== undefined) updateData.installation_date = formData.installation_date || null
-  if (formData.notes !== undefined) updateData.notes = formData.notes
-
-  const { data, error } = await supabase
-    .from("eld_devices")
-    .update(updateData)
-    .eq("id", id)
-    .eq("company_id", userData.company_id)
-    .select()
-    .single()
-
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  revalidatePath("/dashboard/eld")
-  return { data, error: null }
 }
 
 // Delete ELD device
 export async function deleteELDDevice(id: string) {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+    if (!user) {
+      return { error: "Not authenticated", data: null }
+    }
+
+    // Basic UUID format validation
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!id || !uuidRegex.test(id)) {
+      return { error: "Invalid device ID format", data: null }
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("company_id, role")
+      .eq("id", user.id)
+      .single()
+
+    if (userError) {
+      return { error: userError.message || "Failed to fetch user data", data: null }
+    }
+
+    if (!userData?.company_id) {
+      return { error: "No company found", data: null }
+    }
+
+    // RBAC: Allow managers, admins, and owners to manage ELD devices
+    const allowedRoles = ["super_admin", "operations_manager"]
+    if (!allowedRoles.includes(userData.role)) {
+      return { error: "You don't have permission to delete ELD devices", data: null }
+    }
+
+    const { error } = await supabase
+      .from("eld_devices")
+      .delete()
+      .eq("id", id)
+      .eq("company_id", userData.company_id)
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    revalidatePath("/dashboard/eld")
+    return { error: null, data: { id } }
+  } catch (error: any) {
+    console.error("[deleteELDDevice] Unexpected error:", error)
+    return { error: error?.message || "Failed to delete ELD device", data: null }
   }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  // RBAC: Allow managers, admins, and owners to manage ELD devices
-  const allowedRoles = ['super_admin', 'operations_manager']
-  if (!allowedRoles.includes(userData.role)) {
-    return { error: "You don't have permission to delete ELD devices", data: null }
-  }
-
-  const { error } = await supabase
-    .from("eld_devices")
-    .delete()
-    .eq("id", id)
-    .eq("company_id", userData.company_id)
-
-  if (error) {
-    return { error: error.message, data: null }
-  }
-
-  revalidatePath("/dashboard/eld")
-  return { error: null }
 }
 
 // Sync ELD device data from provider

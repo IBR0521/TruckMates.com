@@ -159,7 +159,7 @@ CREATE POLICY "Managers can manage company integrations"
   ON public.company_integrations FOR ALL
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -178,7 +178,7 @@ CREATE POLICY "Managers can manage reminder settings"
   ON public.company_reminder_settings FOR ALL
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -197,7 +197,7 @@ CREATE POLICY "Managers can manage portal settings"
   ON public.company_portal_settings FOR ALL
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -207,7 +207,7 @@ CREATE POLICY "Managers can view billing info"
   ON public.company_billing_info FOR SELECT
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -216,7 +216,7 @@ CREATE POLICY "Managers can manage billing info"
   ON public.company_billing_info FOR ALL
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 

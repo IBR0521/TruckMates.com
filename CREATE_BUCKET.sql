@@ -60,7 +60,7 @@ USING (
     SELECT 1 FROM public.documents d
     JOIN public.users u ON d.company_id = u.company_id
     WHERE u.id = auth.uid()
-    AND u.role = 'manager'
+    AND u.role IN ('super_admin','operations_manager')
     AND d.file_url LIKE '%' || storage.objects.name || '%'
   )
 );

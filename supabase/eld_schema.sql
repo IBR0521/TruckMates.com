@@ -131,7 +131,7 @@ CREATE POLICY "Managers can insert ELD devices"
   ON public.eld_devices FOR INSERT
   WITH CHECK (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -140,7 +140,7 @@ CREATE POLICY "Managers can update ELD devices"
   ON public.eld_devices FOR UPDATE
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -149,7 +149,7 @@ CREATE POLICY "Managers can delete ELD devices"
   ON public.eld_devices FOR DELETE
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -215,7 +215,7 @@ CREATE POLICY "Managers can update ELD events"
   ON public.eld_events FOR UPDATE
   USING (
     company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 

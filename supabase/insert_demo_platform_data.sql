@@ -1059,7 +1059,7 @@ BEGIN
   
   -- Get first manager user for notifications
   SELECT id INTO v_user_id FROM public.users 
-  WHERE company_id = v_company_id AND role = 'manager' 
+  WHERE company_id = v_company_id AND role IN ('super_admin','operations_manager') 
   LIMIT 1;
 
   IF v_user_id IS NOT NULL AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'notifications') THEN

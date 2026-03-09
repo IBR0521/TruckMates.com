@@ -7,22 +7,23 @@ import { createClient } from "@supabase/supabase-js"
 const DEMO_EMAIL = process.env.DEMO_EMAIL || "demo@truckmates.com"
 const DEMO_COMPANY_NAME = process.env.DEMO_COMPANY_NAME || "Demo Logistics Company"
 
-// Helper function to get demo password - don't throw during module initialization
+// Helper function to get demo password - validate at call time
 function getDemoPassword(): string {
   const password = process.env.DEMO_PASSWORD
   if (password) {
     return password
   }
-  
-  // In production, return a default but log a warning
-  // Don't throw during module load - check inside the function instead
+
+  // In production, require DEMO_PASSWORD to be set explicitly.
   const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL === "1"
   if (isProduction) {
-    // Return a default for now, but the function will check and return proper error
-    return "demo123456"
+    throw new Error(
+      "DEMO_PASSWORD is not configured. Set DEMO_PASSWORD in your environment (Vercel project settings or .env) before using the demo endpoint.",
+    )
   }
-  
-  return "demo123456" // Development fallback
+
+  // Development fallback only
+  return "demo123456"
 }
 
 // Use a loose type here to avoid tight coupling to Supabase client generics
@@ -73,11 +74,8 @@ export async function createDemoAndSignIn() {
       return { error: errorMsg }
     }
     
-    // Get demo password - check if it's set in production
+    // Get demo password - throws in production if DEMO_PASSWORD is not configured
     const demoPassword = getDemoPassword()
-    if (isProduction && !process.env.DEMO_PASSWORD) {
-      console.warn("[createDemoAndSignIn] DEMO_PASSWORD not set in production - using default. This should be set in Vercel environment variables.")
-    }
 
     // Create admin client with service role key
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {

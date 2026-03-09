@@ -15,8 +15,14 @@ import { formatDate } from "@/lib/format-utils"
 
 export function NotificationsCenter() {
   const [open, setOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const { notifications, unreadCount, markAsRead, markAllAsRead } =
     useRealtimeNotifications()
+
+  // Defer Radix Popover until after mount to avoid hydration mismatch (aria-controls/data-state differ between server and client)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
   // FIXED: Removed unused supabase client
 
   // Note: Notifications are managed by the useRealtimeNotifications hook
@@ -52,10 +58,19 @@ export function NotificationsCenter() {
     }
   }
 
+  // Render placeholder until mounted to avoid Radix hydration mismatch (server/client aria-controls and data-state differ)
+  if (!mounted) {
+    return (
+      <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
+        <Bell className="h-5 w-5" />
+      </Button>
+    )
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
+        <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
             <Badge

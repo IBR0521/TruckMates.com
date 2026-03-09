@@ -149,12 +149,12 @@ CREATE POLICY "Brokers can manage their own marketplace loads"
   ON public.load_marketplace FOR ALL
   USING (
     broker_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   )
   WITH CHECK (
     broker_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 
@@ -189,12 +189,12 @@ CREATE POLICY "Carriers can manage their own subscriptions"
   ON public.marketplace_subscriptions FOR ALL
   USING (
     carrier_company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   )
   WITH CHECK (
     carrier_company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role = 'manager'
+      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
     )
   );
 

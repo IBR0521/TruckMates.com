@@ -32,10 +32,9 @@ export async function getCachedUserCompany(userId: string): Promise<{ company_id
 
   const result = { company_id: userData?.company_id || null }
   
-  // CRH-007: Cache for 5 minutes (company_id rarely changes)
-  // Note: In serverless, this cache is per-instance and resets on cold starts
-  // For production, consider using Redis/Upstash for shared cache
-  cache.set(cacheKey, result, 5 * 60 * 1000)
+  // CRH-007: Cache for 60 seconds to balance performance and staleness.
+  // Company association can change during onboarding, so keep TTL short.
+  cache.set(cacheKey, result, 60 * 1000)
 
   return { ...result, error: null }
 }
