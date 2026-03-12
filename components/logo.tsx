@@ -43,14 +43,9 @@ export function Logo({ className = "", showText = true, size = "md" }: LogoProps
   if (imageError || !imageLoaded) {
     return (
       <div className={`flex items-center gap-2 ${className}`}>
-        <div className="flex flex-col">
-          <span className={`font-bold text-foreground ${size === "sm" ? "text-sm" : size === "md" ? "text-lg" : "text-2xl"}`} style={{ letterSpacing: "0.05em" }}>
-            TRUCKMATES
-          </span>
-          <span className={`text-muted-foreground ${size === "sm" ? "text-[9px]" : size === "md" ? "text-[11px]" : "text-xs"} tracking-wider`} style={{ letterSpacing: "0.2em" }}>
-            CARGO CREW
-          </span>
-        </div>
+        <span className={`font-bold text-foreground ${size === "sm" ? "text-sm" : size === "md" ? "text-lg" : "text-2xl"}`} style={{ letterSpacing: "0.05em" }}>
+          TRUCKMATES
+        </span>
       </div>
     )
   }
@@ -59,7 +54,7 @@ export function Logo({ className = "", showText = true, size = "md" }: LogoProps
     <div className={`flex items-center ${className}`}>
       <Image
         src="/logo.png"
-        alt="TRUCKMATES - CARGO CREW"
+        alt="TruckMates"
         width={dimensions[size].width}
         height={dimensions[size].height}
         className={sizeClasses[size]}

@@ -36,9 +36,9 @@ export async function requestLocationPermissions(): Promise<boolean> {
       const granted = await GeolocationService.requestAuthorization('whenInUse')
       return granted === 'granted'
     } else {
-      // iOS - request authorization
-      const granted = await GeolocationService.requestAuthorization('whenInUse')
-      return granted === 'granted'
+      // iOS – request Always & When In Use for continuous background tracking
+      const granted = await GeolocationService.requestAuthorization('always')
+      return granted === 'granted' || granted === 'always'
     }
   } catch (error) {
     console.error('Error requesting location permission:', error)
@@ -55,8 +55,10 @@ export async function checkLocationPermissions(): Promise<boolean> {
   }
   
   try {
-    const hasPermission = await GeolocationService.requestAuthorization('whenInUse')
-    return hasPermission === 'granted'
+    const hasPermission = await GeolocationService.requestAuthorization(
+      Platform.OS === 'ios' ? 'always' : 'whenInUse'
+    )
+    return hasPermission === 'granted' || hasPermission === 'always'
   } catch (error) {
     console.error('Error checking location permissions:', error)
     return false

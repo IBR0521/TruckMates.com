@@ -23,7 +23,6 @@ import {
   Cloud,
   Star,
   Play,
-  Award,
   Target,
   ArrowDown,
   Sparkles,
@@ -45,6 +44,9 @@ export default function Home() {
             </Link>
             <Link href="/marketplace" suppressHydrationWarning>
               <Button variant="ghost" className="hidden sm:flex">Marketplace</Button>
+            </Link>
+            <Link href="/pricing" suppressHydrationWarning>
+              <Button variant="ghost" className="hidden sm:flex">Pricing</Button>
             </Link>
             <Link href="/login" suppressHydrationWarning>
               <Button variant="ghost" className="hidden sm:flex">Login</Button>
@@ -117,8 +119,13 @@ export default function Home() {
                   Get Started Free <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
+              <Link href="/login">
+                <Button size="lg" variant="outline" className="w-full sm:w-auto border-2 border-border text-foreground hover:bg-secondary/50 text-lg px-8 py-6">
+                  Login
+                </Button>
+              </Link>
               <Link href="/demo">
-                <Button size="lg" variant="outline" className="w-full sm:w-auto border-2 border-primary text-primary hover:bg-primary/10 text-lg px-8 py-6">
+                <Button size="lg" variant="ghost" className="w-full sm:w-auto text-primary hover:bg-primary/10 text-lg px-8 py-6">
                   <Play className="mr-2 w-5 h-5" />
                   View Demo
                 </Button>
@@ -541,13 +548,8 @@ export default function Home() {
                 </li>
               </ul>
               <div className="flex flex-col sm:flex-row gap-4" suppressHydrationWarning>
-                <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                  <Smartphone className="mr-2 w-5 h-5" />
-                  Download for iOS
-                </Button>
-                <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                  <Smartphone className="mr-2 w-5 h-5" />
-                  Download for Android
+                <Button size="lg" variant="outline" className="w-full sm:w-auto" disabled>
+                  Coming Soon
                 </Button>
               </div>
             </div>
@@ -570,21 +572,11 @@ export default function Home() {
                     </p>
                   </div>
 
-                  {/* Download Buttons */}
+                  {/* Download - coming when app is published */}
                   <div className="pt-4 border-t border-border">
-                    <p className="text-sm text-muted-foreground mb-4 text-center">
-                      Download the TruckMates ELD app
+                    <p className="text-sm text-muted-foreground text-center">
+                      Mobile app coming soon. We&apos;ll announce when it&apos;s available on the App Store and Google Play.
                     </p>
-                    <div className="flex flex-col gap-3">
-                      <Button size="lg" variant="outline" className="w-full border-2 border-primary/20 hover:border-primary/40">
-                        <Smartphone className="mr-2 w-5 h-5" />
-                        Download for iOS
-                      </Button>
-                      <Button size="lg" variant="outline" className="w-full border-2 border-primary/20 hover:border-primary/40">
-                        <Smartphone className="mr-2 w-5 h-5" />
-                        Download for Android
-                      </Button>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -800,10 +792,6 @@ export default function Home() {
       <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent relative overflow-hidden" suppressHydrationWarning>
         <div className="absolute inset-0 bg-grid-pattern opacity-5" />
         <div className="max-w-4xl mx-auto text-center relative z-10" suppressHydrationWarning>
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
-            <Award className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium text-primary">Trusted by Logistics Companies</span>
-          </div>
           <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
             Ready to Transform Your Fleet Operations?
           </h2>
@@ -817,13 +805,21 @@ export default function Home() {
                 Get Started Free <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
+            <Link href="/login">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto border-2 border-border text-foreground hover:bg-secondary/50 text-lg px-8 py-6">
+                Login
+              </Button>
+            </Link>
             <Link href="/demo" suppressHydrationWarning>
-              <Button size="lg" variant="outline" className="w-full sm:w-auto border-2 border-primary text-primary hover:bg-primary/10 text-lg px-8 py-6">
+              <Button size="lg" variant="ghost" className="w-full sm:w-auto text-primary hover:bg-primary/10 text-lg px-8 py-6">
                 <Play className="mr-2 w-5 h-5" />
                 Try Demo
               </Button>
             </Link>
           </div>
+          <p className="text-sm text-muted-foreground mt-4">
+            Already have an account? <Link href="/login" className="text-primary font-medium hover:underline">Log in</Link>
+          </p>
         </div>
       </section>
 
@@ -841,8 +837,10 @@ export default function Home() {
               <h4 className="font-semibold text-foreground mb-4">Product</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><Link href="/marketplace" className="hover:text-primary transition">Marketplace</Link></li>
+                <li><Link href="/pricing" className="hover:text-primary transition">Pricing</Link></li>
                 <li><Link href="/demo" className="hover:text-primary transition">Demo</Link></li>
-                <li><Link href="/register" className="hover:text-primary transition" suppressHydrationWarning>Sign Up</Link></li>
+                <li><Link href="/register" className="hover:text-primary transition">Get Started</Link></li>
+                <li><Link href="/login" className="hover:text-primary transition">Login</Link></li>
               </ul>
             </div>
             <div>

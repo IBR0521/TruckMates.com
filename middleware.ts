@@ -36,6 +36,7 @@ export async function middleware(request: NextRequest) {
       request.nextUrl.pathname.startsWith('/login') ||
       request.nextUrl.pathname.startsWith('/register') ||
       request.nextUrl.pathname.startsWith('/plans') ||
+      request.nextUrl.pathname.startsWith('/pricing') ||
       request.nextUrl.pathname.startsWith('/demo') ||
       request.nextUrl.pathname.startsWith('/privacy') ||
       request.nextUrl.pathname.startsWith('/terms') ||

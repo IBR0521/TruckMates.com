@@ -318,8 +318,8 @@ export default function ELDPage() {
                     <Activity className="w-6 h-6 text-orange-500" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-foreground">AI Insights</h3>
-                    <p className="text-xs text-muted-foreground">Smart recommendations</p>
+                    <h3 className="font-semibold text-foreground">Insights</h3>
+                    <p className="text-xs text-muted-foreground">Recommendations</p>
                   </div>
                 </div>
               </Card>

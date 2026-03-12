@@ -6,7 +6,7 @@ export default function MaintenanceFeaturesPage() {
     {
       icon: TrendingUp,
       title: "Predictive Maintenance",
-      description: "AI-powered maintenance predictions based on mileage, usage patterns, and service history.",
+      description: "Predictive maintenance based on mileage, usage patterns, and service history.",
       details: [
         "Automatic maintenance predictions",
         "Mileage-based scheduling",

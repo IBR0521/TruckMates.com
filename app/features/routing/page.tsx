@@ -72,7 +72,7 @@ export default function RoutingFeaturesPage() {
               </h1>
             </div>
             <p className="text-xl text-muted-foreground">
-              AI-powered route optimization that minimizes distance, travel time, and fuel costs while considering traffic and constraints.
+              Smart route optimization that minimizes distance, travel time, and fuel costs while considering traffic and constraints.
             </p>
           </div>
         </div>

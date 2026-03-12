@@ -413,7 +413,7 @@ export default function DispatchSettingsPage() {
                   <SelectContent>
                     <SelectItem value="manual">Manual Only</SelectItem>
                     <SelectItem value="auto">Automatic</SelectItem>
-                    <SelectItem value="smart">Smart (AI-Powered)</SelectItem>
+                    <SelectItem value="smart">Smart</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-sm text-muted-foreground mt-1">

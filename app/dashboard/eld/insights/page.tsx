@@ -119,8 +119,8 @@ export default function ELDInsightsPage() {
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">AI-Powered Insights</h1>
-          <p className="text-sm text-muted-foreground mt-1">Intelligent analysis of your fleet data</p>
+          <h1 className="text-2xl font-bold text-foreground">Insights</h1>
+          <p className="text-sm text-muted-foreground mt-1">Analysis of your fleet data</p>
         </div>
         <Link href="/dashboard/eld">
           <Button variant="outline">Back to ELD</Button>

@@ -1,11 +1,12 @@
 {
-  "name": "truckmates-platform",
+  "name": "truckmates",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev -p 3000 --hostname 127.0.0.1",
+    "dev": "next dev -p 3000 --hostname 0.0.0.0",
     "dev:alt": "next dev -p 3001",
+    "dev:open": "next dev -p 3000 --hostname 0.0.0.0",
     "lint": "eslint .",
     "start": "next start"
   },

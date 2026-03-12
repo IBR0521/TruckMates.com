@@ -5,8 +5,8 @@ export default function DocumentsFeaturesPage() {
   const features = [
     {
       icon: Brain,
-      title: "AI Document Analysis",
-      description: "Automatically extract and organize data from documents using AI-powered analysis.",
+      title: "Document Analysis",
+      description: "Extract and organize data from documents with smart categorization and routing.",
       details: [
         "Automatic data extraction",
         "Document type recognition",
@@ -68,7 +68,7 @@ export default function DocumentsFeaturesPage() {
               </h1>
             </div>
             <p className="text-xl text-muted-foreground">
-              Secure document storage with AI-powered analysis, expiry tracking, and automated organization.
+              Secure document storage with smart organization, expiry tracking, and automated workflows.
             </p>
           </div>
         </div>

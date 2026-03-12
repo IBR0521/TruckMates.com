@@ -34,28 +34,28 @@ export interface LLMContext {
 export class TruckMatesAIEngine {
   private baseUrl: string
   private model: string
+  /** When false, generate() returns a friendly "not configured" message instead of calling Ollama (avoids crash in production when OLLAMA_BASE_URL is unset). */
+  private available: boolean
 
   constructor() {
-    // BUG-022 FIX: Check OLLAMA_BASE_URL at startup and throw clear error if missing in production
     const ollamaBaseUrl = process.env.OLLAMA_BASE_URL
     const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1'
-    
+
     if (!ollamaBaseUrl) {
       if (isProduction) {
-        throw new Error(
-          'OLLAMA_BASE_URL environment variable is required in production. ' +
-          'Please configure it in your deployment environment variables. ' +
-          'The AI engine cannot connect to localhost in serverless environments.'
-        )
+        this.baseUrl = ''
+        this.available = false
+        console.warn('[AI Engine] OLLAMA_BASE_URL not set in production; AI chat will show "not configured" until you set it in Vercel.')
+      } else {
+        console.warn('[AI Engine] OLLAMA_BASE_URL not set, defaulting to localhost:11434 (development only)')
+        this.baseUrl = 'http://localhost:11434'
+        this.available = true
       }
-      // In development, default to localhost but warn
-      console.warn('[AI Engine] OLLAMA_BASE_URL not set, defaulting to localhost:11434 (development only)')
-      this.baseUrl = "http://localhost:11434"
     } else {
       this.baseUrl = ollamaBaseUrl
+      this.available = true
     }
-    
-    // Use Llama 3.1 8B (recommended) or Mistral 7B
+
     this.model = process.env.OLLAMA_MODEL || "llama3.1:8b"
   }
 
@@ -66,7 +66,14 @@ export class TruckMatesAIEngine {
     prompt: string,
     context?: LLMContext
   ): Promise<LLMResponse> {
-    // Build enhanced prompt with logistics expertise
+    if (!this.available) {
+      return {
+        response:
+          "The AI assistant isn't configured for this environment. To enable it, set the OLLAMA_BASE_URL environment variable (e.g. in Vercel project settings) to your Ollama server URL.",
+        confidence: 0
+      }
+    }
+
     const enhancedPrompt = this.buildExpertPrompt(prompt, context)
 
     try {

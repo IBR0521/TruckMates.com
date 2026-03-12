@@ -80,7 +80,7 @@ export default function PredictiveMaintenancePage() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Predictive Maintenance</h1>
             <p className="text-muted-foreground text-xs sm:text-sm mt-1">
-              AI-powered maintenance predictions based on usage patterns
+              Predictive maintenance based on usage patterns
             </p>
           </div>
           <Button onClick={loadPredictions} variant="outline" className="w-full sm:w-auto">

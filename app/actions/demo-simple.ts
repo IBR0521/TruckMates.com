@@ -192,6 +192,14 @@ export async function createDemoAndSignIn() {
     // Populate demo data - with timeout to prevent hanging
     if (companyId) {
       try {
+        console.log("Cleaning up existing demo data for company before repopulating:", companyId)
+        // Ensure each demo run starts from a clean slate so new users see a fresh environment
+        await adminClient.rpc('cleanup_demo_data_for_company', {
+          p_company_id: companyId,
+        }).catch((err: any) => {
+          console.warn("cleanup_demo_data_for_company failed (continuing anyway):", err?.message || String(err))
+        })
+
         console.log("Starting demo data population for company:", companyId)
         
         // Add timeout wrapper to prevent infinite hanging

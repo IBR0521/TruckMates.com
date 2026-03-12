@@ -20,7 +20,7 @@ export default function FeaturesPage() {
     {
       icon: Route,
       title: "Route Optimization",
-      description: "AI-powered route optimization that minimizes distance, travel time, and fuel costs while considering traffic and constraints.",
+      description: "Smart route optimization that minimizes distance, travel time, and fuel costs while considering traffic and constraints.",
       link: "/features/routing",
       highlights: ["Multi-stop Optimization", "Traffic-Aware Routing", "Time Windows", "Priority-Based"]
     },
@@ -34,9 +34,9 @@ export default function FeaturesPage() {
     {
       icon: FileText,
       title: "Document Management",
-      description: "Secure document storage with AI-powered analysis, expiry tracking, and automated organization.",
+      description: "Secure document storage with smart organization, expiry tracking, and automated workflows.",
       link: "/features/documents",
-      highlights: ["AI Document Analysis", "Expiry Tracking", "Secure Storage", "Bulk Operations"]
+      highlights: ["Document Analysis", "Expiry Tracking", "Secure Storage", "Bulk Operations"]
     },
     {
       icon: Wrench,
