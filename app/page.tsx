@@ -39,9 +39,6 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <Logo size="sm" />
           <div className="flex items-center gap-4">
-            <Link href="/features" suppressHydrationWarning>
-              <Button variant="ghost" className="hidden sm:flex">Features</Button>
-            </Link>
             <Link href="/marketplace" suppressHydrationWarning>
               <Button variant="ghost" className="hidden sm:flex">Marketplace</Button>
             </Link>
@@ -223,19 +220,14 @@ export default function Home() {
       </section>
 
       {/* Core Features - Detailed */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8" suppressHydrationWarning>
+      <section id="features" className="py-24 px-4 sm:px-6 lg:px-8" suppressHydrationWarning>
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <Badge variant="outline" className="mb-4">Features</Badge>
             <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">Powerful Features</h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-6">
-              Everything you need to manage your fleet efficiently and profitably
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Everything your fleet needs. Nothing you don&apos;t.
             </p>
-            <Link href="/features" suppressHydrationWarning>
-              <Button variant="outline" size="lg">
-                View All Features <ArrowRight className="ml-2 w-4 h-4" />
-              </Button>
-            </Link>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -307,8 +299,7 @@ export default function Home() {
               </div>
               <h3 className="text-xl font-bold text-foreground mb-3">Driver & Employee Management</h3>
               <p className="text-muted-foreground mb-4">
-                Comprehensive driver profiles, scheduling, performance tracking, and employee 
-                management tools to keep your team organized.
+                Cut driver onboarding from 2 hours to 10 minutes. Profiles, documents, scorecards and gamification all in one place.
               </p>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
@@ -333,8 +324,7 @@ export default function Home() {
               </div>
               <h3 className="text-xl font-bold text-foreground mb-3">Route Planning & Optimization</h3>
               <p className="text-muted-foreground mb-4">
-                Intelligent route planning with multi-stop optimization, real-time traffic updates, 
-                and delivery point management to reduce fuel costs and improve efficiency.
+                Multi-stop optimization and real-time traffic so you burn less fuel and hit every delivery on time.
               </p>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
@@ -384,8 +374,7 @@ export default function Home() {
               </div>
               <h3 className="text-xl font-bold text-foreground mb-3">Analytics & Reporting</h3>
               <p className="text-muted-foreground mb-4">
-                Powerful analytics and customizable reports to gain insights into your operation. 
-                Track KPIs, analyze performance, and make data-driven decisions.
+                See exactly which truck is losing you money, which driver is burning fuel, and which route is costing you time. Live.
               </p>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
@@ -459,28 +448,27 @@ export default function Home() {
               </ul>
             </Card>
 
-            {/* Security & Compliance */}
+            {/* ELD & HOS Compliance */}
             <Card className="bg-card border-border p-6 hover:border-primary/50 hover:shadow-lg transition-all group">
               <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/20 transition">
                 <Shield className="w-7 h-7 text-primary" />
               </div>
-              <h3 className="text-xl font-bold text-foreground mb-3">Security & Compliance</h3>
+              <h3 className="text-xl font-bold text-foreground mb-3">ELD & HOS Compliance</h3>
               <p className="text-muted-foreground mb-4">
-                Enterprise-grade security with role-based access control, data encryption, 
-                audit logs, and full compliance with industry regulations.
+                Legally required for most fleets. Stay legal with automatic hours-of-service logging, DVIR, and inspection readiness—no more spreadsheets or roadside surprises.
               </p>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Role-based access control</span>
+                  <span>Automatic HOS logging</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>End-to-end encryption</span>
+                  <span>DVIR and inspection-ready records</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <span>Compliance reporting</span>
+                  <span>Stay legal, avoid fines</span>
                 </li>
               </ul>
             </Card>
@@ -846,10 +834,7 @@ export default function Home() {
             <div>
               <h4 className="font-semibold text-foreground mb-4">Features</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="/features" className="hover:text-primary transition">All Features</Link></li>
-                <li><Link href="/features/eld" className="hover:text-primary transition">ELD Compliance</Link></li>
-                <li><Link href="/features/routing" className="hover:text-primary transition">Route Optimization</Link></li>
-                <li><Link href="/features/accounting" className="hover:text-primary transition">Accounting</Link></li>
+                <li><Link href="/#features" className="hover:text-primary transition">Features</Link></li>
               </ul>
             </div>
             <div>

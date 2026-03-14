@@ -447,6 +447,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               isCollapsed={shouldShowCollapsed}
             >
               <NavItem href="/dashboard/settings" label="General" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/users" label="Users" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/invoice" label="Invoice" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/load" label="Load" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/dispatch" label="Dispatch" isSubitem isCollapsed={shouldShowCollapsed} />

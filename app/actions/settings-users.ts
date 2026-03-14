@@ -348,38 +348,30 @@ export async function inviteUser(data: {
     return { error: inviteError.message || "Failed to create invitation", data: null }
   }
 
-  // Send invitation email
+  // Send invitation email: use Resend from company integration (Settings > Integration) or from env (RESEND_API_KEY)
   try {
-    // Helper function to get Resend client (similar to notifications.ts)
-    async function getResendClient(companyId?: string) {
-      const apiKey = process.env.RESEND_API_KEY
-      
-      if (!apiKey) {
-        return null
-      }
+    async function getResendClientAndFromEmail(companyId: string) {
+      // 1. Company-specific key (from Settings > Integration)
+      const { data: integrations } = await supabase
+        .from("company_integrations")
+        .select("resend_api_key, resend_from_email")
+        .eq("company_id", companyId)
+        .maybeSingle()
 
-      if (companyId) {
-        try {
-          const supabase = await createClient()
-          const { data: integrations } = await supabase
-            .from("company_integrations")
-            .select("resend_enabled")
-            .eq("company_id", companyId)
-            .single()
+      const companyKey = integrations?.resend_api_key?.trim()
+      const apiKey = companyKey || process.env.RESEND_API_KEY || process.env.NEXT_PUBLIC_RESEND_API_KEY
+      if (!apiKey) return { resend: null, fromEmail: null }
 
-          if (!integrations?.resend_enabled) {
-            return null
-          }
-        } catch (error) {
-          return null
-        }
-      }
-      
       try {
         const { Resend } = await import("resend")
-        return new Resend(apiKey)
-      } catch (error) {
-        return null
+        const resend = new Resend(apiKey)
+        const fromEmail =
+          integrations?.resend_from_email?.trim() ||
+          process.env.RESEND_FROM_EMAIL ||
+          "onboarding@resend.dev"
+        return { resend, fromEmail }
+      } catch {
+        return { resend: null, fromEmail: null }
       }
     }
 
@@ -394,7 +386,7 @@ export async function inviteUser(data: {
         .replace(/'/g, "&#039;")
     }
 
-    const resend = await getResendClient(currentUser.company_id)
+    const { resend, fromEmail: resolvedFromEmail } = await getResendClientAndFromEmail(currentUser.company_id)
 
     if (!resend) {
       // If email service is not configured, still create the invitation
@@ -473,9 +465,8 @@ export async function inviteUser(data: {
       </html>
     `
 
-    const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
     const emailResult = await resend.emails.send({
-      from: fromEmail,
+      from: resolvedFromEmail ?? "onboarding@resend.dev",
       to: data.email,
       subject: `You're Invited to Join ${companyName} on TruckMates`,
       html: emailHtml,

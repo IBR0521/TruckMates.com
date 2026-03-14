@@ -369,14 +369,20 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground">
                   Manage your employees and control access to your company account.
                 </p>
-                <div className="flex gap-3">
-                  <Link href="/dashboard/employees" className="flex-1">
+                <div className="flex flex-wrap gap-3">
+                  <Link href="/dashboard/settings/users" className="flex-1 min-w-[140px]">
+                    <Button className="w-full">
+                      <Users className="w-4 h-4 mr-2" />
+                      Add employee
+                    </Button>
+                  </Link>
+                  <Link href="/dashboard/employees" className="flex-1 min-w-[140px]">
                     <Button variant="outline" className="w-full">
                       <Users className="w-4 h-4 mr-2" />
                       View All Employees
                     </Button>
                   </Link>
-                  <Link href="/dashboard/drivers" className="flex-1">
+                  <Link href="/dashboard/drivers" className="flex-1 min-w-[140px]">
                     <Button variant="outline" className="w-full">
                       <Users className="w-4 h-4 mr-2" />
                       View All Drivers

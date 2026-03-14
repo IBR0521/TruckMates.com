@@ -1,15 +1,18 @@
 /**
  * React Query hook for dashboard stats
- * Provides caching, deduplication, and automatic refetching
- * OPTIMIZED: Increased stale time and removed aggressive refetching
+ * Scoped by company so different accounts never see each other's cached data.
  */
 
 import { useQuery } from "@tanstack/react-query"
 import { getDashboardStats } from "@/app/actions/dashboard"
+import { useAuthCompany } from "./use-auth-company"
 
 export function useDashboardStats() {
+  const { data: authCompany } = useAuthCompany()
+  const companyId = authCompany?.companyId ?? null
+
   return useQuery({
-    queryKey: ["dashboard", "stats"],
+    queryKey: ["dashboard", "stats", companyId],
     queryFn: async () => {
       const result = await getDashboardStats()
       if (result.error) {
@@ -17,11 +20,12 @@ export function useDashboardStats() {
       }
       return result.data
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes - data is fresh for 2 minutes (increased from 60s)
-    gcTime: 10 * 60 * 1000, // 10 minutes - cache persists longer
+    enabled: companyId != null,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
     retry: 1,
-    refetchOnWindowFocus: false, // Don't refetch on window focus
-    refetchOnMount: false, // Don't refetch on mount if data is fresh
-    refetchInterval: false, // Disable automatic refetching - rely on real-time subscriptions instead
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchInterval: false,
   })
 }

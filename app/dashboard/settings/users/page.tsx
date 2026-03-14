@@ -19,7 +19,7 @@ import {
 import { getCompanyUsers, updateUserRole, removeUser, inviteUser, getPendingInvitations, cancelInvitation } from "@/app/actions/settings-users"
 import { toast } from "sonner"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { Plus, Mail, X, Clock, CheckCircle2 } from "lucide-react"
+import { Plus, Mail, X, Clock, CheckCircle2, Copy } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -64,6 +64,8 @@ export default function UsersSettingsPage() {
     expires_at: string
     accepted_at: string | null
   }>>([])
+  const [inviteLinkToCopy, setInviteLinkToCopy] = useState<string | null>(null)
+  const [inviteEmailError, setInviteEmailError] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadUsers() {
@@ -178,12 +180,14 @@ export default function UsersSettingsPage() {
       } else {
         if (result.data?.emailSent) {
           toast.success(`Invitation sent to ${inviteForm.email}`)
+          setShowInviteDialog(false)
+          setInviteForm({ email: "", role: "user" })
         } else {
-          toast.success(`Invitation created. Share this link: ${result.data?.invitationLink}`)
+          toast.warning("Invitation created but email was not sent. Copy the link below to share manually.")
+          setInviteLinkToCopy(result.data?.invitationLink ?? null)
+          setInviteEmailError(result.data?.emailError ?? null)
         }
-        setShowInviteDialog(false)
-        setInviteForm({ email: "", role: "user" })
-        
+
         // Reload invitations
         const invitationsResult = await getPendingInvitations()
         if (invitationsResult.data) {
@@ -441,57 +445,108 @@ export default function UsersSettingsPage() {
         )}
 
         {/* Invite User Dialog */}
-        <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+        <Dialog open={showInviteDialog}         onOpenChange={(open) => {
+          setShowInviteDialog(open)
+          if (!open) {
+            setInviteLinkToCopy(null)
+            setInviteEmailError(null)
+            setInviteForm({ email: "", role: "user" })
+          }
+        }}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Invite User to Company</DialogTitle>
               <DialogDescription>
-                Send an invitation email to add a new team member to your company.
+                {inviteLinkToCopy
+                  ? "Copy the invitation link and send it to the user (email was not sent — add your Resend API key in Settings > Integration or in .env as RESEND_API_KEY)."
+                  : "Send an invitation email to add a new team member to your company."}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Email Address</Label>
-                <Input
-                  type="email"
-                  placeholder="user@example.com"
-                  value={inviteForm.email}
-                  onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
-                />
+            {inviteLinkToCopy ? (
+              <div className="space-y-4 py-4">
+                {inviteEmailError && (
+                  <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
+                    <strong>Resend error:</strong> {inviteEmailError}
+                  </div>
+                )}
+                <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+                  To send to real email addresses: verify your domain at <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="underline">resend.com/domains</a>, then set <code className="rounded bg-black/10 px-1">RESEND_FROM_EMAIL</code> in <code className="rounded bg-black/10 px-1">.env</code> (e.g. <code className="rounded bg-black/10 px-1">TruckMates &lt;notifications@yourdomain.com&gt;</code>). With the default sender you can only send to Resend test addresses.
+                </div>
+                <div className="space-y-2">
+                  <Label>Invitation link (copy and share)</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      value={inviteLinkToCopy}
+                      className="font-mono text-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        navigator.clipboard.writeText(inviteLinkToCopy)
+                        toast.success("Link copied to clipboard")
+                      }}
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Role</Label>
-                <Select
-                  value={inviteForm.role}
-                  onValueChange={(value) => setInviteForm({ ...inviteForm, role: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="user">Employee</SelectItem>
-                    <SelectItem value="dispatcher">Dispatcher</SelectItem>
-                    <SelectItem value="safety_compliance">Safety & Compliance</SelectItem>
-                    <SelectItem value="financial_controller">Financial Controller</SelectItem>
-                    <SelectItem value="driver">Driver</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowInviteDialog(false)
-                  setInviteForm({ email: "", role: "user" })
-                }}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleInviteUser} disabled={isInviting}>
-                {isInviting ? "Sending..." : "Send Invitation"}
-              </Button>
-            </DialogFooter>
+            ) : (
+              <>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Email Address</Label>
+                    <Input
+                      type="email"
+                      placeholder="user@example.com"
+                      value={inviteForm.email}
+                      onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Role</Label>
+                    <Select
+                      value={inviteForm.role}
+                      onValueChange={(value) => setInviteForm({ ...inviteForm, role: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="user">Employee</SelectItem>
+                        <SelectItem value="dispatcher">Dispatcher</SelectItem>
+                        <SelectItem value="safety_compliance">Safety & Compliance</SelectItem>
+                        <SelectItem value="financial_controller">Financial Controller</SelectItem>
+                        <SelectItem value="driver">Driver</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowInviteDialog(false)
+                      setInviteForm({ email: "", role: "user" })
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={handleInviteUser} disabled={isInviting}>
+                    {isInviting ? "Sending..." : "Send Invitation"}
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+            {inviteLinkToCopy && (
+              <DialogFooter>
+                <Button onClick={() => { setShowInviteDialog(false); setInviteLinkToCopy(null); setInviteEmailError(null); setInviteForm({ email: "", role: "user" }) }}>
+                  Done
+                </Button>
+              </DialogFooter>
+            )}
           </DialogContent>
         </Dialog>
       </div>

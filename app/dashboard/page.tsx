@@ -22,6 +22,7 @@ import Link from "next/link"
 import { useMemo, useState, useEffect } from "react"
 import { toast } from "sonner"
 import { useDashboardStats } from "@/lib/hooks/use-dashboard-stats"
+import { useAuthCompany } from "@/lib/hooks/use-auth-company"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -119,9 +120,9 @@ function TimeAgo({ timestamp }: { timestamp: string | null | undefined }) {
 }
 
 export default function DashboardPage() {
-  // Use React Query for automatic caching, deduplication, and background refetching
+  const { data: authCompany } = useAuthCompany()
   const { data: dashboardData, isLoading, error } = useDashboardStats()
-  
+
   // Check email service configuration (for managers/owners only)
   const [emailServiceStatus, setEmailServiceStatus] = useState<{ configured: boolean; isManager: boolean } | null>(null)
   const [dismissedEmailBanner, setDismissedEmailBanner] = useState(false)
@@ -209,6 +210,11 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-foreground">Dashboard</h1>
               <p className="text-muted-foreground text-sm mt-1">Welcome back, manage your fleet efficiently</p>
+              {authCompany?.companyName && (
+                <p className="text-muted-foreground text-xs mt-0.5" data-testid="dashboard-company">
+                  Viewing: <span className="font-medium text-foreground">{authCompany.companyName}</span>
+                </p>
+              )}
               <p className="sr-only">Use keyboard shortcuts: Ctrl+N for new item, Ctrl+F to search</p>
             </div>
           </div>

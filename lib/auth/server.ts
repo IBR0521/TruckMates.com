@@ -71,6 +71,30 @@ export async function getUserProfile() {
 }
 
 /**
+ * Get current user's company id and name (for scoping data and display).
+ * Used to ensure dashboard and queries are keyed per company and users can verify which account they're viewing.
+ */
+export async function getAuthCompany() {
+  try {
+    const { companyId, error } = await getAuthContext()
+    if (error || !companyId) return { companyId: null, companyName: null, error: error ?? "Not authenticated" }
+    const supabase = await createClient()
+    const { data: company } = await supabase
+      .from("companies")
+      .select("name")
+      .eq("id", companyId)
+      .maybeSingle()
+    return {
+      companyId,
+      companyName: company?.name ?? null,
+      error: null,
+    }
+  } catch (e: any) {
+    return { companyId: null, companyName: null, error: e?.message ?? "Failed to get company" }
+  }
+}
+
+/**
  * Get authenticated user and company context
  * Returns only plain JSON-serializable data
  */

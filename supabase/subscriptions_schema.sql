@@ -118,6 +118,14 @@ ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payment_methods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 
+-- RLS Policies (drop first so script is re-runnable)
+DROP POLICY IF EXISTS "Anyone can view active subscription plans" ON public.subscription_plans;
+DROP POLICY IF EXISTS "Users can view their company's subscription" ON public.subscriptions;
+DROP POLICY IF EXISTS "Managers can insert subscriptions for their company" ON public.subscriptions;
+DROP POLICY IF EXISTS "Managers can update their company's subscription" ON public.subscriptions;
+DROP POLICY IF EXISTS "Users can view their company's payment methods" ON public.payment_methods;
+DROP POLICY IF EXISTS "Users can view their company's invoices" ON public.invoices;
+
 -- RLS Policies for subscription_plans (public read)
 CREATE POLICY "Anyone can view active subscription plans"
   ON public.subscription_plans FOR SELECT
@@ -175,47 +183,65 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Triggers for updated_at
+-- Triggers for updated_at (drop first so script is re-runnable)
+DROP TRIGGER IF EXISTS update_subscription_plans_updated_at ON public.subscription_plans;
+DROP TRIGGER IF EXISTS update_subscriptions_updated_at ON public.subscriptions;
+
 CREATE TRIGGER update_subscription_plans_updated_at BEFORE UPDATE ON public.subscription_plans
   FOR EACH ROW EXECUTE FUNCTION update_subscription_updated_at_column();
 
 CREATE TRIGGER update_subscriptions_updated_at BEFORE UPDATE ON public.subscriptions
   FOR EACH ROW EXECUTE FUNCTION update_subscription_updated_at_column();
 
--- Insert default subscription plans (Updated competitive pricing)
-INSERT INTO public.subscription_plans (name, display_name, price_monthly, max_users, max_drivers, max_vehicles, features) VALUES
+-- Insert default subscription plans (matches public pricing page: Free, Starter $149, Pro $299, Enterprise $499)
+INSERT INTO public.subscription_plans (name, display_name, price_monthly, price_yearly, max_users, max_drivers, max_vehicles, features) VALUES
+  (
+    'free',
+    'Free',
+    0.00,
+    0.00,
+    1,
+    NULL,
+    2,
+    '["GPS tracking", "Basic dispatch", "ELD compliance", "1 user only"]'::jsonb
+  ),
   (
     'starter',
     'Starter',
-    29.00,
+    149.00,
+    1490.00,
+    3,
+    NULL,
     10,
-    15,
-    10,
-    '["Up to 10 vehicles", "Up to 15 drivers", "Up to 10 employees", "Basic fleet tracking", "Driver management", "Route planning", "Load management", "Basic reports", "Invoice & expense tracking", "Maintenance scheduling", "Document storage", "Email notifications"]'::jsonb
+    '["Everything in Free", "IFTA reporting + PDF", "Invoicing & settlements", "Fuel analytics", "Maintenance tracking", "Driver scorecards", "3 users", "API & webhooks"]'::jsonb
   ),
   (
     'professional',
     'Professional',
-    59.00,
-    25,
-    40,
+    299.00,
+    2990.00,
+    10,
+    NULL,
     30,
-    '["Up to 30 vehicles", "Up to 40 drivers", "Up to 25 employees", "ELD Service Integration", "Real-time GPS tracking", "Hours of Service (HOS) compliance", "IFTA reporting with ELD data", "Advanced analytics", "Route optimization", "Custom reports", "Priority email support"]'::jsonb
+    '["Everything in Starter", "AI dispatch assistant", "Marketplace access", "Customer portal", "Backhaul optimization", "API keys & webhooks", "10 users", "Priority support"]'::jsonb
   ),
   (
     'enterprise',
     'Enterprise',
-    99.00,
+    499.00,
+    4990.00,
     NULL,
     NULL,
     NULL,
-    '["Unlimited vehicles", "Unlimited drivers", "Unlimited employees", "Advanced ELD features", "AI-powered route optimization", "Custom integrations", "Advanced security features", "Dedicated account manager", "24/7 priority support", "Custom training"]'::jsonb
+    '["Everything in Pro", "Unlimited users", "Multi-company RBAC", "Audit logs", "Custom Integrations", "Receipt OCR (AI)", "White-label portal", "Dedicated support"]'::jsonb
   )
 ON CONFLICT (name) DO UPDATE SET
   display_name = EXCLUDED.display_name,
   price_monthly = EXCLUDED.price_monthly,
+  price_yearly = EXCLUDED.price_yearly,
   max_users = EXCLUDED.max_users,
   max_drivers = EXCLUDED.max_drivers,
   max_vehicles = EXCLUDED.max_vehicles,
-  features = EXCLUDED.features;
+  features = EXCLUDED.features,
+  updated_at = TIMEZONE('utc'::text, NOW());
 
