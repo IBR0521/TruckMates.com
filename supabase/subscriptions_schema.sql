@@ -4,8 +4,8 @@
 -- Subscription plans table
 CREATE TABLE IF NOT EXISTS public.subscription_plans (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE, -- 'simple', 'standard', 'premium'
-  display_name TEXT NOT NULL, -- 'Simple', 'Standard', 'Premium'
+  name TEXT NOT NULL UNIQUE, -- canonical: 'free', 'starter', 'professional', 'enterprise' (must match pricing page and company_subscriptions.plan_name)
+  display_name TEXT NOT NULL, -- 'Free', 'Starter', 'Professional', 'Enterprise'
   price_monthly DECIMAL(10, 2) NOT NULL, -- Price in USD
   price_yearly DECIMAL(10, 2), -- Optional yearly price
   stripe_price_id_monthly TEXT, -- Stripe Price ID for monthly

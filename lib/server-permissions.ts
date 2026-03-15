@@ -1,6 +1,5 @@
 "use server"
 
-import { createClient } from "@/lib/supabase/server"
 import { mapLegacyRole, type EmployeeRole } from "./roles"
 import {
   canViewFeature,
@@ -10,35 +9,14 @@ import {
   canManageFeature,
   type FeatureCategory,
 } from "./feature-permissions"
+import { getCachedAuthContext } from "./auth/server"
 
-// Get user role from server
+/** Uses cached auth context so auth + user lookup run once per request across all permission checks. */
 export async function getUserRole(): Promise<EmployeeRole | null> {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return null
-    }
-
-    // EXT-002 FIX: NEVER trust JWT user_metadata for authorization - it's user-controlled
-    // Only read role from database (ground truth) which can only be modified by admins
-    // Remove the user_metadata check entirely to prevent RBAC bypass
-    
-    // Get role from users table (ground truth - only modifiable by admins)
-    const { data: userData } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (!userData) {
-      return null
-    }
-
-    const role = userData.role || null
+    const { user, error } = await getCachedAuthContext()
+    if (error || !user) return null
+    const role = user.role || null
     return role ? (mapLegacyRole(role) as EmployeeRole) : null
   } catch (error) {
     console.error("Error getting user role:", error)

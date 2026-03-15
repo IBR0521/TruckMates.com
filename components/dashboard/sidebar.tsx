@@ -362,12 +362,14 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               >
                 <NavItem href="/dashboard/eld" label="ELD Dashboard" isSubitem isCollapsed={shouldShowCollapsed} />
                 <NavItem href="/dashboard/eld/devices" label="Devices" isSubitem isCollapsed={shouldShowCollapsed} />
-                <NavItem href="/dashboard/eld/simulator" label="Device Simulator" isSubitem isCollapsed={shouldShowCollapsed} />
+                {process.env.NODE_ENV !== "production" && (
+                  <NavItem href="/dashboard/eld/simulator" label="Device Simulator" isSubitem isCollapsed={shouldShowCollapsed} />
+                )}
                 <NavItem href="/dashboard/eld/health" label="Fleet Health" isSubitem isCollapsed={shouldShowCollapsed} />
                 <NavItem href="/dashboard/eld/insights" label="Insights" isSubitem isCollapsed={shouldShowCollapsed} />
               </DropdownItem>
-              {/* Direct link to simulator for easy access */}
-              {!shouldShowCollapsed && (
+              {/* ELD Simulator: dev only - BUG-069 FMCSA compliance */}
+              {process.env.NODE_ENV !== "production" && !shouldShowCollapsed && (
                 <NavItem href="/dashboard/eld/simulator" icon={Radio} label="ELD Simulator" isCollapsed={shouldShowCollapsed} />
               )}
             </>

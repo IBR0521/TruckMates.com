@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS public.company_subscriptions (
   company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE NOT NULL UNIQUE,
   
   -- Subscription Details
-  plan_name TEXT NOT NULL, -- 'basic', 'professional', 'enterprise'
+  plan_name TEXT NOT NULL, -- must match subscription_plans.name: 'free', 'starter', 'professional', 'enterprise'
   plan_display_name TEXT,
   status TEXT DEFAULT 'active', -- 'active', 'cancelled', 'expired', 'trial'
   

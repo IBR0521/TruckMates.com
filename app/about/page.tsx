@@ -31,7 +31,7 @@ export default function AboutPage() {
               <h2 className="text-3xl font-bold text-foreground">Our Mission</h2>
             </div>
             <p className="text-lg text-muted-foreground leading-relaxed">
-              TruckMates was founded with a simple mission: to make fleet management easier, more efficient, and more profitable for logistics companies of all sizes. We believe that technology should simplify operations, not complicate them.
+              TruckMates was built with a simple mission: to make fleet management easier, more efficient, and more profitable for logistics companies of all sizes. We believe that technology should simplify operations, not complicate them.
             </p>
           </div>
 
@@ -46,7 +46,7 @@ export default function AboutPage() {
                 TruckMates is a leading provider of fleet management and logistics software solutions.
               </p>
               <div className="space-y-2 text-sm text-muted-foreground">
-                <p><strong className="text-foreground">Founded:</strong> 2024</p>
+                <p><strong className="text-foreground">Launched:</strong> 2024</p>
                 <p><strong className="text-foreground">Headquarters:</strong> United States</p>
                 <p><strong className="text-foreground">Industry:</strong> Logistics & Transportation Technology</p>
                 <p><strong className="text-foreground">Mission:</strong> Simplify fleet management for logistics companies of all sizes</p>

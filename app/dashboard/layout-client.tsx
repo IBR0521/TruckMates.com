@@ -111,9 +111,6 @@ export default function DashboardLayoutClient({
           }
         }
 
-        // Small delay to avoid race conditions (reduced from 1500ms to 300ms)
-        await new Promise(resolve => setTimeout(resolve, 300))
-
         if (!isMounted) return
 
         const userResult = await getCurrentUser()
@@ -163,11 +160,9 @@ export default function DashboardLayoutClient({
     }
     
     if (mounted) {
-      // Add a delay to avoid race conditions with page navigation
-      const timeoutId = setTimeout(checkCompanyAccess, 300) // Reduced from 1500ms to 300ms
+      checkCompanyAccess()
       return () => {
         isMounted = false
-        clearTimeout(timeoutId)
       }
     }
   }, [mounted]) // Removed router from dependencies to prevent re-runs

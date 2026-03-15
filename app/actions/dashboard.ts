@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getAuthContext } from "@/lib/auth/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { cache, cacheKeys } from "@/lib/cache"
 
 /**
@@ -58,8 +58,8 @@ export async function getDashboardStats() {
       }
     }
 
-    // Get authenticated user and company_id with reasonable timeout (10 seconds for poor connections)
-    const authPromise = getAuthContext()
+    // Get authenticated user and company_id (cached per request)
+    const authPromise = getCachedAuthContext()
     const authTimeout = new Promise((resolve) => {
       setTimeout(() => {
         resolve({ companyId: null, error: "Connection timeout. Please check your internet connection." })

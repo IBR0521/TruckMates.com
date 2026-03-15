@@ -187,6 +187,7 @@ export async function createPayPalSubscription(planId: string) {
       },
       body: JSON.stringify({
         plan_id: paypalPlan.id,
+        custom_id: planId, // BUG-020: Our subscription_plans.id so webhook can map to internal plan
         subscriber: {
           email_address: userData.email || user.email || undefined,
           name: {

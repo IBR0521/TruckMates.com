@@ -848,7 +848,7 @@ export default function Home() {
             </div>
           </div>
           <div className="border-t border-border pt-8 flex flex-col sm:flex-row items-center justify-between">
-            <p className="text-sm text-muted-foreground">© 2025 TruckMates. All rights reserved.</p>
+            <p className="text-sm text-muted-foreground">© 2026 TruckMates. All rights reserved.</p>
             <div className="flex gap-6 mt-4 sm:mt-0">
               <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary transition">Privacy</Link>
               <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary transition">Terms</Link>

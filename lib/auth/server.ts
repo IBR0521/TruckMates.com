@@ -1,5 +1,6 @@
 "use server"
 
+import { cache } from "react"
 import { createClient } from "@/lib/supabase/server"
 
 /**
@@ -76,7 +77,7 @@ export async function getUserProfile() {
  */
 export async function getAuthCompany() {
   try {
-    const { companyId, error } = await getAuthContext()
+    const { companyId, error } = await getCachedAuthContext()
     if (error || !companyId) return { companyId: null, companyName: null, error: error ?? "Not authenticated" }
     const supabase = await createClient()
     const { data: company } = await supabase
@@ -95,21 +96,22 @@ export async function getAuthCompany() {
 }
 
 /**
- * Get authenticated user and company context
- * Returns only plain JSON-serializable data
+ * Get authenticated user and company context (uncached).
+ * Prefer getCachedAuthContext() in server actions so auth + user lookup run once per request.
  */
-export async function getAuthContext() {
+export async function getAuthContext(): Promise<{
+  user: { id: string; email: string; role: string } | null
+  userId: string | null
+  companyId: string | null
+  error: string | null
+}> {
   try {
     const supabase = await createClient()
-    
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
     if (authError || !user) {
-      return { user: null, companyId: null, error: "Not authenticated" }
+      return { user: null, userId: null, companyId: null, error: "Not authenticated" }
     }
 
-    // Get user with company_id
-    // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select("id, company_id, role")
@@ -117,11 +119,10 @@ export async function getAuthContext() {
       .maybeSingle()
 
     if (userError) {
-      return { user: null, companyId: null, error: userError.message || "Failed to fetch user data" }
+      return { user: null, userId: null, companyId: null, error: userError.message || "Failed to fetch user data" }
     }
-
     if (!userData) {
-      return { user: null, companyId: null, error: "User not found" }
+      return { user: null, userId: null, companyId: null, error: "User not found" }
     }
 
     return {
@@ -130,18 +131,22 @@ export async function getAuthContext() {
         email: String(user.email || ""),
         role: String(userData.role),
       },
-      userId: String(userData.id), // Add userId for mobile API compatibility
+      userId: String(userData.id),
       companyId: userData.company_id ? String(userData.company_id) : null,
-      error: null
+      error: null,
     }
   } catch (error: any) {
-    return { 
-      user: null, 
-      companyId: null, 
-      error: String(error?.message || error || "Authentication failed") 
+    return {
+      user: null,
+      userId: null,
+      companyId: null,
+      error: String(error?.message || error || "Authentication failed"),
     }
   }
 }
+
+/** Auth + company lookup cached per request. Use in server actions to avoid 2–3 repeated round trips. */
+export const getCachedAuthContext = cache(getAuthContext)
 
 /**
  * Update user profile

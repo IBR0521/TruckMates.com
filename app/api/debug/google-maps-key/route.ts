@@ -2,9 +2,8 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
 /**
- * Debug endpoint to check Google Maps API key configuration
- * SECURITY: Requires authentication to prevent information disclosure
- * This helps diagnose API key issues
+ * Debug endpoint to check Google Maps API key configuration.
+ * SECURITY: Returns 404 in production (NODE_ENV=production). Dev only.
  */
 export async function GET() {
   // SECURITY: Require authentication
