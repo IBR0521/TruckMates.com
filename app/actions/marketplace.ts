@@ -3,11 +3,12 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { getUserRole } from "@/lib/server-permissions"
+import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 import { createLoad } from "./loads"
 import { sendNotification } from "./notifications"
 
-const MARKETPLACE_MANAGER_ROLES = ["super_admin", "operations_manager"] as const
+const MARKETPLACE_MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
 /**
  * Get all available marketplace loads (public)

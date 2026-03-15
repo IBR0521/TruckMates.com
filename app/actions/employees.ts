@@ -3,11 +3,11 @@
 import { createClient } from "@/lib/supabase/server"
 import { getUserRole } from "@/lib/server-permissions"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
-import { mapLegacyRole } from "@/lib/roles"
+import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 import { sendNotification } from "./notifications"
 
-const MANAGER_ROLES = ["super_admin", "operations_manager"] as const
+const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
 // Get all employees for a company (managers only)
 export async function getEmployees() {

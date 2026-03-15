@@ -2,9 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getUserRole } from "@/lib/server-permissions"
+import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 
-const MANAGER_ROLES = ["super_admin", "operations_manager"] as const
+const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
 // Manually create ELD log entry
 export async function createELDLog(formData: {

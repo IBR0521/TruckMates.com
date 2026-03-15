@@ -3,9 +3,10 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { getUserRole } from "@/lib/server-permissions"
+import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 
-const MANAGER_ROLES = ["super_admin", "operations_manager"] as const
+const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
 /**
  * Initialize driver onboarding when driver is created

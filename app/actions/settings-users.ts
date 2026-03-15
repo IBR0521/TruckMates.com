@@ -4,8 +4,9 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { getUserRole } from "@/lib/server-permissions"
+import type { EmployeeRole } from "@/lib/roles"
 
-const MANAGER_ROLES = ["super_admin", "operations_manager"] as const
+const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
 export async function getCompanyUsers() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
