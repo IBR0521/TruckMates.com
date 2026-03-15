@@ -55,7 +55,7 @@ async function getGoogleMapsApiKey() {
       const { error: insertError } = await supabase
         .from("company_integrations")
         .insert({
-          company_id: result.company_id,
+          company_id: ctx.companyId,
           google_maps_enabled: true,
         })
       
