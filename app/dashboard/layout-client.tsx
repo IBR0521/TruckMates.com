@@ -119,10 +119,10 @@ export default function DashboardLayoutClient({
         const userResult = await getCurrentUser()
         if (userResult.data && isMounted) {
           const user = userResult.data
-          
+          const { mapLegacyRole } = await import("@/lib/roles")
+          const mappedRole = mapLegacyRole((user as { role?: string }).role)
           // For Super Admin and operations_manager roles, check if setup is complete
-          // These are the roles that can set up a company
-          if (user.role === "super_admin" || user.role === "operations_manager") {
+          if (mappedRole === "super_admin" || mappedRole === "operations_manager") {
             // Check if account setup is complete
             // CRITICAL FIX: Always fetch fresh data, don't rely on cache
             const setupResult = await getSetupStatus()

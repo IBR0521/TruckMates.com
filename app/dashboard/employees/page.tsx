@@ -46,6 +46,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { getCurrentUser } from "@/lib/auth/server"
+import { mapLegacyRole } from "@/lib/roles"
 import { useRouter } from "next/navigation"
 
 export default function EmployeesPage() {
@@ -92,14 +93,12 @@ export default function EmployeesPage() {
           return
         }
 
-        const userRole = userResult.data.role
-        // HIGH FIX 6 & MEDIUM FIX 16: Fix role check to use correct role names
-        // LOW FIX 17: Remove dead code - isManagerOrSuperAdmin was computed but never used
-        const isManagerOrSuperAdmin = userRole === "operations_manager" || userRole === "super_admin"
+        const rawRole = userResult.data.role
+        const mappedRole = mapLegacyRole(rawRole)
+        const isManagerOrSuperAdmin = mappedRole === "operations_manager" || mappedRole === "super_admin"
         
-        // HIGH FIX 6: Only grant access if user is actually a manager
         setIsManager(isManagerOrSuperAdmin)
-        setIsSuperAdmin(userRole === "super_admin")
+        setIsSuperAdmin(mappedRole === "super_admin")
         
         // HIGH FIX 6: Deny access to non-managers
         if (!isManagerOrSuperAdmin) {

@@ -77,9 +77,10 @@ export async function updateCompany(formData: FormData) {
       return { success: false, error: "No company found" }
     }
 
-    // SEC-006 FIX: Use correct role names - super_admin and operations_manager (not "manager")
+    const { getUserRole } = await import("@/lib/server-permissions")
+    const role = await getUserRole()
     const MANAGER_ROLES = ["super_admin", "operations_manager"]
-    if (!MANAGER_ROLES.includes(userData.role)) {
+    if (!role || !MANAGER_ROLES.includes(role)) {
       return { success: false, error: "Only managers can update company information" }
     }
 

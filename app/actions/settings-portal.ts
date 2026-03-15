@@ -80,23 +80,20 @@ export async function updatePortalSettings(settings: {
     return { error: "Not authenticated", success: false }
   }
 
-  // HIGH FIX 1: Add RBAC check - only managers can update portal settings
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
-
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
+  const role = await getUserRole()
   const MANAGER_ROLES = ["super_admin", "operations_manager"]
-  if (!userData || !MANAGER_ROLES.includes(userData.role)) {
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can update portal settings", success: false }
   }
 
-  if (!userData.company_id) {
+  const { company_id } = await getCachedUserCompany(user.id)
+  if (!company_id) {
     return { error: "No company found", success: false }
   }
 
-  const result = { company_id: userData.company_id }
+  const result = { company_id }
 
   // MEDIUM FIX 10: Validate custom_url with strict regex to prevent path traversal
   if (settings.custom_url) {

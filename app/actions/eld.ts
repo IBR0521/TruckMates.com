@@ -146,10 +146,10 @@ export async function createELDDevice(formData: {
       return { error: "No company found", data: null }
     }
 
-    // Only real manager roles can create ELD devices
-    const allowedRoles = ["super_admin", "operations_manager"]
-    if (!allowedRoles.includes(userData.role)) {
-      return { error: "You don't have permission to create ELD devices", data: null }
+    const { checkCreatePermission } = await import("@/lib/server-permissions")
+    const perm = await checkCreatePermission("eld")
+    if (!perm.allowed) {
+      return { error: perm.error || "You don't have permission to create ELD devices", data: null }
     }
 
     // Basic server-side validation so we fail fast with clear errors
@@ -242,9 +242,10 @@ export async function updateELDDevice(
       return { error: "No company found", data: null }
     }
 
-    const allowedRoles = ["super_admin", "operations_manager"]
-    if (!allowedRoles.includes(userData.role)) {
-      return { error: "You don't have permission to update ELD devices", data: null }
+    const { checkEditPermission } = await import("@/lib/server-permissions")
+    const perm = await checkEditPermission("eld")
+    if (!perm.allowed) {
+      return { error: perm.error || "You don't have permission to update ELD devices", data: null }
     }
 
     // Build update data
@@ -319,10 +320,10 @@ export async function deleteELDDevice(id: string) {
       return { error: "No company found", data: null }
     }
 
-    // RBAC: Allow managers, admins, and owners to manage ELD devices
-    const allowedRoles = ["super_admin", "operations_manager"]
-    if (!allowedRoles.includes(userData.role)) {
-      return { error: "You don't have permission to delete ELD devices", data: null }
+    const { checkDeletePermission } = await import("@/lib/server-permissions")
+    const permission = await checkDeletePermission("eld")
+    if (!permission.allowed) {
+      return { error: permission.error || "You don't have permission to delete ELD devices", data: null }
     }
 
     const { error } = await supabase
@@ -599,10 +600,10 @@ export async function resolveELDEvent(eventId: string) {
     return { error: "No company found", data: null }
   }
 
-  // RBAC: Allow managers, admins, and owners to manage ELD devices
-  const allowedRoles = ['super_admin', 'operations_manager']
-  if (!allowedRoles.includes(userData.role)) {
-    return { error: "You don't have permission to resolve ELD events", data: null }
+  const { checkEditPermission } = await import("@/lib/server-permissions")
+  const perm = await checkEditPermission("eld")
+  if (!perm.allowed) {
+    return { error: perm.error || "You don't have permission to resolve ELD events", data: null }
   }
 
   const { data, error } = await supabase

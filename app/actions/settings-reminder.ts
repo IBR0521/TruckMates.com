@@ -85,9 +85,10 @@ export async function updateReminderSettings(settings: {
     return { error: "User not found", success: false }
   }
 
-  // HIGH FIX 1: Fix role check - use correct role names (manager, admin, owner)
-  const MANAGER_ROLES = ["manager", "admin", "owner"]
-  if (!MANAGER_ROLES.includes(userData.role)) {
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const role = await getUserRole()
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can update reminder settings", success: false }
   }
 

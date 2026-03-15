@@ -1,42 +1,13 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getUserRole } from "@/lib/server-permissions"
+import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { mapLegacyRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 import { sendNotification } from "./notifications"
 
-// Manager roles that can manage employees
-const MANAGER_ROLES = ["super_admin", "operations_manager"]
-
-// Helper function to get user role and company_id (bypasses RLS)
-async function getUserRoleAndCompany(supabase: any, userId: string) {
-  let userRole: string | null = null
-  let companyId: string | null = null
-
-  // Try using the RPC function first (bypasses RLS)
-  try {
-    const { data: roleData, error: roleError } = await supabase.rpc("get_user_role_and_company")
-    if (!roleError && roleData && Array.isArray(roleData) && roleData.length > 0) {
-      userRole = roleData[0].role
-      companyId = roleData[0].company_id
-      return { role: userRole, companyId, error: null }
-    }
-  } catch (error) {
-    // RPC function might not exist, use fallback
-  }
-
-  // Fallback: try direct query
-  const { data: userData, error } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", userId)
-    .single()
-
-  if (error || !userData) {
-    return { role: null, companyId: null, error: error?.message || "User not found" }
-  }
-
-  return { role: userData.role, companyId: userData.company_id, error: null }
-}
+const MANAGER_ROLES = ["super_admin", "operations_manager"] as const
 
 // Get all employees for a company (managers only)
 export async function getEmployees() {
@@ -51,44 +22,14 @@ export async function getEmployees() {
       return { error: "Not authenticated", data: null }
     }
 
-    // Check if user is a manager - try using RPC function first
-    let userRole: string | null = null
-    let companyId: string | null = null
-
-    try {
-      const { data: roleData, error: roleError } = await supabase.rpc("get_user_role_and_company")
-      if (!roleError && roleData && Array.isArray(roleData) && roleData.length > 0) {
-        userRole = roleData[0].role
-        companyId = roleData[0].company_id
-      }
-    } catch (error) {
-      // RPC function might not exist, use fallback
-    }
-
-    // Fallback: try direct query
-    if (!userRole || !companyId) {
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .select("role, company_id")
-        .eq("id", user.id)
-        .single()
-
-      if (userError) {
-        return { error: userError.message || "Failed to fetch user data", data: null }
-      }
-
-      if (userData) {
-        userRole = userData.role
-        companyId = userData.company_id
-      }
-    }
-
-    if (!userRole || !MANAGER_ROLES.includes(userRole)) {
+    const role = await getUserRole()
+    if (!role || !MANAGER_ROLES.includes(role)) {
       return { error: "Only managers can view employees", data: null }
     }
 
-    if (!companyId) {
-      return { error: "No company found", data: null }
+    const { company_id: companyId, error: companyError } = await getCachedUserCompany(user.id)
+    if (companyError || !companyId) {
+      return { error: companyError || "No company found", data: null }
     }
 
     // HIGH FIX 1: Select only necessary columns to prevent exposing sensitive internal fields
@@ -131,15 +72,14 @@ export async function updateEmployee(
     return { error: "Not authenticated", data: null }
   }
 
-  // Check if user is a manager
-  const { role: userRole, companyId, error: roleError } = await getUserRoleAndCompany(supabase, user.id)
-
-  if (roleError || !userRole || !MANAGER_ROLES.includes(userRole)) {
-    return { error: roleError || "Only managers can update employees", data: null }
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
+    return { error: "Only managers can update employees", data: null }
   }
 
-  if (!companyId) {
-    return { error: "No company found", data: null }
+  const { company_id: companyId, error: companyError } = await getCachedUserCompany(user.id)
+  if (companyError || !companyId) {
+    return { error: companyError || "No company found", data: null }
   }
 
   // Verify employee belongs to manager's company and is not a manager
@@ -157,7 +97,8 @@ export async function updateEmployee(
     return { error: "Employee does not belong to your company", data: null }
   }
 
-  if (MANAGER_ROLES.includes(employee.role)) {
+  const employeeMappedRole = mapLegacyRole(employee.role)
+  if (MANAGER_ROLES.includes(employeeMappedRole)) {
     return { error: "Cannot update manager accounts", data: null }
   }
 
@@ -220,15 +161,14 @@ export async function removeEmployee(employeeId: string) {
     return { error: "Not authenticated", data: null }
   }
 
-  // Check if user is a manager
-  const { role: userRole, companyId, error: roleError } = await getUserRoleAndCompany(supabase, user.id)
-
-  if (roleError || !userRole || !MANAGER_ROLES.includes(userRole)) {
-    return { error: roleError || "Only managers can remove employees", data: null }
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
+    return { error: "Only managers can remove employees", data: null }
   }
 
-  if (!companyId) {
-    return { error: "No company found", data: null }
+  const { company_id: companyId, error: companyError } = await getCachedUserCompany(user.id)
+  if (companyError || !companyId) {
+    return { error: companyError || "No company found", data: null }
   }
 
   // Verify employee belongs to manager's company and is not a manager
@@ -246,7 +186,8 @@ export async function removeEmployee(employeeId: string) {
     return { error: "Employee does not belong to your company", data: null }
   }
 
-  if (MANAGER_ROLES.includes(employee.role)) {
+  const employeeMappedRole = mapLegacyRole(employee.role)
+  if (MANAGER_ROLES.includes(employeeMappedRole)) {
     return { error: "Cannot remove manager accounts", data: null }
   }
 

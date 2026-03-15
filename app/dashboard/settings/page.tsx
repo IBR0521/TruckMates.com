@@ -29,6 +29,7 @@ import { getNotificationPreferences, updateNotificationPreferences, sendTestEmai
 import Link from "next/link"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ROLES, mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 
 export default function SettingsPage() {
   const [companyData, setCompanyData] = useState<{
@@ -100,13 +101,15 @@ export default function SettingsPage() {
       if (userResult.error) {
         toast.error(userResult.error)
       } else if (userResult.data) {
+        const rawRole = userResult.data.role || ""
+        const mappedRole = mapLegacyRole(rawRole)
         setUserData({
           full_name: userResult.data.full_name || "",
           email: userResult.data.email || "",
           phone: userResult.data.phone || "",
-          role: userResult.data.role || "",
+          role: rawRole,
         })
-        setIsManager(userResult.data.role === "manager")
+        setIsManager(mappedRole === "super_admin" || mappedRole === "operations_manager")
         setUserFormData({
           full_name: userResult.data.full_name || "",
           phone: userResult.data.phone || "",
@@ -338,7 +341,7 @@ export default function SettingsPage() {
                     <Input
                       id="user-role"
                       type="text"
-                      value={userData.role === "manager" ? "Manager" : "Employee"}
+                      value={ROLES[mapLegacyRole(userData.role) as EmployeeRole]?.name ?? userData.role}
                       disabled
                       className="mt-2 bg-muted capitalize"
                     />

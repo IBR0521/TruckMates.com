@@ -34,14 +34,14 @@ async function sendNotificationsForLoadUpdate(loadData: any) {
       assignedDriverId = loadData.driver_id
     }
 
-    // Get relevant users: assigned driver, dispatchers, and managers only
+    // Get relevant users: assigned driver, dispatchers, and managers only (6-role names)
     const { data: relevantUsers } = await supabase
       .from("users")
       .select("id, role")
       .eq("company_id", userData.company_id)
       .or([
         assignedDriverId ? `id.eq.${assignedDriverId}` : "",
-        "role.in.(dispatcher,manager,safety_manager,owner)",
+        "role.in.(super_admin,operations_manager,dispatcher,safety_compliance)",
       ].filter(Boolean).join(","))
 
     // BUG-018 FIX: Only send notifications to relevant users, not all company users
@@ -703,7 +703,12 @@ export async function createLoad(formData: {
   if (formData.length !== undefined && formData.length !== null) loadData.length = formData.length
   if (formData.width !== undefined && formData.width !== null) loadData.width = formData.width
   if (formData.height !== undefined && formData.height !== null) loadData.height = formData.height
-  if (formData.temperature !== undefined && formData.temperature !== null) loadData.temperature = formData.temperature
+  // Temperature: DB is numeric; accept range strings like "35-40" and store first number to avoid "invalid input syntax for type numeric"
+  if (formData.temperature !== undefined && formData.temperature !== null && formData.temperature !== "") {
+    const t = formData.temperature
+    const num = typeof t === "number" ? t : parseFloat(String(t).trim().replace(/^(\d+(?:\.\d+)?).*/, "$1"))
+    loadData.temperature = !isNaN(num) ? num : undefined
+  }
   if (formData.is_hazardous !== undefined) loadData.is_hazardous = formData.is_hazardous
   if (formData.is_oversized !== undefined) loadData.is_oversized = formData.is_oversized
   if (formData.special_instructions) loadData.special_instructions = formData.special_instructions
@@ -1010,7 +1015,16 @@ export async function updateLoad(
   updateField("length", formData.length || null)
   updateField("width", formData.width || null)
   updateField("height", formData.height || null)
-  updateField("temperature", formData.temperature || null)
+  // Coerce temperature range strings (e.g. "35-40") to first number for numeric column
+  (() => {
+    const t = formData.temperature
+    if (t === undefined || t === null || t === "") {
+      updateField("temperature", null)
+      return
+    }
+    const num = typeof t === "number" ? t : parseFloat(String(t).trim().replace(/^(\d+(?:\.\d+)?).*/, "$1"))
+    updateField("temperature", !isNaN(num) ? num : null)
+  })()
   updateField("is_hazardous", formData.is_hazardous)
   updateField("is_oversized", formData.is_oversized)
   updateField("special_instructions", formData.special_instructions)

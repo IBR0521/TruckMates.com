@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card"
 import { ArrowLeft, Phone, Mail, Building2, MapPin, Edit2, DollarSign, Wrench, MessageSquare } from "lucide-react"
 import { DocumentManager } from "@/components/crm/document-manager"
 import { CommunicationTimeline } from "@/components/crm/communication-timeline"
+import { CRMSectionHeader } from "@/components/crm/crm-section-header"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -92,17 +93,20 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
     <div className="w-full">
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Link href="/dashboard/vendors">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground">{vendor.name}</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              {vendor.company_name || "Vendor Details"}
-            </p>
+        <div className="space-y-3 min-w-0">
+          <CRMSectionHeader currentPage="vendor-detail" entityName={vendor.name} />
+          <div className="flex items-center gap-4">
+            <Link href="/dashboard/vendors">
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground">{vendor.name}</h1>
+              <p className="text-muted-foreground text-sm mt-1">
+                {vendor.company_name || "Vendor Details"}
+              </p>
+            </div>
           </div>
         </div>
         <Link href={`/dashboard/vendors/${id}/edit`}>

@@ -44,8 +44,10 @@ export async function updateEIN(einNumber: string): Promise<{ data: { ein: strin
       return { error: userError?.message || "No company found", data: null }
     }
 
+    const { getUserRole } = await import("@/lib/server-permissions")
+    const role = await getUserRole()
     const MANAGER_ROLES = ["super_admin", "operations_manager"]
-    if (!MANAGER_ROLES.includes(userData.role)) {
+    if (!role || !MANAGER_ROLES.includes(role)) {
       return { error: "Only managers can update EIN numbers", data: null }
     }
 
@@ -144,8 +146,10 @@ export async function deleteEINNumber(einId: string): Promise<{ error: string | 
     return { error: userError?.message || "No company found" }
   }
 
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const role = await getUserRole()
   const MANAGER_ROLES = ["super_admin", "operations_manager"]
-  if (!MANAGER_ROLES.includes(userData.role)) {
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can delete EIN numbers" }
   }
 

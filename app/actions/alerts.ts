@@ -94,9 +94,11 @@ export async function createAlertRule(formData: {
       return { error: "No company found", data: null }
     }
 
-    // FIXED: Allow admin and owner roles to create alert rules
-    if (!['manager', 'admin', 'owner'].includes(userData.role || '')) {
-      return { error: "Only managers, admins, and owners can create alert rules", data: null }
+    const { getUserRole } = await import("@/lib/server-permissions")
+    const role = await getUserRole()
+    const MANAGER_ROLES = ["super_admin", "operations_manager"]
+    if (!role || !MANAGER_ROLES.includes(role)) {
+      return { error: "Only managers can create alert rules", data: null }
     }
 
     const { data, error } = await supabase
@@ -186,9 +188,11 @@ export async function updateAlertRule(
     return { error: "No company found", data: null }
   }
 
-  // FIXED: Allow admin and owner roles to update alert rules
-  if (!['manager', 'admin', 'owner'].includes(userData.role || '')) {
-    return { error: "Only managers, admins, and owners can update alert rules", data: null }
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const role = await getUserRole()
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!role || !MANAGER_ROLES.includes(role)) {
+    return { error: "Only managers can update alert rules", data: null }
   }
 
   // Verify the rule belongs to the company
@@ -274,9 +278,11 @@ export async function deleteAlertRule(ruleId: string) {
     return { error: "No company found", data: null }
   }
 
-  // FIXED: Allow admin and owner roles to delete alert rules
-  if (!['manager', 'admin', 'owner'].includes(userData.role || '')) {
-    return { error: "Only managers, admins, and owners can delete alert rules", data: null }
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const role = await getUserRole()
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!role || !MANAGER_ROLES.includes(role)) {
+    return { error: "Only managers can delete alert rules", data: null }
   }
 
   // Verify the rule belongs to the company

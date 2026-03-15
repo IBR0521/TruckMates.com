@@ -193,12 +193,14 @@ export async function getDriverPayRules(driverId: string) {
   }
 
   try {
+    // V3-007 FIX: Replace select(*) with explicit columns
     const { data, error } = await supabase
       .from("driver_pay_rules")
-      .select("*")
+      .select("id, company_id, driver_id, pay_type, base_rate_per_mile, base_percentage, base_flat_rate, bonuses, deductions, minimum_pay_guarantee, effective_from, effective_to, is_active, notes, created_at, updated_at")
       .eq("company_id", result.company_id)
       .eq("driver_id", driverId)
       .order("effective_from", { ascending: false })
+      .limit(100) // V3-007 FIX: Add LIMIT to prevent unbounded queries
 
     if (error) {
       return { error: error.message, data: null }
@@ -360,23 +362,16 @@ export async function deletePayRule(ruleId: string) {
     return { error: "Not authenticated", data: null }
   }
 
-  // Check if user is manager
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (!userData) {
-    return { error: "User not found", data: null }
-  }
-
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
+  const role = await getUserRole()
   const MANAGER_ROLES = ["super_admin", "operations_manager"]
-  if (!MANAGER_ROLES.includes(userData.role)) {
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can delete pay rules", data: null }
   }
 
-  if (!userData.company_id) {
+  const { company_id } = await getCachedUserCompany(user.id)
+  if (!company_id) {
     return { error: "No company found", data: null }
   }
 
@@ -385,7 +380,7 @@ export async function deletePayRule(ruleId: string) {
       .from("driver_pay_rules")
       .delete()
       .eq("id", ruleId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", company_id)
 
     if (error) {
       return { error: error.message, data: null }

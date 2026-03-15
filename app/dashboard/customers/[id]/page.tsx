@@ -32,6 +32,7 @@ import { Switch } from "@/components/ui/switch"
 import { ExternalLink, Copy, Link as LinkIcon, X } from "lucide-react"
 import { DocumentManager } from "@/components/crm/document-manager"
 import { CommunicationTimeline } from "@/components/crm/communication-timeline"
+import { CRMSectionHeader } from "@/components/crm/crm-section-header"
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -203,12 +204,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   }
 
   return (
-    <DetailPageLayout
-      title={customer.name}
-      subtitle={customer.company_name || undefined}
-      backUrl="/dashboard/customers"
-      editUrl={`/dashboard/customers/${id}/edit`}
-    >
+    <div className="w-full space-y-4">
+      <CRMSectionHeader currentPage="customer-detail" entityName={customer.name} />
+      <DetailPageLayout
+        title={customer.name}
+        subtitle={customer.company_name || undefined}
+        backUrl="/dashboard/customers"
+        editUrl={`/dashboard/customers/${id}/edit`}
+      >
       {/* Tabs - Moved to Top */}
       <div className="flex gap-1 border-b border-border mb-6 overflow-x-auto -mx-4 md:-mx-8 px-4 md:px-8">
         <button
@@ -829,6 +832,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         )}
       </div>
     </DetailPageLayout>
+    </div>
   )
 }
 

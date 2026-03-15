@@ -165,7 +165,10 @@ export async function updateDocumentTemplates(templates: {
     return { error: "No company found", data: null }
   }
 
-  if (userData.role !== 'manager') {
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const role = await getUserRole()
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can update templates", data: null }
   }
 

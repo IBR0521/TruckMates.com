@@ -200,6 +200,13 @@ export function GoogleMapsRoute({
           throw new Error("Google Maps Geocoder API is not available. Please ensure the Google Maps JavaScript API is fully loaded.")
         }
 
+        // Multi-stop with no delivery points: cannot draw route without addresses
+        if ((destination === "Multiple Locations" || destination === "Multiple locations") && (!stops || stops.length === 0)) {
+          setError("Add delivery points to view the multi-stop route. The map will update once addresses are set.")
+          setIsLoading(false)
+          return
+        }
+
         // Get coordinates for origin and destination
         let originCoords: { lat: number; lng: number }
         let destCoords: { lat: number; lng: number }
@@ -242,8 +249,28 @@ export function GoogleMapsRoute({
           }
         }
 
+        // Multi-stop: destination is "Multiple Locations" — use last delivery point as destination (no geocode of literal string)
+        const isMultiStop = !destinationCoordinates && (destination === "Multiple Locations" || destination === "Multiple locations") && stops.length > 0
         if (destinationCoordinates) {
           destCoords = destinationCoordinates
+        } else if (isMultiStop) {
+          // Resolve last stop as destination (geocode or use coordinates)
+          const lastStop = stops[stops.length - 1]
+          if (lastStop.coordinates) {
+            destCoords = lastStop.coordinates
+          } else {
+            const address = lastStop.address || lastStop.location_name
+            const lastResult = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+              geocoder.geocode({ address }, (results: google.maps.GeocoderResult[] | null, status: google.maps.GeocoderStatus) => {
+                if (status === window.google.maps.GeocoderStatus.OK && results && results.length > 0) resolve(results)
+                else reject(new Error(`Address not found: "${address}"`))
+              })
+            })
+            destCoords = {
+              lat: lastResult[0].geometry.location.lat(),
+              lng: lastResult[0].geometry.location.lng(),
+            }
+          }
         } else {
           try {
             const destResult = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
@@ -251,17 +278,8 @@ export function GoogleMapsRoute({
                 if (status === window.google.maps.GeocoderStatus.OK && results && results.length > 0) {
                   resolve(results)
                 } else {
-                  // Provide specific error messages
                   let errorMsg = `Geocoding failed: ${status}`
-                  if (status === window.google.maps.GeocoderStatus.ERROR) {
-                    errorMsg = "Geocoding service error. Please check your API key and try again."
-                  } else if (status === window.google.maps.GeocoderStatus.INVALID_REQUEST) {
-                    errorMsg = `Invalid address format: "${destination}". Please provide a complete address.`
-                  } else if (status === window.google.maps.GeocoderStatus.OVER_QUERY_LIMIT) {
-                    errorMsg = "Geocoding quota exceeded. Please try again later."
-                  } else if (status === window.google.maps.GeocoderStatus.REQUEST_DENIED) {
-                    errorMsg = "Geocoding API access denied. Please check your API key permissions."
-                  } else if (status === window.google.maps.GeocoderStatus.ZERO_RESULTS) {
+                  if (status === window.google.maps.GeocoderStatus.ZERO_RESULTS) {
                     errorMsg = `Address not found: "${destination}". Please check the address and try again.`
                   }
                   reject(new Error(errorMsg))

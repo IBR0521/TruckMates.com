@@ -3,6 +3,9 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getUserRole } from "@/lib/server-permissions"
+
+const MANAGER_ROLES = ["super_admin", "operations_manager"] as const
 
 export async function getCompanyUsers() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
@@ -17,15 +20,8 @@ export async function getCompanyUsers() {
       return { error: "Not authenticated", data: null }
     }
 
-    // HIGH FIX 8: Add role check - only managers can list all company users
-    const { data: userData } = await supabase
-      .from("users")
-      .select("role, company_id")
-      .eq("id", user.id)
-      .single()
-
-    const MANAGER_ROLES = ["super_admin", "operations_manager"]
-    if (!userData || !MANAGER_ROLES.includes(userData.role)) {
+    const role = await getUserRole()
+    if (!role || !MANAGER_ROLES.includes(role)) {
       return { error: "Only managers can view company users", data: null }
     }
 
@@ -70,19 +66,22 @@ export async function updateUserRole(userId: string, newRole: string) {
       return { error: "Not authenticated", success: false }
     }
 
-    // Check if current user is manager
+    const role = await getUserRole()
+    if (!role || !MANAGER_ROLES.includes(role)) {
+      return { error: "Only managers can update user roles", success: false }
+    }
+
     const { data: currentUser } = await supabase
       .from("users")
       .select("role, company_id")
       .eq("id", user.id)
       .single()
 
-    const MANAGER_ROLES = ["super_admin", "operations_manager"]
-    if (!currentUser || !MANAGER_ROLES.includes(currentUser.role)) {
-      return { error: "Only managers can update user roles", success: false }
+    if (!currentUser?.company_id) {
+      return { error: "No company found", success: false }
     }
 
-    // HIGH FIX 4: Validate newRole against valid EmployeeRole enum
+    // Validate newRole against exact 6 roles
     const VALID_ROLES = ["super_admin", "operations_manager", "dispatcher", "safety_compliance", "financial_controller", "driver"]
     if (!VALID_ROLES.includes(newRole)) {
       return { error: `Invalid role: ${newRole}. Must be one of: ${VALID_ROLES.join(", ")}`, success: false }
@@ -102,7 +101,7 @@ export async function updateUserRole(userId: string, newRole: string) {
       operations_manager: 3,
       super_admin: 4,
     }
-    const callerLevel = roleHierarchy[currentUser.role] || 0
+    const callerLevel = roleHierarchy[role] || 0
     const targetLevel = roleHierarchy[newRole] || 0
     if (targetLevel > callerLevel) {
       return { error: `You cannot assign a role higher than your own (${currentUser.role})`, success: false }
@@ -161,17 +160,16 @@ export async function removeUser(userId: string) {
       return { error: "Not authenticated", success: false }
     }
 
-    // Check if current user is manager
-    const { data: currentUser } = await supabase
-      .from("users")
-      .select("role, company_id")
-      .eq("id", user.id)
-      .single()
-
-    const MANAGER_ROLES = ["super_admin", "operations_manager"]
-    if (!currentUser || !MANAGER_ROLES.includes(currentUser.role)) {
+    const role = await getUserRole()
+    if (!role || !MANAGER_ROLES.includes(role)) {
       return { error: "Only managers can remove users", success: false }
     }
+
+    const { data: currentUser } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single()
 
     // Prevent removing yourself
     if (userId === user.id) {
@@ -241,19 +239,18 @@ export async function inviteUser(data: {
     return { error: "Not authenticated", data: null }
   }
 
-  // Check if current user is manager
-  const { data: currentUser } = await supabase
-    .from("users")
-    .select("role, company_id, full_name")
-    .eq("id", user.id)
-    .single()
-
-  const MANAGER_ROLES = ["super_admin", "operations_manager"]
-  if (!currentUser || !MANAGER_ROLES.includes(currentUser.role)) {
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can invite users", data: null }
   }
 
-  if (!currentUser.company_id) {
+  const { data: currentUser } = await supabase
+    .from("users")
+    .select("company_id, full_name")
+    .eq("id", user.id)
+    .single()
+
+  if (!currentUser?.company_id) {
     return { error: "No company found", data: null }
   }
 
@@ -263,8 +260,8 @@ export async function inviteUser(data: {
     return { error: "Invalid email address", data: null }
   }
 
-  // Validate role
-  const VALID_ROLES = ["dispatcher", "safety_compliance", "financial_controller", "driver", "user"]
+  // Validate role: exact 6 roles only
+  const VALID_ROLES = ["super_admin", "operations_manager", "dispatcher", "safety_compliance", "financial_controller", "driver"]
   if (!VALID_ROLES.includes(data.role)) {
     return { error: `Invalid role: ${data.role}. Must be one of: ${VALID_ROLES.join(", ")}`, data: null }
   }
@@ -524,26 +521,20 @@ export async function getPendingInvitations() {
     return { error: "Not authenticated", data: null }
   }
 
-  // Check if current user is manager
-  const { data: currentUser } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
-
-  const MANAGER_ROLES = ["super_admin", "operations_manager"]
-  if (!currentUser || !MANAGER_ROLES.includes(currentUser.role)) {
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can view invitations", data: null }
   }
 
-  if (!currentUser.company_id) {
-    return { error: "No company found", data: null }
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", data: null }
   }
 
   const { data: invitations, error } = await supabase
     .from("invitation_codes")
     .select("id, email, invitation_code, status, created_at, expires_at, accepted_at")
-    .eq("company_id", currentUser.company_id)
+    .eq("company_id", result.company_id)
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -567,20 +558,14 @@ export async function cancelInvitation(invitationId: string) {
     return { error: "Not authenticated", success: false }
   }
 
-  // Check if current user is manager
-  const { data: currentUser } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
-
-  const MANAGER_ROLES = ["super_admin", "operations_manager"]
-  if (!currentUser || !MANAGER_ROLES.includes(currentUser.role)) {
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can cancel invitations", success: false }
   }
 
-  if (!currentUser.company_id) {
-    return { error: "No company found", success: false }
+  const result = await getCachedUserCompany(user.id)
+  if (result.error || !result.company_id) {
+    return { error: result.error || "No company found", success: false }
   }
 
   // Delete invitation (only if pending and belongs to company)
@@ -588,7 +573,7 @@ export async function cancelInvitation(invitationId: string) {
     .from("invitation_codes")
     .delete()
     .eq("id", invitationId)
-    .eq("company_id", currentUser.company_id)
+    .eq("company_id", result.company_id)
     .eq("status", "pending")
 
   if (error) {

@@ -2,9 +2,12 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getUserRole } from "@/lib/server-permissions"
 import { revalidatePath } from "next/cache"
 import { createLoad } from "./loads"
 import { sendNotification } from "./notifications"
+
+const MARKETPLACE_MANAGER_ROLES = ["super_admin", "operations_manager"] as const
 
 /**
  * Get all available marketplace loads (public)
@@ -177,22 +180,16 @@ export async function postLoadToMarketplace(formData: {
     return { data: null, error: companyError || "No company found" }
   }
 
-  // Verify user is a manager and company is a broker or both
+  const role = await getUserRole()
+  if (!role || !MARKETPLACE_MANAGER_ROLES.includes(role)) {
+    return { data: null, error: "Only managers can post loads to marketplace" }
+  }
+
   const { data: companyData } = await supabase
     .from("companies")
     .select("company_type")
     .eq("id", company_id)
     .single()
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single()
-
-  if (userData?.role !== "manager") {
-    return { data: null, error: "Only managers can post loads to marketplace" }
-  }
 
   // Check if company can post loads (broker or both)
   if (companyData?.company_type !== "broker" && companyData?.company_type !== "both") {
@@ -271,22 +268,16 @@ export async function acceptMarketplaceLoad(marketplaceLoadId: string) {
     return { data: null, error: companyError || "No company found" }
   }
 
-  // Verify user is a manager and company is a carrier or both
+  const role = await getUserRole()
+  if (!role || !MARKETPLACE_MANAGER_ROLES.includes(role)) {
+    return { data: null, error: "Only managers can accept loads from marketplace" }
+  }
+
   const { data: companyData } = await supabase
     .from("companies")
     .select("company_type")
     .eq("id", company_id)
     .single()
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single()
-
-  if (userData?.role !== "manager") {
-    return { data: null, error: "Only managers can accept loads from marketplace" }
-  }
 
   // Check if company can accept loads (carrier or both)
   if (companyData?.company_type !== "carrier" && companyData?.company_type !== "both") {
@@ -844,14 +835,8 @@ export async function rateCarrier(formData: {
     return { data: null, error: companyError || "No company found" }
   }
 
-  // Verify user is a manager (brokers rate carriers)
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single()
-
-  if (userData?.role !== "manager") {
+  const role = await getUserRole()
+  if (!role || !MARKETPLACE_MANAGER_ROLES.includes(role)) {
     return { data: null, error: "Only managers can rate carriers" }
   }
 

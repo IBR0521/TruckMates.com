@@ -2,10 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getUserRole } from "@/lib/server-permissions"
 import { revalidatePath } from "next/cache"
 
-// Manager roles that can manage driver onboarding
-const MANAGER_ROLES = ["super_admin", "operations_manager"]
+const MANAGER_ROLES = ["super_admin", "operations_manager"] as const
 
 /**
  * Initialize driver onboarding when driver is created
@@ -21,15 +21,19 @@ export async function initializeDriverOnboarding(driverId: string) {
     return { data: null, error: "Not authenticated" }
   }
 
-  // MEDIUM FIX 10: Add RBAC check - only managers can initialize onboarding
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
+    return { data: null, error: "Only managers can initialize driver onboarding" }
+  }
+
   const { data: userData } = await supabase
     .from("users")
-    .select("role, company_id")
+    .select("company_id")
     .eq("id", user.id)
     .single()
 
-  if (!userData || !MANAGER_ROLES.includes(userData.role)) {
-    return { data: null, error: "Only managers can initialize driver onboarding" }
+  if (!userData?.company_id) {
+    return { data: null, error: "No company found" }
   }
 
   const company_id = userData.company_id
@@ -129,8 +133,8 @@ export async function getDriverOnboarding(driverId: string) {
     return { data: null, error: "No company found" }
   }
 
-  // Check if user is manager or viewing their own driver record
-  const isManager = MANAGER_ROLES.includes(userData.role)
+  const role = await getUserRole()
+  const isManager = role && MANAGER_ROLES.includes(role)
   if (!isManager) {
     // For non-managers, verify they're viewing their own driver record
     const { data: driver } = await supabase
@@ -182,18 +186,18 @@ export async function updateOnboardingStep(driverId: string, step: number) {
     return { data: null, error: "Not authenticated" }
   }
 
-  // MEDIUM FIX 10: Add RBAC check
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData || !MANAGER_ROLES.includes(userData.role)) {
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { data: null, error: "Only managers can update onboarding steps" }
   }
 
-  const company_id = userData.company_id
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  const company_id = userData?.company_id
   if (!company_id) {
     return { data: null, error: "No company found" }
   }
@@ -258,7 +262,8 @@ export async function markDocumentUploaded(driverId: string, documentType: strin
     return { data: null, error: "No company found" }
   }
 
-  const isManager = MANAGER_ROLES.includes(userData.role)
+  const role = await getUserRole()
+  const isManager = role && MANAGER_ROLES.includes(role)
   if (!isManager) {
     // For non-managers, verify they're marking documents for their own driver record
     const { data: driver } = await supabase
@@ -385,18 +390,18 @@ export async function completeDriverOnboarding(driverId: string) {
     return { data: null, error: "Not authenticated" }
   }
 
-  // MEDIUM FIX 10: Add RBAC check - only managers can complete onboarding
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData || !MANAGER_ROLES.includes(userData.role)) {
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { data: null, error: "Only managers can complete driver onboarding" }
   }
 
-  const company_id = userData.company_id
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  const company_id = userData?.company_id
   if (!company_id) {
     return { data: null, error: "No company found" }
   }
@@ -484,18 +489,18 @@ export async function getAllDriverOnboarding(filters?: {
     return { data: null, error: "Not authenticated" }
   }
 
-  // MEDIUM FIX 10: Add RBAC check - only managers can view all onboarding records
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData || !MANAGER_ROLES.includes(userData.role)) {
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { data: null, error: "Only managers can view all onboarding records" }
   }
 
-  const company_id = userData.company_id
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
+
+  const company_id = userData?.company_id
   if (!company_id) {
     return { data: null, error: "No company found" }
   }

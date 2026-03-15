@@ -84,15 +84,10 @@ export async function createInvoiceTax(tax: Omit<InvoiceTax, "id">): Promise<{ d
     return { error: userError?.message || "No company found", data: null }
   }
 
-  // HIGH FIX 1: Add RBAC check - only managers can create invoice taxes
-  const { data: userRoleData } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single()
-
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const role = await getUserRole()
   const MANAGER_ROLES = ["super_admin", "operations_manager"]
-  if (!userRoleData || !MANAGER_ROLES.includes(userRoleData.role)) {
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can create invoice taxes", data: null }
   }
 
@@ -183,15 +178,10 @@ export async function updateInvoiceTax(id: string, tax: Partial<InvoiceTax>): Pr
     return { error: "Invoice tax not found or access denied", data: null }
   }
 
-  // HIGH FIX 1: Add RBAC check - only managers can update invoice taxes
-  const { data: userRoleData } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single()
-
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const role = await getUserRole()
   const MANAGER_ROLES = ["super_admin", "operations_manager"]
-  if (!userRoleData || !MANAGER_ROLES.includes(userRoleData.role)) {
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can update invoice taxes", data: null }
   }
 
@@ -261,21 +251,20 @@ export async function deleteInvoiceTax(id: string): Promise<{ error: string | nu
     return { error: "Not authenticated" }
   }
 
-  // HIGH FIX 1: Add RBAC check - only managers can delete invoice taxes
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError || !userData?.company_id) {
-    return { error: userError?.message || "No company found" }
-  }
-
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
+  const role = await getUserRole()
   const MANAGER_ROLES = ["super_admin", "operations_manager"]
-  if (!MANAGER_ROLES.includes(userData.role)) {
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can delete invoice taxes" }
   }
+
+  const { company_id } = await getCachedUserCompany(user.id)
+  if (!company_id) {
+    return { error: "No company found" }
+  }
+
+  const userData = { company_id }
 
   // Verify the tax belongs to the company
   const { data: existing, error: checkError } = await supabase

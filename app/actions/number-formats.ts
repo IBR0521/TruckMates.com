@@ -178,9 +178,10 @@ export async function updateCompanySettings(settings: {
     return { error: "No company found", data: null }
   }
 
-  // HIGH FIX 2: Fix role check - use 'operations_manager' not 'manager'
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const role = await getUserRole()
   const MANAGER_ROLES = ["super_admin", "operations_manager"]
-  if (!MANAGER_ROLES.includes(userData.role)) {
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can update company settings", data: null }
   }
 

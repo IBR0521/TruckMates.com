@@ -90,9 +90,8 @@ serve(async (req: Request) => {
       )
     }
 
-    // MEDIUM FIX: RBAC check - only managers/admins/owners can trigger maintenance creation
-    // Drivers and dispatchers should not be able to trigger this function
-    const allowedRoles = ["manager", "admin", "owner", "super_admin", "operations_manager"]
+    // RBAC: only these 6-role values can run fault code analysis
+    const allowedRoles = ["super_admin", "operations_manager", "safety_compliance"]
     if (!userData.role || !allowedRoles.includes(userData.role)) {
       return new Response(
         JSON.stringify({ error: "Insufficient permissions - only managers can analyze fault codes" }),

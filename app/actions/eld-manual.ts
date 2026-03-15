@@ -1,7 +1,10 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getUserRole } from "@/lib/server-permissions"
 import { revalidatePath } from "next/cache"
+
+const MANAGER_ROLES = ["super_admin", "operations_manager"] as const
 
 // Manually create ELD log entry
 export async function createELDLog(formData: {
@@ -45,7 +48,8 @@ export async function createELDLog(formData: {
     return { error: "No company found", data: null }
   }
 
-  if (userData.role !== "manager") {
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can create ELD logs", data: null }
   }
 
@@ -132,7 +136,8 @@ export async function createELDLocation(formData: {
     return { error: "No company found", data: null }
   }
 
-  if (userData.role !== "manager") {
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can create ELD locations", data: null }
   }
 
@@ -200,7 +205,8 @@ export async function createELDEvent(formData: {
     return { error: "No company found", data: null }
   }
 
-  if (userData.role !== "manager") {
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can create ELD events", data: null }
   }
 

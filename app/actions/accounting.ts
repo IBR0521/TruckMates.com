@@ -953,19 +953,7 @@ export async function createExpense(formData: {
     }
   }
 
-  // Validate vendor if provided
-  if (formData.vendor) {
-    const { data: vendor, error: vendorError } = await supabase
-      .from("vendors")
-      .select("id, company_id")
-      .eq("id", formData.vendor)
-      .eq("company_id", userData.company_id)
-      .single()
-
-    if (vendorError || !vendor) {
-      return { error: "Invalid vendor selected", data: null }
-    }
-  }
+  // Vendor is stored as free-text name on expenses; no ID validation.
 
   // Try to auto-link to route/load based on date, driver, and truck
   let linkedRouteId = null

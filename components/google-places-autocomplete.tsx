@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
@@ -46,8 +46,12 @@ export function GooglePlacesAutocomplete({
   const inputRef = useRef<HTMLInputElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const autocompleteElementRef = useRef<any>(null)
+  const scrollResizeHandlerRef = useRef<() => void>(() => {})
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false)
+
+  // Stable handler for scroll/resize so cleanup can always remove the same reference
+  const handleScrollResize = useCallback(() => scrollResizeHandlerRef.current?.(), [])
 
   // Load Google Maps Places API with PlaceAutocompleteElement support
   useEffect(() => {
@@ -152,9 +156,24 @@ export function GooglePlacesAutocomplete({
 
       autocompleteElementRef.current = autocomplete
 
-      // Fix z-index and click handling for the dropdown
+      // Fix z-index, position under input, and click handling for the dropdown
       const fixedItems = new WeakSet<HTMLElement>()
       
+      const positionDropdown = () => {
+        const input = inputRef.current
+        const pacContainers = document.querySelectorAll('.pac-container') as NodeListOf<HTMLElement>
+        if (!input || pacContainers.length === 0) return
+        const rect = input.getBoundingClientRect()
+        pacContainers.forEach((pacContainer) => {
+          if (pacContainer.offsetParent === null) return
+          pacContainer.style.top = `${rect.bottom + 2}px`
+          pacContainer.style.left = `${rect.left}px`
+          pacContainer.style.width = `${Math.max(rect.width, 280)}px`
+        })
+      }
+      
+      scrollResizeHandlerRef.current = positionDropdown
+
       const applyStyles = () => {
         const pacContainers = document.querySelectorAll('.pac-container') as NodeListOf<HTMLElement>
         
@@ -164,11 +183,19 @@ export function GooglePlacesAutocomplete({
             document.body.appendChild(pacContainer)
           }
           
-          // Apply container styles
+          // Apply container styles and position under the input
           if (!pacContainer.dataset.styled) {
+            const input = inputRef.current
+            const rect = input?.getBoundingClientRect()
+            const top = rect ? `${rect.bottom + 2}px` : 'auto'
+            const left = rect ? `${rect.left}px` : '0'
+            const width = rect ? `${Math.max(rect.width, 280)}px` : '300px'
             pacContainer.style.cssText = `
               z-index: 99999 !important;
               position: fixed !important;
+              top: ${top} !important;
+              left: ${left} !important;
+              width: ${width} !important;
               pointer-events: auto !important;
               cursor: default !important;
               background-color: white !important;
@@ -177,6 +204,8 @@ export function GooglePlacesAutocomplete({
               box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
             `
             pacContainer.dataset.styled = 'true'
+          } else {
+            positionDropdown()
           }
           
           // Fix items - only process new ones
@@ -225,12 +254,17 @@ export function GooglePlacesAutocomplete({
 
       // Apply styles immediately
       applyStyles()
+      positionDropdown()
+
+      window.addEventListener('scroll', handleScrollResize, true)
+      window.addEventListener('resize', handleScrollResize)
 
       // Watch for dropdown creation
       observer = new MutationObserver(() => {
         if (debounceTimeout) clearTimeout(debounceTimeout)
         debounceTimeout = setTimeout(() => {
           applyStyles()
+          positionDropdown()
         }, 50)
       })
 
@@ -493,6 +527,9 @@ export function GooglePlacesAutocomplete({
       if (observer) {
         observer.disconnect()
       }
+      window.removeEventListener('scroll', handleScrollResize, true)
+      window.removeEventListener('resize', handleScrollResize)
+      scrollResizeHandlerRef.current = () => {}
       if (autocompleteElementRef.current) {
         window.google?.maps?.event?.clearInstanceListeners?.(autocompleteElementRef.current)
         autocompleteElementRef.current = null

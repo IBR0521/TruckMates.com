@@ -33,14 +33,14 @@ async function sendNotificationsForRouteUpdate(routeData: any) {
       assignedDriverId = routeData.driver_id
     }
 
-    // Get relevant users: assigned driver, dispatchers, and managers only
+    // Get relevant users: assigned driver, dispatchers, and managers only (6-role names)
     const { data: relevantUsers } = await supabase
       .from("users")
       .select("id, role")
       .eq("company_id", userData.company_id)
       .or([
         assignedDriverId ? `id.eq.${assignedDriverId}` : "",
-        "role.in.(dispatcher,manager,safety_manager,owner)",
+        "role.in.(super_admin,operations_manager,dispatcher,safety_compliance)",
       ].filter(Boolean).join(","))
 
     // BUG-044 FIX: Only send notifications to relevant users, not all company users
@@ -172,9 +172,6 @@ export async function getRoute(id: string) {
   }
 }
 
-// Manager roles that can create routes
-const MANAGER_ROLES = ["super_admin", "operations_manager"]
-
 export async function createRoute(formData: {
   name: string
   origin: string
@@ -219,11 +216,6 @@ export async function createRoute(formData: {
 
   if (!userData?.company_id) {
     return { error: "No company found", data: null }
-  }
-
-  // Check if user has manager role
-  if (!userData.role || !MANAGER_ROLES.includes(userData.role)) {
-    return { error: "Only managers can create routes", data: null }
   }
 
   // Professional validation

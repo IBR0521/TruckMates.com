@@ -2,7 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getUserRole } from "@/lib/server-permissions"
 import { revalidatePath } from "next/cache"
+
+const MANAGER_ROLES = ["super_admin", "operations_manager"] as const
 
 /**
  * IFTA Tax Rates Management
@@ -227,14 +230,8 @@ export async function upsertIFTATaxRate(formData: {
     return { error: result.error || "No company found", data: null }
   }
 
-  // Check if user is manager
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single()
-
-  if (userData?.role !== "manager") {
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can update tax rates", data: null }
   }
 
@@ -305,14 +302,8 @@ export async function bulkUpdateIFTATaxRates(
     return { error: result.error || "No company found", data: null }
   }
 
-  // FIXED: Add null guard to prevent bypass when userData is null
-  const { data: userData, error: userDataError } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single()
-
-  if (userDataError || !userData || userData.role !== "manager") {
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can update tax rates", data: null }
   }
 
@@ -373,14 +364,8 @@ export async function deleteIFTATaxRate(id: string): Promise<{
     return { error: result.error || "No company found" }
   }
 
-  // FIXED: Add null guard to prevent bypass when userData is null
-  const { data: userData, error: userDataError } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single()
-
-  if (userDataError || !userData || userData.role !== "manager") {
+  const role = await getUserRole()
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can delete tax rates" }
   }
 

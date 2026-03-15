@@ -36,6 +36,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { ROLES, mapLegacyRole, type EmployeeRole } from "@/lib/roles"
+
+const SIX_ROLES: EmployeeRole[] = ["super_admin", "operations_manager", "dispatcher", "safety_compliance", "financial_controller", "driver"]
+
+function getRoleDisplayName(rawRole: string): string {
+  const mapped = mapLegacyRole(rawRole)
+  return ROLES[mapped]?.name ?? rawRole
+}
 
 export default function UsersSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -53,7 +61,7 @@ export default function UsersSettingsPage() {
   const [isInviting, setIsInviting] = useState(false)
   const [inviteForm, setInviteForm] = useState({
     email: "",
-    role: "user",
+    role: "driver" as EmployeeRole,
   })
   const [pendingInvitations, setPendingInvitations] = useState<Array<{
     id: string
@@ -84,7 +92,7 @@ export default function UsersSettingsPage() {
             email: u.email,
             full_name: u.full_name,
             phone: u.phone,
-            role: u.role === "manager" ? "Manager" : u.role === "user" ? "Employee" : "Driver",
+            role: u.role,
             status: "Active",
           })))
         }
@@ -108,20 +116,12 @@ export default function UsersSettingsPage() {
     user.email.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const handleUpdateRole = async (userId: string, newRole: string) => {
-    const roleMap: Record<string, string> = {
-      "Manager": "manager",
-      "Employee": "user",
-      "Driver": "driver",
-    }
-    
-    const result = await updateUserRole(userId, roleMap[newRole] || newRole.toLowerCase())
-    
+  const handleUpdateRole = async (userId: string, newRole: EmployeeRole) => {
+    const result = await updateUserRole(userId, newRole)
     if (result.error) {
       toast.error(result.error)
     } else {
       toast.success("User role updated successfully")
-      // Reload users
       const reloadResult = await getCompanyUsers()
       if (reloadResult.data) {
         setUsers(reloadResult.data.map((u: any) => ({
@@ -129,7 +129,7 @@ export default function UsersSettingsPage() {
           email: u.email,
           full_name: u.full_name,
           phone: u.phone,
-          role: u.role === "manager" ? "Manager" : u.role === "user" ? "Employee" : "Driver",
+          role: u.role,
           status: "Active",
         })))
       }
@@ -155,7 +155,7 @@ export default function UsersSettingsPage() {
           email: u.email,
           full_name: u.full_name,
           phone: u.phone,
-          role: u.role === "manager" ? "Manager" : u.role === "user" ? "Employee" : "Driver",
+          role: u.role,
           status: "Active",
         })))
       }
@@ -181,7 +181,7 @@ export default function UsersSettingsPage() {
         if (result.data?.emailSent) {
           toast.success(`Invitation sent to ${inviteForm.email}`)
           setShowInviteDialog(false)
-          setInviteForm({ email: "", role: "user" })
+          setInviteForm({ email: "", role: "driver" })
         } else {
           toast.warning("Invitation created but email was not sent. Copy the link below to share manually.")
           setInviteLinkToCopy(result.data?.invitationLink ?? null)
@@ -345,9 +345,11 @@ export default function UsersSettingsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleUpdateRole(user.id, user.role === "Manager" ? "Employee" : "Manager")}>
-                                Change Role
-                              </DropdownMenuItem>
+                              {SIX_ROLES.map((r) => (
+                                <DropdownMenuItem key={r} onClick={() => handleUpdateRole(user.id, r)}>
+                                  Change to {ROLES[r].name}
+                                </DropdownMenuItem>
+                              ))}
                               <DropdownMenuItem 
                                 className="text-red-500"
                                 onClick={() => handleRemoveUser(user.id, user.full_name || user.email)}
@@ -359,7 +361,7 @@ export default function UsersSettingsPage() {
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="px-2 py-1 bg-primary/10 text-primary rounded text-xs">
-                            {user.role}
+                            {getRoleDisplayName(user.role)}
                           </span>
                           <span className={`px-2 py-1 rounded text-xs ${
                             user.status === "Active" 
@@ -401,7 +403,7 @@ export default function UsersSettingsPage() {
                           <td className="p-3 text-muted-foreground">{user.email}</td>
                           <td className="p-3">
                             <span className="px-2 py-1 bg-primary/10 text-primary rounded text-sm">
-                              {user.role}
+                              {getRoleDisplayName(user.role)}
                             </span>
                           </td>
                           <td className="p-3">
@@ -421,9 +423,11 @@ export default function UsersSettingsPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleUpdateRole(user.id, user.role === "Manager" ? "Employee" : "Manager")}>
-                                  Change Role
-                                </DropdownMenuItem>
+                                {SIX_ROLES.map((r) => (
+                                  <DropdownMenuItem key={r} onClick={() => handleUpdateRole(user.id, r)}>
+                                    Change to {ROLES[r].name}
+                                  </DropdownMenuItem>
+                                ))}
                                 <DropdownMenuItem 
                                   className="text-red-500"
                                   onClick={() => handleRemoveUser(user.id, user.full_name || user.email)}
@@ -450,7 +454,7 @@ export default function UsersSettingsPage() {
           if (!open) {
             setInviteLinkToCopy(null)
             setInviteEmailError(null)
-            setInviteForm({ email: "", role: "user" })
+            setInviteForm({ email: "", role: "driver" })
           }
         }}>
           <DialogContent>
@@ -509,17 +513,17 @@ export default function UsersSettingsPage() {
                     <Label>Role</Label>
                     <Select
                       value={inviteForm.role}
-                      onValueChange={(value) => setInviteForm({ ...inviteForm, role: value })}
+                      onValueChange={(value) => setInviteForm({ ...inviteForm, role: value as EmployeeRole })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select a role" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="user">Employee</SelectItem>
-                        <SelectItem value="dispatcher">Dispatcher</SelectItem>
-                        <SelectItem value="safety_compliance">Safety & Compliance</SelectItem>
-                        <SelectItem value="financial_controller">Financial Controller</SelectItem>
-                        <SelectItem value="driver">Driver</SelectItem>
+                        {SIX_ROLES.map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {ROLES[r].name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -529,7 +533,7 @@ export default function UsersSettingsPage() {
                     variant="outline"
                     onClick={() => {
                       setShowInviteDialog(false)
-                      setInviteForm({ email: "", role: "user" })
+                      setInviteForm({ email: "", role: "driver" })
                     }}
                   >
                     Cancel
@@ -542,7 +546,7 @@ export default function UsersSettingsPage() {
             )}
             {inviteLinkToCopy && (
               <DialogFooter>
-                <Button onClick={() => { setShowInviteDialog(false); setInviteLinkToCopy(null); setInviteEmailError(null); setInviteForm({ email: "", role: "user" }) }}>
+                <Button onClick={() => { setShowInviteDialog(false); setInviteLinkToCopy(null); setInviteEmailError(null); setInviteForm({ email: "", role: "driver" }) }}>
                   Done
                 </Button>
               </DialogFooter>

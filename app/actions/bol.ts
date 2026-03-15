@@ -478,10 +478,10 @@ export async function updateBOLSignature(
     }
 
     // SECURITY FIX 3: Role check - consignee signatures should only be added by authorized users
-    // Drivers and dispatchers can sign as driver, but consignee requires manager/admin/owner or external consignee
-    if (signatureType === "consignee" && !["manager", "admin", "owner", "dispatcher"].includes(userData.role || "")) {
-      // Allow if user is external (not in users table) or has special permission
-      // For now, we'll allow it but log it
+    const { getUserRole } = await import("@/lib/server-permissions")
+    const mappedRole = (await getUserRole()) || ""
+    const canSignConsignee = ["super_admin", "operations_manager", "dispatcher"].includes(mappedRole)
+    if (signatureType === "consignee" && !canSignConsignee) {
       console.warn(`[BOL] Consignee signature added by user with role: ${userData.role}`)
     }
 

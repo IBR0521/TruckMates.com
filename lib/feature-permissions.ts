@@ -109,6 +109,7 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
       "loads",
       "marketplace",
       "crm",
+      "eld",
     ],
     manage: [
       "dispatch",
@@ -184,7 +185,7 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
       "maintenance",
       "documents",
     ],
-    delete: [],
+    delete: ["eld", "dvir"],
     manage: [
       "eld",
       "dvir",

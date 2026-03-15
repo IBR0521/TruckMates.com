@@ -72,15 +72,20 @@ export async function createAPIKey(formData: {
     return { error: "Not authenticated", data: null }
   }
 
-  // Check if user is manager
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const role = await getUserRole()
+  if (!role || !["super_admin", "operations_manager"].includes(role)) {
+    return { error: "Only managers can create API keys", data: null }
+  }
+
   const { data: userData } = await supabase
     .from("users")
-    .select("role, company_id")
+    .select("company_id")
     .eq("id", user.id)
     .maybeSingle()
 
-  if (!userData || !["super_admin", "operations_manager"].includes(userData.role)) {
-    return { error: "Only managers can create API keys", data: null }
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
   }
 
   if (!userData.company_id) {
@@ -142,14 +147,9 @@ export async function revokeAPIKey(id: string) {
     return { error: result.error || "No company found" }
   }
 
-  // Check if user is manager
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (!userData || !["super_admin", "operations_manager"].includes(userData.role)) {
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const role = await getUserRole()
+  if (!role || !["super_admin", "operations_manager"].includes(role)) {
     return { error: "Only managers can revoke API keys" }
   }
 
@@ -209,14 +209,9 @@ export async function updateAPIKey(
     return { error: result.error || "No company found", data: null }
   }
 
-  // Check if user is manager
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (!userData || !["super_admin", "operations_manager"].includes(userData.role)) {
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const role = await getUserRole()
+  if (!role || !["super_admin", "operations_manager"].includes(role)) {
     return { error: "Only managers can update API keys", data: null }
   }
 

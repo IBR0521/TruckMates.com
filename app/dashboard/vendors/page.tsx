@@ -31,6 +31,7 @@ import { InlineEdit } from "@/components/dashboard/inline-edit"
 import { DefensiveDelete } from "@/components/dashboard/defensive-delete"
 import { AuditTrail } from "@/components/dashboard/audit-trail"
 import { History } from "lucide-react"
+import { CRMSectionHeader } from "@/components/crm/crm-section-header"
 
 export default function VendorsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -183,9 +184,12 @@ export default function VendorsPage() {
     <div className="w-full">
       {/* Page Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Vendors</h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage your vendors and suppliers</p>
+        <div className="space-y-3 w-full min-w-0">
+          <CRMSectionHeader currentPage="vendors" />
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground">Vendors</h1>
+            <p className="text-muted-foreground text-sm mt-1">Manage your vendors and suppliers</p>
+          </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <Button

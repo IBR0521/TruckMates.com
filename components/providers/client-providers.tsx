@@ -40,20 +40,20 @@ export function ClientProviders({ children }: ClientProvidersProps) {
     setMounted(true)
   }, [])
 
-  // Don't render providers until mounted (client-side only)
-  if (!mounted) {
-    return <>{children}</>
-  }
-
+  // Always wrap with QueryProvider so useQuery never throws "No QueryClient set"
   return (
     <QueryProvider>
-      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-        <KeyboardShortcutsProvider>
-          {children}
-          <GlobalSearch />
-        </KeyboardShortcutsProvider>
-        <Toaster />
-      </ThemeProvider>
+      {mounted ? (
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+          <KeyboardShortcutsProvider>
+            {children}
+            <GlobalSearch />
+          </KeyboardShortcutsProvider>
+        </ThemeProvider>
+      ) : (
+        children
+      )}
+      <Toaster />
     </QueryProvider>
   )
 }

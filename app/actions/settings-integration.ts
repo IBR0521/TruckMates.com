@@ -127,17 +127,18 @@ export async function updateIntegrationSettings(settings: {
     return { error: "Not authenticated", success: false }
   }
 
-  // HIGH FIX 1: Add RBAC check - only managers can update integration settings
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
-
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const role = await getUserRole()
   const MANAGER_ROLES = ["super_admin", "operations_manager"]
-  if (!userData || !MANAGER_ROLES.includes(userData.role)) {
+  if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can update integration settings", success: false }
   }
+
+  const { data: userData } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .single()
 
   if (!userData.company_id) {
     return { error: "No company found", success: false }
@@ -211,15 +212,16 @@ export async function checkEmailServiceConfigured() {
     return { configured: false, isManager: false }
   }
 
-  // Check if user is a manager/owner/admin
+  const { getUserRole } = await import("@/lib/server-permissions")
+  const role = await getUserRole()
+  const MANAGER_ROLES = ["super_admin", "operations_manager"]
+  const isManager = role != null && MANAGER_ROLES.includes(role)
+
   const { data: userData } = await supabase
     .from("users")
-    .select("role, company_id")
+    .select("company_id")
     .eq("id", user.id)
     .single()
-
-  const MANAGER_ROLES = ["manager", "admin", "owner", "super_admin", "operations_manager"]
-  const isManager = userData && MANAGER_ROLES.includes(userData.role)
 
   if (!isManager || !userData?.company_id) {
     return { configured: false, isManager: false }
