@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getUserRole } from "@/lib/server-permissions"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 import { sendNotification } from "./notifications"
@@ -14,12 +14,9 @@ export async function getEmployees() {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const role = await getUserRole()
@@ -27,17 +24,12 @@ export async function getEmployees() {
       return { error: "Only managers can view employees", data: null }
     }
 
-    const { company_id: companyId, error: companyError } = await getCachedUserCompany(user.id)
-    if (companyError || !companyId) {
-      return { error: companyError || "No company found", data: null }
-    }
-
     // HIGH FIX 1: Select only necessary columns to prevent exposing sensitive internal fields
     const { data: employees, error } = await supabase
       .from("users")
       .select("id, full_name, email, phone, employee_status, role, created_at")
-      .eq("company_id", companyId)
-      .neq("id", user.id) // Exclude the manager
+      .eq("company_id", ctx.companyId)
+      .neq("id", ctx.userId!) // Exclude the manager
       .order("created_at", { ascending: false })
 
     if (error) {
@@ -64,22 +56,14 @@ export async function updateEmployee(
 ) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const role = await getUserRole()
   if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can update employees", data: null }
-  }
-
-  const { company_id: companyId, error: companyError } = await getCachedUserCompany(user.id)
-  if (companyError || !companyId) {
-    return { error: companyError || "No company found", data: null }
   }
 
   // Verify employee belongs to manager's company and is not a manager
@@ -93,7 +77,7 @@ export async function updateEmployee(
     return { error: "Employee not found", data: null }
   }
 
-  if (employee.company_id !== companyId) {
+  if (employee.company_id !== ctx.companyId) {
     return { error: "Employee does not belong to your company", data: null }
   }
 
@@ -120,7 +104,7 @@ export async function updateEmployee(
     .from("users")
     .update(updateData)
     .eq("id", employeeId)
-    .eq("company_id", companyId)
+    .eq("company_id", ctx.companyId)
 
   if (updateError) {
     return { error: updateError.message, data: null }
@@ -153,22 +137,14 @@ export async function updateEmployee(
 export async function removeEmployee(employeeId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const role = await getUserRole()
   if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can remove employees", data: null }
-  }
-
-  const { company_id: companyId, error: companyError } = await getCachedUserCompany(user.id)
-  if (companyError || !companyId) {
-    return { error: companyError || "No company found", data: null }
   }
 
   // Verify employee belongs to manager's company and is not a manager
@@ -182,7 +158,7 @@ export async function removeEmployee(employeeId: string) {
     return { error: "Employee not found", data: null }
   }
 
-  if (employee.company_id !== companyId) {
+  if (employee.company_id !== ctx.companyId) {
     return { error: "Employee does not belong to your company", data: null }
   }
 
@@ -191,7 +167,7 @@ export async function removeEmployee(employeeId: string) {
     return { error: "Cannot remove manager accounts", data: null }
   }
 
-  if (employee.id === user.id) {
+  if (employee.id === ctx.userId) {
     return { error: "Cannot remove yourself", data: null }
   }
 
@@ -200,7 +176,7 @@ export async function removeEmployee(employeeId: string) {
     .from("users")
     .update({ company_id: null })
     .eq("id", employeeId)
-    .eq("company_id", companyId) // Defense-in-depth
+    .eq("company_id", ctx.companyId) // Defense-in-depth
 
   // HIGH FIX 7: Revoke all active sessions for the removed employee
   if (!removeError) {

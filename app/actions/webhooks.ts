@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import crypto from "crypto"
 
 // Webhook event types
@@ -30,23 +30,15 @@ export async function getWebhooks() {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const result = await getCachedUserCompany(user.id)
-    if (result.error || !result.company_id) {
-      return { error: result.error || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { data, error } = await supabase
       .from("webhooks")
       .select("*")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     if (error) {
@@ -66,24 +58,16 @@ export async function getWebhook(id: string) {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const result = await getCachedUserCompany(user.id)
-    if (result.error || !result.company_id) {
-      return { error: result.error || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { data, error } = await supabase
       .from("webhooks")
       .select("*")
       .eq("id", id)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (error) {
@@ -111,17 +95,9 @@ export async function createWebhook(formData: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Validate URL format and security (SSRF protection)
@@ -170,7 +146,7 @@ export async function createWebhook(formData: {
   const { data: existing } = await supabase
     .from("webhooks")
     .select("id")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("url", formData.url)
     .single()
 
@@ -181,7 +157,7 @@ export async function createWebhook(formData: {
   const { data, error } = await supabase
     .from("webhooks")
     .insert({
-      company_id: result.company_id,
+      company_id: ctx.companyId,
       url: formData.url,
       events: formData.events,
       secret: secret,
@@ -212,17 +188,9 @@ export async function updateWebhook(
 ) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Check if webhook exists
@@ -230,7 +198,7 @@ export async function updateWebhook(
     .from("webhooks")
     .select("id, url")
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!existing) {
@@ -249,7 +217,7 @@ export async function updateWebhook(
     const { data: duplicate } = await supabase
       .from("webhooks")
       .select("id")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("url", formData.url)
       .neq("id", id)
       .single()
@@ -273,7 +241,7 @@ export async function updateWebhook(
     .from("webhooks")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -289,24 +257,16 @@ export async function updateWebhook(
 export async function deleteWebhook(id: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { error } = await supabase
     .from("webhooks")
     .delete()
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message, data: null }
@@ -500,17 +460,9 @@ export async function triggerWebhook(
 export async function getWebhookDeliveries(webhookId: string, limit: number = 50) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Verify webhook belongs to company
@@ -518,7 +470,7 @@ export async function getWebhookDeliveries(webhookId: string, limit: number = 50
     .from("webhooks")
     .select("id")
     .eq("id", webhookId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!webhook) {
@@ -542,18 +494,9 @@ export async function getWebhookDeliveries(webhookId: string, limit: number = 50
 // Retry failed webhook delivery
 export async function retryWebhookDelivery(deliveryId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get delivery record
@@ -569,7 +512,7 @@ export async function retryWebhookDelivery(deliveryId: string) {
 
   // Verify company ownership
   const webhook = delivery.webhooks as any
-  if (webhook.company_id !== result.company_id) {
+  if (webhook.company_id !== ctx.companyId) {
     return { error: "Access denied", data: null }
   }
 
@@ -606,17 +549,9 @@ export async function retryWebhookDelivery(deliveryId: string) {
 export async function testWebhook(webhookId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Verify webhook belongs to company
@@ -624,7 +559,7 @@ export async function testWebhook(webhookId: string) {
     .from("webhooks")
     .select("id")
     .eq("id", webhookId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!webhook) {

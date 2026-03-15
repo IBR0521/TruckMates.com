@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { validatePricingData, validateNonNegativeNumber, sanitizeString, validateDate, validateRequiredString } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
@@ -16,28 +16,16 @@ export async function getInvoices(filters?: {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    // Use optimized helper with caching
-    const result = await getCachedUserCompany(user.id)
-    const company_id = result.company_id
-    const companyError = result.error
-
-    if (companyError || !company_id) {
-      return { error: companyError || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Build query with selective columns and pagination
     let query = supabase
       .from("invoices")
       .select("id, invoice_number, customer_name, amount, status, issue_date, due_date, load_id, created_at", { count: "exact" })
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     // Apply filters
@@ -73,26 +61,9 @@ export async function getInvoice(id: string) {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // V3-007 FIX: Replace select(*) with explicit columns
@@ -109,7 +80,7 @@ export async function getInvoice(id: string) {
         )
       `)
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (error) {
@@ -137,28 +108,16 @@ export async function getExpenses(filters?: {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    // Use optimized helper with caching
-    const result = await getCachedUserCompany(user.id)
-    const company_id = result.company_id
-    const companyError = result.error
-
-    if (companyError || !company_id) {
-      return { error: companyError || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Build query with selective columns and pagination
     let query = supabase
       .from("expenses")
       .select("id, category, description, amount, date, driver_id, truck_id, vendor, payment_method, created_at", { count: "exact" })
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     // Apply filters
@@ -190,26 +149,9 @@ export async function getSettlements() {
   try {
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // V3-007 FIX: Replace select(*) with explicit columns and add LIMIT
@@ -222,7 +164,7 @@ export async function getSettlements() {
         name
       )
     `)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .order("created_at", { ascending: false })
     .limit(1000)
 
@@ -254,26 +196,9 @@ export async function updateInvoice(
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // RBAC check
@@ -310,7 +235,7 @@ export async function updateInvoice(
       .from("invoices")
       .update(updateData)
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .select("id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, created_at, updated_at")
       .single()
 
@@ -333,26 +258,9 @@ export async function duplicateInvoice(id: string) {
   try {
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -368,7 +276,7 @@ export async function duplicateInvoice(id: string) {
     .from("invoices")
     .select("id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, created_at, updated_at")
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (fetchError || !originalInvoice) {
@@ -432,26 +340,9 @@ export async function deleteInvoice(id: string) {
   try {
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data" }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   // RBAC check
@@ -464,7 +355,7 @@ export async function deleteInvoice(id: string) {
     .from("invoices")
     .delete()
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) return { error: error.message }
 
@@ -482,26 +373,9 @@ export async function deleteExpense(id: string) {
   try {
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data" }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   // RBAC check
@@ -514,7 +388,7 @@ export async function deleteExpense(id: string) {
     .from("expenses")
     .delete()
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) return { error: error.message }
 
@@ -531,26 +405,9 @@ export async function deleteSettlement(id: string) {
   try {
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data" }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   // RBAC check
@@ -563,7 +420,7 @@ export async function deleteSettlement(id: string) {
     .from("settlements")
     .delete()
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) return { error: error.message }
 
@@ -590,26 +447,9 @@ export async function createInvoice(formData: {
   try {
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -657,7 +497,7 @@ export async function createInvoice(formData: {
       .from("loads")
       .select("id, company_id")
       .eq("id", formData.load_id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (loadError || !load) {
@@ -723,7 +563,7 @@ export async function createInvoice(formData: {
   }
 
   const invoiceData: any = {
-    company_id: userData.company_id,
+    company_id: ctx.companyId,
     invoice_number: invoiceNumber,
     customer_name: sanitizeString(formData.customer_name, 200),
     load_id: formData.load_id || null,
@@ -779,7 +619,7 @@ export async function createInvoice(formData: {
   // Trigger webhook
   try {
     const { triggerWebhook } = await import("./webhooks")
-    await triggerWebhook(userData.company_id, "invoice.created", {
+    await triggerWebhook(ctx.companyId, "invoice.created", {
       invoice_id: data.id,
       invoice_number: invoiceNumber,
       amount: finalAmount,
@@ -802,33 +642,16 @@ export async function getLoadForInvoice(loadId: string) {
   try {
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data: load, error } = await supabase
     .from("loads")
     .select("id, shipment_number, value, company_name, origin, destination, contents")
     .eq("id", loadId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (error) {
@@ -863,26 +686,9 @@ export async function createExpense(formData: {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // RBAC check
@@ -931,7 +737,7 @@ export async function createExpense(formData: {
       .from("drivers")
       .select("id, company_id")
       .eq("id", formData.driver_id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (driverError || !driver) {
@@ -945,7 +751,7 @@ export async function createExpense(formData: {
       .from("trucks")
       .select("id, company_id")
       .eq("id", formData.truck_id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (truckError || !truck) {
@@ -964,7 +770,7 @@ export async function createExpense(formData: {
     let routeQuery = supabase
       .from("routes")
       .select("id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .gte("created_at", `${formData.date}T00:00:00`)
       .lte("created_at", `${formData.date}T23:59:59`)
 
@@ -985,7 +791,7 @@ export async function createExpense(formData: {
     let loadQuery = supabase
       .from("loads")
       .select("id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("load_date", formData.date)
 
     if (formData.driver_id) {
@@ -1005,7 +811,7 @@ export async function createExpense(formData: {
   const { data, error } = await supabase
     .from("expenses")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       category: sanitizeString(formData.category, 100).toLowerCase(),
       description: sanitizeString(formData.description, 500),
       // V3-013 FIX: Guard parseFloat against NaN
@@ -1082,26 +888,9 @@ export async function getDriverLoadsForPeriod(driverId: string, periodStart: str
   try {
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get loads for driver in the period
@@ -1110,7 +899,7 @@ export async function getDriverLoadsForPeriod(driverId: string, periodStart: str
   const { data: allLoads, error: loadsError } = await supabase
     .rpc("get_driver_loads_for_period", {
       p_driver_id: driverId,
-      p_company_id: userData.company_id,
+      p_company_id: ctx.companyId,
       p_period_start: periodStart,
       p_period_end: periodEnd,
     })
@@ -1121,7 +910,7 @@ export async function getDriverLoadsForPeriod(driverId: string, periodStart: str
     const { data: loadsWithDate, error: errorWithDate } = await supabase
       .from("loads")
       .select("id, shipment_number, value, status, actual_delivery, load_date, created_at")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("driver_id", driverId)
       .not("load_date", "is", null)
       .gte("load_date", periodStart)
@@ -1133,7 +922,7 @@ export async function getDriverLoadsForPeriod(driverId: string, periodStart: str
     const { data: loadsWithoutDate, error: errorWithoutDate } = await supabase
       .from("loads")
       .select("id, shipment_number, value, status, actual_delivery, load_date, created_at")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("driver_id", driverId)
       .is("load_date", null)
       .gte("created_at", `${periodStart}T00:00:00`)
@@ -1169,33 +958,16 @@ export async function getDriverFuelExpensesForPeriod(driverId: string, periodSta
   try {
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get fuel expenses for driver in the period
   const { data: expenses, error } = await supabase
     .from("expenses")
     .select("id, amount, date, description")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("driver_id", driverId)
     .eq("category", "fuel")
     .gte("date", periodStart)
@@ -1231,26 +1003,9 @@ export async function createSettlement(formData: {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // RBAC check
@@ -1264,7 +1019,7 @@ export async function createSettlement(formData: {
     .from("drivers")
     .select("id")
     .eq("id", formData.driver_id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (driverError || !driver) {
@@ -1407,7 +1162,7 @@ export async function createSettlement(formData: {
   const { data, error } = await supabase
     .from("settlements")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       driver_id: formData.driver_id,
       period_start: formData.period_start,
       period_end: formData.period_end,

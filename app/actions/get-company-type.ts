@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Get the company type for the current user
@@ -9,25 +9,15 @@ import { getCachedUserCompany } from "@/lib/query-optimizer"
  */
 export async function getCompanyType() {
   const supabase = await createClient()
-  
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  const { company_id, error: companyError } = await getCachedUserCompany(user.id)
-
-  if (companyError || !company_id) {
-    return { data: null, error: companyError || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   const { data: company, error } = await supabase
     .from("companies")
     .select("company_type")
-    .eq("id", company_id)
+    .eq("id", ctx.companyId)
     .single()
 
   if (error) {

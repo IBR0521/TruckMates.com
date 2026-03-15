@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Saved Filter Presets
@@ -23,24 +23,16 @@ export interface FilterPreset {
 export async function getFilterPresets(page: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Check if table exists
   const { data, error } = await supabase
     .from("filter_presets")
     .select("*")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("page", page)
     .order("is_default", { ascending: false })
     .order("created_at", { ascending: false })
@@ -62,17 +54,9 @@ export async function getFilterPresets(page: string) {
 export async function saveFilterPreset(preset: FilterPreset) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // If this is set as default, unset other defaults for this page
@@ -80,7 +64,7 @@ export async function saveFilterPreset(preset: FilterPreset) {
     await supabase
       .from("filter_presets")
       .update({ is_default: false })
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("page", preset.page)
       .eq("is_default", true)
   }
@@ -88,8 +72,8 @@ export async function saveFilterPreset(preset: FilterPreset) {
   const { data, error } = await supabase
     .from("filter_presets")
     .insert({
-      company_id: result.company_id,
-      user_id: user.id,
+      company_id: ctx.companyId,
+      user_id: ctx.userId!,
       name: preset.name,
       page: preset.page,
       filters: preset.filters,
@@ -116,17 +100,9 @@ export async function saveFilterPreset(preset: FilterPreset) {
 export async function updateFilterPreset(id: string, preset: Partial<FilterPreset>) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // If this is set as default, unset other defaults for this page
@@ -134,7 +110,7 @@ export async function updateFilterPreset(id: string, preset: Partial<FilterPrese
     await supabase
       .from("filter_presets")
       .update({ is_default: false })
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("page", preset.page || "")
       .eq("is_default", true)
       .neq("id", id)
@@ -149,7 +125,7 @@ export async function updateFilterPreset(id: string, preset: Partial<FilterPrese
     .from("filter_presets")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -167,17 +143,9 @@ export async function updateFilterPreset(id: string, preset: Partial<FilterPrese
 export async function deleteFilterPreset(id: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get preset to know which page to revalidate
@@ -185,14 +153,14 @@ export async function deleteFilterPreset(id: string) {
     .from("filter_presets")
     .select("page")
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   const { error } = await supabase
     .from("filter_presets")
     .delete()
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message, data: null }
@@ -211,23 +179,15 @@ export async function deleteFilterPreset(id: string) {
 export async function getDefaultFilterPreset(page: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("filter_presets")
     .select("*")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("page", page)
     .eq("is_default", true)
     .single()

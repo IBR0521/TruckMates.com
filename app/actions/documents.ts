@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission, checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 
 export async function getDocuments(filters?: {
@@ -19,21 +19,9 @@ export async function getDocuments(filters?: {
 
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null, count: 0 }
-  }
-
-  // Use optimized helper with caching
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-  const companyError = result.error
-
-  if (companyError || !company_id) {
-    return { error: companyError || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null, count: 0 }
   }
 
   // Build query with pagination (default limit 25 for faster initial loads, max 100)
@@ -43,7 +31,7 @@ export async function getDocuments(filters?: {
   const { data: documents, error, count } = await supabase
     .from("documents")
     .select("id, name, type, file_url, file_size, upload_date, expiry_date, company_id, truck_id, driver_id", { count: "exact" })
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .order("upload_date", { ascending: false })
     .range(offset, offset + limit - 1)
 
@@ -68,32 +56,17 @@ export async function deleteDocument(id: string) {
     }
 
     const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
-  }
-
-  // SECURITY: Get user's company_id and verify document belongs to it
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found" }
-  }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated" }
+    }
 
   // First, get the document to retrieve the file path (with company_id check)
   const { data: document, error: docError } = await supabase
     .from("documents")
     .select("file_url")
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (docError || !document) {
@@ -135,7 +108,7 @@ export async function deleteDocument(id: string) {
     .from("documents")
     .delete()
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
   if (error) return { error: error.message }
   
   revalidatePath("/dashboard/documents")
@@ -155,28 +128,13 @@ export async function deleteDocuments(ids: string[]) {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", deletedCount: 0 }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", deletedCount: 0 }
   }
 
   if (!ids || ids.length === 0) {
     return { error: "No documents selected" }
-  }
-
-  // SECURITY: Get user's company_id first
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found" }
   }
 
   // Get all documents to retrieve file paths (with company filter)
@@ -184,7 +142,7 @@ export async function deleteDocuments(ids: string[]) {
     .from("documents")
     .select("id, file_url")
     .in("id", ids)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (docError || !documents || documents.length === 0) {
     return { error: docError?.message || "Documents not found" }
@@ -231,7 +189,7 @@ export async function deleteDocuments(ids: string[]) {
     .from("documents")
     .delete()
     .in("id", ids)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
   
   if (error) return { error: error.message }
   
@@ -248,22 +206,9 @@ export async function getDocumentUrl(documentId: string) {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  // FIXED: Get user's company_id and filter document query by it
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-  const companyError = result.error
-
-  if (companyError || !company_id) {
-    return { error: companyError || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // FIXED: Get document record with company_id filter to prevent cross-company access
@@ -271,7 +216,7 @@ export async function getDocumentUrl(documentId: string) {
     .from("documents")
     .select("file_url, name")
     .eq("id", documentId)
-    .eq("company_id", company_id) // FIXED: Add company_id filter
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (docError || !document) {
@@ -337,22 +282,9 @@ export async function uploadDocument(
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  // Get company_id
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-  const companyError = result.error
-
-  if (companyError || !company_id) {
-    return { error: companyError || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -375,7 +307,7 @@ export async function uploadDocument(
 
     // Upload file to Supabase storage
     const fileExt = file.name.split(".").pop()
-    const fileName = `${user.id}/${Date.now()}.${fileExt}`
+    const fileName = `${ctx.userId}/${Date.now()}.${fileExt}`
     const filePath = fileName
 
     const { error: uploadError } = await supabase.storage
@@ -394,7 +326,7 @@ export async function uploadDocument(
     const { data: documentData, error: docError } = await supabase
       .from("documents")
       .insert({
-        company_id: company_id,
+        company_id: ctx.companyId,
         name: metadata?.name || file.name,
         type: metadata?.type || "other",
         file_url: filePath, // FIXED: Store path, not signed URL

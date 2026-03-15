@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone, validateRequiredString, stateNameToCode } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
@@ -18,28 +18,16 @@ export async function getCustomers(filters?: {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
-
-  // Use optimized helper with caching
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-  const companyError = result.error
-
-  if (companyError || !company_id) {
-    return { error: companyError || "No company found", data: null }
-  }
 
   // Build query with selective columns and pagination
   let query = supabase
     .from("customers")
     .select("id, name, company_name, email, phone, status, customer_type, created_at", { count: "exact" })
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .order("created_at", { ascending: false })
 
   if (filters?.status) {
@@ -91,34 +79,16 @@ export async function getCustomer(id: string) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
 
     const { data, error } = await supabase
       .from("customers")
       .select("*")
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (error) {
@@ -180,28 +150,9 @@ export async function createCustomer(formData: {
   primary_contact_phone?: string
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -253,7 +204,7 @@ export async function createCustomer(formData: {
     const { data: existingCustomer } = await supabase
       .from("customers")
       .select("id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("company_name", sanitizeString(formData.company_name, 200))
       .single()
 
@@ -267,7 +218,7 @@ export async function createCustomer(formData: {
     const { data: existingEmail } = await supabase
       .from("customers")
       .select("id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("email", sanitizeEmail(formData.email))
       .single()
 
@@ -279,7 +230,7 @@ export async function createCustomer(formData: {
   const { data, error } = await supabase
     .from("customers")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       name: sanitizeString(formData.name, 200),
       company_name: formData.company_name ? sanitizeString(formData.company_name, 200) : null,
       email: formData.email ? sanitizeEmail(formData.email) : null,
@@ -349,28 +300,9 @@ export async function updateCustomer(
   }
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -384,7 +316,7 @@ export async function updateCustomer(
     .from("customers")
     .select("*")
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!currentCustomer) {
@@ -432,7 +364,7 @@ export async function updateCustomer(
     .from("customers")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -444,7 +376,7 @@ export async function updateCustomer(
   if (changes.length > 0) {
     try {
       const { createAuditLog } = await import("@/lib/audit-log")
-      if (user) {
+      if (ctx.userId) {
         // Batch all audit log entries into a single operation
         const auditLogPromises = changes.map((change) =>
           createAuditLog({
@@ -485,28 +417,9 @@ export async function updateCustomer(
 // Delete customer
 export async function deleteCustomer(id: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -519,7 +432,7 @@ export async function deleteCustomer(id: string) {
     .from("customers")
     .delete()
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message }
@@ -532,28 +445,9 @@ export async function deleteCustomer(id: string) {
 // Get customer's loads
 export async function getCustomerLoads(customerId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get customer name first
@@ -561,7 +455,7 @@ export async function getCustomerLoads(customerId: string) {
     .from("customers")
     .select("name")
     .eq("id", customerId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!customer) {
@@ -573,7 +467,7 @@ export async function getCustomerLoads(customerId: string) {
   const { data: loadsByCustomerId, error: error1 } = await supabase
     .from("loads")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("customer_id", customerId)
 
   // Also get by company_name if it matches the customer name exactly (sanitized)
@@ -583,7 +477,7 @@ export async function getCustomerLoads(customerId: string) {
     const { data: loadsByName, error: error2 } = await supabase
       .from("loads")
       .select("*")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("company_name", sanitizedName)
       .neq("customer_id", customerId) // Exclude ones already matched by customer_id
     
@@ -613,28 +507,9 @@ export async function getCustomerLoads(customerId: string) {
 // Get customer's invoices
 export async function getCustomerInvoices(customerId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get customer name first
@@ -642,7 +517,7 @@ export async function getCustomerInvoices(customerId: string) {
     .from("customers")
     .select("name")
     .eq("id", customerId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!customer) {
@@ -654,7 +529,7 @@ export async function getCustomerInvoices(customerId: string) {
   const { data: invoicesByCustomerId, error: error1 } = await supabase
     .from("invoices")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("customer_id", customerId)
 
   // Also get by customer_name if it matches the customer name exactly (sanitized)
@@ -664,7 +539,7 @@ export async function getCustomerInvoices(customerId: string) {
     const { data: invoicesByName, error: error2 } = await supabase
       .from("invoices")
       .select("*")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("customer_name", sanitizedName)
       .neq("customer_id", customerId) // Exclude ones already matched by customer_id
     
@@ -694,34 +569,15 @@ export async function getCustomerInvoices(customerId: string) {
 // Get customer's contacts
 export async function getCustomerContacts(customerId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("contacts")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("customer_id", customerId)
     .order("is_primary", { ascending: false })
     .order("created_at", { ascending: false })
@@ -736,34 +592,15 @@ export async function getCustomerContacts(customerId: string) {
 // Get customer's communication history
 export async function getCustomerHistory(customerId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("contact_history")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("customer_id", customerId)
     .order("occurred_at", { ascending: false })
 

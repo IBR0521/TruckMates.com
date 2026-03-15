@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateRequiredString, validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
 
@@ -17,28 +17,16 @@ export async function getVendors(filters?: {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    // Use optimized helper with caching
-    const result = await getCachedUserCompany(user.id)
-    const company_id = result.company_id
-    const companyError = result.error
-
-    if (companyError || !company_id) {
-      return { error: companyError || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Build query with selective columns and pagination
     let query = supabase
       .from("vendors")
       .select("id, name, company_name, email, phone, status, vendor_type, created_at", { count: "exact" })
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     if (filters?.status) {
@@ -79,34 +67,16 @@ export async function getVendor(id: string) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
 
     const { data, error } = await supabase
       .from("vendors")
       .select("*")
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (error) {
@@ -150,27 +120,9 @@ export async function createVendor(formData: {
   primary_contact_phone?: string
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Professional validation
@@ -212,7 +164,7 @@ export async function createVendor(formData: {
     const { data: existingVendor } = await supabase
       .from("vendors")
       .select("id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("company_name", sanitizeString(formData.company_name, 200))
       .single()
 
@@ -226,7 +178,7 @@ export async function createVendor(formData: {
     const { data: existingEmail } = await supabase
       .from("vendors")
       .select("id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("email", sanitizeEmail(formData.email))
       .single()
 
@@ -238,7 +190,7 @@ export async function createVendor(formData: {
   const { data, error } = await supabase
     .from("vendors")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       name: sanitizeString(formData.name, 200),
       company_name: formData.company_name ? sanitizeString(formData.company_name, 200) : null,
       email: formData.email ? sanitizeEmail(formData.email) : null,
@@ -302,27 +254,9 @@ export async function updateVendor(
   }
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get current vendor data for audit trail
@@ -330,7 +264,7 @@ export async function updateVendor(
     .from("vendors")
     .select("*")
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!currentVendor) {
@@ -378,7 +312,7 @@ export async function updateVendor(
     .from("vendors")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -390,7 +324,7 @@ export async function updateVendor(
   if (changes.length > 0) {
     try {
       const { createAuditLog } = await import("@/lib/audit-log")
-      if (user) {
+      if (ctx.userId) {
         for (const change of changes) {
           try {
             await createAuditLog({
@@ -430,34 +364,16 @@ export async function updateVendor(
 // Delete vendor
 export async function deleteVendor(id: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { error } = await supabase
     .from("vendors")
     .delete()
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message }
@@ -470,27 +386,9 @@ export async function deleteVendor(id: string) {
 // Get vendor's expenses
 export async function getVendorExpenses(vendorId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get vendor name first
@@ -498,7 +396,7 @@ export async function getVendorExpenses(vendorId: string) {
     .from("vendors")
     .select("name")
     .eq("id", vendorId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!vendor) {
@@ -509,7 +407,7 @@ export async function getVendorExpenses(vendorId: string) {
   const { data, error } = await supabase
     .from("expenses")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .or(`vendor_id.eq.${vendorId},vendor.eq.${vendor.name}`)
     .order("date", { ascending: false })
 
@@ -523,27 +421,9 @@ export async function getVendorExpenses(vendorId: string) {
 // Get vendor's maintenance records
 export async function getVendorMaintenance(vendorId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get vendor name first
@@ -551,7 +431,7 @@ export async function getVendorMaintenance(vendorId: string) {
     .from("vendors")
     .select("name")
     .eq("id", vendorId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!vendor) {
@@ -562,7 +442,7 @@ export async function getVendorMaintenance(vendorId: string) {
   const { data, error } = await supabase
     .from("maintenance")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .or(`vendor_id.eq.${vendorId},vendor.eq.${vendor.name}`)
     .order("scheduled_date", { ascending: false })
 

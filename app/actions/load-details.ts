@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 export interface LoadDetails {
   id: string
@@ -92,20 +92,9 @@ export async function getLoadDetails(loadId: string): Promise<{
 }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -145,7 +134,7 @@ export async function getLoadDetails(loadId: string): Promise<{
         )
       `)
       .eq("id", loadId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
     
     // Try to get broker and customer separately if columns exist
@@ -158,7 +147,7 @@ export async function getLoadDetails(loadId: string): Promise<{
           .from("brokers")
           .select("id, name, phone, email, w9_url, insurance_url")
           .eq("id", (load as any).broker_id)
-          .eq("company_id", company_id) // V3-004: Enforce company ownership for broker
+          .eq("company_id", ctx.companyId) // V3-004: Enforce company ownership for broker
           .single()
         if (brokerData) broker = brokerData
       } catch (error) {
@@ -172,7 +161,7 @@ export async function getLoadDetails(loadId: string): Promise<{
           .from("customers")
           .select("id, name, phone, email")
           .eq("id", (load as any).customer_id)
-          .eq("company_id", company_id) // V3-004: Enforce company ownership for customer
+          .eq("company_id", ctx.companyId) // V3-004: Enforce company ownership for customer
           .single()
         if (customerData) customer = customerData
       } catch (error) {
@@ -189,7 +178,7 @@ export async function getLoadDetails(loadId: string): Promise<{
       .from("load_delivery_points")
       .select("id, delivery_number, location_name, address, scheduled_delivery_date")
       .eq("load_id", loadId)
-      .eq("company_id", company_id) // V3-004: Enforce company ownership for delivery points
+      .eq("company_id", ctx.companyId) // V3-004: Enforce company ownership for delivery points
       .order("delivery_number", { ascending: true })
 
     // Get notes (if notes table exists)
@@ -199,7 +188,7 @@ export async function getLoadDetails(loadId: string): Promise<{
         .from("load_notes")
         .select("id, note, created_at, created_by")
         .eq("load_id", loadId)
-        .eq("company_id", company_id) // V3-004: Enforce company ownership for notes
+        .eq("company_id", ctx.companyId) // V3-004: Enforce company ownership for notes
         .order("created_at", { ascending: false })
         .limit(10)
       
