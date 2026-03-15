@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { validateRequiredString, validateNonNegativeNumber, validateDate, sanitizeString } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
@@ -21,21 +21,9 @@ export async function getDVIRs(filters?: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-  const companyError = result.error
-
-  if (companyError || !company_id) {
-    return { error: companyError || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -65,7 +53,7 @@ export async function getDVIRs(filters?: {
         drivers:driver_id (id, name),
         trucks:truck_id (id, truck_number, make, model)
       `, { count: "exact" })
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("inspection_date", { ascending: false })
       .order("created_at", { ascending: false })
 
@@ -112,20 +100,9 @@ export async function getDVIRs(filters?: {
 export async function getDVIR(id: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -138,7 +115,7 @@ export async function getDVIR(id: string) {
         certified_by_user:certified_by (id, full_name, email)
       `)
       .eq("id", id)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (error) {
@@ -181,20 +158,9 @@ export async function createDVIR(formData: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -208,7 +174,7 @@ export async function createDVIR(formData: {
     .from("drivers")
     .select("id")
     .eq("id", formData.driver_id)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (driverError || !driver) {
@@ -219,7 +185,7 @@ export async function createDVIR(formData: {
     .from("trucks")
     .select("id")
     .eq("id", formData.truck_id)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (truckError || !truck) {
@@ -287,7 +253,7 @@ export async function createDVIR(formData: {
     const { data: dvir, error } = await supabase
       .from("dvir")
       .insert({
-        company_id,
+        company_id: ctx.companyId,
         driver_id: formData.driver_id,
         truck_id: formData.truck_id,
         inspection_type: sanitizeString(formData.inspection_type, 50),
@@ -345,20 +311,9 @@ export async function updateDVIR(id: string, formData: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -372,7 +327,7 @@ export async function updateDVIR(id: string, formData: {
     .from("dvir")
     .select("certified, certified_by, certified_date, defects_found, defects, status")
     .eq("id", id)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!currentDVIR) {
@@ -438,7 +393,7 @@ export async function updateDVIR(id: string, formData: {
       // Only allow setting certified to true, not false (prevent uncertification)
       if (formData.certified) {
         updateData.certified = true
-        updateData.certified_by = user.id
+        updateData.certified_by = ctx.userId!
         updateData.certified_date = new Date().toISOString()
       }
       // If trying to set to false, it's already blocked above
@@ -467,7 +422,7 @@ export async function updateDVIR(id: string, formData: {
       .from("dvir")
       .update(updateData)
       .eq("id", id)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .select()
       .single()
 
@@ -489,20 +444,9 @@ export async function updateDVIR(id: string, formData: {
 export async function deleteDVIR(id: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -516,7 +460,7 @@ export async function deleteDVIR(id: string) {
     .from("dvir")
     .select("certified, inspection_date")
     .eq("id", id)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (dvir?.certified) {
@@ -537,7 +481,7 @@ export async function deleteDVIR(id: string) {
       .from("dvir")
       .delete()
       .eq("id", id)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message, data: null }
@@ -561,26 +505,15 @@ export async function getDVIRStats(filters?: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
     // Use RPC function for efficient server-side aggregation instead of fetching all records
     const { data: stats, error } = await supabase.rpc("get_dvir_stats", {
-      p_company_id: company_id,
+      p_company_id: ctx.companyId,
       p_driver_id: filters?.driver_id || null,
       p_truck_id: filters?.truck_id || null,
       p_start_date: filters?.start_date || null,
@@ -593,7 +526,7 @@ export async function getDVIRStats(filters?: {
       let query = supabase
         .from("dvir")
         .select("id, status, defects_found, safe_to_operate, inspection_type")
-        .eq("company_id", company_id)
+        .eq("company_id", ctx.companyId)
         .limit(10000) // Cap at 10k to prevent memory issues
 
       if (filters?.driver_id) {

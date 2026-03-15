@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Map provider driver ID to internal driver ID
@@ -45,17 +45,9 @@ export async function createDriverMapping(data: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Verify device belongs to company
@@ -65,7 +57,7 @@ export async function createDriverMapping(data: {
     .eq("id", data.eld_device_id)
     .single()
 
-  if (!device || device.company_id !== result.company_id) {
+  if (!device || device.company_id !== ctx.companyId) {
     return { error: "Device not found or access denied", data: null }
   }
 
@@ -76,7 +68,7 @@ export async function createDriverMapping(data: {
     .eq("id", data.internal_driver_id)
     .single()
 
-  if (!driver || driver.company_id !== result.company_id) {
+  if (!driver || driver.company_id !== ctx.companyId) {
     return { error: "Driver not found or access denied", data: null }
   }
 
@@ -85,7 +77,7 @@ export async function createDriverMapping(data: {
     .from("eld_driver_mappings")
     .upsert(
       {
-        company_id: result.company_id,
+        company_id: ctx.companyId,
         eld_device_id: data.eld_device_id,
         provider_driver_id: data.provider_driver_id,
         internal_driver_id: data.internal_driver_id,
@@ -114,18 +106,9 @@ export async function createDriverMapping(data: {
  */
 export async function getDriverMappings(eldDeviceId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data: mappings, error } = await supabase
@@ -135,7 +118,7 @@ export async function getDriverMappings(eldDeviceId: string) {
       driver:drivers!internal_driver_id(id, full_name, email, phone, license_number)
     `)
     .eq("eld_device_id", eldDeviceId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("is_active", true)
     .order("created_at", { ascending: false })
 
@@ -151,18 +134,9 @@ export async function getDriverMappings(eldDeviceId: string) {
  */
 export async function deleteDriverMapping(mappingId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", success: false }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", success: false }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", success: false }
   }
 
   // Verify mapping belongs to company
@@ -172,7 +146,7 @@ export async function deleteDriverMapping(mappingId: string) {
     .eq("id", mappingId)
     .single()
 
-  if (!mapping || mapping.company_id !== result.company_id) {
+  if (!mapping || mapping.company_id !== ctx.companyId) {
     return { error: "Mapping not found or access denied", success: false }
   }
 

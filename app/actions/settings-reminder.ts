@@ -2,28 +2,19 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 export async function getReminderSettings() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("company_reminder_settings")
     .select("*")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (error && error.code !== "PGRST116") {
@@ -66,23 +57,9 @@ export async function updateReminderSettings(settings: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", success: false }
-  }
-
-  // SECURITY FIX 1: Role check - only managers, admins, and owners can update settings
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData) {
-    return { error: "User not found", success: false }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", success: false }
   }
 
   const { getUserRole } = await import("@/lib/server-permissions")
@@ -90,10 +67,6 @@ export async function updateReminderSettings(settings: {
   const MANAGER_ROLES = ["super_admin", "operations_manager"]
   if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can update reminder settings", success: false }
-  }
-
-  if (!userData.company_id) {
-    return { error: "No company found", success: false }
   }
 
   // LOW FIX 20: Validate reminder_frequency
@@ -106,7 +79,7 @@ export async function updateReminderSettings(settings: {
 
   // MEDIUM FIX 17: Build explicit updateData object to prevent column injection
   const updateData: any = {
-    company_id: userData.company_id,
+    company_id: ctx.companyId,
   }
   if (settings.email_enabled !== undefined) updateData.email_enabled = settings.email_enabled
   if (settings.sms_enabled !== undefined) updateData.sms_enabled = settings.sms_enabled

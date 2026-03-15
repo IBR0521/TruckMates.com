@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
 
@@ -13,12 +13,9 @@ export async function getCompanyUsers() {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const role = await getUserRole()
@@ -26,16 +23,11 @@ export async function getCompanyUsers() {
       return { error: "Only managers can view company users", data: null }
     }
 
-    const result = await getCachedUserCompany(user.id)
-    if (result.error || !result.company_id) {
-      return { error: result.error || "No company found", data: null }
-    }
-
     // Get all users in the company
     const { data: users, error } = await supabase
       .from("users")
       .select("id, email, full_name, phone, role, created_at")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     if (error) {
@@ -59,27 +51,14 @@ export async function updateUserRole(userId: string, newRole: string) {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", success: false }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", success: false }
     }
 
     const role = await getUserRole()
     if (!role || !MANAGER_ROLES.includes(role)) {
       return { error: "Only managers can update user roles", success: false }
-    }
-
-    const { data: currentUser } = await supabase
-      .from("users")
-      .select("role, company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (!currentUser?.company_id) {
-      return { error: "No company found", success: false }
     }
 
     // Validate newRole against exact 6 roles
@@ -89,7 +68,7 @@ export async function updateUserRole(userId: string, newRole: string) {
     }
 
     // Prevent self-promotion to super_admin
-    if (userId === user.id && newRole === "super_admin") {
+    if (userId === ctx.userId && newRole === "super_admin") {
       return { error: "You cannot promote yourself to super_admin", success: false }
     }
 
@@ -105,7 +84,7 @@ export async function updateUserRole(userId: string, newRole: string) {
     const callerLevel = roleHierarchy[role] || 0
     const targetLevel = roleHierarchy[newRole] || 0
     if (targetLevel > callerLevel) {
-      return { error: `You cannot assign a role higher than your own (${currentUser.role})`, success: false }
+      return { error: `You cannot assign a role higher than your own (${role})`, success: false }
     }
 
     // Update user role in database
@@ -113,7 +92,7 @@ export async function updateUserRole(userId: string, newRole: string) {
       .from("users")
       .update({ role: newRole })
       .eq("id", userId)
-      .eq("company_id", currentUser.company_id) // Ensure user is in same company
+      .eq("company_id", ctx.companyId) // Ensure user is in same company
 
     if (error) {
       return { error: error.message, success: false }
@@ -152,13 +131,9 @@ export async function updateUserRole(userId: string, newRole: string) {
 export async function removeUser(userId: string) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", success: false }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", success: false }
     }
 
     const role = await getUserRole()
@@ -166,14 +141,8 @@ export async function removeUser(userId: string) {
       return { error: "Only managers can remove users", success: false }
     }
 
-    const { data: currentUser } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
     // Prevent removing yourself
-    if (userId === user.id) {
+    if (userId === ctx.userId) {
       return { error: "You cannot remove yourself", success: false }
     }
 
@@ -184,7 +153,7 @@ export async function removeUser(userId: string) {
       .eq("id", userId)
       .single()
 
-    if (targetUser?.company_id !== currentUser.company_id) {
+    if (targetUser?.company_id !== ctx.companyId) {
       return { error: "User not found in your company", success: false }
     }
 
@@ -194,7 +163,7 @@ export async function removeUser(userId: string) {
       .from("users")
       .delete()
       .eq("id", userId)
-      .eq("company_id", currentUser.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message, success: false }
@@ -231,13 +200,9 @@ export async function inviteUser(data: {
   role: string
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const role = await getUserRole()
@@ -245,15 +210,12 @@ export async function inviteUser(data: {
     return { error: "Only managers can invite users", data: null }
   }
 
-  const { data: currentUser } = await supabase
+  // Fetch inviter full_name for email (optional)
+  const { data: inviterProfile } = await supabase
     .from("users")
-    .select("company_id, full_name")
-    .eq("id", user.id)
+    .select("full_name")
+    .eq("id", ctx.userId!)
     .single()
-
-  if (!currentUser?.company_id) {
-    return { error: "No company found", data: null }
-  }
 
   // Validate email
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -275,7 +237,7 @@ export async function inviteUser(data: {
     .maybeSingle()
 
   if (existingUser) {
-    if (existingUser.company_id === currentUser.company_id) {
+    if (existingUser.company_id === ctx.companyId) {
       return { error: "A user with this email already exists in your company", data: null }
     } else {
       return { error: "A user with this email already exists in another company", data: null }
@@ -287,7 +249,7 @@ export async function inviteUser(data: {
     .from("invitation_codes")
     .select("id, status")
     .eq("email", data.email.toLowerCase())
-    .eq("company_id", currentUser.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("status", "pending")
     .maybeSingle()
 
@@ -302,7 +264,7 @@ export async function inviteUser(data: {
       plan_id,
       subscription_plans!inner(max_users)
     `)
-    .eq("company_id", currentUser.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("status", "active")
     .single()
 
@@ -311,7 +273,7 @@ export async function inviteUser(data: {
     const { count: currentUserCount } = await supabase
       .from("users")
       .select("*", { count: "exact", head: true })
-      .eq("company_id", currentUser.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("employee_status", "active")
 
     if (currentUserCount !== null && currentUserCount >= subscription.subscription_plans.max_users) {
@@ -332,10 +294,10 @@ export async function inviteUser(data: {
   const { data: invitation, error: inviteError } = await supabase
     .from("invitation_codes")
     .insert({
-      company_id: currentUser.company_id,
+      company_id: ctx.companyId,
       email: data.email.toLowerCase(),
       invitation_code: invitationCode,
-      created_by: user.id,
+      created_by: ctx.userId!,
       status: "pending",
       expires_at: expiresAt.toISOString(),
     })
@@ -384,7 +346,7 @@ export async function inviteUser(data: {
         .replace(/'/g, "&#039;")
     }
 
-    const { resend, fromEmail: resolvedFromEmail } = await getResendClientAndFromEmail(currentUser.company_id)
+    const { resend, fromEmail: resolvedFromEmail } = await getResendClientAndFromEmail(ctx.companyId)
 
     if (!resend) {
       // If email service is not configured, still create the invitation
@@ -404,11 +366,11 @@ export async function inviteUser(data: {
     const { data: company } = await supabase
       .from("companies")
       .select("name")
-      .eq("id", currentUser.company_id)
+      .eq("id", ctx.companyId)
       .single()
 
     const companyName = company?.name || "Your Company"
-    const inviterName = currentUser.full_name || "A team member"
+    const inviterName = inviterProfile?.full_name || "A team member"
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
     const invitationLink = `${appUrl}/register?invitation=${invitationCode}`
 
@@ -514,12 +476,9 @@ export async function inviteUser(data: {
 export async function getPendingInvitations() {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const role = await getUserRole()
@@ -527,15 +486,10 @@ export async function getPendingInvitations() {
     return { error: "Only managers can view invitations", data: null }
   }
 
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
-  }
-
   const { data: invitations, error } = await supabase
     .from("invitation_codes")
     .select("id, email, invitation_code, status, created_at, expires_at, accepted_at")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -550,13 +504,9 @@ export async function getPendingInvitations() {
  */
 export async function cancelInvitation(invitationId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", success: false }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", success: false }
   }
 
   const role = await getUserRole()
@@ -564,17 +514,12 @@ export async function cancelInvitation(invitationId: string) {
     return { error: "Only managers can cancel invitations", success: false }
   }
 
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", success: false }
-  }
-
   // Delete invitation (only if pending and belongs to company)
   const { error } = await supabase
     .from("invitation_codes")
     .delete()
     .eq("id", invitationId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("status", "pending")
 
   if (error) {

@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 export interface InvoiceTax {
   id?: string
@@ -21,28 +22,15 @@ export interface InvoiceTax {
 export async function getInvoiceTaxes(): Promise<{ data: InvoiceTax[] | null; error: string | null }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError || !userData?.company_id) {
-    return { error: userError?.message || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("company_invoice_taxes")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .order("display_order", { ascending: true })
     .order("name", { ascending: true })
 
@@ -66,22 +54,9 @@ export async function getInvoiceTaxes(): Promise<{ data: InvoiceTax[] | null; er
 export async function createInvoiceTax(tax: Omit<InvoiceTax, "id">): Promise<{ data: InvoiceTax | null; error: string | null }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError || !userData?.company_id) {
-    return { error: userError?.message || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { getUserRole } = await import("@/lib/server-permissions")
@@ -112,14 +87,14 @@ export async function createInvoiceTax(tax: Omit<InvoiceTax, "id">): Promise<{ d
     await supabase
       .from("company_invoice_taxes")
       .update({ is_default: false })
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("is_default", true)
   }
 
   const { data, error } = await supabase
     .from("company_invoice_taxes")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       name: tax.name.trim(),
       rate: tax.rate,
       tax_type: tax.tax_type,
@@ -149,22 +124,9 @@ export async function createInvoiceTax(tax: Omit<InvoiceTax, "id">): Promise<{ d
 export async function updateInvoiceTax(id: string, tax: Partial<InvoiceTax>): Promise<{ data: InvoiceTax | null; error: string | null }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError || !userData?.company_id) {
-    return { error: userError?.message || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Verify the tax belongs to the company
@@ -174,7 +136,7 @@ export async function updateInvoiceTax(id: string, tax: Partial<InvoiceTax>): Pr
     .eq("id", id)
     .single()
 
-  if (checkError || !existing || existing.company_id !== userData.company_id) {
+  if (checkError || !existing || existing.company_id !== ctx.companyId) {
     return { error: "Invoice tax not found or access denied", data: null }
   }
 
@@ -203,7 +165,7 @@ export async function updateInvoiceTax(id: string, tax: Partial<InvoiceTax>): Pr
     await supabase
       .from("company_invoice_taxes")
       .update({ is_default: false })
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("is_default", true)
       .neq("id", id)
   }
@@ -223,7 +185,7 @@ export async function updateInvoiceTax(id: string, tax: Partial<InvoiceTax>): Pr
     .from("company_invoice_taxes")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -242,29 +204,17 @@ export async function updateInvoiceTax(id: string, tax: Partial<InvoiceTax>): Pr
  */
 export async function deleteInvoiceTax(id: string): Promise<{ error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   const { getUserRole } = await import("@/lib/server-permissions")
-  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
   const role = await getUserRole()
   const MANAGER_ROLES = ["super_admin", "operations_manager"]
   if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can delete invoice taxes" }
   }
-
-  const { company_id } = await getCachedUserCompany(user.id)
-  if (!company_id) {
-    return { error: "No company found" }
-  }
-
-  const userData = { company_id }
 
   // Verify the tax belongs to the company
   const { data: existing, error: checkError } = await supabase
@@ -273,7 +223,7 @@ export async function deleteInvoiceTax(id: string): Promise<{ error: string | nu
     .eq("id", id)
     .single()
 
-  if (checkError || !existing || existing.company_id !== userData.company_id) {
+  if (checkError || !existing || existing.company_id !== ctx.companyId) {
     return { error: "Invoice tax not found or access denied" }
   }
 
@@ -281,7 +231,7 @@ export async function deleteInvoiceTax(id: string): Promise<{ error: string | nu
     .from("company_invoice_taxes")
     .delete()
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message || "Failed to delete invoice tax" }

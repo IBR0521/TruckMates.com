@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import crypto from "crypto"
 import { handleDbError } from "@/lib/db-helpers"
@@ -18,25 +19,17 @@ async function getResendClient() {
   // Check if integration is enabled for this company
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const ctx = await getCachedAuthContext()
+    if (ctx.companyId) {
+      const { data: integrations } = await supabase
+        .from("company_integrations")
+        .select("resend_enabled")
+        .eq("company_id", ctx.companyId)
+        .maybeSingle()
 
-    if (user) {
-      const { getCachedUserCompany } = await import("@/lib/query-optimizer")
-      const result = await getCachedUserCompany(user.id)
-      
-      if (result.company_id) {
-        const { data: integrations } = await supabase
-          .from("company_integrations")
-          .select("resend_enabled")
-          .eq("company_id", result.company_id)
-          .maybeSingle()
-
-        if (!integrations?.resend_enabled) {
-          console.log("[RESEND] Integration not enabled for company")
-          return null
-        }
+      if (!integrations?.resend_enabled) {
+        console.log("[RESEND] Integration not enabled for company")
+        return null
       }
     }
   } catch (error) {
@@ -83,26 +76,9 @@ export async function createCustomerPortalAccess(formData: {
 
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id, role")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { getUserRole } = await import("@/lib/server-permissions")
@@ -118,7 +94,7 @@ export async function createCustomerPortalAccess(formData: {
       .from("customers")
       .select("id, company_id, name, company_name, email, phone, address_line1, address_line2, city, state, zip_code, country, contact_name, contact_email, contact_phone")
       .eq("id", formData.customer_id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (!customer) {
@@ -131,7 +107,7 @@ export async function createCustomerPortalAccess(formData: {
       .from("customer_portal_access")
       .select("id, customer_id, company_id, access_token, portal_url, can_view_location, can_submit_loads, can_view_invoices, can_download_documents, email_notifications, sms_notifications, expires_at, is_active, created_at, updated_at")
       .eq("customer_id", formData.customer_id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     // Preserve existing token if updating, only generate new one if creating
@@ -173,7 +149,7 @@ export async function createCustomerPortalAccess(formData: {
       const { data: created, error: createError } = await supabase
         .from("customer_portal_access")
         .insert({
-          company_id: userData.company_id,
+          company_id: ctx.companyId,
           customer_id: formData.customer_id,
           access_token: accessToken,
           portal_url: formData.portal_url || null,
@@ -202,7 +178,7 @@ export async function createCustomerPortalAccess(formData: {
           customerEmail: customer.email,
           customerName: customer.name || customer.company_name || "Customer",
           portalUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://truckmates.com"}/portal/${accessToken}`,
-          companyName: userData.company_id ? (await supabase.from("companies").select("name").eq("id", userData.company_id).maybeSingle()).data?.name || "TruckMates" : "TruckMates",
+          companyName: ctx.companyId ? (await supabase.from("companies").select("name").eq("id", ctx.companyId).maybeSingle()).data?.name || "TruckMates" : "TruckMates",
           expiresAt: expiresAt,
         })
       } catch (emailError) {
@@ -703,35 +679,17 @@ export async function getCustomerPortalAccess(customerId: string) {
     }
 
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id, role")
-      .eq("id", user.id)
-      .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
 
     // V3-007 FIX: Replace select(*) with explicit columns
     const { data, error } = await supabase
       .from("customer_portal_access")
       .select("id, customer_id, company_id, access_token, portal_url, can_view_location, can_submit_loads, can_view_invoices, can_download_documents, email_notifications, sms_notifications, expires_at, is_active, access_count, last_accessed_at, created_at, updated_at")
       .eq("customer_id", customerId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("is_active", true)
       .maybeSingle()
 
@@ -763,27 +721,9 @@ export async function revokeCustomerPortalAccess(customerId: string) {
     }
 
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id, role")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { getUserRole } = await import("@/lib/server-permissions")
@@ -797,7 +737,7 @@ export async function revokeCustomerPortalAccess(customerId: string) {
       .from("customer_portal_access")
       .update({ is_active: false })
       .eq("customer_id", customerId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message, data: null }

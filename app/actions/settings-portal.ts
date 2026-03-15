@@ -2,28 +2,19 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 export async function getPortalSettings() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("company_portal_settings")
     .select("*")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (error && error.code !== "PGRST116") {
@@ -72,28 +63,19 @@ export async function updatePortalSettings(settings: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", success: false }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", success: false }
   }
 
   const { getUserRole } = await import("@/lib/server-permissions")
-  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
   const role = await getUserRole()
   const MANAGER_ROLES = ["super_admin", "operations_manager"]
   if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can update portal settings", success: false }
   }
 
-  const { company_id } = await getCachedUserCompany(user.id)
-  if (!company_id) {
-    return { error: "No company found", success: false }
-  }
-
-  const result = { company_id }
+  const result = { company_id: ctx.companyId }
 
   // MEDIUM FIX 10: Validate custom_url with strict regex to prevent path traversal
   if (settings.custom_url) {

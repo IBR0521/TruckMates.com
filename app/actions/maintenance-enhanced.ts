@@ -9,7 +9,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
@@ -19,17 +19,9 @@ import { checkCreatePermission, checkEditPermission, checkDeletePermission } fro
 export async function analyzeFaultCodeAndCreateMaintenance(eventId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -43,7 +35,7 @@ export async function analyzeFaultCodeAndCreateMaintenance(eventId: string) {
     .from("eld_events")
     .select("id, company_id")
     .eq("id", eventId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (eventError || !event) {
@@ -77,16 +69,10 @@ export async function analyzeFaultCodeAndCreateMaintenance(eventId: string) {
 export async function batchAnalyzePendingFaultCodes(limit: number = 100) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
 
   // RBAC check
   const permissionCheck = await checkCreatePermission("maintenance")
@@ -94,13 +80,9 @@ export async function batchAnalyzePendingFaultCodes(limit: number = 100) {
     return { error: permissionCheck.error || "You don't have permission to batch analyze fault codes", data: null }
   }
 
-  if (!company_id) {
-    return { error: "No company found", data: null }
-  }
-
   try {
     const { data, error } = await supabase.rpc("batch_analyze_pending_fault_codes", {
-      p_company_id: company_id,
+      p_company_id: ctx.companyId,
       p_limit: limit,
     })
 
@@ -130,17 +112,9 @@ export async function uploadMaintenanceDocument(
 ) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -155,7 +129,7 @@ export async function uploadMaintenanceDocument(
       .from("maintenance")
       .select("id, truck_id, company_id")
       .eq("id", maintenanceId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (maintenanceError || !maintenance) {
@@ -192,7 +166,7 @@ export async function uploadMaintenanceDocument(
     const { data: doc, error: docError } = await supabase
       .from("maintenance_documents")
       .insert({
-        company_id: result.company_id,
+        company_id: ctx.companyId,
         maintenance_id: maintenanceId,
         truck_id: maintenance.truck_id,
         document_type: documentType,
@@ -201,7 +175,7 @@ export async function uploadMaintenanceDocument(
         storage_url: publicUrl,
         file_size: file.size,
         mime_type: file.type,
-        uploaded_by: user.id,
+        uploaded_by: ctx.userId!,
       })
       .select()
       .single()
@@ -226,17 +200,9 @@ export async function uploadMaintenanceDocument(
 export async function getMaintenanceDocuments(maintenanceId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -247,7 +213,7 @@ export async function getMaintenanceDocuments(maintenanceId: string) {
         uploaded_by_user:uploaded_by (id, name, email)
       `)
       .eq("maintenance_id", maintenanceId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .order("uploaded_at", { ascending: false })
 
     if (error) {
@@ -267,17 +233,9 @@ export async function getMaintenanceDocuments(maintenanceId: string) {
 export async function deleteMaintenanceDocument(documentId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -292,7 +250,7 @@ export async function deleteMaintenanceDocument(documentId: string) {
       .from("maintenance_documents")
       .select("storage_url, maintenance_id")
       .eq("id", documentId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (docError || !document) {
@@ -341,7 +299,7 @@ export async function deleteMaintenanceDocument(documentId: string) {
       .from("maintenance_documents")
       .delete()
       .eq("id", documentId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (deleteError) {
       return { error: deleteError.message, data: null }
@@ -363,17 +321,9 @@ export async function deleteMaintenanceDocument(documentId: string) {
 export async function createWorkOrderFromMaintenance(maintenanceId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -387,7 +337,7 @@ export async function createWorkOrderFromMaintenance(maintenanceId: string) {
     .from("maintenance")
     .select("id, company_id")
     .eq("id", maintenanceId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (maintenanceError || !maintenance) {
@@ -420,17 +370,9 @@ export async function createWorkOrderFromMaintenance(maintenanceId: string) {
 export async function getWorkOrder(workOrderId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -463,7 +405,7 @@ export async function getWorkOrder(workOrderId: string) {
         )
       `)
       .eq("id", workOrderId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (error) {
@@ -488,17 +430,9 @@ export async function getWorkOrders(filters?: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -516,7 +450,7 @@ export async function getWorkOrders(filters?: {
           truck_number
         )
       `)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     if (filters?.maintenance_id) {
@@ -563,17 +497,9 @@ export async function updateWorkOrder(
 ) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -599,7 +525,7 @@ export async function updateWorkOrder(
       .from("work_orders")
       .update(updateData)
       .eq("id", workOrderId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .select()
       .single()
 
@@ -623,17 +549,9 @@ export async function updateWorkOrder(
 export async function checkAndReserveParts(workOrderId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -647,7 +565,7 @@ export async function checkAndReserveParts(workOrderId: string) {
     .from("work_orders")
     .select("id, company_id")
     .eq("id", workOrderId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (workOrderError || !workOrder) {
@@ -684,17 +602,9 @@ export async function completeWorkOrder(
 ) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -708,7 +618,7 @@ export async function completeWorkOrder(
     .from("work_orders")
     .select("id, company_id")
     .eq("id", workOrderId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (workOrderError || !workOrder) {
@@ -750,24 +660,16 @@ export async function completeWorkOrder(
 export async function getFaultCodeRules() {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
     const { data: rules, error } = await supabase
       .from("fault_code_maintenance_rules")
       .select("*")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .order("fault_code", { ascending: true })
 
     if (error) {
@@ -798,17 +700,9 @@ export async function upsertFaultCodeRule(rule: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -819,7 +713,7 @@ export async function upsertFaultCodeRule(rule: {
 
   try {
     const ruleData: any = {
-      company_id: result.company_id,
+      company_id: ctx.companyId,
       fault_code: rule.fault_code,
       fault_code_category: rule.fault_code_category || null,
       service_type: rule.service_type,
@@ -838,7 +732,7 @@ export async function upsertFaultCodeRule(rule: {
         .from("fault_code_maintenance_rules")
         .update(ruleData)
         .eq("id", rule.id)
-        .eq("company_id", result.company_id)
+        .eq("company_id", ctx.companyId)
         .select()
         .single()
 
@@ -873,17 +767,9 @@ export async function upsertFaultCodeRule(rule: {
 export async function deleteFaultCodeRule(ruleId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -897,7 +783,7 @@ export async function deleteFaultCodeRule(ruleId: string) {
       .from("fault_code_maintenance_rules")
       .delete()
       .eq("id", ruleId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message, data: null }
@@ -917,22 +803,14 @@ export async function deleteFaultCodeRule(ruleId: string) {
 export async function checkLowStockForMaintenanceParts() {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
     const { data, error } = await supabase.rpc("check_low_stock_for_maintenance_parts", {
-      p_company_id: result.company_id,
+      p_company_id: ctx.companyId,
     })
 
     if (error) {
@@ -952,17 +830,9 @@ export async function checkLowStockForMaintenanceParts() {
 export async function autoCreatePartOrdersForLowStock(reorderMultiplier: number = 2.0) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -978,7 +848,7 @@ export async function autoCreatePartOrdersForLowStock(reorderMultiplier: number 
 
   try {
     const { data, error } = await supabase.rpc("auto_create_part_orders_for_low_stock", {
-      p_company_id: result.company_id,
+      p_company_id: ctx.companyId,
       p_reorder_quantity_multiplier: reorderMultiplier,
     })
 

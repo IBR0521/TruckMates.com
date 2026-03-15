@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 
 // Generate AI-powered insights based on ELD data
@@ -13,23 +13,9 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -43,7 +29,7 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
       drivers:driver_id (id, name),
       trucks:truck_id (id, truck_number)
     `)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .gte("log_date", startDate)
     .lte("log_date", new Date().toISOString().split('T')[0]) // Add end date
     .limit(5000) // V3-007: Limit to prevent OOM
@@ -66,7 +52,7 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
       *,
       drivers:driver_id (id, name)
     `)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .gte("event_time", startDate)
     .lte("event_time", new Date().toISOString()) // Add end date
     .limit(1000) // V3-007: Limit to prevent OOM
@@ -251,22 +237,9 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
 export async function getDriverRecommendations(driverId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get driver's recent violations
@@ -276,7 +249,7 @@ export async function getDriverRecommendations(driverId: string) {
     .from("eld_events")
     .select("*")
     .eq("driver_id", driverId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .gte("event_time", thirtyDaysAgo)
     .order("event_time", { ascending: false })
 
@@ -354,20 +327,9 @@ export async function getDriverRecommendations(driverId: string) {
 export async function getDriverBehaviorScore(driverId: string, days: number = 30) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
@@ -378,7 +340,7 @@ export async function getDriverBehaviorScore(driverId: string, days: number = 30
       .from("eld_events")
       .select("*")
       .eq("driver_id", driverId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .gte("event_time", startDate)
 
     if (violationsError) {
@@ -390,7 +352,7 @@ export async function getDriverBehaviorScore(driverId: string, days: number = 30
       .from("eld_logs")
       .select("*")
       .eq("driver_id", driverId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .gte("log_date", startDate.split("T")[0])
 
     if (logsError) {
@@ -443,7 +405,7 @@ export async function getDriverBehaviorScore(driverId: string, days: number = 30
       .from("eld_events")
       .select("*")
       .eq("driver_id", driverId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .gte("event_time", previousStartDate)
       .lt("event_time", startDate)
 
@@ -485,20 +447,9 @@ export async function getDriverBehaviorScore(driverId: string, days: number = 30
 export async function getAllDriverBehaviorScores(days: number = 30) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -506,7 +457,7 @@ export async function getAllDriverBehaviorScores(days: number = 30) {
     const { data: drivers, error: driversError } = await supabase
       .from("drivers")
       .select("id, name")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .eq("status", "active")
 
     if (driversError) {

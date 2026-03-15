@@ -2,28 +2,19 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 export async function getBillingInfo() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("company_billing_info")
     .select("*")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (error && error.code !== "PGRST116") {
@@ -64,12 +55,9 @@ export async function updateBillingInfo(billing: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", success: false }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", success: false }
   }
 
   const { getUserRole } = await import("@/lib/server-permissions")
@@ -79,21 +67,7 @@ export async function updateBillingInfo(billing: {
     return { error: "Only managers can update billing information", success: false }
   }
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", success: false }
-  }
-
-  if (!userData.company_id) {
-    return { error: "No company found", success: false }
-  }
-
-  const result = { company_id: userData.company_id }
+  const result = { company_id: ctx.companyId }
 
   // MEDIUM FIX 17: Build explicit updateData object to prevent column injection
   const updateData: any = {}

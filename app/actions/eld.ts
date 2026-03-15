@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
 // Get all ELD devices for a company
@@ -9,23 +10,10 @@ export async function getELDDevices() {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
-
-    // OPTIMIZATION: Use cached user company lookup for consistency
-    const { getCachedUserCompany } = await import("@/lib/query-optimizer")
-    const result = await getCachedUserCompany(user.id)
-    
-    if (result.error || !result.company_id) {
-      return { error: result.error || "No company found", data: null }
-    }
-    
-    const company_id = result.company_id
 
     const { data: devices, error } = await supabase
       .from("eld_devices")
@@ -38,7 +26,7 @@ export async function getELDDevices() {
           model
         )
       `)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     if (error) {
@@ -58,23 +46,10 @@ export async function getELDDevice(id: string) {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
-
-    // OPTIMIZATION: Use cached user company lookup for consistency
-    const { getCachedUserCompany } = await import("@/lib/query-optimizer")
-    const result = await getCachedUserCompany(user.id)
-    
-    if (result.error || !result.company_id) {
-      return { error: result.error || "No company found", data: null }
-    }
-    
-    const company_id = result.company_id
 
     const { data: device, error } = await supabase
       .from("eld_devices")
@@ -88,7 +63,7 @@ export async function getELDDevice(id: string) {
         )
       `)
       .eq("id", id)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (error) {
@@ -124,26 +99,9 @@ export async function createELDDevice(formData: {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id, role")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to load user", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { checkCreatePermission } = await import("@/lib/server-permissions")
@@ -165,7 +123,7 @@ export async function createELDDevice(formData: {
 
     // Build insert data
     const deviceData: any = {
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       device_name: formData.device_name.trim(),
       device_serial_number: formData.device_serial_number.trim(),
       provider: formData.provider.trim(),
@@ -220,26 +178,9 @@ export async function updateELDDevice(
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id, role")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to load user", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { checkEditPermission } = await import("@/lib/server-permissions")
@@ -271,7 +212,7 @@ export async function updateELDDevice(
       .from("eld_devices")
       .update(updateData)
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .select()
       .single()
 
@@ -292,32 +233,15 @@ export async function deleteELDDevice(id: string) {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Basic UUID format validation
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!id || !uuidRegex.test(id)) {
       return { error: "Invalid device ID format", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id, role")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
     }
 
     const { checkDeletePermission } = await import("@/lib/server-permissions")
@@ -330,7 +254,7 @@ export async function deleteELDDevice(id: string) {
       .from("eld_devices")
       .delete()
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message, data: null }
@@ -363,23 +287,10 @@ export async function getELDLogs(filters?: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
-
-  // OPTIMIZATION: Use cached user company lookup for consistency
-  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
-  const result = await getCachedUserCompany(user.id)
-  
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
-  }
-  
-  const company_id = result.company_id
 
   let query = supabase
     .from("eld_logs")
@@ -399,7 +310,7 @@ export async function getELDLogs(filters?: {
         truck_number
       )
     `)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .order("log_date", { ascending: false })
     .order("start_time", { ascending: false })
 
@@ -449,23 +360,10 @@ export async function getELDEvents(filters?: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
-
-  // OPTIMIZATION: Use cached user company lookup for consistency
-  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
-  const result = await getCachedUserCompany(user.id)
-  
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
-  }
-  
-  const company_id = result.company_id
 
   let query = supabase
     .from("eld_events")
@@ -484,7 +382,7 @@ export async function getELDEvents(filters?: {
         truck_number
       )
     `)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .order("event_time", { ascending: false })
 
   if (filters?.eld_device_id) {
@@ -532,30 +430,17 @@ export async function getELDMileageData(filters: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
-
-  // OPTIMIZATION: Use cached user company lookup for consistency
-  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
-  const result = await getCachedUserCompany(user.id)
-  
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
-  }
-  
-  const company_id = result.company_id
 
   // Get mileage data from ELD logs for the specified trucks and date range
   // V3-007 FIX: Add LIMIT to prevent OOM on large datasets
   const { data: logs, error } = await supabase
     .from("eld_logs")
     .select("truck_id, miles_driven, log_date, location_start, location_end")
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .in("truck_id", filters.truck_ids)
     .gte("log_date", filters.start_date)
     .lte("log_date", filters.end_date)
@@ -582,22 +467,9 @@ export async function getELDMileageData(filters: {
 export async function resolveELDEvent(eventId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { checkEditPermission } = await import("@/lib/server-permissions")
@@ -611,10 +483,10 @@ export async function resolveELDEvent(eventId: string) {
     .update({
       resolved: true,
       resolved_at: new Date().toISOString(),
-      resolved_by: user.id,
+      resolved_by: ctx.userId!,
     })
     .eq("id", eventId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 

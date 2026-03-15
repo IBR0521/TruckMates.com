@@ -8,7 +8,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission } from "@/lib/server-permissions"
 
@@ -21,17 +21,9 @@ export async function checkPreTripDVIRRequired(
 ): Promise<{ data: { required: boolean } | null; error: string | null }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Validate truck_id ownership
@@ -39,7 +31,7 @@ export async function checkPreTripDVIRRequired(
     .from("trucks")
     .select("id")
     .eq("id", truckId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (truckError || !truck) {
@@ -74,22 +66,14 @@ export async function getDVIRsForAudit(filters?: {
 }): Promise<{ data: any[] | null; error: string | null }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
     const { data, error } = await supabase.rpc("get_dvirs_for_audit", {
-      p_company_id: result.company_id,
+      p_company_id: ctx.companyId,
       p_truck_id: filters?.truck_id || null,
       p_start_date: filters?.start_date || null,
       p_end_date: filters?.end_date || null,
@@ -115,17 +99,9 @@ export async function createWorkOrdersFromDVIRDefects(
 ): Promise<{ data: any[] | null; error: string | null }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -139,7 +115,7 @@ export async function createWorkOrdersFromDVIRDefects(
     .from("dvir")
     .select("id, company_id")
     .eq("id", dvirId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (dvirError || !dvir) {
@@ -174,17 +150,9 @@ export async function getDVIRWorkOrders(
 ): Promise<{ data: any[] | null; error: string | null }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -192,7 +160,7 @@ export async function getDVIRWorkOrders(
       .from("dvir")
       .select("work_orders_created")
       .eq("id", dvirId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (dvirError || !dvir) {
@@ -217,7 +185,7 @@ export async function getDVIRWorkOrders(
         )
       `)
       .in("id", workOrderIds)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (woError) {
       return { error: woError.message, data: null }
