@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getAuthContext } from "@/lib/auth/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Fake ELD Device Simulator
@@ -35,7 +35,7 @@ export async function createFakeELDDevice(config: {
   }
 
   const supabase = await createClient()
-  const { companyId, error: authError } = await getAuthContext()
+  const { companyId, error: authError } = await getCachedAuthContext()
   
   if (authError || !companyId) {
     return { error: authError || "Not authenticated", data: null }
@@ -94,7 +94,7 @@ export async function simulateLocationUpdate(config: SimulatorConfig) {
   }
 
   const supabase = await createClient()
-  const { companyId } = await getAuthContext()
+  const { companyId } = await getCachedAuthContext()
   
   if (!companyId) {
     return { error: "Not authenticated", data: null }
@@ -176,7 +176,7 @@ export async function simulateHOSLog(config: {
   }
 
   const supabase = await createClient()
-  const { companyId } = await getAuthContext()
+  const { companyId } = await getCachedAuthContext()
   
   if (!companyId) {
     return { error: "Not authenticated", data: null }
@@ -233,7 +233,7 @@ export async function simulateELDEvent(config: {
   }
 
   const supabase = await createClient()
-  const { companyId } = await getAuthContext()
+  const { companyId } = await getCachedAuthContext()
   
   if (!companyId) {
     return { error: "Not authenticated", data: null }

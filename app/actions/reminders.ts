@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { sendNotification } from "./notifications"
 import { handleDbError } from "@/lib/db-helpers"
 
@@ -16,33 +17,15 @@ export async function getReminders(filters?: {
 }) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     let query = supabase
       .from("reminders")
       .select("*")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .order("due_date", { ascending: true })
 
     if (filters?.reminder_type) {
@@ -105,23 +88,9 @@ export async function createReminder(formData: {
   send_sms?: boolean
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // CRITICAL FIX 1: Validate due_date is in the future
@@ -136,7 +105,7 @@ export async function createReminder(formData: {
   const { data: settings } = await supabase
     .from("company_reminder_settings")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   const daysBeforeReminder = settings?.days_before_reminder || 1
@@ -159,7 +128,7 @@ export async function createReminder(formData: {
   const { data, error } = await supabase
     .from("reminders")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       title: formData.title,
       description: formData.description || null,
       reminder_type: formData.reminder_type,
@@ -196,7 +165,7 @@ export async function createReminder(formData: {
       const { data: managers } = await supabase
         .from("users")
         .select("id")
-        .eq("company_id", userData.company_id)
+        .eq("company_id", ctx.companyId)
         .in("role", ["manager", "admin", "owner"])
       if (managers) {
         userIdsToNotify = managers.map((m: { id: string; [key: string]: any }) => m.id)
@@ -229,27 +198,9 @@ export async function createReminder(formData: {
 export async function completeReminder(id: string) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Get reminder to check if recurring
@@ -257,7 +208,7 @@ export async function completeReminder(id: string) {
       .from("reminders")
       .select("*")
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (reminderError) {
@@ -278,10 +229,10 @@ export async function completeReminder(id: string) {
     .update({
       status: 'completed',
       completed_at: new Date().toISOString(),
-      completed_by: user.id,
+      completed_by: ctx.userId,
     })
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -304,7 +255,7 @@ export async function completeReminder(id: string) {
       const { data: settings } = await supabase
         .from("company_reminder_settings")
         .select("days_before_reminder")
-        .eq("company_id", userData.company_id)
+        .eq("company_id", ctx.companyId)
         .single()
 
       const daysBeforeReminder = settings?.days_before_reminder || 1
@@ -323,7 +274,7 @@ export async function completeReminder(id: string) {
       const { error: insertError } = await supabase
         .from("reminders")
         .insert({
-          company_id: userData.company_id,
+          company_id: ctx.companyId,
           title: reminder.title,
           description: reminder.description,
           reminder_type: reminder.reminder_type,
@@ -407,27 +358,9 @@ function calculateNextDueDate(
 export async function getOverdueReminders() {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const today = new Date().toISOString().split('T')[0]
@@ -435,7 +368,7 @@ export async function getOverdueReminders() {
     const { data, error } = await supabase
       .from("reminders")
       .select("*")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("status", "pending")
       .lt("due_date", today)
       .order("due_date", { ascending: true })
@@ -481,23 +414,9 @@ export async function updateReminder(
 ) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError || !userData?.company_id) {
-      return { error: userError?.message || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Validate due_date if provided
@@ -514,7 +433,7 @@ export async function updateReminder(
       .from("reminders")
       .update(formData)
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .select()
       .single()
 
@@ -538,30 +457,16 @@ export async function updateReminder(
 export async function deleteReminder(id: string) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError || !userData?.company_id) {
-      return { error: userError?.message || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { error } = await supabase
       .from("reminders")
       .delete()
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       const result = handleDbError(error, null)

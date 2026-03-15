@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 // Initialize Resend (checks both env var and database)
 // Initialize lazily to avoid errors if API key is not set or package not available
@@ -49,19 +50,15 @@ export async function getNotificationPreferences() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-    
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.userId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { data, error } = await supabase
       .from("notification_preferences")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", ctx.userId)
       .single()
 
     if (error && error.code !== "PGRST116") { // PGRST116 = no rows returned
@@ -101,20 +98,16 @@ export async function updateNotificationPreferences(preferences: {
   payment_reminders?: boolean
 }) {
   const supabase = await createClient()
-  
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", success: false }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", success: false }
   }
 
   // FIXED: Use upsert to eliminate race condition
   const { error } = await supabase
     .from("notification_preferences")
     .upsert({
-      user_id: user.id,
+      user_id: ctx.userId,
       ...preferences,
     }, {
       onConflict: "user_id"
@@ -587,35 +580,24 @@ export async function checkEmailConfiguration() {
 // Function to send a test email
 export async function sendTestEmail() {
   const supabase = await createClient()
-  
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { sent: false, error: "Not authenticated" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.userId) {
+    return { sent: false, error: ctx.error || "Not authenticated" }
   }
 
   // Get user email and name
   const { data: userData } = await supabase
     .from("users")
     .select("email, full_name")
-    .eq("id", user.id)
+    .eq("id", ctx.userId)
     .single()
 
   if (!userData?.email) {
     return { sent: false, error: "User email not found" }
   }
 
-  // Get user's company_id for Resend client
-  const { data: userCompany } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-  
-  // Get Resend client with company_id
-  const resend = await getResendClient(userCompany?.company_id)
+  // Get Resend client with company_id (from cached context)
+  const resend = await getResendClient(ctx.companyId ?? undefined)
   
   if (!resend) {
     return { 
@@ -693,21 +675,11 @@ export async function sendTestEmail() {
 export async function deleteNotification(notificationId: string, notificationType: "notification" | "alert") {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
+  if (!ctx.companyId) {
     return { error: "No company found", data: null }
   }
 
@@ -718,7 +690,7 @@ export async function deleteNotification(notificationId: string, notificationTyp
         .from("notifications")
         .delete()
         .eq("id", notificationId)
-        .eq("user_id", user.id)
+        .eq("user_id", ctx.userId)
 
       if (error) {
         return { error: error.message, data: null }
@@ -729,7 +701,7 @@ export async function deleteNotification(notificationId: string, notificationTyp
         .from("alerts")
         .delete()
         .eq("id", notificationId)
-        .eq("company_id", userData.company_id)
+        .eq("company_id", ctx.companyId)
 
       if (error) {
         return { error: error.message, data: null }
@@ -751,29 +723,18 @@ export async function deleteNotification(notificationId: string, notificationTyp
  */
 export async function getUnreadNotificationCount() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
+  if (!ctx.companyId) {
     return { error: "No company found", data: null }
   }
 
   // Use efficient COUNT queries instead of fetching all records
   const [notificationsResult, alertsResult] = await Promise.all([
-    supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false),
-    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", userData.company_id).in("status", ["pending", "active"]),
+    supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", ctx.userId).eq("read", false),
+    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", ctx.companyId).in("status", ["pending", "active"]),
   ])
 
   const notificationsCount = notificationsResult.count || 0

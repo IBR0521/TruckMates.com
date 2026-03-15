@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getAuthContext } from "@/lib/auth/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 
 type Period = 'weekly' | 'monthly' | 'yearly'
@@ -18,7 +18,7 @@ export async function getRevenueTrend(period: Period = 'weekly') {
   }
 
   try {
-    const { companyId, error: authError } = await getAuthContext()
+    const { companyId, error: authError } = await getCachedAuthContext()
     
     if (authError || !companyId) {
       return { data: [], error: authError || "Not authenticated" }

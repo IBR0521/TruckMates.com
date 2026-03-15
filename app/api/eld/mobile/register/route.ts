@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { getAuthContext } from "@/lib/auth/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Register mobile app as ELD device
@@ -17,7 +17,7 @@ import { getAuthContext } from "@/lib/auth/server"
  */
 export async function POST(request: NextRequest) {
   try {
-    const { companyId, error: authError } = await getAuthContext()
+    const { companyId, error: authError } = await getCachedAuthContext()
     
     if (authError || !companyId) {
       return NextResponse.json(

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { getAuthContext } from "@/lib/auth/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Mobile API: Approve settlement
@@ -14,7 +14,7 @@ import { getAuthContext } from "@/lib/auth/server"
  */
 export async function POST(request: NextRequest) {
   try {
-    const { companyId, userId, error: authError } = await getAuthContext()
+    const { companyId, userId, error: authError } = await getCachedAuthContext()
 
     if (authError || !companyId || !userId) {
       return NextResponse.json({ error: authError || "Not authenticated" }, { status: 401 })

@@ -2,24 +2,15 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 export async function getIntegrationSettings() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const result = await getCachedUserCompany(user.id)
-    if (result.error || !result.company_id) {
-      return { error: result.error || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { data, error } = await supabase
@@ -42,7 +33,7 @@ export async function getIntegrationSettings() {
         created_at,
         updated_at
       `)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (error && error.code !== "PGRST116") {
@@ -118,13 +109,9 @@ export async function updateIntegrationSettings(settings: {
   resend_from_email?: string
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", success: false }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", success: false }
   }
 
   const { getUserRole } = await import("@/lib/server-permissions")
@@ -134,23 +121,11 @@ export async function updateIntegrationSettings(settings: {
     return { error: "Only managers can update integration settings", success: false }
   }
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData.company_id) {
-    return { error: "No company found", success: false }
-  }
-
-  const result = { company_id: userData.company_id }
-
   // Check if settings exist
   const { data: existing } = await supabase
     .from("company_integrations")
     .select("id")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   // MEDIUM FIX 17: Build explicit updateData object to prevent column injection
@@ -174,7 +149,7 @@ export async function updateIntegrationSettings(settings: {
     const { error } = await supabase
       .from("company_integrations")
       .update(updateData)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message, success: false }
@@ -184,7 +159,7 @@ export async function updateIntegrationSettings(settings: {
     const { error } = await supabase
       .from("company_integrations")
       .insert({
-        company_id: result.company_id,
+        company_id: ctx.companyId,
         ...updateData,
       })
 
@@ -203,12 +178,8 @@ export async function updateIntegrationSettings(settings: {
  */
 export async function checkEmailServiceConfigured() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
     return { configured: false, isManager: false }
   }
 
@@ -217,13 +188,7 @@ export async function checkEmailServiceConfigured() {
   const MANAGER_ROLES = ["super_admin", "operations_manager"]
   const isManager = role != null && MANAGER_ROLES.includes(role)
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!isManager || !userData?.company_id) {
+  if (!isManager) {
     return { configured: false, isManager: false }
   }
 
@@ -232,7 +197,7 @@ export async function checkEmailServiceConfigured() {
   const { data: integrations } = await supabase
     .from("company_integrations")
     .select("resend_enabled, resend_api_key")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .maybeSingle() // Use maybeSingle to handle case where record doesn't exist
 
   // Check environment variable (platform-wide key)
