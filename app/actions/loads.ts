@@ -1019,7 +1019,7 @@ export async function updateLoad(
   updateField("width", formData.width || null)
   updateField("height", formData.height || null)
   // Coerce temperature range strings (e.g. "35-40") to first number for numeric column
-  (() => {
+  ;(() => {
     const t = formData.temperature
     if (t === undefined || t === null || (typeof t === "string" && t.trim() === "")) {
       updateField("temperature", null)
