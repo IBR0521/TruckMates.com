@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import crypto from "crypto"
 
@@ -23,25 +23,16 @@ function generateAPIKey(): { key: string; hash: string; prefix: string } {
  */
 export async function getAPIKeys() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // MEDIUM FIX 8: Select only safe fields - never return key_hash to client
   const { data: keys, error } = await supabase
     .from("api_keys")
     .select("id, name, key_prefix, is_active, expires_at, created_at, last_used_at, rate_limit_per_minute, rate_limit_per_day, allowed_ips, scopes, created_by")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -63,33 +54,15 @@ export async function createAPIKey(formData: {
   scopes?: string[]
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { getUserRole } = await import("@/lib/server-permissions")
   const role = await getUserRole()
   if (!role || !["super_admin", "operations_manager"].includes(role)) {
     return { error: "Only managers can create API keys", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  if (!userData.company_id) {
-    return { error: "No company found", data: null }
   }
 
   // Generate API key
@@ -99,7 +72,7 @@ export async function createAPIKey(formData: {
   const { data: apiKey, error } = await supabase
     .from("api_keys")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       name: formData.name,
       key_hash: hash,
       key_prefix: prefix,
@@ -108,7 +81,7 @@ export async function createAPIKey(formData: {
       rate_limit_per_day: formData.rate_limit_per_day || 10000,
       allowed_ips: formData.allowed_ips || null,
       scopes: formData.scopes || ["read"],
-      created_by: user.id,
+      created_by: ctx.userId ?? undefined,
     })
     .select()
     .single()
@@ -133,18 +106,9 @@ export async function createAPIKey(formData: {
  */
 export async function revokeAPIKey(id: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   const { getUserRole } = await import("@/lib/server-permissions")
@@ -158,7 +122,7 @@ export async function revokeAPIKey(id: string) {
     .from("api_keys")
     .select("id")
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (verifyError) {
@@ -170,7 +134,7 @@ export async function revokeAPIKey(id: string) {
     .from("api_keys")
     .delete()
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message }
@@ -195,18 +159,9 @@ export async function updateAPIKey(
   }
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { getUserRole } = await import("@/lib/server-permissions")
@@ -220,7 +175,7 @@ export async function updateAPIKey(
     .from("api_keys")
     .select("id")
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (verifyError) {
@@ -241,7 +196,7 @@ export async function updateAPIKey(
     .from("api_keys")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", result.company_id) // Defense-in-depth
+    .eq("company_id", ctx.companyId) // Defense-in-depth
     .select("id, name, key_prefix, is_active, expires_at, created_at, last_used_at, rate_limit_per_minute, rate_limit_per_day, allowed_ips, scopes")
     .single()
 
@@ -258,18 +213,9 @@ export async function updateAPIKey(
  */
 export async function getAPIKeyUsage(apiKeyId: string, days: number = 7) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const startDate = new Date()
@@ -279,7 +225,7 @@ export async function getAPIKeyUsage(apiKeyId: string, days: number = 7) {
     .from("api_key_usage")
     .select("*")
     .eq("api_key_id", apiKeyId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .gte("created_at", startDate.toISOString())
     .order("created_at", { ascending: false })
     .limit(1000)

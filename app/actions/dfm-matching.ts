@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 export interface MatchingTruck {
   truck_id: string
@@ -49,14 +49,9 @@ export async function findMatchingTrucksForLoad(
   maxDistanceMiles: number = 100.0
 ): Promise<{ data: MatchingTruck[] | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -85,14 +80,9 @@ export async function findMatchingLoadsForTruck(
   maxDistanceMiles: number = 100.0
 ): Promise<{ data: MatchingLoad[] | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -117,14 +107,9 @@ export async function findMatchingLoadsForTruck(
  */
 export async function autoMatchLoadToTrucks(loadId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -156,14 +141,11 @@ export async function autoMatchLoadToTrucks(loadId: string) {
     // Create notifications for dispatchers about matches
     try {
       const { sendNotification } = await import("./notifications")
-      const result = await getCachedUserCompany(user.id)
-      const company_id = result.company_id
-
-      if (company_id) {
+      if (ctx.companyId) {
         const { data: dispatchers } = await supabase
           .from("users")
           .select("id")
-          .eq("company_id", company_id)
+          .eq("company_id", ctx.companyId)
           .eq("role", "manager")
 
         if (dispatchers) {

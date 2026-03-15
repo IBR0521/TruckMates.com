@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkCreatePermission } from "@/lib/server-permissions"
 
 /**
@@ -11,17 +11,9 @@ import { checkCreatePermission } from "@/lib/server-permissions"
 export async function predictMaintenanceNeeds(truckId?: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Build query
@@ -36,7 +28,7 @@ export async function predictMaintenanceNeeds(truckId?: string) {
       last_maintenance_mileage,
       last_maintenance_date
     `)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("status", "active")
 
   if (truckId) {
@@ -165,17 +157,9 @@ export async function createMaintenanceFromPrediction(data: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -189,7 +173,7 @@ export async function createMaintenanceFromPrediction(data: {
     .from("trucks")
     .select("current_mileage")
     .eq("id", data.truck_id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (truckError || !truck) {
@@ -200,7 +184,7 @@ export async function createMaintenanceFromPrediction(data: {
   const { data: maintenance, error } = await supabase
     .from("maintenance")
     .insert({
-      company_id: result.company_id,
+      company_id: ctx.companyId,
       truck_id: data.truck_id,
       service_type: data.service_type,
       service_date: new Date().toISOString().split("T")[0],

@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
@@ -166,19 +166,9 @@ export async function postLoadToMarketplace(formData: {
   [key: string]: any
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  const { company_id, error: companyError } = await getCachedUserCompany(user.id)
-
-  if (companyError || !company_id) {
-    return { data: null, error: companyError || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   const role = await getUserRole()
@@ -189,7 +179,7 @@ export async function postLoadToMarketplace(formData: {
   const { data: companyData } = await supabase
     .from("companies")
     .select("company_type")
-    .eq("id", company_id)
+    .eq("id", ctx.companyId)
     .single()
 
   // Check if company can post loads (broker or both)
@@ -200,7 +190,7 @@ export async function postLoadToMarketplace(formData: {
   const { data, error } = await supabase
     .from("load_marketplace")
     .insert({
-      broker_id: company_id,
+      broker_id: ctx.companyId,
       origin: formData.origin,
       destination: formData.destination,
       rate: formData.rate,
@@ -254,19 +244,9 @@ export async function postLoadToMarketplace(formData: {
  */
 export async function acceptMarketplaceLoad(marketplaceLoadId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  const { company_id, error: companyError } = await getCachedUserCompany(user.id)
-
-  if (companyError || !company_id) {
-    return { data: null, error: companyError || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   const role = await getUserRole()
@@ -277,7 +257,7 @@ export async function acceptMarketplaceLoad(marketplaceLoadId: string) {
   const { data: companyData } = await supabase
     .from("companies")
     .select("company_type")
-    .eq("id", company_id)
+    .eq("id", ctx.companyId)
     .single()
 
   // Check if company can accept loads (carrier or both)
@@ -291,7 +271,7 @@ export async function acceptMarketplaceLoad(marketplaceLoadId: string) {
     .from("load_marketplace")
     .update({ 
       status: "accepted",
-      matched_carrier_id: company_id,
+      matched_carrier_id: ctx.companyId,
       matched_at: new Date().toISOString()
     })
     .eq("id", marketplaceLoadId)
@@ -372,7 +352,7 @@ export async function acceptMarketplaceLoad(marketplaceLoadId: string) {
       for (const brokerUser of brokerUsers) {
         await sendNotification(brokerUser.id, "marketplace_load_accepted", {
           marketplaceLoadId: marketplaceLoad.id,
-          carrierCompanyId: company_id,
+          carrierCompanyId: ctx.companyId,
           loadId: createdLoad.id,
         }).catch((err) => {
           console.warn("[acceptMarketplaceLoad] Notification failed:", err)
@@ -499,19 +479,9 @@ async function autoCreateLoadsForMatchingCarriers(marketplaceLoadId: string) {
  */
 export async function getBrokerMarketplaceLoads() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  const { company_id, error: companyError } = await getCachedUserCompany(user.id)
-
-  if (companyError || !company_id) {
-    return { data: null, error: companyError || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   const { data, error } = await supabase
@@ -520,7 +490,7 @@ export async function getBrokerMarketplaceLoads() {
       *,
       created_load:created_load_id(id, shipment_number, status)
     `)
-    .eq("broker_id", company_id)
+    .eq("broker_id", ctx.companyId)
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -536,25 +506,15 @@ export async function getBrokerMarketplaceLoads() {
  */
 export async function getMarketplaceSubscription() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  const { company_id, error: companyError } = await getCachedUserCompany(user.id)
-
-  if (companyError || !company_id) {
-    return { data: null, error: companyError || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   const { data, error } = await supabase
     .from("marketplace_subscriptions")
     .select("*")
-    .eq("carrier_company_id", company_id)
+    .eq("carrier_company_id", ctx.companyId)
     .single()
 
   if (error) {
@@ -562,7 +522,7 @@ export async function getMarketplaceSubscription() {
     const { data: newSubscription, error: createError } = await supabase
       .from("marketplace_subscriptions")
       .insert({
-        carrier_company_id: company_id,
+        carrier_company_id: ctx.companyId,
         is_active: true,
       })
       .select()
@@ -595,25 +555,15 @@ export async function updateMarketplaceSubscription(formData: {
   is_active?: boolean
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  const { company_id, error: companyError } = await getCachedUserCompany(user.id)
-
-  if (companyError || !company_id) {
-    return { data: null, error: companyError || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   const { data, error } = await supabase
     .from("marketplace_subscriptions")
     .update(formData)
-    .eq("carrier_company_id", company_id)
+    .eq("carrier_company_id", ctx.companyId)
     .select()
     .single()
 
@@ -735,18 +685,9 @@ export async function rateBroker(formData: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  const { company_id, error: companyError } = await getCachedUserCompany(user.id)
-
-  if (companyError || !company_id) {
-    return { data: null, error: companyError || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   // BUG-066 FIX: Require at least one of load_id or marketplace_load_id to be present
@@ -762,7 +703,7 @@ export async function rateBroker(formData: {
       .eq("id", formData.load_id)
       .single()
     
-    if (!load || (load.customer_id !== formData.broker_company_id && load.company_id !== company_id)) {
+    if (!load || (load.customer_id !== formData.broker_company_id && load.company_id !== ctx.companyId)) {
       return { data: null, error: "Load does not connect your company with the rated broker" }
     }
   } else if (formData.marketplace_load_id) {
@@ -773,7 +714,7 @@ export async function rateBroker(formData: {
       .single()
     
     if (!marketplaceLoad || 
-        (marketplaceLoad.broker_id !== formData.broker_company_id || marketplaceLoad.matched_carrier_id !== company_id)) {
+        (marketplaceLoad.broker_id !== formData.broker_company_id || marketplaceLoad.matched_carrier_id !== ctx.companyId)) {
       return { data: null, error: "Marketplace load does not connect your company with the rated broker" }
     }
   }
@@ -782,7 +723,7 @@ export async function rateBroker(formData: {
     .from("broker_ratings")
     .insert({
       broker_company_id: formData.broker_company_id,
-      carrier_company_id: company_id,
+      carrier_company_id: ctx.companyId,
       load_id: formData.load_id || null,
       marketplace_load_id: formData.marketplace_load_id || null,
       rating: formData.rating,
@@ -821,19 +762,9 @@ export async function rateCarrier(formData: {
   damage_reported?: boolean
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  const { company_id, error: companyError } = await getCachedUserCompany(user.id)
-
-  if (companyError || !company_id) {
-    return { data: null, error: companyError || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   const role = await getUserRole()
@@ -854,7 +785,7 @@ export async function rateCarrier(formData: {
       .eq("id", formData.load_id)
       .single()
     
-    if (!load || (load.customer_id !== company_id && load.company_id !== formData.carrier_company_id)) {
+    if (!load || (load.customer_id !== ctx.companyId && load.company_id !== formData.carrier_company_id)) {
       return { data: null, error: "Load does not connect your company with the rated carrier" }
     }
   } else if (formData.marketplace_load_id) {
@@ -865,7 +796,7 @@ export async function rateCarrier(formData: {
       .single()
     
     if (!marketplaceLoad || 
-        (marketplaceLoad.broker_id !== company_id || marketplaceLoad.matched_carrier_id !== formData.carrier_company_id)) {
+        (marketplaceLoad.broker_id !== ctx.companyId || marketplaceLoad.matched_carrier_id !== formData.carrier_company_id)) {
       return { data: null, error: "Marketplace load does not connect your company with the rated carrier" }
     }
   }
@@ -874,7 +805,7 @@ export async function rateCarrier(formData: {
     .from("carrier_ratings")
     .insert({
       carrier_company_id: formData.carrier_company_id,
-      broker_company_id: company_id,
+      broker_company_id: ctx.companyId,
       load_id: formData.load_id || null,
       marketplace_load_id: formData.marketplace_load_id || null,
       rating: formData.rating,

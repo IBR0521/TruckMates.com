@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Extract fuel purchase data from receipt image using OpenAI Vision API
@@ -24,14 +24,9 @@ export async function extractFuelPurchaseFromReceipt(
   error: string | null
 }> {
   // BUG-040 FIX: Add authentication check to prevent unauthorized API usage
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const apiKey = process.env.OPENAI_API_KEY
@@ -282,23 +277,14 @@ export async function uploadReceiptAndExtract(imageFile: File): Promise<{
   error: string | null
 }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Upload receipt to storage
   const fileExt = imageFile.name.split(".").pop() || "jpg"
-  const fileName = `receipts/${user.id}/${Date.now()}.${fileExt}`
+  const fileName = `receipts/${ctx.userId ?? "anon"}/${Date.now()}.${fileExt}`
   const filePath = fileName
 
   const { error: uploadError } = await supabase.storage

@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Google Maps Integration Backend
@@ -19,24 +19,16 @@ async function getGoogleMapsApiKey() {
 
   // Check if integration is enabled for this company
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    throw new Error("Not authenticated")
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    throw new Error("No company found")
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    throw new Error(ctx.error || "Not authenticated")
   }
 
   // Check if integration is enabled, or auto-enable if platform key exists
   const { data: integrations, error: integrationError } = await supabase
     .from("company_integrations")
     .select("google_maps_enabled")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   // Auto-enable Google Maps if platform API key exists and integration record doesn't exist or is disabled
@@ -45,7 +37,7 @@ async function getGoogleMapsApiKey() {
     const { data: existing } = await supabase
       .from("company_integrations")
       .select("id")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (existing) {
@@ -53,7 +45,7 @@ async function getGoogleMapsApiKey() {
       const { error: updateError } = await supabase
         .from("company_integrations")
         .update({ google_maps_enabled: true })
-        .eq("company_id", result.company_id)
+        .eq("company_id", ctx.companyId)
       
       if (updateError) {
         console.error("[Google Maps] Failed to enable integration:", updateError)

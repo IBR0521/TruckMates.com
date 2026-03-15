@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Get vehicles within a map viewport using PostGIS
@@ -20,19 +20,12 @@ export async function getVehiclesInViewport(
   companyId?: string
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
-  const result = await getCachedUserCompany(user.id)
-  const finalCompanyId = companyId || result.company_id
-
+  const finalCompanyId = companyId || ctx.companyId
   if (!finalCompanyId) {
     return { error: "No company found", data: null }
   }
@@ -121,19 +114,12 @@ export async function getGeofencesInViewport(
   companyId?: string
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
-  const result = await getCachedUserCompany(user.id)
-  const finalCompanyId = companyId || result.company_id
-
+  const finalCompanyId = companyId || ctx.companyId
   if (!finalCompanyId) {
     return { error: "No company found", data: null }
   }

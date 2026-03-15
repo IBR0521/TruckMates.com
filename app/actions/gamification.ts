@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 export interface DriverBadge {
   id: string
@@ -52,14 +52,9 @@ export async function calculateDriverPerformanceScore(
   periodType: 'weekly' | 'monthly' | 'yearly' = 'monthly'
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -88,21 +83,9 @@ export async function getDriverLeaderboard(
   limit: number = 10
 ): Promise<{ data: DriverPerformanceScore[] | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -126,7 +109,7 @@ export async function getDriverLeaderboard(
         *,
         drivers:driver_id (id, name)
       `)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .eq("period_type", periodType)
       .gte("period_end", periodStart.toISOString().split('T')[0])
       .lte("period_start", periodEnd.toISOString().split('T')[0])
@@ -148,21 +131,9 @@ export async function getDriverLeaderboard(
  */
 export async function getDriverBadges(driverId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -170,7 +141,7 @@ export async function getDriverBadges(driverId: string) {
       .from("driver_badges")
       .select("*")
       .eq("driver_id", driverId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("earned_date", { ascending: false })
 
     if (error) {
@@ -192,14 +163,9 @@ export async function checkAndAwardBadges(
   periodEnd?: string
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -227,21 +193,9 @@ export async function getDriverPerformanceScore(
   periodType: 'weekly' | 'monthly' | 'yearly' = 'monthly'
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -263,7 +217,7 @@ export async function getDriverPerformanceScore(
       .from("driver_performance_scores")
       .select("*")
       .eq("driver_id", driverId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .eq("period_type", periodType)
       .gte("period_end", periodStart.toISOString().split('T')[0])
       .lte("period_start", periodEnd.toISOString().split('T')[0])

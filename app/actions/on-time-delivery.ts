@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 
 /**
@@ -20,20 +20,9 @@ export async function getOnTimeDeliveryAnalytics(filters?: {
 
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -54,7 +43,7 @@ export async function getOnTimeDeliveryAnalytics(filters?: {
           company_name
         )
       `)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .eq("status", "delivered")
       .not("estimated_delivery", "is", null)
       .not("actual_delivery", "is", null)

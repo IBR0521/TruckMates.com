@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
 /**
@@ -68,18 +68,9 @@ export async function importComdataFuelData(
 }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -144,7 +135,7 @@ export async function importComdataFuelData(
     const { data: trucks } = await supabase
       .from("trucks")
       .select("id, truck_number")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
 
     const truckMap = new Map<string, string>()
     trucks?.forEach((truck: { id: string; truck_number: string | null }) => {
@@ -249,7 +240,7 @@ export async function importComdataFuelData(
 
         // Insert fuel purchase
         const { error: insertError } = await supabase.from("fuel_purchases").insert({
-          company_id: result.company_id,
+          company_id: ctx.companyId,
           truck_id: truckId,
           purchase_date: purchaseDate.toISOString().split("T")[0],
           state: state,

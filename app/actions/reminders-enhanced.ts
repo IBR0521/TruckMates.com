@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
 /**
@@ -18,24 +18,14 @@ export async function autoCreateMaintenanceReminders(): Promise<{
 }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
-    // MEDIUM FIX 4: Pass company_id to RPC to prevent cross-company data writes
     const { data, error } = await supabase.rpc("auto_create_maintenance_reminders_from_schedule", {
-      p_company_id: result.company_id,
+      p_company_id: ctx.companyId,
     })
 
     if (error) {
@@ -59,26 +49,16 @@ export async function getDashboardReminders(limit: number = 5): Promise<{
 }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
-    // Get overdue reminders
     const { data: overdue, error: overdueError } = await supabase
       .from("reminders")
       .select("*")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("status", "pending")
       .lt("due_date", new Date().toISOString().split("T")[0])
       .order("due_date", { ascending: true })
@@ -91,7 +71,7 @@ export async function getDashboardReminders(limit: number = 5): Promise<{
     const { data: upcoming, error: upcomingError } = await supabase
       .from("reminders")
       .select("*")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("status", "pending")
       .gte("due_date", new Date().toISOString().split("T")[0])
       .lte("due_date", sevenDaysFromNow.toISOString().split("T")[0])

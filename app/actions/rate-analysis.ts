@@ -7,7 +7,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { geocodeAddress } from "./integrations-google-maps"
 
 export interface MarketRateSuggestion {
@@ -35,15 +35,9 @@ export async function getMarketRateSuggestion(
   equipmentType: string = 'dry_van',
   yourRate?: number
 ): Promise<{ data: MarketRateSuggestion | null; error: string | null }> {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -247,20 +241,9 @@ async function getInternalRateSuggestion(
   equipmentType: string
 ): Promise<{ data: MarketRateSuggestion | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -268,7 +251,7 @@ async function getInternalRateSuggestion(
     const { data: historicalLoads, error } = await supabase
       .from("loads")
       .select("rate, origin, destination, created_at")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .gte("created_at", new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
       .not("rate", "is", null)
       .gt("rate", 0)

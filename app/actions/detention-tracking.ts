@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission, checkCreatePermission } from "@/lib/server-permissions"
 
 export interface DetentionRecord {
@@ -44,27 +44,15 @@ export async function getActiveDetentions() {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
     // UPDATED: RPC now accepts p_company_id to enforce company isolation
     const { data: activeDetentions, error } = await supabase.rpc('calculate_active_detention', {
-      p_company_id: company_id,
+      p_company_id: ctx.companyId,
     })
 
     if (error) {
@@ -85,7 +73,7 @@ export async function getActiveDetentions() {
     const { data: geofences } = await supabase
       .from("geofences")
       .select("id, company_id")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .in("id", zoneVisits?.map((zv: any) => zv.geofence_id) || [])
     
     const validGeofenceIds = new Set(geofences?.map((g: any) => g.id) || [])
@@ -109,7 +97,7 @@ export async function getActiveDetentions() {
       `)
       .in('zone_visit_id', validZoneVisitIds)
       .eq('status', 'active')
-      .eq('company_id', company_id)
+      .eq('company_id', ctx.companyId)
 
     if (detError) {
       return { error: detError.message, data: null }
@@ -142,21 +130,9 @@ export async function getDetentionRecords(filters?: {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -170,7 +146,7 @@ export async function getDetentionRecords(filters?: {
         loads:load_id (id, shipment_number),
         invoices:invoice_id (id, invoice_number)
       `, { count: "exact" })
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("entry_timestamp", { ascending: false })
 
     if (filters?.geofence_id) {
@@ -217,27 +193,15 @@ export async function getDetentionRecords(filters?: {
  */
 export async function checkAndCreateDetentions() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
     // UPDATED: RPC now accepts p_company_id to enforce company isolation
     const { data: activeDetentions, error: activeError } = await supabase.rpc('calculate_active_detention', {
-      p_company_id: company_id,
+      p_company_id: ctx.companyId,
     })
 
     if (activeError) {
@@ -265,7 +229,7 @@ export async function checkAndCreateDetentions() {
     const { data: geofences } = await supabase
       .from("geofences")
       .select("id, company_id")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .in("id", zoneVisits?.map((zv: any) => zv.geofence_id) || [])
     
     const validGeofenceIds = new Set(geofences?.map((g: any) => g.id) || [])
@@ -298,7 +262,7 @@ export async function checkAndCreateDetentions() {
               updated_at: new Date().toISOString(),
             })
             .eq("id", existing.id)
-            .eq("company_id", company_id)
+            .eq("company_id", ctx.companyId)
           
           if (!updateError) {
             created.push(existing.id)
@@ -312,7 +276,7 @@ export async function checkAndCreateDetentions() {
             .eq("id", detention.zone_visit_id)
             .single()
           
-          if (!zoneVisit || (zoneVisit.geofences as any)?.company_id !== company_id) {
+          if (!zoneVisit || (zoneVisit.geofences as any)?.company_id !== ctx.companyId) {
             errors.push({
               zone_visit_id: detention.zone_visit_id,
               error: "Zone visit does not belong to your company"
@@ -358,21 +322,9 @@ export async function finalizeDetention(zoneVisitId: string) {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -383,7 +335,7 @@ export async function finalizeDetention(zoneVisitId: string) {
       .eq("id", zoneVisitId)
       .single()
     
-    if (!zoneVisit || zoneVisit.company_id !== company_id) {
+    if (!zoneVisit || zoneVisit.company_id !== ctx.companyId) {
       return { error: "Unauthorized: Zone visit does not belong to your company", data: null }
     }
     
@@ -412,21 +364,9 @@ export async function addDetentionToInvoice(detentionId: string, invoiceId: stri
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -437,7 +377,7 @@ export async function addDetentionToInvoice(detentionId: string, invoiceId: stri
       .eq("id", detentionId)
       .single()
     
-    if (!detention || detention.company_id !== company_id) {
+    if (!detention || detention.company_id !== ctx.companyId) {
       return { error: "Unauthorized: Detention does not belong to your company", data: null }
     }
     
@@ -447,7 +387,7 @@ export async function addDetentionToInvoice(detentionId: string, invoiceId: stri
       .eq("id", invoiceId)
       .single()
     
-    if (!invoice || invoice.company_id !== company_id) {
+    if (!invoice || invoice.company_id !== ctx.companyId) {
       return { error: "Unauthorized: Invoice does not belong to your company", data: null }
     }
     
@@ -471,21 +411,9 @@ export async function addDetentionToInvoice(detentionId: string, invoiceId: stri
  */
 export async function autoAddDetentionsToInvoice(loadId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -494,7 +422,7 @@ export async function autoAddDetentionsToInvoice(loadId: string) {
       .from("invoices")
       .select("id")
       .eq("load_id", loadId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (!invoice) {
@@ -551,21 +479,9 @@ export async function updateGeofenceDetentionSettings(
   }
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -588,7 +504,7 @@ export async function updateGeofenceDetentionSettings(
       .from("geofences")
       .update(updateData)
       .eq("id", geofenceId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .select()
       .single()
 
@@ -617,21 +533,9 @@ export async function getDetentionAnalytics(filters?: {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -653,7 +557,7 @@ export async function getDetentionAnalytics(filters?: {
           )
         )
       `)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .eq("status", "completed")
       .not("total_fee", "is", null)
       .gt("total_fee", 0)

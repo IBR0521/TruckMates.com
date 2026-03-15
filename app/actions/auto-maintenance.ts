@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { createMaintenance } from "./maintenance"
 
 /**
@@ -21,18 +21,9 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
     }
 
     const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get truck with current mileage
@@ -40,7 +31,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
     .from("trucks")
     .select("id, truck_number, current_mileage, make, model, year")
     .eq("id", truckId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (truckError || !truck) {
@@ -62,7 +53,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
     .from("maintenance")
     .select("service_type, scheduled_date, current_mileage, status")
     .eq("truck_id", truckId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .in("status", ["scheduled", "in_progress"])
     .order("scheduled_date", { ascending: false })
     .limit(10)
@@ -86,7 +77,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
     .from("maintenance")
     .select("service_type, current_mileage, scheduled_date")
     .eq("truck_id", truckId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("status", "completed")
     .in("service_type", Object.keys(maintenanceIntervals))
     .order("scheduled_date", { ascending: false })
@@ -203,17 +194,9 @@ export async function autoScheduleMaintenanceForAllTrucks(): Promise<{
   try {
     const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get all active trucks
@@ -221,7 +204,7 @@ export async function autoScheduleMaintenanceForAllTrucks(): Promise<{
   const { data: trucks, error: trucksError } = await supabase
     .from("trucks")
     .select("id")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("status", "active")
     .limit(1000)
 

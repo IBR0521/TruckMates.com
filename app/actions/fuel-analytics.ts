@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Get fuel analytics for a truck or all trucks
@@ -13,21 +13,9 @@ export async function getFuelAnalytics(filters?: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-  const companyError = result.error
-
-  if (companyError || !company_id) {
-    return { error: companyError || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -35,7 +23,7 @@ export async function getFuelAnalytics(filters?: {
     let fuelQuery = supabase
       .from("expenses")
       .select("id, amount, date, mileage, truck_id, description, gallons, price_per_gallon")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .eq("category", "fuel")
       .order("date", { ascending: false })
       .limit(10000) // Cap at 10k rows to prevent memory exhaustion
@@ -61,7 +49,7 @@ export async function getFuelAnalytics(filters?: {
     let trucksQuery = supabase
       .from("trucks")
       .select("id, truck_number, fuel_level, mileage")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
 
     if (filters?.truck_id) {
       trucksQuery = trucksQuery.eq("id", filters.truck_id)
@@ -283,20 +271,9 @@ export async function getFuelCostPerRoute(filters?: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -304,7 +281,7 @@ export async function getFuelCostPerRoute(filters?: {
     const { data: routes, error: routesError } = await supabase
       .from("routes")
       .select("id, name, origin, destination, truck_id, driver_id")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     if (routesError) {
@@ -316,7 +293,7 @@ export async function getFuelCostPerRoute(filters?: {
     let fuelQuery = supabase
       .from("expenses")
       .select("id, amount, date, truck_id, mileage")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .eq("category", "fuel")
 
     if (filters?.start_date) {
@@ -383,20 +360,9 @@ export async function getFuelEfficiencyReport(filters?: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -415,7 +381,7 @@ export async function getFuelEfficiencyReport(filters?: {
         trucks:truck_id(id, truck_number),
         drivers:driver_id(id, name)
       `)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .eq("category", "fuel")
       .order("date", { ascending: false })
 

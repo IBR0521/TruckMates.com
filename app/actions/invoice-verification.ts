@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
 /**
@@ -16,15 +16,12 @@ import { revalidatePath } from "next/cache"
 export async function verifyInvoiceMatch(invoiceId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
 
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  try {
+    try {
     // Call database function to perform verification
     const { data, error } = await supabase.rpc("verify_invoice_three_way_match", {
       p_invoice_id: invoiceId,
@@ -57,17 +54,9 @@ export async function getInvoiceVerification(invoiceId: string) {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const result = await getCachedUserCompany(user.id)
-    if (result.error || !result.company_id) {
-      return { error: result.error || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { data, error } = await supabase
@@ -96,7 +85,7 @@ export async function getInvoiceVerification(invoiceId: string) {
         )
       `)
       .eq("invoice_id", invoiceId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (error) {
@@ -121,17 +110,9 @@ export async function getInvoiceVerification(invoiceId: string) {
 export async function getInvoicesRequiringReview() {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -154,7 +135,7 @@ export async function getInvoicesRequiringReview() {
           total_revenue
         )
       `)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("requires_manual_review", true)
       .order("created_at", { ascending: false })
 
@@ -175,17 +156,9 @@ export async function getInvoicesRequiringReview() {
 export async function approveInvoiceManually(invoiceId: string, reason?: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -195,12 +168,12 @@ export async function approveInvoiceManually(invoiceId: string, reason?: string)
       .update({
         matching_status: "verified",
         requires_manual_review: false,
-        verified_by: user.id,
+        verified_by: ctx.userId ?? null,
         verified_at: new Date().toISOString(),
         exception_reason: reason || "Manually approved by user",
       })
       .eq("id", invoiceId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .select()
       .single()
 
@@ -213,7 +186,7 @@ export async function approveInvoiceManually(invoiceId: string, reason?: string)
       .from("invoice_verifications")
       .update({
         verification_status: "verified",
-        verified_by: user.id,
+        verified_by: ctx.userId ?? null,
         verified_at: new Date().toISOString(),
       })
       .eq("invoice_id", invoiceId)
@@ -233,18 +206,9 @@ export async function approveInvoiceManually(invoiceId: string, reason?: string)
  */
 export async function batchVerifyInvoices() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -252,7 +216,7 @@ export async function batchVerifyInvoices() {
     const { data: invoices, error: invoicesError } = await supabase
       .from("invoices")
       .select("id")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("matching_status", "pending")
       .not("load_id", "is", null)
 

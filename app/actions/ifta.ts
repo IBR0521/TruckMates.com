@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { getELDMileageData } from "./eld"
 import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
@@ -10,33 +11,15 @@ export async function getIFTAReports() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { data: reports, error } = await supabase
       .from("ifta_reports")
       .select("*")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     if (error) {
@@ -58,34 +41,16 @@ export async function deleteIFTAReport(id: string) {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data" }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   const { error } = await supabase
     .from("ifta_reports")
     .delete()
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message }
@@ -104,27 +69,9 @@ export async function createIFTAReport(formData: {
   period_end?: string
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -138,7 +85,7 @@ export async function createIFTAReport(formData: {
     const { data: ownedTrucks, error: trucksError } = await supabase
       .from("trucks")
       .select("id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .in("id", formData.truck_ids)
 
     if (trucksError) {
@@ -219,7 +166,7 @@ export async function createIFTAReport(formData: {
     const { data: fuelPurchases } = await supabase
       .from("fuel_purchases")
       .select("state, gallons")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .gte("purchase_date", periodStart)
       .lte("purchase_date", periodEnd)
 
@@ -278,7 +225,7 @@ export async function createIFTAReport(formData: {
       let routesQuery = supabase
         .from("routes")
         .select("distance, truck_id, route_start_time, route_departure_time, created_at")
-        .eq("company_id", userData.company_id)
+        .eq("company_id", ctx.companyId)
         .in("truck_id", validTruckIds)
       
       // Filter by trip date if available, otherwise fall back to created_at
@@ -297,7 +244,7 @@ export async function createIFTAReport(formData: {
         const { data: routesByDeparture } = await supabase
           .from("routes")
           .select("distance, truck_id, route_start_time, route_departure_time, created_at")
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .in("truck_id", validTruckIds)
           .gte("route_departure_time", periodStart)
           .lte("route_departure_time", periodEnd)
@@ -309,7 +256,7 @@ export async function createIFTAReport(formData: {
           const { data: fallbackRoutes } = await supabase
             .from("routes")
             .select("distance, truck_id")
-            .eq("company_id", userData.company_id)
+            .eq("company_id", ctx.companyId)
             .in("truck_id", validTruckIds)
             .gte("created_at", periodStart)
             .lte("created_at", periodEnd)
@@ -376,7 +323,7 @@ For demo/test purposes: Use the ELD Simulator or create routes with GPS tracking
   const { data, error } = await supabase
     .from("ifta_reports")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       quarter: formData.quarter,
       year: formData.year,
       period: period,

@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
 /**
@@ -47,25 +47,16 @@ export async function upsertDriverPayRule(rule: DriverPayRule) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const result = await getCachedUserCompany(user.id)
-    if (result.error || !result.company_id) {
-      return { error: result.error || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // BUG-012 FIX: Use RPC function for atomic transaction (deactivate old + insert new)
     // This ensures if insert fails, old rule remains active
     const { data, error } = await supabase.rpc('update_driver_pay_rule', {
       p_rule_id: rule.id || null,
-      p_company_id: result.company_id,
+      p_company_id: ctx.companyId,
       p_driver_id: rule.driver_id,
       p_pay_type: rule.pay_type,
       p_base_rate_per_mile: rule.base_rate_per_mile || null,
@@ -103,7 +94,7 @@ export async function upsertDriverPayRule(rule: DriverPayRule) {
       const { data: insertData, error: insertError } = await supabase
         .from("driver_pay_rules")
         .insert({
-          company_id: result.company_id,
+          company_id: ctx.companyId,
           driver_id: rule.driver_id,
           pay_type: rule.pay_type,
           base_rate_per_mile: rule.base_rate_per_mile || null,
@@ -146,13 +137,9 @@ export async function upsertDriverPayRule(rule: DriverPayRule) {
  */
 export async function getActivePayRule(driverId: string, date?: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -178,18 +165,9 @@ export async function getActivePayRule(driverId: string, date?: string) {
  */
 export async function getDriverPayRules(driverId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -197,7 +175,7 @@ export async function getDriverPayRules(driverId: string) {
     const { data, error } = await supabase
       .from("driver_pay_rules")
       .select("id, company_id, driver_id, pay_type, base_rate_per_mile, base_percentage, base_flat_rate, bonuses, deductions, minimum_pay_guarantee, effective_from, effective_to, is_active, notes, created_at, updated_at")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("driver_id", driverId)
       .order("effective_from", { ascending: false })
       .limit(100) // V3-007 FIX: Add LIMIT to prevent unbounded queries
@@ -354,25 +332,16 @@ export async function calculateGrossPayFromRule(params: {
 export async function deletePayRule(ruleId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { getUserRole } = await import("@/lib/server-permissions")
-  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
   const role = await getUserRole()
   const MANAGER_ROLES = ["super_admin", "operations_manager"]
   if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can delete pay rules", data: null }
-  }
-
-  const { company_id } = await getCachedUserCompany(user.id)
-  if (!company_id) {
-    return { error: "No company found", data: null }
   }
 
   try {
@@ -380,7 +349,7 @@ export async function deletePayRule(ruleId: string) {
       .from("driver_pay_rules")
       .delete()
       .eq("id", ruleId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message, data: null }

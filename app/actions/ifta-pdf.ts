@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * IFTA Report PDF Generation
@@ -17,19 +17,9 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
   error: string | null
 }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { pdf: null, html: "", error: "Not authenticated" }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { pdf: null, html: "", error: result.error || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { pdf: null, html: "", error: ctx.error || "Not authenticated" }
   }
 
   try {
@@ -38,7 +28,7 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
       .from("ifta_reports")
       .select("*")
       .eq("id", reportId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (reportError || !report) {
@@ -49,7 +39,7 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
     const { data: company } = await supabase
       .from("companies")
       .select("name, address, city, state, zip, phone, email, mc_number, dot_number")
-      .eq("id", result.company_id)
+      .eq("id", ctx.companyId)
       .single()
 
     // Get state breakdown

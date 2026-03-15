@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { createAlert } from "./alerts"
 import { checkViewPermission, checkCreatePermission } from "@/lib/server-permissions"
 
@@ -18,21 +18,9 @@ export async function getExpiringItems(daysAhead: number = 30) {
 
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-  const companyError = result.error
-
-  if (companyError || !company_id) {
-    return { error: companyError || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const today = new Date()
@@ -49,7 +37,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
     const { data: expiringDocuments, error: docsError } = await supabase
       .from("documents")
       .select("id, name, type, expiry_date, truck_id, driver_id")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .not("expiry_date", "is", null)
       .gte("expiry_date", today.toISOString().split("T")[0])
       .lte("expiry_date", futureDate.toISOString().split("T")[0])
@@ -60,7 +48,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
     const { data: expiringLicenses, error: licensesError } = await supabase
       .from("drivers")
       .select("id, name, license_number, license_expiry")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .not("license_expiry", "is", null)
       .gte("license_expiry", today.toISOString().split("T")[0])
       .lte("license_expiry", futureDate.toISOString().split("T")[0])
@@ -71,7 +59,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
     const { data: expiringTruckLicenses, error: truckLicensesError } = await supabase
       .from("trucks")
       .select("id, truck_number, license_expiry_date")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .not("license_expiry_date", "is", null)
       .gte("license_expiry_date", today.toISOString().split("T")[0])
       .lte("license_expiry_date", futureDate.toISOString().split("T")[0])
@@ -82,7 +70,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
     const { data: expiringInsurance, error: insuranceError } = await supabase
       .from("trucks")
       .select("id, truck_number, insurance_expiry_date")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .not("insurance_expiry_date", "is", null)
       .gte("insurance_expiry_date", today.toISOString().split("T")[0])
       .lte("insurance_expiry_date", futureDate.toISOString().split("T")[0])
@@ -93,7 +81,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
     const { data: expiredDocuments, error: expiredDocsError } = await supabase
       .from("documents")
       .select("id, name, type, expiry_date, truck_id, driver_id")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .not("expiry_date", "is", null)
       .lt("expiry_date", today.toISOString().split("T")[0])
       .order("expiry_date", { ascending: false })
@@ -102,7 +90,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
     const { data: expiredLicenses, error: expiredLicensesError } = await supabase
       .from("drivers")
       .select("id, name, license_number, license_expiry")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .not("license_expiry", "is", null)
       .lt("license_expiry", today.toISOString().split("T")[0])
       .order("license_expiry", { ascending: false })
@@ -111,7 +99,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
     const { data: expiredTruckLicenses, error: expiredTruckLicensesError } = await supabase
       .from("trucks")
       .select("id, truck_number, license_expiry_date")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .not("license_expiry_date", "is", null)
       .lt("license_expiry_date", today.toISOString().split("T")[0])
       .order("license_expiry_date", { ascending: false })
@@ -120,7 +108,7 @@ export async function getExpiringItems(daysAhead: number = 30) {
     const { data: expiredInsurance, error: expiredInsuranceError } = await supabase
       .from("trucks")
       .select("id, truck_number, insurance_expiry_date")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .not("insurance_expiry_date", "is", null)
       .lt("insurance_expiry_date", today.toISOString().split("T")[0])
       .order("insurance_expiry_date", { ascending: false })
@@ -276,21 +264,9 @@ export async function createExpiryAlerts(daysAhead: number = 30) {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get expiring items
@@ -310,7 +286,7 @@ export async function createExpiryAlerts(daysAhead: number = 30) {
   const { data: existingAlerts } = await supabase
     .from("alerts")
     .select("metadata")
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .eq("event_type", "document_expiry")
     .gte("created_at", oneDayAgo.toISOString())
 

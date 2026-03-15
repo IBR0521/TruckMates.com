@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { createInvoice } from "./accounting"
 import { checkCreatePermission } from "@/lib/server-permissions"
 
@@ -16,30 +17,16 @@ export async function autoGenerateInvoicesFromLoads() {
   // BUG-010 FIX: Add try/catch wrapper
   try {
     const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get all delivered loads that don't have an invoice yet
   const { data: loads, error: loadsError } = await supabase
     .from("loads")
     .select("id, shipment_number, company_name, value, total_revenue, estimated_revenue, customer_id, status, load_date")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("status", "delivered")
     .is("invoice_id", null)
 
@@ -62,7 +49,7 @@ export async function autoGenerateInvoicesFromLoads() {
   const { data: existingInvoices } = await supabase
     .from("invoices")
     .select("load_id")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .not("load_id", "is", null)
 
   const existingLoadIds = new Set<string>()
@@ -138,7 +125,7 @@ export async function autoGenerateInvoicesFromLoads() {
     }
 
     invoiceData.push({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       customer_name: customerName,
       load_id: load.id,
       amount: amount,

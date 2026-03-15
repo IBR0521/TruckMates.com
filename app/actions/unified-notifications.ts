@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Get all unified notifications (system notifications + alerts)
@@ -16,20 +16,9 @@ export async function getUnifiedNotifications(filters?: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null, count: 0 }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null, count: 0 }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null, count: 0 }
   }
 
   try {
@@ -40,7 +29,7 @@ export async function getUnifiedNotifications(filters?: {
       let notificationsQuery = supabase
         .from("notifications")
         .select("*", { count: "exact" })
-        .eq("user_id", user.id)
+        .eq("user_id", ctx.userId ?? "")
         .order("created_at", { ascending: false })
 
       if (filters?.read !== undefined) {
@@ -80,7 +69,7 @@ export async function getUnifiedNotifications(filters?: {
       let alertsQuery = supabase
         .from("alerts")
         .select("*", { count: "exact" })
-        .eq("company_id", company_id)
+        .eq("company_id", ctx.companyId)
         .order("created_at", { ascending: false })
 
       if (filters?.priority) {
@@ -162,26 +151,12 @@ export async function getUnifiedNotifications(filters?: {
 export async function markNotificationAsRead(notificationId: string, notificationType: "notification" | "alert") {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
-    // FIXED: Check source value instead of notificationType parameter
-    // The source is "system" for notifications and "alerts" for alerts
-    // We need to determine which table to update based on the actual record
     if (notificationType === "notification") {
       const { error } = await supabase
         .from("notifications")
@@ -190,7 +165,7 @@ export async function markNotificationAsRead(notificationId: string, notificatio
           read_at: new Date().toISOString(),
         })
         .eq("id", notificationId)
-        .eq("user_id", user.id)
+        .eq("user_id", ctx.userId ?? "")
 
       if (error) {
         return { error: error.message, data: null }
@@ -204,7 +179,7 @@ export async function markNotificationAsRead(notificationId: string, notificatio
           acknowledged_at: new Date().toISOString(),
         })
         .eq("id", notificationId)
-        .eq("company_id", company_id) // FIXED: Add ownership check
+        .eq("company_id", ctx.companyId) // FIXED: Add ownership check
 
       if (error) {
         return { error: error.message, data: null }
@@ -223,34 +198,20 @@ export async function markNotificationAsRead(notificationId: string, notificatio
 export async function markAllNotificationsAsRead() {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
-    // FIXED: Mark both notifications AND alerts as read
-    // Use Promise.all to update both in parallel
     const [notificationsResult, alertsResult] = await Promise.all([
-      // Mark all system notifications as read
       supabase
         .from("notifications")
         .update({
           read: true,
           read_at: new Date().toISOString(),
         })
-        .eq("user_id", user.id)
+        .eq("user_id", ctx.userId ?? "")
         .eq("read", false),
       // Mark all unresolved alerts as acknowledged
       supabase
@@ -259,7 +220,7 @@ export async function markAllNotificationsAsRead() {
           status: "acknowledged",
           acknowledged_at: new Date().toISOString(),
         })
-        .eq("company_id", company_id)
+        .eq("company_id", ctx.companyId)
         .in("status", ["pending", "active"]),
     ])
 

@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { validateRequiredString, sanitizeString } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
@@ -122,29 +122,16 @@ export async function getGeofences(filters?: {
   route_id?: string
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-  const companyError = result.error
-
-  if (companyError || !company_id) {
-    return { error: companyError || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
     let query = supabase
       .from("geofences")
       .select("*")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     if (filters?.is_active !== undefined) {
@@ -179,21 +166,9 @@ export async function getGeofences(filters?: {
  */
 export async function getGeofence(id: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -201,7 +176,7 @@ export async function getGeofence(id: string) {
       .from("geofences")
       .select("*")
       .eq("id", id)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (error) {
@@ -251,21 +226,9 @@ export async function createGeofence(formData: {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Validation
@@ -301,7 +264,7 @@ export async function createGeofence(formData: {
     const { data: geofence, error } = await supabase
       .from("geofences")
       .insert({
-        company_id,
+        company_id: ctx.companyId,
         name: sanitizeString(formData.name, 200),
         description: formData.description ? sanitizeString(formData.description, 1000) : null,
         zone_type: formData.zone_type,
@@ -370,21 +333,9 @@ export async function updateGeofence(id: string, formData: Partial<{
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -446,7 +397,7 @@ export async function updateGeofence(id: string, formData: Partial<{
       .from("geofences")
       .update(updateData)
       .eq("id", id)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .select()
       .single()
 
@@ -473,21 +424,9 @@ export async function deleteGeofence(id: string) {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -497,13 +436,13 @@ export async function deleteGeofence(id: string) {
       .from("zone_visits")
       .delete()
       .eq("geofence_id", id)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
     
     const { error } = await supabase
       .from("geofences")
       .delete()
       .eq("id", id)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message, data: null }
@@ -522,21 +461,9 @@ export async function deleteGeofence(id: string) {
  */
 export async function checkGeofenceEntry(truckId: string, latitude: number, longitude: number, timestamp?: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -545,7 +472,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
       .from("trucks")
       .select("id, driver_id, company_id")
       .eq("id", truckId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (!truck) {
@@ -557,7 +484,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
     let geofenceQuery = supabase
       .from("geofences")
       .select("*")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .eq("is_active", true)
     
     // Filter by assigned_trucks if geofence has assignments
@@ -618,7 +545,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
         const { data: visit } = await supabase
           .from("zone_visits")
           .insert({
-            company_id,
+            company_id: ctx.companyId,
             geofence_id: geofence.id,
             truck_id: truckId,
             driver_id: truck.driver_id || null,
@@ -673,7 +600,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
         const { data: visit } = await supabase
           .from("zone_visits")
           .insert({
-            company_id,
+            company_id: ctx.companyId,
             geofence_id: geofence.id,
             truck_id: truckId,
             driver_id: truck.driver_id || null,
@@ -695,7 +622,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
             .from("zone_visits")
             .select("id, company_id")
             .eq("id", recentVisit.id)
-            .eq("company_id", company_id)
+            .eq("company_id", ctx.companyId)
             .single()
           
           if (visitCheck) {
@@ -706,7 +633,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
                 duration_minutes: duration,
               })
               .eq("id", recentVisit.id)
-              .eq("company_id", company_id) // Additional safety check
+              .eq("company_id", ctx.companyId) // Additional safety check
           }
         }
 
@@ -774,21 +701,9 @@ export async function getZoneVisits(filters?: {
   offset?: number
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -800,7 +715,7 @@ export async function getZoneVisits(filters?: {
         trucks:truck_id (id, truck_number),
         drivers:driver_id (id, name)
       `, { count: "exact" })
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("timestamp", { ascending: false })
 
     if (filters?.geofence_id) {
@@ -848,28 +763,16 @@ export async function getGeofencingStats(filters?: {
   end_date?: string
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
     let visitsQuery = supabase
       .from("zone_visits")
       .select("id, event_type, duration_minutes, geofence_id, truck_id")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
 
     if (filters?.geofence_id) {
       visitsQuery = visitsQuery.eq("geofence_id", filters.geofence_id)
@@ -889,7 +792,7 @@ export async function getGeofencingStats(filters?: {
     const { data: geofences } = await supabase
       .from("geofences")
       .select("id")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .eq("is_active", true)
 
     const stats = {

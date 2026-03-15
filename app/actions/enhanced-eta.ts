@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { getRouteDirections } from "./integrations-google-maps"
 import { decodePolyline } from "@/lib/polyline-utils"
 
@@ -31,31 +31,18 @@ export interface EnhancedETA {
  */
 export async function updateTrafficAwareRoute(routeId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
-    // V3-004 FIX: Ensure route belongs to the authenticated user's company
-    const companyResult = await getCachedUserCompany(user.id)
-    const companyId = companyResult.company_id
-
-    if (!companyId) {
-      return { error: companyResult.error || "No company found", data: null }
-    }
-
     // Get route details
     const { data: route, error: routeError } = await supabase
       .from("routes")
       .select("id, origin, destination, waypoints, origin_coordinates, destination_coordinates")
       .eq("id", routeId)
-      .eq("company_id", companyId) // V3-004: Prevent cross-tenant route access
+      .eq("company_id", ctx.companyId) // V3-004: Prevent cross-tenant route access
       .single()
 
     if (routeError || !route) {
@@ -127,14 +114,9 @@ export async function calculateEnhancedETA(
   driverId?: string
 ): Promise<{ data: EnhancedETA | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -165,21 +147,9 @@ export async function calculateEnhancedETA(
  */
 export async function updateTrafficRoutesForActiveRoutes() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -187,7 +157,7 @@ export async function updateTrafficRoutesForActiveRoutes() {
     const { data: activeRoutes, error: routesError } = await supabase
       .from("routes")
       .select("id")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .in("status", ["in_progress", "scheduled"])
       .or(`traffic_last_updated.is.null,traffic_last_updated.lt.${new Date(Date.now() - 10 * 60 * 1000).toISOString()}`)
       .limit(20) // Limit to 20 routes per run to avoid API rate limits

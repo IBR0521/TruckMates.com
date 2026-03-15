@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
@@ -14,12 +14,9 @@ const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manag
 export async function initializeDriverOnboarding(driverId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   const role = await getUserRole()
@@ -27,27 +24,12 @@ export async function initializeDriverOnboarding(driverId: string) {
     return { data: null, error: "Only managers can initialize driver onboarding" }
   }
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { data: null, error: "No company found" }
-  }
-
-  const company_id = userData.company_id
-  if (!company_id) {
-    return { data: null, error: "No company found" }
-  }
-
   // Get driver info
   const { data: driver } = await supabase
     .from("drivers")
     .select("*")
     .eq("id", driverId)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!driver) {
@@ -68,7 +50,7 @@ export async function initializeDriverOnboarding(driverId: string) {
     .from("driver_onboarding")
     .select("id")
     .eq("driver_id", driverId)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .maybeSingle()
 
   if (existing) {
@@ -80,7 +62,7 @@ export async function initializeDriverOnboarding(driverId: string) {
     .from("driver_onboarding")
     .insert({
       driver_id: driverId,
-      company_id,
+      company_id: ctx.companyId,
       status: "in_progress",
       current_step: 1,
       total_steps: 5,
@@ -89,7 +71,7 @@ export async function initializeDriverOnboarding(driverId: string) {
       documents_required: requiredDocuments,
       documents_completed: [],
       documents_missing: requiredDocuments,
-      assigned_to_user_id: user.id,
+      assigned_to_user_id: ctx.userId ?? null,
       assigned_at: new Date().toISOString(),
     })
     .select()
@@ -109,43 +91,22 @@ export async function initializeDriverOnboarding(driverId: string) {
  */
 export async function getDriverOnboarding(driverId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  // MEDIUM FIX 10: Add RBAC check - managers can view any, drivers can view their own
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData) {
-    return { data: null, error: "User not found" }
-  }
-
-  const company_id = userData.company_id
-  if (!company_id) {
-    return { data: null, error: "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   const role = await getUserRole()
   const isManager = role && MANAGER_ROLES.includes(role)
   if (!isManager) {
-    // For non-managers, verify they're viewing their own driver record
     const { data: driver } = await supabase
       .from("drivers")
       .select("id, user_id")
       .eq("id", driverId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
-    if (!driver || driver.user_id !== user.id) {
+    if (!driver || driver.user_id !== ctx.userId) {
       return { data: null, error: "You can only view your own onboarding status" }
     }
   }
@@ -158,7 +119,7 @@ export async function getDriverOnboarding(driverId: string) {
       assigned_to:assigned_to_user_id(id, full_name, email)
     `)
     .eq("driver_id", driverId)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (error) {
@@ -178,29 +139,14 @@ export async function getDriverOnboarding(driverId: string) {
  */
 export async function updateOnboardingStep(driverId: string, step: number) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   const role = await getUserRole()
   if (!role || !MANAGER_ROLES.includes(role)) {
     return { data: null, error: "Only managers can update onboarding steps" }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  const company_id = userData?.company_id
-  if (!company_id) {
-    return { data: null, error: "No company found" }
   }
 
   // MEDIUM FIX 13: Validate step bounds
@@ -220,7 +166,7 @@ export async function updateOnboardingStep(driverId: string, step: number) {
       updated_at: new Date().toISOString(),
     })
     .eq("driver_id", driverId)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -238,43 +184,22 @@ export async function updateOnboardingStep(driverId: string, step: number) {
  */
 export async function markDocumentUploaded(driverId: string, documentType: string, documentId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  // MEDIUM FIX 10: Add RBAC check - managers can mark documents for any driver
-  const { data: userData } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData) {
-    return { data: null, error: "User not found" }
-  }
-
-  const company_id = userData.company_id
-  if (!company_id) {
-    return { data: null, error: "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   const role = await getUserRole()
   const isManager = role && MANAGER_ROLES.includes(role)
   if (!isManager) {
-    // For non-managers, verify they're marking documents for their own driver record
     const { data: driver } = await supabase
       .from("drivers")
       .select("id, user_id")
       .eq("id", driverId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
-    if (!driver || driver.user_id !== user.id) {
+    if (!driver || driver.user_id !== ctx.userId) {
       return { data: null, error: "You can only mark documents for your own onboarding" }
     }
   }
@@ -284,7 +209,7 @@ export async function markDocumentUploaded(driverId: string, documentType: strin
     .from("driver_onboarding")
     .select("*")
     .eq("driver_id", driverId)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!onboarding) {
@@ -364,7 +289,7 @@ export async function markDocumentUploaded(driverId: string, documentType: strin
     .from("driver_onboarding")
     .update(updateData)
     .eq("driver_id", driverId)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -383,12 +308,9 @@ export async function markDocumentUploaded(driverId: string, documentType: strin
 export async function completeDriverOnboarding(driverId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   const role = await getUserRole()
@@ -396,23 +318,12 @@ export async function completeDriverOnboarding(driverId: string) {
     return { data: null, error: "Only managers can complete driver onboarding" }
   }
 
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  const company_id = userData?.company_id
-  if (!company_id) {
-    return { data: null, error: "No company found" }
-  }
-
   // Verify all required documents are uploaded
   const { data: onboarding } = await supabase
     .from("driver_onboarding")
     .select("*")
     .eq("driver_id", driverId)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!onboarding) {
@@ -453,7 +364,7 @@ export async function completeDriverOnboarding(driverId: string) {
       updated_at: new Date().toISOString(),
     })
     .eq("driver_id", driverId)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -467,7 +378,7 @@ export async function completeDriverOnboarding(driverId: string) {
     .from("drivers")
     .update({ status: "active" })
     .eq("id", driverId)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
 
   revalidatePath("/dashboard/drivers")
   return { data, error: null }
@@ -481,29 +392,14 @@ export async function getAllDriverOnboarding(filters?: {
   assigned_to?: string
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   const role = await getUserRole()
   if (!role || !MANAGER_ROLES.includes(role)) {
     return { data: null, error: "Only managers can view all onboarding records" }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  const company_id = userData?.company_id
-  if (!company_id) {
-    return { data: null, error: "No company found" }
   }
 
   let query = supabase
@@ -513,7 +409,7 @@ export async function getAllDriverOnboarding(filters?: {
       driver:driver_id(id, name, email, phone, status),
       assigned_to:assigned_to_user_id(id, full_name, email)
     `)
-    .eq("company_id", company_id)
+    .eq("company_id", ctx.companyId)
     .order("created_at", { ascending: false })
 
   if (filters?.status) {

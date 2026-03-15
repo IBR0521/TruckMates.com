@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { getCompanySettings } from "./number-formats"
 import { handleDbError } from "@/lib/db-helpers"
 
@@ -19,33 +20,15 @@ export async function getCheckCalls(filters?: {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     let query = supabase
       .from("check_calls")
       .select("*")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .order("scheduled_time", { ascending: false })
 
     if (filters?.load_id) {
@@ -98,27 +81,9 @@ export async function createCheckCall(formData: {
   notes?: string
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // LOW FIX: Use driver's timezone for timestamp if available, otherwise use server time
@@ -129,7 +94,7 @@ export async function createCheckCall(formData: {
       .from("drivers")
       .select("timezone")
       .eq("id", formData.driver_id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
     
     if (driver?.timezone) {
@@ -143,7 +108,7 @@ export async function createCheckCall(formData: {
   const { data, error } = await supabase
     .from("check_calls")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       load_id: formData.load_id || null,
       route_id: formData.route_id || null,
       driver_id: formData.driver_id,
@@ -190,34 +155,16 @@ export async function updateCheckCall(
   }
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("check_calls")
     .update(updates)
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -236,27 +183,9 @@ export async function updateCheckCall(
  */
 export async function scheduleCheckCallsForLoad(loadId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get load details
@@ -264,7 +193,7 @@ export async function scheduleCheckCallsForLoad(loadId: string) {
     .from("loads")
     .select("*")
     .eq("id", loadId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (loadError || !load) {
@@ -291,7 +220,7 @@ export async function scheduleCheckCallsForLoad(loadId: string) {
   if (settings.require_check_call_at_pickup && load.load_date) {
     const pickupTime = new Date(load.load_date)
     checkCalls.push({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       load_id: loadId,
       driver_id: load.driver_id,
       call_type: "pickup",
@@ -311,7 +240,7 @@ export async function scheduleCheckCallsForLoad(loadId: string) {
 
     while (currentTime < endTime) {
       checkCalls.push({
-        company_id: userData.company_id,
+        company_id: ctx.companyId,
         load_id: loadId,
         driver_id: load.driver_id,
         call_type: "scheduled",
@@ -326,7 +255,7 @@ export async function scheduleCheckCallsForLoad(loadId: string) {
   if (settings.require_check_call_at_delivery && load.estimated_delivery) {
     const deliveryTime = new Date(load.estimated_delivery)
     checkCalls.push({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       load_id: loadId,
       driver_id: load.driver_id,
       call_type: "delivery",
@@ -358,27 +287,9 @@ export async function scheduleCheckCallsForLoad(loadId: string) {
  */
 export async function getOverdueCheckCalls() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const now = new Date().toISOString()
@@ -386,7 +297,7 @@ export async function getOverdueCheckCalls() {
   const { data, error } = await supabase
     .from("check_calls")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("status", "pending")
     .lt("scheduled_time", now)
     .order("scheduled_time", { ascending: true })

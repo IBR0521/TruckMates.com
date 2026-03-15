@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 export interface CustomerPerformanceMetrics {
   customer_id: string
@@ -55,17 +55,9 @@ export async function getCustomerPerformanceMetrics(filters?: {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const result = await getCachedUserCompany(user.id)
-    const company_id = result.company_id
-
-    if (!company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // SECURITY FIX: Use explicit column selection instead of select("*")
@@ -92,7 +84,7 @@ export async function getCustomerPerformanceMetrics(filters?: {
         last_invoice_date,
         revenue_per_load
       `)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
 
     // Apply filters
     if (filters?.relationship_type) {
@@ -139,17 +131,9 @@ export async function getCustomerPerformance(customerId: string): Promise<{
   error: string | null
 }> {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -178,7 +162,7 @@ export async function getCustomerPerformance(customerId: string): Promise<{
         revenue_per_load
       `)
       .eq("customer_id", customerId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (error) {
@@ -205,17 +189,9 @@ export async function getVendorPerformanceMetrics(filters?: {
   min_transactions?: number
 }): Promise<{ data: VendorPerformanceMetrics[] | null; error: string | null }> {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -238,7 +214,7 @@ export async function getVendorPerformanceMetrics(filters?: {
         first_transaction_date,
         transactions_per_month
       `)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
 
     // Apply filters
     if (filters?.relationship_type) {
@@ -281,17 +257,9 @@ export async function getVendorPerformance(vendorId: string): Promise<{
   error: string | null
 }> {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -313,7 +281,7 @@ export async function getVendorPerformance(vendorId: string): Promise<{
         transactions_per_month
       `)
       .eq("vendor_id", vendorId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (error) {
@@ -344,17 +312,9 @@ export async function getRelationshipInsights(): Promise<{
   error: string | null
 }> {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -383,7 +343,7 @@ export async function getRelationshipInsights(): Promise<{
         last_invoice_date,
         revenue_per_load
       `)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
     
     // MEDIUM FIX: Add limit to prevent unbounded aggregation queries
     const { data: customersData, error: customersError } = await customerQuery.order("total_revenue", { ascending: false }).limit(1000)
@@ -426,7 +386,7 @@ export async function getRelationshipInsights(): Promise<{
         first_transaction_date,
         transactions_per_month
       `)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("total_spent", { ascending: false })
       .limit(1000)
 

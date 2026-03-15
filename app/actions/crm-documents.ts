@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 
@@ -50,17 +50,9 @@ export async function uploadCRMDocument(
   }
 ): Promise<{ data: CRMDocument | null; error: string | null }> {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -77,7 +69,7 @@ export async function uploadCRMDocument(
   try {
     // Upload file to Supabase Storage
     const fileExt = file.name.split(".").pop()
-    const fileName = `crm/${user.id}/${Date.now()}.${fileExt}`
+    const fileName = `crm/${ctx.userId ?? "unknown"}/${Date.now()}.${fileExt}`
     const filePath = fileName
 
     const { error: uploadError } = await supabase.storage
@@ -108,7 +100,7 @@ export async function uploadCRMDocument(
     const { data: documentData, error: docError } = await supabase
       .from("crm_documents")
       .insert({
-        company_id: company_id,
+        company_id: ctx.companyId,
         customer_id: metadata.customer_id || null,
         vendor_id: metadata.vendor_id || null,
         document_type: metadata.document_type,
@@ -118,7 +110,7 @@ export async function uploadCRMDocument(
         file_size: file.size,
         mime_type: file.type,
         expiration_date: metadata.expiration_date || null,
-        uploaded_by: user.id,
+        uploaded_by: ctx.userId ?? null,
       })
       .select()
       .single()
@@ -144,17 +136,9 @@ export async function getCRMDocuments(filters?: {
   include_expired?: boolean
 }): Promise<{ data: CRMDocument[] | null; error: string | null }> {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -165,7 +149,7 @@ export async function getCRMDocuments(filters?: {
         customers:customer_id(name),
         vendors:vendor_id(name)
       `)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
 
     if (filters?.customer_id) {
       query = query.eq("customer_id", filters.customer_id)
@@ -211,17 +195,9 @@ export async function getExpiringCRMDocuments(
   daysAhead: number = 30
 ): Promise<{ data: ExpiringDocument[] | null; error: string | null }> {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -250,7 +226,7 @@ export async function getExpiringCRMDocuments(
           customers:customer_id(name),
           vendors:vendor_id(name)
         `)
-        .eq("company_id", company_id)
+        .eq("company_id", ctx.companyId)
         .not("expiration_date", "is", null)
         .gte("expiration_date", new Date().toISOString().split("T")[0])
         .lte("expiration_date", endDate.toISOString().split("T")[0])
@@ -296,17 +272,9 @@ export async function deleteCRMDocument(documentId: string): Promise<{
   error: string | null
 }> {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -321,7 +289,7 @@ export async function deleteCRMDocument(documentId: string): Promise<{
       .from("crm_documents")
       .select("storage_url, company_id")
       .eq("id", documentId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (fetchError) {
@@ -396,17 +364,9 @@ export async function markExpirationAlertSent(
   documentId: string
 ): Promise<{ data: boolean | null; error: string | null }> {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -414,7 +374,7 @@ export async function markExpirationAlertSent(
       .from("crm_documents")
       .update({ expiration_alert_sent: true })
       .eq("id", documentId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message, data: null }

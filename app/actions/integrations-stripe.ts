@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Stripe Integration Backend
@@ -16,23 +16,15 @@ async function getStripeClient() {
   if (!STRIPE_SECRET_KEY) {
     // Try to get from integration settings
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      throw new Error("Not authenticated")
-    }
-
-    const result = await getCachedUserCompany(user.id)
-    if (result.error || !result.company_id) {
-      throw new Error("No company found")
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      throw new Error(ctx.error || "Not authenticated")
     }
 
     const { data: integrations } = await supabase
       .from("company_integrations")
       .select("stripe_enabled, stripe_api_key")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (!integrations?.stripe_enabled || !integrations.stripe_api_key) {
@@ -60,18 +52,9 @@ async function getStripeClient() {
  */
 export async function createInvoicePayment(invoiceId: string, amount?: number) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get invoice
@@ -79,7 +62,7 @@ export async function createInvoicePayment(invoiceId: string, amount?: number) {
     .from("invoices")
     .select("*")
     .eq("id", invoiceId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (invoiceError || !invoice) {
@@ -101,7 +84,7 @@ export async function createInvoicePayment(invoiceId: string, amount?: number) {
       metadata: {
         invoice_id: invoiceId,
         invoice_number: invoice.invoice_number,
-        company_id: result.company_id,
+        company_id: ctx.companyId,
       },
       description: `Payment for invoice ${invoice.invoice_number}`,
     })
@@ -132,18 +115,9 @@ export async function createInvoicePayment(invoiceId: string, amount?: number) {
  */
 export async function confirmInvoicePayment(invoiceId: string, paymentIntentId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -166,7 +140,7 @@ export async function confirmInvoicePayment(invoiceId: string, paymentIntentId: 
         stripe_payment_intent_id: paymentIntentId,
       })
       .eq("id", invoiceId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (updateError) {
       return { error: updateError.message, data: null }
@@ -185,25 +159,16 @@ export async function confirmInvoicePayment(invoiceId: string, paymentIntentId: 
  */
 export async function processPayPalInvoicePayment(invoiceId: string, amount?: number) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get integration settings
   const { data: integrations } = await supabase
     .from("company_integrations")
     .select("paypal_enabled, paypal_client_id")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!integrations?.paypal_enabled || !integrations.paypal_client_id) {
@@ -215,7 +180,7 @@ export async function processPayPalInvoicePayment(invoiceId: string, amount?: nu
     .from("invoices")
     .select("*")
     .eq("id", invoiceId)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (invoiceError || !invoice) {
@@ -315,25 +280,16 @@ export async function processPayPalInvoicePayment(invoiceId: string, amount?: nu
  */
 export async function capturePayPalPayment(invoiceId: string, orderId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get integration settings
   const { data: integrations } = await supabase
     .from("company_integrations")
     .select("paypal_enabled, paypal_client_id")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!integrations?.paypal_enabled || !integrations.paypal_client_id) {
@@ -393,7 +349,7 @@ export async function capturePayPalPayment(invoiceId: string, orderId: string) {
           paypal_capture_id: capture.purchase_units?.[0]?.payments?.captures?.[0]?.id,
         })
         .eq("id", invoiceId)
-        .eq("company_id", result.company_id)
+        .eq("company_id", ctx.companyId)
 
       revalidatePath("/dashboard/accounting/invoices")
       return { data: { success: true, capture }, error: null }

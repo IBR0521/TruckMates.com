@@ -7,7 +7,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 export interface RealtimeETA {
   estimated_arrival: string
@@ -45,14 +45,9 @@ export interface ETAUpdate {
  */
 export async function createRouteLinestring(routeId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -80,14 +75,9 @@ export async function calculateRealtimeETA(
   currentSpeed?: number
 ): Promise<{ data: RealtimeETA | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -118,21 +108,9 @@ export async function calculateRealtimeETA(
  */
 export async function updateRouteETA(routeId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -141,7 +119,7 @@ export async function updateRouteETA(routeId: string) {
       .from("routes")
       .select("truck_id, driver_id, traffic_last_updated, company_id")
       .eq("id", routeId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (!route) {
@@ -200,7 +178,7 @@ export async function updateRouteETA(routeId: string) {
             eta_confidence: enhancedResult.data.confidence
           })
           .eq("id", routeId)
-          .eq("company_id", company_id)
+          .eq("company_id", ctx.companyId)
 
         return { data: { enhanced: true, eta: enhancedResult.data }, error: null }
       }
@@ -228,21 +206,9 @@ export async function updateRouteETA(routeId: string) {
  */
 export async function getRouteETA(routeId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -251,7 +217,7 @@ export async function getRouteETA(routeId: string) {
       .from("routes")
       .select("id, current_eta, last_eta_update, eta_confidence, truck_id")
       .eq("id", routeId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (error) {
@@ -290,21 +256,9 @@ export async function getETAHistory(
   limit: number = 100
 ): Promise<{ data: ETAUpdate[] | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -312,7 +266,7 @@ export async function getETAHistory(
       .from("eta_updates")
       .select("*")
       .eq("route_id", routeId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("timestamp", { ascending: false })
       .limit(limit)
 
@@ -331,21 +285,9 @@ export async function getETAHistory(
  */
 export async function getLoadETA(loadId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -354,7 +296,7 @@ export async function getLoadETA(loadId: string) {
       .from("loads")
       .select("route_id")
       .eq("id", loadId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (!load || !load.route_id) {

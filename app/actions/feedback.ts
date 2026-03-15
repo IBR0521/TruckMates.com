@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { sanitizeString } from "@/lib/validation"
 import { escapeHtml } from "@/lib/html-escape"
@@ -18,26 +18,18 @@ async function getResendClient() {
 
   // Check if integration is enabled for this company
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const ctx = await getCachedAuthContext()
+    if (ctx.companyId) {
+      const supabase = await createClient()
+      const { data: integrations } = await supabase
+        .from("company_integrations")
+        .select("resend_enabled")
+        .eq("company_id", ctx.companyId)
+        .single()
 
-    if (user) {
-      const { getCachedUserCompany } = await import("@/lib/query-optimizer")
-      const result = await getCachedUserCompany(user.id)
-      
-      if (result.company_id) {
-        const { data: integrations } = await supabase
-          .from("company_integrations")
-          .select("resend_enabled")
-          .eq("company_id", result.company_id)
-          .single()
-
-        if (!integrations?.resend_enabled) {
-          console.log("[RESEND] Integration not enabled for company")
-          return null
-        }
+      if (!integrations?.resend_enabled) {
+        console.log("[RESEND] Integration not enabled for company")
+        return null
       }
     }
   } catch (error) {
@@ -176,22 +168,16 @@ export async function getFeedback(filters?: {
 }) {
   try {
     const supabase = await createClient()
-
-    // Get current user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.userId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Build query - users can only see their own feedback
     let query = supabase
       .from("feedback")
       .select("id, type, category, title, message, priority, status, created_at, updated_at", { count: "exact" })
-      .eq("user_id", user.id)
+      .eq("user_id", ctx.userId)
       .order("created_at", { ascending: false })
 
     // Apply filters
@@ -224,20 +210,16 @@ export async function getFeedback(filters?: {
 // Get a single feedback item
 export async function getFeedbackItem(id: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data: feedbackItem, error } = await supabase
     .from("feedback")
     .select("*")
     .eq("id", id)
-    .eq("user_id", user.id) // Ensure user can only access their own feedback
+    .eq("user_id", ctx.userId) // Ensure user can only access their own feedback
     .single()
 
   if (error) {
@@ -260,24 +242,9 @@ export async function createFeedback(formData: {
 }) {
   try {
     const supabase = await createClient()
-
-    // Get current user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    // Get user's company_id
-    const result = await getCachedUserCompany(user.id)
-    const company_id = result.company_id
-    const companyError = result.error
-
-    if (companyError || !company_id) {
-      return { error: companyError || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Validate and sanitize input
@@ -310,7 +277,7 @@ export async function createFeedback(formData: {
     const { data: userData } = await supabase
       .from("users")
       .select("email, full_name")
-      .eq("id", user.id)
+      .eq("id", ctx.userId!)
       .single()
 
     // Use provided user info or fallback to database user info
@@ -323,15 +290,15 @@ export async function createFeedback(formData: {
     const { data: companyData } = await supabase
       .from("companies")
       .select("name")
-      .eq("id", company_id)
+      .eq("id", ctx.companyId)
       .single()
 
     // Insert feedback
     const { data: feedback, error } = await supabase
       .from("feedback")
       .insert({
-        user_id: user.id,
-        company_id: company_id,
+        user_id: ctx.userId!,
+        company_id: ctx.companyId,
         type: formData.type,
         category: formData.category ? sanitizeString(formData.category) : null,
         title: title,
@@ -376,15 +343,9 @@ export async function updateFeedback(id: string, formData: {
   priority?: string
 }) {
   const supabase = await createClient()
-
-  // Get current user
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // First, check if feedback exists and belongs to user, and status is 'open'
@@ -392,7 +353,7 @@ export async function updateFeedback(id: string, formData: {
     .from("feedback")
     .select("id, status")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("user_id", ctx.userId)
     .single()
 
   if (fetchError || !existingFeedback) {
@@ -439,7 +400,7 @@ export async function updateFeedback(id: string, formData: {
     .from("feedback")
     .update(updateData)
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("user_id", ctx.userId)
     .select()
     .single()
 

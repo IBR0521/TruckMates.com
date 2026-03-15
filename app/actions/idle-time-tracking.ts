@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 export interface IdleTimeSession {
   id: string
@@ -82,20 +82,9 @@ export async function getIdleTimeSessions(filters?: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -106,7 +95,7 @@ export async function getIdleTimeSessions(filters?: {
         trucks:truck_id (id, truck_number, make, model),
         drivers:driver_id (id, name)
       `)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("start_time", { ascending: false })
 
     if (filters?.truck_id) {
@@ -151,27 +140,16 @@ export async function getIdleTimeStats(filters?: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
     let query = supabase
       .from("idle_time_sessions")
       .select("duration_minutes, estimated_fuel_cost, truck_id, driver_id")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
 
     if (filters?.truck_id) {
       query = query.eq("truck_id", filters.truck_id)
@@ -246,20 +224,9 @@ export async function getIdleTimeStats(filters?: {
 export async function closeIdleSession(sessionId: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -267,7 +234,7 @@ export async function closeIdleSession(sessionId: string) {
       .from("idle_time_sessions")
       .select("*")
       .eq("id", sessionId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (fetchError || !session) {
@@ -287,7 +254,7 @@ export async function closeIdleSession(sessionId: string) {
         updated_at: new Date().toISOString()
       })
       .eq("id", sessionId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .select()
       .single()
 

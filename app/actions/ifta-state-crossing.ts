@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * IFTA State Line Crossing Detection
@@ -127,23 +127,12 @@ export async function detectStateCrossing(params: {
 }) {
   const supabase = await createClient()
 
-  // FIXED: Always derive and verify company_id from authenticated session
-  // Never trust caller-provided company_id to prevent cross-company data injection
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  // FIXED: Always derive company from authenticated session; verify caller-provided company_id matches
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
-  }
-
-  // Verify the passed company_id matches the authenticated user's company
-  if (params.company_id !== result.company_id) {
+  if (params.company_id !== ctx.companyId) {
     return { error: "Unauthorized: company_id mismatch", data: null }
   }
 
@@ -205,7 +194,7 @@ export async function detectStateCrossing(params: {
         const { error: exitError } = await supabase
           .from("state_crossings")
           .insert({
-            company_id: params.company_id,
+            company_id: ctx.companyId,
             truck_id: params.truck_id,
             driver_id: params.driver_id,
             eld_device_id: params.eld_device_id,
@@ -244,7 +233,7 @@ export async function detectStateCrossing(params: {
     const { data: crossingId, error: crossingError } = await supabase.rpc(
       "detect_state_crossing",
       {
-        p_company_id: params.company_id,
+        p_company_id: ctx.companyId,
         p_truck_id: params.truck_id,
         p_driver_id: params.driver_id,
         p_eld_device_id: params.eld_device_id,
@@ -293,17 +282,9 @@ export async function getStateMileageBreakdown(params: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -311,7 +292,7 @@ export async function getStateMileageBreakdown(params: {
     const { data: stateMileage, error } = await supabase.rpc(
       "calculate_state_mileage_from_crossings",
       {
-        p_company_id: result.company_id,
+        p_company_id: ctx.companyId,
         p_truck_ids: params.truck_ids || null,
         p_start_date: params.start_date,
         p_end_date: params.end_date,
@@ -342,24 +323,16 @@ export async function getStateCrossings(params: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
     let query = supabase
       .from("state_crossings")
       .select("*")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .order("timestamp", { ascending: false })
 
     if (params.truck_id) {

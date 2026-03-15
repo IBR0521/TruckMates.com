@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 // EXT-009 FIX: Import fuel tax rates from shared source to prevent inconsistencies
 import { STATE_FUEL_TAX_RATES, getFuelTaxRate } from "@/lib/fuel-tax-rates"
@@ -18,23 +18,15 @@ export async function getFuelPurchases(filters?: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   let query = supabase
     .from("fuel_purchases")
     .select("*", { count: "exact" })
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .order("purchase_date", { ascending: false })
 
   if (filters?.startDate) {
@@ -80,17 +72,9 @@ export async function createFuelPurchase(formData: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Validate required fields
@@ -103,7 +87,7 @@ export async function createFuelPurchase(formData: {
   const { data, error } = await supabase
     .from("fuel_purchases")
     .insert({
-      company_id: result.company_id,
+      company_id: ctx.companyId,
       truck_id: formData.truck_id || null,
       driver_id: formData.driver_id || null,
       purchase_date: formData.purchase_date,
@@ -149,17 +133,9 @@ export async function updateFuelPurchase(
 ) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const updateData: any = {
@@ -198,7 +174,7 @@ export async function updateFuelPurchase(
     .from("fuel_purchases")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -214,24 +190,16 @@ export async function updateFuelPurchase(
 export async function deleteFuelPurchase(id: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { error } = await supabase
     .from("fuel_purchases")
     .delete()
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message, data: null }
@@ -249,23 +217,15 @@ export async function getIFTAReports(filters?: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   let query = supabase
     .from("ifta_reports")
     .select("*")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .order("year", { ascending: false })
     .order("quarter", { ascending: false })
 
@@ -292,17 +252,9 @@ export async function getIFTAReports(filters?: {
 export async function getIFTAReport(id: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get report
@@ -310,7 +262,7 @@ export async function getIFTAReport(id: string) {
     .from("ifta_reports")
     .select("*")
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (reportError || !report) {
@@ -341,17 +293,9 @@ export async function getIFTAReport(id: string) {
 export async function generateIFTAReport(quarter: number, year: number) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Validate quarter
@@ -363,7 +307,7 @@ export async function generateIFTAReport(quarter: number, year: number) {
   const { data: existing } = await supabase
     .from("ifta_reports")
     .select("id")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("quarter", quarter)
     .eq("year", year)
     .single()
@@ -384,7 +328,7 @@ export async function generateIFTAReport(quarter: number, year: number) {
   const { data: fuelPurchases } = await supabase
     .from("fuel_purchases")
     .select("*")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .gte("purchase_date", startDate)
     .lte("purchase_date", endDate)
 
@@ -393,7 +337,7 @@ export async function generateIFTAReport(quarter: number, year: number) {
   const { data: routes } = await supabase
     .from("routes")
     .select("distance, origin, destination")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .gte("created_at", startDate)
     .lte("created_at", endDate)
 
@@ -464,7 +408,7 @@ export async function generateIFTAReport(quarter: number, year: number) {
   const { data: report, error: reportError } = await supabase
     .from("ifta_reports")
     .insert({
-      company_id: result.company_id,
+      company_id: ctx.companyId,
       quarter: quarterText, // Convert to TEXT format: 'Q1', 'Q2', etc.
       year,
       period: period, // Required field - format: "Jan-Mar 2026"
@@ -518,17 +462,9 @@ export async function updateIFTAReportStatus(
 ) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const updateData: any = {
@@ -550,7 +486,7 @@ export async function updateIFTAReportStatus(
     .from("ifta_reports")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -566,24 +502,16 @@ export async function updateIFTAReportStatus(
 export async function deleteIFTAReport(id: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { error } = await supabase
     .from("ifta_reports")
     .delete()
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message, data: null }

@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { geocodeAddress } from "./integrations-google-maps"
 
 export interface NearbyDriver {
@@ -39,21 +39,9 @@ export async function findNearbyDriversForLoad(
   options?: ProximityDispatchingOptions
 ): Promise<{ data: NearbyDriver[] | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -62,7 +50,7 @@ export async function findNearbyDriversForLoad(
       .from("loads")
       .select("id, origin, shipper_address, shipper_city, shipper_state, shipper_zip, shipper_latitude, shipper_longitude, origin_coordinates")
       .eq("id", loadId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (loadError || !load) {
@@ -117,7 +105,7 @@ export async function findNearbyDriversForLoad(
     const { data: drivers, error } = await supabase.rpc('find_nearby_drivers_for_load', {
       pickup_lat: pickupLat,
       pickup_lng: pickupLng,
-      company_id_param: company_id,
+      company_id_param: ctx.companyId,
       max_radius_meters: maxRadiusMeters,
       min_drive_hours: minDriveHours,
       min_on_duty_hours: minOnDutyHours,
@@ -145,21 +133,9 @@ export async function findNearbyDriversByCoordinates(
   options?: ProximityDispatchingOptions
 ): Promise<{ data: NearbyDriver[] | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -171,7 +147,7 @@ export async function findNearbyDriversByCoordinates(
     const { data: drivers, error } = await supabase.rpc('find_nearby_drivers_for_load', {
       pickup_lat: latitude,
       pickup_lng: longitude,
-      company_id_param: company_id,
+      company_id_param: ctx.companyId,
       max_radius_meters: maxRadiusMeters,
       min_drive_hours: minDriveHours,
       min_on_duty_hours: minOnDutyHours,

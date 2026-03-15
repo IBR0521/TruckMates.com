@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { generateBOLPDF } from "./bol-pdf"
 
@@ -43,16 +43,9 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
         targetCompanyId = bolData.company_id
       } else {
         // Fallback: try to get from user session if available
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser()
-
-        if (!authError && user) {
-          const result = await getCachedUserCompany(user.id)
-          if (result.company_id) {
-            targetCompanyId = result.company_id
-          }
+        const ctx = await getCachedAuthContext()
+        if (ctx.companyId) {
+          targetCompanyId = ctx.companyId
         }
 
         if (!targetCompanyId) {
@@ -259,16 +252,9 @@ export async function autoStoreBOLPDFOnCompletion(bolId: string, companyId?: str
         targetCompanyId = bolData.company_id
       } else {
         // Fallback: try to get from user session if available
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser()
-
-        if (!authError && user) {
-          const result = await getCachedUserCompany(user.id)
-          if (result.company_id) {
-            targetCompanyId = result.company_id
-          }
+        const ctx = await getCachedAuthContext()
+        if (ctx.companyId) {
+          targetCompanyId = ctx.companyId
         }
 
         if (!targetCompanyId) {

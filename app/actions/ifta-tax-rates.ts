@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
@@ -42,25 +42,16 @@ export async function getIFTATaxRates(filters?: {
 }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
     let query = supabase
       .from("ifta_tax_rates")
       .select("*")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .order("state_code", { ascending: true })
       .order("year", { ascending: false })
       .order("quarter", { ascending: false })
@@ -104,23 +95,14 @@ export async function getIFTATaxRate(
 }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
     const { data, error } = await supabase.rpc("get_ifta_tax_rate", {
-      p_company_id: result.company_id,
+      p_company_id: ctx.companyId,
       p_state_code: stateCode.toUpperCase(),
       p_quarter: quarter,
       p_year: year,
@@ -158,23 +140,14 @@ export async function getIFTATaxRatesForQuarter(
 }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
     const { data, error } = await supabase.rpc("get_ifta_tax_rates_for_quarter", {
-      p_company_id: result.company_id,
+      p_company_id: ctx.companyId,
       p_quarter: quarter,
       p_year: year,
     })
@@ -217,18 +190,9 @@ export async function upsertIFTATaxRate(formData: {
 }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const role = await getUserRole()
@@ -241,7 +205,7 @@ export async function upsertIFTATaxRate(formData: {
       .from("ifta_tax_rates")
       .upsert(
         {
-          company_id: result.company_id,
+          company_id: ctx.companyId,
           state_code: formData.state_code.toUpperCase(),
           state_name: formData.state_name,
           quarter: formData.quarter,
@@ -289,18 +253,9 @@ export async function bulkUpdateIFTATaxRates(
 }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const role = await getUserRole()
@@ -316,14 +271,14 @@ export async function bulkUpdateIFTATaxRates(
 
     // Prepare bulk insert data
     const ratesToInsert = rates.map((rate) => ({
-      company_id: result.company_id,
+      company_id: ctx.companyId,
       state_code: rate.state_code.toUpperCase(),
       state_name: rate.state_name,
       quarter,
       year,
       tax_rate_per_gallon: rate.tax_rate_per_gallon,
       effective_date: effectiveDate,
-      created_by: user.id,
+      created_by: ctx.userId ?? null,
     }))
 
     const { error } = await supabase.from("ifta_tax_rates").upsert(ratesToInsert, {
@@ -351,18 +306,9 @@ export async function deleteIFTATaxRate(id: string): Promise<{
 }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated" }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   const role = await getUserRole()
@@ -375,7 +321,7 @@ export async function deleteIFTATaxRate(id: string): Promise<{
       .from("ifta_tax_rates")
       .delete()
       .eq("id", id)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       console.error("Error deleting IFTA tax rate:", error)

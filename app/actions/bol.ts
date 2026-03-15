@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
 // Get all BOLs
@@ -13,34 +14,16 @@ export async function getBOLs(filters?: {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // V3-007 FIX: Replace select(*) with explicit columns and add LIMIT
     let query = supabase
       .from("bols")
       .select("id, bol_number, load_id, template_id, shipper_name, consignee_name, carrier_name, pickup_date, delivery_date, freight_charges, status, created_at, updated_at")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
       .limit(1000)
 
@@ -81,27 +64,9 @@ export async function getBOL(id: string) {
 
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // V3-007 FIX: Replace select(*) with explicit columns
@@ -109,7 +74,7 @@ export async function getBOL(id: string) {
       .from("bols")
       .select("id, company_id, bol_number, load_id, template_id, shipper_name, shipper_address, shipper_city, shipper_state, shipper_zip, shipper_phone, shipper_email, consignee_name, consignee_address, consignee_city, consignee_state, consignee_zip, consignee_phone, consignee_email, carrier_name, carrier_mc_number, carrier_dot_number, pickup_date, delivery_date, freight_charges, payment_terms, special_instructions, shipper_signature, driver_signature, consignee_signature, status, created_at, updated_at, metadata")
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (error) {
@@ -161,26 +126,9 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
 
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Get load with address book entries
@@ -216,7 +164,7 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
         )
       `)
       .eq("id", loadId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (loadError || !load) {
@@ -250,7 +198,7 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
     await supabase
       .from("companies")
       .select("name, mc_number, dot_number")
-      .eq("id", userData.company_id)
+      .eq("id", ctx.companyId)
       .maybeSingle()
 
     return {
@@ -312,28 +260,9 @@ export async function createBOL(formData: {
     }
 
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Auto-populate from load if requested or if fields are missing
@@ -359,7 +288,7 @@ export async function createBOL(formData: {
       const { data: company } = await supabase
         .from("companies")
         .select("name, mc_number, dot_number")
-        .eq("id", userData.company_id)
+        .eq("id", ctx.companyId)
         .maybeSingle()
 
       if (company) {
@@ -375,7 +304,7 @@ export async function createBOL(formData: {
     const { data, error } = await supabase
       .from("bols")
       .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       load_id: bolData.load_id,
       bol_number: bolNumber,
       template_id: bolData.template_id || null,
@@ -455,26 +384,9 @@ export async function updateBOLSignature(
 
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id, role")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // SECURITY FIX 3: Role check - consignee signatures should only be added by authorized users
@@ -482,7 +394,7 @@ export async function updateBOLSignature(
     const mappedRole = (await getUserRole()) || ""
     const canSignConsignee = ["super_admin", "operations_manager", "dispatcher"].includes(mappedRole)
     if (signatureType === "consignee" && !canSignConsignee) {
-      console.warn(`[BOL] Consignee signature added by user with role: ${userData.role}`)
+      console.warn(`[BOL] Consignee signature added by user with role: ${(await getUserRole()) || ""}`)
     }
 
     const signatureField = `${signatureType}_signature`
@@ -492,7 +404,7 @@ export async function updateBOLSignature(
       .from("bols")
       .select("status, shipper_signature, driver_signature, consignee_signature")
       .eq("id", bolId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (!currentBOL) {
@@ -533,7 +445,7 @@ export async function updateBOLSignature(
       .from("bols")
       .update(updateData)
       .eq("id", bolId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .select()
       .single()
 
@@ -545,7 +457,7 @@ export async function updateBOLSignature(
     if (data && data.consignee_signature && signatureType === "consignee") {
       try {
         const { autoStoreBOLPDFOnCompletion } = await import("./bol-enhanced")
-        await autoStoreBOLPDFOnCompletion(bolId, userData.company_id).catch((err) => {
+        await autoStoreBOLPDFOnCompletion(bolId, ctx.companyId).catch((err) => {
           console.error("Failed to auto-store BOL PDF:", err)
           // Don't fail if PDF storage fails
         })
@@ -582,28 +494,9 @@ export async function updateBOLPOD(
     }
 
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const updateData: any = {}
@@ -618,7 +511,7 @@ export async function updateBOLPOD(
       .from("bols")
       .select("status")
       .eq("id", bolId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (currentBOL && !["delivered", "completed"].includes(currentBOL.status)) {
@@ -631,7 +524,7 @@ export async function updateBOLPOD(
       .from("bols")
       .update(updateData)
       .eq("id", bolId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .select()
       .single()
 
@@ -643,7 +536,7 @@ export async function updateBOLPOD(
     if (data && (data as any).consignee_signature) {
       try {
         const { autoStoreBOLPDFOnCompletion } = await import("./bol-enhanced")
-        await autoStoreBOLPDFOnCompletion(bolId, userData.company_id).catch((err) => {
+        await autoStoreBOLPDFOnCompletion(bolId, ctx.companyId).catch((err) => {
           console.error("Failed to auto-store BOL PDF:", err)
           // Don't fail if PDF storage fails
         })
@@ -666,35 +559,16 @@ export async function getBOLTemplates() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // V3-007 FIX: Replace select(*) with explicit columns and add LIMIT
   const { data, error } = await supabase
     .from("bol_templates")
     .select("id, name, description, is_default, template_html, template_fields, created_at, updated_at")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .order("is_default", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(100)
@@ -726,28 +600,9 @@ export async function createBOLTemplate(formData: {
     }
 
     const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // If this is set as default, unset other defaults
@@ -755,13 +610,13 @@ export async function createBOLTemplate(formData: {
     await supabase
       .from("bol_templates")
       .update({ is_default: false })
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
   }
 
   const { data, error } = await supabase
     .from("bol_templates")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       name: formData.name,
       description: formData.description || null,
       is_default: formData.is_default || false,

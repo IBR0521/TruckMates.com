@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { escapeHtml } from "@/lib/html-escape"
 
 /**
@@ -17,18 +17,9 @@ export async function generateSettlementPDF(settlementId: string): Promise<{
   error: string | null
 }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { html: "", error: "Not authenticated" }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { html: "", error: result.error || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { html: "", error: ctx.error || "Not authenticated" }
   }
 
   try {
@@ -52,7 +43,7 @@ export async function generateSettlementPDF(settlementId: string): Promise<{
         )
       `)
       .eq("id", settlementId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (settlementError || !settlement) {
@@ -63,7 +54,7 @@ export async function generateSettlementPDF(settlementId: string): Promise<{
     const { data: company } = await supabase
       .from("companies")
       .select("name, address, phone, email")
-      .eq("id", result.company_id)
+      .eq("id", ctx.companyId)
       .single()
 
     // Format dates
@@ -455,13 +446,9 @@ export async function saveSettlementPDF(settlementId: string): Promise<{
   error: string | null
 }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { pdfUrl: null, error: "Not authenticated" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { pdfUrl: null, error: ctx.error || "Not authenticated" }
   }
 
   try {

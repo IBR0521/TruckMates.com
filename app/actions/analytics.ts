@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 
 /**
@@ -23,21 +23,9 @@ export async function getAnalyticsData(dateRange: number = 30) {
     }
 
     const supabase = await createClient()
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const result = await getCachedUserCompany(user.id)
-    const company_id = result.company_id
-
-    if (!company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const startDate = new Date()
@@ -49,7 +37,7 @@ export async function getAnalyticsData(dateRange: number = 30) {
     const { data: loadsData, error: loadsError } = await supabase
       .from("loads")
       .select("id, status, estimated_delivery, actual_delivery, created_at")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .gte("created_at", startDate.toISOString())
       .limit(10000)
 
@@ -62,7 +50,7 @@ export async function getAnalyticsData(dateRange: number = 30) {
     const { data: trucksData, error: trucksError } = await supabase
       .from("trucks")
       .select("id, status")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .limit(1000)
 
     if (trucksError) {
@@ -74,7 +62,7 @@ export async function getAnalyticsData(dateRange: number = 30) {
     const { data: driversData, error: driversError } = await supabase
       .from("drivers")
       .select("id, status")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .limit(1000)
 
     if (driversError) {
@@ -86,7 +74,7 @@ export async function getAnalyticsData(dateRange: number = 30) {
     const { data: invoicesData, error: invoicesError } = await supabase
       .from("invoices")
       .select("amount, status, created_at")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .gte("created_at", startDate.toISOString())
       .limit(10000)
 
@@ -99,7 +87,7 @@ export async function getAnalyticsData(dateRange: number = 30) {
     const { data: loadsWithRevenue, error: loadsRevenueError } = await supabase
       .from("loads")
       .select("total_rate, value, created_at")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .gte("created_at", startDate.toISOString())
       .limit(10000) // Reasonable limit for analytics
 

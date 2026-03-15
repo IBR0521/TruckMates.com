@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission } from "@/lib/server-permissions"
 
@@ -52,17 +52,9 @@ export async function logCommunication(input: {
   attachments?: any[]
 }): Promise<{ data: CommunicationLog | null; error: string | null }> {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -80,7 +72,7 @@ export async function logCommunication(input: {
     const { data, error } = await supabase
       .from("contact_history")
       .insert({
-        company_id: company_id,
+        company_id: ctx.companyId,
         customer_id: input.customer_id || null,
         vendor_id: input.vendor_id || null,
         contact_id: input.contact_id || null,
@@ -90,7 +82,7 @@ export async function logCommunication(input: {
         direction: input.direction || "outbound",
         load_id: input.load_id || null,
         invoice_id: input.invoice_id || null,
-        user_id: user.id,
+        user_id: ctx.userId ?? null,
         occurred_at: input.occurred_at || new Date().toISOString(),
         attachments: input.attachments || null,
         source: "manual",
@@ -121,17 +113,9 @@ export async function getCommunicationTimeline(filters: {
   limit?: number
 }): Promise<{ data: CommunicationLog[] | null; error: string | null }> {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -144,7 +128,7 @@ export async function getCommunicationTimeline(filters: {
         contacts:contact_id(first_name, last_name),
         users:user_id(full_name)
       `)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
 
     if (filters.customer_id) {
       query = query.eq("customer_id", filters.customer_id)
@@ -205,13 +189,11 @@ export async function logCommunicationFromWebhook(input: {
   occurred_at?: string
 }): Promise<{ data: CommunicationLog | null; error: string | null }> {
   const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const ctx = await getCachedAuthContext()
+  let company_id: string | null = ctx.companyId ?? null
 
-  // For webhooks, we might not have a user - use service role if available
-  let company_id: string | null = null
-
-  if (authError || !user) {
-    // Try to get company_id from customer_id or vendor_id
+  if (!company_id) {
+    // For webhooks, try to get company_id from customer_id or vendor_id
     if (input.customer_id) {
       const { data: customer } = await supabase
         .from("customers")
@@ -229,14 +211,7 @@ export async function logCommunicationFromWebhook(input: {
     }
 
     if (!company_id) {
-      return { error: "Could not determine company", data: null }
-    }
-  } else {
-    const result = await getCachedUserCompany(user.id)
-    company_id = result.company_id
-
-    if (!company_id) {
-      return { error: "No company found", data: null }
+      return { error: ctx.error || "Could not determine company", data: null }
     }
   }
 
@@ -270,7 +245,7 @@ export async function logCommunicationFromWebhook(input: {
         subject: input.subject || null,
         message: input.message || null,
         direction: input.direction,
-        user_id: user?.id || null,
+        user_id: ctx.userId ?? null,
         occurred_at: input.occurred_at || new Date().toISOString(),
         external_id: input.external_id,
         source: input.source,

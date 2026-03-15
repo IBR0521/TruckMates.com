@@ -1,28 +1,13 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 
-// Helper to get company ID
+// Helper to get company ID (uses cached auth)
 async function getCompanyId() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) return null
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return null
-  }
-
-  return userData?.company_id || null
+  const ctx = await getCachedAuthContext()
+  return ctx.companyId ?? null
 }
 
 // Revenue Report

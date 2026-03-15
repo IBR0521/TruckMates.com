@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 // Get all parts for company
 export async function getParts(filters?: {
@@ -13,24 +13,15 @@ export async function getParts(filters?: {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
-  }
 
   let query = supabase
     .from("parts")
     .select("*")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .order("name", { ascending: true })
 
   if (filters?.category) {
@@ -63,25 +54,16 @@ export async function getPart(id: string) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
-  }
 
   const { data, error } = await supabase
     .from("parts")
     .select("*")
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .maybeSingle()
 
   if (error) {
@@ -115,18 +97,9 @@ export async function createPart(formData: {
   notes?: string
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Validate required fields
@@ -138,7 +111,7 @@ export async function createPart(formData: {
   const { data: existing } = await supabase
     .from("parts")
     .select("id")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("part_number", formData.part_number)
     .single()
 
@@ -149,7 +122,7 @@ export async function createPart(formData: {
   const { data, error } = await supabase
     .from("parts")
     .insert({
-      company_id: result.company_id,
+      company_id: ctx.companyId,
       part_number: formData.part_number,
       name: formData.name,
       description: formData.description || null,
@@ -193,18 +166,9 @@ export async function updatePart(
   }
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Check if part exists and belongs to company
@@ -212,7 +176,7 @@ export async function updatePart(
     .from("parts")
     .select("id")
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!existing) {
@@ -224,7 +188,7 @@ export async function updatePart(
     const { data: duplicate } = await supabase
       .from("parts")
       .select("id")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("part_number", formData.part_number)
       .neq("id", id)
       .single()
@@ -255,7 +219,7 @@ export async function updatePart(
     .from("parts")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -270,25 +234,16 @@ export async function updatePart(
 // Delete part
 export async function deletePart(id: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { error } = await supabase
     .from("parts")
     .delete()
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message, data: null }
@@ -307,18 +262,9 @@ export async function recordPartUsage(formData: {
   notes?: string
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get part to verify it exists and get current quantity
@@ -326,7 +272,7 @@ export async function recordPartUsage(formData: {
     .from("parts")
     .select("quantity")
     .eq("id", formData.part_id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!part) {
@@ -342,7 +288,7 @@ export async function recordPartUsage(formData: {
   const { data: usage, error: usageError } = await supabase
     .from("part_usage")
     .insert({
-      company_id: result.company_id,
+      company_id: ctx.companyId,
       part_id: formData.part_id,
       maintenance_id: formData.maintenance_id || null,
       quantity_used: formData.quantity_used,
@@ -385,18 +331,9 @@ export async function createPartOrder(formData: {
   notes?: string
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get part to get supplier info
@@ -404,7 +341,7 @@ export async function createPartOrder(formData: {
     .from("parts")
     .select("supplier")
     .eq("id", formData.part_id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!part) {
@@ -416,7 +353,7 @@ export async function createPartOrder(formData: {
   const { data, error } = await supabase
     .from("part_orders")
     .insert({
-      company_id: result.company_id,
+      company_id: ctx.companyId,
       part_id: formData.part_id,
       quantity: formData.quantity,
       order_date: formData.order_date || new Date().toISOString().split("T")[0],
@@ -446,18 +383,9 @@ export async function updatePartOrderStatus(
   received_date?: string
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const updateData: any = {
@@ -498,7 +426,7 @@ export async function updatePartOrderStatus(
     .from("part_orders")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -513,24 +441,15 @@ export async function updatePartOrderStatus(
 // Get parts needing reorder (low stock)
 export async function getPartsNeedingReorder() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("parts")
     .select("*")
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .lte("quantity", supabase.raw("min_quantity"))
     .order("quantity", { ascending: true })
 

@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { sendSMSNotification } from "./sms"
 
 /**
@@ -136,20 +136,9 @@ export async function getMaintenanceAlertHistory(filters?: {
 }) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -160,7 +149,7 @@ export async function getMaintenanceAlertHistory(filters?: {
         trucks:truck_id (id, truck_number, make, model),
         users:sent_to (id, name, phone)
       `)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       // FIXED: Order by sent_at NULLS LAST to handle pending records with NULL sent_at
       .order("sent_at", { ascending: false, nullsFirst: false })
 

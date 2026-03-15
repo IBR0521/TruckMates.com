@@ -6,7 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { calculateRemainingHOS } from "./eld-advanced"
 
 export interface DriverHOSStatus {
@@ -34,20 +34,9 @@ export async function getAllDriversHOSStatus(): Promise<{
 }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -55,7 +44,7 @@ export async function getAllDriversHOSStatus(): Promise<{
     const { data: drivers, error: driversError } = await supabase
       .from("drivers")
       .select("id, name, status, truck_id")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .eq("status", "active")
 
     if (driversError) {

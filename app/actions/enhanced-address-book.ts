@@ -10,7 +10,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { geocodeAddress } from "./integrations-google-maps"
 import { analyzeDocument } from "./document-analysis"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
@@ -95,17 +95,9 @@ export async function createAddressBookEntry(
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { data: null, error: result.error || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   try {
@@ -172,7 +164,7 @@ export async function createAddressBookEntry(
     const { data, error } = await supabase
       .from("address_book")
       .insert({
-        company_id: result.company_id,
+        company_id: ctx.companyId,
         name: input.name,
         company_name: input.company_name,
         contact_name: input.contact_name,
@@ -195,7 +187,7 @@ export async function createAddressBookEntry(
         notes: input.notes,
         auto_create_geofence: input.auto_create_geofence || false,
         geofence_radius_meters: input.geofence_radius_meters || 500,
-        created_by: user.id,
+        created_by: ctx.userId ?? undefined,
       })
       .select(`
         id,
@@ -273,17 +265,9 @@ export async function getAddressBookEntries(filters?: {
 }): Promise<{ data: AddressBookEntry[]; error: string | null }> {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: [], error: "Not authenticated" }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { data: [], error: result.error || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: [], error: ctx.error || "Not authenticated" }
   }
 
   try {
@@ -326,7 +310,7 @@ export async function getAddressBookEntries(filters?: {
         last_used_at,
         usage_count
       `)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (filters?.category && filters.category !== "all") {
       query = query.eq("category", filters.category)
@@ -423,24 +407,16 @@ export async function findNearbyAddresses(
   error: string | null
 }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { data: null, error: result.error || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   try {
     // OPTIMIZED: Use the new RPC function that returns coordinates directly
     // This eliminates all coordinate extraction queries - single database call
     const { data, error } = await supabase.rpc("find_nearby_addresses_with_coords", {
-      p_company_id: result.company_id,
+      p_company_id: ctx.companyId,
       p_latitude: latitude,
       p_longitude: longitude,
       p_radius_km: options?.radius_km || 10.0,
@@ -477,17 +453,9 @@ export async function geocodeAddressBookEntry(
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { data: null, error: result.error || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   try {
@@ -530,7 +498,7 @@ export async function geocodeAddressBookEntry(
         usage_count
       `)
       .eq("id", entryId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (fetchError || !entry) {
@@ -552,7 +520,7 @@ export async function geocodeAddressBookEntry(
         .from("address_book")
         .update({ geocoding_status: "failed" })
         .eq("id", entryId)
-        .eq("company_id", result.company_id)
+        .eq("company_id", ctx.companyId)
 
       return { 
         data: null, 
@@ -568,7 +536,7 @@ export async function geocodeAddressBookEntry(
         .from("address_book")
         .update({ geocoding_status: "failed" })
         .eq("id", entryId)
-        .eq("company_id", result.company_id)
+        .eq("company_id", ctx.companyId)
 
       return { 
         data: null, 
@@ -584,7 +552,7 @@ export async function geocodeAddressBookEntry(
         .from("address_book")
         .update({ geocoding_status: "failed" })
         .eq("id", entryId)
-        .eq("company_id", result.company_id)
+        .eq("company_id", ctx.companyId)
 
       return { data: null, error: geocodeResult.error || "Failed to geocode address" }
     }
@@ -598,7 +566,7 @@ export async function geocodeAddressBookEntry(
         .from("address_book")
         .update({ geocoding_status: "failed" })
         .eq("id", entryId)
-        .eq("company_id", result.company_id)
+        .eq("company_id", ctx.companyId)
       
       return { 
         data: null, 
@@ -620,7 +588,7 @@ export async function geocodeAddressBookEntry(
         geocoded_at: new Date().toISOString(),
       })
       .eq("id", entryId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .select(`
         id,
         company_id,
@@ -763,17 +731,9 @@ export async function updateAddressBookEntry(
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { data: null, error: result.error || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   try {
@@ -812,7 +772,7 @@ export async function updateAddressBookEntry(
           zip_code
         `)
         .eq("id", entryId)
-        .eq("company_id", result.company_id)
+        .eq("company_id", ctx.companyId)
         .single()
 
       if (currentEntry) {
@@ -853,7 +813,7 @@ export async function updateAddressBookEntry(
       .from("address_book")
       .update(updateData)
       .eq("id", entryId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .select(`
         id,
         company_id,
@@ -930,17 +890,9 @@ export async function deleteAddressBookEntry(
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   try {
@@ -948,7 +900,7 @@ export async function deleteAddressBookEntry(
     const { data: referencedLoads } = await supabase
       .from("loads")
       .select("id, shipment_number")
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .or(`shipper_address_book_id.eq.${entryId},consignee_address_book_id.eq.${entryId}`)
       .not("status", "in", '("delivered","cancelled","completed")')
       .limit(1)
@@ -963,7 +915,7 @@ export async function deleteAddressBookEntry(
       .from("address_book")
       .delete()
       .eq("id", entryId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message }
@@ -980,17 +932,9 @@ export async function deleteAddressBookEntry(
  */
 export async function incrementAddressUsage(entryId: string): Promise<{ error: string | null }> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   try {
@@ -999,7 +943,7 @@ export async function incrementAddressUsage(entryId: string): Promise<{ error: s
       .from("address_book")
       .select("id")
       .eq("id", entryId)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (!entry) {
@@ -1008,7 +952,7 @@ export async function incrementAddressUsage(entryId: string): Promise<{ error: s
 
     const { error } = await supabase.rpc("increment_address_usage", {
       p_address_id: entryId,
-      p_company_id: result.company_id,
+      p_company_id: ctx.companyId,
     })
 
     if (error) {

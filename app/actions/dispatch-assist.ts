@@ -13,7 +13,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { findNearbyDriversForLoad, type NearbyDriver } from "./proximity-dispatching"
 import { checkAssignmentConflicts } from "./dispatch-timeline"
 import { calculateRemainingHOS } from "./eld-advanced"
@@ -67,20 +67,9 @@ export async function getOptimalDriverSuggestions(
 }> {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  const company_id = result.company_id
-
-  if (!company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -89,7 +78,7 @@ export async function getOptimalDriverSuggestions(
       .from("loads")
       .select("*")
       .eq("id", loadId)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (loadError || !load) {
@@ -136,7 +125,7 @@ export async function getOptimalDriverSuggestions(
     const { data: allDrivers } = await supabase
       .from("drivers")
       .select("id, name, status")
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .eq("status", "active")
 
     // Get driver performance scores if available
@@ -170,14 +159,14 @@ export async function getOptimalDriverSuggestions(
       .from("loads")
       .select("id, driver_id, load_date, estimated_delivery, origin, destination")
       .in("driver_id", driverIds)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .not("status", "in", '("delivered","cancelled","completed")')
     
     const { data: existingRoutes } = await supabase
       .from("routes")
       .select("id, driver_id, route_start_time, estimated_arrival, origin, destination")
       .in("driver_id", driverIds)
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .not("status", "in", '("completed","cancelled")')
     
     // Group assignments by driver_id
@@ -250,7 +239,7 @@ export async function getOptimalDriverSuggestions(
         .from("trucks")
         .select("id, carrier_type, make, model")
         .in("id", truckIds)
-        .eq("company_id", company_id)
+        .eq("company_id", ctx.companyId)
       
       const truckMap = new Map<string, any>()
       allTrucks?.forEach((truck: { id: string; carrier_type: string | null; make: string | null; model: string | null }) => truckMap.set(truck.id, truck))

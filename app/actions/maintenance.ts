@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { sanitizeString, validateRequiredString, validateDate, validatePositiveNumber } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
@@ -12,27 +13,9 @@ export async function getMaintenance(filters?: {
 }) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null, count: 0 }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null, count: 0 }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null, count: 0 }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null, count: 0 }
     }
 
     let query = supabase
@@ -41,7 +24,7 @@ export async function getMaintenance(filters?: {
         "id, company_id, truck_id, service_type, scheduled_date, completed_date, status, priority, estimated_cost, actual_cost, vendor, current_mileage, created_at",
         { count: "exact" },
       )
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     if (filters?.status) {
@@ -79,28 +62,10 @@ export async function createMaintenance(formData: {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
 
   // RBAC check
   const permissionCheck = await checkCreatePermission("maintenance")
@@ -113,7 +78,7 @@ export async function createMaintenance(formData: {
     .from("trucks")
     .select("id")
     .eq("id", formData.truck_id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (truckError || !truck) {
@@ -155,7 +120,7 @@ export async function createMaintenance(formData: {
   const { data, error } = await supabase
     .from("maintenance")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       truck_id: sanitizeString(formData.truck_id, 100),
       service_type: sanitizedServiceType,
       scheduled_date: formData.scheduled_date,
@@ -178,7 +143,7 @@ export async function createMaintenance(formData: {
     // Trigger webhook
     try {
       const { triggerWebhook } = await import("./webhooks")
-      await triggerWebhook(userData.company_id, "maintenance.scheduled", {
+      await triggerWebhook(ctx.companyId, "maintenance.scheduled", {
         maintenance_id: data.id,
       truck_id: formData.truck_id,
       service_type: formData.service_type,
@@ -198,26 +163,9 @@ export async function createMaintenance(formData: {
 export async function getMaintenanceById(id: string) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data: maintenance, error } = await supabase
@@ -234,7 +182,7 @@ export async function getMaintenanceById(id: string) {
       )
     `)
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (error) {
@@ -252,26 +200,9 @@ export async function updateMaintenanceStatus(
 ) {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // RBAC check
@@ -302,7 +233,7 @@ export async function updateMaintenanceStatus(
     .from("maintenance")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -318,27 +249,9 @@ export async function updateMaintenanceStatus(
 
 export async function deleteMaintenance(id: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data" }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   // RBAC check
@@ -351,7 +264,7 @@ export async function deleteMaintenance(id: string) {
     .from("maintenance")
     .delete()
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message }

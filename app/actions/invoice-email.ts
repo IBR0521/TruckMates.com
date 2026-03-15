@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { getCompanySettings } from "./number-formats"
 import { revalidatePath } from "next/cache"
 import { escapeHtml } from "@/lib/html-escape"
@@ -18,25 +19,17 @@ async function getResendClient() {
   // Check if integration is enabled for this company
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const ctx = await getCachedAuthContext()
+    if (ctx.companyId) {
+      const { data: integrations } = await supabase
+        .from("company_integrations")
+        .select("resend_enabled")
+        .eq("company_id", ctx.companyId)
+        .single()
 
-    if (user) {
-      const { getCachedUserCompany } = await import("@/lib/query-optimizer")
-      const result = await getCachedUserCompany(user.id)
-      
-      if (result.company_id) {
-        const { data: integrations } = await supabase
-          .from("company_integrations")
-          .select("resend_enabled")
-          .eq("company_id", result.company_id)
-          .single()
-
-        if (!integrations?.resend_enabled) {
-          console.log("[RESEND] Integration not enabled for company")
-          return null
-        }
+      if (!integrations?.resend_enabled) {
+        console.log("[RESEND] Integration not enabled for company")
+        return null
       }
     }
   } catch (error) {
@@ -69,28 +62,10 @@ export async function sendInvoiceEmail(
   }
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
-    }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
+  }
 
     // Check rate limit for Resend API
     try {
@@ -130,7 +105,7 @@ export async function sendInvoiceEmail(
       )
     `)
     .eq("id", invoiceId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (invoiceError || !invoice) {
@@ -145,7 +120,7 @@ export async function sendInvoiceEmail(
     const { data: company } = await supabase
       .from("companies")
       .select("name, email")
-      .eq("id", userData.company_id)
+      .eq("id", ctx.companyId)
       .maybeSingle()
 
     // Prepare email data
@@ -229,28 +204,16 @@ export async function sendInvoiceEmail(
 
     // Get from email (check env var, then database, then default)
     let fromEmail = process.env.RESEND_FROM_EMAIL
-    if (!fromEmail) {
+    if (!fromEmail && ctx.companyId) {
       try {
-        const supabase = await createClient()
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
+        const { data: integrations } = await supabase
+          .from("company_integrations")
+          .select("resend_from_email")
+          .eq("company_id", ctx.companyId)
+          .maybeSingle()
 
-        if (user) {
-          const { getCachedUserCompany } = await import("@/lib/query-optimizer")
-          const result = await getCachedUserCompany(user.id)
-          
-          if (result.company_id) {
-            const { data: integrations } = await supabase
-              .from("company_integrations")
-              .select("resend_from_email")
-              .eq("company_id", result.company_id)
-              .maybeSingle()
-
-            if (integrations?.resend_from_email) {
-              fromEmail = integrations.resend_from_email
-            }
-          }
+        if (integrations?.resend_from_email) {
+          fromEmail = integrations.resend_from_email
         }
       } catch (error) {
         // Silently fail - will use default
@@ -283,7 +246,7 @@ export async function sendInvoiceEmail(
       .from("invoices")
       .update({ status: "sent" })
       .eq("id", invoiceId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
 
     revalidatePath("/dashboard/accounting/invoices")
     revalidatePath(`/dashboard/accounting/invoices/${invoiceId}`)
