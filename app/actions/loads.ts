@@ -704,10 +704,13 @@ export async function createLoad(formData: {
   if (formData.width !== undefined && formData.width !== null) loadData.width = formData.width
   if (formData.height !== undefined && formData.height !== null) loadData.height = formData.height
   // Temperature: DB is numeric; accept range strings like "35-40" and store first number to avoid "invalid input syntax for type numeric"
-  if (formData.temperature !== undefined && formData.temperature !== null && formData.temperature !== "") {
+  if (formData.temperature !== undefined && formData.temperature !== null) {
     const t = formData.temperature
-    const num = typeof t === "number" ? t : parseFloat(String(t).trim().replace(/^(\d+(?:\.\d+)?).*/, "$1"))
-    loadData.temperature = !isNaN(num) ? num : undefined
+    const str = String(t).trim()
+    if (str !== "") {
+      const num = typeof t === "number" ? t : parseFloat(str.replace(/^(\d+(?:\.\d+)?).*/, "$1"))
+      loadData.temperature = !isNaN(num) ? num : undefined
+    }
   }
   if (formData.is_hazardous !== undefined) loadData.is_hazardous = formData.is_hazardous
   if (formData.is_oversized !== undefined) loadData.is_oversized = formData.is_oversized
@@ -1018,7 +1021,7 @@ export async function updateLoad(
   // Coerce temperature range strings (e.g. "35-40") to first number for numeric column
   (() => {
     const t = formData.temperature
-    if (t === undefined || t === null || t === "") {
+    if (t === undefined || t === null || (typeof t === "string" && t.trim() === "")) {
       updateField("temperature", null)
       return
     }
