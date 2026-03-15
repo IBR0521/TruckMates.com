@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkEditPermission } from "@/lib/server-permissions"
 
 /**
@@ -11,27 +12,9 @@ export async function getUnassignedLoads() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // SECURITY FIX: Use explicit column selection instead of select("*")
@@ -58,7 +41,7 @@ export async function getUnassignedLoads() {
         created_at,
         updated_at
       `)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .or("driver_id.is.null,truck_id.is.null")
       .not("status", "in", '("delivered","cancelled","completed")')
       .order("created_at", { ascending: false })
@@ -87,27 +70,9 @@ export async function getUnassignedRoutes() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // SECURITY FIX: Use explicit column selection instead of select("*")
@@ -129,7 +94,7 @@ export async function getUnassignedRoutes() {
         created_at,
         updated_at
       `)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .or("driver_id.is.null,truck_id.is.null")
       .not("status", "in", '("completed","cancelled")')
       .order("created_at", { ascending: false })
@@ -162,27 +127,9 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // ERROR HANDLING FIX: Use maybeSingle() when checking if record exists (might not exist)
@@ -191,7 +138,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
     .from("loads")
     .select("status, company_id")
     .eq("id", loadId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .maybeSingle()
 
   if (loadError) {
@@ -214,7 +161,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
       .from("drivers")
       .select("id")
       .eq("id", driverId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
     
     if (driverError) {
@@ -233,7 +180,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
       .from("trucks")
       .select("id")
       .eq("id", truckId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
     
     if (truckError) {
@@ -258,7 +205,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
     .from("loads")
     .update(updateData)
     .eq("id", loadId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select(`
       id,
       shipment_number,
@@ -296,7 +243,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
   if (driverId) {
     try {
       const { triggerWebhook } = await import("./webhooks")
-      await triggerWebhook(userData.company_id, "driver.assigned", {
+      await triggerWebhook(ctx.companyId, "driver.assigned", {
         load_id: loadId,
         driver_id: driverId,
         truck_id: truckId,
@@ -320,27 +267,9 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // ERROR HANDLING FIX: Use maybeSingle() when checking if record exists (might not exist)
@@ -349,7 +278,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
     .from("routes")
     .select("status, company_id")
     .eq("id", routeId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .maybeSingle()
 
   if (routeError) {
@@ -372,7 +301,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
       .from("drivers")
       .select("id")
       .eq("id", driverId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
     
     if (driverError) {
@@ -391,7 +320,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
       .from("trucks")
       .select("id")
       .eq("id", truckId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
     
     if (truckError) {
@@ -416,7 +345,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
     .from("routes")
     .update(updateData)
     .eq("id", routeId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select(`
       id,
       name,
@@ -454,7 +383,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
   if (driverId) {
     try {
       const { triggerWebhook } = await import("./webhooks")
-      await triggerWebhook(userData.company_id, "driver.assigned", {
+      await triggerWebhook(ctx.companyId, "driver.assigned", {
         route_id: routeId,
         driver_id: driverId,
         truck_id: truckId,

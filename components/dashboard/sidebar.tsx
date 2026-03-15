@@ -496,14 +496,14 @@ function NavItem({ href, icon: Icon, label, isSubitem, isCollapsed }: NavItemPro
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <Link href={href} aria-label={label}>{content}</Link>
+          <Link href={href} aria-label={label} prefetch={false}>{content}</Link>
         </TooltipTrigger>
         <TooltipContent side="right">{label}</TooltipContent>
       </Tooltip>
     )
   }
 
-  return <Link href={href} aria-label={isSubitem ? undefined : label}>{content}</Link>
+  return <Link href={href} aria-label={isSubitem ? undefined : label} prefetch={false}>{content}</Link>
 }
 
 interface DropdownItemProps {
@@ -521,7 +521,7 @@ function DropdownItem({ icon: Icon, label, href, isOpen, onToggle, children, isC
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <Link href={href}>
+          <Link href={href} prefetch={false}>
             <div className="w-full flex items-center justify-center px-2 py-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition font-medium">
               <Icon className="w-5 h-5" />
             </div>

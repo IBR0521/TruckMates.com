@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { sendNotification } from "./notifications"
 import { handleDbError } from "@/lib/db-helpers"
 
@@ -12,34 +13,16 @@ export async function getAlertRules() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
 
   // V3-007 FIX: Replace select(*) with explicit columns and add LIMIT
   const { data, error } = await supabase
     .from("alert_rules")
     .select("id, name, description, event_type, conditions, send_email, send_sms, send_in_app, notify_users, escalation_enabled, escalation_delay_minutes, priority, is_active, created_at, updated_at")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .order("created_at", { ascending: false })
     .limit(1000)
 
@@ -75,23 +58,9 @@ export async function createAlertRule(formData: {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData } = await supabase
-      .from("users")
-      .select("company_id, role")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { getUserRole } = await import("@/lib/server-permissions")
@@ -104,7 +73,7 @@ export async function createAlertRule(formData: {
     const { data, error } = await supabase
       .from("alert_rules")
       .insert({
-        company_id: userData.company_id,
+        company_id: ctx.companyId,
         name: formData.name,
         description: formData.description || null,
         event_type: formData.event_type,
@@ -170,23 +139,10 @@ export async function updateAlertRule(
       return { error: "Invalid rule ID", data: null }
     }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
 
   const { getUserRole } = await import("@/lib/server-permissions")
   const role = await getUserRole()
@@ -200,7 +156,7 @@ export async function updateAlertRule(
     .from("alert_rules")
     .select("id, company_id")
     .eq("id", ruleId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!existingRule) {
@@ -231,7 +187,7 @@ export async function updateAlertRule(
     .from("alert_rules")
     .update(updateData)
     .eq("id", ruleId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -260,23 +216,10 @@ export async function deleteAlertRule(ruleId: string) {
       return { error: "Invalid rule ID", data: null }
     }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
 
   const { getUserRole } = await import("@/lib/server-permissions")
   const role = await getUserRole()
@@ -290,7 +233,7 @@ export async function deleteAlertRule(ruleId: string) {
     .from("alert_rules")
     .select("id, company_id")
     .eq("id", ruleId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!existingRule) {
@@ -301,7 +244,7 @@ export async function deleteAlertRule(ruleId: string) {
     .from("alert_rules")
     .delete()
     .eq("id", ruleId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message, data: null }
@@ -322,31 +265,17 @@ export async function getAlertCounts() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
 
   // Use efficient COUNT queries instead of fetching all records
   const [activeResult, criticalResult, acknowledgedResult, resolvedResult] = await Promise.all([
-    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", userData.company_id).eq("status", "active"),
-    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", userData.company_id).eq("status", "active").eq("priority", "critical"),
-    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", userData.company_id).eq("status", "acknowledged"),
-    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", userData.company_id).eq("status", "resolved"),
+    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", ctx.companyId).eq("status", "active"),
+    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", ctx.companyId).eq("status", "active").eq("priority", "critical"),
+    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", ctx.companyId).eq("status", "acknowledged"),
+    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", ctx.companyId).eq("status", "resolved"),
   ])
 
   return {
@@ -385,35 +314,25 @@ export async function getAlerts(filters?: {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id, role, driver_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
+    // Fetch role and driver_id for filtering (auth already cached above)
+    const { data: userRow } = await supabase.from("users").select("role, driver_id").eq("id", ctx.userId!).single()
+    const userRole = userRow?.role || "driver"
+    const driverId = userRow?.driver_id
 
   // V3-007 FIX: Replace select(*) with explicit columns
   let query = supabase
     .from("alerts")
     .select("id, alert_rule_id, title, message, event_type, priority, status, load_id, route_id, driver_id, truck_id, metadata, escalated, escalation_level, escalated_at, acknowledged_by, acknowledged_at, resolved_by, resolved_at, created_at, updated_at")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .order("created_at", { ascending: false })
 
   // Role-based filtering (if enabled)
   if (filters?.role_filter !== false) {
-    const userRole = userData.role || "driver"
     
     // Define role-based event type filters
     const roleEventTypes: Record<string, string[]> = {
@@ -433,8 +352,8 @@ export async function getAlerts(filters?: {
     }
     
     // Drivers only see alerts for their assigned loads/routes
-    if (userRole === "driver" && userData.driver_id) {
-      query = query.or(`driver_id.eq.${userData.driver_id},driver_id.is.null`)
+    if (userRole === "driver" && driverId) {
+      query = query.or(`driver_id.eq.${driverId},driver_id.is.null`)
     }
   }
 
@@ -496,26 +415,9 @@ export async function createAlert(formData: {
       return { error: "Event type is required", data: null }
     }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get alert rule if provided
@@ -526,7 +428,7 @@ export async function createAlert(formData: {
       .from("alert_rules")
       .select("id, name, description, event_type, conditions, send_email, send_sms, send_in_app, notify_users, escalation_enabled, escalation_delay_minutes, priority, is_active")
       .eq("id", formData.alert_rule_id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
     alertRule = rule
   }
@@ -535,7 +437,7 @@ export async function createAlert(formData: {
   const { data: alert, error: alertError } = await supabase
     .from("alerts")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       alert_rule_id: formData.alert_rule_id || null,
       title: formData.title,
       message: formData.message,
@@ -567,7 +469,7 @@ export async function createAlert(formData: {
       const { data: companyUsers } = await supabase
         .from("users")
         .select("id, role")
-        .eq("company_id", userData.company_id)
+        .eq("company_id", ctx.companyId)
       
       if (companyUsers) {
         // Filter by role-based event type visibility
@@ -873,37 +775,20 @@ export async function acknowledgeAlert(id: string) {
       return { error: "Invalid alert ID", data: null }
     }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("alerts")
     .update({
       status: 'acknowledged',
-      acknowledged_by: user.id,
+      acknowledged_by: ctx.userId!,
       acknowledged_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -932,37 +817,20 @@ export async function resolveAlert(id: string) {
       return { error: "Invalid alert ID", data: null }
     }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("alerts")
     .update({
       status: 'resolved',
-      resolved_by: user.id, // FIXED: Record who resolved the alert
+      resolved_by: ctx.userId!, // FIXED: Record who resolved the alert
       resolved_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 

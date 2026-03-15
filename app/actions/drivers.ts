@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateDriverData, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
@@ -20,31 +20,16 @@ export async function getDrivers(filters?: {
     }
 
     const supabase = await createClient()
-
-    // Get current user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return { error: "Not authenticated", data: null, count: 0 }
-    }
-
-    // Use optimized helper with caching
-    const result = await getCachedUserCompany(user.id)
-    const company_id = result.company_id
-    const companyError = result.error
-
-    if (companyError || !company_id) {
-      return { error: companyError || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null, count: 0 }
     }
 
     // Build query with selective columns and pagination
     let query = supabase
       .from("drivers")
       .select("id, name, email, phone, status, license_number, license_expiry, truck_id, created_at", { count: "exact" })
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     // Apply filters
@@ -74,18 +59,9 @@ export async function getDriver(id: string) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const result = await getCachedUserCompany(user.id)
-    if (result.error || !result.company_id) {
-      return { error: result.error || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // SECURITY FIX: Use explicit column selection instead of select("*")
@@ -123,7 +99,7 @@ export async function getDriver(id: string) {
         updated_at
       `)
       .eq("id", id)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (error) {
@@ -140,7 +116,7 @@ export async function getDriver(id: string) {
         .from("trucks")
         .select("id, truck_number, make, model")
         .eq("id", driver.truck_id)
-        .eq("company_id", result.company_id)
+        .eq("company_id", ctx.companyId)
         .maybeSingle()
       
       // Add truck data to driver object
@@ -173,28 +149,9 @@ export async function createDriver(formData: {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // BUG-061 FIX: Check subscription plan limits before creating driver
@@ -204,7 +161,7 @@ export async function createDriver(formData: {
       plan_id,
       subscription_plans!inner(max_drivers)
     `)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("status", "active")
     .single()
 
@@ -213,7 +170,7 @@ export async function createDriver(formData: {
     const { count: currentDriverCount } = await supabase
       .from("drivers")
       .select("*", { count: "exact", head: true })
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("status", "active")
 
     if (currentDriverCount !== null && currentDriverCount >= subscription.subscription_plans.max_drivers) {
@@ -257,7 +214,7 @@ export async function createDriver(formData: {
     const { data: existingDriver, error: emailCheckError } = await supabase
       .from("drivers")
       .select("id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("email", sanitizeEmail(formData.email))
       .maybeSingle()
 
@@ -277,7 +234,7 @@ export async function createDriver(formData: {
     const { data: existingLicense, error: licenseCheckError } = await supabase
       .from("drivers")
       .select("id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("license_number", sanitizeString(formData.license_number, 20).toUpperCase())
       .maybeSingle()
 
@@ -298,7 +255,7 @@ export async function createDriver(formData: {
       .from("trucks")
       .select("id, status, company_id, current_driver_id")
       .eq("id", formData.truck_id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (truckError) {
@@ -317,7 +274,7 @@ export async function createDriver(formData: {
   // Build insert data with professional sanitization
   // Include all extended fields from the drivers table schema
   const driverData: any = {
-    company_id: userData.company_id,
+    company_id: ctx.companyId,
     name: sanitizeString(formData.name, 100),
     status: formData.status || "active",
   }
@@ -414,17 +371,9 @@ export async function updateDriver(
 
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // ERROR HANDLING FIX: Use maybeSingle() when checking if record exists (might not exist)
@@ -464,7 +413,7 @@ export async function updateDriver(
       updated_at
     `)
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .maybeSingle()
 
   if (fetchError) {
@@ -551,7 +500,7 @@ export async function updateDriver(
     .from("drivers")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .select(`
       id,
       company_id,
@@ -595,7 +544,7 @@ export async function updateDriver(
       .from("trucks")
       .select("id, truck_number, make, model")
       .eq("id", data.truck_id)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
     
     // Add truck data to driver object
@@ -679,24 +628,15 @@ export async function deleteDriver(id: string) {
     }
 
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated" }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated" }
     }
 
     // Basic UUID validation
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!id || !uuidRegex.test(id)) {
       return { error: "Invalid driver ID format" }
-    }
-
-    const result = await getCachedUserCompany(user.id)
-    if (result.error || !result.company_id) {
-      return { error: result.error || "No company found" }
     }
 
     // BUG-024 FIX: Check for dependencies before deleting driver
@@ -744,7 +684,7 @@ export async function deleteDriver(id: string) {
       .from("drivers")
       .delete()
       .eq("id", id)
-      .eq("company_id", result.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message }
@@ -761,27 +701,9 @@ export async function deleteDriver(id: string) {
 // Bulk operations for workflow optimization
 export async function bulkDeleteDrivers(ids: string[]) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // DAT-004 FIX: Check for active assignments before bulk delete
@@ -791,7 +713,7 @@ export async function bulkDeleteDrivers(ids: string[]) {
     .select("id, driver_id, shipment_number, status")
     .in("driver_id", ids)
     .in("status", ["scheduled", "in_transit"])
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (activeLoads && activeLoads.length > 0) {
     const blockedDriverIds = [...new Set(activeLoads.map((load: { id: string; driver_id: string | null; shipment_number: string | null; status: string }) => load.driver_id))]
@@ -799,7 +721,7 @@ export async function bulkDeleteDrivers(ids: string[]) {
       .from("drivers")
       .select("id, name")
       .in("id", blockedDriverIds)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (blockedDrivers.data && blockedDrivers.data.length > 0) {
       const driverNames = blockedDrivers.data.map((d: { id: string; name: string | null }) => d.name).join(", ")
@@ -814,7 +736,7 @@ export async function bulkDeleteDrivers(ids: string[]) {
     .from("drivers")
     .delete()
     .in("id", ids)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message, data: null }
@@ -838,34 +760,16 @@ export async function bulkUpdateDriverStatus(ids: string[], status: string) {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { error } = await supabase
     .from("drivers")
     .update({ status })
     .in("id", ids)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message, data: null }

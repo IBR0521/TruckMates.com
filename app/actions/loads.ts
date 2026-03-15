@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { createRoute } from "./routes"
 import { sendNotification } from "./notifications"
@@ -82,34 +82,16 @@ export async function getLoads(filters?: {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError) {
-      console.error("[getLoads] Auth error:", authError)
-      return { error: "Authentication failed. Please try logging in again.", data: null, count: 0 }
-    }
-
-    if (!user) {
-      return { error: "Not authenticated", data: null, count: 0 }
-    }
-
-    // Use optimized helper with caching
-    const result = await getCachedUserCompany(user.id)
-    const company_id = result.company_id
-    const companyError = result.error
-
-    if (companyError || !company_id) {
-      return { error: companyError || "No company found", data: null, count: 0 }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null, count: 0 }
     }
 
     // Build query with pagination
     let query = supabase
       .from("loads")
       .select("id, shipment_number, origin, destination, status, driver_id, truck_id, load_date, estimated_delivery, created_at, company_name, value", { count: "exact" })
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     // Apply filters
@@ -145,35 +127,16 @@ export async function getLoad(id: string) {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    // ERR-004 FIX: Use maybeSingle() to handle missing user records gracefully
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      console.error("[getLoad] Error fetching user:", userError)
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { data: load, error } = await supabase
       .from("loads")
       .select("*")
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (error) {
@@ -1274,18 +1237,9 @@ export async function deleteLoad(id: string) {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   // DAT-003 FIX: Prevent deletion of active in-transit loads
@@ -1294,7 +1248,7 @@ export async function deleteLoad(id: string) {
     .from("loads")
     .select("status, shipment_number")
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .maybeSingle()
 
   if (loadError) {
@@ -1324,7 +1278,7 @@ export async function deleteLoad(id: string) {
     .from("loads")
     .delete()
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message }

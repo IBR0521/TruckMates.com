@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateRequiredString, sanitizeString } from "@/lib/validation"
 import { sendNotification } from "./notifications"
@@ -76,28 +76,16 @@ export async function getRoutes(filters?: {
   try {
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    // Use optimized helper with caching
-    const result = await getCachedUserCompany(user.id)
-    const company_id = result.company_id
-    const companyError = result.error
-
-    if (companyError || !company_id) {
-      return { error: companyError || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Build query with selective columns and pagination
     let query = supabase
       .from("routes")
       .select("id, name, origin, destination, status, driver_id, truck_id, priority, created_at, updated_at", { count: "exact" })
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     // Apply filters
@@ -344,18 +332,9 @@ export async function updateRoute(
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get current route data for audit trail (with company_id verification)
@@ -363,7 +342,7 @@ export async function updateRoute(
     .from("routes")
     .select("*")
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!currentRoute) {
@@ -413,7 +392,7 @@ export async function updateRoute(
     .from("routes")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 

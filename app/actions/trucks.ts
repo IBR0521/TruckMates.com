@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateTruckData, sanitizeString } from "@/lib/validation"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
@@ -14,29 +14,16 @@ export async function getTrucks(filters?: {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    // Use optimized helper with caching
-    const result = await getCachedUserCompany(user.id)
-    const company_id = result.company_id
-    const companyError = result.error
-
-    if (companyError || !company_id) {
-      return { error: companyError || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Build query with selective columns and pagination
     let query = supabase
       .from("trucks")
       .select("id, truck_number, make, model, year, status, current_driver_id, mileage, fuel_level, created_at", { count: "exact" })
-      .eq("company_id", company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     // Apply filters
@@ -66,34 +53,16 @@ export async function getTruck(id: string) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { data: truck, error } = await supabase
       .from("trucks")
       .select("*")
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (error) {
@@ -145,27 +114,9 @@ export async function createTruck(formData: {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // BUG-061 FIX: Check subscription plan limits before creating truck
@@ -175,7 +126,7 @@ export async function createTruck(formData: {
       plan_id,
       subscription_plans!inner(max_vehicles)
     `)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("status", "active")
     .single()
 
@@ -184,7 +135,7 @@ export async function createTruck(formData: {
     const { count: currentTruckCount } = await supabase
       .from("trucks")
       .select("*", { count: "exact", head: true })
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("status", "active")
 
     if (currentTruckCount !== null && currentTruckCount >= subscription.subscription_plans.max_vehicles) {
@@ -212,7 +163,7 @@ export async function createTruck(formData: {
   const { data: existingTruck } = await supabase
     .from("trucks")
     .select("id")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("truck_number", sanitizeString(formData.truck_number, 50).toUpperCase())
     .single()
 
@@ -225,7 +176,7 @@ export async function createTruck(formData: {
     const { data: existingVIN } = await supabase
       .from("trucks")
       .select("id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("vin", sanitizeString(formData.vin, 17).toUpperCase())
       .single()
 
@@ -239,7 +190,7 @@ export async function createTruck(formData: {
     const { data: existingPlate } = await supabase
       .from("trucks")
       .select("id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("license_plate", sanitizeString(formData.license_plate, 20).toUpperCase())
       .single()
 
@@ -254,7 +205,7 @@ export async function createTruck(formData: {
       .from("drivers")
       .select("id, status, company_id, truck_id")
       .eq("id", formData.current_driver_id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (driverError || !driver) {
@@ -272,7 +223,7 @@ export async function createTruck(formData: {
 
   // Build insert data with professional sanitization
   const truckData: any = {
-    company_id: userData.company_id,
+    company_id: ctx.companyId,
     truck_number: sanitizeString(formData.truck_number, 50).toUpperCase(),
     status: formData.status || "available",
   }
@@ -369,18 +320,9 @@ export async function updateTruck(
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const result = await getCachedUserCompany(user.id)
-  if (result.error || !result.company_id) {
-    return { error: result.error || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get current truck data for audit trail (with company_id verification)
@@ -388,7 +330,7 @@ export async function updateTruck(
     .from("trucks")
     .select("*")
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!currentTruck) {
@@ -437,7 +379,7 @@ export async function updateTruck(
     .from("trucks")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", result.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -512,12 +454,9 @@ export async function deleteTruck(id: string) {
 
     const supabase = await createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated" }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated" }
     }
 
     // Basic UUID validation
@@ -526,26 +465,12 @@ export async function deleteTruck(id: string) {
       return { error: "Invalid truck ID format" }
     }
 
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data" }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found" }
-    }
-
     // Dependency checks mirroring bulkDeleteTrucks safeguards
     const { data: truck } = await supabase
       .from("trucks")
       .select("id, truck_number, status")
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (!truck) {
@@ -563,7 +488,7 @@ export async function deleteTruck(id: string) {
       .select("id, shipment_number, status")
       .eq("truck_id", id)
       .in("status", ["scheduled", "in_transit"])
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (activeLoads && activeLoads.length > 0) {
       const loadNumbers = activeLoads.map((l: { shipment_number: string | null }) => l.shipment_number).join(", ")
@@ -576,7 +501,7 @@ export async function deleteTruck(id: string) {
       .from("trucks")
       .delete()
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message }
@@ -599,27 +524,9 @@ export async function bulkDeleteTrucks(ids: string[]) {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // DAT-004 FIX: Check for active assignments before bulk delete
@@ -628,7 +535,7 @@ export async function bulkDeleteTrucks(ids: string[]) {
     .from("trucks")
     .select("id, truck_number, status")
     .in("id", ids)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (trucksToDelete) {
     const inUseTrucks = trucksToDelete.filter((t: { status: string; [key: string]: any }) => t.status === "in_use")
@@ -647,7 +554,7 @@ export async function bulkDeleteTrucks(ids: string[]) {
     .select("id, truck_id, shipment_number, status")
     .in("truck_id", ids)
     .in("status", ["scheduled", "in_transit"])
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (activeLoads && activeLoads.length > 0) {
     const blockedTruckIds = [...new Set(activeLoads.map((load: { truck_id: string | null; [key: string]: any }) => load.truck_id))]
@@ -655,7 +562,7 @@ export async function bulkDeleteTrucks(ids: string[]) {
       .from("trucks")
       .select("id, truck_number")
       .in("id", blockedTruckIds)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (blockedTrucks.data && blockedTrucks.data.length > 0) {
       const truckNumbers = blockedTrucks.data.map((t: { truck_number: string; [key: string]: any }) => t.truck_number).join(", ")
@@ -670,7 +577,7 @@ export async function bulkDeleteTrucks(ids: string[]) {
     .from("trucks")
     .delete()
     .in("id", ids)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message, data: null }
@@ -694,34 +601,16 @@ export async function bulkUpdateTruckStatus(ids: string[], status: string) {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { error } = await supabase
     .from("trucks")
     .update({ status })
     .in("id", ids)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message, data: null }
