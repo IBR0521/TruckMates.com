@@ -214,7 +214,7 @@ export async function upsertIFTATaxRate(formData: {
           effective_date: formData.effective_date,
           end_date: formData.end_date || null,
           notes: formData.notes || null,
-          created_by: user.id,
+          created_by: ctx.userId ?? undefined,
         },
         {
           onConflict: "company_id,state_code,quarter,year",
