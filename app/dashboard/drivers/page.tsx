@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
 import { exportToExcel } from "@/lib/export-utils"
 import { toast } from "sonner"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useDebounce } from "@/lib/hooks/use-debounce"
 import {
   AlertDialog,
@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useRouter } from "next/navigation"
 import { getDrivers, deleteDriver, bulkDeleteDrivers, bulkUpdateDriverStatus, updateDriver } from "@/app/actions/drivers"
+import { importDriversFromCsv } from "@/app/actions/import-drivers"
 import { AccessGuard } from "@/components/access-guard"
 import { InlineEdit } from "@/components/dashboard/inline-edit"
 import { DefensiveDelete } from "@/components/dashboard/defensive-delete"
@@ -48,6 +49,34 @@ function DriversPageContent() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isBulkMode, setIsBulkMode] = useState(false)
   const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
+  const [isImporting, setIsImporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const handleImportCsv = async (file: File | null) => {
+    if (!file) return
+    setIsImporting(true)
+    try {
+      const text = await file.text()
+      const result = await importDriversFromCsv(text)
+
+      if (result.inserted > 0) {
+        toast.success(`Imported ${result.inserted} driver${result.inserted === 1 ? "" : "s"}`)
+      }
+
+      if (result.errors.length > 0) {
+        const firstError = result.errors[0]
+        toast.error("Some rows failed to import", {
+          description: `First error (row ${firstError.rowNumber}): ${firstError.message}`,
+        })
+      }
+
+      await loadDrivers()
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to import drivers")
+    } finally {
+      setIsImporting(false)
+    }
+  }
 
   const loadDrivers = async () => {
     setIsLoading(true)
@@ -288,6 +317,28 @@ function DriversPageContent() {
               Leaderboard
             </Button>
           </Link>
+          <div className="inline-flex items-center">
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              disabled={isImporting}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {isImporting ? "Importing..." : "Import CSV"}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null
+                void handleImportCsv(file)
+                e.target.value = ""
+              }}
+            />
+          </div>
           {isBulkMode && selectedIds.size > 0 && (
             <>
               <DropdownMenu>

@@ -61,10 +61,14 @@ export default function FleetMapPage() {
   const [geofenceFormData, setGeofenceFormData] = useState({
     name: "",
     description: "",
-    zone_type: "circle" as "circle" | "polygon",
+    zone_type: "circle" as "circle" | "polygon" | "rectangle",
     center_latitude: "",
     center_longitude: "",
     radius_meters: "",
+    north_bound: "",
+    south_bound: "",
+    east_bound: "",
+    west_bound: "",
     is_active: true,
     alert_on_entry: true,
     alert_on_exit: true,
@@ -494,6 +498,11 @@ export default function FleetMapPage() {
                   toast.error("Please draw a circle on the map or enter coordinates and radius")
                   return
                 }
+              } else if (geofenceFormData.zone_type === "rectangle") {
+                if (!geofenceFormData.north_bound || !geofenceFormData.south_bound || !geofenceFormData.east_bound || !geofenceFormData.west_bound) {
+                  toast.error("Please draw a rectangle on the map or enter all bounds")
+                  return
+                }
               } else if (geofenceFormData.zone_type === "polygon") {
                 // Polygon coordinates will be set from the drawn shape
                 if (!drawnShapeRef.current) {
@@ -521,6 +530,10 @@ export default function FleetMapPage() {
                 center_longitude: geofenceFormData.center_longitude ? parseFloat(geofenceFormData.center_longitude) : undefined,
                 radius_meters: geofenceFormData.radius_meters ? parseInt(geofenceFormData.radius_meters) : undefined,
                 polygon_coordinates: polygonCoordinates,
+                north_bound: geofenceFormData.north_bound ? parseFloat(geofenceFormData.north_bound) : undefined,
+                south_bound: geofenceFormData.south_bound ? parseFloat(geofenceFormData.south_bound) : undefined,
+                east_bound: geofenceFormData.east_bound ? parseFloat(geofenceFormData.east_bound) : undefined,
+                west_bound: geofenceFormData.west_bound ? parseFloat(geofenceFormData.west_bound) : undefined,
                 is_active: geofenceFormData.is_active,
                 alert_on_entry: geofenceFormData.alert_on_entry,
                 alert_on_exit: geofenceFormData.alert_on_exit,
@@ -549,6 +562,10 @@ export default function FleetMapPage() {
                   center_latitude: "",
                   center_longitude: "",
                   radius_meters: "",
+                  north_bound: "",
+                  south_bound: "",
+                  east_bound: "",
+                  west_bound: "",
                   is_active: true,
                   alert_on_entry: true,
                   alert_on_exit: true,
@@ -591,7 +608,7 @@ export default function FleetMapPage() {
                 <Select
                   value={geofenceFormData.zone_type}
                   onValueChange={(value) => {
-                    setGeofenceFormData({ ...geofenceFormData, zone_type: value as "circle" | "polygon" })
+                    setGeofenceFormData({ ...geofenceFormData, zone_type: value as "circle" | "polygon" | "rectangle" })
                     // Clear drawn shape when changing type
                     if (drawnShapeRef.current) {
                       drawnShapeRef.current.setMap(null)
@@ -607,6 +624,7 @@ export default function FleetMapPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="circle">Circle</SelectItem>
+                    <SelectItem value="rectangle">Rectangle</SelectItem>
                     <SelectItem value="polygon">Polygon</SelectItem>
                   </SelectContent>
                 </Select>
@@ -645,6 +663,19 @@ export default function FleetMapPage() {
                   </Button>
                   <Button
                     type="button"
+                    variant={geofenceFormData.zone_type === "rectangle" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setGeofenceFormData({ ...geofenceFormData, zone_type: "rectangle" })
+                      if (drawingManagerRef.current && mapInstanceRef.current) {
+                        drawingManagerRef.current.setDrawingMode(window.google.maps.drawing.OverlayType.RECTANGLE)
+                      }
+                    }}
+                  >
+                    Draw Rectangle
+                  </Button>
+                  <Button
+                    type="button"
                     variant={geofenceFormData.zone_type === "polygon" ? "default" : "outline"}
                     size="sm"
                     onClick={() => {
@@ -673,6 +704,10 @@ export default function FleetMapPage() {
                         center_latitude: "",
                         center_longitude: "",
                         radius_meters: "",
+                        north_bound: "",
+                        south_bound: "",
+                        east_bound: "",
+                        west_bound: "",
                       })
                     }}
                   >
@@ -687,14 +722,35 @@ export default function FleetMapPage() {
                     drawingManagerRef={drawingManagerRef}
                     drawnShapeRef={drawnShapeRef}
                     zoneType={geofenceFormData.zone_type}
-                    onShapeComplete={(shape: any, center?: { lat: number; lng: number }, radius?: number) => {
+                    onShapeComplete={(
+                      shape: any,
+                      payload?:
+                        | { kind: "circle"; center: { lat: number; lng: number }; radius: number }
+                        | { kind: "rectangle"; bounds: { north: number; south: number; east: number; west: number } }
+                        | { kind: "polygon" }
+                    ) => {
                       drawnShapeRef.current = shape
-                      if (center && radius) {
+                      if (payload?.kind === "circle") {
                         setGeofenceFormData({
                           ...geofenceFormData,
-                          center_latitude: center.lat.toString(),
-                          center_longitude: center.lng.toString(),
-                          radius_meters: radius.toString(),
+                          center_latitude: payload.center.lat.toString(),
+                          center_longitude: payload.center.lng.toString(),
+                          radius_meters: payload.radius.toString(),
+                          north_bound: "",
+                          south_bound: "",
+                          east_bound: "",
+                          west_bound: "",
+                        })
+                      } else if (payload?.kind === "rectangle") {
+                        setGeofenceFormData({
+                          ...geofenceFormData,
+                          center_latitude: "",
+                          center_longitude: "",
+                          radius_meters: "",
+                          north_bound: payload.bounds.north.toString(),
+                          south_bound: payload.bounds.south.toString(),
+                          east_bound: payload.bounds.east.toString(),
+                          west_bound: payload.bounds.west.toString(),
                         })
                       }
                     }}
@@ -746,6 +802,59 @@ export default function FleetMapPage() {
                     )}
                   </div>
                 </div>
+            )}
+
+            {geofenceFormData.zone_type === "rectangle" && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="north_bound">North Bound</Label>
+                  <Input
+                    id="north_bound"
+                    type="number"
+                    step="any"
+                    value={geofenceFormData.north_bound}
+                    onChange={(e) => setGeofenceFormData({ ...geofenceFormData, north_bound: e.target.value })}
+                    placeholder="37.80"
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="south_bound">South Bound</Label>
+                  <Input
+                    id="south_bound"
+                    type="number"
+                    step="any"
+                    value={geofenceFormData.south_bound}
+                    onChange={(e) => setGeofenceFormData({ ...geofenceFormData, south_bound: e.target.value })}
+                    placeholder="37.70"
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="east_bound">East Bound</Label>
+                  <Input
+                    id="east_bound"
+                    type="number"
+                    step="any"
+                    value={geofenceFormData.east_bound}
+                    onChange={(e) => setGeofenceFormData({ ...geofenceFormData, east_bound: e.target.value })}
+                    placeholder="-122.35"
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="west_bound">West Bound</Label>
+                  <Input
+                    id="west_bound"
+                    type="number"
+                    step="any"
+                    value={geofenceFormData.west_bound}
+                    onChange={(e) => setGeofenceFormData({ ...geofenceFormData, west_bound: e.target.value })}
+                    placeholder="-122.52"
+                    className="mt-2"
+                  />
+                </div>
+              </div>
             )}
 
             <div className="grid grid-cols-2 gap-4">
@@ -952,8 +1061,14 @@ function GeofenceDrawingMap({
   mapInstanceRef: React.MutableRefObject<any>
   drawingManagerRef: React.MutableRefObject<any>
   drawnShapeRef: React.MutableRefObject<any>
-  zoneType: "circle" | "polygon"
-  onShapeComplete: (shape: any, center?: { lat: number; lng: number }, radius?: number) => void
+  zoneType: "circle" | "polygon" | "rectangle"
+  onShapeComplete: (
+    shape: any,
+    payload?:
+      | { kind: "circle"; center: { lat: number; lng: number }; radius: number }
+      | { kind: "rectangle"; bounds: { north: number; south: number; east: number; west: number } }
+      | { kind: "polygon" }
+  ) => void
 }) {
   const localMapInstanceRef = useRef<any>(null)
   
@@ -996,6 +1111,15 @@ function GeofenceDrawingMap({
           editable: true,
           zIndex: 1,
         },
+        rectangleOptions: {
+          fillColor: "#3b82f6",
+          fillOpacity: 0.15,
+          strokeColor: "#3b82f6",
+          strokeWeight: 2,
+          clickable: false,
+          editable: true,
+          zIndex: 1,
+        },
         polygonOptions: {
           fillColor: "#3b82f6",
           fillOpacity: 0.15,
@@ -1013,34 +1137,52 @@ function GeofenceDrawingMap({
       drawingManager.addListener("circlecomplete", (circle: any) => {
         const center = circle.getCenter()
         const radius = circle.getRadius()
-        onShapeComplete(circle, { lat: center.lat(), lng: center.lng() }, radius)
+        onShapeComplete(circle, { kind: "circle", center: { lat: center.lat(), lng: center.lng() }, radius })
+        drawingManager.setDrawingMode(null)
+      })
+
+      drawingManager.addListener("rectanglecomplete", (rectangle: any) => {
+        const bounds = rectangle.getBounds()
+        const ne = bounds.getNorthEast()
+        const sw = bounds.getSouthWest()
+        onShapeComplete(rectangle, {
+          kind: "rectangle",
+          bounds: {
+            north: ne.lat(),
+            east: ne.lng(),
+            south: sw.lat(),
+            west: sw.lng(),
+          },
+        })
         drawingManager.setDrawingMode(null)
       })
 
       drawingManager.addListener("polygoncomplete", (polygon: any) => {
-        onShapeComplete(polygon)
+        onShapeComplete(polygon, { kind: "polygon" })
         drawingManager.setDrawingMode(null)
       })
     }
-    
-    // Cleanup: restore parent mapInstanceRef when dialog closes
-    return () => {
-      if (localMapInstanceRef.current && mapInstanceRef.current === localMapInstanceRef.current) {
-        mapInstanceRef.current = null
-      }
-      localMapInstanceRef.current = null
-    }
+
+    let checkInterval: any = null
+    let waitForScript: any = null
 
     // If Google Maps is already loaded, initialize immediately
     if (window.google && window.google.maps) {
       setTimeout(initMap, 300)
-      return
+      return () => {
+        if (checkInterval) clearInterval(checkInterval)
+        if (waitForScript) clearInterval(waitForScript)
+        if (localMapInstanceRef.current && mapInstanceRef.current === localMapInstanceRef.current) {
+          mapInstanceRef.current = null
+        }
+        localMapInstanceRef.current = null
+      }
     }
 
     // Check if script is already being loaded
     if (document.querySelector(`script[src*="maps.googleapis.com"]`)) {
       // Wait for it to load
-      const checkInterval = setInterval(() => {
+      checkInterval = setInterval(() => {
         if (window.google && window.google.maps) {
           clearInterval(checkInterval)
           setTimeout(initMap, 300)
@@ -1048,12 +1190,19 @@ function GeofenceDrawingMap({
       }, 100)
       
       setTimeout(() => clearInterval(checkInterval), 10000)
-      return
+      return () => {
+        if (checkInterval) clearInterval(checkInterval)
+        if (waitForScript) clearInterval(waitForScript)
+        if (localMapInstanceRef.current && mapInstanceRef.current === localMapInstanceRef.current) {
+          mapInstanceRef.current = null
+        }
+        localMapInstanceRef.current = null
+      }
     }
 
     // Script should already be loaded by the main FleetMap component
     // If not, wait a bit and check again
-    const waitForScript = setInterval(() => {
+    waitForScript = setInterval(() => {
       if (window.google && window.google.maps) {
         clearInterval(waitForScript)
         setTimeout(initMap, 300)
@@ -1061,6 +1210,16 @@ function GeofenceDrawingMap({
     }, 100)
 
     setTimeout(() => clearInterval(waitForScript), 10000)
+
+    // Cleanup: clear timers and restore refs when dialog closes/unmounts
+    return () => {
+      if (checkInterval) clearInterval(checkInterval)
+      if (waitForScript) clearInterval(waitForScript)
+      if (localMapInstanceRef.current && mapInstanceRef.current === localMapInstanceRef.current) {
+        mapInstanceRef.current = null
+      }
+      localMapInstanceRef.current = null
+    }
   }, [mapRef, mapInstanceRef, drawingManagerRef, onShapeComplete])
 
   return null

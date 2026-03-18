@@ -7,9 +7,14 @@ import { useQuery } from "@tanstack/react-query"
 import { getDashboardStats } from "@/app/actions/dashboard"
 import { useAuthCompany } from "./use-auth-company"
 
-export function useDashboardStats() {
+type UseDashboardStatsOptions = {
+  enabled?: boolean
+}
+
+export function useDashboardStats(options?: UseDashboardStatsOptions) {
   const { data: authCompany } = useAuthCompany()
   const companyId = authCompany?.companyId ?? null
+  const enabled = (companyId != null) && (options?.enabled ?? true)
 
   return useQuery({
     queryKey: ["dashboard", "stats", companyId],
@@ -20,7 +25,7 @@ export function useDashboardStats() {
       }
       return result.data
     },
-    enabled: companyId != null,
+    enabled,
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     retry: 1,

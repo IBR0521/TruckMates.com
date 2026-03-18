@@ -112,17 +112,122 @@ export async function POST(request: NextRequest) {
       insertedCount += batch.length
     }
 
-    // Check geofences for the latest location (triggers auto-status updates)
+    // Check geofences for the latest location (backend engine via RPC; fallback to legacy action)
     if (device.truck_id && locationsToInsert.length > 0) {
       try {
         const latestLocation = locationsToInsert[locationsToInsert.length - 1]
-        const { checkGeofenceEntry } = await import("@/app/actions/geofencing")
-        await checkGeofenceEntry(
-          device.truck_id,
-          latestLocation.latitude,
-          latestLocation.longitude,
-          latestLocation.timestamp
-        )
+        const { data: geofenceResult, error: rpcError } = await supabase.rpc("process_geofence_point", {
+          company_id_param: companyId,
+          truck_id_param: device.truck_id,
+          driver_id_param: latestLocation.driver_id,
+          point_lat: latestLocation.latitude,
+          point_lng: latestLocation.longitude,
+          point_ts: latestLocation.timestamp,
+          point_speed: latestLocation.speed,
+          point_heading: latestLocation.heading,
+        })
+
+        if (rpcError) {
+          const { checkGeofenceEntry } = await import("@/app/actions/geofencing")
+          await checkGeofenceEntry(
+            device.truck_id,
+            latestLocation.latitude,
+            latestLocation.longitude,
+            latestLocation.timestamp
+          )
+        } else {
+          // Alerts-only v1: write in-app alerts for entry/exit/dwell events (deduped)
+          const events = (geofenceResult as any)?.events
+          if (Array.isArray(events) && events.length > 0) {
+            const geofenceIds = Array.from(
+              new Set(
+                events
+                  .map((e: any) => e?.geofence_id)
+                  .filter((id: any) => typeof id === "string" && id.length > 0)
+              )
+            )
+
+            const geofenceNameById = new Map<string, string>()
+            if (geofenceIds.length > 0) {
+              const { data: geofenceRows } = await supabase
+                .from("geofences")
+                .select("id, name")
+                .eq("company_id", companyId)
+                .in("id", geofenceIds)
+              for (const g of geofenceRows || []) {
+                if (g?.id) geofenceNameById.set(g.id, g.name || "Zone")
+              }
+            }
+
+            const DEDUPE_MINUTES = 10
+            const dedupeSince = new Date(Date.now() - DEDUPE_MINUTES * 60 * 1000).toISOString()
+
+            for (const e of events) {
+              const type = String(e?.type || "").toLowerCase()
+              if (!["entry", "exit", "dwell"].includes(type)) continue
+
+              const geofenceId = String(e?.geofence_id || "")
+              if (!geofenceId) continue
+
+              const zoneName = geofenceNameById.get(geofenceId) || "Zone"
+              const eventType = `geofence_${type}`
+
+              const durationMinutes =
+                typeof e?.duration_minutes === "number"
+                  ? e.duration_minutes
+                  : e?.duration_minutes
+                    ? Number(e.duration_minutes)
+                    : null
+
+              const title =
+                type === "entry"
+                  ? `Entered zone: ${zoneName}`
+                  : type === "exit"
+                    ? `Exited zone: ${zoneName}`
+                    : `Dwell time reached: ${zoneName}`
+
+              const message =
+                type === "entry"
+                  ? `Truck entered "${zoneName}".`
+                  : type === "exit"
+                    ? `Truck exited "${zoneName}"${durationMinutes ? ` after ${durationMinutes} minutes.` : "."}`
+                    : `Truck has remained in "${zoneName}"${durationMinutes ? ` for ${durationMinutes} minutes.` : "."}`
+
+              // Deduplicate: same truck + zone + event_type within window
+              const { data: existing } = await supabase
+                .from("alerts")
+                .select("id")
+                .eq("company_id", companyId)
+                .eq("truck_id", device.truck_id)
+                .eq("event_type", eventType)
+                .eq("status", "active")
+                .eq("metadata->>geofence_id", geofenceId)
+                .gte("created_at", dedupeSince)
+                .limit(1)
+
+              if (existing && existing.length > 0) continue
+
+              await supabase.from("alerts").insert({
+                company_id: companyId,
+                title,
+                message,
+                event_type: eventType,
+                priority: "normal",
+                status: "active",
+                truck_id: device.truck_id,
+                driver_id: latestLocation.driver_id || null,
+                metadata: {
+                  geofence_id: geofenceId,
+                  geofence_name: zoneName,
+                  latitude: latestLocation.latitude,
+                  longitude: latestLocation.longitude,
+                  timestamp: latestLocation.timestamp,
+                  duration_minutes: durationMinutes,
+                },
+              })
+            }
+          }
+        }
       } catch (geofenceError) {
         // Don't fail the request if geofence check fails
         console.error("Geofence check error (non-blocking):", geofenceError)

@@ -39,9 +39,6 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <Logo size="sm" />
           <div className="flex items-center gap-4">
-            <Link href="/marketplace" suppressHydrationWarning>
-              <Button variant="ghost" className="hidden sm:flex">Marketplace</Button>
-            </Link>
             <Link href="/pricing" suppressHydrationWarning>
               <Button variant="ghost" className="hidden sm:flex">Pricing</Button>
             </Link>
@@ -824,7 +821,6 @@ export default function Home() {
             <div>
               <h4 className="font-semibold text-foreground mb-4">Product</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="/marketplace" className="hover:text-primary transition">Marketplace</Link></li>
                 <li><Link href="/pricing" className="hover:text-primary transition">Pricing</Link></li>
                 <li><Link href="/demo" className="hover:text-primary transition">Demo</Link></li>
                 <li><Link href="/register" className="hover:text-primary transition">Get Started</Link></li>

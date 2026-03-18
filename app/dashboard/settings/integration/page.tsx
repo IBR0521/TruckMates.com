@@ -12,9 +12,11 @@ import { toast } from "sonner"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { getIntegrationSettings } from "@/app/actions/settings-integration"
+import { useSearchParams } from "next/navigation"
 
 export default function IntegrationSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
+  const searchParams = useSearchParams()
   const [integrations, setIntegrations] = useState({
     google_maps_enabled: true, // Auto-enabled (platform API key)
     resend_enabled: true, // Auto-enabled (platform API key)
@@ -22,10 +24,15 @@ export default function IntegrationSettingsPage() {
     stripe_enabled: false,
     paypal_enabled: false,
     has_quickbooks_credentials: false,
+    has_quickbooks_connection: false,
     has_stripe_api_key: false,
     has_paypal_client_id: false,
     has_google_maps_api_key: false,
     has_resend_api_key: false,
+    quickbooks_sandbox: true,
+    quickbooks_synced_at: null as string | null,
+    quickbooks_default_income_account_id: "" as string,
+    quickbooks_default_item_id: "" as string,
   })
 
   useEffect(() => {
@@ -43,10 +50,16 @@ export default function IntegrationSettingsPage() {
             stripe_enabled: !!result.data.stripe_enabled,
             paypal_enabled: !!result.data.paypal_enabled,
             has_quickbooks_credentials: !!result.data.has_quickbooks_credentials,
+            has_quickbooks_connection: !!(result.data as any).has_quickbooks_connection,
             has_stripe_api_key: !!result.data.has_stripe_api_key,
             has_paypal_client_id: !!result.data.has_paypal_client_id,
             has_google_maps_api_key: !!result.data.has_google_maps_api_key,
             has_resend_api_key: !!result.data.has_resend_api_key,
+            quickbooks_sandbox: (result.data as any).quickbooks_sandbox !== false,
+            quickbooks_synced_at: (result.data as any).quickbooks_synced_at || null,
+            quickbooks_default_income_account_id:
+              (result.data as any).quickbooks_default_income_account_id || "",
+            quickbooks_default_item_id: (result.data as any).quickbooks_default_item_id || "",
           })
         }
       } catch (error) {
@@ -57,6 +70,85 @@ export default function IntegrationSettingsPage() {
     }
     loadSettings()
   }, [])
+
+  useEffect(() => {
+    const ok = searchParams.get("quickbooks_success")
+    const err = searchParams.get("quickbooks_error")
+    if (ok) toast.success("QuickBooks connected")
+    if (err) toast.error(`QuickBooks error: ${err}`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  async function disconnectQuickBooks() {
+    try {
+      const res = await fetch("/api/quickbooks/disconnect", { method: "POST" })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || "Disconnect failed")
+      toast.success("QuickBooks disconnected")
+      // Refresh UI state
+      const result = await getIntegrationSettings()
+      if (!result.error && result.data) {
+        setIntegrations((prev) => ({
+          ...prev,
+          quickbooks_enabled: !!result.data.quickbooks_enabled,
+          has_quickbooks_credentials: !!result.data.has_quickbooks_credentials,
+          has_quickbooks_connection: !!(result.data as any).has_quickbooks_connection,
+          quickbooks_sandbox: (result.data as any).quickbooks_sandbox !== false,
+        }))
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to disconnect")
+    }
+  }
+
+  async function testQuickBooks() {
+    try {
+      const res = await fetch("/api/quickbooks/test", { method: "POST" })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || "Test failed")
+      toast.success(`QuickBooks connected: ${json?.companyInfo?.CompanyName || "OK"}`)
+    } catch (e: any) {
+      toast.error(e?.message || "QuickBooks test failed")
+    }
+  }
+
+  async function syncQuickBooks() {
+    try {
+      const res = await fetch("/api/quickbooks/sync", { method: "POST" })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || "Sync failed")
+      toast.success(`Synced ${json?.accounts_count ?? 0} accounts`)
+      const result = await getIntegrationSettings()
+      if (!result.error && result.data) {
+        setIntegrations((prev) => ({
+          ...prev,
+          quickbooks_synced_at: (result.data as any).quickbooks_synced_at || null,
+        }))
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "QuickBooks sync failed")
+    }
+  }
+
+  async function saveQuickBooksMapping() {
+    try {
+      const res = await fetch("/api/actions/settings/integration", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quickbooks_default_income_account_id: integrations.quickbooks_default_income_account_id || null,
+          quickbooks_default_item_id: integrations.quickbooks_default_item_id || null,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.success) {
+        throw new Error(json?.error || "Failed to save mapping")
+      }
+      toast.success("QuickBooks mapping saved")
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to save QuickBooks mapping")
+    }
+  }
 
 
   return (
@@ -193,21 +285,108 @@ export default function IntegrationSettingsPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-semibold">QuickBooks Online</h3>
-                      <Badge variant="secondary" className="text-xs">Coming soon</Badge>
+                      {integrations.has_quickbooks_connection ? (
+                        <Badge variant="outline" className="text-xs">Connected</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-xs">Not connected</Badge>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       Sync invoices and payments between TruckLogics and QuickBooks Online.
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <XCircle className="w-5 h-5 text-amber-500" />
-                    <span className="text-sm text-muted-foreground">Not yet available</span>
+                    {integrations.has_quickbooks_connection ? (
+                      <>
+                        <CheckCircle2 className="w-5 h-5 text-green-500" />
+                        <span className="text-sm text-muted-foreground">Active</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-5 h-5 text-amber-500" />
+                        <span className="text-sm text-muted-foreground">Inactive</span>
+                      </>
+                    )}
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  OAuth connection and automatic sync are in development. You can&apos;t connect QuickBooks yet,
-                  but this integration is planned.
-                </p>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    {integrations.has_quickbooks_connection
+                      ? `Connected via OAuth (${integrations.quickbooks_sandbox ? "Sandbox" : "Production"}).`
+                      : "Connect your QuickBooks Online account via OAuth."}
+                  </p>
+                  <div className="flex gap-2">
+                    {integrations.has_quickbooks_connection ? (
+                      <>
+                        <Button variant="outline" size="sm" onClick={syncQuickBooks}>
+                          Sync
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={testQuickBooks}>
+                          Test
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={disconnectQuickBooks}>
+                          Disconnect
+                        </Button>
+                      </>
+                    ) : (
+                      <Button asChild size="sm">
+                        <Link href="/api/quickbooks/connect">Connect</Link>
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {integrations.has_quickbooks_connection && (
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Default Income Account ID
+                      </label>
+                      <input
+                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+                        value={integrations.quickbooks_default_income_account_id}
+                        onChange={(e) =>
+                          setIntegrations((prev) => ({
+                            ...prev,
+                            quickbooks_default_income_account_id: e.target.value,
+                          }))
+                        }
+                        placeholder="e.g. 42"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Optional. If set, this Income Account will be used for all synced invoices.
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Default Service Item ID
+                      </label>
+                      <input
+                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+                        value={integrations.quickbooks_default_item_id}
+                        onChange={(e) =>
+                          setIntegrations((prev) => ({
+                            ...prev,
+                            quickbooks_default_item_id: e.target.value,
+                          }))
+                        }
+                        placeholder="e.g. 15"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Optional. If set, this Item will be used instead of auto-creating &quot;Freight Services&quot;.
+                      </p>
+                    </div>
+                    <div className="md:col-span-2 flex justify-end">
+                      <Button variant="outline" size="sm" onClick={saveQuickBooksMapping}>
+                        Save QuickBooks mapping
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {integrations.has_quickbooks_connection && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Last synced: {integrations.quickbooks_synced_at ? new Date(integrations.quickbooks_synced_at).toLocaleString() : "Never"}
+                  </p>
+                )}
               </div>
 
               {/* Stripe */}

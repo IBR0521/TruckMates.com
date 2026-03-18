@@ -43,11 +43,8 @@ export default function LoginPage() {
           const response = await fetch("/api/get-company-type")
           const result = await response.json()
           
-          if (result.data === "broker" || result.data === "carrier" || result.data === "both") {
-            router.push("/marketplace/dashboard")
-          } else {
-            router.push("/dashboard")
-          }
+          // Marketplace is intentionally disabled for now; always send users to dashboard.
+          router.push("/dashboard")
         } catch {
           router.push("/dashboard")
         }

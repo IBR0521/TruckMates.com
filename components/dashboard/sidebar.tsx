@@ -429,11 +429,6 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             <NavItem href="/dashboard/employees" icon={UserCog} label="Employees" isCollapsed={shouldShowCollapsed} />
           )}
 
-          {/* Marketplace - Show if user can view marketplace */}
-          {userRole && canViewFeature(userRole, "marketplace") && (
-            <NavItem href="/dashboard/marketplace" icon={Store} label="Marketplace" isCollapsed={shouldShowCollapsed} />
-          )}
-
         </nav>
 
         {/* Footer */}

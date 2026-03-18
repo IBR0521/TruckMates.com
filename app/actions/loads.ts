@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache"
 import { createRoute } from "./routes"
 import { sendNotification } from "./notifications"
 import { validateLoadData, validatePricingData, sanitizeString, sanitizeEmail, sanitizePhone, validateAddress } from "@/lib/validation"
+import { ALL_LOAD_STATUSES, getAllowedNextLoadStatuses, normalizeLoadStatus, parseLoadStatus } from "@/lib/load-status"
 
 // Helper function to send notifications in background (non-blocking)
 async function sendNotificationsForLoadUpdate(loadData: any) {
@@ -887,20 +888,19 @@ export async function updateLoad(
   // DAT-002 FIX: Validate status transitions to prevent invalid state changes
   // Define allowed transitions - delivered loads cannot revert to pending
   if (formData.status && formData.status !== currentLoad.status) {
-    const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-      pending: ["scheduled", "cancelled"],
-      scheduled: ["in_transit", "cancelled"],
-      in_transit: ["delivered", "cancelled"],
-      delivered: [], // Delivered loads cannot transition to any other state
-      cancelled: [], // Cancelled loads cannot transition to any other state
+    const currentStatus = normalizeLoadStatus(currentLoad.status)
+    const nextStatus = parseLoadStatus(formData.status)
+    if (!nextStatus) {
+      return {
+        error: `Invalid status "${formData.status}". Must be one of: ${ALL_LOAD_STATUSES.join(", ")}`,
+        data: null,
+      }
     }
-
-    const currentStatus = currentLoad.status || "pending"
-    const allowedNextStatuses = ALLOWED_TRANSITIONS[currentStatus] || []
+    const allowedNextStatuses = getAllowedNextLoadStatuses(currentStatus)
     
-    if (!allowedNextStatuses.includes(formData.status)) {
+    if (!allowedNextStatuses.includes(nextStatus)) {
       return { 
-        error: `Invalid status transition: Cannot change load status from "${currentStatus}" to "${formData.status}". Allowed transitions: ${allowedNextStatuses.join(", ") || "none"}`,
+        error: `Invalid status transition: Cannot change load status from "${currentStatus}" to "${nextStatus}". Allowed transitions: ${allowedNextStatuses.join(", ") || "none"}`,
         data: null 
       }
     }
@@ -1367,9 +1367,9 @@ export async function bulkUpdateLoadStatus(ids: string[], status: string) {
   }
 
   // Validate status value
-  const validStatuses = ["pending", "scheduled", "in_transit", "delivered", "cancelled"]
-  if (!validStatuses.includes(status)) {
-    return { error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`, data: null }
+  const normalizedTarget = parseLoadStatus(status)
+  if (!normalizedTarget) {
+    return { error: `Invalid status. Must be one of: ${ALL_LOAD_STATUSES.join(", ")}`, data: null }
   }
 
   const supabase = await createClient()
@@ -1397,9 +1397,43 @@ export async function bulkUpdateLoadStatus(ids: string[], status: string) {
     return { error: "No company found", data: null }
   }
 
+  // Validate transitions per-load to avoid applying impossible status changes in bulk
+  const { data: currentLoads, error: fetchError } = await supabase
+    .from("loads")
+    .select("id, shipment_number, status")
+    .in("id", ids)
+    .eq("company_id", userData.company_id)
+
+  if (fetchError) {
+    return { error: fetchError.message || "Failed to fetch loads for bulk update", data: null }
+  }
+
+  if (!currentLoads || currentLoads.length === 0) {
+    return { error: "No loads found to update", data: null }
+  }
+
+  const invalidLoads = currentLoads.filter((l: any) => {
+    const currentStatus = normalizeLoadStatus(l.status)
+    if (currentStatus === normalizedTarget) return false
+    const allowedNext = getAllowedNextLoadStatuses(currentStatus)
+    return !allowedNext.includes(normalizedTarget)
+  })
+
+  if (invalidLoads.length > 0) {
+    const sample = invalidLoads
+      .slice(0, 5)
+      .map((l: any) => `${l.shipment_number || l.id} (${normalizeLoadStatus(l.status)} → ${normalizedTarget})`)
+      .join(", ")
+    const extra = invalidLoads.length > 5 ? ` (+${invalidLoads.length - 5} more)` : ""
+    return {
+      error: `Invalid status transition for ${invalidLoads.length} load(s): ${sample}${extra}`,
+      data: null,
+    }
+  }
+
   const { error } = await supabase
     .from("loads")
-    .update({ status })
+    .update({ status: normalizedTarget })
     .in("id", ids)
     .eq("company_id", userData.company_id)
 

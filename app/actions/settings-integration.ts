@@ -21,6 +21,14 @@ export async function getIntegrationSettings() {
         quickbooks_enabled,
         quickbooks_company_id,
         quickbooks_api_key,
+        quickbooks_api_secret,
+        quickbooks_access_token,
+        quickbooks_refresh_token,
+        quickbooks_token_expires_at,
+        quickbooks_sandbox,
+        quickbooks_synced_at,
+        quickbooks_default_income_account_id,
+        quickbooks_default_item_id,
         stripe_enabled,
         stripe_api_key,
         paypal_enabled,
@@ -79,6 +87,11 @@ export async function getIntegrationSettings() {
       resend_enabled: data.resend_enabled !== false,
       resend_from_email: data.resend_from_email || "",
       has_quickbooks_credentials: !!(data.quickbooks_api_key || data.quickbooks_api_secret),
+      has_quickbooks_connection: !!(data.quickbooks_access_token && data.quickbooks_refresh_token && data.quickbooks_company_id),
+      quickbooks_sandbox: data.quickbooks_sandbox !== false,
+      quickbooks_synced_at: data.quickbooks_synced_at || null,
+      quickbooks_default_income_account_id: data.quickbooks_default_income_account_id || "",
+      quickbooks_default_item_id: data.quickbooks_default_item_id || "",
       has_stripe_api_key: !!data.stripe_api_key,
       has_paypal_client_id: !!data.paypal_client_id,
       // Platform keys take priority - if they exist, service is configured
@@ -98,6 +111,8 @@ export async function updateIntegrationSettings(settings: {
   quickbooks_api_key?: string
   quickbooks_api_secret?: string
   quickbooks_company_id?: string
+  quickbooks_default_income_account_id?: string
+  quickbooks_default_item_id?: string
   stripe_enabled?: boolean
   stripe_api_key?: string
   paypal_enabled?: boolean
@@ -134,6 +149,10 @@ export async function updateIntegrationSettings(settings: {
   if (settings.quickbooks_api_key !== undefined) updateData.quickbooks_api_key = settings.quickbooks_api_key
   if (settings.quickbooks_api_secret !== undefined) updateData.quickbooks_api_secret = settings.quickbooks_api_secret
   if (settings.quickbooks_company_id !== undefined) updateData.quickbooks_company_id = settings.quickbooks_company_id
+  if (settings.quickbooks_default_income_account_id !== undefined)
+    updateData.quickbooks_default_income_account_id = settings.quickbooks_default_income_account_id
+  if (settings.quickbooks_default_item_id !== undefined)
+    updateData.quickbooks_default_item_id = settings.quickbooks_default_item_id
   if (settings.stripe_enabled !== undefined) updateData.stripe_enabled = settings.stripe_enabled
   if (settings.stripe_api_key !== undefined) updateData.stripe_api_key = settings.stripe_api_key
   if (settings.paypal_enabled !== undefined) updateData.paypal_enabled = settings.paypal_enabled

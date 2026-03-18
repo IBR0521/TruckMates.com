@@ -17,6 +17,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [invoice, setInvoice] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showShareMenu, setShowShareMenu] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [isRefreshingPayment, setIsRefreshingPayment] = useState(false)
 
   useEffect(() => {
     if (id === "add" || id === "create") {
@@ -177,6 +179,42 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     setShowShareMenu(false)
   }
 
+  const handleSyncToQuickBooks = async () => {
+    try {
+      setIsSyncing(true)
+      const res = await fetch(`/api/quickbooks/invoices/${encodeURIComponent(id)}/sync`, { method: "POST" })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || "Sync failed")
+      toast.success("Synced to QuickBooks")
+      const refreshed = await getInvoice(id)
+      if (!refreshed.error && refreshed.data) setInvoice(refreshed.data)
+    } catch (e: any) {
+      toast.error(e?.message || "QuickBooks sync failed")
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  const handleRefreshFromQuickBooks = async () => {
+    try {
+      setIsRefreshingPayment(true)
+      const res = await fetch(`/api/quickbooks/invoices/${encodeURIComponent(id)}/refresh`, { method: "POST" })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json?.error || "Refresh failed")
+      if (json.paid) {
+        toast.success("Payment status pulled from QuickBooks")
+      } else {
+        toast.info(json.message || "Invoice is not fully paid in QuickBooks")
+      }
+      const refreshed = await getInvoice(id)
+      if (!refreshed.error && refreshed.data) setInvoice(refreshed.data)
+    } catch (e: any) {
+      toast.error(e?.message || "QuickBooks refresh failed")
+    } finally {
+      setIsRefreshingPayment(false)
+    }
+  }
+
   return (
     <div className="w-full">
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
@@ -192,6 +230,26 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
             <p className="text-muted-foreground text-sm mt-1">Issued on {invoiceData.issueDate}</p>
           </div>
           <div className="flex gap-2 relative">
+            <Button
+              onClick={handleSyncToQuickBooks}
+              variant="outline"
+              disabled={isSyncing}
+              className="border-border bg-transparent"
+              title="Sync this invoice to QuickBooks"
+            >
+              {isSyncing ? "Syncing..." : "Sync to QuickBooks"}
+            </Button>
+            {invoice.quickbooks_id && (
+              <Button
+                onClick={handleRefreshFromQuickBooks}
+                variant="outline"
+                disabled={isRefreshingPayment}
+                className="border-border bg-transparent"
+                title="Pull payment status from QuickBooks"
+              >
+                {isRefreshingPayment ? "Refreshing..." : "Pull payment status"}
+              </Button>
+            )}
             <Button onClick={handleDownload} variant="outline" className="border-border bg-transparent">
               <Download className="w-4 h-4 mr-2" />
               Download PDF
@@ -232,6 +290,19 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
       <div className="p-8">
         <div className="max-w-4xl mx-auto space-y-6">
+          {(invoice.quickbooks_id || invoice.quickbooks_synced_at) && (
+            <Card className="border-border p-4">
+              <div className="text-sm">
+                <div className="font-medium text-foreground">QuickBooks</div>
+                <div className="text-muted-foreground">
+                  {invoice.quickbooks_id ? `QuickBooks ID: ${invoice.quickbooks_id}` : "Not synced"}
+                  {invoice.quickbooks_synced_at
+                    ? ` • Last synced: ${new Date(invoice.quickbooks_synced_at).toLocaleString()}`
+                    : ""}
+                </div>
+              </div>
+            </Card>
+          )}
           <Card className="border-border p-8">
             <div className="grid md:grid-cols-2 gap-8 mb-8">
               <div>

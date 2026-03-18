@@ -4,7 +4,7 @@ import type React from "react"
 // Exports route segment config to force dynamic rendering
 // This prevents static generation which causes React hooks errors
 
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 import DashboardLayoutClient from "./layout-client"

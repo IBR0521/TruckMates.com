@@ -754,6 +754,55 @@ export async function getZoneVisits(filters?: {
 }
 
 /**
+ * Get current geofence "inside/outside" states.
+ * This is populated by the backend engine (public.process_geofence_point).
+ */
+export async function getGeofenceStates(filters?: {
+  geofence_id?: string
+  truck_id?: string
+  is_inside?: boolean
+  limit?: number
+  offset?: number
+}) {
+  const supabase = await createClient()
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null, count: 0 }
+  }
+
+  try {
+    let query = supabase
+      .from("geofence_states")
+      .select(
+        `
+        *,
+        geofences:geofence_id (id, name, zone_type),
+        trucks:truck_id (id, truck_number),
+        drivers:driver_id (id, name)
+      `,
+        { count: "exact" }
+      )
+      .eq("company_id", ctx.companyId)
+      .order("last_seen_at", { ascending: false })
+
+    if (filters?.geofence_id) query = query.eq("geofence_id", filters.geofence_id)
+    if (filters?.truck_id) query = query.eq("truck_id", filters.truck_id)
+    if (filters?.is_inside !== undefined) query = query.eq("is_inside", filters.is_inside)
+
+    const limit = Math.min(filters?.limit || 50, 200)
+    const offset = filters?.offset || 0
+    query = query.range(offset, offset + limit - 1)
+
+    const { data, error, count } = await query
+    if (error) return { error: error.message, data: null, count: 0 }
+
+    return { data: data || [], error: null, count: count || 0 }
+  } catch (error: any) {
+    return { error: error.message || "Failed to get geofence states", data: null, count: 0 }
+  }
+}
+
+/**
  * Get geofencing statistics
  */
 export async function getGeofencingStats(filters?: {

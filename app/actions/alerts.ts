@@ -322,6 +322,8 @@ export async function getAlerts(filters?: {
     // Fetch role and driver_id for filtering (auth already cached above)
     const { data: userRow } = await supabase.from("users").select("role, driver_id").eq("id", ctx.userId!).single()
     const userRole = userRow?.role || "driver"
+    const elevatedRoles = ["super_admin", "operations_manager", "manager", "owner", "admin"]
+    const effectiveRole = elevatedRoles.includes(userRole) ? "manager" : userRole
     const driverId = userRow?.driver_id
 
   // V3-007 FIX: Replace select(*) with explicit columns
@@ -336,23 +338,23 @@ export async function getAlerts(filters?: {
     
     // Define role-based event type filters
     const roleEventTypes: Record<string, string[]> = {
-      driver: ["hos_violation", "hos_alert", "dvir_required", "check_call", "load_assigned", "route_update"],
-      dispatcher: ["load_status_change", "driver_late", "check_call_missed", "delivery_window", "route_update"],
-      manager: ["*"], // Managers see all alerts
+      driver: ["hos_violation", "hos_alert", "dvir_required", "check_call", "load_assigned", "route_update", "geofence_entry", "geofence_exit", "geofence_dwell"],
+      dispatcher: ["load_status_change", "driver_late", "check_call_missed", "delivery_window", "route_update", "geofence_entry", "geofence_exit", "geofence_dwell"],
+      manager: ["*"], // Managers/admins/owners see all alerts
       fleet_manager: ["maintenance_due", "maintenance_overdue", "insurance_expiration", "license_renewal", "dvir_required"],
       maintenance_manager: ["maintenance_due", "maintenance_overdue", "dvir_required", "fault_code_detected"],
       safety_manager: ["hos_violation", "dvir_required", "insurance_expiration", "license_renewal"],
     }
     
-    const allowedEventTypes = roleEventTypes[userRole] || roleEventTypes.driver
+    const allowedEventTypes = roleEventTypes[effectiveRole] || roleEventTypes.driver
     
     // If not manager (who sees all), filter by event type
-    if (userRole !== "manager" && userRole !== "owner" && !allowedEventTypes.includes("*")) {
+    if (effectiveRole !== "manager" && !allowedEventTypes.includes("*")) {
       query = query.in("event_type", allowedEventTypes)
     }
     
     // Drivers only see alerts for their assigned loads/routes
-    if (userRole === "driver" && driverId) {
+    if (effectiveRole === "driver" && driverId) {
       query = query.or(`driver_id.eq.${driverId},driver_id.is.null`)
     }
   }
@@ -475,16 +477,20 @@ export async function createAlert(formData: {
         // Filter by role-based event type visibility
         // FIXED: Add 'owner' role with wildcard access (same as manager)
         const roleEventTypes: Record<string, string[]> = {
-          driver: ["hos_violation", "hos_alert", "dvir_required", "check_call", "load_assigned"],
-          dispatcher: ["load_status_change", "driver_late", "check_call_missed", "delivery_window"],
+          driver: ["hos_violation", "hos_alert", "dvir_required", "check_call", "load_assigned", "geofence_entry", "geofence_exit", "geofence_dwell"],
+          dispatcher: ["load_status_change", "driver_late", "check_call_missed", "delivery_window", "geofence_entry", "geofence_exit", "geofence_dwell"],
           manager: ["*"],
-          owner: ["*"], // FIXED: Owner should see all alerts like manager
+          owner: ["*"],
+          super_admin: ["*"],
+          operations_manager: ["*"],
+          admin: ["*"],
           fleet_manager: ["maintenance_due", "maintenance_overdue", "insurance_expiration"],
           maintenance_manager: ["maintenance_due", "maintenance_overdue", "dvir_required"],
         }
         
         const filteredUsers = companyUsers.filter((u: any) => {
-          const allowedTypes = roleEventTypes[u.role || "driver"] || roleEventTypes.driver
+          const role = u.role || "driver"
+          const allowedTypes = roleEventTypes[role] || roleEventTypes.driver
           return allowedTypes.includes("*") || allowedTypes.includes(formData.event_type)
         })
         

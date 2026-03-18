@@ -510,7 +510,7 @@ function getEmailContent(
 
     case "marketplace_load_accepted":
       return {
-        subject: "Marketplace Load Accepted",
+        subject: "Load Accepted",
         html: `
           ${baseStyle}
           <div class="container">
@@ -519,10 +519,10 @@ function getEmailContent(
             </div>
             <div class="content">
               <p>Hello ${escapeHtml(userName)},</p>
-              <p>Your marketplace load has been accepted.</p>
+              <p>Your load has been accepted.</p>
               ${data.shipmentNumber ? `<p><strong>Load:</strong> ${escapeHtml(data.shipmentNumber)}</p>` : ""}
               ${data.origin && data.destination ? `<p><strong>Route:</strong> ${escapeHtml(data.origin)} → ${escapeHtml(data.destination)}</p>` : ""}
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/marketplace" class="button">View Load</a>
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/loads" class="button">View Loads</a>
             </div>
             <div class="footer">
               <p>This is an automated notification from TruckMates.</p>
@@ -533,20 +533,20 @@ function getEmailContent(
 
     case "marketplace_new_matching_load":
       return {
-        subject: "New Marketplace Load Available",
+        subject: "New Load Opportunity",
         html: `
           ${baseStyle}
           <div class="container">
             <div class="header">
-              <h1>New Matching Load</h1>
+              <h1>New Load Opportunity</h1>
             </div>
             <div class="content">
               <p>Hello ${escapeHtml(userName)},</p>
-              <p>A new matching load is available in the marketplace.</p>
+              <p>A new load opportunity is available.</p>
               ${data.shipmentNumber ? `<p><strong>Load:</strong> ${escapeHtml(data.shipmentNumber)}</p>` : ""}
               ${data.origin && data.destination ? `<p><strong>Route:</strong> ${escapeHtml(data.origin)} → ${escapeHtml(data.destination)}</p>` : ""}
               ${data.rate ? `<p><strong>Rate:</strong> $${escapeHtml(String(data.rate))}</p>` : ""}
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/marketplace" class="button">View Load</a>
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/loads" class="button">View Loads</a>
             </div>
             <div class="footer">
               <p>This is an automated notification from TruckMates.</p>

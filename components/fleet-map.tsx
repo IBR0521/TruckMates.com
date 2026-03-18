@@ -502,6 +502,104 @@ export function FleetMap({
         })
 
         geofenceShapesRef.current.set(geofence.id, circle)
+      } else if (
+        geofence.zone_type === "rectangle" &&
+        geofence.north_bound != null &&
+        geofence.south_bound != null &&
+        geofence.east_bound != null &&
+        geofence.west_bound != null
+      ) {
+        const rectangle = new window.google.maps.Rectangle({
+          strokeColor: isSelected ? "#ef4444" : "#3b82f6",
+          strokeOpacity: isSelected ? 0.8 : 0.5,
+          strokeWeight: isSelected ? 3 : 2,
+          fillColor: isSelected ? "#ef4444" : "#3b82f6",
+          fillOpacity: isSelected ? 0.1 : 0.03,
+          map: mapInstanceRef.current,
+          bounds: {
+            north: Number(geofence.north_bound),
+            south: Number(geofence.south_bound),
+            east: Number(geofence.east_bound),
+            west: Number(geofence.west_bound),
+          },
+          zIndex: isSelected ? 1000 : 1,
+        })
+
+        const infoWindow = new window.google.maps.InfoWindow()
+
+        const escapeHtml = (s: string) => {
+          const map: Record<string, string> = {
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;",
+          }
+          return s.replace(/[&<>"']/g, (c) => map[c] || c)
+        }
+
+        const createInfoContent = () => {
+          return `
+            <div style="padding: 14px; min-width: 220px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #ffffff; border-radius: 8px; position: relative;">
+              <button 
+                onclick="window.closeGeofenceInfo_${geofence.id} && window.closeGeofenceInfo_${geofence.id}()"
+                style="position: absolute; top: 8px; right: 8px; background: transparent; border: none; cursor: pointer; padding: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: background 0.2s; z-index: 1000;"
+                onmouseover="this.style.background='#f3f4f6'"
+                onmouseout="this.style.background='transparent'"
+                title="Close"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 4L4 12M4 4L12 12" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <div style="font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 8px; line-height: 1.3; padding-right: 28px;">
+                ${escapeHtml(geofence.name)}
+              </div>
+              ${geofence.description ? `
+                <div style="font-size: 14px; color: #374151; margin-top: 6px; line-height: 1.5;">
+                  ${escapeHtml(geofence.description)}
+                </div>
+              ` : ''}
+              <div style="font-size: 12px; color: #6b7280; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+                Rectangle Zone
+              </div>
+            </div>
+          `
+        }
+
+        ;(rectangle as any).infoWindow = infoWindow
+
+        rectangle.addListener("click", () => {
+          if (onGeofenceClick) {
+            onGeofenceClick(geofence.id)
+          }
+
+          geofenceShapesRef.current.forEach((shape, id) => {
+            if (id !== geofence.id) {
+              const storedInfoWindow = (shape as any).infoWindow
+              if (storedInfoWindow && storedInfoWindow.getMap()) {
+                storedInfoWindow.close()
+              }
+            }
+          })
+
+          if (infoWindow.getMap()) {
+            infoWindow.close()
+            ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = undefined
+          } else {
+            ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = () => {
+              infoWindow.close()
+              ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = undefined
+            }
+
+            const bounds = rectangle.getBounds()
+            infoWindow.setContent(createInfoContent())
+            infoWindow.setPosition(bounds.getCenter())
+            infoWindow.open(mapInstanceRef.current)
+          }
+        })
+
+        geofenceShapesRef.current.set(geofence.id, rectangle)
       } else if (geofence.zone_type === "polygon" && geofence.polygon_coordinates) {
         // Handle both {lat, lng} and [lat, lng] formats
         const paths = geofence.polygon_coordinates.map((coord: any) => {

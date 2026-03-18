@@ -27,7 +27,6 @@ const ALL_FEATURES = [
   { name: "Reminders", href: "/dashboard/reminders", icon: Calendar, description: "Task and deadline reminders" },
   { name: "Bill of Lading", href: "/dashboard/bols", icon: FileText, description: "BOL document management" },
   { name: "Employees", href: "/dashboard/employees", icon: UserCog, description: "Employee management" },
-  { name: "Marketplace", href: "/dashboard/marketplace", icon: Store, description: "Load marketplace" },
   { name: "Settings", href: "/dashboard/settings", icon: Settings, description: "Platform configuration" },
 ]
 
