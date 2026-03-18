@@ -127,7 +127,8 @@ export default function EditGeofencePage() {
         alert_on_entry: formData.alert_on_entry,
         alert_on_exit: formData.alert_on_exit,
         alert_on_dwell: formData.alert_on_dwell,
-        dwell_time_minutes: dwell ? dwell : null,
+        // `updateGeofence` expects `dwell_time_minutes?: number` (no `null`), so use `undefined` to omit.
+        dwell_time_minutes: dwell !== null ? dwell : undefined,
         assigned_trucks: formData.assigned_trucks.length > 0 ? formData.assigned_trucks : [],
         assigned_routes: formData.assigned_routes.length > 0 ? formData.assigned_routes : [],
         address: formData.address,
