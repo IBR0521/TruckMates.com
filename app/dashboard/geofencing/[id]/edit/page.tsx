@@ -118,7 +118,13 @@ export default function EditGeofencePage() {
 
     setIsSaving(true)
     try {
-      const dwell = formData.dwell_time_minutes ? parseInt(formData.dwell_time_minutes) : null
+      const dwellTimeMinutesRaw = formData.dwell_time_minutes
+        ? Number.parseInt(formData.dwell_time_minutes, 10)
+        : undefined
+      const dwellTimeMinutes =
+        dwellTimeMinutesRaw !== undefined && Number.isFinite(dwellTimeMinutesRaw)
+          ? dwellTimeMinutesRaw
+          : undefined
 
       const result = await updateGeofence(geofenceId, {
         name: formData.name.trim(),
@@ -127,8 +133,8 @@ export default function EditGeofencePage() {
         alert_on_entry: formData.alert_on_entry,
         alert_on_exit: formData.alert_on_exit,
         alert_on_dwell: formData.alert_on_dwell,
-        // `updateGeofence` expects `dwell_time_minutes?: number` (no `null`), so use `undefined` to omit.
-        dwell_time_minutes: dwell !== null ? dwell : undefined,
+        // `updateGeofence` expects `dwell_time_minutes?: number` (no `null`).
+        dwell_time_minutes: dwellTimeMinutes,
         assigned_trucks: formData.assigned_trucks.length > 0 ? formData.assigned_trucks : [],
         assigned_routes: formData.assigned_routes.length > 0 ? formData.assigned_routes : [],
         address: formData.address,
