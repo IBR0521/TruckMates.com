@@ -370,9 +370,182 @@ export async function getOptimalDriverSuggestionsForRoute(
   data: DriverSuggestion[] | null
   error: string | null
 }> {
-  // Similar to load suggestions but for routes
-  // Simplified for now - can be enhanced later
-  return { error: "Route suggestions not yet implemented", data: null }
+  const supabase = await createClient()
+
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  try {
+    // Get route
+    const { data: route, error: routeError } = await supabase
+      .from("routes")
+      .select("*")
+      .eq("id", routeId)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+
+    if (routeError || !route) {
+      return { error: routeError?.message || "Route not found", data: null }
+    }
+
+    // Load requirements are inferred from loads attached to this route.
+    const { data: routeLoads, error: routeLoadsError } = await supabase
+      .from("loads")
+      .select("id, origin, destination, carrier_type, requires_special_equipment, weight_kg, priority, status")
+      .eq("route_id", routeId)
+      .eq("company_id", ctx.companyId)
+      .not("status", "in", '("delivered","cancelled","completed")')
+
+    if (routeLoadsError) {
+      return { error: routeLoadsError.message, data: null }
+    }
+
+    if (!routeLoads || routeLoads.length === 0) {
+      return { error: "No eligible loads found for this route", data: null }
+    }
+
+    // Pick a "primary" load to infer equipment/priority and to find nearby drivers.
+    const primaryLoad =
+      routeLoads.find((l: any) => l.status === "pending") || routeLoads[0]
+
+    const requirements: LoadRequirements = {
+      load_id: primaryLoad.id,
+      origin: primaryLoad.origin,
+      destination: primaryLoad.destination,
+      equipment_type: primaryLoad.carrier_type,
+      weight_kg: primaryLoad.weight_kg,
+      requires_special_equipment: !!primaryLoad.requires_special_equipment,
+      priority: primaryLoad.priority || "normal",
+    }
+
+    // Find nearby drivers around the primary load pickup.
+    const nearbyResult = await findNearbyDriversForLoad(primaryLoad.id, {
+      // Keep generous defaults for route-level suggestions
+      max_radius_km: 200,
+      min_drive_hours: options?.min_drive_hours || 4,
+      min_on_duty_hours: 6,
+      limit: (options?.max_suggestions || 5) * 2,
+    })
+
+    if (nearbyResult.error || !nearbyResult.data) {
+      return { error: nearbyResult.error || "Failed to find nearby drivers", data: null }
+    }
+
+    // Batch fetch all unique trucks for equipment matching.
+    const truckIds = [
+      ...new Set(
+        nearbyResult.data.map((d) => d.truck_id).filter(Boolean) as string[]
+      ),
+    ]
+
+    const { data: allTrucks } = await supabase
+      .from("trucks")
+      .select("id, carrier_type, make, model")
+      .eq("company_id", ctx.companyId)
+      .in("id", truckIds)
+
+    const truckMap = new Map<string, any>()
+    allTrucks?.forEach((t: any) => truckMap.set(t.id, t))
+
+    const suggestions: DriverSuggestion[] = []
+
+    for (const driver of nearbyResult.data) {
+      // Check conflicts for assigning this driver to the whole route.
+      const conflictCheck = await checkAssignmentConflicts(driver.driver_id, undefined, routeId)
+
+      const conflicts = conflictCheck.data?.conflicts || []
+      const hosViolations = conflictCheck.data?.hos_violations || []
+
+      // Determine equipment compatibility.
+      let equipmentMatch = false
+      if (requirements.equipment_type && driver.truck_id) {
+        const truck = truckMap.get(driver.truck_id)
+        if (truck) {
+          const required = requirements.equipment_type
+          const actual = truck.carrier_type
+
+          if (actual === required) {
+            equipmentMatch = true
+          } else if (required === "any") {
+            equipmentMatch = true
+          } else if (!actual && !requirements.requires_special_equipment) {
+            equipmentMatch = true
+          }
+        }
+      } else if (!requirements.equipment_type || !requirements.requires_special_equipment) {
+        equipmentMatch = true
+      }
+
+      // Base score model (0-100).
+      let score = 50
+
+      // Distance score (closer = higher score, max 30 points)
+      const distanceScore = Math.max(0, 30 - driver.distance_miles / 10)
+      score += distanceScore
+
+      // HOS score
+      const hosScore = Math.min(25, (driver.remaining_drive_hours / 11) * 25)
+      score += hosScore
+
+      // Equipment match boost
+      if (equipmentMatch) score += 10
+
+      // Priority boost
+      if (requirements.priority === "urgent") {
+        score += driver.remaining_drive_hours >= 8 ? 10 : 0
+      }
+
+      // Penalties
+      if (conflicts.length > 0) score -= 20
+      if (hosViolations.length > 0) score -= 30
+
+      const clampedScore = Math.max(0, Math.min(100, score))
+
+      // Reasons
+      const reasons: string[] = []
+      if (driver.distance_miles < 10) {
+        reasons.push("Very close to pickup location")
+      } else if (driver.distance_miles < 25) {
+        reasons.push("Close to pickup location")
+      }
+
+      if (driver.remaining_drive_hours >= 8) {
+        reasons.push("Plenty of drive hours remaining")
+      } else if (driver.remaining_drive_hours >= 4) {
+        reasons.push("Sufficient drive hours")
+      }
+
+      if (equipmentMatch) reasons.push("Equipment compatible")
+      if (conflicts.length > 0) reasons.push(`⚠️ Has ${conflicts.length} scheduling conflict(s)`)
+      if (hosViolations.length > 0) reasons.push(`⚠️ HOS violation: ${hosViolations[0]}`)
+
+      suggestions.push({
+        driver_id: driver.driver_id,
+        driver_name: driver.driver_name,
+        truck_id: driver.truck_id,
+        truck_number: driver.truck_number,
+        score: clampedScore,
+        reasons,
+        distance_miles: driver.distance_miles,
+        remaining_drive_hours: driver.remaining_drive_hours,
+        remaining_on_duty_hours: driver.remaining_on_duty_hours,
+        current_status: driver.current_status,
+        equipment_match: equipmentMatch,
+        can_complete: conflicts.length === 0 && hosViolations.length === 0,
+        conflicts,
+        hos_violations: hosViolations,
+      })
+    }
+
+    suggestions.sort((a, b) => b.score - a.score)
+
+    const maxSuggestions = options?.max_suggestions || 5
+    return { data: suggestions.slice(0, maxSuggestions), error: null }
+  } catch (error: any) {
+    return { error: error.message || "Failed to get driver suggestions for route", data: null }
+  }
 }
 
 /**

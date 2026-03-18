@@ -89,7 +89,7 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
       title={`DVIR Report - ${getTypeLabel(dvir.inspection_type)}`}
       subtitle={`${dvir.drivers?.name || "Unknown Driver"} • ${dvir.trucks?.truck_number || "N/A"}`}
       backUrl="/dashboard/dvir"
-      // editUrl removed - edit page not yet implemented
+      editUrl={`/dashboard/dvir/${encodeURIComponent(dvir.id)}/edit`}
     >
       <div className="space-y-6">
         {/* Status Card */}

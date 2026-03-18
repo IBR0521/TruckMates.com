@@ -2,6 +2,31 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+type StateCrossingCacheEntry = {
+  lat: number
+  lng: number
+  ts: number
+  state_code?: string
+}
+
+// Throttle repeated state-crossing checks for stationary devices.
+// This reduces the chance of unnecessary reverse-geocoding calls.
+const stateCrossingCache = new Map<string, StateCrossingCacheEntry>()
+const STATE_CROSSING_MIN_INTERVAL_MS = 90_000 // 1.5 minutes
+const STATE_CROSSING_MIN_MOVEMENT_METERS = 300 // ~0.3 km
+
+function haversineDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const toRad = (deg: number) => (deg * Math.PI) / 180
+  const R = 6371000 // meters
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
 /**
  * Receive GPS location updates from mobile app
  * POST /api/eld/mobile/locations
@@ -301,27 +326,51 @@ export async function POST(request: NextRequest) {
         const latestLocation = locationsToInsert[locationsToInsert.length - 1]
         const { detectStateCrossing } = await import("@/app/actions/ifta-state-crossing")
         
-        // Check state crossing deterministically - compare with previous known state
-        // Use a simple cache to track previous state per truck
-        // Always check on latest location (not random) to ensure IFTA compliance
-        // Note: This should be optimized with a proper state cache, but for now check every time
-        // TODO: Implement proper state cache to avoid excessive API calls
-        await detectStateCrossing({
-          company_id: companyId,
-          truck_id: device.truck_id,
-          driver_id: latestLocation.driver_id,
-          eld_device_id: device_id,
-          latitude: latestLocation.latitude,
-          longitude: latestLocation.longitude,
-          timestamp: latestLocation.timestamp,
-          route_id: activeRouteId,
-          load_id: activeLoadId,
-          speed: latestLocation.speed,
-          odometer: latestLocation.odometer,
-          address: latestLocation.address,
-        }).catch(err => 
-          console.error("State crossing detection error (non-blocking):", err)
-        )
+        // Throttle checks when the device is essentially stationary.
+        // We still rely on the backend engine for correctness, but we reduce how often we call it.
+        const truckId = device.truck_id
+        const cacheKey = `${companyId}:${truckId}`
+        const cached = stateCrossingCache.get(cacheKey)
+        const movedMeters = cached
+          ? haversineDistanceMeters(cached.lat, cached.lng, latestLocation.latitude, latestLocation.longitude)
+          : Number.POSITIVE_INFINITY
+        const ageMs = cached ? Date.now() - cached.ts : Number.POSITIVE_INFINITY
+
+        if (cached && ageMs < STATE_CROSSING_MIN_INTERVAL_MS && movedMeters < STATE_CROSSING_MIN_MOVEMENT_METERS) {
+          // Skip state crossing detection for this update.
+          // Next updates will still be checked after the throttle interval or movement.
+        } else {
+          const res = await detectStateCrossing({
+            company_id: companyId,
+            truck_id: device.truck_id,
+            driver_id: latestLocation.driver_id,
+            eld_device_id: device_id,
+            latitude: latestLocation.latitude,
+            longitude: latestLocation.longitude,
+            timestamp: latestLocation.timestamp,
+            route_id: activeRouteId,
+            load_id: activeLoadId,
+            speed: latestLocation.speed,
+            odometer: latestLocation.odometer,
+            address: latestLocation.address,
+          })
+
+          // Cache last known point/state for throttling.
+          if (!res?.error && (res as any)?.data?.state_code) {
+            stateCrossingCache.set(cacheKey, {
+              lat: latestLocation.latitude,
+              lng: latestLocation.longitude,
+              ts: Date.now(),
+              state_code: (res as any).data.state_code,
+            })
+          } else {
+            stateCrossingCache.set(cacheKey, {
+              lat: latestLocation.latitude,
+              lng: latestLocation.longitude,
+              ts: Date.now(),
+            })
+          }
+        }
       } catch (stateError) {
         // Don't fail the request if state crossing detection fails
         console.error("State crossing detection error (non-blocking):", stateError)
