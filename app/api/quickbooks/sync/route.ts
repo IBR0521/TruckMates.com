@@ -30,7 +30,7 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
-      realmId,
+      realmId: conn.realmId,
       accounts_count: Array.isArray(accounts) ? accounts.length : 0,
     })
   } catch (error: any) {
