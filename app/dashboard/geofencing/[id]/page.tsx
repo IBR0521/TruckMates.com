@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { DetailPageLayout, DetailSection } from "@/components/dashboard/detail-page-layout"
 import { MapPin, Calendar, Truck, Route, AlertCircle, CheckCircle, Clock } from "lucide-react"
 import { toast } from "sonner"
-import { getGeofence, updateGeofence, deleteGeofence } from "@/app/actions/geofencing"
+import { getGeofence, updateGeofence, deleteGeofence, getGeofenceStates } from "@/app/actions/geofencing"
 import { getZoneVisits } from "@/app/actions/geofencing"
 import { format } from "date-fns"
 import {
@@ -30,6 +31,7 @@ export default function GeofenceDetailPage() {
   const geofenceId = params.id as string
   const [geofence, setGeofence] = useState<any>(null)
   const [visits, setVisits] = useState<any[]>([])
+  const [states, setStates] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -38,6 +40,7 @@ export default function GeofenceDetailPage() {
     if (geofenceId) {
       loadGeofence()
       loadVisits()
+      loadStates()
     }
   }, [geofenceId])
 
@@ -60,6 +63,13 @@ export default function GeofenceDetailPage() {
     }
   }
 
+  async function loadStates() {
+    const result = await getGeofenceStates({ geofence_id: geofenceId, limit: 50 })
+    if (result.data) {
+      setStates(result.data.slice(0, 20))
+    }
+  }
+
   async function handleToggleActive() {
     if (!geofence) return
     const result = await updateGeofence(geofenceId, { is_active: !geofence.is_active })
@@ -68,6 +78,7 @@ export default function GeofenceDetailPage() {
     } else {
       toast.success(`Zone ${!geofence.is_active ? "activated" : "deactivated"}`)
       loadGeofence()
+      loadStates()
     }
   }
 
@@ -106,6 +117,9 @@ export default function GeofenceDetailPage() {
       backUrl="/dashboard/geofencing"
       actions={
         <>
+          <Link href={`/dashboard/geofencing/${encodeURIComponent(geofenceId)}/edit`}>
+            <Button variant="outline">Edit Zone</Button>
+          </Link>
           <Button variant="outline" onClick={handleToggleActive}>
             {geofence.is_active ? "Deactivate" : "Activate"}
           </Button>
@@ -161,6 +175,38 @@ export default function GeofenceDetailPage() {
               </div>
             )}
           </div>
+        </DetailSection>
+
+        <DetailSection
+          title="Current Membership"
+          icon={<Truck className="w-5 h-5" />}
+        >
+          {states.length > 0 ? (
+            <div className="space-y-2">
+              {states.map((s) => (
+                <div
+                  key={`${s.truck_id}-${s.geofence_id}`}
+                  className="flex items-center justify-between p-3 border rounded-lg"
+                >
+                  <div>
+                    <p className="font-medium">
+                      {s.trucks?.truck_number || s.truck_id}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Last seen: {s.last_seen_at ? format(new Date(s.last_seen_at), "MMM d, yyyy h:mm a") : "N/A"}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className={s.is_inside ? "bg-green-500/15 text-green-600 border-green-500/30" : ""}>
+                    {s.is_inside ? "Inside" : "Outside"}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No geofence state data yet. Once vehicles send location updates, the inside/outside state will show here.
+            </p>
+          )}
         </DetailSection>
 
         <DetailSection
