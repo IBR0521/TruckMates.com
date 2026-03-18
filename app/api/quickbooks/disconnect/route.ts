@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+function getRequiredEnv(name: string): string {
+  const v = process.env[name]
+  if (!v) throw new Error(`Missing env var: ${name}`)
+  return v
+}
+
 export async function POST(request: NextRequest) {
   try {
     const ctx = await getCachedAuthContext()
@@ -17,6 +23,36 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient()
+
+    // Best-effort token revoke (Intuit-side disconnect)
+    try {
+      const { data: row } = await supabase
+        .from("company_integrations")
+        .select("quickbooks_access_token, quickbooks_refresh_token")
+        .eq("company_id", ctx.companyId)
+        .maybeSingle()
+
+      const tokenToRevoke = row?.quickbooks_refresh_token || row?.quickbooks_access_token
+      if (tokenToRevoke) {
+        const clientId = getRequiredEnv("QUICKBOOKS_CLIENT_ID")
+        const clientSecret = getRequiredEnv("QUICKBOOKS_CLIENT_SECRET")
+        const body = new URLSearchParams({ token: tokenToRevoke })
+        const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64")
+
+        await fetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/revoke", {
+          method: "POST",
+          headers: {
+            Authorization: `Basic ${basic}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+            Accept: "application/json",
+          },
+          body,
+        })
+      }
+    } catch {
+      // Non-fatal; still proceed with local disconnect
+    }
+
     const { error } = await supabase
       .from("company_integrations")
       .update({

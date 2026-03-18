@@ -53,14 +53,17 @@ async function getOrCreateServiceItem(conn: any, mapping: QuickBooksMapping) {
 }
 
 async function getOrCreateCustomer(conn: any, displayName: string) {
-  const q = `select Id, DisplayName from Customer where DisplayName = '${qbEscape(displayName)}' maxresults 1`
+  const normalized = String(displayName || "")
+    .trim()
+    .replace(/\s+/g, " ")
+  const q = `select Id, DisplayName from Customer where DisplayName = '${qbEscape(normalized)}' maxresults 1`
   const res = await qbQuery(conn, q)
   const existing = res?.QueryResponse?.Customer?.[0]
   if (existing?.Id) return String(existing.Id)
 
   const created = await qbFetch(conn, "/customer", {
     method: "POST",
-    body: JSON.stringify({ DisplayName: displayName }),
+    body: JSON.stringify({ DisplayName: normalized }),
   })
   const id = created?.Customer?.Id
   if (!id) throw new Error("Failed to create customer in QuickBooks")
@@ -94,6 +97,13 @@ export async function POST(request: NextRequest, ctxRoute: { params: Promise<{ i
 
     if (invoiceError || !invoice) {
       return NextResponse.json({ error: invoiceError?.message || "Invoice not found" }, { status: 404 })
+    }
+
+    if (invoice.quickbooks_id) {
+      return NextResponse.json(
+        { error: "Already synced", quickbooks_id: invoice.quickbooks_id },
+        { status: 409 },
+      )
     }
 
     const conn = await getQuickBooksConnection(ctx.companyId)

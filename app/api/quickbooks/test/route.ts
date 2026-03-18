@@ -1,46 +1,7 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-
-function getBaseUrl(isSandbox: boolean) {
-  return isSandbox ? "https://sandbox-quickbooks.api.intuit.com" : "https://quickbooks.api.intuit.com"
-}
-
-function getRequiredEnv(name: string): string {
-  const v = process.env[name]
-  if (!v) throw new Error(`Missing env var: ${name}`)
-  return v
-}
-
-async function refreshAccessToken(args: {
-  refreshToken: string
-  clientId: string
-  clientSecret: string
-}) {
-  const body = new URLSearchParams({
-    grant_type: "refresh_token",
-    refresh_token: args.refreshToken,
-  })
-
-  const basic = Buffer.from(`${args.clientId}:${args.clientSecret}`).toString("base64")
-  const res = await fetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basic}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    },
-    body,
-    cache: "no-store",
-  })
-
-  const json = await res.json().catch(() => null)
-  if (!res.ok) {
-    const msg = json?.error_description || json?.error || "refresh_failed"
-    throw new Error(msg)
-  }
-  return json as { access_token: string; refresh_token?: string; expires_in: number }
-}
+import { createClient } from "@/lib/supabase/server"
+import { getQuickBooksConnection, qbFetch } from "@/lib/quickbooks/client"
 
 export async function POST() {
   try {
@@ -56,69 +17,12 @@ export async function POST() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const supabase = await createClient()
-    const { data: row, error } = await supabase
-      .from("company_integrations")
-      .select(
-        "quickbooks_enabled, quickbooks_company_id, quickbooks_access_token, quickbooks_refresh_token, quickbooks_token_expires_at, quickbooks_sandbox"
-      )
-      .eq("company_id", ctx.companyId)
-      .single()
-
-    if (error || !row) return NextResponse.json({ error: "Not configured" }, { status: 400 })
-    if (!row.quickbooks_enabled || !row.quickbooks_company_id) {
-      return NextResponse.json({ error: "QuickBooks not connected" }, { status: 400 })
-    }
-
-    const realmId = String(row.quickbooks_company_id)
-    let accessToken = row.quickbooks_access_token as string | null
-    const refreshToken = row.quickbooks_refresh_token as string | null
-
-    if (!accessToken || !refreshToken) {
-      return NextResponse.json({ error: "Missing QuickBooks tokens" }, { status: 400 })
-    }
-
-    const expiresAt = row.quickbooks_token_expires_at ? new Date(row.quickbooks_token_expires_at) : null
-    const isExpired = !expiresAt || expiresAt.getTime() < Date.now() + 60_000
-    const isSandbox = row.quickbooks_sandbox !== false
-
-    if (isExpired) {
-      const clientId = getRequiredEnv("QUICKBOOKS_CLIENT_ID")
-      const clientSecret = getRequiredEnv("QUICKBOOKS_CLIENT_SECRET")
-      const refreshed = await refreshAccessToken({ refreshToken, clientId, clientSecret })
-      accessToken = refreshed.access_token
-      const newExpiresAt = new Date(Date.now() + Number(refreshed.expires_in || 0) * 1000).toISOString()
-
-      await supabase
-        .from("company_integrations")
-        .update({
-          quickbooks_access_token: accessToken,
-          quickbooks_refresh_token: refreshed.refresh_token || refreshToken,
-          quickbooks_token_expires_at: newExpiresAt,
-        })
-        .eq("company_id", ctx.companyId)
-    }
-
-    const baseUrl = getBaseUrl(isSandbox)
-    const res = await fetch(
-      `${baseUrl}/v3/company/${encodeURIComponent(realmId)}/companyinfo/${encodeURIComponent(realmId)}?minorversion=73`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
-        cache: "no-store",
-      }
-    )
-
-    const json = await res.json().catch(() => null)
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: json?.Fault?.Error?.[0]?.Message || "QuickBooks API error", details: json },
-        { status: 502 }
-      )
-    }
-
+    // Ensure company_integrations tokens exist and are valid (token refresh happens inside).
+    const conn = await getQuickBooksConnection(ctx.companyId)
+    const json = await qbFetch(conn, `/companyinfo/${encodeURIComponent(conn.realmId)}`, { method: "GET" })
     return NextResponse.json({
       success: true,
-      realmId,
+      realmId: conn.realmId,
       companyInfo: json?.CompanyInfo || json,
     })
   } catch (error: any) {

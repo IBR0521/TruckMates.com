@@ -387,6 +387,11 @@ export default function IntegrationSettingsPage() {
                     Last synced: {integrations.quickbooks_synced_at ? new Date(integrations.quickbooks_synced_at).toLocaleString() : "Never"}
                   </p>
                 )}
+                {integrations.has_quickbooks_connection && (
+                  <p className="text-[11px] text-muted-foreground mt-2">
+                    Note: A company stays on the sandbox/production mode it connected with until they disconnect and reconnect.
+                  </p>
+                )}
               </div>
 
               {/* Stripe */}
