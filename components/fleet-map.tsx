@@ -69,20 +69,21 @@ export function FleetMap({
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const containerReadyRef = useRef(false)
+  const debug = process.env.NODE_ENV !== "production"
 
   // Callback ref to ensure container is attached
   const setMapRef = (node: HTMLDivElement | null) => {
     if (node) {
-      console.log('[FleetMap] Container ref attached', node)
+      if (debug) console.log('[FleetMap] Container ref attached', node)
       mapRef.current = node
       containerReadyRef.current = true
       // Try to initialize if Google Maps is already loaded and Map constructor is available
       if (window.google?.maps?.Map && typeof window.google.maps.Map === 'function' && !mapInstanceRef.current) {
-        console.log('[FleetMap] Google Maps already loaded, initializing...')
+        if (debug) console.log('[FleetMap] Google Maps already loaded, initializing...')
         setTimeout(() => initializeMap(), 100)
       }
     } else {
-      console.log('[FleetMap] Container ref detached')
+      if (debug) console.log('[FleetMap] Container ref detached')
       containerReadyRef.current = false
     }
   }
@@ -150,12 +151,12 @@ export function FleetMap({
       
       script.onload = () => {
         script.removeAttribute("data-loading")
-        console.log('[FleetMap] Google Maps script loaded')
+        if (debug) console.log('[FleetMap] Google Maps script loaded')
         // Wait for Google Maps to fully initialize (check for Map constructor)
         const checkGoogleMaps = setInterval(() => {
           if (window.google?.maps?.Map && typeof window.google.maps.Map === 'function') {
             clearInterval(checkGoogleMaps)
-            console.log('[FleetMap] Google Maps fully initialized')
+            if (debug) console.log('[FleetMap] Google Maps fully initialized')
             // Wait a bit more to ensure everything is ready
             setTimeout(() => {
               if (containerReadyRef.current && mapRef.current) {
@@ -216,7 +217,7 @@ export function FleetMap({
 
   // Initialize map
   const initializeMap = () => {
-    console.log('[FleetMap] initializeMap called', {
+    if (debug) console.log('[FleetMap] initializeMap called', {
       hasGoogle: !!window.google,
       hasMaps: !!(window.google && window.google.maps),
       hasMapConstructor: !!(window.google?.maps?.Map),
@@ -227,11 +228,12 @@ export function FleetMap({
 
     // Check if Google Maps is fully loaded with Map constructor
     if (!window.google || !window.google.maps || typeof window.google.maps.Map !== 'function') {
-      console.warn('[FleetMap] Google Maps not fully loaded yet', {
+      if (debug)
+        console.warn('[FleetMap] Google Maps not fully loaded yet', {
         hasGoogle: !!window.google,
         hasMaps: !!(window.google?.maps),
         hasMapConstructor: typeof window.google?.maps?.Map
-      })
+        })
       // Retry after a short delay
       setTimeout(() => {
         if (window.google?.maps?.Map && typeof window.google.maps.Map === 'function') {
@@ -246,7 +248,7 @@ export function FleetMap({
 
     // Retry if container not ready yet
     if (!containerReadyRef.current || !mapRef.current) {
-      console.warn('[FleetMap] Container not ready, retrying...')
+      if (debug) console.warn('[FleetMap] Container not ready, retrying...')
       setTimeout(() => {
         if (containerReadyRef.current && mapRef.current) {
           initializeMap()
@@ -260,7 +262,7 @@ export function FleetMap({
     }
 
     try {
-      console.log('[FleetMap] Creating map instance...')
+      if (debug) console.log('[FleetMap] Creating map instance...')
       const map = new window.google.maps.Map(mapRef.current, {
         center: { lat: center[0], lng: center[1] },
         zoom: zoom,
@@ -270,7 +272,7 @@ export function FleetMap({
       })
 
         mapInstanceRef.current = map
-      console.log('[FleetMap] Map instance created successfully')
+      if (debug) console.log('[FleetMap] Map instance created successfully')
         setIsLoading(false)
 
       // Update markers and geofences after a short delay

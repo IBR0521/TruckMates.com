@@ -163,6 +163,36 @@ export default function GeofenceDetailPage() {
                 </div>
               </>
             )}
+            {geofence.zone_type === "rectangle" && (
+              <>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">North Bound</p>
+                  <p className="text-sm font-medium">{geofence.north_bound ?? "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">South Bound</p>
+                  <p className="text-sm font-medium">{geofence.south_bound ?? "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">East Bound</p>
+                  <p className="text-sm font-medium">{geofence.east_bound ?? "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">West Bound</p>
+                  <p className="text-sm font-medium">{geofence.west_bound ?? "N/A"}</p>
+                </div>
+              </>
+            )}
+            {geofence.zone_type === "polygon" && (
+              <>
+                <div className="col-span-2">
+                  <p className="text-sm text-muted-foreground mb-1">Polygon Points</p>
+                  <p className="text-sm font-medium">
+                    {Array.isArray(geofence.polygon_coordinates) ? geofence.polygon_coordinates.length : 0}
+                  </p>
+                </div>
+              </>
+            )}
             {geofence.address && (
               <div className="col-span-2">
                 <p className="text-sm text-muted-foreground mb-1">Address</p>

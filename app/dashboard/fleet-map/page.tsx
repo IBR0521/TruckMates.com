@@ -192,6 +192,19 @@ export default function FleetMapPage() {
       if (geofence.zone_type === "circle" && geofence.center_latitude && geofence.center_longitude) {
         setMapCenter([Number(geofence.center_latitude), Number(geofence.center_longitude)])
         setZoom(geofence.radius_meters ? Math.max(12, 20 - Math.log10(geofence.radius_meters / 1000)) : 15)
+      } else if (geofence.zone_type === "rectangle") {
+        // Rectangle selection: center is the midpoint of bounds
+        if (
+          geofence.north_bound != null &&
+          geofence.south_bound != null &&
+          geofence.east_bound != null &&
+          geofence.west_bound != null
+        ) {
+          const centerLat = (Number(geofence.north_bound) + Number(geofence.south_bound)) / 2
+          const centerLng = (Number(geofence.east_bound) + Number(geofence.west_bound)) / 2
+          setMapCenter([centerLat, centerLng])
+          setZoom(13)
+        }
       } else if (geofence.zone_type === "polygon" && geofence.polygon_coordinates && geofence.polygon_coordinates.length > 0) {
         // Calculate center of polygon (handle both {lat, lng} and [lat, lng] formats)
         const coords = geofence.polygon_coordinates.map((coord: any) => {
@@ -360,10 +373,12 @@ export default function FleetMapPage() {
                               {geofence.description}
                             </p>
                           )}
-                          <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                             {geofence.zone_type === "circle"
                               ? `Circle - ${geofence.radius_meters}m radius`
-                              : "Polygon"}
+                      : geofence.zone_type === "rectangle"
+                        ? "Rectangle Zone"
+                        : "Polygon"}
                           </p>
                               </div>
                         <div className="flex gap-1">
