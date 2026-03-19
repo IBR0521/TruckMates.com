@@ -1,0 +1,1002 @@
+{
+  "pages": {
+    "total": 110,
+    "results": [
+      {
+        "route": "/about",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/account-setup/manager",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/company",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/compliance",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/accounting/expenses",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/accounting/expenses/add",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/accounting/ifta/tax-rates",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/accounting/invoices",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/accounting/invoices/auto-generate",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/accounting/invoices/create",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/accounting/settlements",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/accounting/settlements/create",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/accounting/tax-fuel",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/accounting/tax-fuel/import",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/address-book",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/ai",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/alerts",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/all-features",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/bols",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/bols/create",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/crm",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/customers",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/customers/add",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/dispatches",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/dispatches/check-calls",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/documents",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/drivers",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/drivers/achievements",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/drivers/add",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/drivers/leaderboard",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/dvir",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/dvir/add",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/dvir/audit",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/eld",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/eld/devices",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/eld/driver-app",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/eld/health",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/eld/insights",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/eld/locations/add",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/eld/logs",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/eld/logs/add",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/eld/simulator",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/eld/violations",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/eld/violations/add",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/employees",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/fleet-map",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/fleet/idle-time",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/fuel-analytics",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/geofencing",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/geofencing/add",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/ifta",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/ifta/generate",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/loads",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/loads/add",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/maintenance",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/maintenance/add",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/maintenance/fault-code-rules",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/maintenance/predictive",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/maintenance/work-orders",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/marketplace",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/marketplace/post",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/marketplace/settings",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/notifications",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/reminders",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/reports/analytics",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/reports/detention",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/reports/driver-payments",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/reports/fuel-efficiency",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/reports/on-time-delivery",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/reports/profit-loss",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/reports/revenue",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/routes",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/routes/add",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/routes/optimize",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/account",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/alerts",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/api-keys",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/billing",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/business",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/dispatch",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/general",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/integration",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/invoice",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/load",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/loadboards",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/portal",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/reminder",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/users",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/settings/webhooks",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/trucks",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/trucks/add",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/vendors",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/dashboard/vendors/add",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/demo",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/demo/setup",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/diagnostics",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/login",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/marketplace",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/marketplace/dashboard",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/marketplace/post",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/partners",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/pricing",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/privacy",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/register",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/register/employee",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/register/super-admin",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/security",
+        "status": 200,
+        "location": null
+      },
+      {
+        "route": "/terms",
+        "status": 200,
+        "location": null
+      }
+    ]
+  },
+  "apis": {
+    "total": 40,
+    "results": [
+      {
+        "route": "/api/actions/settings/integration",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 400,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/audit-logs",
+        "get": {
+          "status": 401,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/check-dependencies",
+        "get": {
+          "status": 400,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/check-env",
+        "get": {
+          "status": 401,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/checkout-success",
+        "get": {
+          "status": 200,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/cleanup-demo-data",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 400,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/cron/alert-escalations",
+        "get": {
+          "status": 401,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/cron/auto-maintenance",
+        "get": {
+          "status": 401,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/cron/sync-eld",
+        "get": {
+          "status": 401,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/debug/geocoding",
+        "get": {
+          "status": 401,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/debug/google-maps-key",
+        "get": {
+          "status": 401,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/demo/populate",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/dvir/audit/pdf",
+        "get": {
+          "status": 401,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/eld/mobile/dvirs",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/eld/mobile/events",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/eld/mobile/locations",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/eld/mobile/logs",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/eld/mobile/register",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/eta/realtime",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/get-company-type",
+        "get": {
+          "status": 401,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/google-maps-key",
+        "get": {
+          "status": 401,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/health",
+        "get": {
+          "status": 200,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/mobile/bol-signature",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 400,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/mobile/pod-capture",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 400,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/mobile/settlements",
+        "get": {
+          "status": 401,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/mobile/settlements/approve",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/quickbooks/callback",
+        "get": {
+          "status": 403,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/quickbooks/connect",
+        "get": {
+          "status": 403,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/quickbooks/disconnect",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/quickbooks/sync",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/quickbooks/test",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/test-connection",
+        "get": {
+          "status": 401,
+          "location": null
+        },
+        "post": {
+          "status": 405,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/truckmates-ai/chat",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/webhooks/crm-communication",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 400,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/webhooks/eld/geotab",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/webhooks/eld/keeptruckin",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/webhooks/eld/samsara",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/webhooks/paypal",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 400,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/webhooks/retry",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      },
+      {
+        "route": "/api/webhooks/stripe",
+        "get": {
+          "status": 405,
+          "location": null
+        },
+        "post": {
+          "status": 401,
+          "location": null
+        }
+      }
+    ]
+  }
+}

@@ -1,40 +1,23 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
 // Get all stops for a route
 export async function getRouteStops(routeId: string) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { data: stops, error } = await supabase
       .from("route_stops")
       .select("*")
       .eq("route_id", routeId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .order("stop_number", { ascending: true })
 
     if (error) {
@@ -84,27 +67,9 @@ export async function createRouteStop(routeId: string, stopData: {
 }) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Verify route belongs to company
@@ -112,7 +77,7 @@ export async function createRouteStop(routeId: string, stopData: {
       .from("routes")
       .select("id, company_id")
       .eq("id", routeId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (!route) {
@@ -123,7 +88,7 @@ export async function createRouteStop(routeId: string, stopData: {
       .from("route_stops")
       .insert({
         route_id: routeId,
-        company_id: userData.company_id,
+        company_id: ctx.companyId,
         stop_number: stopData.stop_number,
         location_name: stopData.location_name,
         location_id: stopData.location_id || null,
@@ -210,27 +175,9 @@ export async function updateRouteStop(stopId: string, stopData: {
 }) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const updateData: any = {}
@@ -271,7 +218,7 @@ export async function updateRouteStop(stopId: string, stopData: {
       .from("route_stops")
       .update(updateData)
       .eq("id", stopId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .select()
       .single()
 
@@ -292,27 +239,9 @@ export async function updateRouteStop(stopId: string, stopData: {
 export async function deleteRouteStop(stopId: string) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Get stop to get route_id for revalidation
@@ -320,7 +249,7 @@ export async function deleteRouteStop(stopId: string) {
       .from("route_stops")
       .select("route_id")
       .eq("id", stopId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (!stop) {
@@ -331,7 +260,7 @@ export async function deleteRouteStop(stopId: string) {
       .from("route_stops")
       .delete()
       .eq("id", stopId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message, data: null }
@@ -350,27 +279,9 @@ export async function deleteRouteStop(stopId: string) {
 export async function reorderRouteStops(routeId: string, stopIds: string[]) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Update stop numbers based on new order
@@ -380,7 +291,7 @@ export async function reorderRouteStops(routeId: string, stopIds: string[]) {
         .update({ stop_number: i + 1 })
         .eq("id", stopIds[i])
         .eq("route_id", routeId)
-        .eq("company_id", userData.company_id)
+        .eq("company_id", ctx.companyId)
 
       if (error) {
         return { error: error.message, data: null }

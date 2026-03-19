@@ -13,20 +13,8 @@ import { ALL_LOAD_STATUSES, getAllowedNextLoadStatuses, normalizeLoadStatus, par
 async function sendNotificationsForLoadUpdate(loadData: any) {
   try {
     const supabase = await createClient()
-    
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) return
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError || !userData?.company_id) return
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) return
 
     // BUG-018 FIX: Filter notifications by relevance - only notify assigned driver, dispatcher, and managers
     // Get assigned driver if load has one
@@ -39,7 +27,7 @@ async function sendNotificationsForLoadUpdate(loadData: any) {
     const { data: relevantUsers } = await supabase
       .from("users")
       .select("id, role")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .or([
         assignedDriverId ? `id.eq.${assignedDriverId}` : "",
         "role.in.(super_admin,operations_manager,dispatcher,safety_compliance)",
@@ -255,26 +243,9 @@ export async function createLoad(formData: {
 
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get company settings to apply load defaults
@@ -317,7 +288,7 @@ export async function createLoad(formData: {
       .from("drivers")
       .select("id, status, company_id")
       .eq("id", formData.driver_id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (driverError || !driver) {
@@ -335,7 +306,7 @@ export async function createLoad(formData: {
       .from("trucks")
       .select("id, status, company_id")
       .eq("id", formData.truck_id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (truckError || !truck) {
@@ -353,7 +324,7 @@ export async function createLoad(formData: {
       .from("customers")
       .select("id, company_id")
       .eq("id", formData.customer_id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (customerError || !customer) {
@@ -385,7 +356,7 @@ export async function createLoad(formData: {
     const { data: existingLoad } = await supabase
       .from("loads")
       .select("id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("shipment_number", shipmentNumber)
       .maybeSingle()
 
@@ -425,7 +396,7 @@ export async function createLoad(formData: {
     const { data: existingRoutes } = await supabase
       .from("routes")
       .select("id, origin, destination")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .or(`origin.ilike.%${safeOrigin}%,origin.ilike.%${safeOriginFirst}%,destination.ilike.%${safeDest}%,destination.ilike.%${safeDestFirst}%`)
       .limit(10) // Limit results for performance
 
@@ -513,7 +484,7 @@ export async function createLoad(formData: {
       const { data: recentLoads } = await supabase
         .from("loads")
         .select("driver_id, truck_id, customer_id")
-        .eq("company_id", userData.company_id)
+        .eq("company_id", ctx.companyId)
         .or(`origin.ilike.%${safeOrigin}%,destination.ilike.%${safeDest}%`)
         .order("created_at", { ascending: false })
         .limit(5)
@@ -541,7 +512,7 @@ export async function createLoad(formData: {
             .select("id, shipment_number")
             .eq("driver_id", topDriverId)
             .in("status", ["scheduled", "in_transit"])
-            .eq("company_id", userData.company_id)
+            .eq("company_id", ctx.companyId)
             .limit(1)
 
           // Only assign if driver is not already on an active load
@@ -551,7 +522,7 @@ export async function createLoad(formData: {
               .from("drivers")
               .select("id, name, status")
               .eq("id", topDriverId)
-              .eq("company_id", userData.company_id)
+              .eq("company_id", ctx.companyId)
               .eq("status", "active")
               .maybeSingle()
             if (driver) finalDriverId = driver.id
@@ -564,7 +535,7 @@ export async function createLoad(formData: {
             .from("trucks")
             .select("id, truck_number, status")
             .eq("id", topTruckId)
-            .eq("company_id", userData.company_id)
+            .eq("company_id", ctx.companyId)
             .in("status", ["available", "in_use"])
             .maybeSingle()
           if (truck) finalTruckId = truck.id
@@ -577,7 +548,7 @@ export async function createLoad(formData: {
 
   // Build insert data with professional sanitization
   const loadData: any = {
-    company_id: userData.company_id,
+    company_id: ctx.companyId,
     shipment_number: shipmentNumber,
     origin: sanitizeString(formData.origin, 200),
     destination: sanitizeString(formData.destination, 200),
@@ -741,7 +712,7 @@ export async function createLoad(formData: {
         .from("trucks")
         .update({ status: "in_use" })
         .eq("id", data.truck_id)
-        .eq("company_id", userData.company_id)
+        .eq("company_id", ctx.companyId)
     } catch (truckUpdateError) {
       console.warn("[createLoad] Failed to update truck status:", truckUpdateError)
       // Don't fail load creation if truck status update fails
@@ -788,7 +759,7 @@ export async function createLoad(formData: {
   // Trigger webhook
   try {
     const { triggerWebhook } = await import("./webhooks")
-    await triggerWebhook(userData.company_id, "load.created", {
+    await triggerWebhook(ctx.companyId, "load.created", {
       load_id: data.id,
       shipment_number: shipmentNumber,
       status: data.status,
@@ -847,27 +818,9 @@ export async function updateLoad(
 
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get current load data for audit trail and status check (with company_id verification)
@@ -875,7 +828,7 @@ export async function updateLoad(
     .from("loads")
     .select("*")
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!currentLoad) {
@@ -1050,7 +1003,7 @@ export async function updateLoad(
     .from("loads")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -1077,7 +1030,7 @@ export async function updateLoad(
       const { data: newInvoice, error: invoiceError } = await supabase
         .from("invoices")
         .insert({
-          company_id: userData.company_id,
+          company_id: ctx.companyId,
           invoice_number: invoiceNumber,
           customer_name: data.company_name || "Customer",
           load_id: id,
@@ -1110,7 +1063,7 @@ export async function updateLoad(
           const { data: settings } = await supabase
             .from("company_settings")
             .select("auto_send_invoice_email, invoice_email_subject, invoice_email_body")
-            .eq("company_id", userData.company_id)
+            .eq("company_id", ctx.companyId)
             .single()
 
           if (settings?.auto_send_invoice_email) {
@@ -1182,11 +1135,7 @@ export async function updateLoad(
   if (changes.length > 0) {
     try {
       const { createAuditLog } = await import("@/lib/audit-log")
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (user) {
+      if (ctx.userId) {
         // Log each field change separately for better audit trail
         for (const change of changes) {
           try {
@@ -1291,28 +1240,9 @@ export async function deleteLoad(id: string) {
 // Bulk operations for workflow optimization
 export async function bulkDeleteLoads(ids: string[]) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // DAT-004 FIX: Check for active in-transit loads before bulk delete
@@ -1321,7 +1251,7 @@ export async function bulkDeleteLoads(ids: string[]) {
     .from("loads")
     .select("id, shipment_number, status")
     .in("id", ids)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (loadsToDelete) {
     const inTransitLoads = loadsToDelete.filter((l: { id: string; shipment_number: string; status: string; [key: string]: any }) => l.status === "in_transit")
@@ -1349,7 +1279,7 @@ export async function bulkDeleteLoads(ids: string[]) {
     .from("loads")
     .delete()
     .in("id", ids)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message, data: null }
@@ -1373,28 +1303,9 @@ export async function bulkUpdateLoadStatus(ids: string[], status: string) {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Validate transitions per-load to avoid applying impossible status changes in bulk
@@ -1402,7 +1313,7 @@ export async function bulkUpdateLoadStatus(ids: string[], status: string) {
     .from("loads")
     .select("id, shipment_number, status")
     .in("id", ids)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (fetchError) {
     return { error: fetchError.message || "Failed to fetch loads for bulk update", data: null }
@@ -1435,7 +1346,7 @@ export async function bulkUpdateLoadStatus(ids: string[], status: string) {
     .from("loads")
     .update({ status: normalizedTarget })
     .in("id", ids)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message, data: null }
@@ -1448,28 +1359,9 @@ export async function bulkUpdateLoadStatus(ids: string[], status: string) {
 // Duplicate/clone load for workflow optimization
 export async function duplicateLoad(id: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get the original load
@@ -1477,7 +1369,7 @@ export async function duplicateLoad(id: string) {
     .from("loads")
     .select("*")
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (fetchError || !originalLoad) {
@@ -1495,7 +1387,7 @@ export async function duplicateLoad(id: string) {
   // Explicitly set required fields to avoid RLS issues
   // Only include columns that exist in the base schema
   const duplicateData: any = {
-    company_id: userData.company_id, // Explicitly set company_id
+    company_id: ctx.companyId, // Explicitly set company_id
     shipment_number: numberResult.data,
     origin: originalLoad.origin || "",
     destination: originalLoad.destination || "",
@@ -1563,7 +1455,7 @@ export async function duplicateLoad(id: string) {
     .from("load_delivery_points")
     .select("*")
     .eq("load_id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (deliveryPoints && deliveryPoints.length > 0) {
     const { createLoadDeliveryPoint } = await import("./load-delivery-points")
@@ -1584,28 +1476,9 @@ export async function duplicateLoad(id: string) {
 // Smart suggestions for workflow optimization
 export async function getLoadSuggestions(origin?: string, destination?: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const suggestions: any = {
@@ -1625,7 +1498,7 @@ export async function getLoadSuggestions(origin?: string, destination?: string) 
     const { data: recentLoads } = await supabase
       .from("loads")
       .select("driver_id, truck_id, customer_id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .or(`origin.ilike.%${safeOrigin}%,destination.ilike.%${safeDest}%`)
       .order("created_at", { ascending: false })
       .limit(5)
@@ -1652,7 +1525,7 @@ export async function getLoadSuggestions(origin?: string, destination?: string) 
           .from("drivers")
           .select("id, name, status")
           .eq("id", topDriverId)
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .eq("status", "active")
           .maybeSingle()
         if (driver) suggestions.suggestedDriver = driver
@@ -1664,7 +1537,7 @@ export async function getLoadSuggestions(origin?: string, destination?: string) 
           .from("trucks")
           .select("id, truck_number, status")
           .eq("id", topTruckId)
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .in("status", ["available", "in_use"])
           .maybeSingle()
         if (truck) suggestions.suggestedTruck = truck
@@ -1678,7 +1551,7 @@ export async function getLoadSuggestions(origin?: string, destination?: string) 
           .from("customers")
           .select("id, name, company_name")
           .eq("id", lastLoad.customer_id)
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .maybeSingle()
         if (customer) suggestions.lastUsedCustomer = customer
       }
@@ -1689,7 +1562,7 @@ export async function getLoadSuggestions(origin?: string, destination?: string) 
   const { data: similarLoads } = await supabase
     .from("loads")
     .select("id, shipment_number, origin, destination, contents, value, status")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .order("created_at", { ascending: false })
     .limit(5)
 

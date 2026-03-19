@@ -571,11 +571,7 @@ export async function updateDriver(
   if (changes.length > 0) {
     try {
       const { createAuditLog } = await import("@/lib/audit-log")
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (user) {
+      if (ctx.userId) {
         // Log each field change separately for better audit trail
         for (const change of changes) {
           try {

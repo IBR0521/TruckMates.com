@@ -1,40 +1,23 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
 // Get all delivery points for a load
 export async function getLoadDeliveryPoints(loadId: string) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { data: deliveryPoints, error } = await supabase
       .from("load_delivery_points")
       .select("*")
       .eq("load_id", loadId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .order("delivery_number", { ascending: true })
 
     if (error) {
@@ -87,27 +70,9 @@ export async function createLoadDeliveryPoint(loadId: string, deliveryPointData:
 }) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Verify load belongs to company
@@ -115,7 +80,7 @@ export async function createLoadDeliveryPoint(loadId: string, deliveryPointData:
       .from("loads")
       .select("id, company_id")
       .eq("id", loadId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (!load) {
@@ -126,7 +91,7 @@ export async function createLoadDeliveryPoint(loadId: string, deliveryPointData:
       .from("load_delivery_points")
       .insert({
         load_id: loadId,
-        company_id: userData.company_id,
+        company_id: ctx.companyId,
         delivery_number: deliveryPointData.delivery_number,
         location_name: deliveryPointData.location_name,
         location_id: deliveryPointData.location_id || null,
@@ -231,27 +196,9 @@ export async function updateLoadDeliveryPoint(deliveryPointId: string, deliveryP
 }) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const updateData: any = {}
@@ -296,7 +243,7 @@ export async function updateLoadDeliveryPoint(deliveryPointId: string, deliveryP
       .from("load_delivery_points")
       .update(updateData)
       .eq("id", deliveryPointId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .select()
       .single()
 
@@ -317,27 +264,9 @@ export async function updateLoadDeliveryPoint(deliveryPointId: string, deliveryP
 export async function deleteLoadDeliveryPoint(deliveryPointId: string) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Get delivery point to get load_id for revalidation
@@ -345,7 +274,7 @@ export async function deleteLoadDeliveryPoint(deliveryPointId: string) {
       .from("load_delivery_points")
       .select("load_id")
       .eq("id", deliveryPointId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (!deliveryPoint) {
@@ -356,7 +285,7 @@ export async function deleteLoadDeliveryPoint(deliveryPointId: string) {
       .from("load_delivery_points")
       .delete()
       .eq("id", deliveryPointId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message, data: null }

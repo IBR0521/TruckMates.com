@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { createDriver } from "./drivers"
 import { createTruck } from "./trucks"
@@ -12,29 +13,11 @@ import { createTruck } from "./trucks"
  */
 export async function getSetupStatus() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
-
-  // CRITICAL FIX: Don't use cached company_id - fetch fresh from database
-  // This ensures we get the latest setup_complete status
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError || !userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  const company_id = userData.company_id
+  const company_id = ctx.companyId
 
   try {
     // CRITICAL FIX: Always fetch fresh data, no caching
@@ -78,29 +61,11 @@ export async function updateCompanyProfile(data: {
   timezone?: string
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "No company found. Please complete registration first.", data: null }
   }
-
-  // CRITICAL FIX: Fetch company_id directly, don't use cache during setup
-  // This ensures we get the correct company even if cache is stale
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError || !userData?.company_id) {
-    return { error: "No company found. Please complete registration first.", data: null }
-  }
-
-  const company_id = userData.company_id
+  const company_id = ctx.companyId
 
   try {
     // CRITICAL FIX: Use RPC function to bypass RLS during setup
@@ -225,28 +190,11 @@ async function enablePlatformIntegrations(companyId: string) {
 
 export async function completeSetup() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "No company found. Please complete registration first.", data: null }
   }
-
-  // CRITICAL FIX: Fetch company_id directly, don't use cache during setup
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError || !userData?.company_id) {
-    return { error: "No company found. Please complete registration first.", data: null }
-  }
-
-  const company_id = userData.company_id
+  const company_id = ctx.companyId
 
   try {
     // CRITICAL FIX: Use RPC function to bypass RLS during setup

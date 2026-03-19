@@ -11,8 +11,8 @@ export async function GET(request: Request) {
   if (!cronSecret) {
     console.error("[Cron] CRON_SECRET not configured - endpoint disabled")
     return NextResponse.json(
-      { error: "Cron endpoint is not configured. Set CRON_SECRET environment variable." },
-      { status: 503 }
+      { error: "Unauthorized" },
+      { status: 401 }
     )
   }
 

@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
 // PayPal API configuration
@@ -45,27 +46,19 @@ export async function createPayPalSubscription(planId: string) {
     }
 
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.userId || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { data: userData, error: userError } = await supabase
       .from("users")
-      .select("company_id, email, full_name")
-      .eq("id", user.id)
+      .select("email, full_name")
+      .eq("id", ctx.userId)
       .single()
 
     if (userError) {
       return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
     }
 
     // Platform is currently free - no subscription needed
@@ -189,7 +182,7 @@ export async function createPayPalSubscription(planId: string) {
         plan_id: paypalPlan.id,
         custom_id: planId, // BUG-020: Our subscription_plans.id so webhook can map to internal plan
         subscriber: {
-          email_address: userData.email || user.email || undefined,
+          email_address: userData.email || ctx.user?.email || undefined,
           name: {
             given_name: userData.full_name?.split(" ")[0] || "Customer",
             surname: userData.full_name?.split(" ").slice(1).join(" ") || "",

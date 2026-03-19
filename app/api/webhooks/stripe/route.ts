@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
   if (!webhookSecret) {
     console.error('[Stripe] STRIPE_WEBHOOK_SECRET not configured')
     return NextResponse.json(
-      { error: 'Webhook not configured' },
-      { status: 503 }
+      { error: 'Unauthorized' },
+      { status: 401 }
     )
   }
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
   try {
     const stripe = getStripe()
     if (!stripe) {
-      return NextResponse.json({ error: "Stripe not configured" }, { status: 503 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
   } catch (err: any) {

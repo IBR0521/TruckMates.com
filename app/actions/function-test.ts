@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import * as driversActions from "./drivers"
 import * as trucksActions from "./trucks"
 import * as loadsActions from "./loads"
@@ -54,23 +55,9 @@ export async function testAllPlatformFunctions() {
     }
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
     return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
   }
 
   // Create arrays using a closure pattern - absolutely guaranteed to exist
@@ -820,17 +807,11 @@ export async function testAllPlatformFunctions() {
       const trucks = await trucksActions.getTrucks()
       if (trucks.data && trucks.data.length > 0) {
         const supabase = await createClient()
-        const { data: userData } = await supabase
-          .from("users")
-          .select("company_id")
-          .eq("id", user.id)
-          .single()
-
-        if (userData?.company_id) {
+        if (ctx.companyId) {
           const { data: maint, error: maintError } = await supabase
             .from("maintenance")
             .insert({
-              company_id: userData.company_id,
+              company_id: ctx.companyId,
               truck_id: trucks.data[0].id,
               service_type: "oil_change",
               scheduled_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],

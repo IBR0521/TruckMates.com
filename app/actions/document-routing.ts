@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkEditPermission, checkViewPermission } from "@/lib/server-permissions"
 
@@ -20,27 +21,9 @@ export async function linkDocumentToRecord(
 
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { success: false, error: "Not authenticated" }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { success: false, error: userError.message || "Failed to fetch user data" }
-    }
-
-    if (!userData?.company_id) {
-      return { success: false, error: "No company found" }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { success: false, error: ctx.error || "Not authenticated" }
     }
 
     // Verify document belongs to company
@@ -48,7 +31,7 @@ export async function linkDocumentToRecord(
       .from("documents")
       .select("id, company_id, type") // FIXED: Include type to check if it should be preserved
       .eq("id", documentId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (docError || !document) {
@@ -63,7 +46,7 @@ export async function linkDocumentToRecord(
           .from("drivers")
           .select("id")
           .eq("id", recordId)
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .single()
         recordBelongsToCompany = !!driverCheck
         break
@@ -72,7 +55,7 @@ export async function linkDocumentToRecord(
           .from("trucks")
           .select("id")
           .eq("id", recordId)
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .single()
         recordBelongsToCompany = !!truckCheck
         break
@@ -81,7 +64,7 @@ export async function linkDocumentToRecord(
           .from("loads")
           .select("id")
           .eq("id", recordId)
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .single()
         recordBelongsToCompany = !!loadCheck
         break
@@ -90,7 +73,7 @@ export async function linkDocumentToRecord(
           .from("routes")
           .select("id")
           .eq("id", recordId)
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .single()
         recordBelongsToCompany = !!routeCheck
         break
@@ -99,7 +82,7 @@ export async function linkDocumentToRecord(
           .from("invoices")
           .select("id")
           .eq("id", recordId)
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .single()
         recordBelongsToCompany = !!invoiceCheck
         break
@@ -108,7 +91,7 @@ export async function linkDocumentToRecord(
           .from("expenses")
           .select("id")
           .eq("id", recordId)
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .single()
         recordBelongsToCompany = !!expenseCheck
         break
@@ -117,7 +100,7 @@ export async function linkDocumentToRecord(
           .from("maintenance")
           .select("id")
           .eq("id", recordId)
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .single()
         recordBelongsToCompany = !!maintenanceCheck
         break
@@ -177,7 +160,7 @@ export async function linkDocumentToRecord(
           .from("maintenance")
           .select("truck_id")
           .eq("id", recordId)
-          .eq("company_id", userData.company_id) // FIXED: Add company_id filter
+          .eq("company_id", ctx.companyId) // FIXED: Add company_id filter
           .single()
         if (maintenanceRecord?.truck_id) {
           updateData.truck_id = maintenanceRecord.truck_id
@@ -190,7 +173,7 @@ export async function linkDocumentToRecord(
       .from("documents")
       .update(updateData)
       .eq("id", documentId)
-      .eq("company_id", userData.company_id) // FIXED: Add company_id filter
+      .eq("company_id", ctx.companyId) // FIXED: Add company_id filter
 
     if (updateError) {
       return { success: false, error: updateError.message }
@@ -217,23 +200,9 @@ export async function getRecordsForRouting(
 
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     let query: any = null
@@ -244,21 +213,21 @@ export async function getRecordsForRouting(
         query = supabase
           .from("drivers")
           .select("id, name, email, phone")
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .order("name", { ascending: true })
         break
       case "vehicle":
         query = supabase
           .from("trucks")
           .select("id, truck_number, make, model, year")
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .order("truck_number", { ascending: true })
         break
       case "load":
         query = supabase
           .from("loads")
           .select("id, shipment_number, origin, destination, status")
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .order("created_at", { ascending: false })
           .limit(50)
         break
@@ -266,7 +235,7 @@ export async function getRecordsForRouting(
         query = supabase
           .from("routes")
           .select("id, name, origin, destination, status")
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .order("created_at", { ascending: false })
           .limit(50)
         break
@@ -274,7 +243,7 @@ export async function getRecordsForRouting(
         query = supabase
           .from("invoices")
           .select("id, invoice_number, customer_name, amount, status")
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .order("created_at", { ascending: false })
           .limit(50)
         break
@@ -282,7 +251,7 @@ export async function getRecordsForRouting(
         query = supabase
           .from("expenses")
           .select("id, description, amount, date, category")
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .order("date", { ascending: false })
           .limit(50)
         break
@@ -290,7 +259,7 @@ export async function getRecordsForRouting(
         query = supabase
           .from("maintenance")
           .select("id, service_type, scheduled_date, truck_id")
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .order("scheduled_date", { ascending: false })
           .limit(50)
         break

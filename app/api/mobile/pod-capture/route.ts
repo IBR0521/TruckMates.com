@@ -10,6 +10,14 @@ import { getCachedUserCompany } from "@/lib/query-optimizer"
  */
 export async function POST(request: NextRequest) {
   try {
+    const contentType = request.headers.get("content-type") || ""
+    if (!contentType.includes("multipart/form-data")) {
+      return NextResponse.json(
+        { error: "Content-Type must be multipart/form-data" },
+        { status: 400 }
+      )
+    }
+
     const formData = await request.formData()
     const loadId = formData.get("loadId") as string
     const bolId = formData.get("bolId") as string | null
@@ -189,6 +197,13 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error("POD capture upload error:", error)
+    const message = String(error?.message || "")
+    if (message.toLowerCase().includes("formdata")) {
+      return NextResponse.json(
+        { error: "Invalid multipart form-data payload" },
+        { status: 400 }
+      )
+    }
     return NextResponse.json(
       { error: error.message || "Failed to upload POD" },
       { status: 500 }

@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 export interface Accessorial {
   id?: string
@@ -21,29 +22,15 @@ export interface Accessorial {
  */
 export async function getAccessorials(): Promise<{ data: Accessorial[] | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError || !userData?.company_id) {
-    return { error: userError?.message || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("company_accessorials")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .order("display_order", { ascending: true })
     .order("name", { ascending: true })
 
@@ -59,23 +46,19 @@ export async function getAccessorials(): Promise<{ data: Accessorial[] | null; e
  */
 export async function createAccessorial(accessorial: Omit<Accessorial, "id">): Promise<{ data: Accessorial | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // HIGH FIX 1: Add RBAC check - only managers can create accessorials
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("role, company_id")
-    .eq("id", user.id)
+    .eq("id", ctx.userId)
     .single()
 
-  if (userError || !userData?.company_id) {
+  if (userError) {
     return { error: userError?.message || "No company found", data: null }
   }
 
@@ -94,7 +77,7 @@ export async function createAccessorial(accessorial: Omit<Accessorial, "id">): P
   const { data, error } = await supabase
     .from("company_accessorials")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       name: accessorial.name.trim(),
       code: accessorial.code?.trim() || null,
       description: accessorial.description?.trim() || null,
@@ -124,23 +107,19 @@ export async function createAccessorial(accessorial: Omit<Accessorial, "id">): P
  */
 export async function updateAccessorial(id: string, accessorial: Partial<Accessorial>): Promise<{ data: Accessorial | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // HIGH FIX 1: Add RBAC check - only managers can update accessorials
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("role, company_id")
-    .eq("id", user.id)
+    .eq("id", ctx.userId)
     .single()
 
-  if (userError || !userData?.company_id) {
+  if (userError) {
     return { error: userError?.message || "No company found", data: null }
   }
 
@@ -156,7 +135,7 @@ export async function updateAccessorial(id: string, accessorial: Partial<Accesso
     .eq("id", id)
     .single()
 
-  if (checkError || !existing || existing.company_id !== userData.company_id) {
+  if (checkError || !existing || existing.company_id !== ctx.companyId) {
     return { error: "Accessorial not found or access denied", data: null }
   }
 
@@ -176,7 +155,7 @@ export async function updateAccessorial(id: string, accessorial: Partial<Accesso
     .from("company_accessorials")
     .update(updateData)
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -195,23 +174,19 @@ export async function updateAccessorial(id: string, accessorial: Partial<Accesso
  */
 export async function deleteAccessorial(id: string): Promise<{ error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   // HIGH FIX 1: Add RBAC check - only managers can delete accessorials
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("role, company_id")
-    .eq("id", user.id)
+    .eq("id", ctx.userId)
     .single()
 
-  if (userError || !userData?.company_id) {
+  if (userError) {
     return { error: userError?.message || "No company found" }
   }
 
@@ -229,7 +204,7 @@ export async function deleteAccessorial(id: string): Promise<{ error: string | n
     .eq("id", id)
     .single()
 
-  if (checkError || !existing || existing.company_id !== userData.company_id) {
+  if (checkError || !existing || existing.company_id !== ctx.companyId) {
     return { error: "Accessorial not found or access denied" }
   }
 
@@ -237,7 +212,7 @@ export async function deleteAccessorial(id: string): Promise<{ error: string | n
     .from("company_accessorials")
     .delete()
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message || "Failed to delete accessorial" }

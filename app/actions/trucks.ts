@@ -403,11 +403,7 @@ export async function updateTruck(
   if (changes.length > 0) {
     try {
       const { createAuditLog } = await import("@/lib/audit-log")
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (user) {
+      if (ctx.userId) {
         for (const change of changes) {
           try {
             await createAuditLog({
@@ -425,6 +421,8 @@ export async function updateTruck(
             console.error("[updateTruck] ❌ Audit log failed for field", change.field, ":", err.message)
           }
         }
+      } else {
+        console.warn("[updateTruck] No user found for audit logging")
       }
     } catch (err: any) {
       console.error("[updateTruck] Failed to import audit log module:", err.message)

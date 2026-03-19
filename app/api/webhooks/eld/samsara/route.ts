@@ -18,11 +18,14 @@ function verifySamsaraSignature(
   const hmac = crypto.createHmac("sha256", secret)
   hmac.update(body)
   const expectedSignature = `sha256=${hmac.digest("hex")}`
-  
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expectedSignature)
-  )
+
+  const signatureBuffer = Buffer.from(signature)
+  const expectedBuffer = Buffer.from(expectedSignature)
+  if (signatureBuffer.length !== expectedBuffer.length) {
+    return false
+  }
+
+  return crypto.timingSafeEqual(signatureBuffer, expectedBuffer)
 }
 
 export async function POST(request: NextRequest) {
@@ -36,7 +39,7 @@ export async function POST(request: NextRequest) {
     // SECURITY: Fail-closed - require secret to be configured
     if (!webhookSecret) {
       console.error("[Samsara Webhook] SAMSARA_WEBHOOK_SECRET not configured")
-      return NextResponse.json({ error: "Webhook not configured" }, { status: 503 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     
     // Verify signature

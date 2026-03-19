@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 // Generate BOL PDF data (returns HTML that can be converted to PDF)
 export async function generateBOLPDF(bolId: string): Promise<{
@@ -15,28 +16,10 @@ export async function generateBOLPDF(bolId: string): Promise<{
     }
 
     const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { html: "", error: "Not authenticated" }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { html: "", error: userError.message || "Failed to fetch user data" }
-  }
-
-  if (!userData?.company_id) {
-    return { html: "", error: "No company found" }
-  }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { html: "", error: ctx.error || "Not authenticated" }
+    }
 
   // Get BOL data
   // V3-007 FIX: Replace select(*) with explicit columns
@@ -44,7 +27,7 @@ export async function generateBOLPDF(bolId: string): Promise<{
     .from("bols")
     .select("id, company_id, bol_number, created_at, shipper_name, shipper_address, shipper_city, shipper_state, shipper_zip, shipper_phone, shipper_email, consignee_name, consignee_address, consignee_city, consignee_state, consignee_zip, consignee_phone, consignee_email, carrier_name, carrier_mc_number, carrier_dot_number, pickup_date, delivery_date, freight_charges, payment_terms, special_instructions, shipper_signature, driver_signature, consignee_signature, load_id, metadata")
     .eq("id", bolId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .maybeSingle()
 
   if (error || !bol) {

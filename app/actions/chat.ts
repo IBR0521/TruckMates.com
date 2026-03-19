@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { handleDbError } from "@/lib/db-helpers"
 
@@ -15,27 +16,9 @@ export async function getChatThreads(filters?: {
 }) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId || !ctx.userId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     let query = supabase
@@ -43,9 +26,9 @@ export async function getChatThreads(filters?: {
       .select(
         "id, company_id, load_id, route_id, driver_id, thread_type, title, participants, last_message_at, last_message_by",
       )
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       // SECURITY: Only threads where the current user is a participant
-      .contains("participants", [user.id])
+      .contains("participants", [ctx.userId])
       .order("last_message_at", { ascending: false })
 
     if (filters?.load_id) {
@@ -91,34 +74,16 @@ export async function getOrCreateThread(formData: {
   participant_ids: string[]
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Check if thread already exists
   let query = supabase
     .from("chat_threads")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("thread_type", formData.thread_type)
 
   if (formData.load_id) {
@@ -138,12 +103,12 @@ export async function getOrCreateThread(formData: {
   }
 
   // Create new thread
-  const participants = [...new Set([user.id, ...formData.participant_ids])]
+  const participants = [...new Set([ctx.userId, ...formData.participant_ids])]
 
   const { data, error } = await supabase
     .from("chat_threads")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       load_id: formData.load_id || null,
       route_id: formData.route_id || null,
       driver_id: formData.driver_id || null,
@@ -168,27 +133,9 @@ export async function getOrCreateThread(formData: {
  */
 export async function getChatMessages(threadId: string, limit: number = 50) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Verify user has access to thread
@@ -196,7 +143,7 @@ export async function getChatMessages(threadId: string, limit: number = 50) {
     .from("chat_threads")
     .select("*")
     .eq("id", threadId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!thread) {
@@ -204,7 +151,7 @@ export async function getChatMessages(threadId: string, limit: number = 50) {
   }
 
   const participants = thread.participants || []
-  if (!participants.includes(user.id)) {
+  if (!participants.includes(ctx.userId)) {
     return { error: "Access denied", data: null }
   }
 
@@ -228,10 +175,10 @@ export async function getChatMessages(threadId: string, limit: number = 50) {
     .from("chat_messages")
     .update({
       is_read: true,
-      read_by: supabase.raw(`array_append(COALESCE(read_by, '[]'::jsonb), '${user.id}'::text)`)
+      read_by: supabase.raw(`array_append(COALESCE(read_by, '[]'::jsonb), '${ctx.userId}'::text)`)
     })
     .eq("thread_id", threadId)
-    .neq("sender_id", user.id)
+    .neq("sender_id", ctx.userId)
     .eq("is_read", false)
 
   return { data: (data || []).reverse(), error: null }
@@ -247,27 +194,9 @@ export async function sendChatMessage(formData: {
   attachments?: any[]
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Verify user has access to thread
@@ -275,7 +204,7 @@ export async function sendChatMessage(formData: {
     .from("chat_threads")
     .select("*")
     .eq("id", formData.thread_id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!thread) {
@@ -283,7 +212,7 @@ export async function sendChatMessage(formData: {
   }
 
   const participants = thread.participants || []
-  if (!participants.includes(user.id)) {
+  if (!participants.includes(ctx.userId)) {
     return { error: "Access denied", data: null }
   }
 
@@ -292,8 +221,8 @@ export async function sendChatMessage(formData: {
     .from("chat_messages")
     .insert({
       thread_id: formData.thread_id,
-      company_id: userData.company_id,
-      sender_id: user.id,
+      company_id: ctx.companyId,
+      sender_id: ctx.userId,
       message: formData.message,
       message_type: formData.message_type || 'text',
       attachments: formData.attachments || [],
@@ -318,27 +247,9 @@ export async function sendChatMessage(formData: {
  */
 export async function markThreadAsRead(threadId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Mark all messages in thread as read
@@ -346,10 +257,10 @@ export async function markThreadAsRead(threadId: string) {
     .from("chat_messages")
     .update({
       is_read: true,
-      read_by: supabase.raw(`array_append(COALESCE(read_by, '[]'::jsonb), '${user.id}'::text)`)
+      read_by: supabase.raw(`array_append(COALESCE(read_by, '[]'::jsonb), '${ctx.userId}'::text)`)
     })
     .eq("thread_id", threadId)
-    .neq("sender_id", user.id)
+    .neq("sender_id", ctx.userId)
     .eq("is_read", false)
 
   // Update thread unread count
@@ -361,7 +272,7 @@ export async function markThreadAsRead(threadId: string) {
 
   if (thread) {
     const unreadCount = thread.unread_count || {}
-    unreadCount[user.id] = 0
+    unreadCount[ctx.userId] = 0
 
     await supabase
       .from("chat_threads")

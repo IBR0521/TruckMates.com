@@ -1,35 +1,22 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Get subscription information
  */
 export async function getSubscription(): Promise<{ data: any | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError || !userData?.company_id) {
-    return { error: userError?.message || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("company_subscriptions")
     .select("id, company_id, plan_name, plan_display_name, status, billing_cycle, amount, currency, start_date, end_date, trial_end_date, cancelled_at, auto_renew, features")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .maybeSingle()
 
   if (error && error.code !== 'PGRST116') {
@@ -61,29 +48,15 @@ export async function getSubscription(): Promise<{ data: any | null; error: stri
  */
 export async function getPaymentHistory(): Promise<{ data: any[] | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError || !userData?.company_id) {
-    return { error: userError?.message || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("company_payment_history")
     .select("id, company_id, subscription_id, amount, currency, payment_method, payment_method_last4, transaction_id, status, status_message, payment_date, processed_at, invoice_number, receipt_url, metadata, created_at, updated_at")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .order("payment_date", { ascending: false })
     .limit(50)
 
@@ -99,29 +72,15 @@ export async function getPaymentHistory(): Promise<{ data: any[] | null; error: 
  */
 export async function getPaymentMethods(): Promise<{ data: any[] | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError || !userData?.company_id) {
-    return { error: userError?.message || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("company_payment_methods")
     .select("id, company_id, type, is_default, card_brand, card_last4, card_exp_month, card_exp_year, cardholder_name, bank_name, account_type, account_last4, routing_number, external_id, is_active, created_at, updated_at")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("is_active", true)
     .order("is_default", { ascending: false })
     .order("created_at", { ascending: false })
@@ -152,23 +111,19 @@ export async function savePaymentMethod(paymentMethod: {
   id?: string
 }): Promise<{ data: any | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // HIGH FIX 1: Add RBAC check - only managers can save payment methods
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("role, company_id")
-    .eq("id", user.id)
+    .eq("id", ctx.userId)
     .single()
 
-  if (userError || !userData?.company_id) {
+  if (userError) {
     return { error: userError?.message || "No company found", data: null }
   }
 
@@ -183,7 +138,7 @@ export async function savePaymentMethod(paymentMethod: {
   if (paymentMethod.is_default) {
     // Use RPC function for atomic default swap
     const { error: rpcError } = await supabase.rpc("set_payment_method_default", {
-      p_company_id: userData.company_id,
+      p_company_id: ctx.companyId,
       p_payment_method_id: paymentMethod.id || "", // Will be set after insert
       p_is_default: true,
     })
@@ -214,7 +169,7 @@ export async function savePaymentMethod(paymentMethod: {
     if (paymentMethod.is_default) {
       // Try RPC first for atomic swap
       const { error: rpcError } = await supabase.rpc("set_payment_method_default", {
-        p_company_id: userData.company_id,
+        p_company_id: ctx.companyId,
         p_payment_method_id: paymentMethod.id,
         p_is_default: true,
       })
@@ -225,7 +180,7 @@ export async function savePaymentMethod(paymentMethod: {
         const { error: unsetError } = await supabase
           .from("company_payment_methods")
           .update({ is_default: false })
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .eq("is_default", true)
           .neq("id", paymentMethod.id)
       }
@@ -237,7 +192,7 @@ export async function savePaymentMethod(paymentMethod: {
       .from("company_payment_methods")
       .update(updateData)
       .eq("id", paymentMethod.id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .select()
       .single()
 
@@ -251,7 +206,7 @@ export async function savePaymentMethod(paymentMethod: {
     const { data, error } = await supabase
       .from("company_payment_methods")
       .insert({
-        company_id: userData.company_id,
+        company_id: ctx.companyId,
         type: paymentMethod.type,
         card_brand: paymentMethod.card_brand || null,
         card_last4: paymentMethod.card_last4 || null,
@@ -275,7 +230,7 @@ export async function savePaymentMethod(paymentMethod: {
     // If this should be default, use RPC to atomically set it
     if (paymentMethod.is_default && data?.id) {
       await supabase.rpc("set_payment_method_default", {
-        p_company_id: userData.company_id,
+        p_company_id: ctx.companyId,
         p_payment_method_id: data.id,
         p_is_default: true,
       })
@@ -290,23 +245,19 @@ export async function savePaymentMethod(paymentMethod: {
  */
 export async function deletePaymentMethod(id: string): Promise<{ error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   // HIGH FIX 1: Add RBAC check - only managers can delete payment methods
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("role, company_id")
-    .eq("id", user.id)
+    .eq("id", ctx.userId)
     .single()
 
-  if (userError || !userData?.company_id) {
+  if (userError) {
     return { error: userError?.message || "No company found" }
   }
 
@@ -322,7 +273,7 @@ export async function deletePaymentMethod(id: string): Promise<{ error: string |
     .from("company_payment_methods")
     .select("id, is_default, is_active")
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (!paymentMethod) {
@@ -333,7 +284,7 @@ export async function deletePaymentMethod(id: string): Promise<{ error: string |
   const { data: allMethods } = await supabase
     .from("company_payment_methods")
     .select("id")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("is_active", true)
 
   if (allMethods && allMethods.length === 1 && allMethods[0].id === id) {
@@ -346,7 +297,7 @@ export async function deletePaymentMethod(id: string): Promise<{ error: string |
     const { data: otherMethod } = await supabase
       .from("company_payment_methods")
       .select("id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .eq("is_active", true)
       .neq("id", id)
       .limit(1)
@@ -358,7 +309,7 @@ export async function deletePaymentMethod(id: string): Promise<{ error: string |
         .from("company_payment_methods")
         .update({ is_default: true })
         .eq("id", otherMethod.id)
-        .eq("company_id", userData.company_id)
+        .eq("company_id", ctx.companyId)
     } else {
       return { error: "Cannot delete the default payment method. Please set another payment method as default first." }
     }
@@ -368,7 +319,7 @@ export async function deletePaymentMethod(id: string): Promise<{ error: string |
     .from("company_payment_methods")
     .delete()
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message || "Failed to delete payment method" }

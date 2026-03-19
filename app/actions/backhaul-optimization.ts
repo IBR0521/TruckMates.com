@@ -38,13 +38,8 @@ export async function findBackhaulOpportunities(
   maxResults: number = 5
 ): Promise<{ data: BackhaulOpportunity[] | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.userId) {
     return { error: "Not authenticated", data: null }
   }
 

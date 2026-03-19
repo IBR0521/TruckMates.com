@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Remove all demo data from the current user's company
@@ -8,28 +9,11 @@ import { createClient } from "@/lib/supabase/server"
  */
 export async function removeAllDemoData() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
-
-  // Get user's company
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError || !userData?.company_id) {
-    return { error: "No company found", data: null }
-  }
-
-  const company_id = userData.company_id
+  const company_id = ctx.companyId
 
   try {
     // Delete demo data in order (respecting foreign keys)

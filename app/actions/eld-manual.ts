@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
@@ -26,27 +27,9 @@ export async function createELDLog(formData: {
   violations?: any
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const role = await getUserRole()
@@ -71,7 +54,7 @@ export async function createELDLog(formData: {
   const { data, error } = await supabase
     .from("eld_logs")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       eld_device_id: formData.eld_device_id,
       driver_id: formData.driver_id || null,
       truck_id: formData.truck_id || null,
@@ -114,27 +97,9 @@ export async function createELDLocation(formData: {
   engine_status?: string
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const role = await getUserRole()
@@ -145,7 +110,7 @@ export async function createELDLocation(formData: {
   const { data, error } = await supabase
     .from("eld_locations")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       eld_device_id: formData.eld_device_id,
       driver_id: formData.driver_id || null,
       truck_id: formData.truck_id || null,
@@ -183,27 +148,9 @@ export async function createELDEvent(formData: {
   metadata?: any
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const role = await getUserRole()
@@ -214,7 +161,7 @@ export async function createELDEvent(formData: {
   const { data, error } = await supabase
     .from("eld_events")
     .insert({
-      company_id: userData.company_id,
+      company_id: ctx.companyId,
       eld_device_id: formData.eld_device_id,
       driver_id: formData.driver_id || null,
       truck_id: formData.truck_id || null,

@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * V3-003 FIX: Remove fake EIN generation - EINs are issued by the IRS, not generated randomly
@@ -25,23 +26,9 @@ export async function updateEIN(einNumber: string): Promise<{ data: { ein: strin
   // V3-003 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("role, company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError || !userData?.company_id) {
-      return { error: userError?.message || "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { getUserRole } = await import("@/lib/server-permissions")
@@ -66,7 +53,7 @@ export async function updateEIN(einNumber: string): Promise<{ data: { ein: strin
     const { error: updateError } = await supabase
       .from("company_settings")
       .update({ ein_number: cleanedEIN })
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (updateError) {
       return { error: updateError.message || "Failed to update EIN", data: null }
@@ -89,29 +76,15 @@ export async function updateEIN(einNumber: string): Promise<{ data: { ein: strin
  */
 export async function getEINNumbers(): Promise<{ data: any[] | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError || !userData?.company_id) {
-    return { error: userError?.message || "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data, error } = await supabase
     .from("company_ein_numbers")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -126,23 +99,19 @@ export async function getEINNumbers(): Promise<{ data: any[] | null; error: stri
  */
 export async function deleteEINNumber(einId: string): Promise<{ error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   // HIGH FIX 1: Add RBAC check - only managers can delete EINs
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("role, company_id")
-    .eq("id", user.id)
+    .eq("id", ctx.userId)
     .single()
 
-  if (userError || !userData?.company_id) {
+  if (userError) {
     return { error: userError?.message || "No company found" }
   }
 
@@ -160,7 +129,7 @@ export async function deleteEINNumber(einId: string): Promise<{ error: string | 
     .eq("id", einId)
     .single()
 
-  if (checkError || !einData || einData.company_id !== userData.company_id) {
+  if (checkError || !einData || einData.company_id !== ctx.companyId) {
     return { error: "EIN number not found or access denied" }
   }
 
@@ -168,7 +137,7 @@ export async function deleteEINNumber(einId: string): Promise<{ error: string | 
     .from("company_ein_numbers")
     .delete()
     .eq("id", einId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message || "Failed to delete EIN number" }

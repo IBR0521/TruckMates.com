@@ -43,6 +43,7 @@ if (typeof globalThis.DOMMatrix === 'undefined') {
 }
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 // pdfjs-dist and canvas are imported dynamically to avoid build errors
 // Canvas is optional - only used for PDF to image conversion
@@ -940,23 +941,9 @@ export async function analyzeDocumentFromUrl(
 }> {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     // Bucket check removed - let the actual operations fail if bucket doesn't exist
@@ -1114,7 +1101,7 @@ Please try uploading a NEW document - old uploads may have incorrect URLs.`,
     const { data: documentData, error: docError } = await supabase
       .from("documents")
       .insert({
-        company_id: userData.company_id,
+        company_id: ctx.companyId,
         name: metadata?.name || fileName,
         type: metadata?.type || "other",
         file_url: storagePath, // FIXED: Store path, not signed URL
@@ -1179,23 +1166,9 @@ export async function createRecordFromExtractedData(
 
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     let result: any = null
@@ -1208,7 +1181,7 @@ export async function createRecordFromExtractedData(
         const { data, error: driverError } = await supabase
           .from("drivers")
           .insert({
-            company_id: userData.company_id,
+            company_id: ctx.companyId,
             name: sanitizeString(driverData.name, 100) || "",
             email: driverData.email ? sanitizeEmail(driverData.email) : null,
             phone: driverData.phone ? sanitizePhone(driverData.phone) : null,
@@ -1227,7 +1200,7 @@ export async function createRecordFromExtractedData(
         const { data, error: vehicleError } = await supabase
           .from("trucks")
           .insert({
-            company_id: userData.company_id,
+            company_id: ctx.companyId,
             truck_number: (extractedData as ExtractedVehicleData).truck_number || "",
             make: (extractedData as ExtractedVehicleData).make,
             model: (extractedData as ExtractedVehicleData).model,
@@ -1259,7 +1232,7 @@ export async function createRecordFromExtractedData(
         const { data, error: loadError } = await supabase
           .from("loads")
           .insert({
-            company_id: userData.company_id,
+            company_id: ctx.companyId,
             shipment_number: sanitizeString(loadData.shipment_number, 50) || `LOAD-${Date.now()}`,
             origin: sanitizeString(loadData.origin, 200) || "",
             destination: sanitizeString(loadData.destination, 200) || "",
@@ -1327,7 +1300,7 @@ export async function createRecordFromExtractedData(
         const { data: routeData, error: routeError } = await supabase
           .from("routes")
           .insert({
-            company_id: userData.company_id,
+            company_id: ctx.companyId,
             name: routeLoadData.route_name || `Route-${Date.now()}`,
             origin: routeLoadData.route_origin || "",
             destination: routeLoadData.route_destination || "",
@@ -1391,7 +1364,7 @@ export async function createRecordFromExtractedData(
         const { data: loadData, error: loadError } = await supabase
           .from("loads")
           .insert({
-            company_id: userData.company_id,
+            company_id: ctx.companyId,
             shipment_number: routeLoadData.shipment_number || `LOAD-${Date.now()}`,
             origin: routeLoadData.load_origin || routeLoadData.route_origin || "",
             destination: routeLoadData.load_destination || routeLoadData.route_destination || "",
@@ -1458,7 +1431,7 @@ export async function createRecordFromExtractedData(
         const { data, error: routeError } = await supabase
           .from("routes")
           .insert({
-            company_id: userData.company_id,
+            company_id: ctx.companyId,
             name: routeData.name || `Route-${Date.now()}`,
             origin: routeData.origin || "",
             destination: routeData.destination || "",
@@ -1533,7 +1506,7 @@ export async function createRecordFromExtractedData(
             .from("trucks")
             .select("id")
             .eq("truck_number", maintData.truck_number)
-            .eq("company_id", userData.company_id)
+            .eq("company_id", ctx.companyId)
             .single()
           truckId = truckData?.id
         }
@@ -1545,7 +1518,7 @@ export async function createRecordFromExtractedData(
         const { data, error: maintError } = await supabase
           .from("maintenance")
           .insert({
-            company_id: userData.company_id,
+            company_id: ctx.companyId,
             truck_id: truckId,
             service_type: maintData.service_type || "",
             scheduled_date: maintData.scheduled_date || new Date().toISOString().split("T")[0],
@@ -1574,7 +1547,7 @@ export async function createRecordFromExtractedData(
         const { data, error: invoiceError } = await supabase
           .from("invoices")
           .insert({
-            company_id: userData.company_id,
+            company_id: ctx.companyId,
             invoice_number: sanitizedInvoiceNumber, // FIXED: Sanitized
             customer_name: sanitizeString(invoiceData.customer_name, 200) || "",
             amount: sanitizedAmount, // FIXED: Validated
@@ -1601,7 +1574,7 @@ export async function createRecordFromExtractedData(
         const { data, error: expenseError } = await supabase
           .from("expenses")
           .insert({
-            company_id: userData.company_id,
+            company_id: ctx.companyId,
             category: sanitizeString(expenseData.category, 50) || "other",
             description: sanitizeString(expenseData.description, 500) || "",
             amount: sanitizedAmount, // FIXED: Validated

@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 const DEMO_COMPANY_NAME = "Demo Logistics Company"
 
@@ -19,8 +20,9 @@ export async function setupDemoCompany(userId: string | null) {
       }
     }
 
-    // Get authenticated user - simplified timeout
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+    // Get authenticated user from cached auth context
+    const ctx = await getCachedAuthContext()
+    const authUser = ctx.user
     
     // If no authenticated user but userId provided, try to proceed anyway
     // (This handles cases where email confirmation is pending)

@@ -35,7 +35,8 @@ export async function createFakeELDDevice(config: {
   }
 
   const supabase = await createClient()
-  const { companyId, error: authError } = await getCachedAuthContext()
+  const ctx = await getCachedAuthContext()
+  const { companyId, error: authError } = ctx
   
   if (authError || !companyId) {
     return { error: authError || "Not authenticated", data: null }
@@ -45,7 +46,7 @@ export async function createFakeELDDevice(config: {
   const { data: userData } = await supabase
     .from("users")
     .select("role")
-    .eq("id", (await supabase.auth.getUser()).data.user?.id)
+    .eq("id", ctx.userId || "")
     .single()
 
   if (userData?.role !== "super_admin") {

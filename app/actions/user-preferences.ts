@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
 /**
@@ -8,19 +9,15 @@ import { revalidatePath } from "next/cache"
  */
 export async function getUserPreferences() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   let { data, error } = await supabase
     .from("user_preferences")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", ctx.userId)
     .single()
 
   if (error && error.code === 'PGRST116') {
@@ -28,7 +25,7 @@ export async function getUserPreferences() {
     const { data: newPrefs, error: createError } = await supabase
       .from("user_preferences")
       .insert({
-        user_id: user.id,
+        user_id: ctx.userId,
       })
       .select()
       .single()
@@ -61,13 +58,9 @@ export async function updateUserPreferences(preferences: {
   sound_enabled?: boolean
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get or create preferences
@@ -83,7 +76,7 @@ export async function updateUserPreferences(preferences: {
     const { data: updated, error: updateError } = await supabase
       .from("user_preferences")
       .update(preferences)
-      .eq("user_id", user.id)
+      .eq("user_id", ctx.userId)
       .select()
       .single()
 
@@ -94,7 +87,7 @@ export async function updateUserPreferences(preferences: {
     const { data: created, error: createError } = await supabase
       .from("user_preferences")
       .insert({
-        user_id: user.id,
+        user_id: ctx.userId,
         ...preferences,
       })
       .select()

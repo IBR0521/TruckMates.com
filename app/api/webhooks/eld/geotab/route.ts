@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     const webhookSecret = process.env.GEOTAB_WEBHOOK_SECRET
     if (!webhookSecret) {
       console.error("[Geotab Webhook] GEOTAB_WEBHOOK_SECRET not configured")
-      return NextResponse.json({ error: "Webhook not configured" }, { status: 503 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const signature = request.headers.get("x-geotab-signature")

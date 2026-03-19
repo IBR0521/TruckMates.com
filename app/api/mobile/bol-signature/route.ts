@@ -10,6 +10,14 @@ import * as bolActions from "@/app/actions/bol"
  */
 export async function POST(request: NextRequest) {
   try {
+    const contentType = request.headers.get("content-type") || ""
+    if (!contentType.includes("application/json")) {
+      return NextResponse.json(
+        { error: "Content-Type must be application/json" },
+        { status: 400 }
+      )
+    }
+
     const body = await request.json()
     const { bolId, signatureType, signatureData, signedByName, loadId } = body
 
@@ -144,6 +152,12 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error("BOL signature upload error:", error)
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        { error: "Invalid JSON payload" },
+        { status: 400 }
+      )
+    }
     return NextResponse.json(
       { error: error.message || "Failed to upload signature" },
       { status: 500 }

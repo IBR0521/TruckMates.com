@@ -32,7 +32,12 @@ export async function POST(request: NextRequest) {
   try {
     // Get raw body for signature verification
     const rawBody = await request.text()
-    const body = JSON.parse(rawBody)
+    let body: any
+    try {
+      body = JSON.parse(rawBody)
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 })
+    }
     const eventType = body.event_type
 
     // SECURITY: Verify webhook signature with PayPal
@@ -45,7 +50,7 @@ export async function POST(request: NextRequest) {
     const webhookId = process.env.PAYPAL_WEBHOOK_ID
     if (!webhookId) {
       console.error("[PayPal Webhook] PAYPAL_WEBHOOK_ID not configured")
-      return NextResponse.json({ error: "Not configured" }, { status: 503 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     
     // Get signature headers

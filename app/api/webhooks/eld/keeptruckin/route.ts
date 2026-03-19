@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     // SECURITY: Fail-closed - require secret to be configured
     if (!webhookSecret) {
       console.error("[KeepTruckin Webhook] KEEPTRUCKIN_WEBHOOK_SECRET not configured")
-      return NextResponse.json({ error: "Webhook not configured" }, { status: 503 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     
     // Verify signature

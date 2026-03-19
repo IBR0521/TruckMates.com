@@ -1,39 +1,24 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
 export async function getCompany() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-    
-    // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
+
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId || !ctx.userId) {
       return { error: "Not authenticated" }
-    }
-
-    // Get user's company_id
-    const { data: userData, error: userDataError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userDataError) {
-      return { error: userDataError.message || "Failed to fetch user data" }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found" }
     }
 
     // Get company data
     const { data: company, error: companyError } = await supabase
       .from("companies")
       .select("*")
-      .eq("id", userData.company_id)
+      .eq("id", ctx.companyId)
       .maybeSingle()
 
     if (companyError) {
@@ -55,26 +40,10 @@ export async function updateCompany(formData: FormData) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-    
-    // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
+
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId || !ctx.userId) {
       return { success: false, error: "Not authenticated" }
-    }
-
-    // Get user's company_id
-    const { data: userData, error: userDataError } = await supabase
-      .from("users")
-      .select("company_id, role")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userDataError) {
-      return { success: false, error: userDataError.message || "Failed to fetch user data" }
-    }
-
-    if (!userData?.company_id) {
-      return { success: false, error: "No company found" }
     }
 
     const { getUserRole } = await import("@/lib/server-permissions")
@@ -105,7 +74,7 @@ export async function updateCompany(formData: FormData) {
         phone,
         company_type: normalizedCompanyType || null,
       })
-      .eq("id", userData.company_id)
+      .eq("id", ctx.companyId)
 
     if (updateError) {
       return { success: false, error: updateError.message }
@@ -126,32 +95,17 @@ export async function checkAndFixDemoCompanyLink() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-    
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
+
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId || !ctx.userId) {
       return { error: "Not authenticated", isLinkedToDemo: false }
-    }
-
-    // Get user's company
-    const { data: userData, error: userDataError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (userDataError) {
-      return { error: userDataError.message || "Failed to fetch user data", isLinkedToDemo: false }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", isLinkedToDemo: false }
     }
 
     // Check if company is a demo company
     const { data: company, error: companyError } = await supabase
       .from("companies")
       .select("id, name")
-      .eq("id", userData.company_id)
+      .eq("id", ctx.companyId)
       .maybeSingle()
 
     if (companyError) {
@@ -168,14 +122,13 @@ export async function checkAndFixDemoCompanyLink() {
 
     if (isDemoCompany) {
       // User is linked to demo company - create a new company for them
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      const userEmail = authUser?.email || `user-${user.id.substring(0, 8)}@example.com`
+      const userEmail = ctx.user?.email || `user-${ctx.userId.substring(0, 8)}@example.com`
       
       const { data: newCompanyId, error: rpcError } = await supabase.rpc('create_company_for_user', {
         p_name: `My Company (${userEmail})`,
         p_email: userEmail,
         p_phone: "",
-        p_user_id: user.id,
+        p_user_id: ctx.userId,
         p_company_type: null
       })
 

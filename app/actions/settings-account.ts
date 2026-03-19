@@ -1,24 +1,21 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { updateUserProfile, updateUserPassword } from "@/lib/auth/server"
 
 export async function getAccountSettings() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { data: userData, error } = await supabase
     .from("users")
     .select("id, email, full_name, phone, role")
-    .eq("id", user.id)
+    .eq("id", ctx.userId)
     .single()
 
   if (error) {

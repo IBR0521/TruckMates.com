@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Auto-update load status from geofence entry/exit
@@ -16,13 +17,8 @@ export async function autoUpdateLoadStatusFromGeofence(
   eventType: 'entry' | 'exit'
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.userId) {
     return { error: "Not authenticated", data: null }
   }
 
@@ -51,28 +47,9 @@ export async function autoUpdateLoadStatusFromGeofence(
  */
 export async function getLoadStatusHistory(loadId: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -84,7 +61,7 @@ export async function getLoadStatusHistory(loadId: string) {
         users:changed_by (id, name)
       `)
       .eq("load_id", loadId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     if (error) {
@@ -109,28 +86,9 @@ export async function updateGeofenceStatusMapping(
   }
 ) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
@@ -150,7 +108,7 @@ export async function updateGeofenceStatusMapping(
       .from("geofences")
       .update(updateData)
       .eq("id", geofenceId)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .select()
       .single()
 

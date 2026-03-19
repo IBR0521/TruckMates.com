@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 export interface AddressBookContact {
   id: string
@@ -27,27 +28,9 @@ export async function getAddressBookContacts(filters?: {
   error: string | null
 }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: [], error: "Not authenticated" }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { data: [], error: userError.message || "Failed to fetch user data" }
-  }
-
-  if (!userData?.company_id) {
-    return { data: [], error: "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { data: [], error: ctx.error || "Not authenticated" }
   }
 
   const allContacts: AddressBookContact[] = []
@@ -58,7 +41,7 @@ export async function getAddressBookContacts(filters?: {
       let customerQuery = supabase
         .from("customers")
         .select("id, name, company_name, email, phone, address_line1, address_line2, city, state, zip, status, customer_type, payment_terms")
-        .eq("company_id", userData.company_id)
+        .eq("company_id", ctx.companyId)
 
       if (filters?.status) {
         customerQuery = customerQuery.eq("status", filters.status)
@@ -104,7 +87,7 @@ export async function getAddressBookContacts(filters?: {
       let vendorQuery = supabase
         .from("vendors")
         .select("id, name, company_name, email, phone, address_line1, address_line2, city, state, zip, status, vendor_type, payment_terms")
-        .eq("company_id", userData.company_id)
+        .eq("company_id", ctx.companyId)
 
       if (filters?.status) {
         vendorQuery = vendorQuery.eq("status", filters.status)
@@ -150,7 +133,7 @@ export async function getAddressBookContacts(filters?: {
       let driverQuery = supabase
         .from("drivers")
         .select("id, name, email, phone, address, city, state, zip, status, license_number, license_expiry")
-        .eq("company_id", userData.company_id)
+        .eq("company_id", ctx.companyId)
 
       if (filters?.status) {
         driverQuery = driverQuery.eq("status", filters.status)
@@ -192,8 +175,8 @@ export async function getAddressBookContacts(filters?: {
       let employeeQuery = supabase
         .from("users")
         .select("id, name, email, phone, role, company_id")
-        .eq("company_id", userData.company_id)
-        .neq("id", user.id) // Exclude current user
+        .eq("company_id", ctx.companyId)
+        .neq("id", ctx.userId) // Exclude current user
 
       if (filters?.search) {
         employeeQuery = employeeQuery.or(
@@ -258,27 +241,9 @@ export async function getAddressBookContact(
   error: string | null
 }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { data: null, error: "Not authenticated" }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { data: null, error: userError.message || "Failed to fetch user data" }
-  }
-
-  if (!userData?.company_id) {
-    return { data: null, error: "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
   }
 
   // V3-014 FIX: Validate input parameters
@@ -300,7 +265,7 @@ export async function getAddressBookContact(
           .from("customers")
           .select("id, name, company_name, email, phone, address_line1, address_line2, city, state, zip, status, customer_type, payment_terms")
           .eq("id", id)
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .maybeSingle()
 
         if (error || !data) break
@@ -333,7 +298,7 @@ export async function getAddressBookContact(
           .from("vendors")
           .select("id, name, company_name, email, phone, address_line1, address_line2, city, state, zip, status, vendor_type, payment_terms")
           .eq("id", id)
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .maybeSingle()
 
         if (error || !data) break
@@ -366,7 +331,7 @@ export async function getAddressBookContact(
           .from("drivers")
           .select("id, name, email, phone, address, city, state, zip, status, license_number, license_expiry")
           .eq("id", id)
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .maybeSingle()
 
         if (error || !data) break
@@ -395,7 +360,7 @@ export async function getAddressBookContact(
           .from("users")
           .select("id, name, email, phone, role, company_id")
           .eq("id", id)
-          .eq("company_id", userData.company_id)
+          .eq("company_id", ctx.companyId)
           .maybeSingle()
 
         if (error || !data) break

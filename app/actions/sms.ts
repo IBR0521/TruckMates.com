@@ -13,6 +13,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 // Get Twilio client (returns null if not configured)
 async function getTwilioClient() {
@@ -217,24 +218,10 @@ export async function sendSMSToDriver(
   message: string
 ) {
   const supabase = await createClient()
-
   // EXT-005: Get authenticated user's company_id first
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { sent: false, error: "Not authenticated" }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (!userData?.company_id) {
-    return { sent: false, error: "User company not found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { sent: false, error: ctx.error || "Not authenticated" }
   }
 
   // EXT-005: Verify driver belongs to user's company before accessing phone number
@@ -242,7 +229,7 @@ export async function sendSMSToDriver(
     .from("drivers")
     .select("phone")
     .eq("id", driverId)
-    .eq("company_id", userData.company_id) // CRITICAL: Company ownership check
+    .eq("company_id", ctx.companyId) // CRITICAL: Company ownership check
     .maybeSingle()
 
   if (!driver?.phone) {

@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 // HOS Rules (Hours of Service)
 const HOS_RULES = {
@@ -95,27 +96,9 @@ export async function calculateRemainingHOS(driverId: string, date?: string) {
 // Get driver scorecard/performance metrics
 export async function getDriverScorecard(driverId: string, startDate?: string, endDate?: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -127,7 +110,7 @@ export async function getDriverScorecard(driverId: string, startDate?: string, e
     .from("eld_logs")
     .select("*")
     .eq("driver_id", driverId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .gte("log_date", start)
     .lte("log_date", end)
     .limit(10000) // V3-007: Limit to 10k records to prevent OOM
@@ -141,7 +124,7 @@ export async function getDriverScorecard(driverId: string, startDate?: string, e
     .from("eld_events")
     .select("*")
     .eq("driver_id", driverId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .gte("event_time", start)
     .lte("event_time", end)
 
@@ -195,34 +178,16 @@ export async function getDriverScorecard(driverId: string, startDate?: string, e
 // Get fleet health metrics
 export async function getFleetHealth() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get all devices
   const { data: devices, error: devicesError } = await supabase
     .from("eld_devices")
     .select("id, status, truck_id")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (devicesError) {
     return { error: devicesError.message, data: null }
@@ -233,7 +198,7 @@ export async function getFleetHealth() {
   const { data: activeViolations, error: violationsError } = await supabase
     .from("eld_events")
     .select("id, severity, resolved")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("resolved", false)
     .gte("event_time", yesterday)
 
@@ -245,7 +210,7 @@ export async function getFleetHealth() {
   const { data: drivers, error: driversError } = await supabase
     .from("drivers")
     .select("id")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("status", "active")
 
   if (driversError) {
@@ -299,27 +264,9 @@ export async function getFleetHealth() {
 // Get real-time locations for map
 export async function getRealtimeLocations() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get latest location for each device (last 5 minutes)
@@ -344,7 +291,7 @@ export async function getRealtimeLocations() {
         name
       )
     `)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .gte("timestamp", oneDayAgo) // V3-007: Restrict to last 24 hours max
     .order("timestamp", { ascending: false })
     .limit(1000) // V3-007: Limit to prevent OOM
@@ -371,34 +318,16 @@ export async function getRealtimeLocations() {
 // Get predictive alerts (drivers approaching limits)
 export async function getPredictiveAlerts() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get all active drivers
   const { data: drivers, error: driversError } = await supabase
     .from("drivers")
     .select("id, name")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("status", "active")
 
   if (driversError) {

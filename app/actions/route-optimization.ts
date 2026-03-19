@@ -11,6 +11,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 // Calculate distance between two coordinates using Haversine formula
 function calculateDistance(
@@ -452,23 +453,9 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
   error?: string
 }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { optimized: false, error: "Not authenticated" }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { optimized: false, error: "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { optimized: false, error: ctx.error || "Not authenticated" }
   }
 
   // Get route with stops
@@ -476,7 +463,7 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
     .from("routes")
     .select("*")
     .eq("id", routeId)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (routeError || !route) {
@@ -529,7 +516,7 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
   // Trigger webhook
   try {
     const { triggerWebhook } = await import("./webhooks")
-    await triggerWebhook(userData.company_id, "route.optimized", {
+    await triggerWebhook(ctx.companyId, "route.optimized", {
       route_id: routeId,
       optimized_stops: optimizationResult.optimizedOrder.length,
       total_distance: optimizationResult.totalDistance,
@@ -564,23 +551,9 @@ export async function getRouteSuggestions(loadIds: string[]): Promise<{
   error?: string
 }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { suggestions: [], error: "Not authenticated" }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { suggestions: [], error: "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { suggestions: [], error: ctx.error || "Not authenticated" }
   }
 
   // Get loads data
@@ -588,7 +561,7 @@ export async function getRouteSuggestions(loadIds: string[]): Promise<{
     .from("loads")
     .select("id, origin, destination, status")
     .in("id", loadIds)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .eq("status", "pending")
 
   if (!loads || loads.length === 0) {
@@ -599,7 +572,7 @@ export async function getRouteSuggestions(loadIds: string[]): Promise<{
   const { data: routes } = await supabase
     .from("routes")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   const suggestions: Array<{
     routeId: string

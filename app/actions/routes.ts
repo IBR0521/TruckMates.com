@@ -11,20 +11,8 @@ import { checkViewPermission, checkCreatePermission, checkEditPermission, checkD
 async function sendNotificationsForRouteUpdate(routeData: any) {
   try {
     const supabase = await createClient()
-    
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) return
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError || !userData?.company_id) return
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) return
 
     // BUG-044 FIX: Filter notifications by relevance - only notify assigned driver, dispatcher, and managers
     // Get assigned driver if route has one
@@ -37,7 +25,7 @@ async function sendNotificationsForRouteUpdate(routeData: any) {
     const { data: relevantUsers } = await supabase
       .from("users")
       .select("id, role")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .or([
         assignedDriverId ? `id.eq.${assignedDriverId}` : "",
         "role.in.(super_admin,operations_manager,dispatcher,safety_compliance)",
@@ -115,34 +103,16 @@ export async function getRoute(id: string) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: "Not authenticated", data: null }
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userError) {
-      return { error: userError.message || "Failed to fetch user data", data: null }
-    }
-
-    if (!userData?.company_id) {
-      return { error: "No company found", data: null }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     const { data: route, error } = await supabase
       .from("routes")
       .select("*")
       .eq("id", id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .maybeSingle()
 
     if (error) {
@@ -187,23 +157,9 @@ export async function createRoute(formData: {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Professional validation
@@ -225,7 +181,7 @@ export async function createRoute(formData: {
       .from("drivers")
       .select("id, status, company_id")
       .eq("id", formData.driver_id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (driverError || !driver) {
@@ -243,7 +199,7 @@ export async function createRoute(formData: {
       .from("trucks")
       .select("id, status, company_id")
       .eq("id", formData.truck_id)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .single()
 
     if (truckError || !truck) {
@@ -257,7 +213,7 @@ export async function createRoute(formData: {
 
   // Ensure required fields are present and handle undefined values
   const routeData: any = {
-    company_id: userData.company_id,
+    company_id: ctx.companyId,
     name: sanitizeString(formData.name, 200),
     origin: sanitizeString(formData.origin, 200),
     destination: sanitizeString(formData.destination, 200),
@@ -412,11 +368,7 @@ export async function updateRoute(
   if (changes.length > 0) {
     try {
       const { createAuditLog } = await import("@/lib/audit-log")
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (user) {
+      if (ctx.userId) {
         for (const change of changes) {
           try {
             await createAuditLog({
@@ -434,6 +386,8 @@ export async function updateRoute(
             console.error("[updateRoute] ❌ Audit log failed for field", change.field, ":", err.message)
           }
         }
+      } else {
+        console.warn("[updateRoute] No user found for audit logging")
       }
     } catch (err: any) {
       console.error("[updateRoute] Failed to import audit log module:", err.message)
@@ -461,34 +415,16 @@ export async function deleteRoute(id: string) {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated" }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data" }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found" }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated" }
   }
 
   const { error } = await supabase
     .from("routes")
     .delete()
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message }
@@ -501,23 +437,9 @@ export async function deleteRoute(id: string) {
 // Bulk operations for workflow optimization
 export async function bulkDeleteRoutes(ids: string[]) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // DAT-004 FIX: Check for active loads assigned to these routes before bulk delete
@@ -526,7 +448,7 @@ export async function bulkDeleteRoutes(ids: string[]) {
     .select("id, route_id, shipment_number, status")
     .in("route_id", ids)
     .in("status", ["scheduled", "in_transit"])
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (activeLoads && activeLoads.length > 0) {
     const blockedRouteIds = [...new Set(activeLoads.map((load: { route_id: string | null; [key: string]: any }) => load.route_id))]
@@ -534,7 +456,7 @@ export async function bulkDeleteRoutes(ids: string[]) {
       .from("routes")
       .select("id, name")
       .in("id", blockedRouteIds)
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
 
     if (blockedRoutes.data && blockedRoutes.data.length > 0) {
       const routeNames = blockedRoutes.data.map((r: { name: string; [key: string]: any }) => r.name).join(", ")
@@ -549,7 +471,7 @@ export async function bulkDeleteRoutes(ids: string[]) {
     .from("routes")
     .delete()
     .in("id", ids)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message, data: null }
@@ -573,30 +495,16 @@ export async function bulkUpdateRouteStatus(ids: string[], status: string) {
   }
 
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { error } = await supabase
     .from("routes")
     .update({ status })
     .in("id", ids)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
 
   if (error) {
     return { error: error.message, data: null }
@@ -609,23 +517,9 @@ export async function bulkUpdateRouteStatus(ids: string[], status: string) {
 // Duplicate/clone route for workflow optimization
 export async function duplicateRoute(id: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get the original route
@@ -633,7 +527,7 @@ export async function duplicateRoute(id: string) {
     .from("routes")
     .select("*")
     .eq("id", id)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (fetchError || !originalRoute) {
@@ -684,23 +578,9 @@ export async function duplicateRoute(id: string) {
 // Smart suggestions for workflow optimization
 export async function getRouteSuggestions(origin?: string, destination?: string) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const suggestions: any = {
@@ -714,7 +594,7 @@ export async function getRouteSuggestions(origin?: string, destination?: string)
     const { data: recentRoutes } = await supabase
       .from("routes")
       .select("driver_id, truck_id")
-      .eq("company_id", userData.company_id)
+      .eq("company_id", ctx.companyId)
       .or(`origin.ilike.%${origin}%,destination.ilike.%${destination}%`)
       .order("created_at", { ascending: false })
       .limit(5)
@@ -760,7 +640,7 @@ export async function getRouteSuggestions(origin?: string, destination?: string)
   const { data: similarRoutes } = await supabase
     .from("routes")
     .select("id, name, origin, destination, distance, estimated_time")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .order("created_at", { ascending: false })
     .limit(5)
 

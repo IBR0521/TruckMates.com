@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
  * Generate a number based on a format string
@@ -27,34 +28,16 @@ function generateNumber(format: string, sequence: number, companyName?: string):
  */
 export async function getCompanySettings() {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // BUG-064 FIX: Add RBAC check - filter sensitive fields for non-admin roles
   const { data: currentUser } = await supabase
     .from("users")
     .select("role")
-    .eq("id", user.id)
+    .eq("id", ctx.userId)
     .single()
   
   const userRole = currentUser?.role || 'driver'
@@ -64,7 +47,7 @@ export async function getCompanySettings() {
   let { data: settings, error } = await supabase
     .from("company_settings")
     .select("*")
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .single()
 
   // MEDIUM FIX 16: Return error instead of hardcoded defaults to prevent silent misconfiguration
@@ -78,7 +61,7 @@ export async function getCompanySettings() {
     const { data: newSettings, error: createError } = await supabase
       .from("company_settings")
       .insert({
-        company_id: userData.company_id,
+        company_id: ctx.companyId,
       })
       .select()
       .single()
@@ -159,23 +142,9 @@ export async function updateCompanySettings(settings: {
   // HIGH FIX 3: Removed [key: string]: any to prevent arbitrary column injection
 }) {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData } = await supabase
-    .from("users")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single()
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const { getUserRole } = await import("@/lib/server-permissions")
@@ -212,7 +181,7 @@ export async function updateCompanySettings(settings: {
   const { data, error } = await supabase
     .from("company_settings")
     .update(updateData)
-    .eq("company_id", userData.company_id)
+    .eq("company_id", ctx.companyId)
     .select()
     .single()
 
@@ -228,27 +197,9 @@ export async function updateCompanySettings(settings: {
  */
 export async function generateLoadNumber(): Promise<{ data: string | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   // Get company settings
@@ -263,7 +214,7 @@ export async function generateLoadNumber(): Promise<{ data: string | null; error
   // BUG-043 FIX: Use atomic RPC function for sequence increment - fail loudly if RPC doesn't exist
   // Removed non-atomic fallback to prevent race conditions and duplicate numbers
   const { data: rpcResult, error: rpcError } = await supabase.rpc('increment_load_number_sequence', {
-    p_company_id: userData.company_id
+    p_company_id: ctx.companyId
   })
   
   if (rpcError) {
@@ -287,7 +238,7 @@ export async function generateLoadNumber(): Promise<{ data: string | null; error
   const { data: company } = await supabase
     .from("companies")
     .select("name")
-    .eq("id", userData.company_id)
+    .eq("id", ctx.companyId)
     .single()
 
   // Generate number using the incremented sequence
@@ -301,27 +252,9 @@ export async function generateLoadNumber(): Promise<{ data: string | null; error
  */
 export async function generateInvoiceNumber(): Promise<{ data: string | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const settingsResult = await getCompanySettings()
@@ -334,7 +267,7 @@ export async function generateInvoiceNumber(): Promise<{ data: string | null; er
 
   // BUG-043 FIX: Use atomic RPC function for sequence increment - fail loudly if RPC doesn't exist
   const { data: rpcResult, error: rpcError } = await supabase.rpc('increment_invoice_number_sequence', {
-    p_company_id: userData.company_id
+    p_company_id: ctx.companyId
   })
   
   if (rpcError) {
@@ -356,7 +289,7 @@ export async function generateInvoiceNumber(): Promise<{ data: string | null; er
   const { data: company } = await supabase
     .from("companies")
     .select("name")
-    .eq("id", userData.company_id)
+    .eq("id", ctx.companyId)
     .single()
 
   const number = generateNumber(format, sequence, company?.name)
@@ -369,27 +302,9 @@ export async function generateInvoiceNumber(): Promise<{ data: string | null; er
  */
 export async function generateDispatchNumber(): Promise<{ data: string | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const settingsResult = await getCompanySettings()
@@ -402,7 +317,7 @@ export async function generateDispatchNumber(): Promise<{ data: string | null; e
 
   // BUG-043 FIX: Use atomic RPC function for sequence increment - fail loudly if RPC doesn't exist
   const { data: rpcResult, error: rpcError } = await supabase.rpc('increment_dispatch_number_sequence', {
-    p_company_id: userData.company_id
+    p_company_id: ctx.companyId
   })
   
   if (rpcError) {
@@ -424,7 +339,7 @@ export async function generateDispatchNumber(): Promise<{ data: string | null; e
   const { data: company } = await supabase
     .from("companies")
     .select("name")
-    .eq("id", userData.company_id)
+    .eq("id", ctx.companyId)
     .single()
 
   const number = generateNumber(format, sequence, company?.name)
@@ -437,27 +352,9 @@ export async function generateDispatchNumber(): Promise<{ data: string | null; e
  */
 export async function generateBOLNumber(): Promise<{ data: string | null; error: string | null }> {
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: "Not authenticated", data: null }
-  }
-
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("company_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userError) {
-    return { error: userError.message || "Failed to fetch user data", data: null }
-  }
-
-  if (!userData?.company_id) {
-    return { error: "No company found", data: null }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
   }
 
   const settingsResult = await getCompanySettings()
@@ -470,7 +367,7 @@ export async function generateBOLNumber(): Promise<{ data: string | null; error:
 
   // BUG-043 FIX: Use atomic RPC function for sequence increment - fail loudly if RPC doesn't exist
   const { data: rpcResult, error: rpcError } = await supabase.rpc('increment_bol_number_sequence', {
-    p_company_id: userData.company_id
+    p_company_id: ctx.companyId
   })
   
   if (rpcError) {
@@ -492,7 +389,7 @@ export async function generateBOLNumber(): Promise<{ data: string | null; error:
   const { data: company } = await supabase
     .from("companies")
     .select("name")
-    .eq("id", userData.company_id)
+    .eq("id", ctx.companyId)
     .single()
 
   const number = generateNumber(format, sequence, company?.name)
