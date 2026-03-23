@@ -7,6 +7,9 @@ import { getELDMileageData } from "./eld"
 import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 import { STATE_FUEL_TAX_RATES, getFuelTaxRate } from "@/lib/fuel-tax-rates"
 
+const IFTA_REPORT_SELECT =
+  "id, company_id, quarter, year, period, total_miles, fuel_purchased, tax_owed, status, filed_date, state_breakdown, truck_ids, include_eld, created_at, updated_at"
+
 export async function getIFTAReports() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
@@ -18,7 +21,7 @@ export async function getIFTAReports() {
 
     const { data: reports, error } = await supabase
       .from("ifta_reports")
-      .select("*")
+      .select(IFTA_REPORT_SELECT)
       .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 

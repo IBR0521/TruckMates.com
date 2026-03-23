@@ -3,6 +3,23 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+const COMPANY_SETTINGS_SELECT = `
+  id, company_id,
+  load_number_format, invoice_number_format, dispatch_number_format, bol_number_format,
+  load_number_sequence, invoice_number_sequence, dispatch_number_sequence, bol_number_sequence,
+  timezone, date_format, time_format, currency, currency_symbol, default_payment_terms,
+  invoice_auto_send, default_load_type, default_carrier_type, auto_create_route,
+  default_check_call_interval, check_call_reminder_minutes, require_check_call_at_pickup, require_check_call_at_delivery,
+  auto_attach_bol_to_load, auto_email_bol_to_customer, document_retention_days, bol_auto_generate,
+  odometer_validation_enabled, max_odometer_increase_per_day, odometer_auto_sync_from_eld,
+  owner_name, dba_name, ein_number, business_type,
+  load_charge_type, miles_calculation_method, fuel_surcharge_method, fuel_surcharge_flat_amount, fuel_surcharge_per_mile,
+  check_call_notify_customer, check_call_notify_broker, check_call_notify_on_trip_start, check_call_notify_at_shipper,
+  check_call_notify_pickup_completed, check_call_notify_enroute, check_call_notify_at_consignee, check_call_notify_dropoff_completed,
+  factoring_company_name, factoring_submission_email, factoring_include_bol, factoring_include_rate_conf, factoring_include_pod, factoring_email_template, factoring_auto_submit,
+  created_at, updated_at
+`
+
 /**
  * Generate a number based on a format string
  * Format tokens: {YEAR}, {MONTH}, {DAY}, {SEQUENCE}, {COMPANY}
@@ -46,7 +63,7 @@ export async function getCompanySettings() {
   // Get or create company settings
   let { data: settings, error } = await supabase
     .from("company_settings")
-    .select("*")
+    .select(COMPANY_SETTINGS_SELECT)
     .eq("company_id", ctx.companyId)
     .single()
 

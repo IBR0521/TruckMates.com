@@ -7,6 +7,9 @@ import { validateRequiredString, sanitizeString } from "@/lib/validation"
 import { sendNotification } from "./notifications"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
+const ROUTE_DETAIL_SELECT =
+  "id, company_id, name, origin, destination, distance, estimated_time, priority, status, driver_id, truck_id, waypoints, estimated_arrival, depot_name, depot_address, pre_route_time_minutes, post_route_time_minutes, route_start_time, route_departure_time, route_complete_time, route_type, scenario, notes, special_instructions, estimated_fuel_cost, estimated_toll_cost, total_estimated_cost, created_at, updated_at"
+
 // Helper function to send notifications in background (non-blocking)
 async function sendNotificationsForRouteUpdate(routeData: any) {
   try {
@@ -110,7 +113,7 @@ export async function getRoute(id: string) {
 
     const { data: route, error } = await supabase
       .from("routes")
-      .select("*")
+      .select(ROUTE_DETAIL_SELECT)
       .eq("id", id)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
@@ -313,14 +316,14 @@ export async function updateRoute(
   }
 
   // Get current route data for audit trail (with company_id verification)
-  const { data: currentRoute } = await supabase
+  const { data: currentRoute, error: currentRouteError } = await supabase
     .from("routes")
-    .select("*")
+    .select(ROUTE_DETAIL_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
     .single()
 
-  if (!currentRoute) {
+  if (currentRouteError || !currentRoute) {
     return { error: "Route not found", data: null }
   }
 
@@ -544,7 +547,7 @@ export async function duplicateRoute(id: string) {
   // Get the original route
   const { data: originalRoute, error: fetchError } = await supabase
     .from("routes")
-    .select("*")
+    .select(ROUTE_DETAIL_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
     .single()
@@ -570,8 +573,8 @@ export async function duplicateRoute(id: string) {
     .select()
     .single()
 
-  if (createError) {
-    return { error: createError.message, data: null }
+  if (createError || !newRoute) {
+    return { error: createError?.message || "Failed to create duplicated route", data: null }
   }
 
   // Duplicate stops if any

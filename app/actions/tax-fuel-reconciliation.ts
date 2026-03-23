@@ -7,6 +7,13 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 // EXT-009 FIX: Import fuel tax rates from shared source to prevent inconsistencies
 import { STATE_FUEL_TAX_RATES, getFuelTaxRate } from "@/lib/fuel-tax-rates"
 
+const FUEL_PURCHASE_SELECT =
+  "id, company_id, truck_id, driver_id, purchase_date, state, city, station_name, gallons, price_per_gallon, total_cost, odometer_reading, receipt_number, receipt_url, notes, created_at, updated_at"
+const IFTA_REPORT_SELECT =
+  "id, company_id, quarter, year, period, total_miles, fuel_purchased, tax_owed, status, filed_date, state_breakdown, truck_ids, include_eld, created_at, updated_at"
+const IFTA_STATE_BREAKDOWN_SELECT =
+  "id, ifta_report_id, state, miles, gallons, tax_rate, taxable_gallons, tax_due, created_at, updated_at"
+
 // Get fuel purchases
 export async function getFuelPurchases(filters?: {
   startDate?: string
@@ -25,7 +32,7 @@ export async function getFuelPurchases(filters?: {
 
   let query = supabase
     .from("fuel_purchases")
-    .select("*", { count: "exact" })
+    .select(FUEL_PURCHASE_SELECT, { count: "exact" })
     .eq("company_id", ctx.companyId)
     .order("purchase_date", { ascending: false })
 
@@ -224,7 +231,7 @@ export async function getIFTAReports(filters?: {
 
   let query = supabase
     .from("ifta_reports")
-    .select("*")
+    .select(IFTA_REPORT_SELECT)
     .eq("company_id", ctx.companyId)
     .order("year", { ascending: false })
     .order("quarter", { ascending: false })
@@ -260,7 +267,7 @@ export async function getIFTAReport(id: string) {
   // Get report
   const { data: report, error: reportError } = await supabase
     .from("ifta_reports")
-    .select("*")
+    .select(IFTA_REPORT_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
     .single()
@@ -272,7 +279,7 @@ export async function getIFTAReport(id: string) {
   // Get state breakdown
   const { data: breakdown, error: breakdownError } = await supabase
     .from("ifta_state_breakdown")
-    .select("*")
+    .select(IFTA_STATE_BREAKDOWN_SELECT)
     .eq("ifta_report_id", id)
     .order("state", { ascending: true })
 
@@ -346,7 +353,7 @@ export async function generateIFTAReport(quarter: number, year: number) {
   // Get fuel purchases for the quarter
   const { data: fuelPurchases } = await supabase
     .from("fuel_purchases")
-    .select("*")
+    .select(FUEL_PURCHASE_SELECT)
     .eq("company_id", ctx.companyId)
     .gte("purchase_date", startDate)
     .lte("purchase_date", endDate)

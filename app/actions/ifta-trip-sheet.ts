@@ -165,13 +165,13 @@ export async function getTripSheet(id: string) {
 
   const { data: stateMiles } = await supabase
     .from("trip_sheet_state_miles")
-    .select("*")
+    .select("id, trip_sheet_id, state_code, miles, created_at, updated_at")
     .eq("trip_sheet_id", id)
     .order("state_code")
 
   const { data: fuel } = await supabase
     .from("trip_sheet_fuel_purchases")
-    .select("*")
+    .select("id, trip_sheet_id, purchase_date, state_code, gallons, price_per_gallon, total_amount, vendor, receipt_number, created_at, updated_at")
     .eq("trip_sheet_id", id)
 
   return {

@@ -39,3 +39,22 @@ next-env.d.ts
 # supabase
 .supabase
 
+# root AI/session artifact docs (keep only canonical docs)
+/*_REPORT.md
+/*_SUMMARY.md
+/*_ANALYSIS.md
+/*_IMPLEMENTATION*.md
+/*_FIX*.md
+/*_GUIDE*.md
+/*_STATUS*.md
+/*_PLAN*.md
+/*_CHECKLIST*.md
+/*_COMPARISON*.md
+/*_OVERVIEW*.md
+/*_PRESENTATION*.md
+/*_TROUBLESHOOT*.md
+/*_EXPLANATION*.md
+/*.tmp.md
+!README.md
+!CHANGELOG.md
+

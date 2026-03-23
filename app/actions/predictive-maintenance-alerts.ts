@@ -8,6 +8,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { sendSMSNotification } from "./sms"
+import * as Sentry from "@sentry/nextjs"
 
 /**
  * Check and send maintenance alerts for a truck
@@ -22,12 +23,17 @@ export async function checkAndSendMaintenanceAlerts(
   // Get company_id from truck record (works for both authenticated and background calls)
   const supabase = await createClient()
   
-  const { data: truckData } = await supabase
+  const { data: truckData, error: truckError } = await supabase
     .from("trucks")
     .select("company_id")
     .eq("id", truckId)
     .single()
   
+  if (truckError || !truckData) {
+    if (truckError) Sentry.captureException(truckError)
+    return { error: "Truck not found", data: null }
+  }
+
   const targetCompanyId = companyId || truckData?.company_id
 
   if (!targetCompanyId) {
@@ -42,7 +48,7 @@ export async function checkAndSendMaintenanceAlerts(
     })
 
     if (error) {
-      console.error("Failed to check maintenance alerts:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
@@ -59,7 +65,7 @@ export async function checkAndSendMaintenanceAlerts(
       .order("created_at", { ascending: false })
 
     if (alertsError) {
-      console.error("Failed to get pending alerts:", alertsError)
+      Sentry.captureException(alertsError)
       return { data: { alerts_checked: alertsCount || 0, alerts_sent: 0 }, error: null }
     }
 
@@ -105,7 +111,7 @@ export async function checkAndSendMaintenanceAlerts(
           alertsSent++
         }
       } catch (smsError: any) {
-        console.error("Failed to send SMS:", smsError)
+        Sentry.captureException(smsError)
         await supabase
           .from("maintenance_alert_notifications")
           .update({ status: "failed", error_message: smsError.message })
@@ -121,6 +127,7 @@ export async function checkAndSendMaintenanceAlerts(
       error: null
     }
   } catch (error: any) {
+    Sentry.captureException(error)
     return { error: error.message || "Failed to check maintenance alerts", data: null }
   }
 }

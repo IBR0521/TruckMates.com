@@ -9,6 +9,26 @@ import { sendNotification } from "./notifications"
 import { validateLoadData, validatePricingData, sanitizeString, sanitizeEmail, sanitizePhone, validateAddress } from "@/lib/validation"
 import { ALL_LOAD_STATUSES, getAllowedNextLoadStatuses, normalizeLoadStatus, parseLoadStatus } from "@/lib/load-status"
 
+const LOAD_DETAIL_SELECT = `
+  id, company_id, shipment_number, origin, destination, status,
+  load_date, estimated_delivery, actual_delivery,
+  driver_id, truck_id, route_id, customer_id,
+  weight, weight_kg, contents, value, carrier_type, coordinates,
+  delivery_type, company_name, customer_reference, requires_split_delivery, total_delivery_points,
+  load_type, rate, rate_type, fuel_surcharge, accessorial_charges, discount, advance, total_rate,
+  estimated_miles, estimated_profit, estimated_revenue,
+  shipper_name, shipper_address, shipper_city, shipper_state, shipper_zip,
+  shipper_contact_name, shipper_contact_phone, shipper_contact_email,
+  consignee_name, consignee_address, consignee_city, consignee_state, consignee_zip,
+  consignee_contact_name, consignee_contact_phone, consignee_contact_email,
+  pickup_time, pickup_time_window_start, pickup_time_window_end, pickup_instructions,
+  delivery_time, delivery_time_window_start, delivery_time_window_end, delivery_instructions,
+  pieces, pallets, boxes, length, width, height, temperature, is_hazardous, is_oversized,
+  requires_liftgate, requires_inside_delivery, requires_appointment, appointment_time,
+  special_instructions, notes, internal_notes, bol_number,
+  trip_planning_estimate, created_at, updated_at
+`
+
 // Helper function to send notifications in background (non-blocking)
 async function sendNotificationsForLoadUpdate(loadData: any) {
   try {
@@ -123,7 +143,7 @@ export async function getLoad(id: string) {
 
     const { data: load, error } = await supabase
       .from("loads")
-      .select("*")
+      .select(LOAD_DETAIL_SELECT)
       .eq("id", id)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
@@ -701,8 +721,8 @@ export async function createLoad(formData: {
     .select()
     .single()
 
-  if (error) {
-    return { error: error.message, data: null }
+  if (error || !data) {
+    return { error: error?.message || "Failed to create load", data: null }
   }
 
   // DAT-001 FIX: Update truck status to "in_use" when load is created with truck_id
@@ -824,14 +844,14 @@ export async function updateLoad(
   }
 
   // Get current load data for audit trail and status check (with company_id verification)
-  const { data: currentLoad } = await supabase
+  const { data: currentLoad, error: currentLoadError } = await supabase
     .from("loads")
-    .select("*")
+    .select(LOAD_DETAIL_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
     .single()
 
-  if (!currentLoad) {
+  if (currentLoadError || !currentLoad) {
     return { error: "Load not found", data: null }
   }
 
@@ -1007,7 +1027,7 @@ export async function updateLoad(
     .select()
     .single()
 
-  if (error) {
+  if (error || !data) {
     return { error: error.message, data: null }
   }
 
@@ -1376,7 +1396,7 @@ export async function duplicateLoad(id: string) {
   // Get the original load
   const { data: originalLoad, error: fetchError } = await supabase
     .from("loads")
-    .select("*")
+    .select(LOAD_DETAIL_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
     .single()
@@ -1454,15 +1474,17 @@ export async function duplicateLoad(id: string) {
     .select()
     .single()
 
-  if (createError) {
+  if (createError || !newLoad) {
     console.error("[duplicateLoad] Error creating duplicate:", createError)
-    return { error: createError.message, data: null }
+    return { error: createError?.message || "Failed to create duplicate load", data: null }
   }
 
   // Duplicate delivery points if any
   const { data: deliveryPoints } = await supabase
     .from("load_delivery_points")
-    .select("*")
+    .select(
+      "id, type, contact_name, company_name, address_line1, address_line2, city, state, zip_code, country, lat, lng, sequence, date, time, instructions, reference_number, stop_type, is_completed, completed_at, created_at, updated_at, company_id",
+    )
     .eq("load_id", id)
     .eq("company_id", ctx.companyId)
 

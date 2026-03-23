@@ -5,6 +5,9 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 
+const NOTIFICATION_PREFS_SELECT =
+  "id, user_id, email_alerts, sms_alerts, weekly_reports, route_updates, load_updates, maintenance_alerts, payment_reminders, created_at, updated_at"
+
 // Initialize Resend (checks both env var and database)
 // Initialize lazily to avoid errors if API key is not set or package not available
 // FIXED: Decouple from auth context - check company integration using target user's company_id
@@ -58,7 +61,7 @@ export async function getNotificationPreferences() {
 
     const { data, error } = await supabase
       .from("notification_preferences")
-      .select("*")
+      .select(NOTIFICATION_PREFS_SELECT)
       .eq("user_id", ctx.userId)
       .single()
 
@@ -146,7 +149,7 @@ export async function sendNotification(
   // Get user's notification preferences
   const { data: preferences } = await supabase
     .from("notification_preferences")
-    .select("*")
+    .select(NOTIFICATION_PREFS_SELECT)
     .eq("user_id", userId)
     .single()
 

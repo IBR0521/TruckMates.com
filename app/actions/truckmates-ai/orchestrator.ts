@@ -11,6 +11,7 @@ import { TruckMatesFunctionRegistry } from "@/lib/truckmates-ai/function-registr
 import { TruckMatesInternetAccess } from "@/lib/truckmates-ai/internet-access"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
 
 export interface AIRequest {
   message: string
@@ -119,11 +120,11 @@ export async function processAIRequest(
                 }
               }).catch((err: any) => {
                 // Log error but don't fail the AI action
-                console.error("[AI Orchestrator] Failed to create audit log:", err)
+                Sentry.captureException(err)
               })
             } catch (auditError: any) {
               // Log error but don't fail the AI action
-              console.error("[AI Orchestrator] Audit logging error:", auditError)
+              Sentry.captureException(auditError)
             }
           } catch (error: any) {
             actions.push({ 
@@ -150,7 +151,7 @@ export async function processAIRequest(
       error: null
     }
   } catch (error: any) {
-    console.error("AI Orchestrator error:", error)
+    Sentry.captureException(error)
     return {
       response: "",
       confidence: 0,
