@@ -5,7 +5,7 @@ import type React from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowLeft, FileSpreadsheet, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
@@ -98,6 +98,14 @@ export default function GenerateIFTAPage() {
         </Link>
         <h1 className="text-3xl font-bold text-foreground">Generate IFTA Report</h1>
         <p className="text-muted-foreground text-sm mt-1">Create quarterly IFTA tax report</p>
+        <p className="text-muted-foreground text-sm mt-2 max-w-2xl">
+          No ELD? Enter miles and fuel by state on the{" "}
+          <Link href="/dashboard/ifta/trip-sheet" className="text-primary font-medium inline-flex items-center gap-1 hover:underline">
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            Trip sheet
+          </Link>{" "}
+          — it merges with GPS state crossings when you generate.
+        </p>
       </div>
 
       <div className="p-4 md:p-8">

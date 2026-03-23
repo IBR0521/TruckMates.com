@@ -34,12 +34,40 @@ export async function getReminders(filters?: {
     if (filters?.status) {
       query = query.eq("status", filters.status)
     }
-    if (filters?.due_date_start) {
-      query = query.gte("due_date", filters.due_date_start)
+
+    // Prevent unbounded reads as data grows:
+    // - If the caller doesn't pass due_date_start/end, we apply a reasonable default window.
+    // - For completed reminders, prefer bounding by completed_at.
+    const now = new Date()
+    const toISODate = (d: Date) => d.toISOString().slice(0, 10) // YYYY-MM-DD (reminders.due_date is DATE)
+
+    if (filters?.status === "completed") {
+      // Keep last 1 year of completed history by default.
+      const completedStart = new Date(now)
+      completedStart.setFullYear(completedStart.getFullYear() - 1)
+      query = query.gte("completed_at", completedStart.toISOString())
+      query = query.lte("completed_at", now.toISOString())
+    } else {
+      const defaultStart = new Date(now)
+      defaultStart.setDate(defaultStart.getDate() - 180) // last ~6 months
+      const defaultEnd = new Date(now)
+      defaultEnd.setDate(defaultEnd.getDate() + 180) // next ~6 months
+
+      if (filters?.due_date_start) {
+        query = query.gte("due_date", filters.due_date_start)
+      } else {
+        query = query.gte("due_date", toISODate(defaultStart))
+      }
+
+      if (filters?.due_date_end) {
+        query = query.lte("due_date", filters.due_date_end)
+      } else {
+        query = query.lte("due_date", toISODate(defaultEnd))
+      }
     }
-    if (filters?.due_date_end) {
-      query = query.lte("due_date", filters.due_date_end)
-    }
+
+    // Hard cap on rows returned to avoid OOM/slow queries on large companies.
+    query = query.limit(200)
 
     const { data, error } = await query
 
@@ -372,6 +400,7 @@ export async function getOverdueReminders() {
       .eq("status", "pending")
       .lt("due_date", today)
       .order("due_date", { ascending: true })
+      .limit(200)
 
     if (error) {
       // If table doesn't exist, return empty array instead of error

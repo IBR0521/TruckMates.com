@@ -185,6 +185,7 @@ export default function InvoicesPage() {
                         <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Amount</th>
                         <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Due Date</th>
                         <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Status</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Factoring</th>
                         <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Actions</th>
                       </tr>
                     </thead>
@@ -201,6 +202,13 @@ export default function InvoicesPage() {
                               availableStatuses={["draft", "sent", "pending", "paid", "overdue", "cancelled"]}
                               onStatusChange={(newStatus) => handleStatusUpdate(invoice.id, newStatus)}
                             />
+                          </td>
+                          <td className="px-6 py-4 text-sm text-muted-foreground">
+                            {invoice.factoring_status ? (
+                              <span className="capitalize text-foreground">{invoice.factoring_status}</span>
+                            ) : (
+                              "—"
+                            )}
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
@@ -265,6 +273,12 @@ export default function InvoicesPage() {
                         <div>
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Due Date</p>
                           <p className="text-sm text-foreground">{invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : "N/A"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Factoring</p>
+                          <p className="text-sm text-foreground capitalize">
+                            {invoice.factoring_status || "—"}
+                          </p>
                         </div>
                       </div>
 

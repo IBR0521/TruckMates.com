@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 
 // Initialize Resend (checks both env var and database)
 // Initialize lazily to avoid errors if API key is not set or package not available
@@ -747,6 +748,36 @@ export async function getUnreadNotificationCount() {
       alerts: alertsCount,
     },
     error: null
+  }
+}
+
+/**
+ * Cleanup job:
+ * Delete read in-app notifications older than `olderThanDays` to prevent unbounded table growth.
+ *
+ * Uses the Supabase service-role client (bypasses RLS) and should only be called from cron/jobs.
+ */
+export async function cleanupReadNotifications(olderThanDays: number = 90) {
+  const admin = createAdminClient()
+
+  const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString()
+
+  try {
+    const { error } = await admin
+      .from("notifications")
+      .delete()
+      .eq("read", true)
+      .lt("created_at", cutoff)
+
+    return {
+      data: { success: !error, cutoffISO: cutoff },
+      error: error ? error.message : null,
+    }
+  } catch (err: any) {
+    return {
+      data: null,
+      error: err?.message || "Failed to cleanup notifications",
+    }
   }
 }
 

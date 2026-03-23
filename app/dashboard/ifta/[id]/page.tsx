@@ -165,6 +165,28 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
             </Card>
           </div>
 
+          {report.ifta_data_sources && (
+            <Card className="border-border p-4 bg-secondary/20">
+              <p className="text-sm font-medium text-foreground mb-1">Mileage data sources</p>
+              <p className="text-sm text-muted-foreground">
+                {(report.ifta_data_sources as any).summary ||
+                  "GPS/trip sheet mix (see per-state below)."}
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {(report.ifta_data_sources as any).uses_gps && (
+                  <span className="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                    GPS / ELD crossings
+                  </span>
+                )}
+                {(report.ifta_data_sources as any).uses_trip_sheets && (
+                  <span className="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40">
+                    Manual trip sheets
+                  </span>
+                )}
+              </div>
+            </Card>
+          )}
+
           <Card className="border-border p-8">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-foreground">State-by-State Breakdown</h3>
@@ -179,6 +201,7 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
                   <thead>
                     <tr className="border-b border-border bg-secondary/30">
                       <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">State</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Source</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Miles</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Gallons</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Tax Rate</th>
@@ -199,10 +222,20 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
                       // Tax paid and net tax due are not stored in current schema, calculate if needed
                       const taxPaid = state.tax_paid || 0
                       const netTaxDue = state.net_tax_due || (taxDue - taxPaid)
-                      
+                      const src = state.mileage_source as string | undefined
+                      const srcLabel =
+                        src === "gps"
+                          ? "GPS/ELD"
+                          : src === "trip_sheet"
+                            ? "Trip sheet"
+                            : src === "both"
+                              ? "GPS + sheet"
+                              : "—"
+
                       return (
                         <tr key={i} className="border-b border-border hover:bg-secondary/20 transition">
                           <td className="px-6 py-4 text-foreground font-medium">{state.state}</td>
+                          <td className="px-6 py-4 text-muted-foreground text-sm">{srcLabel}</td>
                           <td className="px-6 py-4 text-foreground">{miles.toLocaleString()}</td>
                           <td className="px-6 py-4 text-foreground">{fuel.toLocaleString()}</td>
                           <td className="px-6 py-4 text-foreground">${taxRate.toFixed(4)}</td>
@@ -215,7 +248,7 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-border">
-                      <td colSpan={4} className="px-6 py-4 text-right font-semibold text-foreground">
+                      <td colSpan={5} className="px-6 py-4 text-right font-semibold text-foreground">
                         Total:
                       </td>
                       <td className="px-6 py-4 text-foreground font-semibold">${report.total_tax_due?.toFixed(2) || "0.00"}</td>

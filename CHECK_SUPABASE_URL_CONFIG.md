@@ -9,7 +9,7 @@ You need to check **two places**:
 This is where you configure **redirect URLs** and **site URL**:
 
 1. **Go to Supabase Dashboard**: https://supabase.com/dashboard
-2. **Select your project** (ozzcdefgnutcotcgqruf)
+2. **Select your project**
 3. **Go to**: Authentication → URL Configuration
 4. **Check these settings**:
 

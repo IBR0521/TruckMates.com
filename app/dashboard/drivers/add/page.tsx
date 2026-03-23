@@ -222,51 +222,19 @@ export default function AddDriverPage() {
                           setFormData(prev => ({
                             ...prev,
                             address: address.address_line1?.trim() || prev.address,
-                            // Only update if we have new data, otherwise keep existing
                             city: address.city?.trim() || prev.city,
                             state: address.state?.trim() || prev.state,
                             zip: address.zip_code?.trim() || prev.zip,
                           }))
-                          toast.success("Address fields auto-filled")
                         }}
-                        placeholder="Enter address (auto-fills city, state, zip)"
+                        placeholder="Start typing — full street, city, state & ZIP are saved automatically"
                         label="Address"
                         id="address"
                       />
                     </div>
-                    <div>
-                      <Label>City</Label>
-                      <Input
-                        name="city"
-                        value={formData.city}
-                        onChange={handleChange}
-                        className="mt-1"
-                        placeholder="City"
-                      />
-                    </div>
-                    <div>
-                      <Label>State</Label>
-                      <Select value={formData.state} onValueChange={(v) => handleSelectChange("state", v)}>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Select state" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {usStates.map(state => (
-                            <SelectItem key={state} value={state}>{state}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>ZIP Code</Label>
-                      <Input
-                        name="zip"
-                        value={formData.zip}
-                        onChange={handleChange}
-                        className="mt-1"
-                        placeholder="12345"
-                      />
-                    </div>
+                    <p className="md:col-span-2 text-xs text-muted-foreground">
+                      City, state, and ZIP are filled from the address search above (used for payroll and compliance).
+                    </p>
                   </FormGrid>
                 </FormSection>
               </TabsContent>

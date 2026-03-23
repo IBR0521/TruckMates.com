@@ -12,8 +12,14 @@ interface ELDProvider {
   syncEvents: (device: any) => Promise<any[]>
 }
 
+function getTimestampMs(input: any): number | null {
+  if (!input) return null
+  const ms = new Date(input).getTime()
+  return Number.isFinite(ms) ? ms : null
+}
+
 // KeepTruckin API integration
-async function syncKeepTruckinData(device: any) {
+async function syncKeepTruckinData(device: any, sinceMs?: number | null) {
   const supabase = await createClient()
   
   if (!device.api_key || !device.api_secret) {
@@ -53,7 +59,20 @@ async function syncKeepTruckinData(device: any) {
     }
 
     const logsData = await logsResponse.json()
-    const logs = logsData.logs || []
+    const logsAll = logsData.logs || []
+    const logs = sinceMs
+      ? logsAll.filter((log: any) => {
+          const ts =
+            log.start_time ||
+            log.start_datetime ||
+            log.end_time ||
+            log.end_datetime ||
+            log.date ||
+            log.log_date
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : logsAll
 
     // Sync Locations
     let locationsResponse = await fetch(`${apiBaseUrl}/locations?device_id=${encodedDeviceId}`, {
@@ -76,7 +95,14 @@ async function syncKeepTruckinData(device: any) {
     }
 
     const locationsData = await locationsResponse.json()
-    const locations = locationsData.locations || []
+    const locationsAll = locationsData.locations || []
+    const locations = sinceMs
+      ? locationsAll.filter((loc: any) => {
+          const ts = loc.timestamp || loc.datetime
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : locationsAll
 
     // Sync Events/Violations
     let eventsResponse = await fetch(`${apiBaseUrl}/violations?device_id=${encodedDeviceId}`, {
@@ -99,7 +125,14 @@ async function syncKeepTruckinData(device: any) {
     }
 
     const eventsData = await eventsResponse.json()
-    const events = eventsData.violations || []
+    const eventsAll = eventsData.violations || []
+    const events = sinceMs
+      ? eventsAll.filter((event: any) => {
+          const ts = event.event_time || event.datetime || event.occurred_at || event.timestamp
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : eventsAll
 
     // Store logs in database
     // OPTIMIZATION: Batch fetch all driver mappings to avoid N+1 queries
@@ -275,7 +308,7 @@ async function syncKeepTruckinData(device: any) {
 }
 
 // Samsara API integration
-async function syncSamsaraData(device: any) {
+async function syncSamsaraData(device: any, sinceMs?: number | null) {
   const supabase = await createClient()
   
   if (!device.api_key) {
@@ -307,7 +340,22 @@ async function syncSamsaraData(device: any) {
     }
 
     const logsData = await logsResponse.json()
-    const logs = logsData.data || []
+    const logsAll = logsData.data || []
+    const logs = sinceMs
+      ? logsAll.filter((log: any) => {
+          const ts =
+            log.startTime ||
+            log.start_time ||
+            log.logStartTime ||
+            log.endTime ||
+            log.end_time ||
+            log.logEndTime ||
+            log.date ||
+            log.log_date
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : logsAll
 
     // Sync Locations - Correct Samsara v2 API endpoint
     const locationsResponse = await fetch(`${baseUrl}/v2/fleet/vehicles/locations/feed?vehicleIds=${vehicleId}`, {
@@ -318,7 +366,14 @@ async function syncSamsaraData(device: any) {
     })
 
     const locationsData = await locationsResponse.json()
-    const locations = locationsData.data || []
+    const locationsAll = locationsData.data || []
+    const locations = sinceMs
+      ? locationsAll.filter((loc: any) => {
+          const ts = loc.time || loc.timestamp || loc.datetime
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : locationsAll
 
     // Sync Events - Use correct Samsara HOS violations endpoint (not safety score)
     const eventsResponse = await fetch(`${baseUrl}/v2/fleet/hos/violations?vehicleIds=${vehicleId}`, {
@@ -333,7 +388,14 @@ async function syncSamsaraData(device: any) {
     }
 
     const eventsData = await eventsResponse.json()
-    const events = eventsData.data || []
+    const eventsAll = eventsData.data || []
+    const events = sinceMs
+      ? eventsAll.filter((event: any) => {
+          const ts = event.time || event.timestamp || event.eventTime
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : eventsAll
 
     // OPTIMIZATION: Batch fetch all driver mappings to avoid N+1 queries
     const uniqueProviderDriverIds = [...new Set(
@@ -541,7 +603,7 @@ async function syncSamsaraData(device: any) {
 }
 
 // Geotab API integration
-async function syncGeotabData(device: any) {
+async function syncGeotabData(device: any, sinceMs?: number | null) {
   const supabase = await createClient()
   
   if (!device.api_key || !device.api_secret) {
@@ -616,7 +678,14 @@ async function syncGeotabData(device: any) {
     })
 
     const logsData = await logsResponse.json()
-    const logs = logsData.result || []
+    const logsAll = logsData.result || []
+    const logs = sinceMs
+      ? logsAll.filter((log: any) => {
+          const ts = log.startDateTime || log.dateTime || log.date || log.logDate || log.startDate
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : logsAll
 
     // Get locations
     const locationsResponse = await fetch(`${baseUrl}/Get`, {
@@ -636,7 +705,14 @@ async function syncGeotabData(device: any) {
     })
 
     const locationsData = await locationsResponse.json()
-    const locations = locationsData.result || []
+    const locationsAll = locationsData.result || []
+    const locations = sinceMs
+      ? locationsAll.filter((loc: any) => {
+          const ts = loc.dateTime || loc.date
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : locationsAll
 
     // Get events
     const eventsResponse = await fetch(`${baseUrl}/Get`, {
@@ -656,7 +732,14 @@ async function syncGeotabData(device: any) {
     })
 
     const eventsData = await eventsResponse.json()
-    const events = eventsData.result || []
+    const eventsAll = eventsData.result || []
+    const events = sinceMs
+      ? eventsAll.filter((event: any) => {
+          const ts = event.dateTime || event.date || event.occurredAt
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : eventsAll
 
     // OPTIMIZATION: Batch fetch all driver mappings to avoid N+1 queries
     const uniqueGeotabDriverIds = [...new Set(
@@ -1025,14 +1108,21 @@ export async function syncELDDevice(deviceId: string) {
   }
 
   const device = deviceResult.data
+  // Prevent unbounded `eld_locations` growth by only inserting provider data
+  // newer than the last successful sync (with a small safety buffer).
+  const safetyBufferMs = 5 * 60 * 1000 // 5 minutes
+  const lastSyncAt = device.last_sync_at || device.lastSyncAt
+  const sinceMs = lastSyncAt
+    ? Math.max(0, new Date(lastSyncAt).getTime() - safetyBufferMs)
+    : Date.now() - 24 * 60 * 60 * 1000 // fallback: last 24 hours
 
   switch (device.provider) {
     case 'keeptruckin':
-      return await syncKeepTruckinData(device)
+      return await syncKeepTruckinData(device, sinceMs)
     case 'samsara':
-      return await syncSamsaraData(device)
+      return await syncSamsaraData(device, sinceMs)
     case 'geotab':
-      return await syncGeotabData(device)
+      return await syncGeotabData(device, sinceMs)
     default:
       return { error: `Provider ${device.provider} not yet supported`, data: null }
   }

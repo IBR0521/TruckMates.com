@@ -135,8 +135,9 @@ export async function createIFTAReport(formData: {
   if (formData.period_start) periodStart = formData.period_start
   if (formData.period_end) periodEnd = formData.period_end
 
-  // Try to get state-by-state mileage from actual state crossings (PostGIS automation)
+  // State mileage: GPS/ELD state crossings + manual IFTA trip sheets (no ELD required)
   const { getStateMileageBreakdown } = await import("./ifta-state-crossing")
+  const { getTripSheetAggregatesForIFTA } = await import("./ifta-trip-sheet")
   const validTruckIds = formData.truck_ids && formData.truck_ids.length > 0 ? formData.truck_ids : undefined
   const stateMileageResult = await getStateMileageBreakdown({
     truck_ids: validTruckIds,
@@ -144,25 +145,46 @@ export async function createIFTAReport(formData: {
     end_date: periodEnd,
   })
 
+  const tripSheetAgg = await getTripSheetAggregatesForIFTA({
+    truck_ids: validTruckIds,
+    start_date: periodStart,
+    end_date: periodEnd,
+  })
+  if (tripSheetAgg.error) {
+    console.warn(
+      "[IFTA] Trip sheet aggregates skipped:",
+      tripSheetAgg.error,
+      "(Run supabase/trip_sheets_schema.sql if manual trip sheets are required.)",
+    )
+  }
+  const tripMilesByState = tripSheetAgg.data?.milesByState || {}
+  const tripFuelByState = tripSheetAgg.data?.fuelGallonsByState || {}
+  const hasTripSheets = tripSheetAgg.data?.has_data === true
+
+  const gpsRows = stateMileageResult.data || []
+  const hasGpsCrossings = gpsRows.length > 0
+
   let stateBreakdown: Array<{
     state: string
     miles: number
-    fuel: string
-    tax: string
+    fuel: string | number
+    tax: string | number
+    fuelFormatted?: string
+    taxFormatted?: string
+    taxRate?: number
+    state_code?: string
+    mileage_source?: "gps" | "trip_sheet" | "both"
   }> = []
   let totalMiles = 0
+  let iftaDataSources: Record<string, unknown> | null = null
 
-  // If we have state crossing data, use it (100% accurate)
-  if (stateMileageResult.data && stateMileageResult.data.length > 0) {
-    // Get dynamic tax rates for this quarter (or fallback to defaults)
+  // GPS crossings and/or manual trip sheets → combined state-by-state miles
+  if (hasGpsCrossings || hasTripSheets) {
     const { getIFTATaxRatesForQuarter } = await import("./ifta-tax-rates")
     const quarterNumber = quarter === "Q1" ? 1 : quarter === "Q2" ? 2 : quarter === "Q3" ? 3 : 4
     const taxRatesResult = await getIFTATaxRatesForQuarter(quarterNumber, year)
-    
-    // EXT-009 FIX: Use dynamic rates from database if available, otherwise fallback to shared constants
     const taxRates: Record<string, number> = taxRatesResult.data || STATE_FUEL_TAX_RATES
 
-    // Get fuel purchases for the quarter
     const { data: fuelPurchases } = await supabase
       .from("fuel_purchases")
       .select("state, gallons")
@@ -170,39 +192,75 @@ export async function createIFTAReport(formData: {
       .gte("purchase_date", periodStart)
       .lte("purchase_date", periodEnd)
 
-    // Aggregate fuel by state
     const fuelByState: Record<string, number> = {}
-    fuelPurchases?.forEach((purchase: { state: string; gallons: number | string | null; [key: string]: any }) => {
-      const state = purchase.state
-      if (!fuelByState[state]) {
-        fuelByState[state] = 0
-      }
-      fuelByState[state] += parseFloat(purchase.gallons?.toString() || "0")
+    fuelPurchases?.forEach((purchase: { state: string; gallons: number | string | null }) => {
+      const st = purchase.state
+      if (!fuelByState[st]) fuelByState[st] = 0
+      fuelByState[st] += parseFloat(purchase.gallons?.toString() || "0")
     })
+    for (const [st, gal] of Object.entries(tripFuelByState)) {
+      if (!fuelByState[st]) fuelByState[st] = 0
+      fuelByState[st] += gal
+    }
 
-    // Build state breakdown from actual crossings
-    stateBreakdown = stateMileageResult.data.map((stateData: any) => {
-      const stateCode = stateData.state_code
-      const miles = parseFloat(stateData.total_miles?.toString() || "0")
+    const gpsByCode = new Map<string, { miles: number; state_name: string }>()
+    for (const stateData of gpsRows) {
+      const code = String(stateData.state_code || "").toUpperCase().slice(0, 2)
+      if (!code) continue
+      gpsByCode.set(code, {
+        miles: parseFloat(stateData.total_miles?.toString() || "0"),
+        state_name: stateData.state_name || code,
+      })
+    }
+
+    const allCodes = new Set<string>([...gpsByCode.keys(), ...Object.keys(tripMilesByState)])
+    const perStateSources: Record<string, "gps" | "trip_sheet" | "both"> = {}
+
+    for (const stateCode of allCodes) {
+      const gpsM = gpsByCode.get(stateCode)?.miles ?? 0
+      const sheetM = tripMilesByState[stateCode] ?? 0
+      const miles = gpsM + sheetM
+      if (miles <= 0) continue
+
+      let mileage_source: "gps" | "trip_sheet" | "both"
+      if (gpsM > 0 && sheetM > 0) mileage_source = "both"
+      else if (gpsM > 0) mileage_source = "gps"
+      else mileage_source = "trip_sheet"
+      perStateSources[stateCode] = mileage_source
+
       totalMiles += miles
+      const stateName = gpsByCode.get(stateCode)?.state_name || stateCode
+      const taxRate = taxRates[stateCode] || getFuelTaxRate(stateCode, 0.25)
+      const fuelGallons =
+        fuelByState[stateCode] !== undefined ? fuelByState[stateCode] : Math.round(miles / 6.5)
+      const taxDue = (miles / 6.5) * taxRate
 
-      const taxRate = taxRates[stateCode] || getFuelTaxRate(stateCode, 0.25) // EXT-009: Use dynamic rates or fallback to shared function
-      // FIXED: Zero gallons is valid data, not missing data. Use explicit undefined check.
-      const fuelGallons = fuelByState[stateCode] !== undefined ? fuelByState[stateCode] : Math.round(miles / 6.5)
-      // FIXED: Tax rate is in $/gallon, not percentage. Calculate: gallons * rate
-      const avgMpg = 6.5 // Average MPG for semi-trucks
-      const taxDue = (miles / avgMpg) * taxRate
-
-      return {
-        state: stateData.state_name || stateCode,
+      stateBreakdown.push({
+        state: stateName,
+        state_code: stateCode,
         miles: Math.round(miles),
-        fuel: fuelGallons, // Store as number, format only in UI
-        fuelFormatted: `${fuelGallons.toLocaleString()} gal`, // Formatted version for display
-        tax: taxDue, // Store as number, not formatted string
-        taxFormatted: `$${taxDue.toFixed(2)}`, // Keep formatted version for display
-        taxRate: taxRate, // Store tax rate for detail page
-      }
-    })
+        mileage_source,
+        fuel: fuelGallons,
+        fuelFormatted: `${fuelGallons.toLocaleString()} gal`,
+        tax: taxDue,
+        taxFormatted: `$${taxDue.toFixed(2)}`,
+        taxRate,
+      })
+    }
+
+    stateBreakdown.sort((a, b) => String(a.state_code || a.state).localeCompare(String(b.state_code || b.state)))
+
+    iftaDataSources = {
+      uses_gps: hasGpsCrossings,
+      uses_trip_sheets: hasTripSheets,
+      per_state_sources: perStateSources,
+      summary:
+        hasGpsCrossings && hasTripSheets
+          ? "Combined GPS/ELD state crossings and manual IFTA trip sheets."
+          : hasGpsCrossings
+            ? "Miles from GPS/ELD state crossings."
+            : "Miles from manual IFTA trip sheets (no ELD required).",
+    }
   } else {
     // Fallback: Use ELD data or routes if no state crossing data available
     if (formData.include_eld && formData.truck_ids.length > 0) {
@@ -278,28 +336,23 @@ export async function createIFTAReport(formData: {
 
     // If we still don't have mileage data, return error instead of fabricating data
     if (totalMiles === 0) {
-      return { 
-        error: "Cannot generate IFTA report: No GPS/ELD mileage data available for the selected period. Please ensure trucks have ELD devices or GPS tracking enabled, or provide manual state-by-state mileage data.", 
-        data: null 
+      return {
+        error:
+          "Cannot generate IFTA report: No mileage data for the selected period. Add GPS/ELD state crossings, or enter manual IFTA trip sheets (Dashboard → IFTA → Trip sheet).",
+        data: null,
       }
     }
 
-    // Estimate fuel purchased (simplified calculation)
-    const estimatedFuel = Math.round(totalMiles / 6.5) // Assuming 6.5 MPG average
-
-    // Return error - cannot create IFTA report without actual state breakdown
-    // Provide helpful guidance on how to set up state crossing data
+    // No state-level breakdown: only aggregate miles from ELD/routes — cannot file IFTA without states
     return {
       error: `Cannot generate IFTA report: State-by-state mileage breakdown is required for IFTA filing.
 
-No state crossing data found for the selected period (${periodStart} to ${periodEnd}).
+No GPS state crossings or trip sheet entries found for ${periodStart} to ${periodEnd}.
 
-To generate IFTA reports, you need state crossing data. The system automatically detects state crossings when:
-• Location updates are received from mobile apps or ELD devices
-• Routes are completed with GPS tracking enabled
-
-For demo/test purposes: Use the ELD Simulator or create routes with GPS tracking to generate test state crossing data.`,
-      data: null
+Options:
+• Use ELD/mobile GPS so state crossings are recorded automatically, or
+• Enter trip sheets at /dashboard/ifta/trip-sheet (manual miles and fuel by state).`,
+      data: null,
     }
   }
 
@@ -320,28 +373,26 @@ For demo/test purposes: Use the ELD Simulator or create routes with GPS tracking
     0
   )
 
-  const { data, error } = await supabase
-    .from("ifta_reports")
-    .insert({
-      company_id: ctx.companyId,
-      quarter: formData.quarter,
-      year: formData.year,
-      period: period,
-      // FIXED: Store total_miles as INTEGER/DECIMAL, format only in UI
-      total_miles: totalMiles, // Store as number
-      total_miles_formatted: `${totalMiles.toLocaleString()} mi`, // Keep formatted version for backward compatibility
-      fuel_purchased: Math.round(totalFuel), // Store as number
-      fuel_purchased_formatted: `${Math.round(totalFuel).toLocaleString()} gal`, // Keep formatted version for backward compatibility
-      tax_owed: totalTax,
-      status: "draft",
-      truck_ids: formData.truck_ids,
-      include_eld: formData.include_eld,
-      state_breakdown: stateBreakdown,
-      // Note: uses_state_crossings column may not exist in all schemas
-      // If it doesn't exist, this will be ignored (non-breaking)
-    })
-    .select()
-    .single()
+  const insertPayload: Record<string, unknown> = {
+    company_id: ctx.companyId,
+    quarter: formData.quarter,
+    year: formData.year,
+    period: period,
+    total_miles: totalMiles,
+    total_miles_formatted: `${totalMiles.toLocaleString()} mi`,
+    fuel_purchased: Math.round(totalFuel),
+    fuel_purchased_formatted: `${Math.round(totalFuel).toLocaleString()} gal`,
+    tax_owed: totalTax,
+    status: "draft",
+    truck_ids: formData.truck_ids,
+    include_eld: formData.include_eld,
+    state_breakdown: stateBreakdown,
+  }
+  if (iftaDataSources) {
+    insertPayload.ifta_data_sources = iftaDataSources
+  }
+
+  const { data, error } = await supabase.from("ifta_reports").insert(insertPayload).select().single()
 
   if (error) {
     return { error: error.message, data: null }

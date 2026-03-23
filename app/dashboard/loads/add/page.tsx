@@ -40,7 +40,8 @@ import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { getRoutes } from "@/app/actions/routes"
 import { getCustomers, createCustomer } from "@/app/actions/customers"
-import { calculateMileage } from "@/app/actions/load-mileage"
+import { getTripPlanningEstimate } from "@/app/actions/promiles"
+import { getOrderedDeliveryStopAddresses } from "@/lib/load-routing-from-stops"
 import { LoadDeliveryPointsManager } from "@/components/load-delivery-points-manager"
 import { createLoadDeliveryPoint } from "@/app/actions/load-delivery-points"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
@@ -98,7 +99,6 @@ export default function AddLoadPage() {
     consigneeContact: "",
     consigneePhone: "",
     destination: "",
-    deliveryType: "single",
     estimatedDelivery: "",
     deliveryTime: "",
     deliveryInstructions: "",
@@ -135,9 +135,7 @@ export default function AddLoadPage() {
     requiresInsideDelivery: false,
     requiresAppointment: false,
     
-    // Notes
     notes: "",
-    internalNotes: "",
   })
 
   const [newCustomer, setNewCustomer] = useState({ name: "", email: "", phone: "", address: "", city: "", state: "", zip: "" })
@@ -182,43 +180,78 @@ export default function AddLoadPage() {
     setFormData({ ...formData, [name]: value })
   }
 
-  const calculateMiles = async () => {
-    if (!formData.origin || !formData.destination) {
-      toast.error("Please enter origin and destination")
-      return
-    }
-    setIsCalculatingMiles(true)
-    try {
-    const result = await calculateMileage(formData.origin, formData.destination)
-      if (result.miles) {
-      setFormData(prev => ({ ...prev, estimatedMiles: result.miles!.toString() }))
-      toast.success(`Calculated: ${result.miles} miles`)
-      } else {
-        toast.error(result.error || "Failed to calculate miles")
+  /** Auto-fill miles from trip planning when pickup + drop (or multi-stop chain) are set */
+  useEffect(() => {
+    let cancelled = false
+    const run = async () => {
+      const origin = formData.origin?.trim()
+      if (!origin) return
+
+      const stops = getOrderedDeliveryStopAddresses(deliveryPoints)
+      if (stops.length === 0 && !formData.destination?.trim()) return
+
+      setIsCalculatingMiles(true)
+      try {
+        if (stops.length > 0) {
+          const res = await getTripPlanningEstimate({
+            origin,
+            destination: "",
+            deliveryStopAddresses: stops,
+            mpg: 6.5,
+          })
+          if (cancelled || res.error || !res.data) return
+          const milesLeg = res.data.distance_miles
+          setFormData((prev) => ({
+            ...prev,
+            estimatedMiles: String(Math.round(milesLeg)),
+            milesMethod: "trip_planning",
+          }))
+          return
+        }
+
+        const res = await getTripPlanningEstimate({
+          origin,
+          destination: formData.destination!.trim(),
+          mpg: 6.5,
+        })
+        if (cancelled || res.error || !res.data) return
+        const milesSingle = res.data.distance_miles
+        setFormData((prev) => ({
+          ...prev,
+          estimatedMiles: String(Math.round(milesSingle)),
+          milesMethod: "trip_planning",
+        }))
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setIsCalculatingMiles(false)
       }
-    } catch (error) {
-      toast.error("Failed to calculate miles")
-    } finally {
-      setIsCalculatingMiles(false)
     }
-  }
+
+    const t = setTimeout(() => void run(), 900)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [formData.origin, formData.destination, deliveryPoints])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
 
     try {
+      const multiStop = deliveryPoints.length > 0
       const payload: any = {
         shipment_number: formData.autoNumbering ? "" : formData.shipmentNumber,
       origin: formData.origin,
-        destination: formData.deliveryType === "multi" ? "Multiple Locations" : formData.destination,
+        destination: multiStop ? "Multiple Locations" : formData.destination,
         shipper_address_book_id: selectedShipperAddressBookId || undefined,
         consignee_address_book_id: selectedConsigneeAddressBookId || undefined,
       weight: formData.weight || undefined,
       contents: formData.contents || undefined,
       company_name: formData.companyName || undefined,
         customer_reference: formData.reference || undefined,
-        delivery_type: formData.deliveryType,
+        delivery_type: multiStop ? "multi" : "single",
       load_type: formData.loadType,
       customer_id: formData.customerId || undefined,
       shipper_name: formData.shipperName || undefined,
@@ -256,7 +289,6 @@ export default function AddLoadPage() {
         route_id: formData.route || undefined,
         status: formData.status,
       notes: formData.notes || undefined,
-      internal_notes: formData.internalNotes || undefined,
         load_date: formData.pickupDate || undefined,
         estimated_delivery: formData.estimatedDelivery || undefined,
       }
@@ -269,7 +301,7 @@ export default function AddLoadPage() {
       return
     }
 
-    if (formData.deliveryType === "multi" && deliveryPoints.length > 0 && result.data?.id) {
+    if (deliveryPoints.length > 0 && result.data?.id) {
         for (const point of deliveryPoints) {
           await createLoadDeliveryPoint(result.data.id, point)
         }
@@ -594,25 +626,12 @@ export default function AddLoadPage() {
 
               {/* Consignee Tab */}
               <TabsContent value="consignee" className="space-y-6">
-                <FormSection title="Consignee Information" icon={<MapPin className="w-5 h-5" />}>
+                <FormSection title="Consignee & delivery" icon={<MapPin className="w-5 h-5" />}>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Enter the primary drop-off below. For several stops, add each stop in <strong>Delivery points</strong>
+                    — the load becomes multi-stop automatically.
+                  </p>
                   <FormGrid cols={2}>
-                <div className="md:col-span-2">
-                      <Label>Delivery Type *</Label>
-                      <Select value={formData.deliveryType} onValueChange={(v) => {
-                        handleSelectChange("deliveryType", v)
-                        if (v === "single") setDeliveryPoints([])
-                      }}>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="single">Single Destination</SelectItem>
-                          <SelectItem value="multi">Multiple Stops</SelectItem>
-                        </SelectContent>
-                      </Select>
-                </div>
-                    {formData.deliveryType === "single" ? (
-                      <>
                 <div className="md:col-span-2">
                           <Label>Select from Address Book</Label>
                           <Select 
@@ -759,15 +778,16 @@ export default function AddLoadPage() {
                           <Label>Delivery Instructions</Label>
                           <Textarea name="deliveryInstructions" value={formData.deliveryInstructions} onChange={handleChange} className="mt-1" rows={2} />
                 </div>
-                      </>
-                    ) : (
-                <div className="md:col-span-2">
+                      <div className="md:col-span-2 pt-4 border-t border-border/60">
+                        <Label className="text-base">Delivery points (optional)</Label>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          Add ordered stops for multi-delivery loads. Leave empty for a single drop-off above.
+                        </p>
                         <LoadDeliveryPointsManager
                           deliveryPoints={deliveryPoints}
                           onDeliveryPointsChange={setDeliveryPoints}
-                  />
-                </div>
-                    )}
+                        />
+                      </div>
                   </FormGrid>
                 </FormSection>
               </TabsContent>
@@ -796,9 +816,10 @@ export default function AddLoadPage() {
                       <Label>Freight Class</Label>
                       <Input name="freightClass" type="number" value={formData.freightClass} onChange={handleChange} className="mt-1" placeholder="50-500" />
                 </div>
-                    <div className="md:col-span-2 space-y-2">
-                      <Label>Load Type</Label>
-                      <div className="flex gap-4">
+                    <div className="md:col-span-2 space-y-2 rounded-lg border border-border/80 bg-muted/20 p-4">
+                      <Label className="text-foreground">Load characteristics</Label>
+                      <p className="text-xs text-muted-foreground mb-2">What’s on the truck (commodity / equipment)</p>
+                      <div className="flex flex-wrap gap-4">
                         <label className="flex items-center gap-2 cursor-pointer">
                           <Checkbox checked={formData.isHazardous} onCheckedChange={(c) => setFormData(prev => ({ ...prev, isHazardous: !!c }))} />
                           <span className="text-sm">HazMat</span>
@@ -813,16 +834,17 @@ export default function AddLoadPage() {
                         </label>
                 </div>
                 </div>
-                    <div className="md:col-span-2 space-y-2">
-                      <Label>Special Requirements</Label>
-                      <div className="flex gap-4">
+                    <div className="md:col-span-2 space-y-2 rounded-md border-l-4 border-amber-500/70 bg-amber-500/5 pl-4 py-3 pr-3">
+                      <Label className="text-foreground">Delivery requirements</Label>
+                      <p className="text-xs text-muted-foreground mb-2">What the driver must do at delivery (not freight type)</p>
+                      <div className="flex flex-wrap gap-4">
                         <label className="flex items-center gap-2 cursor-pointer">
                           <Checkbox checked={formData.requiresLiftgate} onCheckedChange={(c) => setFormData(prev => ({ ...prev, requiresLiftgate: !!c }))} />
                           <span className="text-sm">Liftgate</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
                           <Checkbox checked={formData.requiresInsideDelivery} onCheckedChange={(c) => setFormData(prev => ({ ...prev, requiresInsideDelivery: !!c }))} />
-                          <span className="text-sm">Inside Delivery</span>
+                          <span className="text-sm">Inside delivery</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
                           <Checkbox checked={formData.requiresAppointment} onCheckedChange={(c) => setFormData(prev => ({ ...prev, requiresAppointment: !!c }))} />
@@ -839,12 +861,21 @@ export default function AddLoadPage() {
                 <FormSection title="Charges & Pricing" icon={<DollarSign className="w-5 h-5" />}>
                   <FormGrid cols={2}>
                   <div>
-                      <Label>Estimated Miles</Label>
-                      <div className="flex gap-2 mt-1">
-                        <Input name="estimatedMiles" value={formData.estimatedMiles} onChange={handleChange} placeholder="0" />
-                        <Button type="button" variant="outline" onClick={calculateMiles} disabled={isCalculatingMiles}>
-                          {isCalculatingMiles ? "Calculating..." : "Calculate"}
-                        </Button>
+                      <Label>Estimated miles</Label>
+                      <p className="text-xs text-muted-foreground mt-0.5 mb-1">
+                        Filled automatically from trip planning when pickup and drop-off (or delivery stops) are set.
+                      </p>
+                      <div className="flex gap-2 mt-1 items-center">
+                        <Input
+                          name="estimatedMiles"
+                          value={formData.estimatedMiles}
+                          readOnly
+                          className="bg-muted/40"
+                          placeholder={isCalculatingMiles ? "…" : "—"}
+                        />
+                        {isCalculatingMiles && (
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">Updating…</span>
+                        )}
                   </div>
               </div>
                 <div>
@@ -929,12 +960,11 @@ export default function AddLoadPage() {
                 </div>
                     <div className="md:col-span-2">
                       <Label>Notes</Label>
-                      <Textarea name="notes" value={formData.notes} onChange={handleChange} className="mt-1" rows={3} />
+                      <p className="text-xs text-muted-foreground mt-0.5 mb-1">
+                        Dispatch notes, customer-facing details, or internal reminders — one place.
+                      </p>
+                      <Textarea name="notes" value={formData.notes} onChange={handleChange} className="mt-1" rows={4} />
               </div>
-                    <div className="md:col-span-2">
-                      <Label>Internal Notes</Label>
-                      <Textarea name="internalNotes" value={formData.internalNotes} onChange={handleChange} className="mt-1" rows={2} />
-                    </div>
                   </FormGrid>
                 </FormSection>
               </TabsContent>

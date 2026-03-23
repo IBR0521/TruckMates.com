@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Supabase Environment Variables Setup Script
-# This script helps you set up your .env.local file
+# This script helps you set up your .env.local file (placeholders only — paste real values from Supabase / Vercel)
 
 echo "🔧 Setting up Supabase environment variables..."
 echo ""
@@ -19,14 +19,14 @@ if [ -f ".env.local" ]; then
     cp .env.local .env.local.backup
 fi
 
-# Create .env.local with Supabase credentials
+# Create .env.local — replace YOUR_* placeholders with values from Supabase Dashboard → API
 cat > .env.local << 'EOF'
-# Supabase Configuration (REQUIRED)
-NEXT_PUBLIC_SUPABASE_URL=https://ozzcdefgnutcotcgqruf.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96emNkZWZnbnV0Y290Y2dxcnVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4MDU0MTIsImV4cCI6MjA4NjM4MTQxMn0.27PGSSPQaLjdKoKvMwIMBLlyO_jvTHSCNRYg1w8eUwo
+# Supabase Configuration (REQUIRED) — get from Supabase Dashboard → Project Settings → API
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_jwt_here
 
 # Optional: Service Role Key (only use in server-side code, never expose to client)
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96emNkZWZnbnV0Y290Y2dxcnVmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDgwNTQxMiwiZXhwIjoyMDg2MzgxNDEyfQ.g0z5t6hSIPqKxXpUVPx0P33mCqzy1fAINrNDBVUkrmw
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_jwt_here
 
 # App URL (for redirects and OAuth callbacks)
 NEXT_PUBLIC_APP_URL=http://localhost:3000
@@ -74,17 +74,14 @@ NEXT_PUBLIC_SENTRY_DSN=https://xxxxx@xxxxx.ingest.sentry.io/xxxxx
 NEXT_PUBLIC_SENTRY_DEBUG=false
 EOF
 
-echo "✅ Created .env.local file with Supabase credentials"
+echo "✅ Created .env.local file with placeholder Supabase credentials — edit and paste real keys"
 echo ""
 echo "📋 Next steps:"
-echo "   1. Restart your development server: npm run dev"
-echo "   2. Visit http://localhost:3000/diagnostics to verify connection"
-echo "   3. For production, add these variables to Vercel:"
-echo "      - NEXT_PUBLIC_SUPABASE_URL"
-echo "      - NEXT_PUBLIC_SUPABASE_ANON_KEY"
-echo "   4. Redeploy your Vercel project"
+echo "   1. Edit .env.local with values from Supabase / Vercel"
+echo "   2. Restart your development server: npm run dev"
+echo "   3. Visit http://localhost:3000/diagnostics to verify connection"
+echo "   4. For production, add these variables to Vercel and redeploy"
 echo ""
 echo "🔒 Security reminder: .env.local is in .gitignore and won't be committed"
 echo ""
-
 

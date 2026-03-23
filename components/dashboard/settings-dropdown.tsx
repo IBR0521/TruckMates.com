@@ -15,6 +15,7 @@ import {
   Users,
   User,
   ChevronRight,
+  Landmark,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -46,6 +47,12 @@ export function SettingsDropdown() {
       label: "Invoice",
       href: "/dashboard/settings/invoice",
       description: "Invoice settings and templates",
+    },
+    {
+      icon: Landmark,
+      label: "Factoring",
+      href: "/dashboard/settings/factoring",
+      description: "Email invoice packets to your factoring company",
     },
     {
       icon: Plug,

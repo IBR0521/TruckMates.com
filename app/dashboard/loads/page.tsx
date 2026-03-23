@@ -301,7 +301,23 @@ export default function LoadsPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-foreground">Loads</h1>
           <p className="text-muted-foreground text-sm mt-1">Manage shipments and track deliveries</p>
-          <p className="text-xs text-muted-foreground mt-1">Press Ctrl+N for new, Ctrl+F to search, Delete to bulk delete</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs">
+            <Link
+              href="/dashboard/ifta/trip-sheet"
+              className="text-primary font-medium hover:underline"
+            >
+              IFTA trip sheet (manual miles)
+            </Link>
+            <span className="text-border">·</span>
+            <Link href="/dashboard/ifta" className="text-muted-foreground hover:text-primary hover:underline">
+              IFTA reports
+            </Link>
+            <span className="text-border hidden sm:inline">·</span>
+            <span className="text-muted-foreground hidden sm:inline">
+              Trip planning (ProMiles-style) is on each load’s detail page → scroll to <strong className="text-foreground">Trip planning</strong>
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">Press Ctrl+N for new, Ctrl+F to search, Delete to bulk delete</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {isBulkMode && selectedIds.size > 0 && (

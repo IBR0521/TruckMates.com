@@ -31,6 +31,8 @@ import {
   MessageSquare,
   Sparkles,
   AlertTriangle,
+  FileSpreadsheet,
+  Calculator,
 } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
@@ -319,6 +321,10 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               <NavItem href="/dashboard/accounting/expenses" label="Expenses" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/accounting/settlements" label="Settlements" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/accounting/tax-fuel" label="Tax & Fuel" isSubitem isCollapsed={shouldShowCollapsed} />
+              {userRole &&
+                (canViewFeature(userRole, "reports") || canViewFeature(userRole, "accounting")) && (
+                  <NavItem href="/dashboard/reports/year-end" label="Year-End Tax Report" isSubitem isCollapsed={shouldShowCollapsed} />
+                )}
               {userRole && canViewFeature(userRole, "fuel_analytics") && (
                 <NavItem href="/dashboard/fuel-analytics" label="Fuel Analytics" isSubitem isCollapsed={shouldShowCollapsed} />
               )}
@@ -375,9 +381,23 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             </>
           )}
 
-          {/* IFTA - Show if user can view IFTA */}
+          {/* IFTA — always show Reports + Trip sheet as separate links (dropdown hid subitems until expand) */}
           {userRole && canViewFeature(userRole, "ifta") && (
-            <NavItem href="/dashboard/ifta" icon={Receipt} label="IFTA Reports" isCollapsed={shouldShowCollapsed} />
+            <>
+              <NavItem href="/dashboard/ifta" icon={Receipt} label="IFTA reports" isCollapsed={shouldShowCollapsed} />
+              <NavItem
+                href="/dashboard/ifta/trip-planning"
+                icon={Calculator}
+                label="Trip planning"
+                isCollapsed={shouldShowCollapsed}
+              />
+              <NavItem
+                href="/dashboard/ifta/trip-sheet"
+                icon={FileSpreadsheet}
+                label="IFTA trip sheet"
+                isCollapsed={shouldShowCollapsed}
+              />
+            </>
           )}
 
           {/* Reports - Show if user can view reports */}
@@ -397,6 +417,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               <NavItem href="/dashboard/reports/detention" label="Detention Time" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/reports/fuel-efficiency" label="Fuel Efficiency" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/reports/on-time-delivery" label="On-Time Delivery" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/reports/year-end" label="Year-End Tax Report" isSubitem isCollapsed={shouldShowCollapsed} />
             </DropdownItem>
           )}
 
@@ -446,6 +467,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               <NavItem href="/dashboard/settings" label="General" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/users" label="Users" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/invoice" label="Invoice" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/factoring" label="Factoring" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/load" label="Load" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/dispatch" label="Dispatch" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/business" label="Business" isSubitem isCollapsed={shouldShowCollapsed} />

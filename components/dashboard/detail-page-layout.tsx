@@ -52,8 +52,8 @@ export function DetailPageLayout({
             </div>
           </div>
           
-          {/* Action Bar */}
-          <div className="flex items-center justify-between gap-3 flex-wrap">
+          {/* Action Bar — stack so headerActions stay visible (not pushed to far right / off-screen) */}
+          <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2 flex-wrap">
               {editUrl && (
                 <Link href={editUrl}>
@@ -66,7 +66,7 @@ export function DetailPageLayout({
               {actions}
             </div>
             {headerActions && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 w-full pt-1 border-t border-border/40">
                 {headerActions}
               </div>
             )}

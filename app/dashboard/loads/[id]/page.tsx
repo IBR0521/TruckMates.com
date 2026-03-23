@@ -2,9 +2,9 @@
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { ArrowLeft, MapPin, Package, Truck, Calendar, Edit2, Route, AlertCircle } from "lucide-react"
+import { ArrowLeft, MapPin, Package, Truck, Calendar, Edit2, Route, AlertCircle, Calculator, FileSpreadsheet } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { use } from "react"
 import { GoogleMapsRoute } from "@/components/google-maps-route"
@@ -22,6 +22,9 @@ import {
   InfoField,
   StatusBadge,
 } from "@/components/dashboard/detail-page-layout"
+import { LoadTripPlanningEstimate } from "@/components/load-trip-planning-estimate"
+import type { TripPlanningEstimate } from "@/app/actions/promiles"
+import { getLastStopRoutingAddress, getOrderedDeliveryStopAddresses } from "@/lib/load-routing-from-stops"
 import { createCustomerPortalAccess } from "@/app/actions/customer-portal"
 import {
   Dialog,
@@ -46,6 +49,16 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false)
   const [portalUrl, setPortalUrl] = useState<string>("")
   const [isCreatingPortal, setIsCreatingPortal] = useState(false)
+
+  /** For multi-stop loads, trip planning needs one destination — use last delivery stop. */
+  const lastStopRoutingAddress = useMemo(
+    () => getLastStopRoutingAddress(deliveryPoints),
+    [deliveryPoints],
+  )
+  const orderedDeliveryStopAddresses = useMemo(
+    () => getOrderedDeliveryStopAddresses(deliveryPoints),
+    [deliveryPoints],
+  )
 
   useEffect(() => {
     setMounted(true)
@@ -493,6 +506,30 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
       }
     >
       <div className="space-y-6">
+        {/* Single strip: route estimate on this load vs manual IFTA elsewhere */}
+        <Card className="border border-border/80 bg-card p-4 md:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              <span className="text-foreground font-medium">Trip planning</span> (section below) ·{" "}
+              <span className="text-foreground font-medium">IFTA trip sheet</span> for manual miles without ELD
+            </p>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <a href="#trip-planning-promiles">
+                <Button type="button" size="sm" variant="secondary">
+                  <Calculator className="w-4 h-4 mr-2" />
+                  Trip planning
+                </Button>
+              </a>
+              <Link href="/dashboard/ifta/trip-sheet">
+                <Button type="button" variant="outline" size="sm">
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  IFTA trip sheet
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </Card>
+
         {/* Status Indicators - TruckLogics Style */}
         <div className="grid md:grid-cols-3 gap-4">
           <Card className="p-4 border-2">
@@ -589,6 +626,26 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
               )}
             </InfoGrid>
           </DetailSection>
+
+          <div id="trip-planning-promiles">
+            <LoadTripPlanningEstimate
+              loadId={id}
+              origin={load.origin}
+              destination={load.destination}
+              initialEstimate={load.trip_planning_estimate as TripPlanningEstimate | null | undefined}
+              truckGrossWeightLbs={truck?.gross_vehicle_weight}
+              suggestedRoutingDestination={lastStopRoutingAddress || null}
+              deliveryStopAddresses={
+                load.delivery_type === "multi" && orderedDeliveryStopAddresses.length > 0
+                  ? orderedDeliveryStopAddresses
+                  : undefined
+              }
+              onSaved={async () => {
+                const r = await getLoad(id)
+                if (r.data) setLoad(r.data)
+              }}
+            />
+          </div>
 
           {/* Load Summary for Multi-Delivery */}
           {load.delivery_type === "multi" && loadSummary && (

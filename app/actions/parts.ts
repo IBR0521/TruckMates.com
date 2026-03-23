@@ -36,6 +36,11 @@ export async function getParts(filters?: {
     query = query.or(`name.ilike.%${filters.search}%,part_number.ilike.%${filters.search}%,description.ilike.%${filters.search}%`)
   }
 
+    // Prevent unbounded inventory reads as parts grow.
+    // Without UI pagination, enforce a safe cap for the returned list.
+    const defaultLimit = filters?.search ? 200 : 500
+    query = query.limit(defaultLimit)
+
     const { data, error } = await query
 
     if (error) {
@@ -452,6 +457,7 @@ export async function getPartsNeedingReorder() {
     .eq("company_id", ctx.companyId)
     .lte("quantity", supabase.raw("min_quantity"))
     .order("quantity", { ascending: true })
+    .limit(200)
 
   if (error) {
     return { error: error.message, data: null }

@@ -19,7 +19,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { ArrowLeft, Truck, FileText, Settings, User } from "lucide-react"
+import { ArrowLeft, Truck, FileText, Settings, User, Banknote } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { createTruck } from "@/app/actions/trucks"
@@ -125,9 +125,10 @@ export default function AddVehiclePage() {
       submitLabel="Add Vehicle"
     >
             <Tabs defaultValue="basic" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 gap-1 h-auto">
                 <TabsTrigger value="basic">Basic Info</TabsTrigger>
                 <TabsTrigger value="specs">Specifications</TabsTrigger>
+                <TabsTrigger value="ownership">Ownership</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
                 <TabsTrigger value="assignment">Assignment</TabsTrigger>
               </TabsList>
@@ -202,11 +203,21 @@ export default function AddVehiclePage() {
                         placeholder="ABC-1234"
                       />
                     </div>
+                    <div>
+                      <Label>Color</Label>
+                      <Input
+                        name="color"
+                        value={formData.color}
+                        onChange={handleChange}
+                        className="mt-1"
+                        placeholder="White"
+                      />
+                    </div>
                   </FormGrid>
                 </FormSection>
               </TabsContent>
 
-              {/* Specifications Tab */}
+              {/* Specifications — equipment only (dispatcher-friendly) */}
               <TabsContent value="specs" className="space-y-6">
                 <FormSection title="Specifications" icon={<Settings className="w-5 h-5" />}>
                   <FormGrid cols={2}>
@@ -242,38 +253,6 @@ export default function AddVehiclePage() {
                       />
                     </div>
                     <div>
-                      <Label>Color</Label>
-                      <Input
-                        name="color"
-                        value={formData.color}
-                        onChange={handleChange}
-                        className="mt-1"
-                        placeholder="White"
-                      />
-                    </div>
-                    <div>
-                      <Label>Owner's Name</Label>
-                      <Input
-                        name="ownerName"
-                        value={formData.ownerName}
-                        onChange={handleChange}
-                        className="mt-1"
-                        placeholder="John Doe"
-                      />
-                    </div>
-                    <div>
-                      <Label>Cost ($)</Label>
-                      <Input
-                        name="cost"
-                        type="number"
-                        step="0.01"
-                        value={formData.cost}
-                        onChange={handleChange}
-                        className="mt-1"
-                        placeholder="150000.00"
-                      />
-                    </div>
-                    <div>
                       <Label>Fuel Type</Label>
                       <Select value={formData.fuelType} onValueChange={(v) => handleSelectChange("fuelType", v)}>
                         <SelectTrigger className="mt-1">
@@ -288,6 +267,38 @@ export default function AddVehiclePage() {
                           <SelectItem value="lng">LNG (Liquefied Natural Gas)</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+                  </FormGrid>
+                </FormSection>
+              </TabsContent>
+
+              <TabsContent value="ownership" className="space-y-6">
+                <FormSection title="Ownership & accounting" icon={<Banknote className="w-5 h-5" />}>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Optional — for title, leases, or asset tracking. Not needed for day-to-day dispatch.
+                  </p>
+                  <FormGrid cols={2}>
+                    <div>
+                      <Label>Registered owner</Label>
+                      <Input
+                        name="ownerName"
+                        value={formData.ownerName}
+                        onChange={handleChange}
+                        className="mt-1"
+                        placeholder="Legal owner name"
+                      />
+                    </div>
+                    <div>
+                      <Label>Purchase / book value ($)</Label>
+                      <Input
+                        name="cost"
+                        type="number"
+                        step="0.01"
+                        value={formData.cost}
+                        onChange={handleChange}
+                        className="mt-1"
+                        placeholder="150000.00"
+                      />
                     </div>
                   </FormGrid>
                 </FormSection>

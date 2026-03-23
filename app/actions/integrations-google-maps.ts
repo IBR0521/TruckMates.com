@@ -121,15 +121,21 @@ export async function getRouteDirections(origin: string, destination: string, wa
     }
 
     const route = data.routes[0]
-    const leg = route.legs[0]
+    const legs = route.legs || []
+    const leg = legs[0]
+    const distance_meters = legs.reduce((sum: number, l: { distance?: { value?: number } }) => sum + (l.distance?.value ?? 0), 0)
+    const duration_seconds = legs.reduce((sum: number, l: { duration?: { value?: number } }) => sum + (l.duration?.value ?? 0), 0)
 
+    const allSteps = legs.flatMap((l: { steps?: unknown[] }) =>
+      Array.isArray(l?.steps) ? l.steps : [],
+    )
     const result = {
-      distance: leg.distance.text,
-      distance_meters: leg.distance.value,
-      duration: leg.duration.text,
-      duration_seconds: leg.duration.value,
+      distance: leg?.distance?.text ?? "",
+      distance_meters,
+      duration: leg?.duration?.text ?? "",
+      duration_seconds,
       polyline: route.overview_polyline.points,
-      steps: leg.steps.map((step: any) => ({
+      steps: allSteps.map((step: any) => ({
         instruction: step.html_instructions,
         distance: step.distance.text,
         duration: step.duration.text,

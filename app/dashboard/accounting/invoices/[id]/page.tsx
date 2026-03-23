@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { ArrowLeft, Download, Send, Mail, MessageSquare, Share2 } from "lucide-react"
+import { ArrowLeft, Download, Send, Mail, MessageSquare, Share2, ChevronDown, Landmark } from "lucide-react"
 import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -10,6 +10,14 @@ import { use } from "react"
 import { exportToPDF } from "@/lib/export-utils"
 import { toast } from "sonner"
 import { getInvoice } from "@/app/actions/accounting"
+import { sendInvoiceEmail } from "@/app/actions/invoice-email"
+import { sendInvoiceToFactoring, markInvoiceFactoringFunded } from "@/app/actions/factoring-email"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 export default function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -19,6 +27,9 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [showShareMenu, setShowShareMenu] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [isRefreshingPayment, setIsRefreshingPayment] = useState(false)
+  const [sendingCustomer, setSendingCustomer] = useState(false)
+  const [sendingFactoring, setSendingFactoring] = useState(false)
+  const [markingFunded, setMarkingFunded] = useState(false)
 
   useEffect(() => {
     if (id === "add" || id === "create") {
@@ -195,6 +206,62 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     }
   }
 
+  const handleSendToCustomer = async () => {
+    try {
+      setSendingCustomer(true)
+      const res = await sendInvoiceEmail(id)
+      if (res.error) {
+        toast.error(res.error)
+        return
+      }
+      toast.success("Invoice emailed to customer")
+      const refreshed = await getInvoice(id)
+      if (!refreshed.error && refreshed.data) setInvoice(refreshed.data)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to send")
+    } finally {
+      setSendingCustomer(false)
+    }
+  }
+
+  const handleSendToFactoring = async () => {
+    try {
+      setSendingFactoring(true)
+      const res = await sendInvoiceToFactoring(id)
+      if (res.error) {
+        toast.error(res.error)
+        return
+      }
+      toast.success(
+        `Sent to factoring${res.data?.attachmentCount != null ? ` (${res.data.attachmentCount} files)` : ""}`,
+      )
+      const refreshed = await getInvoice(id)
+      if (!refreshed.error && refreshed.data) setInvoice(refreshed.data)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to send")
+    } finally {
+      setSendingFactoring(false)
+    }
+  }
+
+  const handleMarkFactoringFunded = async () => {
+    try {
+      setMarkingFunded(true)
+      const res = await markInvoiceFactoringFunded(id)
+      if (res.error) {
+        toast.error(res.error)
+        return
+      }
+      toast.success("Marked as funded by factoring")
+      const refreshed = await getInvoice(id)
+      if (!refreshed.error && refreshed.data) setInvoice(refreshed.data)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to update")
+    } finally {
+      setMarkingFunded(false)
+    }
+  }
+
   const handleRefreshFromQuickBooks = async () => {
     try {
       setIsRefreshingPayment(true)
@@ -228,8 +295,26 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           <div>
             <h1 className="text-3xl font-bold text-foreground">Invoice {invoiceData.invoice_number}</h1>
             <p className="text-muted-foreground text-sm mt-1">Issued on {invoiceData.issueDate}</p>
+            {invoice.factoring_status && (
+              <p className="text-xs mt-2">
+                <span className="text-muted-foreground">Factoring: </span>
+                <span className="font-medium capitalize text-foreground">{invoice.factoring_status}</span>
+                {invoice.factoring_submitted_at && (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · Submitted {new Date(invoice.factoring_submitted_at).toLocaleString()}
+                  </span>
+                )}
+                {invoice.factoring_funded_at && (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · Funded {new Date(invoice.factoring_funded_at).toLocaleString()}
+                  </span>
+                )}
+              </p>
+            )}
           </div>
-          <div className="flex gap-2 relative">
+          <div className="flex flex-wrap gap-2 relative justify-end">
             <Button
               onClick={handleSyncToQuickBooks}
               variant="outline"
@@ -254,9 +339,38 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
               <Download className="w-4 h-4 mr-2" />
               Download PDF
             </Button>
-            <Button onClick={() => setShowShareMenu(!showShareMenu)} className="bg-primary hover:bg-primary/90">
+            <Button
+              variant="outline"
+              className="border-border bg-transparent"
+              disabled={sendingCustomer}
+              onClick={() => void handleSendToCustomer()}
+            >
+              <Mail className="w-4 h-4 mr-2" />
+              {sendingCustomer ? "Sending…" : "Email customer"}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="default" className="bg-primary hover:bg-primary/90" disabled={sendingFactoring}>
+                  <Landmark className="w-4 h-4 mr-2" />
+                  {sendingFactoring ? "Sending…" : "Send to factoring"}
+                  <ChevronDown className="w-4 h-4 ml-1 opacity-80" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[220px]">
+                <DropdownMenuItem onClick={() => void handleSendToFactoring()}>
+                  Send packet to factoring email
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => void handleMarkFactoringFunded()}
+                  disabled={markingFunded || invoice.factoring_status === "funded"}
+                >
+                  {markingFunded ? "Updating…" : "Mark as funded"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button onClick={() => setShowShareMenu(!showShareMenu)} variant="outline" className="border-border">
               <Share2 className="w-4 h-4 mr-2" />
-              Send Invoice
+              Share
             </Button>
             {showShareMenu && (
               <Card className="absolute top-12 right-0 z-10 border-border p-2 min-w-[180px]">

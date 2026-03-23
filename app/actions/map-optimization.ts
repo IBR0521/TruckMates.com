@@ -31,6 +31,9 @@ export async function getVehiclesInViewport(
   }
 
   try {
+    // Prevent unbounded `eld_locations` scans: map view only needs recent points.
+    const cutoffISO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() // last 24 hours
+
     // Use PostGIS spatial query for better performance
     // Find all locations within the viewport bounds
     const { data: locations, error } = await supabase
@@ -62,8 +65,10 @@ export async function getVehiclesInViewport(
       .lte("latitude", north)
       .gte("longitude", west)
       .lte("longitude", east)
+      .gte("timestamp", cutoffISO)
       .not("location_geography", "is", null)
       .order("timestamp", { ascending: false })
+      .limit(5000)
 
     if (error) {
       // Fallback to regular query without PostGIS
@@ -83,7 +88,9 @@ export async function getVehiclesInViewport(
         .lte("latitude", north)
         .gte("longitude", west)
         .lte("longitude", east)
+        .gte("timestamp", cutoffISO)
         .order("timestamp", { ascending: false })
+        .limit(5000)
 
       return { data: fallbackLocations || [], error: null }
     }

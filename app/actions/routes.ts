@@ -149,6 +149,13 @@ export async function createRoute(formData: {
   route_complete_time?: string
   route_type?: string
   scenario?: string
+  /** ISO datetime string */
+  estimated_arrival?: string
+  notes?: string
+  special_instructions?: string
+  estimated_fuel_cost?: number
+  estimated_toll_cost?: number
+  total_estimated_cost?: number
 }) {
   // Check permission
   const permission = await checkCreatePermission("routes")
@@ -235,6 +242,18 @@ export async function createRoute(formData: {
   if (formData.route_complete_time) routeData.route_complete_time = formData.route_complete_time
   if (formData.route_type) routeData.route_type = formData.route_type
   if (formData.scenario) routeData.scenario = formData.scenario
+  if (formData.estimated_arrival) routeData.estimated_arrival = formData.estimated_arrival
+  if (formData.notes) routeData.notes = sanitizeString(formData.notes, 5000)
+  if (formData.special_instructions) routeData.special_instructions = sanitizeString(formData.special_instructions, 5000)
+  if (formData.estimated_fuel_cost != null && Number.isFinite(formData.estimated_fuel_cost)) {
+    routeData.estimated_fuel_cost = formData.estimated_fuel_cost
+  }
+  if (formData.estimated_toll_cost != null && Number.isFinite(formData.estimated_toll_cost)) {
+    routeData.estimated_toll_cost = formData.estimated_toll_cost
+  }
+  if (formData.total_estimated_cost != null && Number.isFinite(formData.total_estimated_cost)) {
+    routeData.total_estimated_cost = formData.total_estimated_cost
+  }
 
   const { data, error } = await supabase
     .from("routes")

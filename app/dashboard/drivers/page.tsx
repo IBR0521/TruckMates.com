@@ -80,16 +80,30 @@ function DriversPageContent() {
 
   const loadDrivers = async () => {
     setIsLoading(true)
-    const result = await getDrivers()
-    if (result.error) {
-      toast.error(result.error)
+    try {
+      const result = await Promise.race([
+        getDrivers(),
+        new Promise<{ data?: any[]; error?: string }>((resolve) =>
+          setTimeout(() => resolve({ error: "Loading drivers timed out. Please retry." }), 15000)
+        ),
+      ])
+      if (result.error) {
+        toast.error(result.error)
+        setDriversList([])
+        return
+      }
+      if (result.data) {
+        setDriversList(result.data)
+      } else {
+        setDriversList([])
+      }
+    } catch (error: any) {
+      console.error("Error loading drivers:", error)
+      toast.error(error?.message || "Failed to load drivers")
+      setDriversList([])
+    } finally {
       setIsLoading(false)
-      return
     }
-    if (result.data) {
-      setDriversList(result.data)
-    }
-    setIsLoading(false)
   }
 
   useEffect(() => {

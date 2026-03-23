@@ -126,7 +126,17 @@ export default function DashboardPage() {
   // Check email service configuration (for managers/owners only)
   const [emailServiceStatus, setEmailServiceStatus] = useState<{ configured: boolean; isManager: boolean } | null>(null)
   const [dismissedEmailBanner, setDismissedEmailBanner] = useState(false)
-  
+
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined" && localStorage.getItem("dashboard-dismiss-email-banner") === "1") {
+        setDismissedEmailBanner(true)
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
   useEffect(() => {
     async function checkEmailConfig() {
       const result = await checkEmailServiceConfigured()
@@ -326,7 +336,14 @@ export default function DashboardPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => setDismissedEmailBanner(true)}
+                      onClick={() => {
+                        setDismissedEmailBanner(true)
+                        try {
+                          localStorage.setItem("dashboard-dismiss-email-banner", "1")
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
                       className="text-yellow-800 dark:text-yellow-200 hover:bg-yellow-500/20"
                     >
                       Dismiss

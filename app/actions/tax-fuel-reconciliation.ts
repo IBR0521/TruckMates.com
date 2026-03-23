@@ -280,10 +280,29 @@ export async function getIFTAReport(id: string) {
     return { error: breakdownError.message, data: null }
   }
 
+  // Prefer normalized rows from ifta_state_breakdown; fallback to JSON on report (from createIFTAReport)
+  const fromTable = breakdown && breakdown.length > 0 ? breakdown : []
+  const fromJson = report.state_breakdown
+  const state_breakdown =
+    fromTable.length > 0
+      ? fromTable
+      : Array.isArray(fromJson)
+        ? fromJson
+        : typeof fromJson === "string"
+          ? (() => {
+              try {
+                const p = JSON.parse(fromJson)
+                return Array.isArray(p) ? p : []
+              } catch {
+                return []
+              }
+            })()
+          : []
+
   return {
     data: {
       ...report,
-      state_breakdown: breakdown || [],
+      state_breakdown,
     },
     error: null,
   }

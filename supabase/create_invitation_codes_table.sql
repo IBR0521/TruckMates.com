@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS public.invitation_codes (
   accepted_by UUID REFERENCES public.users(id),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
-);
+)
 
 CREATE INDEX IF NOT EXISTS idx_invitation_codes_code ON public.invitation_codes(invitation_code);
 CREATE INDEX IF NOT EXISTS idx_invitation_codes_company_id ON public.invitation_codes(company_id);

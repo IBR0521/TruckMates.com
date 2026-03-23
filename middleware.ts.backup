@@ -1,0 +1,98 @@
+import { type NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+
+export async function middleware(request: NextRequest) {
+  // Skip middleware for API routes and static files
+  if (request.nextUrl.pathname.startsWith('/api/') || 
+      request.nextUrl.pathname.startsWith('/_next/')) {
+    return NextResponse.next({ request })
+  }
+
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    // Check for missing or placeholder values - allow through for now
+    if (!supabaseUrl || !supabaseAnonKey || 
+        supabaseUrl.includes('placeholder') || 
+        supabaseAnonKey.includes('placeholder') ||
+        supabaseUrl === '' ||
+        supabaseAnonKey === '') {
+      return NextResponse.next({ request })
+    }
+
+    let response = NextResponse.next({ request })
+
+    try {
+      const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              request.cookies.set(name, value)
+              response.cookies.set(name, value, options)
+            })
+          },
+        },
+      })
+
+      // Refresh session - wrap in try-catch to handle connection errors
+      try {
+        await supabase.auth.getSession()
+      } catch (sessionError) {
+        // If session refresh fails, continue without authentication
+      }
+
+      // Check authentication for protected routes
+      let user = null
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser()
+        user = authUser
+      } catch (userError) {
+        // If user fetch fails, continue without user
+      }
+
+      const isProtectedRoute = 
+        request.nextUrl.pathname.startsWith('/dashboard') ||
+        request.nextUrl.pathname.startsWith('/marketplace/dashboard') ||
+        request.nextUrl.pathname.startsWith('/account-setup') ||
+        request.nextUrl.pathname.startsWith('/portal') ||
+        request.nextUrl.pathname.startsWith('/tracking')
+
+      if (isProtectedRoute && !user) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/login'
+        return NextResponse.redirect(url)
+      }
+    } catch (supabaseError) {
+      // If Supabase client creation fails, allow through for public routes
+      const isProtectedRoute = 
+        request.nextUrl.pathname.startsWith('/dashboard') ||
+        request.nextUrl.pathname.startsWith('/marketplace/dashboard') ||
+        request.nextUrl.pathname.startsWith('/account-setup') ||
+        request.nextUrl.pathname.startsWith('/portal') ||
+        request.nextUrl.pathname.startsWith('/tracking')
+      
+      if (isProtectedRoute) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/login'
+        return NextResponse.redirect(url)
+      }
+    }
+
+    return response
+  } catch (error) {
+    // For any error, just allow the request through
+    return NextResponse.next({ request })
+  }
+}
+
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+}
+
+

@@ -671,6 +671,7 @@ export async function getFaultCodeRules() {
       .select("*")
       .eq("company_id", ctx.companyId)
       .order("fault_code", { ascending: true })
+      .limit(200)
 
     if (error) {
       return { error: error.message, data: null }

@@ -139,6 +139,14 @@ export async function updateCompanySettings(settings: {
   check_call_notify_enroute?: boolean
   check_call_notify_at_consignee?: boolean
   check_call_notify_dropoff_completed?: boolean
+  /** Factoring partner (invoice submission) */
+  factoring_company_name?: string | null
+  factoring_submission_email?: string | null
+  factoring_include_bol?: boolean
+  factoring_include_rate_conf?: boolean
+  factoring_include_pod?: boolean
+  factoring_email_template?: string | null
+  factoring_auto_submit?: boolean
   // HIGH FIX 3: Removed [key: string]: any to prevent arbitrary column injection
 }) {
   const supabase = await createClient()
@@ -168,7 +176,9 @@ export async function updateCompanySettings(settings: {
     'fuel_surcharge_method', 'fuel_surcharge_flat_amount', 'fuel_surcharge_per_mile',
     'check_call_notify_customer', 'check_call_notify_broker', 'check_call_notify_on_trip_start',
     'check_call_notify_at_shipper', 'check_call_notify_pickup_completed', 'check_call_notify_enroute',
-    'check_call_notify_at_consignee', 'check_call_notify_dropoff_completed'
+    'check_call_notify_at_consignee', 'check_call_notify_dropoff_completed',
+    'factoring_company_name', 'factoring_submission_email', 'factoring_include_bol', 'factoring_include_rate_conf',
+    'factoring_include_pod', 'factoring_email_template', 'factoring_auto_submit',
   ]
   
   for (const field of allowedFields) {

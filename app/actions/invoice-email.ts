@@ -6,8 +6,8 @@ import { getCompanySettings } from "./number-formats"
 import { revalidatePath } from "next/cache"
 import { escapeHtml } from "@/lib/html-escape"
 
-// Helper to get Resend client (checks both env var and database)
-async function getResendClient() {
+/** Exported for factoring / other transactional email that uses the same Resend integration. */
+export async function getResendClient() {
   // Always use platform API key from environment variables
   const apiKey = process.env.RESEND_API_KEY
   

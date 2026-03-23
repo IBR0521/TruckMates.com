@@ -126,9 +126,6 @@ export default function AddGeofencePage() {
       title="Create Geofence Zone"
       subtitle="Define a location zone for vehicle tracking and alerts"
       backUrl="/dashboard/geofencing"
-      onSubmit={handleSubmit}
-      isSubmitting={isSubmitting}
-      submitLabel="Create Zone"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card className="p-6">

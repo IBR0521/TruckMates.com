@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Download, FileText, Plus, Receipt, Settings, Trash2 } from "lucide-react"
+import { Calculator, Download, FileSpreadsheet, FileText, Plus, Receipt, Settings, Trash2 } from "lucide-react"
 import { exportToExcel } from "@/lib/export-utils"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -91,6 +91,24 @@ export default function IFTAPage() {
             <Download className="w-4 h-4 mr-2" />
             Export Report
           </Button>
+          <Link href="/dashboard/ifta/trip-planning">
+            <Button
+              variant="outline"
+              className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+            >
+              <Calculator className="w-4 h-4 mr-2" />
+              Trip planning
+            </Button>
+          </Link>
+          <Link href="/dashboard/ifta/trip-sheet">
+            <Button
+              variant="outline"
+              className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Trip sheet
+            </Button>
+          </Link>
           <Link href="/dashboard/ifta/generate">
             <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md">
               <Plus className="w-4 h-4 mr-2" />
@@ -102,6 +120,40 @@ export default function IFTAPage() {
 
       <div className="p-8">
         <div className="max-w-7xl mx-auto space-y-6">
+          <Card className="border border-border p-5 md:p-6">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Quick links</h2>
+                <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+                  <strong className="text-foreground">Trip planning</strong> — route &amp; state miles (try it without
+                  opening a load).{" "}
+                  <strong className="text-foreground">Trip sheet</strong> — manual miles/fuel by state for IFTA.{" "}
+                  <strong className="text-foreground">Save on a load</strong> — open any load → trip planning →
+                  Calculate &amp; save.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <Link href="/dashboard/ifta/trip-planning">
+                  <Button>
+                    <Calculator className="w-4 h-4 mr-2" />
+                    Trip planning
+                  </Button>
+                </Link>
+                <Link href="/dashboard/ifta/trip-sheet">
+                  <Button variant="outline" type="button">
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Trip sheet
+                  </Button>
+                </Link>
+                <Link href="/dashboard/loads">
+                  <Button variant="outline" type="button">
+                    Loads
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </Card>
+
           {/* Summary Cards */}
           <div className="grid md:grid-cols-4 gap-6">
             <Card className="border border-border/50 p-6">

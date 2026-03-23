@@ -17,17 +17,18 @@ npm run dev:alt  # Uses port 3001
 
 ### 2. Verify Environment Variables
 
-Check that your `.env.local` file has the correct Supabase credentials:
+Check that your `.env.local` file has the correct Supabase credentials (from **Supabase Dashboard → Project Settings → API**, or `vercel env pull`):
 
 ```bash
 # View your .env.local (be careful not to commit this!)
 cat .env.local
 ```
 
-Required variables:
+Required variables (use your real values, not placeholders):
+
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=https://ozzcdefgnutcotcgqruf.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96emNkZWZnbnV0Y290Y2dxcnVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4MDU0MTIsImV4cCI6MjA4NjM4MTQxMn0.27PGSSPQaLjdKoKvMwIMBLlyO_jvTHSCNRYg1w8eUwo
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_jwt
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
@@ -67,9 +68,10 @@ Open browser DevTools (F12) and check:
 
 ### 6. Verify Supabase Connection
 
-Test if Supabase is accessible:
+Test if Supabase is accessible (replace with your project URL):
+
 ```bash
-curl https://ozzcdefgnutcotcgqruf.supabase.co
+curl https://YOUR_PROJECT_REF.supabase.co
 ```
 
 If this fails, check your internet connection.
@@ -88,13 +90,5 @@ If this fails, check your internet connection.
 ### Issue: "Connection timeout"
 **Solution:** 
 - Check internet connection
-- Verify Supabase project is active
-- Check firewall settings
-
-## Still Not Working?
-
-1. **Check terminal output** - Look for error messages when running `npm run dev`
-2. **Try different port** - Use `npm run dev:alt` for port 3001
-3. **Restart everything** - Close terminal, restart, then run `npm run dev`
-4. **Check Node version** - Ensure you're using Node.js 18+ (`node --version`)
-
+- Verify Supabase project is not paused
+- Check firewall/VPN settings

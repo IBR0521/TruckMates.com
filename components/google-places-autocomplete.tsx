@@ -138,6 +138,7 @@ export function GooglePlacesAutocomplete({
 
     let observer: MutationObserver | null = null
     let debounceTimeout: NodeJS.Timeout | null = null
+    let onInputBlur: (() => void) | undefined
 
     try {
       // CRH-003: Using deprecated Autocomplete API - will need migration to PlaceAutocompleteElement
@@ -158,52 +159,106 @@ export function GooglePlacesAutocomplete({
 
       // Fix z-index, position under input, and click handling for the dropdown
       const fixedItems = new WeakSet<HTMLElement>()
-      
+
+      /** Google often leaves `.pac-container` in the DOM with only the "powered by Google" row — that reads as a white bar */
+      const pacHasSuggestions = (root: HTMLElement) => root.querySelector(".pac-item") != null
+
+      const hideOrShowPacContainer = (pacContainer: HTMLElement) => {
+        const hasSuggestions = pacHasSuggestions(pacContainer)
+        if (!hasSuggestions) {
+          pacContainer.style.setProperty("display", "none", "important")
+          pacContainer.style.setProperty("visibility", "hidden", "important")
+          pacContainer.style.setProperty("height", "0", "important")
+          pacContainer.style.setProperty("min-height", "0", "important")
+          pacContainer.style.setProperty("padding", "0", "important")
+          pacContainer.style.setProperty("margin", "0", "important")
+          pacContainer.style.setProperty("overflow", "hidden", "important")
+          pacContainer.style.setProperty("border", "none", "important")
+          pacContainer.style.setProperty("opacity", "0", "important")
+          return
+        }
+        pacContainer.style.removeProperty("display")
+        pacContainer.style.removeProperty("visibility")
+        pacContainer.style.removeProperty("height")
+        pacContainer.style.removeProperty("min-height")
+        pacContainer.style.removeProperty("padding")
+        pacContainer.style.removeProperty("margin")
+        pacContainer.style.removeProperty("overflow")
+        pacContainer.style.removeProperty("border")
+        pacContainer.style.removeProperty("opacity")
+      }
+
+      const syncAllPacContainers = () => {
+        document.querySelectorAll(".pac-container").forEach((el) => hideOrShowPacContainer(el as HTMLElement))
+      }
+
+      /** Run after place select / blur — Google often leaves an empty logo strip in the DOM */
+      const flushPac = () => {
+        syncAllPacContainers()
+        requestAnimationFrame(() => syncAllPacContainers())
+        setTimeout(() => syncAllPacContainers(), 50)
+        setTimeout(() => syncAllPacContainers(), 200)
+      }
+
+      const inputEl = inputRef.current
+      onInputBlur = () => flushPac()
+      inputEl?.addEventListener("blur", onInputBlur)
+
       const positionDropdown = () => {
         const input = inputRef.current
-        const pacContainers = document.querySelectorAll('.pac-container') as NodeListOf<HTMLElement>
+        const pacContainers = document.querySelectorAll(".pac-container") as NodeListOf<HTMLElement>
         if (!input || pacContainers.length === 0) return
         const rect = input.getBoundingClientRect()
         pacContainers.forEach((pacContainer) => {
-          if (pacContainer.offsetParent === null) return
+          if (!pacHasSuggestions(pacContainer)) return
+          if (pacContainer.offsetParent === null && pacContainer.style.display === "none") return
           pacContainer.style.top = `${rect.bottom + 2}px`
           pacContainer.style.left = `${rect.left}px`
           pacContainer.style.width = `${Math.max(rect.width, 280)}px`
         })
       }
-      
-      scrollResizeHandlerRef.current = positionDropdown
+
+      scrollResizeHandlerRef.current = () => {
+        syncAllPacContainers()
+        positionDropdown()
+      }
 
       const applyStyles = () => {
-        const pacContainers = document.querySelectorAll('.pac-container') as NodeListOf<HTMLElement>
-        
+        const pacContainers = document.querySelectorAll(".pac-container") as NodeListOf<HTMLElement>
+
         pacContainers.forEach((pacContainer) => {
-          // Move to body if needed
+          // Move to body if needed (z-index above modals)
           if (pacContainer.parentElement !== document.body) {
             document.body.appendChild(pacContainer)
           }
-          
-          // Apply container styles and position under the input
+
+          syncAllPacContainers()
+
+          if (!pacHasSuggestions(pacContainer)) {
+            return
+          }
+
+          // Apply container styles and position under the input (only when suggestions exist)
           if (!pacContainer.dataset.styled) {
             const input = inputRef.current
             const rect = input?.getBoundingClientRect()
-            const top = rect ? `${rect.bottom + 2}px` : 'auto'
-            const left = rect ? `${rect.left}px` : '0'
-            const width = rect ? `${Math.max(rect.width, 280)}px` : '300px'
-            pacContainer.style.cssText = `
-              z-index: 99999 !important;
-              position: fixed !important;
-              top: ${top} !important;
-              left: ${left} !important;
-              width: ${width} !important;
-              pointer-events: auto !important;
-              cursor: default !important;
-              background-color: white !important;
-              border-radius: 0.375rem;
-              border: 1px solid hsl(var(--border));
-              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            `
-            pacContainer.dataset.styled = 'true'
+            const top = rect ? `${rect.bottom + 2}px` : "auto"
+            const left = rect ? `${rect.left}px` : "0"
+            const width = rect ? `${Math.max(rect.width, 280)}px` : "300px"
+            pacContainer.style.setProperty("z-index", "99999", "important")
+            pacContainer.style.setProperty("position", "fixed", "important")
+            pacContainer.style.setProperty("top", top, "important")
+            pacContainer.style.setProperty("left", left, "important")
+            pacContainer.style.setProperty("width", width, "important")
+            pacContainer.style.setProperty("pointer-events", "auto", "important")
+            pacContainer.style.setProperty("cursor", "default", "important")
+            pacContainer.style.setProperty("background-color", "hsl(var(--popover))", "important")
+            pacContainer.style.setProperty("color", "hsl(var(--popover-foreground))", "important")
+            pacContainer.style.borderRadius = "0.375rem"
+            pacContainer.style.border = "1px solid hsl(var(--border))"
+            pacContainer.style.boxShadow =
+              "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)"
+            pacContainer.dataset.styled = "true"
           } else {
             positionDropdown()
           }
@@ -217,9 +272,9 @@ export function GooglePlacesAutocomplete({
               padding: 0.5rem !important;
               cursor: pointer !important;
               pointer-events: auto !important;
-              border-bottom: 1px solid #e5e7eb !important;
-              color: #111827 !important;
-              background-color: white !important;
+              border-bottom: 1px solid hsl(var(--border)) !important;
+              color: hsl(var(--popover-foreground)) !important;
+              background-color: hsl(var(--popover)) !important;
               user-select: none !important;
             `
             
@@ -237,9 +292,11 @@ export function GooglePlacesAutocomplete({
           })
         })
         
-        // Disable dialog overlay when dropdown is visible
-        const hasDropdown = pacContainers.length > 0 && 
-          Array.from(pacContainers).some(c => c.offsetParent !== null && c.style.display !== 'none')
+        const hasDropdown =
+          pacContainers.length > 0 &&
+          Array.from(pacContainers).some(
+            (c) => pacHasSuggestions(c as HTMLElement) && (c as HTMLElement).style.display !== "none",
+          )
         
         if (hasDropdown) {
           document.querySelectorAll('[data-slot="dialog-overlay"]').forEach((el: any) => {
@@ -268,9 +325,10 @@ export function GooglePlacesAutocomplete({
         }, 50)
       })
 
+      // subtree: true — Google injects `.pac-item` *inside* `.pac-container` without re-attaching the container
       observer.observe(document.body, {
         childList: true,
-        subtree: false,
+        subtree: true,
       })
 
       // Add global styles
@@ -279,6 +337,18 @@ export function GooglePlacesAutocomplete({
         const style = document.createElement('style')
         style.id = styleId
         style.textContent = `
+          .pac-container:not(:has(.pac-item)) {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: hidden !important;
+            border: none !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+          }
           .pac-container {
             z-index: 99999 !important;
             position: fixed !important;
@@ -286,25 +356,29 @@ export function GooglePlacesAutocomplete({
             cursor: default !important;
             border-radius: 0.375rem;
             border: 1px solid hsl(var(--border));
-            background-color: white !important;
+            background-color: hsl(var(--popover)) !important;
+            color: hsl(var(--popover-foreground)) !important;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
           }
           .pac-item {
             padding: 0.5rem !important;
             cursor: pointer !important;
             pointer-events: auto !important;
-            border-bottom: 1px solid #e5e7eb !important;
-            color: #111827 !important;
-            background-color: white !important;
+            border-bottom: 1px solid hsl(var(--border)) !important;
+            color: hsl(var(--popover-foreground)) !important;
+            background-color: hsl(var(--popover)) !important;
             user-select: none !important;
           }
           .pac-item:hover {
-            background-color: #f3f4f6 !important;
+            background-color: hsl(var(--accent)) !important;
           }
           .pac-item-selected {
-            background-color: #e5e7eb !important;
+            background-color: hsl(var(--accent)) !important;
           }
-          body:has(.pac-container) [data-slot="dialog-overlay"] {
+          .pac-logo:after {
+            filter: opacity(0.85);
+          }
+          body:has(.pac-container:has(.pac-item)) [data-slot="dialog-overlay"] {
             pointer-events: none !important;
           }
         `
@@ -313,23 +387,24 @@ export function GooglePlacesAutocomplete({
 
       // Handle place selection
       autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace()
-        
-        console.log('[GooglePlacesAutocomplete] Place selected:', place)
-        console.log('[GooglePlacesAutocomplete] Address components:', place.address_components)
+        try {
+          const place = autocomplete.getPlace()
 
-        if (!place.geometry) {
-          console.warn('[GooglePlacesAutocomplete] Place has no geometry')
-          return
-        }
-        
-        if (!place.address_components || place.address_components.length === 0) {
-          console.warn('[GooglePlacesAutocomplete] Place has no address_components')
-          if (place.formatted_address) {
-            onChange(place.formatted_address)
+          console.log('[GooglePlacesAutocomplete] Place selected:', place)
+          console.log('[GooglePlacesAutocomplete] Address components:', place.address_components)
+
+          if (!place.geometry) {
+            console.warn('[GooglePlacesAutocomplete] Place has no geometry')
+            return
           }
-          return
-        }
+
+          if (!place.address_components || place.address_components.length === 0) {
+            console.warn('[GooglePlacesAutocomplete] Place has no address_components')
+            if (place.formatted_address) {
+              onChange(place.formatted_address)
+            }
+            return
+          }
 
         // Parse address components
         const addressComponents: AddressComponents = {
@@ -512,8 +587,11 @@ export function GooglePlacesAutocomplete({
           console.warn('[GooglePlacesAutocomplete] onPlaceSelect callback not provided')
         }
 
-        // Update the input value with just the street address (not the full formatted address)
-        onChange(streetAddress)
+          // Update the input value with just the street address (not the full formatted address)
+          onChange(streetAddress)
+        } finally {
+          flushPac()
+        }
       })
     } catch (error) {
       console.error('[GooglePlacesAutocomplete] Error initializing autocomplete:', error)
@@ -521,6 +599,9 @@ export function GooglePlacesAutocomplete({
 
     // Cleanup
     return () => {
+      if (onInputBlur) {
+        inputRef.current?.removeEventListener("blur", onInputBlur)
+      }
       if (debounceTimeout) {
         clearTimeout(debounceTimeout)
       }

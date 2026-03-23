@@ -32,15 +32,47 @@ export async function findLocationsWithinRadius(
   }
 
   try {
-    // Use PostGIS function for spatial query
-    const { data, error } = await supabase.rpc('find_locations_within_radius', {
-      center_lat: centerLat,
-      center_lng: centerLng,
-      radius_meters: radiusMeters
-    })
+    // Prevent unbounded `eld_locations` growth:
+    // Always query only a recent time window, even if caller didn't pass it.
+    const nowISO = new Date().toISOString()
+    const defaultStartISO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() // last 24 hours
+    const startTime = filters?.start_time || defaultStartISO
+    const endTime = filters?.end_time || nowISO
+    const limit = filters?.limit ?? 200
 
-    if (error) {
-      return { error: error.message, data: null }
+    // Prefer the newer, bounded RPC (if deployed); fall back to the legacy RPC.
+    let data: any[] = []
+    let rpcError: any = null
+    try {
+      const rpcResult = await supabase.rpc('find_locations_within_radius_filtered', {
+        center_lat: centerLat,
+        center_lng: centerLng,
+        radius_meters: radiusMeters,
+        start_time: startTime,
+        end_time: endTime,
+        p_limit: limit
+      })
+      if (rpcResult.error) {
+        rpcError = rpcResult.error
+      } else {
+        data = rpcResult.data || []
+      }
+    } catch (err: any) {
+      rpcError = err
+    }
+
+    if (rpcError) {
+      const legacyResult = await supabase.rpc('find_locations_within_radius', {
+        center_lat: centerLat,
+        center_lng: centerLng,
+        radius_meters: radiusMeters
+      })
+
+      if (legacyResult.error) {
+        return { error: legacyResult.error.message, data: null }
+      }
+
+      data = legacyResult.data || []
     }
 
     // Apply additional filters if provided
@@ -73,21 +105,16 @@ export async function findLocationsWithinRadius(
       }
     }
 
-    if (filters?.start_time) {
-      filteredData = filteredData.filter((d: any) => 
-        new Date(d.timestamp) >= new Date(filters.start_time!)
-      )
-    }
+    // Filter by time window (handles both `timestamp` and `location_timestamp` fields).
+    filteredData = filteredData.filter((d: any) => {
+      const ts = d.timestamp ?? d.location_timestamp
+      if (!ts) return false
+      const ms = new Date(ts).getTime()
+      if (!Number.isFinite(ms)) return false
+      return ms >= new Date(startTime).getTime() && ms <= new Date(endTime).getTime()
+    })
 
-    if (filters?.end_time) {
-      filteredData = filteredData.filter((d: any) => 
-        new Date(d.timestamp) <= new Date(filters.end_time!)
-      )
-    }
-
-    if (filters?.limit) {
-      filteredData = filteredData.slice(0, filters.limit)
-    }
+    filteredData = filteredData.slice(0, limit)
 
     return { data: filteredData, error: null }
   } catch (error: any) {

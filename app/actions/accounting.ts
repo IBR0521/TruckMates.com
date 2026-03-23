@@ -24,7 +24,7 @@ export async function getInvoices(filters?: {
     // Build query with selective columns and pagination
     let query = supabase
       .from("invoices")
-      .select("id, invoice_number, customer_name, amount, status, issue_date, due_date, load_id, created_at", { count: "exact" })
+      .select("id, invoice_number, customer_name, amount, status, issue_date, due_date, load_id, factoring_status, factoring_submitted_at, factoring_funded_at, created_at", { count: "exact" })
       .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
@@ -70,7 +70,9 @@ export async function getInvoice(id: string) {
     const { data: invoice, error } = await supabase
       .from("invoices")
       .select(`
-        id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, stripe_invoice_id, stripe_payment_intent_id, quickbooks_id, quickbooks_synced_at, created_at, updated_at,
+        id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, stripe_invoice_id, stripe_payment_intent_id, quickbooks_id, quickbooks_synced_at,
+        factoring_status, factoring_submitted_at, factoring_funded_at,
+        created_at, updated_at,
         loads:load_id (
           id,
           shipment_number,
@@ -611,6 +613,18 @@ export async function createInvoice(formData: {
     } catch (emailError) {
       // Log error but don't fail invoice creation
       console.error("Failed to auto-send invoice email:", emailError)
+    }
+  }
+
+  // Auto-submit to factoring company (if enabled)
+  if (data?.id) {
+    try {
+      const { maybeAutoSubmitFactoringOnInvoiceCreated } = await import("./factoring-email")
+      await maybeAutoSubmitFactoringOnInvoiceCreated(data.id).catch((err) =>
+        console.warn("[FACTORING] Auto-submit skipped or failed:", err),
+      )
+    } catch (e) {
+      console.warn("[FACTORING] Auto-submit import failed:", e)
     }
   }
 
