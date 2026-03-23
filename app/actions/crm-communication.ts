@@ -91,8 +91,8 @@ export async function logCommunication(input: {
       .select()
       .single()
 
-    if (error) {
-      return { error: error.message, data: null }
+    if (error || !data) {
+      return { error: error?.message || "Communication not created", data: null }
     }
 
     revalidatePath("/dashboard/crm")
@@ -195,18 +195,24 @@ export async function logCommunicationFromWebhook(input: {
   if (!company_id) {
     // For webhooks, try to get company_id from customer_id or vendor_id
     if (input.customer_id) {
-      const { data: customer } = await supabase
+      const { data: customer, error: customerError } = await supabase
         .from("customers")
         .select("company_id")
         .eq("id", input.customer_id)
         .single()
+      if (customerError && customerError.code !== "PGRST116") {
+        return { error: customerError.message, data: null }
+      }
       company_id = customer?.company_id || null
     } else if (input.vendor_id) {
-      const { data: vendor } = await supabase
+      const { data: vendor, error: vendorError } = await supabase
         .from("vendors")
         .select("company_id")
         .eq("id", input.vendor_id)
         .single()
+      if (vendorError && vendorError.code !== "PGRST116") {
+        return { error: vendorError.message, data: null }
+      }
       company_id = vendor?.company_id || null
     }
 
@@ -223,11 +229,15 @@ export async function logCommunicationFromWebhook(input: {
   try {
     // Check if communication already exists (prevent duplicates)
     if (input.external_id) {
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from("contact_history")
         .select("id")
         .eq("external_id", input.external_id)
         .single()
+
+      if (existingError && existingError.code !== "PGRST116") {
+        return { error: existingError.message, data: null }
+      }
 
       if (existing) {
         return { data: existing as any, error: null }
@@ -254,8 +264,8 @@ export async function logCommunicationFromWebhook(input: {
       .select()
       .single()
 
-    if (error) {
-      return { error: error.message, data: null }
+    if (error || !data) {
+      return { error: error?.message || "Communication not created", data: null }
     }
 
     revalidatePath("/dashboard/crm")

@@ -85,8 +85,8 @@ export async function getInvoice(id: string) {
       .eq("company_id", ctx.companyId)
       .maybeSingle()
 
-    if (error) {
-      return { error: error.message, data: null }
+    if (error || !invoice) {
+      return { error: error?.message || "Invoice not found", data: null }
     }
 
     if (!invoice) {
@@ -170,8 +170,8 @@ export async function getSettlements() {
     .order("created_at", { ascending: false })
     .limit(1000)
 
-  if (error) {
-    return { error: error.message, data: null }
+  if (error || !settlements) {
+    return { error: error?.message || "Settlements not found", data: null }
   }
 
   return { data: settlements, error: null }
@@ -592,8 +592,8 @@ export async function createInvoice(formData: {
     .select("id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, created_at, updated_at")
     .single()
 
-  if (error) {
-    return { error: error.message, data: null }
+  if (error || !data) {
+    return { error: error?.message || "Invoice not created", data: null }
   }
 
   // Auto-send invoice if enabled
@@ -668,8 +668,8 @@ export async function getLoadForInvoice(loadId: string) {
     .eq("company_id", ctx.companyId)
     .single()
 
-  if (error) {
-    return { error: error.message, data: null }
+  if (error || !load) {
+    return { error: error?.message || "Load not found", data: null }
   }
 
   return { data: load, error: null }
@@ -795,7 +795,11 @@ export async function createExpense(formData: {
       routeQuery = routeQuery.eq("truck_id", formData.truck_id)
     }
 
-    const { data: matchingRoute } = await routeQuery.limit(1).single()
+    const { data: matchingRoute, error: matchingRouteError } = await routeQuery.limit(1).single()
+
+    if (matchingRouteError && matchingRouteError.code !== "PGRST116") {
+      return { error: matchingRouteError.message, data: null }
+    }
 
     if (matchingRoute) {
       linkedRouteId = matchingRoute.id
@@ -815,7 +819,11 @@ export async function createExpense(formData: {
       loadQuery = loadQuery.eq("truck_id", formData.truck_id)
     }
 
-    const { data: matchingLoad } = await loadQuery.limit(1).single()
+    const { data: matchingLoad, error: matchingLoadError } = await loadQuery.limit(1).single()
+
+    if (matchingLoadError && matchingLoadError.code !== "PGRST116") {
+      return { error: matchingLoadError.message, data: null }
+    }
 
     if (matchingLoad) {
       linkedLoadId = matchingLoad.id
@@ -867,8 +875,8 @@ export async function createExpense(formData: {
     .select("id, company_id, category, description, amount, date, vendor, driver_id, truck_id, mileage, payment_method, receipt_url, has_receipt, route_id, load_id, fuel_level_after, gallons, price_per_gallon, created_at, updated_at")
     .single()
 
-  if (error) {
-    return { error: error.message, data: null }
+  if (error || !data) {
+    return { error: error?.message || "Settlement not created", data: null }
   }
 
   // Auto-update fuel level if this is a fuel expense with truck_id and fuel_level_after
@@ -1067,14 +1075,16 @@ export async function createSettlement(formData: {
       let totalMiles: number | undefined = undefined
       try {
         const { getELDMileageData } = await import("./eld")
-        const { data: trucks } = await supabase
+        const { data: trucks, error: trucksError } = await supabase
           .from("trucks")
           .select("id")
           .eq("driver_id", formData.driver_id)
           .limit(1)
           .single()
-        
-        if (trucks) {
+
+        if (trucksError && trucksError.code !== "PGRST116") {
+          // Non-fatal: if we can't find a truck for the driver, keep settlement working.
+        } else if (trucks) {
           const eldResult = await getELDMileageData({
             truck_ids: [trucks.id],
             start_date: formData.period_start,

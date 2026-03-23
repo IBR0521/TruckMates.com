@@ -114,11 +114,15 @@ export async function updatePortalSettings(settings: {
   if (portalUrl) updateData.portal_url = portalUrl
 
   // Check if settings exist
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("company_portal_settings")
     .select("id")
     .eq("company_id", result.company_id)
     .single()
+
+  if (existingError && existingError.code !== "PGRST116") {
+    return { error: existingError.message, success: false }
+  }
 
   if (existing) {
     // Update existing
