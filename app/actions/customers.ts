@@ -6,6 +6,18 @@ import { revalidatePath } from "next/cache"
 import { validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone, validateRequiredString, stateNameToCode } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
+// Explicit selection lists to reduce `select("*")` over-fetching.
+// Note: `customers`, `contacts`, and `contact_history` are not represented in `lib/supabase/types.ts`,
+// so keep the customer column list aligned with the fields used in this module.
+const CUSTOMERS_SELECT =
+  "id, company_id, name, company_name, email, phone, website, address_line1, address_line2, city, state, zip, country, tax_id, payment_terms, credit_limit, currency, customer_type, status, priority, notes, tags, primary_contact_name, primary_contact_email, primary_contact_phone, created_at, updated_at"
+
+// Uses columns from `lib/supabase/types.ts` for `loads` + `invoices`.
+const LOADS_SELECT =
+  "id, company_id, shipment_number, origin, destination, weight, weight_kg, contents, value, carrier_type, status, driver_id, truck_id, route_id, load_date, estimated_delivery, actual_delivery, coordinates, created_at, updated_at"
+const INVOICES_SELECT =
+  "id, company_id, invoice_number, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, created_at, updated_at"
+
 // Get all customers
 export async function getCustomers(filters?: {
   status?: string
@@ -86,7 +98,7 @@ export async function getCustomer(id: string) {
 
     const { data, error } = await supabase
       .from("customers")
-      .select("*")
+      .select(CUSTOMERS_SELECT)
       .eq("id", id)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
@@ -314,7 +326,7 @@ export async function updateCustomer(
   // Get current customer data for audit trail
   const { data: currentCustomer } = await supabase
     .from("customers")
-    .select("*")
+    .select(CUSTOMERS_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
     .single()
@@ -466,7 +478,7 @@ export async function getCustomerLoads(customerId: string) {
   // First get by customer_id
   const { data: loadsByCustomerId, error: error1 } = await supabase
     .from("loads")
-    .select("*")
+    .select(LOADS_SELECT)
     .eq("company_id", ctx.companyId)
     .eq("customer_id", customerId)
 
@@ -476,7 +488,7 @@ export async function getCustomerLoads(customerId: string) {
     const sanitizedName = customer.name.trim()
     const { data: loadsByName, error: error2 } = await supabase
       .from("loads")
-      .select("*")
+      .select(LOADS_SELECT)
       .eq("company_id", ctx.companyId)
       .eq("company_name", sanitizedName)
       .neq("customer_id", customerId) // Exclude ones already matched by customer_id
@@ -528,7 +540,7 @@ export async function getCustomerInvoices(customerId: string) {
   // First get by customer_id
   const { data: invoicesByCustomerId, error: error1 } = await supabase
     .from("invoices")
-    .select("*")
+    .select(INVOICES_SELECT)
     .eq("company_id", ctx.companyId)
     .eq("customer_id", customerId)
 
@@ -538,7 +550,7 @@ export async function getCustomerInvoices(customerId: string) {
     const sanitizedName = customer.name.trim()
     const { data: invoicesByName, error: error2 } = await supabase
       .from("invoices")
-      .select("*")
+      .select(INVOICES_SELECT)
       .eq("company_id", ctx.companyId)
       .eq("customer_name", sanitizedName)
       .neq("customer_id", customerId) // Exclude ones already matched by customer_id

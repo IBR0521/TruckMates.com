@@ -13,7 +13,9 @@ export async function getPortalSettings() {
 
   const { data, error } = await supabase
     .from("company_portal_settings")
-    .select("*")
+    .select(
+      "enabled, custom_url, portal_url, allow_customer_login, allow_load_tracking, allow_invoice_viewing, allow_document_download, allow_load_submission, require_authentication, session_timeout_minutes"
+    )
     .eq("company_id", ctx.companyId)
     .single()
 

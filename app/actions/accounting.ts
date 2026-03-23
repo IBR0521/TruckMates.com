@@ -241,8 +241,8 @@ export async function updateInvoice(
       .select("id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, created_at, updated_at")
       .single()
 
-    if (error) {
-      return { error: error.message, data: null }
+    if (error || !data) {
+      return { error: error?.message || "Invoice not found", data: null }
     }
 
     revalidatePath("/dashboard/accounting/invoices")
@@ -324,8 +324,8 @@ export async function duplicateInvoice(id: string) {
     .select("id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, created_at, updated_at")
     .single()
 
-  if (createError) {
-    return { error: createError.message, data: null }
+  if (createError || !newInvoice) {
+    return { error: createError?.message || "Invoice not created", data: null }
   }
 
   revalidatePath("/dashboard/accounting/invoices")
@@ -875,8 +875,8 @@ export async function createExpense(formData: {
     .select("id, company_id, category, description, amount, date, vendor, driver_id, truck_id, mileage, payment_method, receipt_url, has_receipt, route_id, load_id, fuel_level_after, gallons, price_per_gallon, created_at, updated_at")
     .single()
 
-  if (error || !data) {
-    return { error: error?.message || "Settlement not created", data: null }
+  if (error) {
+    return { error: error.message, data: null, totalFuelExpense: 0 }
   }
 
   // Auto-update fuel level if this is a fuel expense with truck_id and fuel_level_after
@@ -997,7 +997,7 @@ export async function getDriverFuelExpensesForPeriod(driverId: string, periodSta
     .order("date", { ascending: true })
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: error.message, data: null, totalFuelExpense: 0 }
   }
 
   const totalFuelExpense = expenses?.reduce((sum: number, exp: any) => sum + (Number(exp.amount) || 0), 0) || 0
@@ -1206,8 +1206,8 @@ export async function createSettlement(formData: {
     .select("id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, net_pay, status, paid_date, payment_method, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at")
     .single()
 
-  if (error) {
-    return { error: error.message, data: null }
+  if (error || !data) {
+    return { error: error?.message || "Settlement not created", data: null }
   }
 
   // Generate PDF automatically (non-blocking)

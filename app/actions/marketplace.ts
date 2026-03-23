@@ -10,6 +10,18 @@ import { sendNotification } from "./notifications"
 
 const MARKETPLACE_MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
+// Explicit column lists to avoid `select("*")` over-fetching.
+const LOAD_MARKETPLACE_AUTO_CREATE_SELECT =
+  "id, origin, destination, rate, equipment_type, auto_create_enabled"
+const MARKETPLACE_SUBSCRIPTIONS_SELECT =
+  "id, carrier_company_id, origin_filter, destination_filter, min_rate, max_rate, equipment_types, auto_accept, auto_accept_min_rate, email_notifications, sms_notifications, is_active"
+const COMPANIES_SELECT =
+  "id, name, address, phone, email, company_type, created_at, updated_at"
+const BROKER_STATISTICS_SELECT =
+  "average_rating, total_ratings, average_payment_days, payment_rate, total_loads_posted, total_loads_completed, verified"
+const CARRIER_STATISTICS_SELECT =
+  "average_rating, total_ratings, on_time_delivery_rate, damage_rate, total_loads_accepted, total_loads_completed, verified"
+
 /**
  * Get all available marketplace loads (public)
  */
@@ -379,7 +391,7 @@ async function autoCreateLoadsForMatchingCarriers(marketplaceLoadId: string) {
   // Get marketplace load
   const { data: marketplaceLoad } = await supabase
     .from("load_marketplace")
-    .select("*")
+    .select(LOAD_MARKETPLACE_AUTO_CREATE_SELECT)
     .eq("id", marketplaceLoadId)
     .single()
 
@@ -390,7 +402,7 @@ async function autoCreateLoadsForMatchingCarriers(marketplaceLoadId: string) {
   // Get all active subscriptions
   const { data: subscriptions } = await supabase
     .from("marketplace_subscriptions")
-    .select("*")
+    .select(MARKETPLACE_SUBSCRIPTIONS_SELECT)
     .eq("is_active", true)
 
   if (!subscriptions || subscriptions.length === 0) {
@@ -513,7 +525,7 @@ export async function getMarketplaceSubscription() {
 
   const { data, error } = await supabase
     .from("marketplace_subscriptions")
-    .select("*")
+    .select(MARKETPLACE_SUBSCRIPTIONS_SELECT)
     .eq("carrier_company_id", ctx.companyId)
     .single()
 
@@ -585,7 +597,7 @@ export async function getBrokerProfile(brokerCompanyId: string) {
   // Get company info
   const { data: company, error: companyError } = await supabase
     .from("companies")
-    .select("*")
+    .select(COMPANIES_SELECT)
     .eq("id", brokerCompanyId)
     .single()
 
@@ -596,7 +608,7 @@ export async function getBrokerProfile(brokerCompanyId: string) {
   // Get broker statistics
   const { data: stats, error: statsError } = await supabase
     .from("broker_statistics")
-    .select("*")
+    .select(BROKER_STATISTICS_SELECT)
     .eq("broker_company_id", brokerCompanyId)
     .single()
 
@@ -636,7 +648,7 @@ export async function getCarrierProfile(carrierCompanyId: string) {
   // Get company info
   const { data: company, error: companyError } = await supabase
     .from("companies")
-    .select("*")
+    .select(COMPANIES_SELECT)
     .eq("id", carrierCompanyId)
     .single()
 
@@ -647,7 +659,7 @@ export async function getCarrierProfile(carrierCompanyId: string) {
   // Get carrier statistics
   const { data: stats, error: statsError } = await supabase
     .from("carrier_statistics")
-    .select("*")
+    .select(CARRIER_STATISTICS_SELECT)
     .eq("carrier_company_id", carrierCompanyId)
     .single()
 
