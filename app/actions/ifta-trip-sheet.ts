@@ -157,7 +157,7 @@ export async function getTripSheet(id: string) {
     )
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (error || !sheet) {
     return { data: null, error: error?.message || "Trip sheet not found" }
@@ -196,25 +196,25 @@ export async function createTripSheet(input: TripSheetInput) {
     return { data: null, error: ctx.error || "Not authenticated" }
   }
 
-  const { data: truckOk } = await supabase
+  const { data: truckOk, error: truckErr } = await supabase
     .from("trucks")
     .select("id")
     .eq("id", input.truck_id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
-  if (!truckOk) {
+  if (truckErr || !truckOk) {
     return { data: null, error: "Invalid truck" }
   }
 
   if (input.driver_id) {
-    const { data: d } = await supabase
+    const { data: d, error: dErr } = await supabase
       .from("drivers")
       .select("id")
       .eq("id", input.driver_id)
       .eq("company_id", ctx.companyId)
-      .single()
-    if (!d) {
+      .maybeSingle()
+    if (dErr || !d) {
       return { data: null, error: "Invalid driver" }
     }
   }

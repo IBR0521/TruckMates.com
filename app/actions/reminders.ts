@@ -141,11 +141,15 @@ export async function createReminder(formData: {
   }
 
   // CRITICAL FIX 6: Read company reminder settings
-  const { data: settings } = await supabase
+  const { data: settings, error: settingsError } = await supabase
     .from("company_reminder_settings")
     .select("days_before_reminder")
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (settingsError) {
+    return { error: settingsError.message, data: null }
+  }
 
   const daysBeforeReminder = settings?.days_before_reminder || 1
 
@@ -291,11 +295,15 @@ export async function completeReminder(id: string) {
 
     if (nextDueDate) {
       // Get company settings for days_before_reminder
-      const { data: settings } = await supabase
+      const { data: settings, error: settingsError } = await supabase
         .from("company_reminder_settings")
         .select("days_before_reminder")
         .eq("company_id", ctx.companyId)
-        .single()
+        .maybeSingle()
+
+      if (settingsError) {
+        return { data, error: settingsError.message }
+      }
 
       const daysBeforeReminder = settings?.days_before_reminder || 1
 

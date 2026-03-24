@@ -196,7 +196,7 @@ export async function scheduleCheckCallsForLoad(loadId: string) {
     .select("id, company_id, driver_id, load_date, estimated_delivery")
     .eq("id", loadId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (loadError || !load) {
     return { error: "Load not found", data: null }

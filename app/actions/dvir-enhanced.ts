@@ -32,7 +32,7 @@ export async function checkPreTripDVIRRequired(
     .select("id")
     .eq("id", truckId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (truckError || !truck) {
     return { error: "Truck not found or does not belong to your company", data: null }
@@ -116,7 +116,7 @@ export async function createWorkOrdersFromDVIRDefects(
     .select("id, company_id")
     .eq("id", dvirId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (dvirError || !dvir) {
     return { error: "DVIR not found or does not belong to your company", data: null }
@@ -161,7 +161,7 @@ export async function getDVIRWorkOrders(
       .select("work_orders_created")
       .eq("id", dvirId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (dvirError || !dvir) {
       return { error: "DVIR not found", data: null }

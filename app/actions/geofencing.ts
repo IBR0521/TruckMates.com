@@ -557,7 +557,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
 
       if (isInside && !wasInside) {
         // Entry event
-        const { data: visit } = await supabase
+        const { data: visit, error: visitError } = await supabase
           .from("zone_visits")
           .insert({
             company_id: ctx.companyId,
@@ -572,6 +572,11 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
           })
           .select()
           .single()
+
+        if (visitError) {
+          console.error("[geofencing] Failed to insert entry zone_visit:", visitError)
+          continue
+        }
 
         if (visit && geofence.alert_on_entry) {
           // Create alert
@@ -612,7 +617,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
             )
           : null
 
-        const { data: visit } = await supabase
+        const { data: visit, error: visitError } = await supabase
           .from("zone_visits")
           .insert({
             company_id: ctx.companyId,
@@ -629,6 +634,11 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
           })
           .select()
           .single()
+
+        if (visitError) {
+          console.error("[geofencing] Failed to insert exit zone_visit:", visitError)
+          continue
+        }
 
         // MEDIUM FIX: Update entry visit with exit info - verify ownership before update
         if (recentVisit) {

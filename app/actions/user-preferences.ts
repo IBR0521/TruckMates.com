@@ -20,9 +20,9 @@ export async function getUserPreferences() {
       "id, user_id, dashboard_layout, default_view, table_columns, table_sorting, table_filters, theme, compact_mode, sidebar_collapsed, desktop_notifications, sound_enabled, created_at, updated_at",
     )
     .eq("user_id", ctx.userId)
-    .single()
+    .maybeSingle()
 
-  if (error && error.code === 'PGRST116') {
+  if (!data) {
     // Preferences don't exist, create defaults
     const { data: newPrefs, error: createError } = await supabase
       .from("user_preferences")

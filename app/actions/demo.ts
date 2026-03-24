@@ -88,7 +88,7 @@ export async function setupDemoCompany(userId: string | null) {
         .from("companies")
         .select("id, name")
         .eq("id", userRecord.company_id)
-        .single()
+        .maybeSingle()
       
       // If linked to demo company, don't use it - create a new one instead
       if (company?.name === DEMO_COMPANY_NAME || company?.name?.includes("Demo Logistics Company")) {

@@ -175,7 +175,7 @@ export async function createDVIR(formData: {
     .select("id")
     .eq("id", formData.driver_id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (driverError || !driver) {
     return { error: "Driver not found or does not belong to your company", data: null }
@@ -186,7 +186,7 @@ export async function createDVIR(formData: {
     .select("id")
     .eq("id", formData.truck_id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (truckError || !truck) {
     return { error: "Truck not found or does not belong to your company", data: null }
@@ -323,12 +323,16 @@ export async function updateDVIR(id: string, formData: {
   }
 
   // Get current DVIR to check if it's certified and get baseline values for status calculation
-  const { data: currentDVIR } = await supabase
+  const { data: currentDVIR, error: currentDVIRError } = await supabase
     .from("dvir")
     .select("certified, certified_by, certified_date, defects_found, defects, status")
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (currentDVIRError) {
+    return { error: currentDVIRError.message, data: null }
+  }
 
   if (!currentDVIR) {
     return { error: "DVIR not found", data: null }
@@ -456,12 +460,16 @@ export async function deleteDVIR(id: string) {
   }
 
   // Check if DVIR is certified - prevent deletion of certified DVIRs for compliance
-  const { data: dvir } = await supabase
+  const { data: dvir, error: dvirFetchError } = await supabase
     .from("dvir")
     .select("certified, inspection_date")
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (dvirFetchError) {
+    return { error: dvirFetchError.message, data: null }
+  }
 
   if (dvir?.certified) {
     return { error: "Cannot delete a certified DVIR. FMCSA regulations require DVIR records to be retained for at least 90 days.", data: null }

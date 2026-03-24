@@ -43,11 +43,15 @@ export async function createFakeELDDevice(config: {
   }
 
   // BUG-069 FIX: Require super_admin role
-  const { data: userData } = await supabase
+  const { data: userData, error: userDataError } = await supabase
     .from("users")
     .select("role")
     .eq("id", ctx.userId || "")
-    .single()
+    .maybeSingle()
+
+  if (userDataError) {
+    return { error: userDataError.message, data: null }
+  }
 
   if (userData?.role !== "super_admin") {
     return { error: "Only super admins can use the ELD Simulator", data: null }
@@ -102,13 +106,17 @@ export async function simulateLocationUpdate(config: SimulatorConfig) {
   }
 
   // Get current location or generate new one
-  const { data: lastLocation } = await supabase
+  const { data: lastLocation, error: lastLocationError } = await supabase
     .from("eld_locations")
     .select("latitude, longitude, heading, odometer")
     .eq("eld_device_id", config.device_id)
     .order("timestamp", { ascending: false })
     .limit(1)
-    .single()
+    .maybeSingle()
+
+  if (lastLocationError) {
+    return { error: lastLocationError.message, data: null }
+  }
 
   let lat: number
   let lng: number

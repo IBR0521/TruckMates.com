@@ -21,11 +21,16 @@ async function getResendClient() {
     const ctx = await getCachedAuthContext()
     if (ctx.companyId) {
       const supabase = await createClient()
-      const { data: integrations } = await supabase
+      const { data: integrations, error: integrationsError } = await supabase
         .from("company_integrations")
         .select("resend_enabled")
         .eq("company_id", ctx.companyId)
-        .single()
+        .maybeSingle()
+
+      if (integrationsError) {
+        console.error("[RESEND] Failed checking company integration:", integrationsError)
+        return null
+      }
 
       if (!integrations?.resend_enabled) {
         console.log("[RESEND] Integration not enabled for company")
@@ -220,10 +225,13 @@ export async function getFeedbackItem(id: string) {
     .select("id, user_id, company_id, type, category, title, message, priority, status, created_at, updated_at")
     .eq("id", id)
     .eq("user_id", ctx.userId) // Ensure user can only access their own feedback
-    .single()
+    .maybeSingle()
 
   if (error) {
     return { error: error.message, data: null }
+  }
+  if (!feedbackItem) {
+    return { error: "Feedback not found or access denied", data: null }
   }
 
   return { data: feedbackItem, error: null }
@@ -274,11 +282,15 @@ export async function createFeedback(formData: {
     }
 
     // Get user info for email notification (use provided info or fallback to database)
-    const { data: userData } = await supabase
+    const { data: userData, error: userDataError } = await supabase
       .from("users")
       .select("email, full_name")
       .eq("id", ctx.userId!)
-      .single()
+      .maybeSingle()
+
+    if (userDataError) {
+      return { error: userDataError.message, data: null }
+    }
 
     // Use provided user info or fallback to database user info
     const feedbackUserName = formData.userName 
@@ -287,11 +299,15 @@ export async function createFeedback(formData: {
     const feedbackUserEmail = formData.userEmail || userData?.email || "Unknown"
 
     // Get company name for email
-    const { data: companyData } = await supabase
+    const { data: companyData, error: companyDataError } = await supabase
       .from("companies")
       .select("name")
       .eq("id", ctx.companyId)
-      .single()
+      .maybeSingle()
+
+    if (companyDataError) {
+      return { error: companyDataError.message, data: null }
+    }
 
     // Insert feedback
     const { data: feedback, error } = await supabase
@@ -354,7 +370,7 @@ export async function updateFeedback(id: string, formData: {
     .select("id, status")
     .eq("id", id)
     .eq("user_id", ctx.userId)
-    .single()
+    .maybeSingle()
 
   if (fetchError || !existingFeedback) {
     return { error: "Feedback not found or access denied", data: null }

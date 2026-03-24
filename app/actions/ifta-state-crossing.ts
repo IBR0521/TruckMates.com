@@ -170,7 +170,12 @@ export async function detectStateCrossing(params: {
       query = query.is("driver_id", null)
     }
     
-    const { data: previousCrossing } = await query.single()
+    const { data: previousCrossing, error: previousCrossingError } = await query.maybeSingle()
+
+    if (previousCrossingError) {
+      console.error("[IFTA State Crossing] Failed to load previous crossing:", previousCrossingError)
+      return { error: previousCrossingError.message, data: null }
+    }
 
     // Check if state has changed
     if (previousCrossing && previousCrossing.state_code === state_code) {

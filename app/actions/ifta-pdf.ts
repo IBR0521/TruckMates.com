@@ -31,18 +31,22 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
       )
       .eq("id", reportId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (reportError || !report) {
       return { pdf: null, html: "", error: "IFTA report not found" }
     }
 
     // Get company info
-    const { data: company } = await supabase
+    const { data: company, error: companyError } = await supabase
       .from("companies")
       .select("name, address, city, state, zip, phone, email, mc_number, dot_number")
       .eq("id", ctx.companyId)
-      .single()
+      .maybeSingle()
+
+    if (companyError) {
+      return { pdf: null, html: "", error: companyError.message || "Failed to load company info" }
+    }
 
     // Get state breakdown
     const stateBreakdown = (report.state_breakdown as any[]) || []

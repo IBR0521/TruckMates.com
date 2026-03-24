@@ -121,9 +121,9 @@ export async function savePaymentMethod(paymentMethod: {
     .from("users")
     .select("role, company_id")
     .eq("id", ctx.userId)
-    .single()
+    .maybeSingle()
 
-  if (userError) {
+  if (userError || !userData) {
     return { error: userError?.message || "No company found", data: null }
   }
 
@@ -255,9 +255,9 @@ export async function deletePaymentMethod(id: string): Promise<{ error: string |
     .from("users")
     .select("role, company_id")
     .eq("id", ctx.userId)
-    .single()
+    .maybeSingle()
 
-  if (userError) {
+  if (userError || !userData) {
     return { error: userError?.message || "No company found" }
   }
 
@@ -269,12 +269,16 @@ export async function deletePaymentMethod(id: string): Promise<{ error: string |
   }
 
   // MEDIUM FIX 15: Check if this is the default or only payment method
-  const { data: paymentMethod } = await supabase
+  const { data: paymentMethod, error: paymentMethodError } = await supabase
     .from("company_payment_methods")
     .select("id, is_default, is_active")
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (paymentMethodError) {
+    return { error: paymentMethodError.message || "Failed to fetch payment method" }
+  }
 
   if (!paymentMethod) {
     return { error: "Payment method not found" }
@@ -294,14 +298,18 @@ export async function deletePaymentMethod(id: string): Promise<{ error: string |
   // Check if this is the default payment method
   if (paymentMethod.is_default) {
     // Find another active payment method to set as default
-    const { data: otherMethod } = await supabase
+    const { data: otherMethod, error: otherMethodError } = await supabase
       .from("company_payment_methods")
       .select("id")
       .eq("company_id", ctx.companyId)
       .eq("is_active", true)
       .neq("id", id)
       .limit(1)
-      .single()
+      .maybeSingle()
+
+    if (otherMethodError) {
+      return { error: otherMethodError.message || "Failed to find fallback payment method" }
+    }
 
     if (otherMethod) {
       // Set another method as default before deleting

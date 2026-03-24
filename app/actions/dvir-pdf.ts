@@ -27,11 +27,15 @@ export async function generateDVIRAuditPDF(filters: any) {
     const dvirs = dvirResult.data
 
     // Get company info
-    const { data: company } = await supabase
+    const { data: company, error: companyError } = await supabase
       .from("companies")
       .select("name, address, phone, email")
       .eq("id", ctx.companyId)
-      .single()
+      .maybeSingle()
+
+    if (companyError) {
+      return { html: "", error: companyError.message || "Failed to load company info" }
+    }
 
     // Format date
     const formatDate = (date: string | Date) => {

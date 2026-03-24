@@ -151,12 +151,18 @@ export async function getChatMessages(threadId: string, limit: number = 50) {
   }
 
   // Verify user has access to thread
-  const { data: thread } = await supabase
+  const { data: thread, error: threadError } = await supabase
     .from("chat_threads")
     .select(CHAT_THREAD_SELECT)
     .eq("id", threadId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (threadError) {
+    const result = handleDbError(threadError, null)
+    if (result.error) return result
+    return { error: "Table not available. Please run the SQL schema.", data: null }
+  }
 
   if (!thread) {
     return { error: "Thread not found", data: null }
@@ -212,12 +218,18 @@ export async function sendChatMessage(formData: {
   }
 
   // Verify user has access to thread
-  const { data: thread } = await supabase
+  const { data: thread, error: threadError } = await supabase
     .from("chat_threads")
     .select(CHAT_THREAD_SELECT)
     .eq("id", formData.thread_id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (threadError) {
+    const result = handleDbError(threadError, null)
+    if (result.error) return result
+    return { error: "Table not available. Please run the SQL schema.", data: null }
+  }
 
   if (!thread) {
     return { error: "Thread not found", data: null }
@@ -276,11 +288,17 @@ export async function markThreadAsRead(threadId: string) {
     .eq("is_read", false)
 
   // Update thread unread count
-  const { data: thread } = await supabase
+  const { data: thread, error: threadError } = await supabase
     .from("chat_threads")
     .select("unread_count")
     .eq("id", threadId)
-    .single()
+    .maybeSingle()
+
+  if (threadError) {
+    const result = handleDbError(threadError, null)
+    if (result.error) return result
+    return { error: "Table not available. Please run the SQL schema.", data: null }
+  }
 
   if (thread) {
     const unreadCount = thread.unread_count || {}

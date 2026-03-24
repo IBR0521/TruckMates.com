@@ -136,7 +136,7 @@ export async function updateInvoiceTax(id: string, tax: Partial<InvoiceTax>): Pr
     .from("company_invoice_taxes")
     .select("company_id")
     .eq("id", id)
-    .single()
+    .maybeSingle()
 
   if (checkError || !existing || existing.company_id !== ctx.companyId) {
     return { error: "Invoice tax not found or access denied", data: null }
@@ -223,7 +223,7 @@ export async function deleteInvoiceTax(id: string): Promise<{ error: string | nu
     .from("company_invoice_taxes")
     .select("company_id")
     .eq("id", id)
-    .single()
+    .maybeSingle()
 
   if (checkError || !existing || existing.company_id !== ctx.companyId) {
     return { error: "Invoice tax not found or access denied" }

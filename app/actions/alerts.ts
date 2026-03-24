@@ -320,7 +320,14 @@ export async function getAlerts(filters?: {
     }
 
     // Fetch role and driver_id for filtering (auth already cached above)
-    const { data: userRow } = await supabase.from("users").select("role, driver_id").eq("id", ctx.userId!).single()
+    const { data: userRow, error: userRowError } = await supabase
+      .from("users")
+      .select("role, driver_id")
+      .eq("id", ctx.userId!)
+      .maybeSingle()
+    if (userRowError) {
+      return { error: userRowError.message, data: null }
+    }
     const userRole = userRow?.role || "driver"
     const elevatedRoles = ["super_admin", "operations_manager", "manager", "owner", "admin"]
     const effectiveRole = elevatedRoles.includes(userRole) ? "manager" : userRole
