@@ -31,7 +31,7 @@ export async function getFilterPresets(page: string) {
   // Check if table exists
   const { data, error } = await supabase
     .from("filter_presets")
-    .select("*")
+    .select("id, company_id, user_id, name, page, filters, is_default, created_at, updated_at")
     .eq("company_id", ctx.companyId)
     .eq("page", page)
     .order("is_default", { ascending: false })
@@ -154,7 +154,7 @@ export async function deleteFilterPreset(id: string) {
     .select("page")
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   const { error } = await supabase
     .from("filter_presets")
@@ -186,14 +186,14 @@ export async function getDefaultFilterPreset(page: string) {
 
   const { data, error } = await supabase
     .from("filter_presets")
-    .select("*")
+    .select("id, company_id, user_id, name, page, filters, is_default, created_at, updated_at")
     .eq("company_id", ctx.companyId)
     .eq("page", page)
     .eq("is_default", true)
-    .single()
+    .maybeSingle()
 
   if (error) {
-    if (error.code === "PGRST116" || error.code === "42P01") {
+    if (error.code === "42P01") {
       return { data: null, error: null } // No default preset or table doesn't exist
     }
     return { error: error.message, data: null }

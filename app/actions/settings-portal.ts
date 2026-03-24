@@ -17,9 +17,9 @@ export async function getPortalSettings() {
       "enabled, custom_url, portal_url, allow_customer_login, allow_load_tracking, allow_invoice_viewing, allow_document_download, allow_load_submission, require_authentication, session_timeout_minutes"
     )
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
-  if (error && error.code !== "PGRST116") {
+  if (error) {
     return { error: error.message, data: null }
   }
 
@@ -120,9 +120,9 @@ export async function updatePortalSettings(settings: {
     .from("company_portal_settings")
     .select("id")
     .eq("company_id", result.company_id)
-    .single()
+    .maybeSingle()
 
-  if (existingError && existingError.code !== "PGRST116") {
+  if (existingError) {
     return { error: existingError.message, success: false }
   }
 

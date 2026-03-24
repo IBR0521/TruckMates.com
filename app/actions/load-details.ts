@@ -135,7 +135,7 @@ export async function getLoadDetails(loadId: string): Promise<{
       `)
       .eq("id", loadId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
     
     // Try to get broker and customer separately if columns exist
     let broker = null
@@ -148,7 +148,7 @@ export async function getLoadDetails(loadId: string): Promise<{
           .select("id, name, phone, email, w9_url, insurance_url")
           .eq("id", (load as any).broker_id)
           .eq("company_id", ctx.companyId) // V3-004: Enforce company ownership for broker
-          .single()
+          .maybeSingle()
         if (brokerData) broker = brokerData
       } catch (error) {
         // Broker table might not exist, that's okay
@@ -162,7 +162,7 @@ export async function getLoadDetails(loadId: string): Promise<{
           .select("id, name, phone, email")
           .eq("id", (load as any).customer_id)
           .eq("company_id", ctx.companyId) // V3-004: Enforce company ownership for customer
-          .single()
+          .maybeSingle()
         if (customerData) customer = customerData
       } catch (error) {
         // Customer might be in different table or not exist
@@ -214,7 +214,7 @@ export async function getLoadDetails(loadId: string): Promise<{
           .eq("driver_id", load.driver_id)
           .order("start_time", { ascending: false })
           .limit(1)
-          .single()
+          .maybeSingle()
 
         const currentStatus = latestLog?.end_time === null 
           ? latestLog?.log_type || "off_duty"

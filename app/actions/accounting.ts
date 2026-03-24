@@ -239,7 +239,7 @@ export async function updateInvoice(
       .eq("id", id)
       .eq("company_id", ctx.companyId)
       .select("id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, created_at, updated_at")
-      .single()
+      .maybeSingle()
 
     if (error || !data) {
       return { error: error?.message || "Invoice not found", data: null }
@@ -279,7 +279,7 @@ export async function duplicateInvoice(id: string) {
     .select("id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, created_at, updated_at")
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (fetchError || !originalInvoice) {
     return { error: "Invoice not found", data: null }
@@ -322,7 +322,7 @@ export async function duplicateInvoice(id: string) {
     .from("invoices")
     .insert(duplicateData)
     .select("id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, created_at, updated_at")
-    .single()
+    .maybeSingle()
 
   if (createError || !newInvoice) {
     return { error: createError?.message || "Invoice not created", data: null }
@@ -500,7 +500,7 @@ export async function createInvoice(formData: {
       .select("id, company_id")
       .eq("id", formData.load_id)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (loadError || !load) {
       return { error: "Invalid load selected", data: null }
@@ -666,7 +666,7 @@ export async function getLoadForInvoice(loadId: string) {
     .select("id, shipment_number, value, company_name, origin, destination, contents")
     .eq("id", loadId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (error || !load) {
     return { error: error?.message || "Load not found", data: null }
@@ -752,7 +752,7 @@ export async function createExpense(formData: {
       .select("id, company_id")
       .eq("id", formData.driver_id)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (driverError || !driver) {
       return { error: "Invalid driver selected", data: null }
@@ -766,7 +766,7 @@ export async function createExpense(formData: {
       .select("id, company_id")
       .eq("id", formData.truck_id)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (truckError || !truck) {
       return { error: "Invalid truck selected", data: null }
@@ -795,9 +795,9 @@ export async function createExpense(formData: {
       routeQuery = routeQuery.eq("truck_id", formData.truck_id)
     }
 
-    const { data: matchingRoute, error: matchingRouteError } = await routeQuery.limit(1).single()
+    const { data: matchingRoute, error: matchingRouteError } = await routeQuery.limit(1).maybeSingle()
 
-    if (matchingRouteError && matchingRouteError.code !== "PGRST116") {
+    if (matchingRouteError) {
       return { error: matchingRouteError.message, data: null }
     }
 
@@ -819,9 +819,9 @@ export async function createExpense(formData: {
       loadQuery = loadQuery.eq("truck_id", formData.truck_id)
     }
 
-    const { data: matchingLoad, error: matchingLoadError } = await loadQuery.limit(1).single()
+    const { data: matchingLoad, error: matchingLoadError } = await loadQuery.limit(1).maybeSingle()
 
-    if (matchingLoadError && matchingLoadError.code !== "PGRST116") {
+    if (matchingLoadError) {
       return { error: matchingLoadError.message, data: null }
     }
 
@@ -873,7 +873,7 @@ export async function createExpense(formData: {
     })
     // V3-007 FIX: Replace implicit select() with explicit columns
     .select("id, company_id, category, description, amount, date, vendor, driver_id, truck_id, mileage, payment_method, receipt_url, has_receipt, route_id, load_id, fuel_level_after, gallons, price_per_gallon, created_at, updated_at")
-    .single()
+    .maybeSingle()
 
   if (error) {
     return { error: error.message, data: null, totalFuelExpense: 0 }
@@ -1042,7 +1042,7 @@ export async function createSettlement(formData: {
     .select("id")
     .eq("id", formData.driver_id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (driverError || !driver) {
     return { error: "Driver not found or does not belong to your company", data: null }
@@ -1080,9 +1080,9 @@ export async function createSettlement(formData: {
           .select("id")
           .eq("driver_id", formData.driver_id)
           .limit(1)
-          .single()
+          .maybeSingle()
 
-        if (trucksError && trucksError.code !== "PGRST116") {
+        if (trucksError) {
           // Non-fatal: if we can't find a truck for the driver, keep settlement working.
         } else if (trucks) {
           const eldResult = await getELDMileageData({

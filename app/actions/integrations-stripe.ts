@@ -21,11 +21,15 @@ async function getStripeClient() {
       throw new Error(ctx.error || "Not authenticated")
     }
 
-    const { data: integrations } = await supabase
+    const { data: integrations, error: integrationsError } = await supabase
       .from("company_integrations")
       .select("stripe_enabled, stripe_api_key")
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
+
+    if (integrationsError) {
+      throw new Error(integrationsError.message)
+    }
 
     if (!integrations?.stripe_enabled || !integrations.stripe_api_key) {
       throw new Error("Stripe integration is not enabled or configured")
@@ -60,7 +64,9 @@ export async function createInvoicePayment(invoiceId: string, amount?: number) {
   // Get invoice
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
-    .select("*")
+    .select(
+      "id, company_id, invoice_number, amount, status, stripe_payment_intent_id, paypal_order_id, paypal_capture_id, paid_date, payment_method",
+    )
     .eq("id", invoiceId)
     .eq("company_id", ctx.companyId)
     .single()
@@ -165,11 +171,15 @@ export async function processPayPalInvoicePayment(invoiceId: string, amount?: nu
   }
 
   // Get integration settings
-  const { data: integrations } = await supabase
+  const { data: integrations, error: integrationsError } = await supabase
     .from("company_integrations")
     .select("paypal_enabled, paypal_client_id")
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (integrationsError) {
+    return { error: integrationsError.message, data: null }
+  }
 
   if (!integrations?.paypal_enabled || !integrations.paypal_client_id) {
     return { error: "PayPal integration is not enabled or configured", data: null }
@@ -178,7 +188,9 @@ export async function processPayPalInvoicePayment(invoiceId: string, amount?: nu
   // Get invoice
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
-    .select("*")
+    .select(
+      "id, company_id, invoice_number, amount, status, stripe_payment_intent_id, paypal_order_id, paypal_capture_id, paid_date, payment_method",
+    )
     .eq("id", invoiceId)
     .eq("company_id", ctx.companyId)
     .single()
@@ -286,11 +298,15 @@ export async function capturePayPalPayment(invoiceId: string, orderId: string) {
   }
 
   // Get integration settings
-  const { data: integrations } = await supabase
+  const { data: integrations, error: integrationsError } = await supabase
     .from("company_integrations")
     .select("paypal_enabled, paypal_client_id")
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (integrationsError) {
+    return { error: integrationsError.message, data: null }
+  }
 
   if (!integrations?.paypal_enabled || !integrations.paypal_client_id) {
     return { error: "PayPal integration is not enabled", data: null }

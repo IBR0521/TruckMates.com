@@ -4,6 +4,14 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 
+/** `public.eld_logs` — supabase/eld_schema.sql */
+const ELD_LOGS_SELECT =
+  "id, company_id, eld_device_id, driver_id, truck_id, log_date, log_type, start_time, end_time, duration_minutes, location_start, location_end, odometer_start, odometer_end, miles_driven, engine_hours, violations, raw_data, created_at, updated_at"
+
+/** `public.eld_events` — eld_schema.sql + fault columns in eld_fault_code_maintenance.sql */
+const ELD_EVENTS_SELECT =
+  "id, company_id, eld_device_id, driver_id, truck_id, event_type, severity, title, description, event_time, location, resolved, resolved_at, resolved_by, metadata, created_at, fault_code, fault_code_category, fault_code_description, maintenance_created, maintenance_id"
+
 // Generate AI-powered insights based on ELD data
 export async function generateELDInsights(driverId?: string, days: number = 7) {
   // FIXED: Add RBAC check
@@ -25,7 +33,7 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
   let logsQuery = supabase
     .from("eld_logs")
     .select(`
-      *,
+      ${ELD_LOGS_SELECT},
       drivers:driver_id (id, name),
       trucks:truck_id (id, truck_number)
     `)
@@ -49,7 +57,7 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
   let violationsQuery = supabase
     .from("eld_events")
     .select(`
-      *,
+      ${ELD_EVENTS_SELECT},
       drivers:driver_id (id, name)
     `)
     .eq("company_id", ctx.companyId)
@@ -247,7 +255,7 @@ export async function getDriverRecommendations(driverId: string) {
 
   const { data: violations, error: violationsError } = await supabase
     .from("eld_events")
-    .select("*")
+    .select(ELD_EVENTS_SELECT)
     .eq("driver_id", driverId)
     .eq("company_id", ctx.companyId)
     .gte("event_time", thirtyDaysAgo)
@@ -338,7 +346,7 @@ export async function getDriverBehaviorScore(driverId: string, days: number = 30
     // Get violations
     const { data: violations, error: violationsError } = await supabase
       .from("eld_events")
-      .select("*")
+      .select(ELD_EVENTS_SELECT)
       .eq("driver_id", driverId)
       .eq("company_id", ctx.companyId)
       .gte("event_time", startDate)
@@ -350,7 +358,7 @@ export async function getDriverBehaviorScore(driverId: string, days: number = 30
     // Get logs for driving time
     const { data: logs, error: logsError } = await supabase
       .from("eld_logs")
-      .select("*")
+      .select(ELD_LOGS_SELECT)
       .eq("driver_id", driverId)
       .eq("company_id", ctx.companyId)
       .gte("log_date", startDate.split("T")[0])
@@ -403,7 +411,7 @@ export async function getDriverBehaviorScore(driverId: string, days: number = 30
     const previousStartDate = new Date(Date.now() - (days * 2) * 24 * 60 * 60 * 1000).toISOString()
     const { data: previousViolations } = await supabase
       .from("eld_events")
-      .select("*")
+      .select(ELD_EVENTS_SELECT)
       .eq("driver_id", driverId)
       .eq("company_id", ctx.companyId)
       .gte("event_time", previousStartDate)

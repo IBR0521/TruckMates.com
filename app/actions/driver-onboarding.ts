@@ -8,6 +8,18 @@ import { revalidatePath } from "next/cache"
 
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
+/** Matches `public.driver_onboarding` in supabase/driver_onboarding_schema.sql */
+const DRIVER_ONBOARDING_SELECT = `
+  id, driver_id, company_id, status, current_step, total_steps, completion_percentage,
+  started_at, completed_at, estimated_completion_date,
+  documents_required, documents_completed, documents_missing,
+  license_uploaded, medical_card_uploaded, insurance_uploaded, w9_uploaded, i9_uploaded,
+  background_check_completed, drug_test_completed,
+  orientation_completed, orientation_date, training_completed, training_modules,
+  notes, onboarding_notes, rejection_reason,
+  assigned_to_user_id, assigned_at, created_at, updated_at
+`
+
 /**
  * Initialize driver onboarding when driver is created
  */
@@ -25,12 +37,16 @@ export async function initializeDriverOnboarding(driverId: string) {
   }
 
   // Get driver info
-  const { data: driver } = await supabase
+  const { data: driver, error: driverError } = await supabase
     .from("drivers")
-    .select("*")
+    .select("id")
     .eq("id", driverId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (driverError) {
+    return { data: null, error: driverError.message }
+  }
 
   if (!driver) {
     return { data: null, error: "Driver not found" }
@@ -104,7 +120,7 @@ export async function getDriverOnboarding(driverId: string) {
       .select("id, user_id")
       .eq("id", driverId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (!driver || driver.user_id !== ctx.userId) {
       return { data: null, error: "You can only view your own onboarding status" }
@@ -114,21 +130,22 @@ export async function getDriverOnboarding(driverId: string) {
   const { data, error } = await supabase
     .from("driver_onboarding")
     .select(`
-      *,
+      ${DRIVER_ONBOARDING_SELECT},
       driver:driver_id(id, name, email, phone),
       assigned_to:assigned_to_user_id(id, full_name, email)
     `)
     .eq("driver_id", driverId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (error) {
-    if (error.code === "PGRST116") {
-      // No onboarding record exists, return null
-      return { data: null, error: null }
-    }
     console.error("[getDriverOnboarding] Error:", error)
     return { data: null, error: error.message }
+  }
+
+  if (!data) {
+    // No onboarding record exists, return null
+    return { data: null, error: null }
   }
 
   return { data, error: null }
@@ -197,7 +214,7 @@ export async function markDocumentUploaded(driverId: string, documentType: strin
       .select("id, user_id")
       .eq("id", driverId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (!driver || driver.user_id !== ctx.userId) {
       return { data: null, error: "You can only mark documents for your own onboarding" }
@@ -205,12 +222,16 @@ export async function markDocumentUploaded(driverId: string, documentType: strin
   }
 
   // Get current onboarding status
-  const { data: onboarding } = await supabase
+  const { data: onboarding, error: onboardingError } = await supabase
     .from("driver_onboarding")
-    .select("*")
+    .select(DRIVER_ONBOARDING_SELECT)
     .eq("driver_id", driverId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (onboardingError) {
+    return { data: null, error: onboardingError.message }
+  }
 
   if (!onboarding) {
     return { data: null, error: "Onboarding record not found" }
@@ -319,12 +340,16 @@ export async function completeDriverOnboarding(driverId: string) {
   }
 
   // Verify all required documents are uploaded
-  const { data: onboarding } = await supabase
+  const { data: onboarding, error: onboardingError } = await supabase
     .from("driver_onboarding")
-    .select("*")
+    .select(DRIVER_ONBOARDING_SELECT)
     .eq("driver_id", driverId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (onboardingError) {
+    return { data: null, error: onboardingError.message }
+  }
 
   if (!onboarding) {
     return { data: null, error: "Onboarding record not found" }

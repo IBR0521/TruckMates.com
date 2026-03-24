@@ -17,7 +17,7 @@ export async function getCompany() {
     // Get company data
     const { data: company, error: companyError } = await supabase
       .from("companies")
-      .select("*")
+      .select("id, name, address, phone, email, company_type, created_at, updated_at")
       .eq("id", ctx.companyId)
       .maybeSingle()
 

@@ -15,7 +15,9 @@ export async function getLoadDeliveryPoints(loadId: string) {
 
     const { data: deliveryPoints, error } = await supabase
       .from("load_delivery_points")
-      .select("*")
+      .select(
+        "id, load_id, company_id, delivery_number, location_name, location_id, address, city, state, zip, phone, contact_name, contact_phone, delivery_type, priority, weight_kg, weight_lbs, pieces, pallets, boxes, carts, volume_cubic_meters, delivery_instructions, special_handling, requires_liftgate, requires_inside_delivery, requires_appointment, appointment_time, scheduled_delivery_date, scheduled_delivery_time, time_window_start, time_window_end, status, actual_delivery_date, actual_delivery_time, delivery_notes, reference_number, notes, coordinates, created_at, updated_at",
+      )
       .eq("load_id", loadId)
       .eq("company_id", ctx.companyId)
       .order("delivery_number", { ascending: true })
@@ -76,14 +78,14 @@ export async function createLoadDeliveryPoint(loadId: string, deliveryPointData:
     }
 
     // Verify load belongs to company
-    const { data: load } = await supabase
+    const { data: load, error: loadError } = await supabase
       .from("loads")
       .select("id, company_id")
       .eq("id", loadId)
       .eq("company_id", ctx.companyId)
       .single()
 
-    if (!load) {
+    if (loadError || !load) {
       return { error: "Load not found", data: null }
     }
 
@@ -138,7 +140,7 @@ export async function createLoadDeliveryPoint(loadId: string, deliveryPointData:
     // Update load's total_delivery_points
     const { count } = await supabase
       .from("load_delivery_points")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("load_id", loadId)
 
     await supabase
@@ -270,14 +272,14 @@ export async function deleteLoadDeliveryPoint(deliveryPointId: string) {
     }
 
     // Get delivery point to get load_id for revalidation
-    const { data: deliveryPoint } = await supabase
+    const { data: deliveryPoint, error: deliveryPointError } = await supabase
       .from("load_delivery_points")
       .select("load_id")
       .eq("id", deliveryPointId)
       .eq("company_id", ctx.companyId)
       .single()
 
-    if (!deliveryPoint) {
+    if (deliveryPointError || !deliveryPoint) {
       return { error: "Delivery point not found", data: null }
     }
 
@@ -294,7 +296,7 @@ export async function deleteLoadDeliveryPoint(deliveryPointId: string) {
     // Update load's total_delivery_points
     const { count } = await supabase
       .from("load_delivery_points")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("load_id", deliveryPoint.load_id)
 
     await supabase

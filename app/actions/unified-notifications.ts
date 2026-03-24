@@ -3,6 +3,14 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+/** `public.notifications` — supabase/notifications_table.sql */
+const NOTIFICATIONS_LIST_SELECT =
+  "id, user_id, company_id, type, title, message, priority, metadata, read, read_at, created_at, updated_at"
+
+/** `public.alerts` — supabase/trucklogics_features_schema.sql */
+const ALERTS_LIST_SELECT =
+  "id, company_id, alert_rule_id, title, message, event_type, priority, status, load_id, route_id, driver_id, truck_id, metadata, escalated, escalation_level, escalated_at, acknowledged_by, acknowledged_at, resolved_at, created_at, updated_at"
+
 /**
  * Get all unified notifications (system notifications + alerts)
  */
@@ -28,7 +36,7 @@ export async function getUnifiedNotifications(filters?: {
     if (!filters?.type || filters.type === "all" || filters.type === "notifications") {
       let notificationsQuery = supabase
         .from("notifications")
-        .select("*", { count: "exact" })
+        .select(NOTIFICATIONS_LIST_SELECT, { count: "exact" })
         .eq("user_id", ctx.userId ?? "")
         .order("created_at", { ascending: false })
 
@@ -68,7 +76,7 @@ export async function getUnifiedNotifications(filters?: {
     if (!filters?.type || filters.type === "all" || filters.type === "alerts") {
       let alertsQuery = supabase
         .from("alerts")
-        .select("*", { count: "exact" })
+        .select(ALERTS_LIST_SELECT, { count: "exact" })
         .eq("company_id", ctx.companyId)
         .order("created_at", { ascending: false })
 

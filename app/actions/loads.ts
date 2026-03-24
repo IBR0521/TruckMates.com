@@ -309,7 +309,7 @@ export async function createLoad(formData: {
       .select("id, status, company_id")
       .eq("id", formData.driver_id)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (driverError || !driver) {
       return { error: "Invalid driver selected", data: null }
@@ -327,7 +327,7 @@ export async function createLoad(formData: {
       .select("id, status, company_id")
       .eq("id", formData.truck_id)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (truckError || !truck) {
       return { error: "Invalid truck selected", data: null }
@@ -345,7 +345,7 @@ export async function createLoad(formData: {
       .select("id, company_id")
       .eq("id", formData.customer_id)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (customerError || !customer) {
       return { error: "Invalid customer selected", data: null }
@@ -849,7 +849,7 @@ export async function updateLoad(
     .select(LOAD_DETAIL_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (currentLoadError || !currentLoad) {
     return { error: "Load not found", data: null }
@@ -1034,11 +1034,16 @@ export async function updateLoad(
   // Auto-generate invoice when load status changes to "delivered"
   if (data && !wasDelivered && willBeDelivered) {
     // Check if invoice already exists for this load
-    const { data: existingInvoice } = await supabase
+    const { data: existingInvoice, error: existingInvoiceError } = await supabase
       .from("invoices")
       .select("id")
       .eq("load_id", id)
-      .single()
+      .maybeSingle()
+
+    if (existingInvoiceError) {
+      console.error("[updateLoad] Failed checking existing invoice:", existingInvoiceError)
+      return { error: existingInvoiceError.message || "Failed to validate existing invoice", data: null }
+    }
 
     if (!existingInvoice && data.value) {
       // Auto-generate invoice
@@ -1080,11 +1085,15 @@ export async function updateLoad(
         
         // Auto-send invoice email if enabled in settings
         try {
-          const { data: settings } = await supabase
+          const { data: settings, error: settingsError } = await supabase
             .from("company_settings")
             .select("auto_send_invoice_email, invoice_email_subject, invoice_email_body")
             .eq("company_id", ctx.companyId)
-            .single()
+            .maybeSingle()
+
+          if (settingsError) {
+            throw settingsError
+          }
 
           if (settings?.auto_send_invoice_email) {
             const { sendInvoiceEmail } = await import("./invoice-email")
@@ -1399,7 +1408,7 @@ export async function duplicateLoad(id: string) {
     .select(LOAD_DETAIL_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (fetchError || !originalLoad) {
     return { error: "Load not found", data: null }

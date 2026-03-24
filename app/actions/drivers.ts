@@ -155,7 +155,7 @@ export async function createDriver(formData: {
   }
 
   // BUG-061 FIX: Check subscription plan limits before creating driver
-  const { data: subscription } = await supabase
+  const { data: subscription, error: subscriptionError } = await supabase
     .from("subscriptions")
     .select(`
       plan_id,
@@ -163,13 +163,17 @@ export async function createDriver(formData: {
     `)
     .eq("company_id", ctx.companyId)
     .eq("status", "active")
-    .single()
+    .maybeSingle()
+
+  if (subscriptionError) {
+    return { error: subscriptionError.message, data: null }
+  }
 
   if (subscription?.subscription_plans?.max_drivers) {
     // Count current active drivers
     const { count: currentDriverCount } = await supabase
       .from("drivers")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("company_id", ctx.companyId)
       .eq("status", "active")
 

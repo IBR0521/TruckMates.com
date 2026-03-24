@@ -27,7 +27,9 @@ export async function getCheckCalls(filters?: {
 
     let query = supabase
       .from("check_calls")
-      .select("*")
+      .select(
+        "id, company_id, load_id, route_id, driver_id, call_type, scheduled_time, actual_time, location, latitude, longitude, address, notes, dispatcher_notes, driver_status, odometer_reading, fuel_level, timestamp, status, created_at, updated_at",
+      )
       .eq("company_id", ctx.companyId)
       .order("scheduled_time", { ascending: false })
 
@@ -191,7 +193,7 @@ export async function scheduleCheckCallsForLoad(loadId: string) {
   // Get load details
   const { data: load, error: loadError } = await supabase
     .from("loads")
-    .select("*")
+    .select("id, company_id, driver_id, load_date, estimated_delivery")
     .eq("id", loadId)
     .eq("company_id", ctx.companyId)
     .single()
@@ -296,7 +298,9 @@ export async function getOverdueCheckCalls() {
 
   const { data, error } = await supabase
     .from("check_calls")
-    .select("*")
+    .select(
+      "id, company_id, load_id, route_id, driver_id, call_type, scheduled_time, actual_time, location, latitude, longitude, address, notes, dispatcher_notes, driver_status, odometer_reading, fuel_level, timestamp, status, created_at, updated_at",
+    )
     .eq("company_id", ctx.companyId)
     .eq("status", "pending")
     .lt("scheduled_time", now)

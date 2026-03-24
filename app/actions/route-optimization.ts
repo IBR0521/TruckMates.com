@@ -13,6 +13,13 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+/** `public.route_stops` — supabase/route_stops_schema_safe.sql */
+const ROUTE_STOPS_FULL_SELECT =
+  "id, route_id, company_id, stop_number, location_name, location_id, address, city, state, zip, phone, contact_name, contact_phone, coordinates, stop_type, priority, salesman_id, arrive_time, depart_time, service_time_minutes, travel_time_minutes, time_window_1_open, time_window_1_close, time_window_2_open, time_window_2_close, carts, boxes, pallets, orders, quantity_type, special_instructions, notes, status, actual_arrive_time, actual_depart_time, created_at, updated_at"
+
+/** Minimal columns for matching loads to existing routes */
+const ROUTE_SUGGESTION_SELECT = "id, name, origin, destination, distance"
+
 // Calculate distance between two coordinates using Haversine formula
 function calculateDistance(
   lat1: number,
@@ -461,7 +468,7 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
   // Get route with stops
   const { data: route, error: routeError } = await supabase
     .from("routes")
-    .select("*")
+    .select("id")
     .eq("id", routeId)
     .eq("company_id", ctx.companyId)
     .single()
@@ -473,7 +480,7 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
   // Get route stops
   const { data: stops } = await supabase
     .from("route_stops")
-    .select("*")
+    .select(ROUTE_STOPS_FULL_SELECT)
     .eq("route_id", routeId)
     .order("stop_number", { ascending: true })
 
@@ -571,7 +578,7 @@ export async function getRouteSuggestions(loadIds: string[]): Promise<{
   // Get existing routes
   const { data: routes } = await supabase
     .from("routes")
-    .select("*")
+    .select(ROUTE_SUGGESTION_SELECT)
     .eq("company_id", ctx.companyId)
 
   const suggestions: Array<{

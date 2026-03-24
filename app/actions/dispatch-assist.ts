@@ -18,6 +18,10 @@ import { findNearbyDriversForLoad, type NearbyDriver } from "./proximity-dispatc
 import { checkAssignmentConflicts } from "./dispatch-timeline"
 import { calculateRemainingHOS } from "./eld-advanced"
 
+/** Fields used by optimal-driver scoring — `public.loads` base + extended columns */
+const DISPATCH_ASSIST_LOAD_SELECT =
+  "id, company_id, origin, destination, carrier_type, weight_kg, priority, load_date, estimated_delivery, coordinates, requires_special_equipment"
+
 export interface DriverSuggestion {
   driver_id: string
   driver_name: string
@@ -76,10 +80,10 @@ export async function getOptimalDriverSuggestions(
     // Get load details
     const { data: load, error: loadError } = await supabase
       .from("loads")
-      .select("*")
+      .select(DISPATCH_ASSIST_LOAD_SELECT)
       .eq("id", loadId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (loadError || !load) {
       return { error: loadError?.message || "Load not found", data: null }
@@ -381,7 +385,7 @@ export async function getOptimalDriverSuggestionsForRoute(
     // Get route
     const { data: route, error: routeError } = await supabase
       .from("routes")
-      .select("*")
+      .select("id")
       .eq("id", routeId)
       .eq("company_id", ctx.companyId)
       .maybeSingle()

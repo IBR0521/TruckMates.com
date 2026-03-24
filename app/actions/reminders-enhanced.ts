@@ -4,6 +4,17 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
+/** Matches `public.reminders` in supabase/trucklogics_features_schema.sql */
+const REMINDERS_SELECT = `
+  id, company_id, title, description, reminder_type,
+  due_date, due_time, reminder_date, reminder_time,
+  is_recurring, recurrence_pattern, recurrence_interval,
+  truck_id, driver_id, load_id, invoice_id,
+  status, completed_at, completed_by,
+  notify_users, send_email, send_sms,
+  created_at, updated_at
+`
+
 /**
  * Enhanced Reminders Actions
  * Includes maintenance integration and mileage-based reminders
@@ -57,7 +68,7 @@ export async function getDashboardReminders(limit: number = 5): Promise<{
   try {
     const { data: overdue, error: overdueError } = await supabase
       .from("reminders")
-      .select("*")
+      .select(REMINDERS_SELECT)
       .eq("company_id", ctx.companyId)
       .eq("status", "pending")
       .lt("due_date", new Date().toISOString().split("T")[0])
@@ -70,7 +81,7 @@ export async function getDashboardReminders(limit: number = 5): Promise<{
 
     const { data: upcoming, error: upcomingError } = await supabase
       .from("reminders")
-      .select("*")
+      .select(REMINDERS_SELECT)
       .eq("company_id", ctx.companyId)
       .eq("status", "pending")
       .gte("due_date", new Date().toISOString().split("T")[0])

@@ -35,12 +35,16 @@ export async function autoAttachDocumentsToLoad(loadId: string) {
   }
 
   // Get load
-  const { data: load } = await supabase
+  const { data: load, error: loadError } = await supabase
     .from("loads")
-    .select("*")
+    .select("id, company_id, company_name")
     .eq("id", loadId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (loadError) {
+    return { error: loadError.message, data: null }
+  }
 
   if (!load) {
     return { error: "Load not found", data: null }
@@ -50,7 +54,7 @@ export async function autoAttachDocumentsToLoad(loadId: string) {
   // FIXED: Use .eq() instead of .ilike() to match exact type
   const { data: bolDocuments } = await supabase
     .from("documents")
-    .select("*")
+    .select("id, company_id, load_id, type, file_name, file_url, created_at")
     .eq("company_id", ctx.companyId)
     .eq("load_id", loadId)
     .eq("type", "bol") // FIXED: Exact match instead of substring

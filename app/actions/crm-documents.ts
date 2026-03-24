@@ -290,7 +290,7 @@ export async function deleteCRMDocument(documentId: string): Promise<{
       .select("storage_url, company_id")
       .eq("id", documentId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (fetchError) {
       // If table doesn't exist, return error

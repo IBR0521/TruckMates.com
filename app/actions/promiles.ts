@@ -53,36 +53,12 @@ function milesFromMeters(m: number) {
   return Math.round((m / 1609.34) * 10) / 10
 }
 
-type GeocodedPoint = { lat: number; lng: number; label: string }
-
-async function geocodeAddressList(addresses: string[]): Promise<{ points: GeocodedPoint[]; error: string | null }> {
-  const results = await Promise.all(addresses.map((addr) => geocodeAddress(addr)))
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i]
-    if (r.error || !r.data) {
-      return { points: [], error: r.error || `Geocoding failed for: ${addresses[i]}` }
-    }
-  }
-  return {
-    points: results.map((r) => ({
-      lat: r.data!.lat,
-      lng: r.data!.lng,
-      label: r.data!.formatted_address,
-    })),
-    error: null,
-  }
-}
-
 /**
  * Full trip planning estimate (dispatcher: origin → destination, truck params).
- * When `deliveryStopAddresses` is set (ordered stop #1…N), routes **origin → all stops → last stop**
- * so mileage reflects the full multi-stop chain (HERE `via` / Google waypoints).
  */
 export async function getTripPlanningEstimate(input: {
   origin: string
   destination: string
-  /** Ordered delivery addresses (stop 1 … last). When non-empty, used for full-chain routing. */
-  deliveryStopAddresses?: string[]
   /** Assumed fuel economy for cost estimate (defaults 6.5) */
   mpg?: number
   truck?: {
@@ -98,38 +74,13 @@ export async function getTripPlanningEstimate(input: {
   const warnings: string[] = []
   const mpg = input.mpg && input.mpg > 0 ? input.mpg : 6.5
 
-  const stopAddrs = (input.deliveryStopAddresses || []).map((s) => s.trim()).filter(Boolean)
-  const useMultiChain = stopAddrs.length > 0
+  const o = await geocodeAddress(input.origin.trim())
+  const d = await geocodeAddress(input.destination.trim())
+  if (o.error || !o.data) return { data: null, error: o.error || "Origin geocoding failed" }
+  if (d.error || !d.data) return { data: null, error: d.error || "Destination geocoding failed" }
 
-  let origin: GeocodedPoint
-  let destination: GeocodedPoint
-  let multiStopMeta: TripPlanningEstimate["multi_stop"] | undefined
-  let via: Array<{ lat: number; lng: number }> | undefined
-
-  if (useMultiChain) {
-    const chainAddrs = [input.origin.trim(), ...stopAddrs]
-    const geo = await geocodeAddressList(chainAddrs)
-    if (geo.error) return { data: null, error: geo.error }
-    if (geo.points.length < 2) {
-      return { data: null, error: "Need at least origin and one delivery stop for multi-stop routing." }
-    }
-    origin = geo.points[0]
-    destination = geo.points[geo.points.length - 1]
-    if (geo.points.length > 2) {
-      via = geo.points.slice(1, -1).map((p) => ({ lat: p.lat, lng: p.lng }))
-    }
-    multiStopMeta = {
-      delivery_stop_count: stopAddrs.length,
-      chain_point_count: geo.points.length,
-    }
-  } else {
-    const o = await geocodeAddress(input.origin.trim())
-    const d = await geocodeAddress(input.destination.trim())
-    if (o.error || !o.data) return { data: null, error: o.error || "Origin geocoding failed" }
-    if (d.error || !d.data) return { data: null, error: d.error || "Destination geocoding failed" }
-    origin = { lat: o.data.lat, lng: o.data.lng, label: o.data.formatted_address }
-    destination = { lat: d.data.lat, lng: d.data.lng, label: d.data.formatted_address }
-  }
+  const origin = { lat: o.data.lat, lng: o.data.lng, label: o.data.formatted_address }
+  const destination = { lat: d.data.lat, lng: d.data.lng, label: d.data.formatted_address }
 
   const hereKey = process.env.HERE_API_KEY || ""
   const googleKey = process.env.GOOGLE_MAPS_API_KEY || ""
@@ -151,7 +102,6 @@ export async function getTripPlanningEstimate(input: {
       apiKey: hereKey,
       origin: { lat: origin.lat, lng: origin.lng },
       destination: { lat: destination.lat, lng: destination.lng },
-      via,
       grossWeightKg: grossKg,
       axleCount: input.truck?.axleCount,
     })
@@ -169,12 +119,9 @@ export async function getTripPlanningEstimate(input: {
   }
 
   if (path.length < 2) {
-    const waypoints =
-      useMultiChain && via && via.length > 0 ? via.map((v) => `${v.lat},${v.lng}`) : undefined
     const g = await getRouteDirections(
       `${origin.lat},${origin.lng}`,
-      `${destination.lat},${destination.lng}`,
-      waypoints,
+      `${destination.lat},${destination.lng}`
     )
     if (g.error || !g.data?.polyline) {
       return { data: null, error: g.error || "Could not build route polyline" }
@@ -235,7 +182,6 @@ export async function getTripPlanningEstimate(input: {
     routing_provider,
     origin,
     destination,
-    ...(multiStopMeta ? { multi_stop: multiStopMeta } : {}),
     distance_miles,
     duration_seconds: durationSeconds || undefined,
     state_miles: stateEst.rows,

@@ -3,6 +3,14 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+/** `public.eld_logs` — supabase/eld_schema.sql */
+const ELD_LOGS_SELECT =
+  "id, company_id, eld_device_id, driver_id, truck_id, log_date, log_type, start_time, end_time, duration_minutes, location_start, location_end, odometer_start, odometer_end, miles_driven, engine_hours, violations, raw_data, created_at, updated_at"
+
+/** `public.eld_events` — eld_schema.sql + fault columns in eld_fault_code_maintenance.sql */
+const ELD_EVENTS_SELECT =
+  "id, company_id, eld_device_id, driver_id, truck_id, event_type, severity, title, description, event_time, location, resolved, resolved_at, resolved_by, metadata, created_at, fault_code, fault_code_category, fault_code_description, maintenance_created, maintenance_id"
+
 // HOS Rules (Hours of Service)
 const HOS_RULES = {
   MAX_DRIVING_HOURS: 11, // Maximum driving hours in a day
@@ -22,7 +30,7 @@ export async function calculateRemainingHOS(driverId: string, date?: string) {
   // V3-007 FIX: Add LIMIT (single day should be safe, but add limit for safety)
   const { data: logs, error } = await supabase
     .from("eld_logs")
-    .select("*")
+    .select(ELD_LOGS_SELECT)
     .eq("driver_id", driverId)
     .eq("log_date", targetDate)
     .order("start_time", { ascending: true })
@@ -108,7 +116,7 @@ export async function getDriverScorecard(driverId: string, startDate?: string, e
   // V3-007 FIX: Add LIMIT to prevent OOM on large date ranges
   const { data: logs, error: logsError } = await supabase
     .from("eld_logs")
-    .select("*")
+    .select(ELD_LOGS_SELECT)
     .eq("driver_id", driverId)
     .eq("company_id", ctx.companyId)
     .gte("log_date", start)
@@ -122,7 +130,7 @@ export async function getDriverScorecard(driverId: string, startDate?: string, e
   // Get violations
   const { data: violations, error: violationsError } = await supabase
     .from("eld_events")
-    .select("*")
+    .select(ELD_EVENTS_SELECT)
     .eq("driver_id", driverId)
     .eq("company_id", ctx.companyId)
     .gte("event_time", start)

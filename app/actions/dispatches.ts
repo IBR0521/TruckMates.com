@@ -267,9 +267,27 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
   }
 
   const supabase = await createClient()
-  const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
-    return { error: ctx.error || "Not authenticated", data: null }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Not authenticated", data: null }
+  }
+
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("company_id")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (userError) {
+    return { error: userError.message || "Failed to fetch user data", data: null }
+  }
+
+  if (!userData?.company_id) {
+    return { error: "No company found", data: null }
   }
 
   // ERROR HANDLING FIX: Use maybeSingle() when checking if record exists (might not exist)

@@ -15,7 +15,9 @@ export async function getRouteStops(routeId: string) {
 
     const { data: stops, error } = await supabase
       .from("route_stops")
-      .select("*")
+      .select(
+        "id, route_id, company_id, stop_number, location_name, location_id, address, city, state, zip, phone, contact_name, contact_phone, stop_type, priority, salesman_id, arrive_time, depart_time, service_time_minutes, travel_time_minutes, time_window_1_open, time_window_1_close, time_window_2_open, time_window_2_close, carts, boxes, pallets, orders, quantity_type, special_instructions, notes, coordinates, status, actual_arrive_time, actual_depart_time, created_at, updated_at",
+      )
       .eq("route_id", routeId)
       .eq("company_id", ctx.companyId)
       .order("stop_number", { ascending: true })
@@ -73,14 +75,14 @@ export async function createRouteStop(routeId: string, stopData: {
     }
 
     // Verify route belongs to company
-    const { data: route } = await supabase
+    const { data: route, error: routeError } = await supabase
       .from("routes")
       .select("id, company_id")
       .eq("id", routeId)
       .eq("company_id", ctx.companyId)
       .single()
 
-    if (!route) {
+    if (routeError || !route) {
       return { error: "Route not found", data: null }
     }
 
@@ -245,14 +247,14 @@ export async function deleteRouteStop(stopId: string) {
     }
 
     // Get stop to get route_id for revalidation
-    const { data: stop } = await supabase
+    const { data: stop, error: stopError } = await supabase
       .from("route_stops")
       .select("route_id")
       .eq("id", stopId)
       .eq("company_id", ctx.companyId)
       .single()
 
-    if (!stop) {
+    if (stopError || !stop) {
       return { error: "Stop not found", data: null }
     }
 

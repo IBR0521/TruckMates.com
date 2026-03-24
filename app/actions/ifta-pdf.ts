@@ -26,7 +26,9 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
     // Get IFTA report with company info
     const { data: report, error: reportError } = await supabase
       .from("ifta_reports")
-      .select("*")
+      .select(
+        "id, company_id, quarter, year, period, status, total_miles, fuel_purchased, tax_owed, state_breakdown, truck_ids, include_eld",
+      )
       .eq("id", reportId)
       .eq("company_id", ctx.companyId)
       .single()

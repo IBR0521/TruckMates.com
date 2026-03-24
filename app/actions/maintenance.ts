@@ -79,7 +79,7 @@ export async function createMaintenance(formData: {
     .select("id")
     .eq("id", formData.truck_id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (truckError || !truck) {
     return { error: "Truck not found or does not belong to your company", data: null }
@@ -183,10 +183,13 @@ export async function getMaintenanceById(id: string) {
     `)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (error) {
     return { error: error.message, data: null }
+  }
+  if (!maintenance) {
+    return { error: "Maintenance record not found", data: null }
   }
 
   return { data: maintenance, error: null }

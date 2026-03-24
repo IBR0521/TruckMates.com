@@ -53,7 +53,7 @@ export async function batchCountQueries(
   const promises = queries.map(async (query) => {
     let queryBuilder = supabase
       .from(query.table)
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("company_id", companyId)
 
     // Apply filters

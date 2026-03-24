@@ -16,7 +16,9 @@ export async function getUserPreferences() {
 
   let { data, error } = await supabase
     .from("user_preferences")
-    .select("*")
+    .select(
+      "id, user_id, dashboard_layout, default_view, table_columns, table_sorting, table_filters, theme, compact_mode, sidebar_collapsed, desktop_notifications, sound_enabled, created_at, updated_at",
+    )
     .eq("user_id", ctx.userId)
     .single()
 

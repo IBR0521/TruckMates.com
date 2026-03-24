@@ -13,6 +13,10 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
+/** `public.fault_code_maintenance_rules` — supabase/eld_fault_code_maintenance.sql */
+const FAULT_CODE_MAINTENANCE_RULES_SELECT =
+  "id, company_id, fault_code, fault_code_category, service_type, priority, estimated_cost, estimated_labor_hours, description, auto_create_maintenance, schedule_days_ahead, created_at, updated_at"
+
 /**
  * Analyze ELD fault code and create maintenance if needed
  */
@@ -36,7 +40,7 @@ export async function analyzeFaultCodeAndCreateMaintenance(eventId: string) {
     .select("id, company_id")
     .eq("id", eventId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (eventError || !event) {
     return { error: "ELD event not found or does not belong to your company", data: null }
@@ -130,7 +134,7 @@ export async function uploadMaintenanceDocument(
       .select("id, truck_id, company_id")
       .eq("id", maintenanceId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (maintenanceError || !maintenance) {
       return { error: "Maintenance record not found", data: null }
@@ -251,7 +255,7 @@ export async function deleteMaintenanceDocument(documentId: string) {
       .select("storage_url, maintenance_id")
       .eq("id", documentId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (docError || !document) {
       return { error: "Document not found", data: null }
@@ -338,7 +342,7 @@ export async function createWorkOrderFromMaintenance(maintenanceId: string) {
     .select("id, company_id")
     .eq("id", maintenanceId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (maintenanceError || !maintenance) {
     return { error: "Maintenance record not found or does not belong to your company", data: null }
@@ -406,10 +410,13 @@ export async function getWorkOrder(workOrderId: string) {
       `)
       .eq("id", workOrderId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (error) {
       return { error: error.message, data: null }
+    }
+    if (!workOrder) {
+      return { error: "Work order not found", data: null }
     }
 
     return { data: workOrder, error: null }
@@ -566,7 +573,7 @@ export async function checkAndReserveParts(workOrderId: string) {
     .select("id, company_id")
     .eq("id", workOrderId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (workOrderError || !workOrder) {
     return { error: "Work order not found or does not belong to your company", data: null }
@@ -619,7 +626,7 @@ export async function completeWorkOrder(
     .select("id, company_id")
     .eq("id", workOrderId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (workOrderError || !workOrder) {
     return { error: "Work order not found or does not belong to your company", data: null }
@@ -668,7 +675,7 @@ export async function getFaultCodeRules() {
   try {
     const { data: rules, error } = await supabase
       .from("fault_code_maintenance_rules")
-      .select("*")
+      .select(FAULT_CODE_MAINTENANCE_RULES_SELECT)
       .eq("company_id", ctx.companyId)
       .order("fault_code", { ascending: true })
       .limit(200)

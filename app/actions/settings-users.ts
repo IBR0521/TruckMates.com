@@ -147,11 +147,15 @@ export async function removeUser(userId: string) {
     }
 
     // Check if user is in same company
-    const { data: targetUser } = await supabase
+    const { data: targetUser, error: targetUserError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", userId)
-      .single()
+      .maybeSingle()
+
+    if (targetUserError) {
+      return { error: targetUserError.message, success: false }
+    }
 
     if (targetUser?.company_id !== ctx.companyId) {
       return { error: "User not found in your company", success: false }
@@ -211,11 +215,15 @@ export async function inviteUser(data: {
   }
 
   // Fetch inviter full_name for email (optional)
-  const { data: inviterProfile } = await supabase
+  const { data: inviterProfile, error: inviterProfileError } = await supabase
     .from("users")
     .select("full_name")
     .eq("id", ctx.userId!)
-    .single()
+    .maybeSingle()
+
+  if (inviterProfileError) {
+    return { error: inviterProfileError.message, data: null }
+  }
 
   // Validate email
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -258,7 +266,7 @@ export async function inviteUser(data: {
   }
 
   // BUG-061 FIX: Check subscription plan limits before inviting user
-  const { data: subscription } = await supabase
+  const { data: subscription, error: subscriptionError } = await supabase
     .from("subscriptions")
     .select(`
       plan_id,
@@ -266,13 +274,17 @@ export async function inviteUser(data: {
     `)
     .eq("company_id", ctx.companyId)
     .eq("status", "active")
-    .single()
+    .maybeSingle()
+
+  if (subscriptionError) {
+    return { error: subscriptionError.message, data: null }
+  }
 
   if (subscription?.subscription_plans?.max_users) {
     // Count current active users
     const { count: currentUserCount } = await supabase
       .from("users")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("company_id", ctx.companyId)
       .eq("employee_status", "active")
 
@@ -363,11 +375,15 @@ export async function inviteUser(data: {
     }
 
     // Get company name
-    const { data: company } = await supabase
+    const { data: company, error: companyError } = await supabase
       .from("companies")
       .select("name")
       .eq("id", ctx.companyId)
-      .single()
+      .maybeSingle()
+
+    if (companyError) {
+      return { error: companyError.message, data: null }
+    }
 
     const companyName = company?.name || "Your Company"
     const inviterName = inviterProfile?.full_name || "A team member"

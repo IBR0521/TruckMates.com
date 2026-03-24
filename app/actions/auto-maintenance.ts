@@ -32,7 +32,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
     .select("id, truck_number, current_mileage, make, model, year")
     .eq("id", truckId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (truckError || !truck) {
     return { error: truckError?.message || "Truck not found", data: null }

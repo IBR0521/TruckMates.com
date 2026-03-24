@@ -4,6 +4,9 @@ import { useEffect, useState, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js"
 
+const NOTIFICATIONS_SELECT =
+  "id, user_id, company_id, type, title, message, priority, metadata, read, read_at, created_at, updated_at"
+
 /**
  * Hook for real-time subscriptions to Supabase tables
  * Automatically handles connection, reconnection, and cleanup
@@ -187,7 +190,7 @@ export function useRealtimeNotifications() {
         // Still fetch notifications for display (limited to 50)
         const { data, error } = await supabase
           .from("notifications")
-          .select("*")
+          .select(NOTIFICATIONS_SELECT)
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
           .limit(50)

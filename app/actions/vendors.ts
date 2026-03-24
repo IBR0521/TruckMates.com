@@ -5,6 +5,29 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateRequiredString, validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
 
+/** `public.vendors` — supabase/crm_schema_complete.sql */
+const VENDOR_FULL_SELECT = `
+  id, company_id, name, company_name, email, phone, website,
+  address_line1, address_line2, city, state, zip, country, coordinates,
+  tax_id, payment_terms, currency, vendor_type, status, priority, notes, tags, custom_fields,
+  primary_contact_name, primary_contact_email, primary_contact_phone,
+  total_spent, total_transactions, last_transaction_date, created_at, updated_at
+`
+
+/** `public.expenses` — schema.sql + vendor_id (crm) + fuel + QuickBooks */
+const EXPENSES_FULL_SELECT = `
+  id, company_id, category, description, amount, date, vendor, vendor_id, driver_id, truck_id,
+  mileage, payment_method, receipt_url, has_receipt, gallons, price_per_gallon,
+  quickbooks_id, quickbooks_synced_at, created_at, updated_at
+`
+
+/** `public.maintenance` — schema.sql + vendor_id + parts_used */
+const MAINTENANCE_FULL_SELECT = `
+  id, company_id, truck_id, service_type, scheduled_date, completed_date, mileage, status, priority,
+  estimated_cost, actual_cost, vendor, vendor_id, technician, notes, next_service_due_mileage,
+  parts_used, created_at, updated_at
+`
+
 // Get all vendors
 export async function getVendors(filters?: {
   status?: string
@@ -74,7 +97,7 @@ export async function getVendor(id: string) {
 
     const { data, error } = await supabase
       .from("vendors")
-      .select("*")
+      .select(VENDOR_FULL_SELECT)
       .eq("id", id)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
@@ -161,12 +184,16 @@ export async function createVendor(formData: {
 
   // Check for duplicate company name if provided
   if (formData.company_name) {
-    const { data: existingVendor } = await supabase
+    const { data: existingVendor, error: existingVendorError } = await supabase
       .from("vendors")
       .select("id")
       .eq("company_id", ctx.companyId)
       .eq("company_name", sanitizeString(formData.company_name, 200))
-      .single()
+      .maybeSingle()
+
+    if (existingVendorError) {
+      return { error: existingVendorError.message, data: null }
+    }
 
     if (existingVendor) {
       return { error: "Vendor with this company name already exists", data: null }
@@ -175,12 +202,16 @@ export async function createVendor(formData: {
 
   // Check for duplicate email if provided
   if (formData.email) {
-    const { data: existingEmail } = await supabase
+    const { data: existingEmail, error: existingEmailError } = await supabase
       .from("vendors")
       .select("id")
       .eq("company_id", ctx.companyId)
       .eq("email", sanitizeEmail(formData.email))
-      .single()
+      .maybeSingle()
+
+    if (existingEmailError) {
+      return { error: existingEmailError.message, data: null }
+    }
 
     if (existingEmail) {
       return { error: "Vendor with this email already exists", data: null }
@@ -260,12 +291,16 @@ export async function updateVendor(
   }
 
   // Get current vendor data for audit trail
-  const { data: currentVendor } = await supabase
+  const { data: currentVendor, error: currentVendorError } = await supabase
     .from("vendors")
-    .select("*")
+    .select(VENDOR_FULL_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (currentVendorError) {
+    return { error: currentVendorError.message, data: null }
+  }
 
   if (!currentVendor) {
     return { error: "Vendor not found", data: null }
@@ -392,12 +427,16 @@ export async function getVendorExpenses(vendorId: string) {
   }
 
   // Get vendor name first
-  const { data: vendor } = await supabase
+  const { data: vendor, error: vendorError } = await supabase
     .from("vendors")
     .select("name")
     .eq("id", vendorId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (vendorError) {
+    return { error: vendorError.message, data: null }
+  }
 
   if (!vendor) {
     return { error: "Vendor not found", data: null }
@@ -406,7 +445,7 @@ export async function getVendorExpenses(vendorId: string) {
   // Get expenses for this vendor (by vendor_id or vendor name)
   const { data, error } = await supabase
     .from("expenses")
-    .select("*")
+    .select(EXPENSES_FULL_SELECT)
     .eq("company_id", ctx.companyId)
     .or(`vendor_id.eq.${vendorId},vendor.eq.${vendor.name}`)
     .order("date", { ascending: false })
@@ -427,12 +466,16 @@ export async function getVendorMaintenance(vendorId: string) {
   }
 
   // Get vendor name first
-  const { data: vendor } = await supabase
+  const { data: vendor, error: vendorError } = await supabase
     .from("vendors")
     .select("name")
     .eq("id", vendorId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (vendorError) {
+    return { error: vendorError.message, data: null }
+  }
 
   if (!vendor) {
     return { error: "Vendor not found", data: null }
@@ -441,7 +484,7 @@ export async function getVendorMaintenance(vendorId: string) {
   // Get maintenance records for this vendor (by vendor_id or vendor name)
   const { data, error } = await supabase
     .from("maintenance")
-    .select("*")
+    .select(MAINTENANCE_FULL_SELECT)
     .eq("company_id", ctx.companyId)
     .or(`vendor_id.eq.${vendorId},vendor.eq.${vendor.name}`)
     .order("scheduled_date", { ascending: false })

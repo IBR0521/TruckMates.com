@@ -192,7 +192,7 @@ export async function createRoute(formData: {
       .select("id, status, company_id")
       .eq("id", formData.driver_id)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (driverError || !driver) {
       return { error: "Invalid driver selected", data: null }
@@ -210,7 +210,7 @@ export async function createRoute(formData: {
       .select("id, status, company_id")
       .eq("id", formData.truck_id)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (truckError || !truck) {
       return { error: "Invalid truck selected", data: null }
@@ -321,7 +321,7 @@ export async function updateRoute(
     .select(ROUTE_DETAIL_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (currentRouteError || !currentRoute) {
     return { error: "Route not found", data: null }
@@ -550,7 +550,7 @@ export async function duplicateRoute(id: string) {
     .select(ROUTE_DETAIL_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (fetchError || !originalRoute) {
     return { error: "Route not found", data: null }
@@ -637,22 +637,28 @@ export async function getRouteSuggestions(origin?: string, destination?: string)
       const topTruckId = Object.entries(truckCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
 
       if (topDriverId) {
-        const { data: driver } = await supabase
+        const { data: driver, error: driverError } = await supabase
           .from("drivers")
           .select("id, name, status")
           .eq("id", topDriverId)
           .eq("status", "active")
-          .single()
+          .maybeSingle()
+        if (driverError) {
+          return { error: driverError.message, data: null }
+        }
         if (driver) suggestions.suggestedDriver = driver
       }
 
       if (topTruckId) {
-        const { data: truck } = await supabase
+        const { data: truck, error: truckError } = await supabase
           .from("trucks")
           .select("id, truck_number, status")
           .eq("id", topTruckId)
           .in("status", ["available", "in_use"])
-          .single()
+          .maybeSingle()
+        if (truckError) {
+          return { error: truckError.message, data: null }
+        }
         if (truck) suggestions.suggestedTruck = truck
       }
     }

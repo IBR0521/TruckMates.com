@@ -4,6 +4,13 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+/** Matches `parts` in supabase/parts_inventory_schema.sql */
+const PARTS_SELECT = `
+  id, company_id, part_number, name, description, category, manufacturer, cost,
+  quantity, min_quantity, location, supplier, supplier_part_number, notes,
+  created_at, updated_at
+`
+
 // Get all parts for company
 export async function getParts(filters?: {
   category?: string
@@ -20,7 +27,7 @@ export async function getParts(filters?: {
 
   let query = supabase
     .from("parts")
-    .select("*")
+    .select(PARTS_SELECT)
     .eq("company_id", ctx.companyId)
     .order("name", { ascending: true })
 
@@ -66,7 +73,7 @@ export async function getPart(id: string) {
 
   const { data, error } = await supabase
     .from("parts")
-    .select("*")
+    .select(PARTS_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
     .maybeSingle()
@@ -118,7 +125,7 @@ export async function createPart(formData: {
     .select("id")
     .eq("company_id", ctx.companyId)
     .eq("part_number", formData.part_number)
-    .single()
+    .maybeSingle()
 
   if (existing) {
     return { error: "Part number already exists", data: null }
@@ -177,12 +184,16 @@ export async function updatePart(
   }
 
   // Check if part exists and belongs to company
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("parts")
-    .select("id")
+    .select("id, part_number")
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (existingError) {
+    return { error: existingError.message, data: null }
+  }
 
   if (!existing) {
     return { error: "Part not found", data: null }
@@ -190,13 +201,17 @@ export async function updatePart(
 
   // Check for duplicate part number if changing
   if (formData.part_number && formData.part_number !== existing.part_number) {
-    const { data: duplicate } = await supabase
+    const { data: duplicate, error: duplicateError } = await supabase
       .from("parts")
       .select("id")
       .eq("company_id", ctx.companyId)
       .eq("part_number", formData.part_number)
       .neq("id", id)
-      .single()
+      .maybeSingle()
+
+    if (duplicateError) {
+      return { error: duplicateError.message, data: null }
+    }
 
     if (duplicate) {
       return { error: "Part number already exists", data: null }
@@ -273,12 +288,16 @@ export async function recordPartUsage(formData: {
   }
 
   // Get part to verify it exists and get current quantity
-  const { data: part } = await supabase
+  const { data: part, error: partError } = await supabase
     .from("parts")
     .select("quantity")
     .eq("id", formData.part_id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (partError) {
+    return { error: partError.message, data: null }
+  }
 
   if (!part) {
     return { error: "Part not found", data: null }
@@ -342,12 +361,16 @@ export async function createPartOrder(formData: {
   }
 
   // Get part to get supplier info
-  const { data: part } = await supabase
+  const { data: part, error: partError } = await supabase
     .from("parts")
     .select("supplier")
     .eq("id", formData.part_id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (partError) {
+    return { error: partError.message, data: null }
+  }
 
   if (!part) {
     return { error: "Part not found", data: null }
@@ -402,18 +425,26 @@ export async function updatePartOrderStatus(
     updateData.received_date = received_date
 
     // Update part quantity when order is received
-    const { data: order } = await supabase
+    const { data: order, error: orderError } = await supabase
       .from("part_orders")
       .select("part_id, quantity")
       .eq("id", id)
-      .single()
+      .maybeSingle()
+
+    if (orderError) {
+      return { error: orderError.message, data: null }
+    }
 
     if (order) {
-      const { data: part } = await supabase
+      const { data: part, error: partError } = await supabase
         .from("parts")
         .select("quantity")
         .eq("id", order.part_id)
-        .single()
+        .maybeSingle()
+
+      if (partError) {
+        return { error: partError.message, data: null }
+      }
 
       if (part) {
         await supabase
@@ -453,7 +484,7 @@ export async function getPartsNeedingReorder() {
 
   const { data, error } = await supabase
     .from("parts")
-    .select("*")
+    .select(PARTS_SELECT)
     .eq("company_id", ctx.companyId)
     .lte("quantity", supabase.raw("min_quantity"))
     .order("quantity", { ascending: true })

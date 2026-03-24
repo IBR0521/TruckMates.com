@@ -16,10 +16,13 @@ export async function getAccountSettings() {
     .from("users")
     .select("id, email, full_name, phone, role")
     .eq("id", ctx.userId)
-    .single()
+    .maybeSingle()
 
   if (error) {
     return { error: error.message, data: null }
+  }
+  if (!userData) {
+    return { error: "User not found", data: null }
   }
 
   return { data: userData, error: null }

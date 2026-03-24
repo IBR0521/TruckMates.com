@@ -12,6 +12,14 @@ import { checkCreatePermission, checkEditPermission, checkDeletePermission } fro
 const CUSTOMERS_SELECT =
   "id, company_id, name, company_name, email, phone, website, address_line1, address_line2, city, state, zip, country, tax_id, payment_terms, credit_limit, currency, customer_type, status, priority, notes, tags, primary_contact_name, primary_contact_email, primary_contact_phone, created_at, updated_at"
 
+/** `public.contacts` — supabase/crm_schema_complete.sql */
+const CONTACTS_SELECT =
+  "id, company_id, customer_id, vendor_id, first_name, last_name, title, email, phone, mobile, fax, preferred_contact_method, send_notifications, send_invoices, is_primary, role, notes, created_at, updated_at"
+
+/** `public.contact_history` — supabase/crm_schema_complete.sql */
+const CONTACT_HISTORY_SELECT =
+  "id, company_id, customer_id, vendor_id, contact_id, type, subject, message, direction, load_id, invoice_id, user_id, occurred_at, attachments, created_at"
+
 // Uses columns from `lib/supabase/types.ts` for `loads` + `invoices`.
 const LOADS_SELECT =
   "id, company_id, shipment_number, origin, destination, weight, weight_kg, contents, value, carrier_type, status, driver_id, truck_id, route_id, load_date, estimated_delivery, actual_delivery, coordinates, created_at, updated_at"
@@ -213,12 +221,16 @@ export async function createCustomer(formData: {
 
   // Check for duplicate company name if provided
   if (formData.company_name) {
-    const { data: existingCustomer } = await supabase
+    const { data: existingCustomer, error: existingCustomerError } = await supabase
       .from("customers")
       .select("id")
       .eq("company_id", ctx.companyId)
       .eq("company_name", sanitizeString(formData.company_name, 200))
-      .single()
+      .maybeSingle()
+
+    if (existingCustomerError) {
+      return { error: existingCustomerError.message, data: null }
+    }
 
     if (existingCustomer) {
       return { error: "Customer with this company name already exists", data: null }
@@ -227,12 +239,16 @@ export async function createCustomer(formData: {
 
   // Check for duplicate email if provided
   if (formData.email) {
-    const { data: existingEmail } = await supabase
+    const { data: existingEmail, error: existingEmailError } = await supabase
       .from("customers")
       .select("id")
       .eq("company_id", ctx.companyId)
       .eq("email", sanitizeEmail(formData.email))
-      .single()
+      .maybeSingle()
+
+    if (existingEmailError) {
+      return { error: existingEmailError.message, data: null }
+    }
 
     if (existingEmail) {
       return { error: "Customer with this email already exists", data: null }
@@ -324,12 +340,16 @@ export async function updateCustomer(
   }
 
   // Get current customer data for audit trail
-  const { data: currentCustomer } = await supabase
+  const { data: currentCustomer, error: currentCustomerError } = await supabase
     .from("customers")
     .select(CUSTOMERS_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (currentCustomerError) {
+    return { error: currentCustomerError.message, data: null }
+  }
 
   if (!currentCustomer) {
     return { error: "Customer not found", data: null }
@@ -463,12 +483,16 @@ export async function getCustomerLoads(customerId: string) {
   }
 
   // Get customer name first
-  const { data: customer } = await supabase
+  const { data: customer, error: customerError } = await supabase
     .from("customers")
     .select("name")
     .eq("id", customerId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (customerError) {
+    return { error: customerError.message, data: null }
+  }
 
   if (!customer) {
     return { error: "Customer not found", data: null }
@@ -525,12 +549,16 @@ export async function getCustomerInvoices(customerId: string) {
   }
 
   // Get customer name first
-  const { data: customer } = await supabase
+  const { data: customer, error: customerError } = await supabase
     .from("customers")
     .select("name")
     .eq("id", customerId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (customerError) {
+    return { error: customerError.message, data: null }
+  }
 
   if (!customer) {
     return { error: "Customer not found", data: null }
@@ -588,7 +616,7 @@ export async function getCustomerContacts(customerId: string) {
 
   const { data, error } = await supabase
     .from("contacts")
-    .select("*")
+    .select(CONTACTS_SELECT)
     .eq("company_id", ctx.companyId)
     .eq("customer_id", customerId)
     .order("is_primary", { ascending: false })
@@ -611,7 +639,7 @@ export async function getCustomerHistory(customerId: string) {
 
   const { data, error } = await supabase
     .from("contact_history")
-    .select("*")
+    .select(CONTACT_HISTORY_SELECT)
     .eq("company_id", ctx.companyId)
     .eq("customer_id", customerId)
     .order("occurred_at", { ascending: false })

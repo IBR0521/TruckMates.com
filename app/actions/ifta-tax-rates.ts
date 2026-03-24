@@ -50,7 +50,9 @@ export async function getIFTATaxRates(filters?: {
   try {
     let query = supabase
       .from("ifta_tax_rates")
-      .select("*")
+      .select(
+        "id, company_id, state_code, state_name, quarter, year, tax_rate_per_gallon, effective_date, end_date, notes, created_at, updated_at, created_by",
+      )
       .eq("company_id", ctx.companyId)
       .order("state_code", { ascending: true })
       .order("year", { ascending: false })

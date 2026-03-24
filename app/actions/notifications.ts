@@ -28,7 +28,7 @@ async function getResendClient(companyId?: string) {
         .from("company_integrations")
         .select("resend_enabled")
         .eq("company_id", companyId)
-        .single()
+        .maybeSingle()
 
       if (!integrations?.resend_enabled) {
         console.log("[RESEND] Integration not enabled for company")
@@ -63,7 +63,7 @@ export async function getNotificationPreferences() {
       .from("notification_preferences")
       .select(NOTIFICATION_PREFS_SELECT)
       .eq("user_id", ctx.userId)
-      .single()
+      .maybeSingle()
 
     if (error && error.code !== "PGRST116") { // PGRST116 = no rows returned
       return { error: error.message, data: null }
@@ -151,7 +151,7 @@ export async function sendNotification(
     .from("notification_preferences")
     .select(NOTIFICATION_PREFS_SELECT)
     .eq("user_id", userId)
-    .single()
+    .maybeSingle()
 
   if (!preferences) {
     return { sent: false, reason: "No preferences found" }
@@ -204,7 +204,7 @@ export async function sendNotification(
       .from("users")
       .select("email, full_name")
       .eq("id", userId)
-      .single()
+      .maybeSingle()
 
     if (userData?.email) {
       // FIXED: Get user's company_id to check integration settings
@@ -212,7 +212,7 @@ export async function sendNotification(
         .from("users")
         .select("company_id")
         .eq("id", userId)
-        .single()
+        .maybeSingle()
       
       // Get Resend client with company_id for proper integration check
       const resend = await getResendClient(userCompany?.company_id)
@@ -275,7 +275,7 @@ export async function sendNotification(
       .from("users")
       .select("full_name")
       .eq("id", userId)
-      .single()
+      .maybeSingle()
 
     // Generate notification title and message
     let notificationTitle = "Notification"
@@ -594,7 +594,7 @@ export async function sendTestEmail() {
     .from("users")
     .select("email, full_name")
     .eq("id", ctx.userId)
-    .single()
+    .maybeSingle()
 
   if (!userData?.email) {
     return { sent: false, error: "User email not found" }

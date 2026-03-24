@@ -223,7 +223,9 @@ export async function getAPIKeyUsage(apiKeyId: string, days: number = 7) {
 
   const { data: usage, error } = await supabase
     .from("api_key_usage")
-    .select("*")
+    .select(
+      "id, api_key_id, company_id, endpoint, method, status_code, response_time_ms, ip_address, user_agent, created_at",
+    )
     .eq("api_key_id", apiKeyId)
     .eq("company_id", ctx.companyId)
     .gte("created_at", startDate.toISOString())

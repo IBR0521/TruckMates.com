@@ -6,6 +6,14 @@ import { revalidatePath } from "next/cache"
 import { validateTruckData, sanitizeString } from "@/lib/validation"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
+/** Full row: `public.trucks` in supabase/schema.sql + supabase/trucks_schema_extended.sql */
+const TRUCK_FULL_SELECT = `
+  id, company_id, truck_number, make, model, year, vin, license_plate, status,
+  current_driver_id, current_location, fuel_level, mileage, created_at, updated_at,
+  height, serial_number, gross_vehicle_weight, license_expiry_date, inspection_date,
+  insurance_provider, insurance_policy_number, insurance_expiry_date, owner_name, cost, color, documents
+`
+
 export async function getTrucks(filters?: {
   status?: string
   limit?: number
@@ -60,7 +68,7 @@ export async function getTruck(id: string) {
 
     const { data: truck, error } = await supabase
       .from("trucks")
-      .select("*")
+      .select(TRUCK_FULL_SELECT)
       .eq("id", id)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
@@ -120,7 +128,7 @@ export async function createTruck(formData: {
   }
 
   // BUG-061 FIX: Check subscription plan limits before creating truck
-  const { data: subscription } = await supabase
+  const { data: subscription, error: subscriptionError } = await supabase
     .from("subscriptions")
     .select(`
       plan_id,
@@ -128,13 +136,17 @@ export async function createTruck(formData: {
     `)
     .eq("company_id", ctx.companyId)
     .eq("status", "active")
-    .single()
+    .maybeSingle()
+
+  if (subscriptionError) {
+    return { error: subscriptionError.message, data: null }
+  }
 
   if (subscription?.subscription_plans?.max_vehicles) {
     // Count current active trucks
     const { count: currentTruckCount } = await supabase
       .from("trucks")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("company_id", ctx.companyId)
       .eq("status", "active")
 
@@ -160,12 +172,16 @@ export async function createTruck(formData: {
   }
 
   // Check for duplicate truck number
-  const { data: existingTruck } = await supabase
+  const { data: existingTruck, error: existingTruckError } = await supabase
     .from("trucks")
     .select("id")
     .eq("company_id", ctx.companyId)
     .eq("truck_number", sanitizeString(formData.truck_number, 50).toUpperCase())
-    .single()
+    .maybeSingle()
+
+  if (existingTruckError) {
+    return { error: existingTruckError.message, data: null }
+  }
 
   if (existingTruck) {
     return { error: "Truck number already exists", data: null }
@@ -173,12 +189,16 @@ export async function createTruck(formData: {
 
   // Check for duplicate VIN if provided
   if (formData.vin) {
-    const { data: existingVIN } = await supabase
+    const { data: existingVIN, error: existingVINError } = await supabase
       .from("trucks")
       .select("id")
       .eq("company_id", ctx.companyId)
       .eq("vin", sanitizeString(formData.vin, 17).toUpperCase())
-      .single()
+      .maybeSingle()
+
+    if (existingVINError) {
+      return { error: existingVINError.message, data: null }
+    }
 
     if (existingVIN) {
       return { error: "VIN already exists in the system", data: null }
@@ -187,12 +207,16 @@ export async function createTruck(formData: {
 
   // Check for duplicate license plate if provided
   if (formData.license_plate) {
-    const { data: existingPlate } = await supabase
+    const { data: existingPlate, error: existingPlateError } = await supabase
       .from("trucks")
       .select("id")
       .eq("company_id", ctx.companyId)
       .eq("license_plate", sanitizeString(formData.license_plate, 20).toUpperCase())
-      .single()
+      .maybeSingle()
+
+    if (existingPlateError) {
+      return { error: existingPlateError.message, data: null }
+    }
 
     if (existingPlate) {
       return { error: "License plate already exists in the system", data: null }
@@ -328,7 +352,7 @@ export async function updateTruck(
   // Get current truck data for audit trail (with company_id verification)
   const { data: currentTruck } = await supabase
     .from("trucks")
-    .select("*")
+    .select(TRUCK_FULL_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
     .single()

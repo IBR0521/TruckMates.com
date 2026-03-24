@@ -8,6 +8,14 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+/** `public.driver_badges` — supabase/gamification.sql */
+const DRIVER_BADGES_SELECT =
+  "id, company_id, driver_id, badge_type, badge_name, badge_description, earned_date, metadata, created_at"
+
+/** `public.driver_performance_scores` — supabase/gamification.sql */
+const DRIVER_PERFORMANCE_SCORES_SELECT =
+  "id, company_id, driver_id, period_start, period_end, period_type, total_loads, on_time_deliveries, on_time_rate, total_miles, total_driving_hours, idle_time_hours, violations_count, hos_violations, speeding_events, hard_braking, safety_score, compliance_score, efficiency_score, overall_score, rank, created_at, updated_at"
+
 export interface DriverBadge {
   id: string
   driver_id: string
@@ -139,7 +147,7 @@ export async function getDriverBadges(driverId: string) {
   try {
     const { data: badges, error } = await supabase
       .from("driver_badges")
-      .select("*")
+      .select(DRIVER_BADGES_SELECT)
       .eq("driver_id", driverId)
       .eq("company_id", ctx.companyId)
       .order("earned_date", { ascending: false })
@@ -215,7 +223,7 @@ export async function getDriverPerformanceScore(
 
     const { data: score, error } = await supabase
       .from("driver_performance_scores")
-      .select("*")
+      .select(DRIVER_PERFORMANCE_SCORES_SELECT)
       .eq("driver_id", driverId)
       .eq("company_id", ctx.companyId)
       .eq("period_type", periodType)

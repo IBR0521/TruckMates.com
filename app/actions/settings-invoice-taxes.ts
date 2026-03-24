@@ -29,7 +29,9 @@ export async function getInvoiceTaxes(): Promise<{ data: InvoiceTax[] | null; er
 
   const { data, error } = await supabase
     .from("company_invoice_taxes")
-    .select("*")
+    .select(
+      "id, company_id, name, rate, tax_type, is_default, is_active, applies_to, state_codes, customer_ids, display_order, created_at, updated_at",
+    )
     .eq("company_id", ctx.companyId)
     .order("display_order", { ascending: true })
     .order("name", { ascending: true })

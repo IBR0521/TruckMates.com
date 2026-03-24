@@ -124,16 +124,16 @@ export async function getDashboardStats() {
     try {
       countResults = await Promise.all([
         // Total counts
-        supabase.from("drivers").select("*", { count: "exact", head: true }).eq("company_id", companyId),
-        supabase.from("drivers").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["active", "on_route"]),
-        supabase.from("trucks").select("*", { count: "exact", head: true }).eq("company_id", companyId),
-        supabase.from("trucks").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["available", "in_use"]),
-        supabase.from("routes").select("*", { count: "exact", head: true }).eq("company_id", companyId),
-        supabase.from("routes").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["in_progress", "scheduled"]),
-        supabase.from("loads").select("*", { count: "exact", head: true }).eq("company_id", companyId),
-        supabase.from("loads").select("*", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "in_transit"),
-        supabase.from("maintenance").select("*", { count: "exact", head: true }).eq("company_id", companyId),
-        supabase.from("maintenance").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["scheduled", "overdue"]),
+        supabase.from("drivers").select("id", { count: "exact", head: true }).eq("company_id", companyId),
+        supabase.from("drivers").select("id", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["active", "on_route"]),
+        supabase.from("trucks").select("id", { count: "exact", head: true }).eq("company_id", companyId),
+        supabase.from("trucks").select("id", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["available", "in_use"]),
+        supabase.from("routes").select("id", { count: "exact", head: true }).eq("company_id", companyId),
+        supabase.from("routes").select("id", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["in_progress", "scheduled"]),
+        supabase.from("loads").select("id", { count: "exact", head: true }).eq("company_id", companyId),
+        supabase.from("loads").select("id", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "in_transit"),
+        supabase.from("maintenance").select("id", { count: "exact", head: true }).eq("company_id", companyId),
+        supabase.from("maintenance").select("id", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["scheduled", "overdue"]),
       ])
     } catch (countError) {
       // Only log in development

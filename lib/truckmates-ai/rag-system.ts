@@ -6,6 +6,15 @@
 import { createClient } from "@/lib/supabase/server"
 import { LogisticsKnowledgeBase } from "./logistics-knowledge-base"
 
+const RAG_LOAD_SELECT =
+  "id, company_id, shipment_number, origin, destination, weight, weight_kg, contents, value, carrier_type, status, driver_id, truck_id, route_id, load_date, estimated_delivery, actual_delivery, coordinates, priority, urgency_score, created_at, updated_at"
+const RAG_DRIVER_SELECT =
+  "id, user_id, company_id, name, email, phone, license_number, license_expiry, status, truck_id, created_at, updated_at"
+const RAG_TRUCK_SELECT =
+  "id, company_id, truck_number, make, model, year, vin, license_plate, status, current_driver_id, current_location, fuel_level, mileage, height, serial_number, gross_vehicle_weight, license_expiry_date, inspection_date, insurance_provider, insurance_policy_number, insurance_expiry_date, owner_name, cost, color, documents, created_at, updated_at"
+const RAG_ROUTE_SELECT =
+  "id, company_id, name, origin, destination, distance, estimated_time, priority, driver_id, truck_id, status, waypoints, estimated_arrival, route_start_time, route_departure_time, created_at, updated_at"
+
 export interface RAGContext {
   loads: any[]
   drivers: any[]
@@ -78,7 +87,7 @@ export class TruckMatesRAG {
     
     const { data, error } = await supabase
       .from("loads")
-      .select("*")
+      .select(RAG_LOAD_SELECT)
       .eq("company_id", companyId)
       .or(`shipment_number.ilike.%${query}%,origin.ilike.%${query}%,destination.ilike.%${query}%,status.ilike.%${query}%`)
       .limit(limit)
@@ -104,7 +113,7 @@ export class TruckMatesRAG {
     
     const { data, error } = await supabase
       .from("drivers")
-      .select("*")
+      .select(RAG_DRIVER_SELECT)
       .eq("company_id", companyId)
       .or(`name.ilike.%${query}%,license_number.ilike.%${query}%,status.ilike.%${query}%`)
       .limit(limit)
@@ -130,7 +139,7 @@ export class TruckMatesRAG {
     
     const { data, error } = await supabase
       .from("trucks")
-      .select("*")
+      .select(RAG_TRUCK_SELECT)
       .eq("company_id", companyId)
       .or(`truck_number.ilike.%${query}%,make.ilike.%${query}%,model.ilike.%${query}%,status.ilike.%${query}%,current_location.ilike.%${query}%`)
       .limit(limit)
@@ -156,7 +165,7 @@ export class TruckMatesRAG {
     
     const { data, error } = await supabase
       .from("routes")
-      .select("*")
+      .select(RAG_ROUTE_SELECT)
       .eq("company_id", companyId)
       .or(`name.ilike.%${query}%,origin.ilike.%${query}%,destination.ilike.%${query}%,status.ilike.%${query}%`)
       .limit(limit)

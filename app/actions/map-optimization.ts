@@ -8,6 +8,10 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+/** `public.geofences` — geofencing_schema.sql + PostGIS columns from postgis_migration.sql */
+const GEOFENCE_MAP_SELECT =
+  "id, company_id, name, description, zone_type, center_latitude, center_longitude, radius_meters, polygon_coordinates, north_bound, south_bound, east_bound, west_bound, is_active, alert_on_entry, alert_on_exit, alert_on_dwell, dwell_time_minutes, assigned_trucks, assigned_routes, address, city, state, zip_code, created_at, updated_at, center_geography, polygon_geography"
+
 /**
  * Get vehicles within a map viewport using PostGIS
  * Much faster than fetching all vehicles and filtering client-side
@@ -136,7 +140,7 @@ export async function getGeofencesInViewport(
     // Filter geofences that intersect with viewport
     const { data: geofences, error } = await supabase
       .from("geofences")
-      .select("*")
+      .select(GEOFENCE_MAP_SELECT)
       .eq("company_id", finalCompanyId)
       .eq("is_active", true)
       .gte("center_latitude", south)
@@ -149,7 +153,7 @@ export async function getGeofencesInViewport(
       // Fallback to regular query
       const { data: fallbackGeofences } = await supabase
         .from("geofences")
-        .select("*")
+        .select(GEOFENCE_MAP_SELECT)
         .eq("company_id", finalCompanyId)
         .eq("is_active", true)
         .gte("center_latitude", south)

@@ -9,6 +9,14 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { calculateRemainingHOS } from "./eld-advanced"
 
+/** Fields for Gantt job from `public.loads` */
+const DISPATCH_TIMELINE_LOAD_SELECT =
+  "id, shipment_number, load_date, estimated_delivery, origin, destination, status, priority, urgency_score"
+
+/** Fields for Gantt job from `public.routes` — base + route_stops_schema_safe timing columns */
+const DISPATCH_TIMELINE_ROUTE_SELECT =
+  "id, name, origin, destination, status, route_start_time, route_departure_time, estimated_arrival, estimated_time"
+
 export interface TimelineJob {
   id: string
   type: "load" | "route"
@@ -529,12 +537,16 @@ export async function checkAssignmentConflicts(
     let newJob: TimelineJob | null = null
 
     if (loadId) {
-      const { data: load } = await supabase
+      const { data: load, error: loadError } = await supabase
         .from("loads")
-        .select("*")
+        .select(DISPATCH_TIMELINE_LOAD_SELECT)
         .eq("id", loadId)
         .eq("company_id", ctx.companyId) // V3-004: Prevent cross-tenant load access
-        .single()
+        .maybeSingle()
+
+      if (loadError) {
+        return { error: loadError.message, data: null }
+      }
 
       if (load) {
         const loadDate = load.load_date ? new Date(load.load_date) : new Date()
@@ -568,12 +580,16 @@ export async function checkAssignmentConflicts(
         }
       }
     } else if (routeId) {
-      const { data: route } = await supabase
+      const { data: route, error: routeError } = await supabase
         .from("routes")
-        .select("*")
+        .select(DISPATCH_TIMELINE_ROUTE_SELECT)
         .eq("id", routeId)
         .eq("company_id", ctx.companyId) // V3-004: Prevent cross-tenant route access
-        .single()
+        .maybeSingle()
+
+      if (routeError) {
+        return { error: routeError.message, data: null }
+      }
 
       if (route) {
         const startDate = route.route_start_time 

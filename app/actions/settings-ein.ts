@@ -83,7 +83,7 @@ export async function getEINNumbers(): Promise<{ data: any[] | null; error: stri
 
   const { data, error } = await supabase
     .from("company_ein_numbers")
-    .select("*")
+    .select("id, company_id, ein, created_at, updated_at")
     .eq("company_id", ctx.companyId)
     .order("created_at", { ascending: false })
 

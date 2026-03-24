@@ -331,7 +331,9 @@ export async function getStateCrossings(params: {
   try {
     let query = supabase
       .from("state_crossings")
-      .select("*")
+      .select(
+        "id, company_id, truck_id, driver_id, eld_device_id, latitude, longitude, location_geography, address, state_code, state_name, crossing_type, previous_state_code, previous_state_name, route_id, load_id, timestamp, speed, odometer, created_at",
+      )
       .eq("company_id", ctx.companyId)
       .order("timestamp", { ascending: false })
 

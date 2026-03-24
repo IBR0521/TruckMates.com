@@ -217,7 +217,7 @@ export async function getFeedbackItem(id: string) {
 
   const { data: feedbackItem, error } = await supabase
     .from("feedback")
-    .select("*")
+    .select("id, user_id, company_id, type, category, title, message, priority, status, created_at, updated_at")
     .eq("id", id)
     .eq("user_id", ctx.userId) // Ensure user can only access their own feedback
     .single()

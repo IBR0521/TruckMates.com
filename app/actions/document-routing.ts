@@ -32,7 +32,7 @@ export async function linkDocumentToRecord(
       .select("id, company_id, type") // FIXED: Include type to check if it should be preserved
       .eq("id", documentId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (docError || !document) {
       return { success: false, error: "Document not found" }
@@ -47,7 +47,7 @@ export async function linkDocumentToRecord(
           .select("id")
           .eq("id", recordId)
           .eq("company_id", ctx.companyId)
-          .single()
+          .maybeSingle()
         recordBelongsToCompany = !!driverCheck
         break
       case "vehicle":
@@ -56,7 +56,7 @@ export async function linkDocumentToRecord(
           .select("id")
           .eq("id", recordId)
           .eq("company_id", ctx.companyId)
-          .single()
+          .maybeSingle()
         recordBelongsToCompany = !!truckCheck
         break
       case "load":
@@ -65,7 +65,7 @@ export async function linkDocumentToRecord(
           .select("id")
           .eq("id", recordId)
           .eq("company_id", ctx.companyId)
-          .single()
+          .maybeSingle()
         recordBelongsToCompany = !!loadCheck
         break
       case "route":
@@ -74,7 +74,7 @@ export async function linkDocumentToRecord(
           .select("id")
           .eq("id", recordId)
           .eq("company_id", ctx.companyId)
-          .single()
+          .maybeSingle()
         recordBelongsToCompany = !!routeCheck
         break
       case "invoice":
@@ -83,7 +83,7 @@ export async function linkDocumentToRecord(
           .select("id")
           .eq("id", recordId)
           .eq("company_id", ctx.companyId)
-          .single()
+          .maybeSingle()
         recordBelongsToCompany = !!invoiceCheck
         break
       case "expense":
@@ -92,7 +92,7 @@ export async function linkDocumentToRecord(
           .select("id")
           .eq("id", recordId)
           .eq("company_id", ctx.companyId)
-          .single()
+          .maybeSingle()
         recordBelongsToCompany = !!expenseCheck
         break
       case "maintenance":
@@ -101,7 +101,7 @@ export async function linkDocumentToRecord(
           .select("id")
           .eq("id", recordId)
           .eq("company_id", ctx.companyId)
-          .single()
+          .maybeSingle()
         recordBelongsToCompany = !!maintenanceCheck
         break
     }
@@ -161,7 +161,7 @@ export async function linkDocumentToRecord(
           .select("truck_id")
           .eq("id", recordId)
           .eq("company_id", ctx.companyId) // FIXED: Add company_id filter
-          .single()
+          .maybeSingle()
         if (maintenanceRecord?.truck_id) {
           updateData.truck_id = maintenanceRecord.truck_id
         }

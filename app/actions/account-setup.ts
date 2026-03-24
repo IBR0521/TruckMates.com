@@ -26,10 +26,13 @@ export async function getSetupStatus() {
       .from("companies")
       .select("id, name, address, phone, setup_complete, setup_completed_at, setup_data")
       .eq("id", company_id)
-      .single()
+      .maybeSingle()
 
     if (error) {
       return { error: error.message, data: null }
+    }
+    if (!company) {
+      return { error: "Company not found", data: null }
     }
 
     const hasBasicInfo = !!(company?.address && company?.phone)

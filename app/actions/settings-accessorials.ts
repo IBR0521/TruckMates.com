@@ -29,7 +29,9 @@ export async function getAccessorials(): Promise<{ data: Accessorial[] | null; e
 
   const { data, error } = await supabase
     .from("company_accessorials")
-    .select("*")
+    .select(
+      "id, company_id, name, code, description, default_amount, charge_type, is_taxable, is_active, is_default, category, display_order, created_at, updated_at",
+    )
     .eq("company_id", ctx.companyId)
     .order("display_order", { ascending: true })
     .order("name", { ascending: true })
@@ -56,9 +58,9 @@ export async function createAccessorial(accessorial: Omit<Accessorial, "id">): P
     .from("users")
     .select("role, company_id")
     .eq("id", ctx.userId)
-    .single()
+    .maybeSingle()
 
-  if (userError) {
+  if (userError || !userData) {
     return { error: userError?.message || "No company found", data: null }
   }
 
@@ -117,9 +119,9 @@ export async function updateAccessorial(id: string, accessorial: Partial<Accesso
     .from("users")
     .select("role, company_id")
     .eq("id", ctx.userId)
-    .single()
+    .maybeSingle()
 
-  if (userError) {
+  if (userError || !userData) {
     return { error: userError?.message || "No company found", data: null }
   }
 
@@ -133,7 +135,7 @@ export async function updateAccessorial(id: string, accessorial: Partial<Accesso
     .from("company_accessorials")
     .select("company_id")
     .eq("id", id)
-    .single()
+    .maybeSingle()
 
   if (checkError || !existing || existing.company_id !== ctx.companyId) {
     return { error: "Accessorial not found or access denied", data: null }
@@ -184,9 +186,9 @@ export async function deleteAccessorial(id: string): Promise<{ error: string | n
     .from("users")
     .select("role, company_id")
     .eq("id", ctx.userId)
-    .single()
+    .maybeSingle()
 
-  if (userError) {
+  if (userError || !userData) {
     return { error: userError?.message || "No company found" }
   }
 
@@ -202,7 +204,7 @@ export async function deleteAccessorial(id: string): Promise<{ error: string | n
     .from("company_accessorials")
     .select("company_id")
     .eq("id", id)
-    .single()
+    .maybeSingle()
 
   if (checkError || !existing || existing.company_id !== ctx.companyId) {
     return { error: "Accessorial not found or access denied" }

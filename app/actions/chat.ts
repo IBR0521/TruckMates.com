@@ -5,6 +5,20 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { handleDbError } from "@/lib/db-helpers"
 
+/** Matches `public.chat_threads` in supabase/trucklogics_features_schema.sql */
+const CHAT_THREAD_SELECT = `
+  id, company_id, load_id, route_id, driver_id, thread_type, title,
+  participants, last_message_at, last_message_by, unread_count,
+  created_at, updated_at
+`
+
+/** Matches `public.chat_messages` in supabase/trucklogics_features_schema.sql */
+const CHAT_MESSAGE_SELECT = `
+  id, thread_id, company_id, sender_id, message, message_type, attachments,
+  is_read, read_by, is_edited, edited_at, is_deleted, deleted_at,
+  created_at, updated_at
+`
+
 /**
  * Get chat threads for user
  */
@@ -23,9 +37,7 @@ export async function getChatThreads(filters?: {
 
     let query = supabase
       .from("chat_threads")
-      .select(
-        "id, company_id, load_id, route_id, driver_id, thread_type, title, participants, last_message_at, last_message_by",
-      )
+      .select(CHAT_THREAD_SELECT)
       .eq("company_id", ctx.companyId)
       // SECURITY: Only threads where the current user is a participant
       .contains("participants", [ctx.userId])
@@ -82,7 +94,7 @@ export async function getOrCreateThread(formData: {
   // Check if thread already exists
   let query = supabase
     .from("chat_threads")
-    .select("*")
+    .select(CHAT_THREAD_SELECT)
     .eq("company_id", ctx.companyId)
     .eq("thread_type", formData.thread_type)
 
@@ -141,7 +153,7 @@ export async function getChatMessages(threadId: string, limit: number = 50) {
   // Verify user has access to thread
   const { data: thread } = await supabase
     .from("chat_threads")
-    .select("*")
+    .select(CHAT_THREAD_SELECT)
     .eq("id", threadId)
     .eq("company_id", ctx.companyId)
     .single()
@@ -158,7 +170,7 @@ export async function getChatMessages(threadId: string, limit: number = 50) {
   // Get messages
   const { data, error } = await supabase
     .from("chat_messages")
-    .select("*")
+    .select(CHAT_MESSAGE_SELECT)
     .eq("thread_id", threadId)
     .eq("is_deleted", false)
     .order("created_at", { ascending: false })
@@ -202,7 +214,7 @@ export async function sendChatMessage(formData: {
   // Verify user has access to thread
   const { data: thread } = await supabase
     .from("chat_threads")
-    .select("*")
+    .select(CHAT_THREAD_SELECT)
     .eq("id", formData.thread_id)
     .eq("company_id", ctx.companyId)
     .single()

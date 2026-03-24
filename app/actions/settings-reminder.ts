@@ -13,11 +13,13 @@ export async function getReminderSettings() {
 
   const { data, error } = await supabase
     .from("company_reminder_settings")
-    .select("*")
+    .select(
+      "id, company_id, email_enabled, sms_enabled, maintenance_reminders, license_expiry_reminders, insurance_expiry_reminders, invoice_reminders, load_reminders, route_reminders, days_before_reminder, reminder_frequency, created_at, updated_at",
+    )
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
-  if (error && error.code !== "PGRST116") {
+  if (error) {
     return { error: error.message, data: null }
   }
 

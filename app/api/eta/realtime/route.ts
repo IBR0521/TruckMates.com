@@ -35,11 +35,18 @@ export async function POST(request: NextRequest) {
     }
 
     // SEC-002: Verify user owns the route (company_id check)
-    const { data: userData } = await supabase
+    const { data: userData, error: userDataError } = await supabase
       .from("users")
       .select("company_id")
       .eq("id", user.id)
-      .single()
+      .maybeSingle()
+
+    if (userDataError) {
+      return NextResponse.json(
+        { error: userDataError.message || "Failed to verify user company" },
+        { status: 500 }
+      )
+    }
 
     if (!userData?.company_id) {
       return NextResponse.json(
@@ -48,12 +55,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { data: routeData } = await supabase
+    const { data: routeData, error: routeDataError } = await supabase
       .from("routes")
       .select("company_id")
       .eq("id", route_id)
       .eq("company_id", userData.company_id)
-      .single()
+      .maybeSingle()
+
+    if (routeDataError) {
+      return NextResponse.json(
+        { error: routeDataError.message || "Failed to verify route ownership" },
+        { status: 500 }
+      )
+    }
 
     if (!routeData) {
       return NextResponse.json(

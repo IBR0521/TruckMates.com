@@ -49,12 +49,6 @@ export function SettingsDropdown() {
       description: "Invoice settings and templates",
     },
     {
-      icon: Landmark,
-      label: "Factoring",
-      href: "/dashboard/settings/factoring",
-      description: "Email invoice packets to your factoring company",
-    },
-    {
       icon: Plug,
       label: "Integration",
       href: "/dashboard/settings/integration",

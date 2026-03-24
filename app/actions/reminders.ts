@@ -6,6 +6,17 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { sendNotification } from "./notifications"
 import { handleDbError } from "@/lib/db-helpers"
 
+/** Matches `public.reminders` in supabase/trucklogics_features_schema.sql */
+const REMINDERS_SELECT = `
+  id, company_id, title, description, reminder_type,
+  due_date, due_time, reminder_date, reminder_time,
+  is_recurring, recurrence_pattern, recurrence_interval,
+  truck_id, driver_id, load_id, invoice_id,
+  status, completed_at, completed_by,
+  notify_users, send_email, send_sms,
+  created_at, updated_at
+`
+
 /**
  * Get reminders
  */
@@ -24,7 +35,7 @@ export async function getReminders(filters?: {
 
     let query = supabase
       .from("reminders")
-      .select("*")
+      .select(REMINDERS_SELECT)
       .eq("company_id", ctx.companyId)
       .order("due_date", { ascending: true })
 
@@ -132,7 +143,7 @@ export async function createReminder(formData: {
   // CRITICAL FIX 6: Read company reminder settings
   const { data: settings } = await supabase
     .from("company_reminder_settings")
-    .select("*")
+    .select("days_before_reminder")
     .eq("company_id", ctx.companyId)
     .single()
 
@@ -234,7 +245,7 @@ export async function completeReminder(id: string) {
     // Get reminder to check if recurring
     const { data: reminder, error: reminderError } = await supabase
       .from("reminders")
-      .select("*")
+      .select(REMINDERS_SELECT)
       .eq("id", id)
       .eq("company_id", ctx.companyId)
       .single()
@@ -395,7 +406,7 @@ export async function getOverdueReminders() {
 
     const { data, error } = await supabase
       .from("reminders")
-      .select("*")
+      .select(REMINDERS_SELECT)
       .eq("company_id", ctx.companyId)
       .eq("status", "pending")
       .lt("due_date", today)

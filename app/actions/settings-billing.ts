@@ -13,7 +13,9 @@ export async function getBillingInfo() {
 
   const { data, error } = await supabase
     .from("company_billing_info")
-    .select("*")
+    .select(
+      "id, company_id, billing_company_name, billing_email, billing_phone, billing_address, tax_id, tax_exempt, payment_method, payment_terms, billing_notes, created_at, updated_at",
+    )
     .eq("company_id", ctx.companyId)
     .single()
 
@@ -82,11 +84,15 @@ export async function updateBillingInfo(billing: {
   if (billing.billing_notes !== undefined) updateData.billing_notes = billing.billing_notes
 
   // Check if billing info exists
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("company_billing_info")
     .select("id")
     .eq("company_id", result.company_id)
     .single()
+
+  if (existingError && existingError.code !== "PGRST116") {
+    return { error: existingError.message, success: false }
+  }
 
   if (existing) {
     // Update existing

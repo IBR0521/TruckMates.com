@@ -9,6 +9,10 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+/** `public.eta_updates` — supabase/realtime_eta.sql */
+const ETA_UPDATES_SELECT =
+  "id, company_id, route_id, load_id, truck_id, driver_id, current_latitude, current_longitude, current_location, current_speed, distance_traveled_meters, distance_remaining_meters, progress_percentage, estimated_arrival, estimated_duration_minutes, average_speed_mph, confidence, confidence_reason, timestamp, created_at"
+
 export interface RealtimeETA {
   estimated_arrival: string
   distance_remaining_meters: number
@@ -115,12 +119,16 @@ export async function updateRouteETA(routeId: string) {
 
   try {
     // Get route with driver info
-    const { data: route } = await supabase
+    const { data: route, error: routeError } = await supabase
       .from("routes")
       .select("truck_id, driver_id, traffic_last_updated, company_id")
       .eq("id", routeId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
+
+    if (routeError) {
+      return { error: routeError.message, data: null }
+    }
 
     if (!route) {
       return { error: "Route not found or access denied", data: null }
@@ -144,13 +152,17 @@ export async function updateRouteETA(routeId: string) {
     }
 
     // Get current truck location
-    const { data: latestLocation } = await supabase
+    const { data: latestLocation, error: latestLocationError } = await supabase
       .from("eld_locations")
       .select("latitude, longitude, speed, timestamp")
       .eq("truck_id", route.truck_id)
       .order("timestamp", { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
+
+    if (latestLocationError) {
+      return { error: latestLocationError.message, data: null }
+    }
 
     if (!latestLocation) {
       return { error: "No location data available", data: null }
@@ -225,13 +237,17 @@ export async function getRouteETA(routeId: string) {
     }
 
     // Get latest ETA update
-    const { data: latestUpdate } = await supabase
+    const { data: latestUpdate, error: latestUpdateError } = await supabase
       .from("eta_updates")
-      .select("*")
+      .select(ETA_UPDATES_SELECT)
       .eq("route_id", routeId)
       .order("timestamp", { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
+
+    if (latestUpdateError) {
+      return { error: latestUpdateError.message, data: null }
+    }
 
     return {
       data: {
@@ -264,7 +280,7 @@ export async function getETAHistory(
   try {
     const { data: updates, error } = await supabase
       .from("eta_updates")
-      .select("*")
+      .select(ETA_UPDATES_SELECT)
       .eq("route_id", routeId)
       .eq("company_id", ctx.companyId)
       .order("timestamp", { ascending: false })
@@ -292,12 +308,16 @@ export async function getLoadETA(loadId: string) {
 
   try {
     // Get load's route
-    const { data: load } = await supabase
+    const { data: load, error: loadError } = await supabase
       .from("loads")
       .select("route_id")
       .eq("id", loadId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
+
+    if (loadError) {
+      return { error: loadError.message, data: null }
+    }
 
     if (!load || !load.route_id) {
       return { error: "Load has no associated route", data: null }

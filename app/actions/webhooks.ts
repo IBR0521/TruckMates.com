@@ -5,6 +5,13 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import crypto from "crypto"
 
+/** Matches `webhooks` in supabase/webhooks_schema.sql */
+const WEBHOOK_SELECT = "id, company_id, url, events, secret, active, description, created_at, updated_at"
+
+/** Matches `webhook_deliveries` in supabase/webhooks_schema.sql */
+const WEBHOOK_DELIVERY_SELECT =
+  "id, webhook_id, event_type, payload, status, response_code, response_body, error_message, attempts, max_attempts, delivered_at, created_at, next_retry_at"
+
 // Webhook event types
 export type WebhookEventType =
   | "load.created"
@@ -37,7 +44,7 @@ export async function getWebhooks() {
 
     const { data, error } = await supabase
       .from("webhooks")
-      .select("*")
+      .select(WEBHOOK_SELECT)
       .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
@@ -65,7 +72,7 @@ export async function getWebhook(id: string) {
 
     const { data, error } = await supabase
       .from("webhooks")
-      .select("*")
+      .select(WEBHOOK_SELECT)
       .eq("id", id)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
@@ -143,12 +150,16 @@ export async function createWebhook(formData: {
   const secret = formData.secret || crypto.randomBytes(32).toString("hex")
 
   // Check for duplicate URL
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("webhooks")
     .select("id")
     .eq("company_id", ctx.companyId)
     .eq("url", formData.url)
-    .single()
+    .maybeSingle()
+
+  if (existingError) {
+    return { error: existingError.message, data: null }
+  }
 
   if (existing) {
     return { error: "Webhook with this URL already exists", data: null }
@@ -194,12 +205,16 @@ export async function updateWebhook(
   }
 
   // Check if webhook exists
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("webhooks")
     .select("id, url")
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (existingError) {
+    return { error: existingError.message, data: null }
+  }
 
   if (!existing) {
     return { error: "Webhook not found", data: null }
@@ -214,13 +229,17 @@ export async function updateWebhook(
     }
 
     // Check for duplicate URL
-    const { data: duplicate } = await supabase
+    const { data: duplicate, error: duplicateError } = await supabase
       .from("webhooks")
       .select("id")
       .eq("company_id", ctx.companyId)
       .eq("url", formData.url)
       .neq("id", id)
-      .single()
+      .maybeSingle()
+
+    if (duplicateError) {
+      return { error: duplicateError.message, data: null }
+    }
 
     if (duplicate) {
       return { error: "Webhook with this URL already exists", data: null }
@@ -290,11 +309,15 @@ export async function deliverWebhook(
   const supabase = await createClient()
 
   // Get webhook
-  const { data: webhook } = await supabase
+  const { data: webhook, error: webhookError } = await supabase
     .from("webhooks")
-    .select("*")
+    .select(WEBHOOK_SELECT)
     .eq("id", webhookId)
-    .single()
+    .maybeSingle()
+
+  if (webhookError) {
+    return { success: false, error: webhookError.message }
+  }
 
   if (!webhook || !webhook.active) {
     return { success: false, error: "Webhook not found or inactive" }
@@ -466,12 +489,16 @@ export async function getWebhookDeliveries(webhookId: string, limit: number = 50
   }
 
   // Verify webhook belongs to company
-  const { data: webhook } = await supabase
+  const { data: webhook, error: webhookError } = await supabase
     .from("webhooks")
     .select("id")
     .eq("id", webhookId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (webhookError) {
+    return { error: webhookError.message, data: null }
+  }
 
   if (!webhook) {
     return { error: "Webhook not found", data: null }
@@ -479,7 +506,7 @@ export async function getWebhookDeliveries(webhookId: string, limit: number = 50
 
   const { data, error } = await supabase
     .from("webhook_deliveries")
-    .select("*")
+    .select(WEBHOOK_DELIVERY_SELECT)
     .eq("webhook_id", webhookId)
     .order("created_at", { ascending: false })
     .limit(limit)
@@ -500,11 +527,15 @@ export async function retryWebhookDelivery(deliveryId: string) {
   }
 
   // Get delivery record
-  const { data: delivery } = await supabase
+  const { data: delivery, error: deliveryError } = await supabase
     .from("webhook_deliveries")
-    .select("*, webhooks!inner(company_id)")
+    .select(`${WEBHOOK_DELIVERY_SELECT}, webhooks!inner(company_id)`)
     .eq("id", deliveryId)
-    .single()
+    .maybeSingle()
+
+  if (deliveryError) {
+    return { error: deliveryError.message, data: null }
+  }
 
   if (!delivery) {
     return { error: "Delivery not found", data: null }
@@ -555,12 +586,16 @@ export async function testWebhook(webhookId: string) {
   }
 
   // Verify webhook belongs to company
-  const { data: webhook } = await supabase
+  const { data: webhook, error: webhookError } = await supabase
     .from("webhooks")
     .select("id")
     .eq("id", webhookId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (webhookError) {
+    return { error: webhookError.message, data: null }
+  }
 
   if (!webhook) {
     return { error: "Webhook not found", data: null }

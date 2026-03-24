@@ -232,7 +232,9 @@ export async function closeIdleSession(sessionId: string) {
   try {
     const { data: session, error: fetchError } = await supabase
       .from("idle_time_sessions")
-      .select("*")
+      .select(
+        "id, company_id, truck_id, driver_id, start_time, end_time, duration_minutes, location_latitude, location_longitude, idle_type, engine_status, speed, estimated_fuel_gallons, estimated_fuel_cost, created_at, updated_at",
+      )
       .eq("id", sessionId)
       .eq("company_id", ctx.companyId)
       .single()

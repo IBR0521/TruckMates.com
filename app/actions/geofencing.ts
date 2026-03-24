@@ -6,6 +6,14 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { validateRequiredString, sanitizeString } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
+/** `public.geofences` — geofencing_schema.sql + PostGIS columns from postgis_migration.sql */
+const GEOFENCE_FULL_SELECT =
+  "id, company_id, name, description, zone_type, center_latitude, center_longitude, radius_meters, polygon_coordinates, north_bound, south_bound, east_bound, west_bound, is_active, alert_on_entry, alert_on_exit, alert_on_dwell, dwell_time_minutes, assigned_trucks, assigned_routes, address, city, state, zip_code, created_at, updated_at, center_geography, polygon_geography"
+
+/** `public.zone_visits` — supabase/geofencing_schema.sql */
+const ZONE_VISITS_SELECT =
+  "id, company_id, geofence_id, truck_id, driver_id, route_id, event_type, latitude, longitude, timestamp, entry_timestamp, exit_timestamp, duration_minutes, speed, heading, created_at"
+
 /**
  * Check if a point is inside a geofence using PostGIS (database-level)
  * Falls back to client-side calculation if PostGIS function fails
@@ -130,7 +138,7 @@ export async function getGeofences(filters?: {
   try {
     let query = supabase
       .from("geofences")
-      .select("*")
+      .select(GEOFENCE_FULL_SELECT)
       .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
@@ -174,13 +182,16 @@ export async function getGeofence(id: string) {
   try {
     const { data: geofence, error } = await supabase
       .from("geofences")
-      .select("*")
+      .select(GEOFENCE_FULL_SELECT)
       .eq("id", id)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (error) {
       return { error: error.message, data: null }
+    }
+    if (!geofence) {
+      return { error: "Geofence not found", data: null }
     }
 
     return { data: geofence, error: null }
@@ -468,12 +479,16 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
 
   try {
     // Get truck info
-    const { data: truck } = await supabase
+    const { data: truck, error: truckError } = await supabase
       .from("trucks")
       .select("id, driver_id, company_id")
       .eq("id", truckId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
+
+    if (truckError) {
+      return { error: truckError.message, data: null }
+    }
 
     if (!truck) {
       return { error: "Truck not found", data: null }
@@ -483,7 +498,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
     // Use JSONB contains operator for efficient filtering
     let geofenceQuery = supabase
       .from("geofences")
-      .select("*")
+      .select(GEOFENCE_FULL_SELECT)
       .eq("company_id", ctx.companyId)
       .eq("is_active", true)
     
@@ -503,7 +518,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
     const geofenceIds = geofences.map((g: { id: string; [key: string]: any }) => g.id)
     const { data: allRecentVisits } = await supabase
       .from("zone_visits")
-      .select("*")
+      .select(ZONE_VISITS_SELECT)
       .eq("truck_id", truckId)
       .in("geofence_id", geofenceIds)
       .order("timestamp", { ascending: false })
@@ -618,12 +633,16 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
         // MEDIUM FIX: Update entry visit with exit info - verify ownership before update
         if (recentVisit) {
           // Verify the visit belongs to this company before updating
-          const { data: visitCheck } = await supabase
+          const { data: visitCheck, error: visitCheckError } = await supabase
             .from("zone_visits")
             .select("id, company_id")
             .eq("id", recentVisit.id)
             .eq("company_id", ctx.companyId)
-            .single()
+            .maybeSingle()
+
+          if (visitCheckError) {
+            return { error: visitCheckError.message, data: null }
+          }
           
           if (visitCheck) {
             await supabase

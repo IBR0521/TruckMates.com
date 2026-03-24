@@ -128,7 +128,9 @@ export async function sendSMSNotification(
   // Get user's notification preferences
   const { data: preferences } = await supabase
     .from("notification_preferences")
-    .select("*")
+    .select(
+      "id, user_id, sms_alerts, route_updates, load_updates, maintenance_alerts, payment_reminders",
+    )
     .eq("user_id", userId)
     .single()
 
