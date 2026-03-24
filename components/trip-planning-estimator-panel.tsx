@@ -133,8 +133,11 @@ export function TripPlanningEstimatorPanel({
     try {
       const result = await getTripPlanningEstimate({
         origin: routingOrigin.trim(),
-        destination: routingDestination.trim(),
-        deliveryStopAddresses: stopsForApi,
+        destination:
+          (stopsForApi && stopsForApi.length > 0
+            ? stopsForApi[stopsForApi.length - 1]
+            : routingDestination
+          ).trim(),
         mpg: mpgNum,
         truck: {
           grossWeightLbs: Number.isFinite(gross) && gross > 0 ? gross : undefined,
