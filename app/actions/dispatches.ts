@@ -296,7 +296,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
     .from("routes")
     .select("status, company_id")
     .eq("id", routeId)
-    .eq("company_id", ctx.companyId)
+    .eq("company_id", userData.company_id)
     .maybeSingle()
 
   if (routeError) {
@@ -319,7 +319,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
       .from("drivers")
       .select("id")
       .eq("id", driverId)
-      .eq("company_id", ctx.companyId)
+      .eq("company_id", userData.company_id)
       .maybeSingle()
     
     if (driverError) {
@@ -338,7 +338,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
       .from("trucks")
       .select("id")
       .eq("id", truckId)
-      .eq("company_id", ctx.companyId)
+      .eq("company_id", userData.company_id)
       .maybeSingle()
     
     if (truckError) {
@@ -363,7 +363,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
     .from("routes")
     .update(updateData)
     .eq("id", routeId)
-    .eq("company_id", ctx.companyId)
+    .eq("company_id", userData.company_id)
     .select(`
       id,
       name,
@@ -401,7 +401,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
   if (driverId) {
     try {
       const { triggerWebhook } = await import("./webhooks")
-      await triggerWebhook(ctx.companyId, "driver.assigned", {
+      await triggerWebhook(userData.company_id, "driver.assigned", {
         route_id: routeId,
         driver_id: driverId,
         truck_id: truckId,
