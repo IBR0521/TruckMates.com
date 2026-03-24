@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { mapLegacyRole, type EmployeeRole } from "./roles"
 import {
   canViewFeature,
@@ -11,6 +12,10 @@ import {
 } from "./feature-permissions"
 import { getCachedAuthContext } from "./auth/server"
 
+function permissionCheckErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Permission check failed"
+}
+
 /** Uses cached auth context so auth + user lookup run once per request across all permission checks. */
 export async function getUserRole(): Promise<EmployeeRole | null> {
   try {
@@ -18,8 +23,8 @@ export async function getUserRole(): Promise<EmployeeRole | null> {
     if (error || !user) return null
     const role = user.role || null
     return role ? (mapLegacyRole(role) as EmployeeRole) : null
-  } catch (error) {
-    console.error("Error getting user role:", error)
+  } catch (error: unknown) {
+    Sentry.captureException(error)
     return null
   }
 }
@@ -42,11 +47,11 @@ export async function checkViewPermission(feature: FeatureCategory): Promise<{
       role,
       error: allowed ? null : "You don't have permission to view this feature",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       allowed: false,
       role: null,
-      error: error?.message || "Permission check failed",
+      error: permissionCheckErrorMessage(error),
     }
   }
 }
@@ -68,11 +73,11 @@ export async function checkCreatePermission(feature: FeatureCategory): Promise<{
       role,
       error: allowed ? null : "You don't have permission to create this feature",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       allowed: false,
       role: null,
-      error: error?.message || "Permission check failed",
+      error: permissionCheckErrorMessage(error),
     }
   }
 }
@@ -94,11 +99,11 @@ export async function checkEditPermission(feature: FeatureCategory): Promise<{
       role,
       error: allowed ? null : "You don't have permission to edit this feature",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       allowed: false,
       role: null,
-      error: error?.message || "Permission check failed",
+      error: permissionCheckErrorMessage(error),
     }
   }
 }
@@ -120,11 +125,11 @@ export async function checkDeletePermission(feature: FeatureCategory): Promise<{
       role,
       error: allowed ? null : "You don't have permission to delete this feature",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       allowed: false,
       role: null,
-      error: error?.message || "Permission check failed",
+      error: permissionCheckErrorMessage(error),
     }
   }
 }
@@ -146,11 +151,11 @@ export async function checkManagePermission(feature: FeatureCategory): Promise<{
       role,
       error: allowed ? null : "You don't have permission to manage this feature",
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       allowed: false,
       role: null,
-      error: error?.message || "Permission check failed",
+      error: permissionCheckErrorMessage(error),
     }
   }
 }
