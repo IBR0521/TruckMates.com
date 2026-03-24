@@ -193,10 +193,11 @@ export default function AddLoadPage() {
       setIsCalculatingMiles(true)
       try {
         if (stops.length > 0) {
+          const finalStop = stops[stops.length - 1]
+          if (!finalStop) return
           const res = await getTripPlanningEstimate({
             origin,
-            destination: "",
-            deliveryStopAddresses: stops,
+            destination: finalStop,
             mpg: 6.5,
           })
           if (cancelled || res.error || !res.data) return
