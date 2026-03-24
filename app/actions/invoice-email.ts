@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getCompanySettings } from "./number-formats"
+import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
 import { escapeHtml } from "@/lib/html-escape"
 
@@ -12,7 +13,7 @@ export async function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY
   
   if (!apiKey) {
-    console.error("[RESEND] Platform API key not configured")
+    Sentry.captureMessage("[RESEND] Platform API key not configured", "error")
     return null
   }
 
@@ -21,11 +22,16 @@ export async function getResendClient() {
     const supabase = await createClient()
     const ctx = await getCachedAuthContext()
     if (ctx.companyId) {
-      const { data: integrations } = await supabase
+      const { data: integrations, error: integrationsError } = await supabase
         .from("company_integrations")
         .select("resend_enabled")
         .eq("company_id", ctx.companyId)
-        .single()
+        .maybeSingle()
+
+      if (integrationsError) {
+        Sentry.captureException(integrationsError)
+        return null
+      }
 
       if (!integrations?.resend_enabled) {
         console.log("[RESEND] Integration not enabled for company")
@@ -33,7 +39,7 @@ export async function getResendClient() {
       }
     }
   } catch (error) {
-    console.error("[RESEND] Error checking integration:", error)
+    Sentry.captureException(error)
     return null
   }
   
@@ -41,7 +47,7 @@ export async function getResendClient() {
     const { Resend } = await import("resend")
     return new Resend(apiKey)
   } catch (error) {
-    console.error("[RESEND] Failed to initialize Resend client:", error)
+    Sentry.captureException(error)
     return null
   }
 }
@@ -80,7 +86,7 @@ export async function sendInvoiceEmail(
     } catch (error) {
       // BUG-065 FIX: Fail closed instead of fail open for billing-adjacent operations
       // Deny the request if rate limit check throws rather than allowing it
-      console.error("[Invoice Email] Rate limit check failed:", error)
+      Sentry.captureException(error)
       return {
         error: "Rate limit check failed. Please try again later.",
         data: null
@@ -106,7 +112,7 @@ export async function sendInvoiceEmail(
     `)
     .eq("id", invoiceId)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (invoiceError || !invoice) {
     return { error: "Invoice not found", data: null }
@@ -177,7 +183,7 @@ export async function sendInvoiceEmail(
     
     if (!resend) {
       // If Resend is not configured, log and return error
-      console.warn("[INVOICE EMAIL] Resend API key not configured. Email not sent.")
+      Sentry.captureMessage("[INVOICE EMAIL] Resend API key not configured. Email not sent.", "warning")
       return { 
         error: "Email service not configured. Please set RESEND_API_KEY in environment variables.", 
         data: null 
@@ -233,7 +239,7 @@ export async function sendInvoiceEmail(
     })
 
     if (emailResult.error) {
-      console.error("[INVOICE EMAIL ERROR]", emailResult.error)
+      Sentry.captureException(emailResult.error)
       return { 
         error: `Failed to send email: ${emailResult.error.message || "Unknown error"}`, 
         data: null 

@@ -42,9 +42,9 @@ export async function getIntegrationSettings() {
         updated_at
       `)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
-    if (error && error.code !== "PGRST116") {
+    if (error) {
       return { error: error.message, data: null }
     }
 
@@ -137,11 +137,15 @@ export async function updateIntegrationSettings(settings: {
   }
 
   // Check if settings exist
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("company_integrations")
     .select("id")
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (existingError) {
+    return { error: existingError.message, success: false }
+  }
 
   // MEDIUM FIX 17: Build explicit updateData object to prevent column injection
   const updateData: any = {}

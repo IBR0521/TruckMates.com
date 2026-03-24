@@ -499,7 +499,7 @@ export async function geocodeAddressBookEntry(
       `)
       .eq("id", entryId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
     if (fetchError || !entry) {
       return { data: null, error: "Address book entry not found" }
@@ -762,7 +762,7 @@ export async function updateAddressBookEntry(
     // Re-geocode if address actually changed (not just present in updates)
     if (updates.address_line1 !== undefined || updates.city !== undefined || updates.state !== undefined || updates.zip_code !== undefined) {
       // SECURITY FIX: Use explicit column selection - only need address fields for comparison
-      const { data: currentEntry } = await supabase
+      const { data: currentEntry, error: currentEntryError } = await supabase
         .from("address_book")
         .select(`
           address_line1,
@@ -773,7 +773,11 @@ export async function updateAddressBookEntry(
         `)
         .eq("id", entryId)
         .eq("company_id", ctx.companyId)
-        .single()
+        .maybeSingle()
+
+      if (currentEntryError) {
+        return { error: currentEntryError.message, data: null }
+      }
 
       if (currentEntry) {
         // Check if any address field actually changed
@@ -939,14 +943,14 @@ export async function incrementAddressUsage(entryId: string): Promise<{ error: s
 
   try {
     // Verify entry belongs to user's company before incrementing
-    const { data: entry } = await supabase
+    const { data: entry, error: entryError } = await supabase
       .from("address_book")
       .select("id")
       .eq("id", entryId)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
 
-    if (!entry) {
+    if (entryError || !entry) {
       return { error: "Address book entry not found or access denied" }
     }
 

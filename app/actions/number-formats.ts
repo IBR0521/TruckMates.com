@@ -51,11 +51,14 @@ export async function getCompanySettings() {
   }
 
   // BUG-064 FIX: Add RBAC check - filter sensitive fields for non-admin roles
-  const { data: currentUser } = await supabase
+  const { data: currentUser, error: currentUserError } = await supabase
     .from("users")
     .select("role")
     .eq("id", ctx.userId)
-    .single()
+    .maybeSingle()
+  if (currentUserError) {
+    return { error: `Failed to fetch user role: ${currentUserError.message}`, data: null }
+  }
   
   const userRole = currentUser?.role || 'driver'
   const isAdmin = userRole === 'super_admin' || userRole === 'operations_manager'
@@ -262,11 +265,14 @@ export async function generateLoadNumber(): Promise<{ data: string | null; error
   const sequence = typeof rpcResult === 'number' ? rpcResult : parseInt(String(rpcResult), 10)
 
   // Get company name for {COMPANY} token
-  const { data: company } = await supabase
+  const { data: company, error: companyError } = await supabase
     .from("companies")
     .select("name")
     .eq("id", ctx.companyId)
-    .single()
+    .maybeSingle()
+  if (companyError) {
+    return { error: `Failed to fetch company name: ${companyError.message}`, data: null }
+  }
 
   // Generate number using the incremented sequence
   const number = generateNumber(format, sequence, company?.name)
@@ -313,11 +319,15 @@ export async function generateInvoiceNumber(): Promise<{ data: string | null; er
   
   const sequence = typeof rpcResult === 'number' ? rpcResult : parseInt(String(rpcResult), 10)
 
-  const { data: company } = await supabase
+  const { data: company, error: companyError } = await supabase
     .from("companies")
     .select("name")
     .eq("id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (companyError) {
+    return { error: `Failed to fetch company name: ${companyError.message}`, data: null }
+  }
 
   const number = generateNumber(format, sequence, company?.name)
 
@@ -363,11 +373,15 @@ export async function generateDispatchNumber(): Promise<{ data: string | null; e
   
   const sequence = typeof rpcResult === 'number' ? rpcResult : parseInt(String(rpcResult), 10)
 
-  const { data: company } = await supabase
+  const { data: company, error: companyError } = await supabase
     .from("companies")
     .select("name")
     .eq("id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (companyError) {
+    return { error: `Failed to fetch company name: ${companyError.message}`, data: null }
+  }
 
   const number = generateNumber(format, sequence, company?.name)
 
@@ -413,11 +427,15 @@ export async function generateBOLNumber(): Promise<{ data: string | null; error:
   
   const sequence = typeof rpcResult === 'number' ? rpcResult : parseInt(String(rpcResult), 10)
 
-  const { data: company } = await supabase
+  const { data: company, error: companyError } = await supabase
     .from("companies")
     .select("name")
     .eq("id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (companyError) {
+    return { error: `Failed to fetch company name: ${companyError.message}`, data: null }
+  }
 
   const number = generateNumber(format, sequence, company?.name)
 

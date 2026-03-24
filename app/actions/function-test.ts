@@ -824,7 +824,9 @@ export async function testAllPlatformFunctions() {
             .single()
 
           pushTested("createMaintenance")
-          if (maint) {
+          if (maintError) {
+            pushFailed({ function: "createMaintenance", error: maintError.message })
+          } else if (maint) {
             pushPassed("createMaintenance")
             // Test DELETE Maintenance
             try {

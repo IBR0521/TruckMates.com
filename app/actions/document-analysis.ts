@@ -1502,12 +1502,15 @@ export async function createRecordFromExtractedData(
         // If truck_number is provided, find the truck_id
         let truckId = maintData.truck_id
         if (maintData.truck_number && !truckId) {
-          const { data: truckData } = await supabase
+          const { data: truckData, error: truckLookupError } = await supabase
             .from("trucks")
             .select("id")
             .eq("truck_number", maintData.truck_number)
             .eq("company_id", ctx.companyId)
-            .single()
+            .maybeSingle()
+          if (truckLookupError) {
+            return { error: truckLookupError.message, data: null }
+          }
           truckId = truckData?.id
         }
 

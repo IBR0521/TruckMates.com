@@ -20,14 +20,18 @@ export async function mapProviderDriverId(
   const providerDriverIdStr = String(providerDriverId)
 
   // Look up mapping
-  const { data: mapping } = await supabase
+  const { data: mapping, error: mappingError } = await supabase
     .from("eld_driver_mappings")
     .select("internal_driver_id")
     .eq("eld_device_id", eldDeviceId)
     .eq("provider_driver_id", providerDriverIdStr)
     .eq("provider", provider)
     .eq("is_active", true)
-    .single()
+    .maybeSingle()
+
+  if (mappingError) {
+    return null
+  }
 
   return mapping?.internal_driver_id || null
 }
@@ -51,24 +55,24 @@ export async function createDriverMapping(data: {
   }
 
   // Verify device belongs to company
-  const { data: device } = await supabase
+  const { data: device, error: deviceError } = await supabase
     .from("eld_devices")
     .select("company_id")
     .eq("id", data.eld_device_id)
-    .single()
+    .maybeSingle()
 
-  if (!device || device.company_id !== ctx.companyId) {
+  if (deviceError || !device || device.company_id !== ctx.companyId) {
     return { error: "Device not found or access denied", data: null }
   }
 
   // Verify driver belongs to company
-  const { data: driver } = await supabase
+  const { data: driver, error: driverError } = await supabase
     .from("drivers")
     .select("company_id")
     .eq("id", data.internal_driver_id)
-    .single()
+    .maybeSingle()
 
-  if (!driver || driver.company_id !== ctx.companyId) {
+  if (driverError || !driver || driver.company_id !== ctx.companyId) {
     return { error: "Driver not found or access denied", data: null }
   }
 
@@ -140,13 +144,13 @@ export async function deleteDriverMapping(mappingId: string) {
   }
 
   // Verify mapping belongs to company
-  const { data: mapping } = await supabase
+  const { data: mapping, error: mappingError } = await supabase
     .from("eld_driver_mappings")
     .select("company_id")
     .eq("id", mappingId)
-    .single()
+    .maybeSingle()
 
-  if (!mapping || mapping.company_id !== ctx.companyId) {
+  if (mappingError || !mapping || mapping.company_id !== ctx.companyId) {
     return { error: "Mapping not found or access denied", success: false }
   }
 

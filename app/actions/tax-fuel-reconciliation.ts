@@ -164,11 +164,15 @@ export async function updateFuelPurchase(
 
   // Recalculate total cost if gallons or price changed
   if (formData.gallons !== undefined || formData.price_per_gallon !== undefined) {
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from("fuel_purchases")
       .select("gallons, price_per_gallon")
       .eq("id", id)
-      .single()
+      .maybeSingle()
+
+    if (existingError) {
+      return { error: existingError.message, data: null }
+    }
 
     if (existing) {
       const gallons = formData.gallons !== undefined ? formData.gallons : existing.gallons
@@ -270,7 +274,7 @@ export async function getIFTAReport(id: string) {
     .select(IFTA_REPORT_SELECT)
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (reportError || !report) {
     return { error: reportError?.message || "Report not found", data: null }
@@ -330,13 +334,17 @@ export async function generateIFTAReport(quarter: number, year: number) {
   }
 
   // Check if report already exists
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("ifta_reports")
     .select("id")
     .eq("company_id", ctx.companyId)
     .eq("quarter", quarter)
     .eq("year", year)
-    .single()
+    .maybeSingle()
+
+  if (existingError) {
+    return { error: existingError.message, data: null }
+  }
 
   if (existing) {
     return { error: "IFTA report for this quarter already exists", data: null }

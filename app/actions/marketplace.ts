@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
+import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
 import { createLoad } from "./loads"
 import { sendNotification } from "./notifications"
@@ -91,13 +92,13 @@ export async function getMarketplaceLoads(filters?: {
     const { data, error, count } = await query
 
     if (error) {
-      console.error("[getMarketplaceLoads] Error:", error)
+      Sentry.captureException(error)
       return { data: null, error: error.message, count: 0 }
     }
 
     return { data: data || [], error: null, count: count || 0 }
   } catch (error: any) {
-    console.error("[getMarketplaceLoads] Unexpected error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error?.message || "Failed to load marketplace loads", count: 0 }
   }
 }
@@ -122,14 +123,10 @@ export async function getMarketplaceLoad(id: string) {
         broker:broker_id(id, name, email, phone)
       `)
       .eq("id", id)
-      .single()
+      .maybeSingle()
 
     if (error) {
-      console.error("[getMarketplaceLoad] Error:", error)
-      // If no rows returned, it's a not found error
-      if (error.code === 'PGRST116') {
-        return { data: null, error: "Load not found" }
-      }
+      Sentry.captureException(error)
       return { data: null, error: error.message }
     }
 
@@ -139,7 +136,7 @@ export async function getMarketplaceLoad(id: string) {
 
     return { data, error: null }
   } catch (error: any) {
-    console.error("[getMarketplaceLoad] Exception:", error)
+    Sentry.captureException(error)
     return { data: null, error: error?.message || "Failed to load load details" }
   }
 }
@@ -188,11 +185,15 @@ export async function postLoadToMarketplace(formData: {
     return { data: null, error: "Only managers can post loads to marketplace" }
   }
 
-  const { data: companyData } = await supabase
+  const { data: companyData, error: companyTypeError } = await supabase
     .from("companies")
     .select("company_type")
     .eq("id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (companyTypeError) {
+    return { data: null, error: companyTypeError.message }
+  }
 
   // Check if company can post loads (broker or both)
   if (companyData?.company_type !== "broker" && companyData?.company_type !== "both") {
@@ -237,7 +238,7 @@ export async function postLoadToMarketplace(formData: {
     .single()
 
   if (error) {
-    console.error("[postLoadToMarketplace] Error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error.message }
   }
 
@@ -266,11 +267,15 @@ export async function acceptMarketplaceLoad(marketplaceLoadId: string) {
     return { data: null, error: "Only managers can accept loads from marketplace" }
   }
 
-  const { data: companyData } = await supabase
+  const { data: companyData, error: companyTypeError } = await supabase
     .from("companies")
     .select("company_type")
     .eq("id", ctx.companyId)
-    .single()
+    .maybeSingle()
+
+  if (companyTypeError) {
+    return { data: null, error: companyTypeError.message }
+  }
 
   // Check if company can accept loads (carrier or both)
   if (companyData?.company_type !== "carrier" && companyData?.company_type !== "both") {
@@ -349,7 +354,7 @@ export async function acceptMarketplaceLoad(marketplaceLoadId: string) {
     .eq("id", marketplaceLoadId)
 
   if (updateLoadIdError) {
-    console.error("[acceptMarketplaceLoad] Failed to update created_load_id:", updateLoadIdError)
+    Sentry.captureException(updateLoadIdError)
     // Load was created and status updated, but load_id update failed - log but continue
   }
 
@@ -367,12 +372,12 @@ export async function acceptMarketplaceLoad(marketplaceLoadId: string) {
           carrierCompanyId: ctx.companyId,
           loadId: createdLoad.id,
         }).catch((err) => {
-          console.warn("[acceptMarketplaceLoad] Notification failed:", err)
+          Sentry.captureException(err)
         })
       }
     }
   } catch (error) {
-    console.warn("[acceptMarketplaceLoad] Notification error:", error)
+    Sentry.captureException(error)
   }
 
   revalidatePath("/marketplace")
@@ -389,11 +394,16 @@ async function autoCreateLoadsForMatchingCarriers(marketplaceLoadId: string) {
   const supabase = await createClient()
 
   // Get marketplace load
-  const { data: marketplaceLoad } = await supabase
+  const { data: marketplaceLoad, error: marketplaceLoadError } = await supabase
     .from("load_marketplace")
     .select(LOAD_MARKETPLACE_AUTO_CREATE_SELECT)
     .eq("id", marketplaceLoadId)
-    .single()
+    .maybeSingle()
+
+  if (marketplaceLoadError) {
+    Sentry.captureException(marketplaceLoadError)
+    return
+  }
 
   if (!marketplaceLoad || !marketplaceLoad.auto_create_enabled) {
     return
@@ -472,16 +482,13 @@ async function autoCreateLoadsForMatchingCarriers(marketplaceLoadId: string) {
               destination: marketplaceLoad.destination,
               rate: marketplaceLoad.rate,
             }).catch((err) => {
-              console.warn("[autoCreateLoadsForMatchingCarriers] Notification failed:", err)
+              Sentry.captureException(err)
             })
           }
         }
       }
     } catch (error) {
-      console.error(
-        `[autoCreateLoadsForMatchingCarriers] Error for carrier ${subscription.carrier_company_id}:`,
-        error
-      )
+      Sentry.captureException(error)
     }
   }
 }
@@ -506,7 +513,7 @@ export async function getBrokerMarketplaceLoads() {
     .order("created_at", { ascending: false })
 
   if (error) {
-    console.error("[getBrokerMarketplaceLoads] Error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error.message }
   }
 
@@ -527,9 +534,14 @@ export async function getMarketplaceSubscription() {
     .from("marketplace_subscriptions")
     .select(MARKETPLACE_SUBSCRIPTIONS_SELECT)
     .eq("carrier_company_id", ctx.companyId)
-    .single()
+    .maybeSingle()
 
   if (error) {
+    // Only "not found" should trigger auto-create; other errors should fail.
+    return { data: null, error: error.message }
+  }
+
+  if (!data) {
     // Subscription doesn't exist, create one
     const { data: newSubscription, error: createError } = await supabase
       .from("marketplace_subscriptions")
@@ -541,7 +553,7 @@ export async function getMarketplaceSubscription() {
       .single()
 
     if (createError) {
-      console.error("[getMarketplaceSubscription] Create error:", createError)
+      Sentry.captureException(createError)
       return { data: null, error: createError.message }
     }
 
@@ -580,7 +592,7 @@ export async function updateMarketplaceSubscription(formData: {
     .single()
 
   if (error) {
-    console.error("[updateMarketplaceSubscription] Error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error.message }
   }
 
@@ -599,7 +611,7 @@ export async function getBrokerProfile(brokerCompanyId: string) {
     .from("companies")
     .select(COMPANIES_SELECT)
     .eq("id", brokerCompanyId)
-    .single()
+    .maybeSingle()
 
   if (companyError || !company) {
     return { data: null, error: "Broker not found" }
@@ -610,7 +622,11 @@ export async function getBrokerProfile(brokerCompanyId: string) {
     .from("broker_statistics")
     .select(BROKER_STATISTICS_SELECT)
     .eq("broker_company_id", brokerCompanyId)
-    .single()
+    .maybeSingle()
+
+  if (statsError) {
+    Sentry.captureException(statsError)
+  }
 
   // Get recent loads
   const { data: recentLoads } = await supabase
@@ -650,7 +666,7 @@ export async function getCarrierProfile(carrierCompanyId: string) {
     .from("companies")
     .select(COMPANIES_SELECT)
     .eq("id", carrierCompanyId)
-    .single()
+    .maybeSingle()
 
   if (companyError || !company) {
     return { data: null, error: "Carrier not found" }
@@ -661,7 +677,11 @@ export async function getCarrierProfile(carrierCompanyId: string) {
     .from("carrier_statistics")
     .select(CARRIER_STATISTICS_SELECT)
     .eq("carrier_company_id", carrierCompanyId)
-    .single()
+    .maybeSingle()
+
+  if (statsError) {
+    Sentry.captureException(statsError)
+  }
 
   return {
     data: {
@@ -709,21 +729,29 @@ export async function rateBroker(formData: {
 
   // BUG-066 FIX: Verify the load actually connects both companies
   if (formData.load_id) {
-    const { data: load } = await supabase
+    const { data: load, error: loadError } = await supabase
       .from("loads")
       .select("customer_id, company_id")
       .eq("id", formData.load_id)
-      .single()
+      .maybeSingle()
+    
+    if (loadError) {
+      return { data: null, error: loadError.message }
+    }
     
     if (!load || (load.customer_id !== formData.broker_company_id && load.company_id !== ctx.companyId)) {
       return { data: null, error: "Load does not connect your company with the rated broker" }
     }
   } else if (formData.marketplace_load_id) {
-    const { data: marketplaceLoad } = await supabase
+    const { data: marketplaceLoad, error: marketplaceLoadError } = await supabase
       .from("load_marketplace")
       .select("broker_id, matched_carrier_id")
       .eq("id", formData.marketplace_load_id)
-      .single()
+      .maybeSingle()
+    
+    if (marketplaceLoadError) {
+      return { data: null, error: marketplaceLoadError.message }
+    }
     
     if (!marketplaceLoad || 
         (marketplaceLoad.broker_id !== formData.broker_company_id || marketplaceLoad.matched_carrier_id !== ctx.companyId)) {
@@ -750,7 +778,7 @@ export async function rateBroker(formData: {
     .single()
 
   if (error) {
-    console.error("[rateBroker] Error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error.message }
   }
 
@@ -791,21 +819,29 @@ export async function rateCarrier(formData: {
 
   // BUG-066 FIX: Verify the load actually connects both companies
   if (formData.load_id) {
-    const { data: load } = await supabase
+    const { data: load, error: loadError } = await supabase
       .from("loads")
       .select("customer_id, company_id")
       .eq("id", formData.load_id)
-      .single()
+      .maybeSingle()
+    
+    if (loadError) {
+      return { data: null, error: loadError.message }
+    }
     
     if (!load || (load.customer_id !== ctx.companyId && load.company_id !== formData.carrier_company_id)) {
       return { data: null, error: "Load does not connect your company with the rated carrier" }
     }
   } else if (formData.marketplace_load_id) {
-    const { data: marketplaceLoad } = await supabase
+    const { data: marketplaceLoad, error: marketplaceLoadError } = await supabase
       .from("load_marketplace")
       .select("broker_id, matched_carrier_id")
       .eq("id", formData.marketplace_load_id)
-      .single()
+      .maybeSingle()
+    
+    if (marketplaceLoadError) {
+      return { data: null, error: marketplaceLoadError.message }
+    }
     
     if (!marketplaceLoad || 
         (marketplaceLoad.broker_id !== ctx.companyId || marketplaceLoad.matched_carrier_id !== formData.carrier_company_id)) {
@@ -832,7 +868,7 @@ export async function rateCarrier(formData: {
     .single()
 
   if (error) {
-    console.error("[rateCarrier] Error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error.message }
   }
 
