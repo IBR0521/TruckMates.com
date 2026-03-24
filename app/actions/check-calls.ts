@@ -92,14 +92,14 @@ export async function createCheckCall(formData: {
   let timestamp = new Date().toISOString()
   if (formData.driver_id) {
     // Try to get driver's timezone from profile
-    const { data: driver } = await supabase
+    const { data: driver, error: driverError } = await supabase
       .from("drivers")
       .select("timezone")
       .eq("id", formData.driver_id)
       .eq("company_id", ctx.companyId)
-      .single()
+      .maybeSingle()
     
-    if (driver?.timezone) {
+    if (!driverError && driver?.timezone) {
       // Convert to driver's timezone
       const now = new Date()
       const driverTime = new Date(now.toLocaleString("en-US", { timeZone: driver.timezone }))

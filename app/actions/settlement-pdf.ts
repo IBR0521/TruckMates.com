@@ -51,11 +51,15 @@ export async function generateSettlementPDF(settlementId: string): Promise<{
     }
 
     // Get company info
-    const { data: company } = await supabase
+    const { data: company, error: companyError } = await supabase
       .from("companies")
       .select("name, address, phone, email")
       .eq("id", ctx.companyId)
-      .single()
+      .maybeSingle()
+
+    if (companyError) {
+      return { html: "", error: companyError.message || "Failed to load company info" }
+    }
 
     // Format dates
     const formatDate = (date: string) => {

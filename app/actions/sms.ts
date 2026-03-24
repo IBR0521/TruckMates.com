@@ -126,13 +126,17 @@ export async function sendSMSNotification(
   const supabase = await createClient()
 
   // Get user's notification preferences
-  const { data: preferences } = await supabase
+  const { data: preferences, error: preferencesError } = await supabase
     .from("notification_preferences")
     .select(
       "id, user_id, sms_alerts, route_updates, load_updates, maintenance_alerts, payment_reminders",
     )
     .eq("user_id", userId)
-    .single()
+    .maybeSingle()
+
+  if (preferencesError) {
+    return { sent: false, reason: preferencesError.message }
+  }
 
   if (!preferences || !preferences.sms_alerts) {
     return { sent: false, reason: "SMS alerts disabled" }
@@ -163,11 +167,15 @@ export async function sendSMSNotification(
   }
 
   // Get user phone number
-  const { data: userData } = await supabase
+  const { data: userData, error: userDataError } = await supabase
     .from("users")
     .select("phone")
     .eq("id", userId)
-    .single()
+    .maybeSingle()
+
+  if (userDataError) {
+    return { sent: false, reason: userDataError.message }
+  }
 
   if (!userData?.phone) {
     return { sent: false, reason: "User phone number not found" }
