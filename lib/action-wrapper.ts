@@ -1,6 +1,7 @@
 "use server"
 
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "./server-permissions"
+import { errorMessage } from "@/lib/error-message"
 import { type FeatureCategory } from "./feature-permissions"
 
 /**
@@ -37,10 +38,10 @@ export async function withPermissionCheck<T>(
   try {
     const result = await action()
     return { data: result, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       data: null,
-      error: error?.message || "Action failed",
+      error: errorMessage(error, "Action failed"),
     }
   }
 }

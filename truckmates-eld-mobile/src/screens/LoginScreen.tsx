@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react'
+import { errorMessage } from "@/lib/error-message"
 import {
   View,
   Text,
@@ -58,9 +59,9 @@ export default function LoginScreen() {
         Alert.alert('Login Failed', 'No session data received')
         setIsLoading(false)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login exception:', error)
-      Alert.alert('Error', error.message || 'An error occurred during login')
+      Alert.alert('Error', errorMessage(error, 'An error occurred during login'))
       setIsLoading(false)
     }
   }

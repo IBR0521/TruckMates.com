@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -104,7 +105,7 @@ async function reverseGeocodeCoordinates(latitude: number, longitude: number) {
     return geocodeResult
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to reverse geocode coordinates"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to reverse geocode coordinates"
     return { error: message, data: null }
   }
 }
@@ -278,7 +279,7 @@ export async function detectStateCrossing(params: {
     }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to detect state crossing"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to detect state crossing"
     return { error: message, data: null }
   }
 }
@@ -318,7 +319,7 @@ export async function getStateMileageBreakdown(params: {
     return { data: stateMileage || [], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to get state mileage breakdown"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to get state mileage breakdown"
     return { error: message, data: null }
   }
 }
@@ -379,7 +380,7 @@ export async function getStateCrossings(params: {
     return { data: crossings || [], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to get state crossings"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to get state crossings"
     return { error: message, data: null }
   }
 }

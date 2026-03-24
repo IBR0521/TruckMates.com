@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { generateDVIRAuditPDF } from "@/app/actions/dvir-pdf"
 
@@ -111,17 +112,17 @@ export async function GET(req: NextRequest) {
       } finally {
         await browser.close()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[DVIR Audit PDF] Puppeteer error:", error)
       return NextResponse.json(
-        { error: error?.message || "Failed to generate DVIR audit PDF" },
+        { error: errorMessage(error, "Failed to generate DVIR audit PDF") },
         { status: 500 }
       )
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[DVIR Audit PDF] Error:", error)
     return NextResponse.json(
-      { error: error?.message || "Failed to generate DVIR audit PDF" },
+      { error: errorMessage(error, "Failed to generate DVIR audit PDF") },
       { status: 500 }
     )
   }

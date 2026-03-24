@@ -1,6 +1,7 @@
 "use client"
 
 import { createClient } from "@/lib/supabase/client"
+import { errorMessage } from "@/lib/error-message"
 
 /**
  * Check if Supabase Realtime is enabled and working
@@ -54,11 +55,11 @@ export async function checkRealtimeStatus(): Promise<{
           }
         })
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       enabled: false,
       connected: false,
-      error: error?.message || "Failed to check realtime status",
+      error: errorMessage(error, "Failed to check realtime status"),
     }
   }
 }
@@ -116,10 +117,10 @@ export async function testRealtimeSubscription(
         })
       }, 3000)
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       working: false,
-      error: error?.message || "Failed to test subscription",
+      error: errorMessage(error, "Failed to test subscription"),
     }
   }
 }

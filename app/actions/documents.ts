@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission, checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
@@ -41,9 +42,9 @@ export async function getDocuments(filters?: {
   }
 
   return { data: documents || [], error: null, count: count || 0 }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null, count: 0 }
   }
 }
 
@@ -114,9 +115,9 @@ export async function deleteDocument(id: string) {
   
   revalidatePath("/dashboard/documents")
   return { error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred" }
+    return { error: errorMessage(error, "An unexpected error occurred") }
   }
 }
 
@@ -344,8 +345,8 @@ export async function uploadDocument(
 
     revalidatePath("/dashboard/documents")
     return { data: documentData, error: null }
-  } catch (error: any) {
-    return { error: error?.message || "Upload failed", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Upload failed"), data: null }
   }
 }
 

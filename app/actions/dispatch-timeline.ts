@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { calculateRemainingHOS } from "./eld-advanced"
 
@@ -482,8 +483,8 @@ export async function getDriverTimelines(filters?: {
     }
 
     return { data: timelines, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get driver timelines", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get driver timelines"), data: null }
   }
 }
 
@@ -662,8 +663,8 @@ export async function checkAssignmentConflicts(
       },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to check conflicts", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to check conflicts"), data: null }
   }
 }
 

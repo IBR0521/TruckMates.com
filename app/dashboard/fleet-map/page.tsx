@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, MapPin, Truck, Plus, Edit2, Trash2, X } from "lucide-react"
@@ -146,8 +147,8 @@ export default function FleetMapPage() {
         }
         setVehicles(result.data || [])
       }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to load vehicles")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to load vehicles"))
     } finally {
       setIsLoading(false)
     }
@@ -161,8 +162,8 @@ export default function FleetMapPage() {
       return
     }
       setGeofences(result.data || [])
-    } catch (error: any) {
-      toast.error(error.message || "Failed to load geofences")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to load geofences"))
     }
   }
 
@@ -178,8 +179,8 @@ export default function FleetMapPage() {
       toast.success("Geofence deleted successfully")
     setDeleteGeofenceId(null)
       loadGeofences()
-    } catch (error: any) {
-      toast.error(error.message || "Failed to delete geofence")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to delete geofence"))
     }
   }
 

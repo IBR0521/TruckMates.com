@@ -41,7 +41,7 @@ export default function CustomerPortalPage() {
 
         if (loadsResult.data) setLoads(loadsResult.data)
         if (invoicesResult.data) setInvoices(invoicesResult.data)
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast.error("Failed to load portal data")
         console.error(error)
       } finally {

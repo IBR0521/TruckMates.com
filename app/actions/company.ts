@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -31,9 +32,9 @@ export async function getCompany() {
     }
 
     return { data: company }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred" }
+    return { error: errorMessage(error, "An unexpected error occurred") }
   }
 }
 
@@ -83,9 +84,9 @@ export async function updateCompany(formData: FormData) {
 
     revalidatePath("/dashboard/settings")
     return { success: true }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { success: false, error: error?.message || "An unexpected error occurred" }
+    return { success: false, error: errorMessage(error, "An unexpected error occurred") }
   }
 }
 
@@ -150,9 +151,9 @@ export async function checkAndFixDemoCompanyLink() {
     }
 
     return { success: true, isLinkedToDemo: false }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", isLinkedToDemo: false }
+    return { error: errorMessage(error, "An unexpected error occurred"), isLinkedToDemo: false }
   }
 }
 

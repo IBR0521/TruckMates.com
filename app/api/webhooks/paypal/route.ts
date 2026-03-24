@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 
 const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || ""
@@ -201,9 +202,9 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ received: true })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("PayPal webhook error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 })
   }
 }
 

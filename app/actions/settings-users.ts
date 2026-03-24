@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
@@ -42,9 +43,9 @@ export async function getCompanyUsers() {
     }))
 
     return { data: usersWithStatus, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -123,9 +124,9 @@ export async function updateUserRole(userId: string, newRole: string) {
 
     revalidatePath("/dashboard/settings/users")
     return { success: true, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { success: false, error: error?.message || "An unexpected error occurred" }
+    return { success: false, error: errorMessage(error, "An unexpected error occurred") }
   }
 }
 
@@ -191,9 +192,9 @@ export async function removeUser(userId: string) {
 
     revalidatePath("/dashboard/settings/users")
     return { success: true, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { success: false, error: error?.message || "An unexpected error occurred" }
+    return { success: false, error: errorMessage(error, "An unexpected error occurred") }
   }
 }
 
@@ -472,7 +473,7 @@ export async function inviteUser(data: {
       },
       error: null,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
     // Still return success since invitation was created
     return {
@@ -480,7 +481,7 @@ export async function inviteUser(data: {
         invitation,
         emailSent: false,
         invitationLink: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/register?invitation=${invitationCode}`,
-        emailError: error?.message || "Failed to send email",
+        emailError: errorMessage(error, "Failed to send email"),
       },
       error: null,
     }

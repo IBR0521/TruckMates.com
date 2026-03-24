@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { ArrowLeft, Download } from "lucide-react"
 import Link from "next/link"
@@ -34,8 +35,8 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
       } else {
         setReport(result.data)
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to load IFTA report")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to load IFTA report"))
     } finally {
       setLoading(false)
     }
@@ -105,8 +106,8 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
           toast.error("Please allow popups to download the PDF")
         }
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to generate IFTA report PDF")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to generate IFTA report PDF"))
     }
   }
 

@@ -1,4 +1,5 @@
 import { decode } from "@here/flexpolyline"
+import { errorMessage } from "@/lib/error-message"
 
 export type HereTruckRouteResult = {
   provider: "here"
@@ -151,6 +152,6 @@ export async function getHereTruckRoute(params: {
       error: null,
     }
   } catch (e: unknown) {
-    return { data: null, error: e instanceof Error ? e.message : "HERE routing failed" }
+    return { data: null, error: e instanceof Error ? errorMessage(e) : "HERE routing failed" }
   }
 }

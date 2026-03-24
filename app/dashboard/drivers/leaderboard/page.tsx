@@ -44,7 +44,7 @@ export default function DriverLeaderboardPage() {
       } else if (result.data) {
         setLeaderboard(result.data)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load leaderboard")
     } finally {
       setIsLoading(false)

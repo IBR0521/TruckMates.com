@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useState } from 'react'
+import { errorMessage } from "@/lib/error-message"
 import {
   View,
   Text,
@@ -79,8 +80,8 @@ export default function SettlementsScreen() {
               } else {
                 Alert.alert('Error', result.error || 'Failed to approve settlement')
               }
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to approve settlement')
+            } catch (error: unknown) {
+              Alert.alert('Error', errorMessage(error, 'Failed to approve settlement'))
             } finally {
               setApprovingId(null)
             }

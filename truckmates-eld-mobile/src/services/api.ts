@@ -4,6 +4,7 @@
 
 // Import URL polyfill for React Native compatibility
 import 'react-native-url-polyfill/auto'
+import { errorMessage } from "@/lib/error-message"
 
 import * as SecureStore from 'expo-secure-store'
 import { createClient } from '@supabase/supabase-js'
@@ -78,11 +79,11 @@ async function apiRequest<T>(
           ...options.headers,
         },
       })
-    } catch (fetchError: any) {
+    } catch (fetchError: unknown) {
       console.error('API request error:', fetchError)
       return {
         success: false,
-        error: fetchError.message || 'Network request failed. Make sure the TruckMates platform server is running.',
+        error: errorMessage(fetchError, 'Network request failed. Make sure the TruckMates platform server is running.'),
       }
     }
 
@@ -100,11 +101,11 @@ async function apiRequest<T>(
       data,
       ...data,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('API request error:', error)
     return {
       success: false,
-      error: error.message || 'Network error. Please check your connection.',
+      error: errorMessage(error, 'Network error. Please check your connection.'),
     }
   }
 }
@@ -187,10 +188,10 @@ export async function uploadPOD(data: {
       success: true,
       data: result,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      error: error.message || 'Failed to upload POD',
+      error: errorMessage(error, 'Failed to upload POD'),
     }
   }
 }

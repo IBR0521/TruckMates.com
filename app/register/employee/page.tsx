@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, Suspense } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -80,8 +81,8 @@ function EmployeeRegisterForm() {
       setTimeout(() => {
         router.push("/dashboard")
       }, 500)
-    } catch (error: any) {
-      toast.error(error?.message || "An error occurred. Please try again.")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "An error occurred. Please try again."))
       setIsLoading(false)
     }
   }

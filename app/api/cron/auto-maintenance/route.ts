@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { autoScheduleMaintenanceForAllTrucks } from "@/app/actions/auto-maintenance"
 
 // Cron endpoint to auto-schedule maintenance for all trucks
@@ -35,10 +36,10 @@ export async function GET(request: Request) {
       data: result.data,
       message: `Processed ${result.data?.trucks_processed || 0} trucks, scheduled ${result.data?.total_scheduled || 0} maintenance items`,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Auto-maintenance cron error:", error)
     return NextResponse.json(
-      { error: error.message, success: false },
+      { error: errorMessage(error), success: false },
       { status: 500 }
     )
   }

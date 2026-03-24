@@ -50,7 +50,7 @@ export async function GET() {
         message: 'Connection successful',
         timestamp: new Date().toISOString(),
       })
-    } catch (dbError: any) {
+    } catch (dbError: unknown) {
       // Don't leak error details
       console.error('[Health Check] Database connection error:', dbError)
       return NextResponse.json(
@@ -61,7 +61,7 @@ export async function GET() {
         { status: 503 }
       )
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Don't leak error details
     console.error('[Health Check] Unexpected error:', error)
     return NextResponse.json(

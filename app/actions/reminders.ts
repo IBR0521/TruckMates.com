@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -96,7 +97,7 @@ export async function getReminders(filters?: {
     return { data: data || [], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const msg = error instanceof Error ? error.message : ""
+    const msg = error instanceof Error ? errorMessage(error) : ""
     const code =
       error && typeof error === "object" && "code" in error
         ? String((error as { code: unknown }).code)
@@ -361,7 +362,7 @@ export async function completeReminder(id: string) {
     return { data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to complete reminder"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to complete reminder"
     return { error: message, data: null }
   }
 }
@@ -438,7 +439,7 @@ export async function getOverdueReminders() {
     return { data: data || [], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const msg = error instanceof Error ? error.message : ""
+    const msg = error instanceof Error ? errorMessage(error) : ""
     const code =
       error && typeof error === "object" && "code" in error
         ? String((error as { code: unknown }).code)
@@ -503,7 +504,7 @@ export async function updateReminder(
     return { data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to update reminder"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to update reminder"
     return { error: message, data: null }
   }
 }
@@ -535,7 +536,7 @@ export async function deleteReminder(id: string) {
     return { data: { success: true }, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to delete reminder"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to delete reminder"
     return { error: message, data: null }
   }
 }

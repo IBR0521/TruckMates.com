@@ -44,7 +44,7 @@ function ManagerAccountSetupContent() {
         // Show wizard
         setShowWizard(true)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to check setup status:", error)
       // Show wizard anyway
       setShowWizard(true)

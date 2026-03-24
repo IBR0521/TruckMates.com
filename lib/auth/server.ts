@@ -1,6 +1,7 @@
 "use server"
 
 import { cache } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 
 /**
@@ -56,10 +57,10 @@ export async function getCurrentUser() {
       },
       error: null
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return { 
       data: null, 
-      error: String(error?.message || error || "Failed to get user") 
+      error: String(errorMessage(error) || error || "Failed to get user") 
     }
   }
 }
@@ -90,8 +91,8 @@ export async function getAuthCompany() {
       companyName: company?.name ?? null,
       error: null,
     }
-  } catch (e: any) {
-    return { companyId: null, companyName: null, error: e?.message ?? "Failed to get company" }
+  } catch (e: unknown) {
+    return { companyId: null, companyName: null, error: errorMessage(e) ?? "Failed to get company" }
   }
 }
 
@@ -135,12 +136,12 @@ export async function getAuthContext(): Promise<{
       companyId: userData.company_id ? String(userData.company_id) : null,
       error: null,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       user: null,
       userId: null,
       companyId: null,
-      error: String(error?.message || error || "Authentication failed"),
+      error: String(errorMessage(error) || error || "Authentication failed"),
     }
   }
 }
@@ -179,10 +180,10 @@ export async function updateUserProfile(formData: {
     }
 
     return { data: { success: true }, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return { 
       data: null, 
-      error: String(error?.message || error || "Failed to update profile") 
+      error: String(errorMessage(error) || error || "Failed to update profile") 
     }
   }
 }
@@ -253,10 +254,10 @@ export async function updateUserPassword(currentPassword: string, newPassword: s
     }
 
     return { data: { success: true }, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return { 
       data: null, 
-      error: String(error?.message || error || "Failed to update password") 
+      error: String(errorMessage(error) || error || "Failed to update password") 
     }
   }
 }

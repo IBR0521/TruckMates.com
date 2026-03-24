@@ -55,7 +55,7 @@ export default function CustomerPortalInvoicePage() {
           return
         }
         setInvoice(foundInvoice)
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast.error("Failed to load invoice details")
         console.error(error)
       } finally {

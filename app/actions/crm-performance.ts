@@ -6,6 +6,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -123,7 +124,7 @@ export async function getCustomerPerformanceMetrics(filters?: {
     return { data: filteredData as CustomerPerformanceMetrics[], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -183,8 +184,8 @@ export async function getCustomerPerformance(customerId: string): Promise<{
     }
 
     return { data: data as CustomerPerformanceMetrics, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get customer performance", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get customer performance"), data: null }
   }
 }
 
@@ -255,8 +256,8 @@ export async function getVendorPerformanceMetrics(filters?: {
     }
 
     return { data: filteredData as VendorPerformanceMetrics[], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get vendor performance metrics", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get vendor performance metrics"), data: null }
   }
 }
 
@@ -308,8 +309,8 @@ export async function getVendorPerformance(vendorId: string): Promise<{
     }
 
     return { data: data as VendorPerformanceMetrics, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get vendor performance", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get vendor performance"), data: null }
   }
 }
 
@@ -466,8 +467,8 @@ export async function getRelationshipInsights(): Promise<{
       },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get relationship insights", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get relationship insights"), data: null }
   }
 }
 

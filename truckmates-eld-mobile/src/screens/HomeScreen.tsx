@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react'
+import { errorMessage } from "@/lib/error-message"
 import {
   View,
   Text,
@@ -183,8 +184,8 @@ export default function HomeScreen() {
         `Status changed to ${getStatusLabel(newStatus)}`,
         [{ text: 'OK' }]
       )
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to change status')
+    } catch (error: unknown) {
+      Alert.alert('Error', errorMessage(error, 'Failed to change status'))
       throw error
     }
   }

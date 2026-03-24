@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { ArrowLeft, MapPin, Package, Truck, Calendar, Edit2, Route, AlertCircle, Calculator, FileSpreadsheet } from "lucide-react"
 import Link from "next/link"
@@ -311,9 +312,9 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           setMatchingRoute(bestRoute || null)
         }
       }
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (isMounted) {
-          toast.error(error.message || "Failed to load load details")
+          toast.error(errorMessage(error, "Failed to load load details"))
         }
       } finally {
         if (isMounted) {
@@ -470,8 +471,8 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         setIsShareDialogOpen(true)
         toast.success("Portal access created! Share the link with your customer.")
       }
-    } catch (error: any) {
-      toast.error("Failed to create portal access: " + (error.message || "Unknown error"))
+    } catch (error: unknown) {
+      toast.error("Failed to create portal access: " + (errorMessage(error, "Unknown error")))
     } finally {
       setIsCreatingPortal(false)
     }

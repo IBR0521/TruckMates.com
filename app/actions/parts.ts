@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
@@ -56,9 +57,9 @@ export async function getParts(filters?: {
     }
 
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -88,9 +89,9 @@ export async function getPart(id: string) {
     }
 
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 

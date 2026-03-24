@@ -1,6 +1,7 @@
 "use client"
 
 import { Card } from "@/components/ui/card"
+import { errorMessage } from "@/lib/error-message"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { 
@@ -96,8 +97,8 @@ export default function IntegrationSettingsPage() {
           quickbooks_sandbox: (result.data as any).quickbooks_sandbox !== false,
         }))
       }
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to disconnect")
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Failed to disconnect"))
     }
   }
 
@@ -107,8 +108,8 @@ export default function IntegrationSettingsPage() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json?.error || "Test failed")
       toast.success(`QuickBooks connected: ${json?.companyInfo?.CompanyName || "OK"}`)
-    } catch (e: any) {
-      toast.error(e?.message || "QuickBooks test failed")
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "QuickBooks test failed"))
     }
   }
 
@@ -125,8 +126,8 @@ export default function IntegrationSettingsPage() {
           quickbooks_synced_at: (result.data as any).quickbooks_synced_at || null,
         }))
       }
-    } catch (e: any) {
-      toast.error(e?.message || "QuickBooks sync failed")
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "QuickBooks sync failed"))
     }
   }
 
@@ -145,8 +146,8 @@ export default function IntegrationSettingsPage() {
         throw new Error(json?.error || "Failed to save mapping")
       }
       toast.success("QuickBooks mapping saved")
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to save QuickBooks mapping")
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Failed to save QuickBooks mapping"))
     }
   }
 

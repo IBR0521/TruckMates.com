@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -44,9 +45,9 @@ export async function getMaintenance(filters?: {
     }
 
     return { data: maintenance || [], error: null, count: count || 0 }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null, count: 0 }
   }
 }
 
@@ -155,9 +156,9 @@ export async function createMaintenance(formData: {
     }
     
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 

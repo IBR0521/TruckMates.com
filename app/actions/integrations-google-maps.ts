@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -155,7 +156,7 @@ export async function getRouteDirections(origin: string, destination: string, wa
     }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to get route directions"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to get route directions"
     return { error: message, data: null }
   }
 }
@@ -255,17 +256,18 @@ export async function geocodeAddress(address: string) {
     }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    let errorMessage = "Failed to geocode address"
+    let userMessage = "Failed to geocode address"
     if (error instanceof Error) {
-      if (error.message.includes("API key")) {
-        errorMessage = "Google Maps API key error. Please contact support."
-      } else if (error.message.includes("network") || error.message.includes("fetch")) {
-        errorMessage = "Network error. Please check your internet connection and try again."
+      const em = errorMessage(error)
+      if (em.includes("API key")) {
+        userMessage = "Google Maps API key error. Please contact support."
+      } else if (em.includes("network") || em.includes("fetch")) {
+        userMessage = "Network error. Please check your internet connection and try again."
       } else {
-        errorMessage = `Geocoding error: ${error.message}`
+        userMessage = `Geocoding error: ${em}`
       }
     }
-    return { error: errorMessage, data: null }
+    return { error: userMessage, data: null }
   }
 }
 
@@ -314,7 +316,7 @@ export async function calculateDistanceMatrix(origins: string[], destinations: s
     }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to calculate distance matrix"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to calculate distance matrix"
     return { error: message, data: null }
   }
 }
@@ -367,7 +369,7 @@ export async function optimizeRoute(origin: string, destination: string, stops: 
     }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to optimize route"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to optimize route"
     return { error: message, data: null }
   }
 }
@@ -410,7 +412,7 @@ export async function getPlaceDetails(placeId: string) {
     }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to get place details"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to get place details"
     return { error: message, data: null }
   }
 }

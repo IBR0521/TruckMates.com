@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
@@ -97,9 +98,9 @@ export async function getMarketplaceLoads(filters?: {
     }
 
     return { data: data || [], error: null, count: count || 0 }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { data: null, error: error?.message || "Failed to load marketplace loads", count: 0 }
+    return { data: null, error: errorMessage(error, "Failed to load marketplace loads"), count: 0 }
   }
 }
 
@@ -135,9 +136,9 @@ export async function getMarketplaceLoad(id: string) {
     }
 
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { data: null, error: error?.message || "Failed to load load details" }
+    return { data: null, error: errorMessage(error, "Failed to load load details") }
   }
 }
 

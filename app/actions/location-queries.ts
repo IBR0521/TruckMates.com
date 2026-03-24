@@ -6,6 +6,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -58,7 +59,7 @@ export async function findLocationsWithinRadius(
       } else {
         data = rpcResult.data || []
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       rpcError = err
     }
 
@@ -118,8 +119,8 @@ export async function findLocationsWithinRadius(
     filteredData = filteredData.slice(0, limit)
 
     return { data: filteredData, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to find locations", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to find locations"), data: null }
   }
 }
 
@@ -246,8 +247,8 @@ export async function findNearestLocations(
     }
 
     return { data: data || [], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to find nearest locations", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to find nearest locations"), data: null }
   }
 }
 

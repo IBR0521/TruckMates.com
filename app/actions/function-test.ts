@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as driversActions from "./drivers"
 import * as trucksActions from "./trucks"
@@ -78,35 +79,35 @@ export async function testAllPlatformFunctions() {
       pushTested: (value: any) => {
         try {
           tested.push(value)
-        } catch (e: any) {
+        } catch (e: unknown) {
           Sentry.captureException(e)
         }
       },
       pushPassed: (value: any) => {
         try {
           passed.push(value)
-        } catch (e: any) {
+        } catch (e: unknown) {
           Sentry.captureException(e)
         }
       },
       pushFailed: (value: any) => {
         try {
           failed.push(value)
-        } catch (e: any) {
+        } catch (e: unknown) {
           Sentry.captureException(e)
         }
       },
       pushSkipped: (value: any) => {
         try {
           skipped.push(value)
-        } catch (e: any) {
+        } catch (e: unknown) {
           Sentry.captureException(e)
         }
       },
       pushError: (value: any) => {
         try {
           errors.push(value)
-        } catch (e: any) {
+        } catch (e: unknown) {
           Sentry.captureException(e)
         }
       },
@@ -143,8 +144,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getDashboardStats")
       if (dashboardResult.data) pushPassed("getDashboardStats")
       else pushFailed({ function: "getDashboardStats", error: dashboardResult.error })
-    } catch (error: any) {
-      pushFailed({ function: "getDashboardStats", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getDashboardStats", error: errorMessage(error) })
     }
 
     // ============================================
@@ -157,8 +158,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getCurrentUser")
       if (currentUser.data) pushPassed("getCurrentUser")
       else pushFailed({ function: "getCurrentUser", error: currentUser.error })
-    } catch (error: any) {
-      pushFailed({ function: "getCurrentUser", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getCurrentUser", error: errorMessage(error) })
     }
 
     // ============================================
@@ -170,8 +171,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getCompany")
       if (company.data) pushPassed("getCompany")
       else pushFailed({ function: "getCompany", error: company.error })
-    } catch (error: any) {
-      pushFailed({ function: "getCompany", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getCompany", error: errorMessage(error) })
     }
 
     // ============================================
@@ -190,15 +191,15 @@ export async function testAllPlatformFunctions() {
             pushTested("getDriver")
             if (driver.data) pushPassed("getDriver")
             else pushFailed({ function: "getDriver", error: driver.error })
-          } catch (error: any) {
-            pushFailed({ function: "getDriver", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getDriver", error: errorMessage(error) })
           }
         }
       } else {
         pushFailed({ function: "getDrivers", error: drivers.error })
       }
-    } catch (error: any) {
-      pushFailed({ function: "getDrivers", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getDrivers", error: errorMessage(error) })
     }
 
     // Test CREATE Driver
@@ -224,8 +225,8 @@ export async function testAllPlatformFunctions() {
           pushTested("updateDriver")
           if (updated.data) pushPassed("updateDriver")
           else pushFailed({ function: "updateDriver", error: updated.error })
-        } catch (error: any) {
-          pushFailed({ function: "updateDriver", error: error.message })
+        } catch (error: unknown) {
+          pushFailed({ function: "updateDriver", error: errorMessage(error) })
         }
 
         // Test DELETE Driver
@@ -234,14 +235,14 @@ export async function testAllPlatformFunctions() {
           pushTested("deleteDriver")
           if (!deleted.error) pushPassed("deleteDriver")
           else pushFailed({ function: "deleteDriver", error: deleted.error })
-        } catch (error: any) {
-          pushFailed({ function: "deleteDriver", error: error.message })
+        } catch (error: unknown) {
+          pushFailed({ function: "deleteDriver", error: errorMessage(error) })
         }
       } else {
         pushFailed({ function: "createDriver", error: testDriver.error })
       }
-    } catch (error: any) {
-      pushFailed({ function: "createDriver", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "createDriver", error: errorMessage(error) })
     }
 
     // ============================================
@@ -260,15 +261,15 @@ export async function testAllPlatformFunctions() {
             pushTested("getTruck")
             if (truck.data) pushPassed("getTruck")
             else pushFailed({ function: "getTruck", error: truck.error })
-          } catch (error: any) {
-            pushFailed({ function: "getTruck", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getTruck", error: errorMessage(error) })
           }
         }
       } else {
         pushFailed({ function: "getTrucks", error: trucks.error })
       }
-    } catch (error: any) {
-      pushFailed({ function: "getTrucks", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getTrucks", error: errorMessage(error) })
     }
 
     // ============================================
@@ -287,15 +288,15 @@ export async function testAllPlatformFunctions() {
             pushTested("getLoad")
             if (load.data) pushPassed("getLoad")
             else pushFailed({ function: "getLoad", error: load.error })
-          } catch (error: any) {
-            pushFailed({ function: "getLoad", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getLoad", error: errorMessage(error) })
           }
         }
       } else {
         pushFailed({ function: "getLoads", error: loads.error })
       }
-    } catch (error: any) {
-      pushFailed({ function: "getLoads", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getLoads", error: errorMessage(error) })
     }
 
     // Test load mileage calculation
@@ -307,8 +308,8 @@ export async function testAllPlatformFunctions() {
       } else {
         pushFailed({ function: "calculateMileage", error: "No result" })
       }
-    } catch (error: any) {
-      pushFailed({ function: "calculateMileage", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "calculateMileage", error: errorMessage(error) })
     }
 
     // Test load delivery points if we have loads
@@ -320,7 +321,7 @@ export async function testAllPlatformFunctions() {
         if (deliveryPoints.data !== undefined) pushPassed("getLoadDeliveryPoints")
         else pushFailed({ function: "getLoadDeliveryPoints", error: deliveryPoints.error })
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       pushSkipped({ function: "getLoadDeliveryPoints", reason: "No loads available" })
     }
 
@@ -340,8 +341,8 @@ export async function testAllPlatformFunctions() {
             pushTested("getRoute")
             if (route.data) pushPassed("getRoute")
             else pushFailed({ function: "getRoute", error: route.error })
-          } catch (error: any) {
-            pushFailed({ function: "getRoute", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getRoute", error: errorMessage(error) })
           }
 
           // Test route stops
@@ -350,8 +351,8 @@ export async function testAllPlatformFunctions() {
             pushTested("getRouteStops")
             if (stops.data !== undefined) pushPassed("getRouteStops")
             else pushFailed({ function: "getRouteStops", error: stops.error })
-          } catch (error: any) {
-            pushFailed({ function: "getRouteStops", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getRouteStops", error: errorMessage(error) })
           }
 
           // Test route summary
@@ -360,15 +361,15 @@ export async function testAllPlatformFunctions() {
             pushTested("getRouteSummary")
             if (summary.data) pushPassed("getRouteSummary")
             else pushFailed({ function: "getRouteSummary", error: summary.error })
-          } catch (error: any) {
-            pushFailed({ function: "getRouteSummary", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getRouteSummary", error: errorMessage(error) })
           }
         }
       } else {
         pushFailed({ function: "getRoutes", error: routes.error })
       }
-    } catch (error: any) {
-      pushFailed({ function: "getRoutes", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getRoutes", error: errorMessage(error) })
     }
 
     // Test route optimization functions
@@ -402,7 +403,7 @@ export async function testAllPlatformFunctions() {
               pushFailed({ function: "optimizeRouteOrder", error: "No result" })
             }
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           pushSkipped({ function: "optimizeRouteOrder", reason: "No stops available" })
         }
 
@@ -418,11 +419,11 @@ export async function testAllPlatformFunctions() {
           } else {
             pushFailed({ function: "calculateRouteDistance", error: "No result" })
           }
-        } catch (error: any) {
-          pushFailed({ function: "calculateRouteDistance", error: error.message })
+        } catch (error: unknown) {
+          pushFailed({ function: "calculateRouteDistance", error: errorMessage(error) })
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       pushSkipped({ function: "Route Optimization", reason: "No routes available" })
     }
 
@@ -448,8 +449,8 @@ export async function testAllPlatformFunctions() {
                 pushTested("getCustomerLoads")
                 if (loads.data !== undefined) pushPassed("getCustomerLoads")
                 else pushFailed({ function: "getCustomerLoads", error: (loads as any).error || "Unknown error" })
-              } catch (error: any) {
-                pushFailed({ function: "getCustomerLoads", error: error.message })
+              } catch (error: unknown) {
+                pushFailed({ function: "getCustomerLoads", error: errorMessage(error) })
               }
 
               try {
@@ -457,8 +458,8 @@ export async function testAllPlatformFunctions() {
                 pushTested("getCustomerInvoices")
                 if (invoices.data !== undefined) pushPassed("getCustomerInvoices")
                 else pushFailed({ function: "getCustomerInvoices", error: (invoices as any).error || "Unknown error" })
-              } catch (error: any) {
-                pushFailed({ function: "getCustomerInvoices", error: error.message })
+              } catch (error: unknown) {
+                pushFailed({ function: "getCustomerInvoices", error: errorMessage(error) })
               }
 
               try {
@@ -466,21 +467,21 @@ export async function testAllPlatformFunctions() {
                 pushTested("getCustomerHistory")
                 if (history.data !== undefined) pushPassed("getCustomerHistory")
                 else pushFailed({ function: "getCustomerHistory", error: (history as any).error || "Unknown error" })
-              } catch (error: any) {
-                pushFailed({ function: "getCustomerHistory", error: error.message })
+              } catch (error: unknown) {
+                pushFailed({ function: "getCustomerHistory", error: errorMessage(error) })
               }
             } else {
               pushFailed({ function: "getCustomer", error: customer.error })
             }
-          } catch (error: any) {
-            pushFailed({ function: "getCustomer", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getCustomer", error: errorMessage(error) })
           }
         }
       } else {
         pushFailed({ function: "getCustomers", error: customers.error })
       }
-    } catch (error: any) {
-      pushFailed({ function: "getCustomers", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getCustomers", error: errorMessage(error) })
     }
 
     // Test CREATE Customer
@@ -509,8 +510,8 @@ export async function testAllPlatformFunctions() {
           pushTested("updateCustomer")
           if (updated.data) pushPassed("updateCustomer")
           else pushFailed({ function: "updateCustomer", error: updated.error })
-        } catch (error: any) {
-          pushFailed({ function: "updateCustomer", error: error.message })
+        } catch (error: unknown) {
+          pushFailed({ function: "updateCustomer", error: errorMessage(error) })
         }
 
         // Test DELETE Customer
@@ -519,14 +520,14 @@ export async function testAllPlatformFunctions() {
           pushTested("deleteCustomer")
           if (!deleted.error) pushPassed("deleteCustomer")
           else pushFailed({ function: "deleteCustomer", error: deleted.error })
-        } catch (error: any) {
-          pushFailed({ function: "deleteCustomer", error: error.message })
+        } catch (error: unknown) {
+          pushFailed({ function: "deleteCustomer", error: errorMessage(error) })
         }
       } else {
         pushFailed({ function: "createCustomer", error: testCustomer.error })
       }
-    } catch (error: any) {
-      pushFailed({ function: "createCustomer", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "createCustomer", error: errorMessage(error) })
     }
 
     // ============================================
@@ -551,8 +552,8 @@ export async function testAllPlatformFunctions() {
                 pushTested("getVendorExpenses")
                 if (expenses.data !== undefined) pushPassed("getVendorExpenses")
                 else pushFailed({ function: "getVendorExpenses", error: expenses.error })
-              } catch (error: any) {
-                pushFailed({ function: "getVendorExpenses", error: error.message })
+              } catch (error: unknown) {
+                pushFailed({ function: "getVendorExpenses", error: errorMessage(error) })
               }
 
               try {
@@ -560,21 +561,21 @@ export async function testAllPlatformFunctions() {
                 pushTested("getVendorMaintenance")
                 if (maintenance.data !== undefined) pushPassed("getVendorMaintenance")
                 else pushFailed({ function: "getVendorMaintenance", error: maintenance.error })
-              } catch (error: any) {
-                pushFailed({ function: "getVendorMaintenance", error: error.message })
+              } catch (error: unknown) {
+                pushFailed({ function: "getVendorMaintenance", error: errorMessage(error) })
               }
             } else {
               pushFailed({ function: "getVendor", error: vendor.error })
             }
-          } catch (error: any) {
-            pushFailed({ function: "getVendor", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getVendor", error: errorMessage(error) })
           }
         }
       } else {
         pushFailed({ function: "getVendors", error: vendors.error })
       }
-    } catch (error: any) {
-      pushFailed({ function: "getVendors", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getVendors", error: errorMessage(error) })
     }
 
     // Test CREATE Vendor
@@ -603,8 +604,8 @@ export async function testAllPlatformFunctions() {
           pushTested("updateVendor")
           if (updated.data) pushPassed("updateVendor")
           else pushFailed({ function: "updateVendor", error: updated.error })
-        } catch (error: any) {
-          pushFailed({ function: "updateVendor", error: error.message })
+        } catch (error: unknown) {
+          pushFailed({ function: "updateVendor", error: errorMessage(error) })
         }
 
         // Test DELETE Vendor
@@ -613,14 +614,14 @@ export async function testAllPlatformFunctions() {
           pushTested("deleteVendor")
           if (!deleted.error) pushPassed("deleteVendor")
           else pushFailed({ function: "deleteVendor", error: deleted.error })
-        } catch (error: any) {
-          pushFailed({ function: "deleteVendor", error: error.message })
+        } catch (error: unknown) {
+          pushFailed({ function: "deleteVendor", error: errorMessage(error) })
         }
       } else {
         pushFailed({ function: "createVendor", error: testVendor.error })
       }
-    } catch (error: any) {
-      pushFailed({ function: "createVendor", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "createVendor", error: errorMessage(error) })
     }
 
     // ============================================
@@ -638,15 +639,15 @@ export async function testAllPlatformFunctions() {
             pushTested("getInvoice")
             if (invoice.data) pushPassed("getInvoice")
             else pushFailed({ function: "getInvoice", error: invoice.error })
-          } catch (error: any) {
-            pushFailed({ function: "getInvoice", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getInvoice", error: errorMessage(error) })
           }
         }
       } else {
         pushFailed({ function: "getInvoices", error: invoices.error })
       }
-    } catch (error: any) {
-      pushFailed({ function: "getInvoices", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getInvoices", error: errorMessage(error) })
     }
 
     try {
@@ -654,8 +655,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getExpenses")
       if (expenses.data) pushPassed("getExpenses")
       else pushFailed({ function: "getExpenses", error: expenses.error })
-    } catch (error: any) {
-      pushFailed({ function: "getExpenses", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getExpenses", error: errorMessage(error) })
     }
 
     try {
@@ -663,8 +664,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getSettlements")
       if (settlements.data) pushPassed("getSettlements")
       else pushFailed({ function: "getSettlements", error: settlements.error })
-    } catch (error: any) {
-      pushFailed({ function: "getSettlements", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getSettlements", error: errorMessage(error) })
     }
 
     // Test auto-generate invoices
@@ -673,8 +674,8 @@ export async function testAllPlatformFunctions() {
       pushTested("autoGenerateInvoicesFromLoads")
       if (autoInvoices.data !== undefined) pushPassed("autoGenerateInvoicesFromLoads")
       else pushFailed({ function: "autoGenerateInvoicesFromLoads", error: (autoInvoices as any).error || "Unknown error" })
-    } catch (error: any) {
-      pushFailed({ function: "autoGenerateInvoicesFromLoads", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "autoGenerateInvoicesFromLoads", error: errorMessage(error) })
     }
 
     // Test CREATE Settlement
@@ -701,14 +702,14 @@ export async function testAllPlatformFunctions() {
             pushTested("deleteSettlement")
             if (!deleted.error) pushPassed("deleteSettlement")
             else pushFailed({ function: "deleteSettlement", error: deleted.error })
-          } catch (error: any) {
-            pushFailed({ function: "deleteSettlement", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "deleteSettlement", error: errorMessage(error) })
           }
         } else {
           pushFailed({ function: "createSettlement", error: settlement.error })
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       pushSkipped({ function: "createSettlement", reason: "No drivers available" })
     }
 
@@ -727,15 +728,15 @@ export async function testAllPlatformFunctions() {
             pushTested("getBOL")
             if (bol.data) pushPassed("getBOL")
             else pushFailed({ function: "getBOL", error: bol.error })
-          } catch (error: any) {
-            pushFailed({ function: "getBOL", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getBOL", error: errorMessage(error) })
           }
         }
       } else {
         pushFailed({ function: "getBOLs", error: bols.error })
       }
-    } catch (error: any) {
-      pushFailed({ function: "getBOLs", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getBOLs", error: errorMessage(error) })
     }
 
     try {
@@ -743,8 +744,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getBOLTemplates")
       if (templates.data) pushPassed("getBOLTemplates")
       else pushFailed({ function: "getBOLTemplates", error: templates.error || "Unknown error" })
-    } catch (error: any) {
-      pushFailed({ function: "getBOLTemplates", error: error.message || "Unknown error" })
+    } catch (error: unknown) {
+      pushFailed({ function: "getBOLTemplates", error: errorMessage(error, "Unknown error") })
     }
 
     // Test CREATE BOL
@@ -783,7 +784,7 @@ export async function testAllPlatformFunctions() {
           pushSkipped({ function: "createBOL", reason: "All loads already have BOLs" })
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       pushSkipped({ function: "createBOL", reason: "No loads available" })
     }
 
@@ -799,8 +800,8 @@ export async function testAllPlatformFunctions() {
       } else {
         pushFailed({ function: "getMaintenance", error: maintenance.error })
       }
-    } catch (error: any) {
-      pushFailed({ function: "getMaintenance", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getMaintenance", error: errorMessage(error) })
     }
 
     // Test CREATE Maintenance (direct DB insert since no createMaintenance function exists)
@@ -835,15 +836,15 @@ export async function testAllPlatformFunctions() {
               pushTested("deleteMaintenance")
               if (!deleted.error) pushPassed("deleteMaintenance")
               else pushFailed({ function: "deleteMaintenance", error: deleted.error })
-            } catch (error: any) {
-              pushFailed({ function: "deleteMaintenance", error: error.message })
+            } catch (error: unknown) {
+              pushFailed({ function: "deleteMaintenance", error: errorMessage(error) })
             }
           } else {
             pushFailed({ function: "createMaintenance", error: maintError?.message || "Failed" })
           }
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       pushSkipped({ function: "createMaintenance", reason: "No trucks available" })
     }
 
@@ -862,8 +863,8 @@ export async function testAllPlatformFunctions() {
             pushTested("getELDDevice")
             if (device.data) pushPassed("getELDDevice")
             else pushFailed({ function: "getELDDevice", error: device.error })
-          } catch (error: any) {
-            pushFailed({ function: "getELDDevice", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getELDDevice", error: errorMessage(error) })
           }
 
           // Test ELD logs
@@ -872,8 +873,8 @@ export async function testAllPlatformFunctions() {
             pushTested("getELDLogs")
             if (logs.data !== undefined) pushPassed("getELDLogs")
             else pushFailed({ function: "getELDLogs", error: logs.error || "Unknown error" })
-          } catch (error: any) {
-            pushFailed({ function: "getELDLogs", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getELDLogs", error: errorMessage(error) })
           }
 
           // Test ELD events
@@ -882,8 +883,8 @@ export async function testAllPlatformFunctions() {
             pushTested("getELDEvents")
             if (events.data !== undefined) pushPassed("getELDEvents")
             else pushFailed({ function: "getELDEvents", error: events.error || "Unknown error" })
-          } catch (error: any) {
-            pushFailed({ function: "getELDEvents", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getELDEvents", error: errorMessage(error) })
           }
 
           // Test ELD mileage data
@@ -901,15 +902,15 @@ export async function testAllPlatformFunctions() {
             } else {
               pushSkipped({ function: "getELDMileageData", reason: "No trucks available" })
             }
-          } catch (error: any) {
-            pushFailed({ function: "getELDMileageData", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getELDMileageData", error: errorMessage(error) })
           }
         }
       } else {
         pushFailed({ function: "getELDDevices", error: devices.error })
       }
-    } catch (error: any) {
-      pushFailed({ function: "getELDDevices", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getELDDevices", error: errorMessage(error) })
     }
 
     // Test ELD advanced functions
@@ -921,8 +922,8 @@ export async function testAllPlatformFunctions() {
           pushTested("calculateRemainingHOS")
           if (remainingHOS.data !== undefined) pushPassed("calculateRemainingHOS")
           else pushFailed({ function: "calculateRemainingHOS", error: (remainingHOS as any).error || "Unknown error" })
-        } catch (error: any) {
-          pushFailed({ function: "calculateRemainingHOS", error: error.message })
+        } catch (error: unknown) {
+          pushFailed({ function: "calculateRemainingHOS", error: errorMessage(error) })
         }
 
         try {
@@ -930,8 +931,8 @@ export async function testAllPlatformFunctions() {
           pushTested("getDriverScorecard")
           if (scorecard.data !== undefined) pushPassed("getDriverScorecard")
           else pushFailed({ function: "getDriverScorecard", error: (scorecard as any).error || "Unknown error" })
-        } catch (error: any) {
-          pushFailed({ function: "getDriverScorecard", error: error.message })
+        } catch (error: unknown) {
+          pushFailed({ function: "getDriverScorecard", error: errorMessage(error) })
         }
 
         try {
@@ -939,11 +940,11 @@ export async function testAllPlatformFunctions() {
           pushTested("getDriverRecommendations")
           if (recommendations.data !== undefined) pushPassed("getDriverRecommendations")
           else pushFailed({ function: "getDriverRecommendations", error: (recommendations as any).error || "Unknown error" })
-        } catch (error: any) {
-          pushFailed({ function: "getDriverRecommendations", error: error.message })
+        } catch (error: unknown) {
+          pushFailed({ function: "getDriverRecommendations", error: errorMessage(error) })
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       pushSkipped({ function: "ELD Advanced", reason: "No drivers available" })
     }
 
@@ -952,8 +953,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getFleetHealth")
       if (fleetHealth.data !== undefined) pushPassed("getFleetHealth")
       else pushFailed({ function: "getFleetHealth", error: (fleetHealth as any).error || "Unknown error" })
-    } catch (error: any) {
-      pushFailed({ function: "getFleetHealth", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getFleetHealth", error: errorMessage(error) })
     }
 
     try {
@@ -961,8 +962,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getRealtimeLocations")
       if (locations.data !== undefined) pushPassed("getRealtimeLocations")
       else pushFailed({ function: "getRealtimeLocations", error: (locations as any).error || "Unknown error" })
-    } catch (error: any) {
-      pushFailed({ function: "getRealtimeLocations", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getRealtimeLocations", error: errorMessage(error) })
     }
 
     try {
@@ -970,8 +971,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getPredictiveAlerts")
       if (alerts.data !== undefined) pushPassed("getPredictiveAlerts")
       else pushFailed({ function: "getPredictiveAlerts", error: (alerts as any).error || "Unknown error" })
-    } catch (error: any) {
-      pushFailed({ function: "getPredictiveAlerts", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getPredictiveAlerts", error: errorMessage(error) })
     }
 
     try {
@@ -979,8 +980,8 @@ export async function testAllPlatformFunctions() {
       pushTested("generateELDInsights")
       if (insights.data !== undefined) pushPassed("generateELDInsights")
       else pushFailed({ function: "generateELDInsights", error: (insights as any).error || "Unknown error" })
-    } catch (error: any) {
-      pushFailed({ function: "generateELDInsights", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "generateELDInsights", error: errorMessage(error) })
     }
 
     // Test CREATE ELD Log
@@ -1001,7 +1002,7 @@ export async function testAllPlatformFunctions() {
         if (log.data) pushPassed("createELDLog")
         else pushFailed({ function: "createELDLog", error: log.error })
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       pushSkipped({ function: "createELDLog", reason: "No devices/drivers available" })
     }
 
@@ -1023,7 +1024,7 @@ export async function testAllPlatformFunctions() {
         if (location.data) pushPassed("createELDLocation")
         else pushFailed({ function: "createELDLocation", error: location.error })
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       pushSkipped({ function: "createELDLocation", reason: "No devices/drivers available" })
     }
 
@@ -1050,14 +1051,14 @@ export async function testAllPlatformFunctions() {
             pushTested("resolveELDEvent")
             if (resolved.data || resolved.error) pushPassed("resolveELDEvent")
             else pushFailed({ function: "resolveELDEvent", error: "No result" })
-          } catch (error: any) {
-            pushFailed({ function: "resolveELDEvent", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "resolveELDEvent", error: errorMessage(error) })
           }
         } else {
           pushFailed({ function: "createELDEvent", error: event.error })
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       pushSkipped({ function: "createELDEvent", reason: "No devices/drivers available" })
     }
 
@@ -1070,8 +1071,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getIFTAReports")
       if (iftaReports.data) pushPassed("getIFTAReports")
       else pushFailed({ function: "getIFTAReports", error: iftaReports.error })
-    } catch (error: any) {
-      pushFailed({ function: "getIFTAReports", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getIFTAReports", error: errorMessage(error) })
     }
 
     // Test CREATE IFTA Report
@@ -1093,14 +1094,14 @@ export async function testAllPlatformFunctions() {
             pushTested("deleteIFTAReport")
             if (!deleted.error) pushPassed("deleteIFTAReport")
             else pushFailed({ function: "deleteIFTAReport", error: deleted.error })
-          } catch (error: any) {
-            pushFailed({ function: "deleteIFTAReport", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "deleteIFTAReport", error: errorMessage(error) })
           }
         } else {
           pushFailed({ function: "createIFTAReport", error: iftaReport.error })
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       pushSkipped({ function: "createIFTAReport", reason: "No trucks available" })
     }
 
@@ -1116,8 +1117,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getRevenueReport")
       if (revenueReport.data) pushPassed("getRevenueReport")
       else pushFailed({ function: "getRevenueReport", error: revenueReport.error })
-    } catch (error: any) {
-      pushFailed({ function: "getRevenueReport", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getRevenueReport", error: errorMessage(error) })
     }
 
     try {
@@ -1128,8 +1129,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getProfitLossReport")
       if (profitLossReport.data) pushPassed("getProfitLossReport")
       else pushFailed({ function: "getProfitLossReport", error: profitLossReport.error })
-    } catch (error: any) {
-      pushFailed({ function: "getProfitLossReport", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getProfitLossReport", error: errorMessage(error) })
     }
 
     try {
@@ -1140,8 +1141,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getDriverPaymentsReport")
       if (driverPaymentsReport.data) pushPassed("getDriverPaymentsReport")
       else pushFailed({ function: "getDriverPaymentsReport", error: driverPaymentsReport.error })
-    } catch (error: any) {
-      pushFailed({ function: "getDriverPaymentsReport", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getDriverPaymentsReport", error: errorMessage(error) })
     }
 
     // ============================================
@@ -1153,8 +1154,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getUnassignedLoads")
       if (unassignedLoads.data !== undefined) pushPassed("getUnassignedLoads")
       else pushFailed({ function: "getUnassignedLoads", error: unassignedLoads.error })
-    } catch (error: any) {
-      pushFailed({ function: "getUnassignedLoads", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getUnassignedLoads", error: errorMessage(error) })
     }
 
     try {
@@ -1162,8 +1163,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getUnassignedRoutes")
       if (unassignedRoutes.data !== undefined) pushPassed("getUnassignedRoutes")
       else pushFailed({ function: "getUnassignedRoutes", error: unassignedRoutes.error })
-    } catch (error: any) {
-      pushFailed({ function: "getUnassignedRoutes", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getUnassignedRoutes", error: errorMessage(error) })
     }
 
     // ============================================
@@ -1175,8 +1176,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getAddressBookContacts")
       if (contacts.data) pushPassed("getAddressBookContacts")
       else pushFailed({ function: "getAddressBookContacts", error: contacts.error })
-    } catch (error: any) {
-      pushFailed({ function: "getAddressBookContacts", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getAddressBookContacts", error: errorMessage(error) })
     }
 
     // ============================================
@@ -1194,15 +1195,15 @@ export async function testAllPlatformFunctions() {
             pushTested("getDocumentUrl")
             if (docUrl.data || docUrl.error) pushPassed("getDocumentUrl")
             else pushFailed({ function: "getDocumentUrl", error: "No result" })
-          } catch (error: any) {
-            pushFailed({ function: "getDocumentUrl", error: error.message })
+          } catch (error: unknown) {
+            pushFailed({ function: "getDocumentUrl", error: errorMessage(error) })
           }
         }
       } else {
         pushFailed({ function: "getDocuments", error: documents.error })
       }
-    } catch (error: any) {
-      pushFailed({ function: "getDocuments", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getDocuments", error: errorMessage(error) })
     }
 
     // Test DELETE Document (if we have documents)
@@ -1212,7 +1213,7 @@ export async function testAllPlatformFunctions() {
         // Skip delete test to avoid deleting real documents
         pushSkipped({ function: "deleteDocument", reason: "Skipped to preserve data" })
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       pushSkipped({ function: "deleteDocument", reason: "No documents available" })
     }
 
@@ -1225,8 +1226,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getEmployees")
       if (employees.data) pushPassed("getEmployees")
       else pushFailed({ function: "getEmployees", error: employees.error })
-    } catch (error: any) {
-      pushFailed({ function: "getEmployees", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "getEmployees", error: errorMessage(error) })
     }
 
     // Invitation functions removed
@@ -1240,8 +1241,8 @@ export async function testAllPlatformFunctions() {
       pushTested("getNotificationPreferences")
       if (preferences.data) pushPassed("getNotificationPreferences")
       else pushFailed({ function: "getNotificationPreferences", error: preferences.error || "Unknown error" })
-    } catch (error: any) {
-      pushFailed({ function: "getNotificationPreferences", error: error.message || "Unknown error" })
+    } catch (error: unknown) {
+      pushFailed({ function: "getNotificationPreferences", error: errorMessage(error, "Unknown error") })
     }
 
     try {
@@ -1249,8 +1250,8 @@ export async function testAllPlatformFunctions() {
       pushTested("checkEmailConfiguration")
       if (emailConfig.configured !== undefined) pushPassed("checkEmailConfiguration")
       else pushFailed({ function: "checkEmailConfiguration", error: "No result" })
-    } catch (error: any) {
-      pushFailed({ function: "checkEmailConfiguration", error: error.message })
+    } catch (error: unknown) {
+      pushFailed({ function: "checkEmailConfiguration", error: errorMessage(error) })
     }
 
 
@@ -1281,12 +1282,12 @@ export async function testAllPlatformFunctions() {
       },
       error: null,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
     // Get results from store - always safe
     const results = store.getResults()
     return {
-      error: error.message || "Function test failed",
+      error: errorMessage(error, "Function test failed"),
       data: {
         tested: results.tested,
         passed: results.passed,

@@ -50,7 +50,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
           setTruck(truckResult.data)
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load driver details")
     } finally {
       setIsLoading(false)

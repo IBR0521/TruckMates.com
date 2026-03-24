@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { errorMessage } from "@/lib/error-message"
 
 import { useState, useEffect } from "react"
 import { Menu, LogOut } from "lucide-react"
@@ -149,10 +150,10 @@ export default function DashboardLayoutClient({
           }
         }
         hasChecked = true
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Only log errors that aren't related to missing configuration
-        const errorMessage = error?.message || String(error)
-        if (!errorMessage.includes("Missing Supabase") && !errorMessage.includes("configuration")) {
+        const accessErr = errorMessage(error) || String(error)
+        if (!accessErr.includes("Missing Supabase") && !accessErr.includes("configuration")) {
           console.error("Error checking company access:", error)
         }
         hasChecked = true
@@ -208,7 +209,7 @@ export default function DashboardLayoutClient({
                     router.push("/login")
                     router.refresh()
                   }
-                } catch (error: any) {
+                } catch (error: unknown) {
                   toast.error("An error occurred during logout")
                   console.error("Logout error:", error)
                 }

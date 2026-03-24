@@ -1,3 +1,5 @@
+import { errorMessage } from "@/lib/error-message"
+
 /**
  * Reverse-geocode lat/lng → US state code using Google Geocoding API.
  * Server-only; uses same pattern as IFTA state crossing (cached per ~100m cell).
@@ -40,7 +42,7 @@ export async function getStateCodeFromLatLng(
       }
     }
     return { state_code: null, error: "State not found" }
-  } catch (e: any) {
-    return { state_code: null, error: e?.message || "Geocoding error" }
+  } catch (e: unknown) {
+    return { state_code: null, error: errorMessage(e, "Geocoding error") }
   }
 }

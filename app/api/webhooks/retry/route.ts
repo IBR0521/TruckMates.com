@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { retryWebhookDelivery } from "@/app/actions/webhooks"
 
 // Retry failed webhook deliveries
@@ -65,10 +66,10 @@ export async function POST(request: NextRequest) {
       retried,
       failed,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Webhook retry cron error:", error)
     return NextResponse.json(
-      { error: error.message, success: false },
+      { error: errorMessage(error), success: false },
       { status: 500 }
     )
   }

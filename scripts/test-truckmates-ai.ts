@@ -4,6 +4,7 @@
  */
 
 import { processAIRequest } from "../app/actions/truckmates-ai/orchestrator"
+import { errorMessage } from "@/lib/error-message"
 
 async function testTruckMatesAI() {
   console.log("🧪 Testing TruckMates AI System...\n")
@@ -71,8 +72,8 @@ async function testTruckMatesAI() {
         console.log(`   ⚠️  WARNING: Empty response`)
         failed++
       }
-    } catch (error: any) {
-      console.log(`   ❌ ERROR: ${error.message}`)
+    } catch (error: unknown) {
+      console.log(`   ❌ ERROR: ${errorMessage(error)}`)
       failed++
     }
   }

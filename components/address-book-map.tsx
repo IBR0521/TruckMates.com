@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useRef, useState } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Loader2, MapPin, AlertCircle } from "lucide-react"
@@ -229,8 +230,8 @@ function AddressBookMap({ entries }: AddressBookMapProps) {
       updateMarkers()
     } catch (error: unknown) {
       console.error("Error initializing map:", error)
-      const errorMessage = error instanceof Error ? error.message : "Unknown error"
-      setLoadError(`Error initializing Google Maps: ${errorMessage}`)
+      const mapErr = error instanceof Error ? errorMessage(error) : "Unknown error"
+      setLoadError(`Error initializing Google Maps: ${mapErr}`)
       setIsLoading(false)
     }
   }

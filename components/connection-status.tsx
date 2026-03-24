@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -22,9 +23,9 @@ export function ConnectionStatus() {
           setStatus("error")
           setError(data.message || "Connection failed")
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         setStatus("error")
-        setError(err.message || "Failed to check connection")
+        setError(errorMessage(err, "Failed to check connection"))
       }
     }
 

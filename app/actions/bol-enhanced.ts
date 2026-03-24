@@ -6,6 +6,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -147,7 +148,7 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
       }
     } catch (error: unknown) {
       Sentry.captureException(error)
-      const detail = error instanceof Error ? error.message : "Unknown error"
+      const detail = error instanceof Error ? errorMessage(error) : "Unknown error"
       return {
         error: `Failed to generate PDF: ${detail}`,
         data: null,
@@ -214,7 +215,7 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
     return { data: { pdf_url: pdfUrl }, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to store BOL PDF"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to store BOL PDF"
     return { error: message, data: null }
   }
 }
@@ -303,12 +304,12 @@ export async function autoStoreBOLPDFOnCompletion(bolId: string, companyId?: str
       return { error: "BOL is not completed. POD signature required.", data: null }
     } catch (error: unknown) {
       Sentry.captureException(error)
-      const message = error instanceof Error ? error.message : "Failed to auto-store BOL PDF"
+      const message = error instanceof Error ? errorMessage(error) : "Failed to auto-store BOL PDF"
       return { error: message, data: null }
     }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to auto-store BOL PDF"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to auto-store BOL PDF"
     return { error: message, data: null }
   }
 }

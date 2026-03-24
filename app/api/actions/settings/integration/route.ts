@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { updateIntegrationSettings } from "@/app/actions/settings-integration"
 
 export async function POST(request: NextRequest) {
@@ -19,9 +20,9 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true })
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { success: false, error: error?.message || "Internal server error" },
+      { success: false, error: errorMessage(error, "Internal server error") },
       { status: 500 },
     )
   }

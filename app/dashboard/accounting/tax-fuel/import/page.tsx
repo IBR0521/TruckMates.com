@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import {
@@ -60,8 +61,8 @@ export default function FuelCardImportPage() {
           toast.warning(`${result.data.failed} row${result.data.failed !== 1 ? "s" : ""} failed to import`)
         }
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to import fuel card data")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to import fuel card data"))
     } finally {
       setIsUploading(false)
     }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -56,8 +57,8 @@ export default function APIKeysPage() {
       } else {
         setKeys(result.data || [])
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to load API keys")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to load API keys"))
     } finally {
       setLoading(false)
     }
@@ -80,8 +81,8 @@ export default function APIKeysPage() {
         await loadKeys()
         toast.success("API key created successfully")
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to create API key")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to create API key"))
     }
   }
 
@@ -94,8 +95,8 @@ export default function APIKeysPage() {
         await loadKeys()
         toast.success("API key revoked")
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to revoke API key")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to revoke API key"))
     }
   }
 
@@ -108,8 +109,8 @@ export default function APIKeysPage() {
         await loadKeys()
         toast.success(`API key ${!currentStatus ? "activated" : "deactivated"}`)
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to update API key")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to update API key"))
     }
   }
 

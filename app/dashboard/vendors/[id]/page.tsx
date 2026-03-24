@@ -45,7 +45,7 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
       setVendor(vendorResult.data)
       setExpenses(expensesResult.data || [])
       setMaintenance(maintenanceResult.data || [])
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load vendor data")
     } finally {
       setIsLoading(false)

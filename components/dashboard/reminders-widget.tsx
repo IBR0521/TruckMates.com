@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -76,7 +77,7 @@ export function RemindersWidget() {
 
       // Show top 5
       setReminders(allReminders.slice(0, 5))
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error loading reminders:", error)
     } finally {
       setIsLoading(false)
@@ -93,8 +94,8 @@ export function RemindersWidget() {
         toast.success("Reminder completed")
         loadReminders()
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to complete reminder")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to complete reminder"))
     } finally {
       setCompletingId(null)
     }

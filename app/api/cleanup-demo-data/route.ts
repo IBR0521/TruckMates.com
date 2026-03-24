@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { removeAllDemoData } from "@/app/actions/cleanup-demo-data"
 
 export async function POST(request: NextRequest) {
@@ -16,9 +17,9 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "All demo data removed successfully",
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error.message || "Failed to remove demo data" },
+      { error: errorMessage(error, "Failed to remove demo data") },
       { status: 500 }
     )
   }

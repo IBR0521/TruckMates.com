@@ -1,3 +1,5 @@
+import { errorMessage } from "@/lib/error-message"
+
 /**
  * TruckMates AI LLM Engine
  * Wrapper for self-hosted LLM (Llama 3.1 or Mistral 7B via Ollama)
@@ -117,15 +119,21 @@ export class TruckMatesAIEngine {
         functionCalls,
         confidence
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Fallback response if LLM is not available
       console.error("LLM Engine error:", error)
       
+      const msg = errorMessage(error)
+      const code =
+        typeof error === "object" && error !== null && "code" in error
+          ? (error as { code?: unknown }).code
+          : undefined
+
       // Check if it's a connection error (Ollama not configured)
-      const isConnectionError = error.message?.includes('fetch failed') || 
-                                error.message?.includes('ECONNREFUSED') ||
-                                error.message?.includes('network') ||
-                                error.code === 'ECONNREFUSED' ||
+      const isConnectionError = msg.includes('fetch failed') || 
+                                msg.includes('ECONNREFUSED') ||
+                                msg.includes('network') ||
+                                code === 'ECONNREFUSED' ||
                                 !this.baseUrl ||
                                 this.baseUrl.includes('localhost')
       
@@ -133,8 +141,8 @@ export class TruckMatesAIEngine {
         // Log technical details server-side only
         console.error("[LLM Engine] Connection error - Ollama unavailable:", {
           baseUrl: this.baseUrl,
-          error: error.message,
-          code: error.code,
+          error: msg,
+          code,
           suggestion: "Set up Ollama on a VPS and configure OLLAMA_BASE_URL in Vercel. See PRODUCTION_OLLAMA_SETUP.md for details."
         })
         

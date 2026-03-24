@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -267,9 +268,9 @@ export async function importComdataFuelData(
             truck_number: truckIndex !== -1 ? row[truckIndex]?.trim() : undefined,
           })
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         importResult.failed++
-        importResult.errors.push({ row: i + 2, error: error.message || "Unknown error" })
+        importResult.errors.push({ row: i + 2, error: errorMessage(error, "Unknown error") })
       }
     }
 
@@ -277,7 +278,7 @@ export async function importComdataFuelData(
     return { data: importResult, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to import fuel data"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to import fuel data"
     return { error: message, data: null }
   }
 }

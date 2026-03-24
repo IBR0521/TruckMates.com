@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { validateRequiredString, sanitizeString } from "@/lib/validation"
@@ -165,8 +166,8 @@ export async function getGeofences(filters?: {
     }
 
     return { data: geofences || [], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get geofences", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get geofences"), data: null }
   }
 }
 
@@ -196,8 +197,8 @@ export async function getGeofence(id: string) {
     }
 
     return { data: geofence, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get geofence", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get geofence"), data: null }
   }
 }
 
@@ -312,8 +313,8 @@ export async function createGeofence(formData: {
 
     revalidatePath("/dashboard/geofencing")
     return { data: geofence, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to create geofence", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to create geofence"), data: null }
   }
 }
 
@@ -420,8 +421,8 @@ export async function updateGeofence(id: string, formData: Partial<{
     revalidatePath("/dashboard/geofencing")
     revalidatePath(`/dashboard/geofencing/${id}`)
     return { data: geofence, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to update geofence", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to update geofence"), data: null }
   }
 }
 
@@ -462,8 +463,8 @@ export async function deleteGeofence(id: string) {
 
     revalidatePath("/dashboard/geofencing")
     return { data: { success: true }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to delete geofence", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to delete geofence"), data: null }
   }
 }
 
@@ -712,8 +713,8 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
     }
 
     return { data: { events }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to check geofence entry", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to check geofence entry"), data: null }
   }
 }
 
@@ -778,8 +779,8 @@ export async function getZoneVisits(filters?: {
     }
 
     return { data: visits || [], error: null, count: count || 0 }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get zone visits", data: null, count: 0 }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get zone visits"), data: null, count: 0 }
   }
 }
 
@@ -827,8 +828,8 @@ export async function getGeofenceStates(filters?: {
     if (error) return { error: error.message, data: null, count: 0 }
 
     return { data: data || [], error: null, count: count || 0 }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get geofence states", data: null, count: 0 }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get geofence states"), data: null, count: 0 }
   }
 }
 
@@ -891,8 +892,8 @@ export async function getGeofencingStats(filters?: {
     }
 
     return { data: stats, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get geofencing stats", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get geofencing stats"), data: null }
   }
 }
 

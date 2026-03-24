@@ -3,6 +3,7 @@
 
 // @ts-expect-error — Deno URL imports are not resolved by the app TypeScript project
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { errorMessage } from "@/lib/error-message"
 // @ts-expect-error — Deno URL imports are not resolved by the app TypeScript project
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -182,10 +183,10 @@ serve(async (req: Request) => {
         status: 200,
       }
     )
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Daily Reminders] Unhandled error:", error)
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: errorMessage(error, "Internal server error") }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     )
   }

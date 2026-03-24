@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
 /** `public.geofences` — geofencing_schema.sql + PostGIS columns from postgis_migration.sql */
@@ -109,8 +110,8 @@ export async function getVehiclesInViewport(
     })
 
     return { data: Object.values(latestLocations), error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get vehicles in viewport", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get vehicles in viewport"), data: null }
   }
 }
 
@@ -165,8 +166,8 @@ export async function getGeofencesInViewport(
     }
 
     return { data: geofences || [], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get geofences in viewport", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get geofences in viewport"), data: null }
   }
 }
 

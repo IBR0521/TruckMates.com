@@ -8,6 +8,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -53,7 +54,7 @@ export async function checkPreTripDVIRRequired(
     return { data: { required: data || false }, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to check pre-trip requirement"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to check pre-trip requirement"
     return { error: message, data: null }
   }
 }
@@ -89,7 +90,7 @@ export async function getDVIRsForAudit(filters?: {
     return { data: data || [], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to get DVIRs for audit"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to get DVIRs for audit"
     return { error: message, data: null }
   }
 }
@@ -141,7 +142,7 @@ export async function createWorkOrdersFromDVIRDefects(
     return { data: data || [], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to create work orders"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to create work orders"
     return { error: message, data: null }
   }
 }
@@ -198,7 +199,7 @@ export async function getDVIRWorkOrders(
     return { data: workOrders || [], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to get work orders"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to get work orders"
     return { error: message, data: null }
   }
 }

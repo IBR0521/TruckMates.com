@@ -6,6 +6,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { geocodeAddress } from "./integrations-google-maps"
@@ -121,7 +122,7 @@ export async function findNearbyDriversForLoad(
     return { data: drivers || [], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to find nearby drivers"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to find nearby drivers"
     return { error: message, data: null }
   }
 }
@@ -161,8 +162,8 @@ export async function findNearbyDriversByCoordinates(
     }
 
     return { data: drivers || [], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to find nearby drivers", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to find nearby drivers"), data: null }
   }
 }
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -165,7 +166,7 @@ export function TripPlanningEstimatorPanel({
         toast.success("Estimate ready (not saved — open a load to attach it to a shipment)")
       }
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Trip planning failed")
+      toast.error(e instanceof Error ? errorMessage(e) : "Trip planning failed")
     } finally {
       setLoading(false)
     }

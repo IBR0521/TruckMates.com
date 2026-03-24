@@ -55,7 +55,7 @@ export function DispatchGantt({
       } else if (result.data) {
         setTimelines(result.data)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load timelines")
     } finally {
       setLoading(false)

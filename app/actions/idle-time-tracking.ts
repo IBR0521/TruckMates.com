@@ -6,6 +6,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -65,8 +66,8 @@ export async function detectIdleTime(
     }
 
     return { data: { session_id: sessionId }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to detect idle time", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to detect idle time"), data: null }
   }
 }
 
@@ -125,8 +126,8 @@ export async function getIdleTimeSessions(filters?: {
     }
 
     return { data: sessions || [], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get idle time sessions", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get idle time sessions"), data: null }
   }
 }
 
@@ -214,8 +215,8 @@ export async function getIdleTimeStats(filters?: {
       },
       error: null
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get idle time stats", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get idle time stats"), data: null }
   }
 }
 
@@ -271,8 +272,8 @@ export async function closeIdleSession(sessionId: string) {
     })
 
     return { data, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to close idle session", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to close idle session"), data: null }
   }
 }
 

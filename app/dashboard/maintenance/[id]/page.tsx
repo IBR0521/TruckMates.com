@@ -91,7 +91,7 @@ export default function MaintenanceDetailPage({ params }: { params: Promise<{ id
       setMaintenance(maintenanceResult.data)
       setWorkOrders(workOrdersResult.data || [])
       setDocuments(documentsResult.data || [])
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load maintenance data")
     } finally {
       setIsLoading(false)

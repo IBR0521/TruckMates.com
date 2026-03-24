@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { MapPin, Navigation, AlertTriangle } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -244,8 +245,8 @@ export function GoogleMapsRoute({
               lat: originResult[0].geometry.location.lat(),
               lng: originResult[0].geometry.location.lng(),
             }
-          } catch (err: any) {
-            throw new Error(`Failed to geocode origin "${origin}": ${err.message || "Unknown error"}`)
+          } catch (err: unknown) {
+            throw new Error(`Failed to geocode origin "${origin}": ${errorMessage(err, "Unknown error")}`)
           }
         }
 
@@ -290,8 +291,8 @@ export function GoogleMapsRoute({
               lat: destResult[0].geometry.location.lat(),
               lng: destResult[0].geometry.location.lng(),
             }
-          } catch (err: any) {
-            throw new Error(`Failed to geocode destination "${destination}": ${err.message || "Unknown error"}`)
+          } catch (err: unknown) {
+            throw new Error(`Failed to geocode destination "${destination}": ${errorMessage(err, "Unknown error")}`)
           }
         }
 
@@ -457,9 +458,9 @@ Visit: https://console.cloud.google.com/google/maps-apis`
 
         // Use default DirectionsRenderer markers and info windows
         // No custom markers needed
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Map initialization error:", err)
-        setError(err.message || "Failed to initialize map")
+        setError(errorMessage(err, "Failed to initialize map"))
         setIsLoading(false)
       }
     }

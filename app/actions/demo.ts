@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
 
@@ -162,19 +163,19 @@ export async function setupDemoCompany(userId: string | null) {
       }, 
       error: null 
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Return detailed error for debugging
-    const errorMessage = error?.message || String(error) || "Failed to setup demo company"
+    const errText = errorMessage(error) || String(error) || "Failed to setup demo company"
     
     // Provide helpful error messages
-    if (errorMessage.includes("Missing Supabase") || errorMessage.includes("NEXT_PUBLIC_SUPABASE")) {
+    if (errText.includes("Missing Supabase") || errText.includes("NEXT_PUBLIC_SUPABASE")) {
       return {
         error: "Supabase configuration missing. Please check your .env.local file and ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set.",
         data: null
       }
     }
     
-    if (errorMessage.includes("connect") || errorMessage.includes("ECONNREFUSED") || errorMessage.includes("timeout")) {
+    if (errText.includes("connect") || errText.includes("ECONNREFUSED") || errText.includes("timeout")) {
       return {
         error: "Failed to connect to Supabase. Please check:\n1. Your internet connection\n2. Supabase project is active (not paused)\n3. Environment variables are correct",
         data: null
@@ -182,7 +183,7 @@ export async function setupDemoCompany(userId: string | null) {
     }
     
     return { 
-      error: `Demo setup failed: ${errorMessage}`, 
+      error: `Demo setup failed: ${errText}`, 
       data: null 
     }
   }

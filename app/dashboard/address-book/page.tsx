@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -278,8 +279,8 @@ export default function EnhancedAddressBookPage() {
         toast.success("Address geocoded successfully")
         loadEntries()
       }
-    } catch (error: any) {
-      toast.error(`Failed to geocode address: ${error.message || "Unknown error"}`)
+    } catch (error: unknown) {
+      toast.error(`Failed to geocode address: ${errorMessage(error, "Unknown error")}`)
     } finally {
       setIsGeocoding(null)
     }

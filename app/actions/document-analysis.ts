@@ -1,6 +1,7 @@
 "use server"
 
 import { checkCreatePermission } from "@/lib/server-permissions"
+import { errorMessage } from "@/lib/error-message"
 import { sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
 import * as Sentry from "@sentry/nextjs"
 
@@ -487,10 +488,10 @@ ACTION:
               error: `Failed to fetch image document: ${errorText} (Status: ${imageResponse.status})`,
               data: null
             }
-          } catch (fetchError: any) {
+          } catch (fetchError: unknown) {
             if (retryCount >= maxRetries) {
               return {
-                error: `Failed to fetch image document: ${fetchError?.message || "Network error"}. Please ensure the file URL is accessible.`,
+                error: `Failed to fetch image document: ${errorMessage(fetchError, "Network error")}. Please ensure the file URL is accessible.`,
                 data: null
               }
             }
@@ -539,10 +540,10 @@ ACTION:
             url: `data:${mimeType};base64,${imageBase64}`
           }
         })
-      } catch (fetchError: any) {
+      } catch (fetchError: unknown) {
         Sentry.captureException(fetchError)
         return {
-          error: `Failed to process image document: ${fetchError?.message || "Unknown error"}. Please check the file URL and try again.`,
+          error: `Failed to process image document: ${errorMessage(fetchError, "Unknown error")}. Please check the file URL and try again.`,
           data: null
         }
       }
@@ -577,10 +578,10 @@ ACTION:
               error: `Failed to fetch PDF document: ${errorText} (Status: ${pdfResponse.status})`,
           data: null
             }
-          } catch (fetchError: any) {
+          } catch (fetchError: unknown) {
             if (retryCount >= maxRetries) {
               return {
-                error: `Failed to fetch PDF document: ${fetchError?.message || "Network error"}. Please ensure the file URL is accessible.`,
+                error: `Failed to fetch PDF document: ${errorMessage(fetchError, "Network error")}. Please ensure the file URL is accessible.`,
                 data: null
               }
             }
@@ -691,17 +692,17 @@ ACTION:
             multiPageWarning = `This PDF has ${pdfDocument.numPages} pages. Only the first page is being analyzed. If important information is on other pages, please upload those pages separately as images.`
             content[0].text += `\n\nNOTE: ${multiPageWarning}`
           }
-        } catch (pdfError: any) {
+        } catch (pdfError: unknown) {
           Sentry.captureException(pdfError)
           return {
-            error: `Failed to convert PDF to image: ${pdfError?.message || "Unknown error"}. Please try converting the PDF to images manually and upload those instead.`,
+            error: `Failed to convert PDF to image: ${errorMessage(pdfError, "Unknown error")}. Please try converting the PDF to images manually and upload those instead.`,
             data: null
           }
         }
-      } catch (fetchError: any) {
+      } catch (fetchError: unknown) {
         Sentry.captureException(fetchError)
         return {
-          error: `Failed to process PDF document: ${fetchError?.message || "Unknown error"}. Please check the file URL and try again.`,
+          error: `Failed to process PDF document: ${errorMessage(fetchError, "Unknown error")}. Please check the file URL and try again.`,
           data: null
         }
       }
@@ -743,11 +744,11 @@ ACTION:
           })
         }
       )
-    } catch (fetchError: any) {
+    } catch (fetchError: unknown) {
       // CRH-008: Clear timeout on error
       if (timeoutId) clearTimeout(timeoutId)
       return {
-        error: `Failed to connect to OpenAI API: ${fetchError?.message || "Network error"}. Please check your internet connection and try again.`,
+        error: `Failed to connect to OpenAI API: ${errorMessage(fetchError, "Network error")}. Please check your internet connection and try again.`,
         data: null
       }
     } finally {
@@ -826,7 +827,7 @@ ACTION:
     let openaiData
     try {
       openaiData = await openaiResponse.json()
-    } catch (jsonError: any) {
+    } catch (jsonError: unknown) {
       Sentry.captureException(jsonError)
       try {
         const responseText = await openaiResponse.text()
@@ -883,18 +884,18 @@ ACTION:
       error: null,
       warning: multiPageWarning || null // FIXED: Return warning to user
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
     
     // Provide more specific error messages
-    if (error?.message?.includes("fetch")) {
+    if (errorMessage(error)?.includes("fetch")) {
       return {
         error: "Failed to connect to OpenAI API. Please check your internet connection and try again.",
         data: null
       }
     }
     
-    if (error?.message?.includes("JSON")) {
+    if (errorMessage(error)?.includes("JSON")) {
       return {
         error: "Failed to parse response from OpenAI. Please try again.",
         data: null
@@ -902,7 +903,7 @@ ACTION:
     }
     
     return {
-      error: error?.message || "An unexpected error occurred while analyzing the document. Please try again.",
+      error: errorMessage(error, "An unexpected error occurred while analyzing the document. Please try again."),
       data: null
     }
   }
@@ -1130,9 +1131,9 @@ Please try uploading a NEW document - old uploads may have incorrect URLs.`,
       },
       error: null
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      error: error?.message || "An unexpected error occurred",
+      error: errorMessage(error, "An unexpected error occurred"),
       data: null
     }
   }
@@ -1602,9 +1603,9 @@ export async function createRecordFromExtractedData(
       },
       error: null
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      error: error?.message || "An unexpected error occurred",
+      error: errorMessage(error, "An unexpected error occurred"),
       data: null
     }
   }

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
@@ -38,10 +39,10 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "Demo data population initiated. Please run insert_demo_platform_data.sql manually in Supabase SQL editor."
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Demo populate error:", error)
     return NextResponse.json(
-      { error: error.message || "Failed to populate demo data" },
+      { error: errorMessage(error, "Failed to populate demo data") },
       { status: 500 }
     )
   }

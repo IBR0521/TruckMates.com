@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 
@@ -444,8 +445,8 @@ export async function getDriverBehaviorScore(driverId: string, days: number = 30
       },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to calculate behavior score", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to calculate behavior score"), data: null }
   }
 }
 
@@ -504,7 +505,7 @@ export async function getAllDriverBehaviorScores(days: number = 30) {
       },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get driver behavior scores", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get driver behavior scores"), data: null }
   }
 }

@@ -11,6 +11,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -439,11 +440,11 @@ export async function calculateRouteDistance(
       error: "Invalid response from Google Maps API",
       useAPI: true,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       distance: 0,
       duration: 0,
-      error: error.message || "Failed to calculate route distance",
+      error: errorMessage(error, "Failed to calculate route distance"),
       useAPI: false,
     }
   }

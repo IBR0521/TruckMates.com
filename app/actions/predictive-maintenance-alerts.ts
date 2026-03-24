@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { sendSMSNotification } from "./sms"
 import * as Sentry from "@sentry/nextjs"
@@ -110,11 +111,11 @@ export async function checkAndSendMaintenanceAlerts(
         if (smsResult.sent) {
           alertsSent++
         }
-      } catch (smsError: any) {
+      } catch (smsError: unknown) {
         Sentry.captureException(smsError)
         await supabase
           .from("maintenance_alert_notifications")
-          .update({ status: "failed", error_message: smsError.message })
+          .update({ status: "failed", error_message: errorMessage(smsError) })
           .eq("id", alert.id)
       }
     }
@@ -126,9 +127,9 @@ export async function checkAndSendMaintenanceAlerts(
       },
       error: null
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error.message || "Failed to check maintenance alerts", data: null }
+    return { error: errorMessage(error, "Failed to check maintenance alerts"), data: null }
   }
 }
 
@@ -180,8 +181,8 @@ export async function getMaintenanceAlertHistory(filters?: {
     }
 
     return { data: alerts || [], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get alert history", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get alert history"), data: null }
   }
 }
 

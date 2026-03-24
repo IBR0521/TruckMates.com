@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
@@ -122,8 +123,8 @@ export async function uploadCRMDocument(
 
     revalidatePath("/dashboard/crm")
     return { data: documentData as CRMDocument, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to upload document", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to upload document"), data: null }
   }
 }
 
@@ -184,8 +185,8 @@ export async function getCRMDocuments(filters?: {
     }))
 
     return { data: formattedData as CRMDocument[], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get documents", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get documents"), data: null }
   }
 }
 
@@ -260,8 +261,8 @@ export async function getExpiringCRMDocuments(
     }
 
     return { data: data as ExpiringDocument[], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get expiring documents", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get expiring documents"), data: null }
   }
 }
 
@@ -353,8 +354,8 @@ export async function deleteCRMDocument(documentId: string): Promise<{
 
     revalidatePath("/dashboard/crm")
     return { data: true, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to delete document", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to delete document"), data: null }
   }
 }
 
@@ -382,8 +383,8 @@ export async function markExpirationAlertSent(
     }
 
     return { data: true, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to update alert status", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to update alert status"), data: null }
   }
 }
 

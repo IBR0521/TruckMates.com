@@ -181,7 +181,7 @@ export default function LoadSettingsPage() {
           max_stops_per_route: result.data.max_stops_per_route || 10,
         })
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load settings")
     } finally {
       setIsLoading(false)
@@ -198,7 +198,7 @@ export default function LoadSettingsPage() {
       } else {
         toast.success("Load settings updated")
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to save settings")
     } finally {
       setIsSaving(false)

@@ -32,7 +32,7 @@ export async function executeQuery<T>(
 
   try {
     return await retryWithBackoff(executeWithTimeout, maxRetries, 500)
-  } catch (error: any) {
+  } catch (error: unknown) {
     const connectionError = handleConnectionError(error)
     
     return {

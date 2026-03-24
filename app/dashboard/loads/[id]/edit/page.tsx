@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { errorMessage } from "@/lib/error-message"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -313,8 +314,8 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
         } else {
           toast.success("Load updated successfully")
         }
-      } catch (error: any) {
-        toast.error(`Load updated but failed to update some delivery points: ${error.message}`)
+      } catch (error: unknown) {
+        toast.error(`Load updated but failed to update some delivery points: ${errorMessage(error)}`)
       }
     } else {
       toast.success("Load updated successfully")

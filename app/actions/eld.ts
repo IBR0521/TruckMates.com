@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -37,7 +38,7 @@ export async function getELDDevices() {
     return { data: devices, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -79,7 +80,7 @@ export async function getELDDevice(id: string) {
     return { data: device, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -156,7 +157,7 @@ export async function createELDDevice(formData: {
     return { data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to create ELD device"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to create ELD device"
     return { error: message, data: null }
   }
 }
@@ -228,7 +229,7 @@ export async function updateELDDevice(
     return { data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to update ELD device"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to update ELD device"
     return { error: message, data: null }
   }
 }
@@ -269,7 +270,7 @@ export async function deleteELDDevice(id: string) {
     return { error: null, data: { id } }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to delete ELD device"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to delete ELD device"
     return { error: message, data: null }
   }
 }

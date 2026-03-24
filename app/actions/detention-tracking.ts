@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission, checkCreatePermission } from "@/lib/server-permissions"
 
@@ -104,8 +105,8 @@ export async function getActiveDetentions() {
     }
 
     return { data: detentions || [], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get active detentions", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get active detentions"), data: null }
   }
 }
 
@@ -182,8 +183,8 @@ export async function getDetentionRecords(filters?: {
     }
 
     return { data: detentions || [], error: null, count: count || 0 }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get detention records", data: null, count: 0 }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get detention records"), data: null, count: 0 }
   }
 }
 
@@ -290,10 +291,10 @@ export async function checkAndCreateDetentions() {
           })
           if (newId) created.push(newId)
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         errors.push({
           zone_visit_id: detention.zone_visit_id,
-          error: error.message
+          error: errorMessage(error)
         })
       }
     }
@@ -306,8 +307,8 @@ export async function checkAndCreateDetentions() {
       },
       error: null
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to check detentions", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to check detentions"), data: null }
   }
 }
 
@@ -348,8 +349,8 @@ export async function finalizeDetention(zoneVisitId: string) {
     }
 
     return { data: { detention_id: detentionId }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to finalize detention", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to finalize detention"), data: null }
   }
 }
 
@@ -401,8 +402,8 @@ export async function addDetentionToInvoice(detentionId: string, invoiceId: stri
     }
 
     return { data: { success }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to add detention to invoice", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to add detention to invoice"), data: null }
   }
 }
 
@@ -461,8 +462,8 @@ export async function autoAddDetentionsToInvoice(loadId: string) {
       },
       error: null
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to auto-add detentions", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to auto-add detentions"), data: null }
   }
 }
 
@@ -513,8 +514,8 @@ export async function updateGeofenceDetentionSettings(
     }
 
     return { data, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to update detention settings", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to update detention settings"), data: null }
   }
 }
 
@@ -635,8 +636,8 @@ export async function getDetentionAnalytics(filters?: {
       },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get detention analytics", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get detention analytics"), data: null }
   }
 }
 

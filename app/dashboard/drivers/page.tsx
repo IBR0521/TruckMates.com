@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { Plus, Edit2, Trash2, Eye, Download, Users, Search, Filter, Trophy } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -71,8 +72,8 @@ function DriversPageContent() {
       }
 
       await loadDrivers()
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to import drivers")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to import drivers"))
     } finally {
       setIsImporting(false)
     }
@@ -97,9 +98,9 @@ function DriversPageContent() {
       } else {
         setDriversList([])
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error loading drivers:", error)
-      toast.error(error?.message || "Failed to load drivers")
+      toast.error(errorMessage(error, "Failed to load drivers"))
       setDriversList([])
     } finally {
       setIsLoading(false)

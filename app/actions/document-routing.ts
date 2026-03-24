@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkEditPermission, checkViewPermission } from "@/lib/server-permissions"
@@ -181,8 +182,8 @@ export async function linkDocumentToRecord(
 
     revalidatePath("/dashboard/documents")
     return { success: true, error: null }
-  } catch (error: any) {
-    return { success: false, error: error?.message || "Failed to link document" }
+  } catch (error: unknown) {
+    return { success: false, error: errorMessage(error, "Failed to link document") }
   }
 }
 
@@ -309,8 +310,8 @@ export async function getRecordsForRouting(
     }) || []
 
     return { data: formattedData, error: null }
-  } catch (error: any) {
-    return { error: error?.message || "Failed to fetch records", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to fetch records"), data: null }
   }
 }
 

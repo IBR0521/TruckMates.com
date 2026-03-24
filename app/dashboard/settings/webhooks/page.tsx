@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -95,8 +96,8 @@ export default function WebhooksPage() {
       } else {
         setWebhooks(result.data || [])
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to load webhooks")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to load webhooks"))
     } finally {
       setLoading(false)
     }
@@ -118,8 +119,8 @@ export default function WebhooksPage() {
         resetForm()
         loadWebhooks()
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to create webhook")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to create webhook"))
     }
   }
 
@@ -139,8 +140,8 @@ export default function WebhooksPage() {
         resetForm()
         loadWebhooks()
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to update webhook")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to update webhook"))
     }
   }
 
@@ -153,8 +154,8 @@ export default function WebhooksPage() {
         toast.success("Webhook deleted successfully")
         loadWebhooks()
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to delete webhook")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to delete webhook"))
     }
   }
 
@@ -167,8 +168,8 @@ export default function WebhooksPage() {
         toast.success("Test webhook sent successfully")
         loadWebhooks()
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to test webhook")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to test webhook"))
     }
   }
 
@@ -182,8 +183,8 @@ export default function WebhooksPage() {
         setSelectedWebhook(webhookId)
         setShowDeliveries(true)
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to load deliveries")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to load deliveries"))
     }
   }
 

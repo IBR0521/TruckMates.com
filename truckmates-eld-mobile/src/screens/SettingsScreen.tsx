@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react'
+import { errorMessage } from "@/lib/error-message"
 import {
   View,
   Text,
@@ -133,8 +134,8 @@ export default function SettingsScreen() {
               await authService.signOut()
               
               // Navigation will handle redirecting to login
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to log out')
+            } catch (error: unknown) {
+              Alert.alert('Error', errorMessage(error, 'Failed to log out'))
             } finally {
               setIsLoading(false)
             }
@@ -161,8 +162,8 @@ export default function SettingsScreen() {
               // Clear all AsyncStorage data
               await AsyncStorage.clear()
               Alert.alert('Success', 'Cache cleared successfully')
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to clear cache')
+            } catch (error: unknown) {
+              Alert.alert('Error', errorMessage(error, 'Failed to clear cache'))
             }
           },
         },

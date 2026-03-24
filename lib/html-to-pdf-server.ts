@@ -1,3 +1,5 @@
+import { errorMessage } from "@/lib/error-message"
+
 /**
  * Server-only HTML → PDF using Puppeteer (same pattern as BOL / DVIR PDF routes).
  */
@@ -47,7 +49,7 @@ export async function htmlToPdfBuffer(html: string): Promise<{ pdf: Buffer | nul
       await browser.close()
     }
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "PDF generation failed"
+    const msg = e instanceof Error ? errorMessage(e) : "PDF generation failed"
     console.error("[htmlToPdfBuffer]", msg)
     return { pdf: null, error: msg }
   }

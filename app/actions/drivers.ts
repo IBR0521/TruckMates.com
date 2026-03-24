@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -52,7 +53,7 @@ export async function getDrivers(filters?: {
     return { data: drivers || [], error: null, count: count || 0 }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null, count: 0 }
   }
 }
@@ -130,7 +131,7 @@ export async function getDriver(id: string) {
     return { data: driver, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -595,7 +596,7 @@ export async function updateDriver(
             Sentry.captureMessage(`[updateDriver] Audit log created for field: ${change.field}`, "info")
           } catch (err: unknown) {
             Sentry.captureException(err)
-            const msg = err instanceof Error ? err.message : String(err)
+            const msg = err instanceof Error ? errorMessage(err) : String(err)
             const code =
               err && typeof err === "object" && "code" in err
                 ? String((err as { code?: unknown }).code)
@@ -618,7 +619,7 @@ export async function updateDriver(
         Sentry.captureMessage("[updateDriver] No user found for audit logging", "warning")
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = err instanceof Error ? errorMessage(err) : String(err)
       Sentry.captureMessage(`[updateDriver] Failed to import audit log module: ${msg}`, "error")
     }
   }
@@ -704,7 +705,7 @@ export async function deleteDriver(id: string) {
     return { error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to delete driver"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to delete driver"
     return { error: message }
   }
 }

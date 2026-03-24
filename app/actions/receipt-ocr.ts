@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -255,7 +256,7 @@ Return ONLY the JSON object, no other text.`,
     return { data: result, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to extract receipt data"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to extract receipt data"
     return { error: message, data: null }
   }
 }

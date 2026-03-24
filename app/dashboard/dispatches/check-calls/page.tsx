@@ -48,7 +48,7 @@ export default function CheckCallsPage() {
       if (loadsResult.data) {
         setLoads(loadsResult.data)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load check calls")
     } finally {
       setIsLoading(false)
@@ -64,7 +64,7 @@ export default function CheckCallsPage() {
         toast.success("Check call updated")
         loadData()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to update check call")
     }
   }

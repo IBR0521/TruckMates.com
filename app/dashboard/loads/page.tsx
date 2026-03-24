@@ -66,7 +66,7 @@ export default function LoadsPage() {
       } else {
         setLoadsList([])
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error loading loads:", error)
       toast.error("Failed to load loads. Please try again.")
       setLoadsList([])

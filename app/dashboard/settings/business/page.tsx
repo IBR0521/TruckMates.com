@@ -139,7 +139,7 @@ export default function BusinessSettingsPage() {
           business_country: result.data.business_country || "United States",
         })
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load settings")
     } finally {
       setIsLoading(false)
@@ -155,7 +155,7 @@ export default function BusinessSettingsPage() {
       } else {
         toast.success("Business settings updated")
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to save settings")
     } finally {
       setIsSaving(false)

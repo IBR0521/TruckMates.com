@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
 
@@ -227,9 +228,9 @@ export async function getAddressBookContacts(filters?: {
     filteredContacts.sort((a, b) => a.name.localeCompare(b.name))
 
     return { data: filteredContacts, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { data: [], error: error?.message || "Failed to fetch contacts" }
+    return { data: [], error: errorMessage(error, "Failed to fetch contacts") }
   }
 }
 
@@ -382,9 +383,9 @@ export async function getAddressBookContact(
     }
 
     return { data: contact, error: contact ? null : "Contact not found" }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { data: null, error: error?.message || "Failed to fetch contact" }
+    return { data: null, error: errorMessage(error, "Failed to fetch contact") }
   }
 }
 

@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { errorMessage } from "@/lib/error-message"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -320,8 +321,8 @@ export default function AddLoadPage() {
     }
 
     router.push(`/dashboard/loads/${result.data?.id || ""}`)
-    } catch (error: any) {
-      toast.error(error.message || "Failed to create load")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to create load"))
       setIsSubmitting(false)
     }
   }

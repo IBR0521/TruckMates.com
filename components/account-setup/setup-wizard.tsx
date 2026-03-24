@@ -131,7 +131,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         }
         toast.success("Company profile saved!")
         setCurrentStep(2)
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast.error("Failed to save company profile")
       } finally {
         setIsSaving(false)
@@ -147,7 +147,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             return
           }
           toast.success("Driver added!")
-        } catch (error: any) {
+        } catch (error: unknown) {
           toast.error("Failed to create driver")
         } finally {
           setIsSaving(false)
@@ -165,7 +165,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             return
           }
           toast.success("Truck added!")
-        } catch (error: any) {
+        } catch (error: unknown) {
           toast.error("Failed to create truck")
         } finally {
           setIsSaving(false)
@@ -183,7 +183,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         }
         toast.success("Setup complete! Welcome to TruckMates!")
         onComplete()
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast.error("Failed to complete setup")
       } finally {
         setIsSaving(false)

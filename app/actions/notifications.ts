@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -89,7 +90,7 @@ export async function getNotificationPreferences() {
     return { data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -244,7 +245,7 @@ export async function sendNotification(
           }
         } catch (error: unknown) {
           Sentry.captureException(error)
-          const reason = error instanceof Error ? error.message : "Failed to send email"
+          const reason = error instanceof Error ? errorMessage(error) : "Failed to send email"
           results.email = { sent: false, reason }
         }
       } else {
@@ -262,7 +263,7 @@ export async function sendNotification(
       results.sms = smsResult
     } catch (error: unknown) {
       Sentry.captureException(error)
-      const reason = error instanceof Error ? error.message : "Failed to send SMS"
+      const reason = error instanceof Error ? errorMessage(error) : "Failed to send SMS"
       results.sms = { sent: false, reason }
     }
   }
@@ -671,7 +672,7 @@ export async function sendTestEmail() {
     }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to send test email"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to send test email"
     return { sent: false, error: message }
   }
 }
@@ -720,8 +721,8 @@ export async function deleteNotification(notificationId: string, notificationTyp
 
     revalidatePath("/dashboard/notifications")
     return { data: { success: true }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to delete notification", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to delete notification"), data: null }
   }
 }
 
@@ -780,10 +781,10 @@ export async function cleanupReadNotifications(olderThanDays: number = 90) {
       data: { success: !error, cutoffISO: cutoff },
       error: error ? error.message : null,
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     return {
       data: null,
-      error: err?.message || "Failed to cleanup notifications",
+      error: errorMessage(err, "Failed to cleanup notifications"),
     }
   }
 }

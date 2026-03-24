@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateTruckData, sanitizeString } from "@/lib/validation"
@@ -52,9 +53,9 @@ export async function getTrucks(filters?: {
     }
 
     return { data: trucks || [], error: null, count: count || 0 }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null, count: 0 }
   }
 }
 
@@ -83,9 +84,9 @@ export async function getTruck(id: string) {
     }
 
     return { data: truck, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -442,14 +443,14 @@ export async function updateTruck(
               },
             })
             Sentry.captureMessage(`[updateTruck] Audit log created for field: ${change.field}`, "info")
-          } catch (err: any) {
+          } catch (err: unknown) {
             Sentry.captureException(err)
           }
         }
       } else {
         Sentry.captureMessage("[updateTruck] No user found for audit logging", "warning")
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       Sentry.captureException(err)
     }
   }
@@ -532,9 +533,9 @@ export async function deleteTruck(id: string) {
 
     revalidatePath("/dashboard/trucks")
     return { error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to delete truck" }
+    return { error: errorMessage(error, "Failed to delete truck") }
   }
 }
 

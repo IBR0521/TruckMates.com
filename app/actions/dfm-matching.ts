@@ -6,6 +6,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -67,8 +68,8 @@ export async function findMatchingTrucksForLoad(
     }
 
     return { data: matches || [], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to find matching trucks", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to find matching trucks"), data: null }
   }
 }
 
@@ -98,8 +99,8 @@ export async function findMatchingLoadsForTruck(
     }
 
     return { data: matches || [], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to find matching loads", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to find matching loads"), data: null }
   }
 }
 
@@ -177,8 +178,8 @@ export async function autoMatchLoadToTrucks(loadId: string) {
       },
       error: null
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to auto-match load", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to auto-match load"), data: null }
   }
 }
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 
 /**
@@ -81,10 +82,10 @@ export async function POST(request: NextRequest) {
     }
     
     return NextResponse.json({ success: true, processed: entityType })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Geotab Webhook] Error:", error)
     return NextResponse.json(
-      { error: error.message || "Internal server error" },
+      { error: errorMessage(error, "Internal server error") },
       { status: 500 }
     )
   }

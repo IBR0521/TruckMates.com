@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getUserRole } from "@/lib/server-permissions"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
@@ -38,9 +39,9 @@ export async function getEmployees() {
     }
 
     return { data: employees, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to fetch employees", data: null }
+    return { error: errorMessage(error, "Failed to fetch employees"), data: null }
   }
 }
 

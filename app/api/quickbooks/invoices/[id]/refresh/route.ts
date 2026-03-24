@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getQuickBooksConnection, qbFetch } from "@/lib/quickbooks/client"
@@ -81,8 +82,8 @@ export async function POST(request: NextRequest, ctxRoute: { params: Promise<{ i
       paid_date: updateData.paid_date,
       payment_method: updateData.payment_method,
     })
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 })
+  } catch (error: unknown) {
+    return NextResponse.json({ error: errorMessage(error, "Internal server error") }, { status: 500 })
   }
 }
 

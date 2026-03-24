@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -129,7 +130,7 @@ export async function upsertDriverPayRule(rule: DriverPayRule) {
     return { data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -157,8 +158,8 @@ export async function getActivePayRule(driverId: string, date?: string) {
     }
 
     return { data: data && data.length > 0 ? data[0] : null, error: null }
-  } catch (error: any) {
-    return { error: error?.message || "Failed to get pay rule", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get pay rule"), data: null }
   }
 }
 
@@ -187,8 +188,8 @@ export async function getDriverPayRules(driverId: string) {
     }
 
     return { data: data || [], error: null }
-  } catch (error: any) {
-    return { error: error?.message || "Failed to get pay rules", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get pay rules"), data: null }
   }
 }
 
@@ -359,8 +360,8 @@ export async function deletePayRule(ruleId: string) {
 
     revalidatePath("/dashboard/accounting/settlements")
     return { data: { success: true }, error: null }
-  } catch (error: any) {
-    return { error: error?.message || "Failed to delete pay rule", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to delete pay rule"), data: null }
   }
 }
 

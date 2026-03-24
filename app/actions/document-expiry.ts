@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { createAlert } from "./alerts"
 import { checkViewPermission, checkCreatePermission } from "@/lib/server-permissions"
@@ -247,8 +248,8 @@ export async function getExpiringItems(daysAhead: number = 30) {
       },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get expiring items", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get expiring items"), data: null }
   }
 }
 

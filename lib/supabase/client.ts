@@ -1,4 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr'
+import { errorMessage } from "@/lib/error-message"
 
 export function createClient() {
   // Validate environment variables - don't throw, return a mock client instead
@@ -75,17 +76,23 @@ export function createClient() {
           }
           
           return response
-        } catch (error: any) {
+        } catch (error: unknown) {
           clearTimeout(timeoutId)
           
+          const msg = errorMessage(error)
+          const code =
+            typeof error === "object" && error !== null && "code" in error
+              ? (error as { code?: unknown }).code
+              : undefined
+
           // Handle network errors
-          if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+          if ((error instanceof Error && error.name === "AbortError") || msg.includes("aborted")) {
             throw new Error('Connection timeout. Please check your internet connection and try again.')
           }
-          if (error.message?.includes('fetch') || 
-              error.message?.includes('ECONNREFUSED') ||
-              error.message?.includes('network') ||
-              error.code === 'ECONNREFUSED') {
+          if (msg.includes('fetch') || 
+              msg.includes('ECONNREFUSED') ||
+              msg.includes('network') ||
+              code === 'ECONNREFUSED') {
             // Check if we're using placeholder values (missing env vars)
             if (supabaseUrl === 'https://placeholder.supabase.co' || supabaseUrl.includes('placeholder')) {
               const isProduction = typeof window !== 'undefined' && 

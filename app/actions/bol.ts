@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import * as Sentry from "@sentry/nextjs"
@@ -48,9 +49,9 @@ export async function getBOLs(filters?: {
     }
 
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { data: null, error: error?.message || "An unexpected error occurred" }
+    return { data: null, error: errorMessage(error, "An unexpected error occurred") }
   }
 }
 
@@ -87,9 +88,9 @@ export async function getBOL(id: string) {
     }
 
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { data: null, error: error?.message || "An unexpected error occurred" }
+    return { data: null, error: errorMessage(error, "An unexpected error occurred") }
   }
 }
 
@@ -219,9 +220,9 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
       },
       error: null,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to get BOL data from load", data: null }
+    return { error: errorMessage(error, "Failed to get BOL data from load"), data: null }
   }
 }
 
@@ -347,9 +348,9 @@ export async function createBOL(formData: {
 
     revalidatePath("/dashboard/bols")
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -473,9 +474,9 @@ export async function updateBOLSignature(
     revalidatePath("/dashboard/bols")
     revalidatePath(`/dashboard/bols/${bolId}`)
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -552,9 +553,9 @@ export async function updateBOLPOD(
     revalidatePath("/dashboard/bols")
     revalidatePath(`/dashboard/bols/${bolId}`)
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -582,9 +583,9 @@ export async function getBOLTemplates() {
   }
 
   return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { data: null, error: error?.message || "An unexpected error occurred" }
+    return { data: null, error: errorMessage(error, "An unexpected error occurred") }
   }
 }
 
@@ -636,9 +637,9 @@ export async function createBOLTemplate(formData: {
 
   revalidatePath("/dashboard/bols/templates")
   return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 

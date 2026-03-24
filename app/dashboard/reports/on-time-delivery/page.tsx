@@ -67,7 +67,7 @@ export default function OnTimeDeliveryScorecardPage() {
       } else {
         setAnalytics(result.data)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load on-time delivery analytics")
       console.error(error)
     } finally {

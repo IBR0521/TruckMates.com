@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -149,8 +150,8 @@ export async function getUnifiedNotifications(filters?: {
       error: null,
       count: filtered.length,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get unified notifications", data: null, count: 0 }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get unified notifications"), data: null, count: 0 }
   }
 }
 
@@ -196,8 +197,8 @@ export async function markNotificationAsRead(notificationId: string, notificatio
     }
 
     return { data: { success: true }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to mark notification as read", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to mark notification as read"), data: null }
   }
 }
 
@@ -241,8 +242,8 @@ export async function markAllNotificationsAsRead() {
     }
 
     return { data: { success: true }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to mark all notifications as read", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to mark all notifications as read"), data: null }
   }
 }
 

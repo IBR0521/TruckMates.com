@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -62,12 +63,12 @@ export default function DiagnosticsPage() {
             : healthData.message || "Health check failed",
           details: healthData.details ? JSON.stringify(healthData.details, null, 2) : undefined
         })
-      } catch (error: any) {
+      } catch (error: unknown) {
         checks.push({
           name: "Health Check",
           status: "fail",
           message: "Failed to reach health endpoint",
-          details: error.message
+          details: errorMessage(error)
         })
       }
 
@@ -84,12 +85,12 @@ export default function DiagnosticsPage() {
             : testData.error || "Connection failed",
           details: testData.error ? `Error: ${testData.error}` : undefined
         })
-      } catch (error: any) {
+      } catch (error: unknown) {
         checks.push({
           name: "Database Connection",
           status: "fail",
           message: "Failed to test database connection",
-          details: error.message
+          details: errorMessage(error)
         })
       }
 

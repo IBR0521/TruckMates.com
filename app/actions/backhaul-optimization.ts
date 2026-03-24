@@ -6,6 +6,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -56,8 +57,8 @@ export async function findBackhaulOpportunities(
     }
 
     return { data: opportunities || [], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to find backhaul opportunities", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to find backhaul opportunities"), data: null }
   }
 }
 
@@ -127,8 +128,8 @@ export async function checkAndNotifyBackhaulOpportunities(routeId: string) {
       },
       error: null
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to check backhaul opportunities", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to check backhaul opportunities"), data: null }
   }
 }
 

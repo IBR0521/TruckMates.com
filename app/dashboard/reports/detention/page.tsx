@@ -49,7 +49,7 @@ export default function DetentionDashboardPage() {
       } else {
         setAnalytics(result.data)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load detention analytics")
       console.error(error)
     } finally {

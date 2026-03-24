@@ -6,6 +6,7 @@
  */
 
 import { TruckMatesAIEngine } from "@/lib/truckmates-ai/llm-engine"
+import { errorMessage } from "@/lib/error-message"
 import { TruckMatesRAG } from "@/lib/truckmates-ai/rag-system"
 import { TruckMatesFunctionRegistry } from "@/lib/truckmates-ai/function-registry"
 import { TruckMatesInternetAccess } from "@/lib/truckmates-ai/internet-access"
@@ -122,15 +123,15 @@ export async function processAIRequest(
                 // Log error but don't fail the AI action
                 Sentry.captureException(err)
               })
-            } catch (auditError: any) {
+            } catch (auditError: unknown) {
               // Log error but don't fail the AI action
               Sentry.captureException(auditError)
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             actions.push({ 
               function: call.name, 
               result: null,
-              error: error.message || "Function execution failed"
+              error: errorMessage(error, "Function execution failed")
             })
           }
         } else {
@@ -150,12 +151,12 @@ export async function processAIRequest(
       confidence: aiResponse.confidence,
       error: null
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
     return {
       response: "",
       confidence: 0,
-      error: error.message || "AI processing failed"
+      error: errorMessage(error, "AI processing failed")
     }
   }
 }

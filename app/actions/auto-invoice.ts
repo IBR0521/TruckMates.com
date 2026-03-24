@@ -5,6 +5,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { createInvoice } from "./accounting"
 import { getLoad } from "./loads"
@@ -120,8 +121,8 @@ export async function autoGenerateInvoiceOnPOD(loadId: string) {
       },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to auto-generate invoice", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to auto-generate invoice"), data: null }
   }
 }
 

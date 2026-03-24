@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -459,7 +460,7 @@ export async function generateBOLPDF(bolId: string): Promise<{
   return { html, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to generate BOL PDF"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to generate BOL PDF"
     return { html: "", error: message }
   }
 }
@@ -545,7 +546,7 @@ export async function generateBOLPDFFile(bolId: string): Promise<{
       }
     } catch (error: unknown) {
       Sentry.captureException(error)
-      const detail = error instanceof Error ? error.message : "Unknown error"
+      const detail = error instanceof Error ? errorMessage(error) : "Unknown error"
       return {
         pdf: null,
         error: `Failed to generate PDF: ${detail}`,
@@ -559,7 +560,7 @@ export async function generateBOLPDFFile(bolId: string): Promise<{
     return { pdf: pdfBuffer, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to generate BOL PDF"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to generate BOL PDF"
     return { pdf: null, error: message }
   }
 }

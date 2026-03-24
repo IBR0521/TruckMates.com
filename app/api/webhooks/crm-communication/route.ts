@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { logCommunicationFromWebhook } from "@/app/actions/crm-communication"
 import crypto from "crypto"
 
@@ -206,10 +207,10 @@ export async function POST(req: NextRequest) {
       { message: "Communication logged successfully", data: result.data },
       { status: 200 }
     )
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Webhook error:", error)
     return NextResponse.json(
-      { error: error.message || "Failed to process webhook" },
+      { error: errorMessage(error, "Failed to process webhook") },
       { status: 500 }
     )
   }

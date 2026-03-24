@@ -76,7 +76,7 @@ export default function FuelAnalyticsPage() {
       } else if (routeCostsResult.data) {
         setRouteCosts(routeCostsResult.data.route_fuel_costs || [])
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load fuel analytics")
     } finally {
       setIsLoading(false)

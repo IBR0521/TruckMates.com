@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { generateIFTAReportPDF } from "@/app/actions/ifta-pdf"
@@ -69,10 +70,10 @@ export async function GET(
       { error: "Failed to generate PDF or HTML" },
       { status: 500 }
     )
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error generating IFTA PDF:", error)
     return NextResponse.json(
-      { error: error.message || "Failed to generate PDF" },
+      { error: errorMessage(error, "Failed to generate PDF") },
       { status: 500 }
     )
   }

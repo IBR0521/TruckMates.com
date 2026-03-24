@@ -7,6 +7,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { geocodeAddress } from "./integrations-google-maps"
@@ -83,8 +84,8 @@ export async function getMarketRateSuggestion(
     }
 
     return { error: "Unable to get rate suggestion", data: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get rate suggestion", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get rate suggestion"), data: null }
   }
 }
 
@@ -175,8 +176,8 @@ async function getDATiQRate(
       },
       error: null
     }
-  } catch (error: any) {
-    return { error: error.message || "DAT iQ API failed", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "DAT iQ API failed"), data: null }
   }
 }
 
@@ -228,8 +229,8 @@ async function getTruckstopRate(
       },
       error: null
     }
-  } catch (error: any) {
-    return { error: error.message || "Truckstop API failed", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Truckstop API failed"), data: null }
   }
 }
 
@@ -330,8 +331,8 @@ async function getInternalRateSuggestion(
       },
       error: null
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get internal rate", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get internal rate"), data: null }
   }
 }
 
@@ -376,8 +377,8 @@ async function getEstimatedRate(
       },
       error: null
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to estimate rate", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to estimate rate"), data: null }
   }
 }
 

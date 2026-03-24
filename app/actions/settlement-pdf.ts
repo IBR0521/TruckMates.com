@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { escapeHtml } from "@/lib/html-escape"
 import * as Sentry from "@sentry/nextjs"
@@ -437,9 +438,9 @@ export async function generateSettlementPDF(settlementId: string): Promise<{
     `
 
     return { html, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { html: "", error: error?.message || "Failed to generate settlement PDF" }
+    return { html: "", error: errorMessage(error, "Failed to generate settlement PDF") }
   }
 }
 
@@ -496,9 +497,9 @@ export async function saveSettlementPDF(settlementId: string): Promise<{
       .eq("id", settlementId)
 
     return { pdfUrl: publicUrl, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { pdfUrl: null, error: error?.message || "Failed to save settlement PDF" }
+    return { pdfUrl: null, error: errorMessage(error, "Failed to save settlement PDF") }
   }
 }
 

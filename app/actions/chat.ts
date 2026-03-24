@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { handleDbError } from "@/lib/db-helpers"
@@ -69,9 +70,9 @@ export async function getChatThreads(filters?: {
     }
 
     return { data: threads || [], error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to load chat threads", data: null }
+    return { error: errorMessage(error, "Failed to load chat threads"), data: null }
   }
 }
 

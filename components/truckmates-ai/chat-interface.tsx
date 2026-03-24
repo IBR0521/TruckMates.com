@@ -6,6 +6,7 @@
  */
 
 import { useState, useRef, useEffect } from "react"
+import { errorMessage } from "@/lib/error-message"
 import DOMPurify from "dompurify"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -236,20 +237,20 @@ export function TruckMatesAIChat({ threadId, className }: ChatInterfaceProps) {
           }
         }
       }
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === "AbortError") {
         // Request was cancelled
         setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId))
         return
       }
       
       console.error("Chat error:", error)
-      toast.error(error.message || "Failed to get AI response")
+      toast.error(errorMessage(error, "Failed to get AI response"))
       
       // Update error message
       setMessages(prev => prev.map(msg => 
         msg.id === assistantMessageId
-          ? { ...msg, content: `I'm sorry, I encountered an error: ${error.message || "Unknown error"}. Please try again.`, isStreaming: false }
+          ? { ...msg, content: `I'm sorry, I encountered an error: ${errorMessage(error, "Unknown error")}. Please try again.`, isStreaming: false }
           : msg
       ))
       setStreamingMessageId(null)

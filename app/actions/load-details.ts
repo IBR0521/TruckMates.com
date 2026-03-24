@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
 
@@ -302,8 +303,8 @@ export async function getLoadDetails(loadId: string): Promise<{
     }
 
     return { data: loadDetails, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get load details", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get load details"), data: null }
   }
 }
 

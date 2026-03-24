@@ -1,6 +1,7 @@
   "use client"
 
 import { useState, useEffect } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -233,8 +234,8 @@ export default function IFTATaxRatesPage() {
           toast.success(`Successfully updated ${result.data?.updated || rates.length} tax rates`)
           loadTaxRates()
         }
-      } catch (error: any) {
-        toast.error(`Failed to process CSV: ${error.message}`)
+      } catch (error: unknown) {
+        toast.error(`Failed to process CSV: ${errorMessage(error)}`)
       }
     }
     input.click()

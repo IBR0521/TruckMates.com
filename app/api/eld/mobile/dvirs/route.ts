@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -167,10 +168,10 @@ export async function POST(request: NextRequest) {
       inserted: insertedDVIRs?.length || 0,
       message: `Successfully synced ${insertedDVIRs?.length || 0} DVIR(s)`,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("DVIR sync error:", error)
     return NextResponse.json(
-      { error: error.message || "Internal server error" },
+      { error: errorMessage(error, "Internal server error") },
       { status: 500 }
     )
   }

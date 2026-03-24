@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { processAlertEscalations } from "@/app/actions/alerts"
 
 // Cron endpoint to process alert escalations
@@ -37,10 +38,10 @@ export async function GET(request: Request) {
       data: result.data,
       message: `Processed alert escalations: ${result.data?.escalated || 0} alerts escalated`,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Cron Alert Escalations] Unexpected error:", error)
     return NextResponse.json(
-      { error: error.message, success: false },
+      { error: errorMessage(error), success: false },
       { status: 500 }
     )
   }

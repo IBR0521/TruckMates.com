@@ -202,7 +202,7 @@ export default function DispatchesPage() {
       if (routesResult.data) setUnassignedRoutes(routesResult.data)
       if (driversResult.data) setDrivers(driversResult.data.filter((d: any) => d.status === "active"))
       if (trucksResult.data) setTrucks(trucksResult.data.filter((t: any) => t.status === "available" || t.status === "in_use"))
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load dispatch data")
       console.error(error)
     } finally {
@@ -219,7 +219,7 @@ export default function DispatchesPage() {
       } else if (result.data) {
         setDriversHOS(result.data)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to load HOS data:", error)
     } finally {
       setHosLoading(false)
@@ -266,7 +266,7 @@ export default function DispatchesPage() {
         toast.success("Load assigned successfully")
         await loadData()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to assign load")
     } finally {
       setAssigning(null)
@@ -288,7 +288,7 @@ export default function DispatchesPage() {
         toast.success("Route assigned successfully")
         await loadData()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to assign route")
     } finally {
       setAssigning(null)
@@ -316,7 +316,7 @@ export default function DispatchesPage() {
       } else {
         toast.info("No nearby drivers found with sufficient HOS")
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to find nearby drivers")
     } finally {
       setFindingNearby(null)
@@ -334,7 +334,7 @@ export default function DispatchesPage() {
         toast.success("Load assigned successfully")
         await loadData()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to assign load")
     } finally {
       setAssigning(null)
@@ -388,7 +388,7 @@ export default function DispatchesPage() {
       } else if (result.data) {
         setLoadDetails(result.data)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load details")
       setSelectedLoadId(null)
     } finally {

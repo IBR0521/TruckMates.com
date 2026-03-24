@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission, checkDeletePermission, checkEditPermission } from "@/lib/server-permissions"
@@ -106,8 +107,8 @@ export async function getTripSheetAggregatesForIFTA(params: {
 
     const has_data = Object.keys(milesByState).length > 0 || Object.keys(fuelGallonsByState).length > 0
     return { data: { milesByState, fuelGallonsByState, has_data }, error: null }
-  } catch (e: any) {
-    return { data: null, error: e?.message || "Trip sheet aggregate failed" }
+  } catch (e: unknown) {
+    return { data: null, error: errorMessage(e, "Trip sheet aggregate failed") }
   }
 }
 

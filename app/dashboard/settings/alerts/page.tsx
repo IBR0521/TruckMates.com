@@ -58,7 +58,7 @@ export default function AlertsSettingsPage() {
       if (rulesResult.data) {
         setAlertRules(rulesResult.data)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load alert rules")
     } finally {
       setIsLoading(false)
@@ -105,7 +105,7 @@ export default function AlertsSettingsPage() {
         })
         loadData()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to create alert rule")
     } finally {
       setIsSaving(false)
@@ -143,7 +143,7 @@ export default function AlertsSettingsPage() {
         setDeletingRule(null)
         loadData()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to delete alert rule")
     }
   }
@@ -189,7 +189,7 @@ export default function AlertsSettingsPage() {
           })
           loadData()
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast.error("Failed to update alert rule")
       } finally {
         setIsSaving(false)

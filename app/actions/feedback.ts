@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { sanitizeString } from "@/lib/validation"
@@ -159,9 +160,9 @@ async function sendFeedbackEmail(feedbackData: {
     }
 
     return { sent: true, email: adminEmail, messageId: result.data?.id }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { sent: false, reason: error?.message || "Failed to send email" }
+    return { sent: false, reason: errorMessage(error, "Failed to send email") }
   }
 }
 
@@ -207,9 +208,9 @@ export async function getFeedback(filters?: {
     }
 
     return { data: feedback || [], error: null, count: count || 0 }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to fetch feedback", data: null, count: 0 }
+    return { error: errorMessage(error, "Failed to fetch feedback"), data: null, count: 0 }
   }
 }
 
@@ -346,9 +347,9 @@ export async function createFeedback(formData: {
 
     revalidatePath("/dashboard/feedback")
     return { data: feedback, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to create feedback", data: null }
+    return { error: errorMessage(error, "Failed to create feedback"), data: null }
   }
 }
 

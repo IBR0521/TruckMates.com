@@ -13,6 +13,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
 
@@ -109,11 +110,11 @@ export async function sendSMS(phoneNumber: string, message: string) {
       messageId: result.sid,
       error: null,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
     return {
       sent: false,
-      error: error?.message || "Failed to send SMS",
+      error: errorMessage(error, "Failed to send SMS"),
     }
   }
 }

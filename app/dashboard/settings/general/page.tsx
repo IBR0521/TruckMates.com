@@ -60,7 +60,7 @@ export default function GeneralSettingsPage() {
           currency_symbol: settingsResult.data.currency_symbol || "$",
         })
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load settings")
     } finally {
       setIsLoading(false)
@@ -93,7 +93,7 @@ export default function GeneralSettingsPage() {
       } else {
         toast.success("General settings updated")
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to save settings")
     } finally {
       setIsSaving(false)

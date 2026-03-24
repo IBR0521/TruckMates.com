@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react'
+import { errorMessage } from "@/lib/error-message"
 import {
   View,
   Text,
@@ -111,9 +112,9 @@ export default function PODCaptureScreen() {
           },
         ]
       )
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error submitting POD:', error)
-      Alert.alert('Error', error.message || 'Failed to submit POD')
+      Alert.alert('Error', errorMessage(error, 'Failed to submit POD'))
     } finally {
       setIsSubmitting(false)
     }

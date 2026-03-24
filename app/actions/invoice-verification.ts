@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import * as Sentry from "@sentry/nextjs"
@@ -41,9 +42,9 @@ export async function verifyInvoiceMatch(invoiceId: string) {
     revalidatePath(`/dashboard/accounting/invoices/${invoiceId}`)
 
     return { data: data[0], error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to verify invoice", data: null }
+    return { error: errorMessage(error, "Failed to verify invoice"), data: null }
   }
 }
 
@@ -99,9 +100,9 @@ export async function getInvoiceVerification(invoiceId: string) {
     }
 
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -145,9 +146,9 @@ export async function getInvoicesRequiringReview() {
     }
 
     return { data: data || [], error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to get invoices requiring review", data: null }
+    return { error: errorMessage(error, "Failed to get invoices requiring review"), data: null }
   }
 }
 
@@ -196,9 +197,9 @@ export async function approveInvoiceManually(invoiceId: string, reason?: string)
     revalidatePath(`/dashboard/accounting/invoices/${invoiceId}`)
 
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to approve invoice", data: null }
+    return { error: errorMessage(error, "Failed to approve invoice"), data: null }
   }
 }
 
@@ -264,11 +265,11 @@ export async function batchVerifyInvoices() {
               error: null,
             }
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           return {
             invoice_id: invoice.id,
             success: false,
-            error: error.message || "Unknown error",
+            error: errorMessage(error, "Unknown error"),
           }
         }
       })
@@ -299,9 +300,9 @@ export async function batchVerifyInvoices() {
       },
       error: null,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to batch verify invoices", data: null }
+    return { error: errorMessage(error, "Failed to batch verify invoices"), data: null }
   }
 }
 

@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { errorMessage } from "@/lib/error-message"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -138,7 +139,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         if (driversResult.data) setDrivers(driversResult.data)
         if (trucksResult.data) setTrucks(trucksResult.data)
         if (stopsResult.data) setStops(stopsResult.data || [])
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast.error("Failed to load route data")
         console.error(error)
       } finally {
@@ -221,8 +222,8 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       } else {
         toast.success("Route updated successfully")
       }
-    } catch (error: any) {
-      toast.error(`Route updated but failed to update some stops: ${error.message}`)
+    } catch (error: unknown) {
+      toast.error(`Route updated but failed to update some stops: ${errorMessage(error)}`)
     }
 
     setIsSubmitting(false)

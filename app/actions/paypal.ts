@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import * as Sentry from "@sentry/nextjs"
@@ -220,9 +221,9 @@ export async function createPayPalSubscription(planId: string) {
     }
 
     return { data: { url: approvalLink, subscriptionId: subscription.id }, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to create PayPal subscription", data: null }
+    return { error: errorMessage(error, "Failed to create PayPal subscription"), data: null }
   }
 }
 
@@ -253,9 +254,9 @@ export async function verifyPayPalSubscription(subscriptionId: string) {
     const subscription = await response.json()
 
     return { data: subscription, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to verify PayPal subscription", data: null }
+    return { error: errorMessage(error, "Failed to verify PayPal subscription"), data: null }
   }
 }
 

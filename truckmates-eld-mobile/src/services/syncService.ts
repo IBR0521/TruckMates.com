@@ -5,6 +5,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { errorMessage } from "@/lib/error-message"
 import { isNetworkAvailable } from './locationService'
 import { syncLocations, syncLogs, syncEvents, syncDVIRs } from './api'
 import {
@@ -146,8 +147,8 @@ async function syncWithRetry<T>(
         const delay = retryDelay * Math.pow(2, attempt)
         await new Promise(resolve => setTimeout(resolve, delay))
       }
-    } catch (error: any) {
-      lastError = error.message || 'Unknown error'
+    } catch (error: unknown) {
+      lastError = errorMessage(error, 'Unknown error')
       if (attempt < maxRetries - 1) {
         const delay = retryDelay * Math.pow(2, attempt)
         await new Promise(resolve => setTimeout(resolve, delay))
@@ -368,9 +369,9 @@ export async function syncAllQueues(deviceId: string): Promise<{
       STORAGE_KEYS.LAST_SYNC,
       new Date().toISOString()
     )
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error syncing queues:', error)
-    results.errors.push(error.message)
+    results.errors.push(errorMessage(error))
   }
 
   return results

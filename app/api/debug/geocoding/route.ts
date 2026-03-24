@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { geocodeAddress } from "@/app/actions/integrations-google-maps"
 import { createClient } from "@/lib/supabase/server"
 
@@ -48,10 +49,10 @@ export async function GET(request: Request) {
         formatted_address: result.data.formatted_address,
       } : null,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({
-      error: error.message || "Unknown error",
-      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+      error: errorMessage(error, "Unknown error"),
+      stack: process.env.NODE_ENV === "development" && error instanceof Error ? error.stack : undefined,
     }, { status: 500 })
   }
 }

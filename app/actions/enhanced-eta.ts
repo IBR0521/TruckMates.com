@@ -6,6 +6,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getRouteDirections } from "./integrations-google-maps"
@@ -99,8 +100,8 @@ export async function updateTrafficAwareRoute(routeId: string) {
     }
 
     return { data: { updated: true }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to update traffic-aware route", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to update traffic-aware route"), data: null }
   }
 }
 
@@ -138,8 +139,8 @@ export async function calculateEnhancedETA(
     }
 
     return { data: eta[0], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to calculate enhanced ETA", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to calculate enhanced ETA"), data: null }
   }
 }
 
@@ -189,8 +190,8 @@ export async function updateTrafficRoutesForActiveRoutes() {
       },
       error: null
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to update traffic routes", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to update traffic routes"), data: null }
   }
 }
 

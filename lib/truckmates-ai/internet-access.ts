@@ -1,3 +1,5 @@
+import { errorMessage } from "@/lib/error-message"
+
 /**
  * Internet Access Layer for TruckMates AI
  * Enables AI to search web, fetch real-time data, and combine with internal data
@@ -52,8 +54,8 @@ export class TruckMatesInternetAccess {
           error: "Web search requires API key. Set TAVILY_API_KEY or SERPER_API_KEY environment variable."
         }
       }
-    } catch (error: any) {
-      return { results: [], error: error.message || "Web search failed" }
+    } catch (error: unknown) {
+      return { results: [], error: errorMessage(error, "Web search failed") }
     }
   }
 
@@ -97,8 +99,8 @@ export class TruckMatesInternetAccess {
         })),
         error: null
       }
-    } catch (error: any) {
-      return { results: [], error: error.message || "Tavily search failed" }
+    } catch (error: unknown) {
+      return { results: [], error: errorMessage(error, "Tavily search failed") }
     }
   }
 
@@ -137,8 +139,8 @@ export class TruckMatesInternetAccess {
         })),
         error: null
       }
-    } catch (error: any) {
-      return { results: [], error: error.message || "Serper search failed" }
+    } catch (error: unknown) {
+      return { results: [], error: errorMessage(error, "Serper search failed") }
     }
   }
 
@@ -175,8 +177,8 @@ export class TruckMatesInternetAccess {
         },
         error: null
       }
-    } catch (error: any) {
-      return { data: null, error: error.message }
+    } catch (error: unknown) {
+      return { data: null, error: errorMessage(error) }
     }
   }
 
@@ -225,8 +227,8 @@ export class TruckMatesInternetAccess {
         },
         error: null
       }
-    } catch (error: any) {
-      return { data: null, error: error.message }
+    } catch (error: unknown) {
+      return { data: null, error: errorMessage(error) }
     }
   }
 
@@ -261,8 +263,8 @@ export class TruckMatesInternetAccess {
       }
 
       return { data: null, error: "Traffic data requires Google Maps API" }
-    } catch (error: any) {
-      return { data: null, error: error.message }
+    } catch (error: unknown) {
+      return { data: null, error: errorMessage(error) }
     }
   }
 
@@ -302,8 +304,8 @@ export class TruckMatesInternetAccess {
         },
         error: null
       }
-    } catch (error: any) {
-      return { data: null, error: error.message }
+    } catch (error: unknown) {
+      return { data: null, error: errorMessage(error) }
     }
   }
 
@@ -334,8 +336,8 @@ export class TruckMatesInternetAccess {
         })),
         error: null
       }
-    } catch (error: any) {
-      return { data: null, error: error.message }
+    } catch (error: unknown) {
+      return { data: null, error: errorMessage(error) }
     }
   }
 

@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
@@ -30,8 +31,8 @@ export async function getLoadDeliveryPoints(loadId: string) {
     }
 
     return { data: deliveryPoints || [], error: null }
-  } catch (error: any) {
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -152,8 +153,8 @@ export async function createLoadDeliveryPoint(loadId: string, deliveryPointData:
     revalidatePath("/dashboard/loads")
 
     return { data: deliveryPoint, error: null }
-  } catch (error: any) {
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -257,8 +258,8 @@ export async function updateLoadDeliveryPoint(deliveryPointId: string, deliveryP
     revalidatePath("/dashboard/loads")
 
     return { data: deliveryPoint, error: null }
-  } catch (error: any) {
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -308,8 +309,8 @@ export async function deleteLoadDeliveryPoint(deliveryPointId: string) {
     revalidatePath("/dashboard/loads")
 
     return { data: { success: true }, error: null }
-  } catch (error: any) {
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -336,8 +337,8 @@ export async function getLoadSummary(loadId: string) {
     }
 
     return { data: summary, error: null }
-  } catch (error: any) {
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 

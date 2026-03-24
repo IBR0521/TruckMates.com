@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { uploadDocument } from "@/app/actions/documents"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
         signatureUrl,
       },
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("BOL signature upload error:", error)
     if (error instanceof SyntaxError) {
       return NextResponse.json(
@@ -162,7 +163,7 @@ export async function POST(request: NextRequest) {
       )
     }
     return NextResponse.json(
-      { error: error.message || "Failed to upload signature" },
+      { error: errorMessage(error, "Failed to upload signature") },
       { status: 500 }
     )
   }

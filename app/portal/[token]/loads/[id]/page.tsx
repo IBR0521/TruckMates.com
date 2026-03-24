@@ -42,7 +42,7 @@ export default function CustomerPortalLoadPage() {
           return
         }
         setLoad(result.data)
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast.error("Failed to load load details")
         console.error(error)
       } finally {

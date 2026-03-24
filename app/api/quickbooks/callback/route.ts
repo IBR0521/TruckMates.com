@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -134,11 +135,11 @@ export async function GET(request: NextRequest) {
     )
     response.cookies.set("qb_oauth_state", "", { path: "/", maxAge: 0 })
     return response
-  } catch (error: any) {
+  } catch (error: unknown) {
     const response = NextResponse.redirect(
       new URL(
         `/dashboard/settings/integration?quickbooks_error=${encodeURIComponent(
-          error?.message || "oauth_failed"
+          errorMessage(error, "oauth_failed")
         )}`,
         request.url
       )

@@ -67,7 +67,7 @@ export default function NotificationsPage() {
       } else {
         setNotifications(result.data || [])
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load notifications")
       console.error(error)
     } finally {
@@ -84,7 +84,7 @@ export default function NotificationsPage() {
         toast.success("Marked as read")
         loadNotifications()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to mark as read")
     }
   }
@@ -98,7 +98,7 @@ export default function NotificationsPage() {
         toast.success("All notifications marked as read")
         loadNotifications()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to mark all as read")
     }
   }

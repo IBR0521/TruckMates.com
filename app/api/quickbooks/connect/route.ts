@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -66,11 +67,11 @@ export async function GET(request: NextRequest) {
     }
 
     return response
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.redirect(
       new URL(
         `/dashboard/settings/integration?quickbooks_error=${encodeURIComponent(
-          error?.message || "connect_failed"
+          errorMessage(error, "connect_failed")
         )}`,
         request.url
       )

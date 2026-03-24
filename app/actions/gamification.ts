@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
 /** `public.driver_badges` — supabase/gamification.sql */
@@ -78,8 +79,8 @@ export async function calculateDriverPerformanceScore(
     }
 
     return { data: { score_id: scoreId }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to calculate performance score", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to calculate performance score"), data: null }
   }
 }
 
@@ -129,8 +130,8 @@ export async function getDriverLeaderboard(
     }
 
     return { data: scores || [], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get leaderboard", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get leaderboard"), data: null }
   }
 }
 
@@ -157,8 +158,8 @@ export async function getDriverBadges(driverId: string) {
     }
 
     return { data: badges || [], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get driver badges", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get driver badges"), data: null }
   }
 }
 
@@ -188,8 +189,8 @@ export async function checkAndAwardBadges(
     }
 
     return { data: { badges_awarded: badgesAwarded || 0 }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to check badges", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to check badges"), data: null }
   }
 }
 
@@ -238,8 +239,8 @@ export async function getDriverPerformanceScore(
     }
 
     return { data: score || null, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get performance score", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get performance score"), data: null }
   }
 }
 

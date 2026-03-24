@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
@@ -154,7 +155,7 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
     }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -307,7 +308,7 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
     }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -444,7 +445,7 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
     }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to get driver payments report"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to get driver payments report"
     return { error: message, data: null }
   }
 }
@@ -552,7 +553,7 @@ export async function getMonthlyRevenueTrend(months = 6) {
     return { data: trend, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to fetch revenue trend"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to fetch revenue trend"
     return { error: message, data: [] }
   }
 }

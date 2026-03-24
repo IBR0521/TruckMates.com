@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 
 export async function testSupabaseConnection() {
   try {
@@ -24,10 +25,10 @@ export async function testSupabaseConnection() {
       success: true,
       message: "Connection successful"
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      error: error.message || "Unknown error",
+      error: errorMessage(error, "Unknown error"),
       details: "Failed to connect to Supabase. Check your environment variables."
     }
   }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { errorMessage } from "@/lib/error-message"
 import Link from "next/link"
 import { ArrowLeft, Plus, Trash2, FileSpreadsheet } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -107,8 +108,8 @@ export default function IFTATripSheetPage() {
         const list = await listTripSheets()
         if (list.data) setRecent(list.data.slice(0, 15))
       }
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to save")
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, "Failed to save"))
     } finally {
       setLoading(false)
     }

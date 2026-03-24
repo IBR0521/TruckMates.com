@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@supabase/supabase-js"
+import { errorMessage } from "@/lib/error-message"
 import * as Sentry from "@sentry/nextjs"
 
 // BUG-068 FIX: Use environment variables instead of hardcoded credentials
@@ -199,9 +200,9 @@ export async function createDemoAndSignIn() {
           await adminClient.rpc('cleanup_demo_data_for_company', {
             p_company_id: companyId,
           })
-        } catch (err: any) {
+        } catch (err: unknown) {
           Sentry.captureMessage(
-            `cleanup_demo_data_for_company failed (continuing anyway): ${err?.message || String(err)}`,
+            `cleanup_demo_data_for_company failed (continuing anyway): ${errorMessage(err) || String(err)}`,
             "warning",
           )
         }
@@ -294,10 +295,10 @@ export async function createDemoAndSignIn() {
         } else {
           Sentry.captureMessage("Warning: Demo data population returned no result", "warning")
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         Sentry.captureException(err)
         
-        const errorMsg = err?.message || String(err)
+        const errorMsg = errorMessage(err) || String(err)
         
         // Don't fail on timeout or missing function - company is created
         if (errorMsg.includes('timed out') || errorMsg.includes('does not exist') || (errorMsg.includes('function') && errorMsg.includes('not found'))) {
@@ -341,13 +342,14 @@ export async function createDemoAndSignIn() {
     Sentry.captureException(error)
     
     // Return a user-friendly error message
-    const errorMessage = error instanceof Error 
-      ? error.message 
-      : typeof error === 'string' 
-        ? error 
-        : "Failed to create demo. Please check your environment variables and try again."
-    
-    return { error: errorMessage }
+    const errText =
+      error instanceof Error
+        ? errorMessage(error)
+        : typeof error === "string"
+          ? error
+          : "Failed to create demo. Please check your environment variables and try again."
+
+    return { error: errText }
   }
 }
 

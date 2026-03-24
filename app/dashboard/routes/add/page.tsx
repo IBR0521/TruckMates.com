@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { errorMessage } from "@/lib/error-message"
 import { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -204,7 +205,7 @@ export default function AddRoutePage() {
         }
         toast.success(`Route added successfully with ${stops.length} stops`)
       } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : "Unknown error"
+        const msg = error instanceof Error ? errorMessage(error) : "Unknown error"
         toast.error(`Route created but failed to add some stops: ${msg}`)
       }
     } else {

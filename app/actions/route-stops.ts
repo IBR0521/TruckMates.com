@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
@@ -30,8 +31,8 @@ export async function getRouteStops(routeId: string) {
     }
 
     return { data: stops || [], error: null }
-  } catch (error: any) {
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -135,8 +136,8 @@ export async function createRouteStop(routeId: string, stopData: {
     revalidatePath("/dashboard/routes")
 
     return { data: stop, error: null }
-  } catch (error: any) {
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -232,8 +233,8 @@ export async function updateRouteStop(stopId: string, stopData: {
     revalidatePath("/dashboard/routes")
 
     return { data: stop, error: null }
-  } catch (error: any) {
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -272,8 +273,8 @@ export async function deleteRouteStop(stopId: string) {
     revalidatePath("/dashboard/routes")
 
     return { data: { success: true }, error: null }
-  } catch (error: any) {
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -304,8 +305,8 @@ export async function reorderRouteStops(routeId: string, stopIds: string[]) {
     revalidatePath("/dashboard/routes")
 
     return { data: { success: true }, error: null }
-  } catch (error: any) {
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -340,8 +341,8 @@ export async function getRouteSummary(routeId: string) {
     }
 
     return { data: summary, error: null }
-  } catch (error: any) {
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 

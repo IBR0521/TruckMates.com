@@ -61,7 +61,7 @@ export default function AlertsPage() {
           toast.error(filteredResult.error)
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load alerts")
     } finally {
       setIsLoading(false)
@@ -91,7 +91,7 @@ export default function AlertsPage() {
         setSelectedAlert(null)
         loadAlerts()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to acknowledge alert")
     }
   }
@@ -108,7 +108,7 @@ export default function AlertsPage() {
         setSelectedAlert(null)
         loadAlerts()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to resolve alert")
     }
   }

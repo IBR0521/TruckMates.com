@@ -164,7 +164,7 @@ export default function InvoiceSettingsPage() {
           include_bol_in_invoice: result.data.include_bol_in_invoice || false,
         })
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load settings")
     } finally {
       setIsLoading(false)
@@ -181,7 +181,7 @@ export default function InvoiceSettingsPage() {
       } else {
         toast.success("Invoice settings updated")
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to save settings")
     } finally {
       setIsSaving(false)

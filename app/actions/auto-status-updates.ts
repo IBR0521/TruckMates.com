@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
@@ -37,8 +38,8 @@ export async function autoUpdateLoadStatusFromGeofence(
     }
 
     return { data: { history_id: historyId, updated: historyId !== null }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to update load status", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to update load status"), data: null }
   }
 }
 
@@ -69,8 +70,8 @@ export async function getLoadStatusHistory(loadId: string) {
     }
 
     return { data: history || [], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get status history", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get status history"), data: null }
   }
 }
 
@@ -117,8 +118,8 @@ export async function updateGeofenceStatusMapping(
     }
 
     return { data, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to update geofence status mapping", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to update geofence status mapping"), data: null }
   }
 }
 

@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import type { EmployeeRole } from "@/lib/roles"
 import * as Sentry from "@sentry/nextjs"
 
@@ -26,10 +27,10 @@ export async function checkCompanyName(companyName: string) {
     }
 
     return { available: !exists, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return { 
       available: false, 
-      error: String(error?.message || error || "Unknown error").substring(0, 200) 
+      error: String(errorMessage(error) || error || "Unknown error").substring(0, 200) 
     }
   }
 }
@@ -173,10 +174,10 @@ export async function registerSuperAdmin(data: {
         error: null
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return { 
       data: null, 
-      error: String(error?.message || error || "Registration failed").substring(0, 200) 
+      error: String(errorMessage(error) || error || "Registration failed").substring(0, 200) 
     }
   }
 }
@@ -330,10 +331,10 @@ export async function registerEmployee(data: {
       },
       error: null
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return { 
       data: null, 
-      error: String(error?.message || error || "Registration failed").substring(0, 200) 
+      error: String(errorMessage(error) || error || "Registration failed").substring(0, 200) 
     }
   }
 }

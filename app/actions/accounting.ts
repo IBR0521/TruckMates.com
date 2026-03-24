@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
@@ -51,8 +52,7 @@ export async function getInvoices(filters?: {
     return { data: invoices || [], error: null, count: count || 0 }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
-    return { error: errorMessage, data: null, count: 0 }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null, count: 0 }
   }
 }
 
@@ -97,8 +97,7 @@ export async function getInvoice(id: string) {
     return { data: invoice, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
-    return { error: errorMessage, data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -142,8 +141,7 @@ export async function getExpenses(filters?: {
     return { data: expenses || [], error: null, count: count || 0 }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
-    return { error: errorMessage, data: null, count: 0 }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null, count: 0 }
   }
 }
 
@@ -178,8 +176,7 @@ export async function getSettlements() {
   return { data: settlements, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
-    return { error: errorMessage, data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -251,8 +248,7 @@ export async function updateInvoice(
     return { data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
-    return { error: errorMessage, data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -333,8 +329,7 @@ export async function duplicateInvoice(id: string) {
   return { data: newInvoice, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
-    return { error: errorMessage, data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -366,8 +361,7 @@ export async function deleteInvoice(id: string) {
     return { error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
-    return { error: errorMessage }
+    return { error: errorMessage(error, "An unexpected error occurred") }
   }
 }
 
@@ -397,9 +391,9 @@ export async function deleteExpense(id: string) {
 
   revalidatePath("/dashboard/accounting/expenses")
   return { error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred" }
+    return { error: errorMessage(error, "An unexpected error occurred") }
   }
 }
 
@@ -429,9 +423,9 @@ export async function deleteSettlement(id: string) {
 
   revalidatePath("/dashboard/accounting/settlements")
   return { error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred" }
+    return { error: errorMessage(error, "An unexpected error occurred") }
   }
 }
 
@@ -645,9 +639,9 @@ export async function createInvoice(formData: {
   }
   
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to create invoice", data: null }
+    return { error: errorMessage(error, "Failed to create invoice"), data: null }
   }
 }
 
@@ -674,9 +668,9 @@ export async function getLoadForInvoice(loadId: string) {
   }
 
   return { data: load, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -899,9 +893,9 @@ export async function createExpense(formData: {
 
   revalidatePath("/dashboard/accounting/expenses")
   return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -969,9 +963,9 @@ export async function getDriverLoadsForPeriod(driverId: string, periodStart: str
   }
 
   return { data: allLoads, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -1004,9 +998,9 @@ export async function getDriverFuelExpensesForPeriod(driverId: string, periodSta
   const totalFuelExpense = expenses?.reduce((sum: number, exp: any) => sum + (Number(exp.amount) || 0), 0) || 0
 
   return { data: expenses || [], totalFuelExpense, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null, totalFuelExpense: 0 }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null, totalFuelExpense: 0 }
   }
 }
 
@@ -1226,8 +1220,8 @@ export async function createSettlement(formData: {
 
   revalidatePath("/dashboard/accounting/settlements")
   return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }

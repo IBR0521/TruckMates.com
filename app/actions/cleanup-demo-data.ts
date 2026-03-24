@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
@@ -152,9 +153,9 @@ export async function removeAllDemoData() {
       data: { success: true, message: "All demo data removed successfully" },
       error: null,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      error: error.message || "Failed to remove demo data",
+      error: errorMessage(error, "Failed to remove demo data"),
       data: null,
     }
   }

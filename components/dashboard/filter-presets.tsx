@@ -116,7 +116,7 @@ export function FilterPresets({ page, currentFilters, onApplyPreset }: FilterPre
           loadDefaultPreset()
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to save preset")
       console.error(error)
     }
@@ -138,7 +138,7 @@ export function FilterPresets({ page, currentFilters, onApplyPreset }: FilterPre
           setDefaultPreset(null)
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to delete preset")
       console.error(error)
     }
@@ -157,7 +157,7 @@ export function FilterPresets({ page, currentFilters, onApplyPreset }: FilterPre
         loadPresets()
         loadDefaultPreset()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to update preset")
       console.error(error)
     }

@@ -51,7 +51,7 @@ export function DispatchAssist({ loadId, onAssigned, onClose }: DispatchAssistPr
           toast.info("No suitable drivers found. Try adjusting search criteria.")
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load suggestions")
     } finally {
       setLoading(false)
@@ -68,7 +68,7 @@ export function DispatchAssist({ loadId, onAssigned, onClose }: DispatchAssistPr
         toast.success(`Assigned to ${suggestion.driver_name}`)
         onAssigned?.()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to assign load")
     } finally {
       setAssigning(null)

@@ -59,7 +59,7 @@ export default function RemindersPage() {
         if (driversResult.data) setDrivers(driversResult.data)
         if (trucksResult.data) setTrucks(trucksResult.data)
         if (loadsResult.data) setLoads(loadsResult.data)
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Failed to load static data:", error)
       }
     }
@@ -95,7 +95,7 @@ export default function RemindersPage() {
       if (overdueResult.data) {
         setOverdueReminders(overdueResult.data)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load reminders")
     } finally {
       setIsLoading(false)
@@ -137,7 +137,7 @@ export default function RemindersPage() {
         })
         loadReminders()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to create reminder")
     }
   }
@@ -155,7 +155,7 @@ export default function RemindersPage() {
         }
         loadReminders()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to complete reminder")
     }
   }
@@ -169,7 +169,7 @@ export default function RemindersPage() {
         toast.success("Reminder deleted")
         loadReminders()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to delete reminder")
     } finally {
       setDeletingReminder(null)
@@ -198,7 +198,7 @@ export default function RemindersPage() {
         setEditingReminder(null)
         loadReminders()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to update reminder")
     }
   }

@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -192,7 +193,7 @@ export async function createCustomerPortalAccess(formData: {
     return { data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -312,7 +313,7 @@ async function sendPortalAccessEmail(data: {
     return { sent: true, email: data.customerEmail, messageId: result.data?.id }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const reason = error instanceof Error ? error.message : "Failed to send email"
+    const reason = error instanceof Error ? errorMessage(error) : "Failed to send email"
     return { sent: false, reason }
   }
 }
@@ -385,7 +386,7 @@ export async function getPortalAccessByToken(token: string) {
     return { data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -454,7 +455,7 @@ export async function getCustomerPortalLoads(token: string) {
     return { data: loads || [], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -554,7 +555,7 @@ export async function getCustomerPortalLoad(token: string, loadId: string) {
     }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -618,7 +619,7 @@ export async function getCustomerPortalDocuments(token: string, loadId?: string)
   return { data: data || [], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -669,7 +670,7 @@ export async function getCustomerPortalInvoices(token: string) {
     return { data: data || [], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -712,7 +713,7 @@ export async function getCustomerPortalAccess(customerId: string) {
     return { data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -755,7 +756,7 @@ export async function revokeCustomerPortalAccess(customerId: string) {
     return { data: { success: true }, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }

@@ -3,6 +3,7 @@
 
 // @ts-expect-error — Deno URL imports are not resolved by the app TypeScript project
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { errorMessage } from "@/lib/error-message"
 // @ts-expect-error — Deno URL imports are not resolved by the app TypeScript project
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -196,7 +197,7 @@ serve(async (req: Request) => {
           // RPC returned null - no maintenance created (e.g., non-critical fault, no rule match)
           skipped++
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error(`Error processing event ${event.id}:`, error)
         skipped++
         // Don't increment processed on exception either
@@ -214,10 +215,10 @@ serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     )
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Edge function error:", error)
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: errorMessage(error, "Internal server error") }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

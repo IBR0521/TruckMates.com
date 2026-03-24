@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { calculateRemainingHOS } from "./eld-advanced"
 
@@ -147,8 +148,8 @@ export async function getAllDriversHOSStatus(): Promise<{
     )
 
     return { data: driversWithHOS, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get drivers HOS status", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get drivers HOS status"), data: null }
   }
 }
 

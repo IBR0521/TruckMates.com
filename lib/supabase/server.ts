@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { errorMessage } from "@/lib/error-message"
 import { cookies } from 'next/headers'
 
 export async function createClient() {
@@ -130,20 +131,25 @@ export async function createClient() {
             }
             
             return response
-          } catch (error: any) {
+          } catch (error: unknown) {
+            const msg = errorMessage(error)
+            const code =
+              typeof error === "object" && error !== null && "code" in error
+                ? (error as { code?: unknown }).code
+                : undefined
             // Re-throw if it's already our custom error
-            if (error.message?.includes('Connection timeout') || 
-                error.message?.includes('Failed to connect') ||
-                error.message?.includes('Database server error')) {
+            if (msg.includes('Connection timeout') || 
+                msg.includes('Failed to connect') ||
+                msg.includes('Database server error')) {
               throw error
             }
             // Handle other errors
-            if (error.name === 'AbortError') {
+            if (error instanceof Error && error.name === 'AbortError') {
               throw new Error('Connection timeout. Please check your internet connection.')
             }
-            if (error.message?.includes('fetch') || 
-                error.message?.includes('ECONNREFUSED') ||
-                error.code === 'ECONNREFUSED') {
+            if (msg.includes('fetch') || 
+                msg.includes('ECONNREFUSED') ||
+                code === 'ECONNREFUSED') {
               throw new Error('Failed to connect to database. Please check your connection and Supabase configuration.')
             }
             throw error

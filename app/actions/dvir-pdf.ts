@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getDVIRsForAudit } from "./dvir-enhanced"
 import { escapeHtml } from "@/lib/html-escape"
@@ -357,8 +358,8 @@ export async function generateDVIRAuditPDF(filters: any) {
     `
 
   return { html, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { html: "", error: error.message || "Failed to generate DVIR audit PDF" }
+    return { html: "", error: errorMessage(error, "Failed to generate DVIR audit PDF") }
   }
 }

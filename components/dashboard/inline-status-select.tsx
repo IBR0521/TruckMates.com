@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
@@ -33,9 +34,9 @@ export function InlineStatusSelect({
 
     try {
       await onStatusChange(newStatus)
-    } catch (error: any) {
+    } catch (error: unknown) {
       setLocalStatus(currentStatus) // Revert on error
-      toast.error(error.message || "Failed to update status")
+      toast.error(errorMessage(error, "Failed to update status"))
     } finally {
       setIsUpdating(false)
     }

@@ -68,7 +68,7 @@ export default function IdleTimeDashboardPage() {
       } else if (statsResult.data) {
         setStats(statsResult.data)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load idle time data")
     } finally {
       setIsLoading(false)

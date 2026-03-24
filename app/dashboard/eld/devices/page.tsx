@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -165,8 +166,8 @@ export default function ELDDevicesPage() {
         toast.success(`Synced: ${result.data?.logs || 0} logs, ${result.data?.locations || 0} locations, ${result.data?.events || 0} events`)
         loadData()
       }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to sync device")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to sync device"))
     } finally {
       setIsSubmitting(false)
     }

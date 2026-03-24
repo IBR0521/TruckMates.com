@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { processAIRequest } from "@/app/actions/truckmates-ai/orchestrator"
 import { createClient } from "@/lib/supabase/server"
 import { rateLimit } from "@/lib/rate-limit"
@@ -112,10 +113,10 @@ export async function POST(request: NextRequest) {
       internetData: result.internetData,
       confidence: result.confidence
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("AI Chat API error:", error)
     return NextResponse.json(
-      { error: error.message || "Internal server error" },
+      { error: errorMessage(error, "Internal server error") },
       { status: 500 }
     )
   }
@@ -168,9 +169,9 @@ async function streamAIResponse(
           encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`)
         )
         controller.close()
-      } catch (error: any) {
+      } catch (error: unknown) {
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`)
+          encoder.encode(`data: ${JSON.stringify({ error: errorMessage(error) })}\n\n`)
         )
         controller.close()
       }

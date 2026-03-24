@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Truck } from "lucide-react"
 
 interface Vehicle {
@@ -282,9 +283,9 @@ export function FleetMap({
           updateGeofences()
         }
       }, 500)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[FleetMap] Error initializing map:", error)
-      setLoadError(error.message || "Failed to initialize map")
+      setLoadError(errorMessage(error, "Failed to initialize map"))
       setIsLoading(false)
     }
   }

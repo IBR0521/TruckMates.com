@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { errorMessage } from "@/lib/error-message"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -151,8 +152,8 @@ export default function CreateSettlementPage() {
         `Found ${loads.length} loads and ${fuelResult.data?.length || 0} fuel expenses.${eldMilesMessage} ${calculationBreakdown ? `Calculation: ${calculationBreakdown}` : ""}`,
         { duration: 7000 }
       )
-    } catch (error: any) {
-      toast.error(error.message || "Failed to calculate settlement")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to calculate settlement"))
     } finally {
       setIsCalculating(false)
     }

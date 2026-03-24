@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -484,7 +485,7 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
     }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to generate PDF"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to generate PDF"
     return { pdf: null, html: null, error: message }
   }
 }

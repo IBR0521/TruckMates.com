@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { headers } from "next/headers"
 import Stripe from "stripe"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -45,9 +46,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
-  } catch (err: any) {
-    console.error("Webhook signature verification failed:", err.message)
-    return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 })
+  } catch (err: unknown) {
+    console.error("Webhook signature verification failed:", errorMessage(err))
+    return NextResponse.json({ error: `Webhook Error: ${errorMessage(err)}` }, { status: 400 })
   }
 
   // Use service-role Supabase client for webhook writes (no user session / bypass RLS)
@@ -91,9 +92,9 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ received: true })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Webhook handler error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 })
   }
 }
 

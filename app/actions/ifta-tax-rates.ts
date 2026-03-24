@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
@@ -79,9 +80,9 @@ export async function getIFTATaxRates(filters?: {
     }
 
     return { data: data as IFTATaxRate[], error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error.message || "Failed to get tax rates", data: null }
+    return { error: errorMessage(error, "Failed to get tax rates"), data: null }
   }
 }
 
@@ -124,10 +125,10 @@ export async function getIFTATaxRate(
     }
 
     return { data: data || 0.25, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
     // FIXED: Return error for real exceptions, not silent default
-    return { data: null, error: `Failed to get tax rate: ${error.message}` }
+    return { data: null, error: `Failed to get tax rate: ${errorMessage(error)}` }
   }
 }
 
@@ -169,9 +170,9 @@ export async function getIFTATaxRatesForQuarter(
     }
 
     return { data: ratesMap, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error.message || "Failed to get tax rates", data: null }
+    return { error: errorMessage(error, "Failed to get tax rates"), data: null }
   }
 }
 
@@ -233,9 +234,9 @@ export async function upsertIFTATaxRate(formData: {
 
     revalidatePath("/dashboard/accounting/ifta/tax-rates")
     return { data: data as IFTATaxRate, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error.message || "Failed to update tax rate", data: null }
+    return { error: errorMessage(error, "Failed to update tax rate"), data: null }
   }
 }
 
@@ -295,9 +296,9 @@ export async function bulkUpdateIFTATaxRates(
 
     revalidatePath("/dashboard/accounting/ifta/tax-rates")
     return { data: { updated: rates.length }, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error.message || "Failed to bulk update tax rates", data: null }
+    return { error: errorMessage(error, "Failed to bulk update tax rates"), data: null }
   }
 }
 
@@ -333,9 +334,9 @@ export async function deleteIFTATaxRate(id: string): Promise<{
 
     revalidatePath("/dashboard/accounting/ifta/tax-rates")
     return { error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error.message || "Failed to delete tax rate" }
+    return { error: errorMessage(error, "Failed to delete tax rate") }
   }
 }
 

@@ -80,7 +80,7 @@ export default function DriverAchievementsPage() {
       } else {
         setPerformance(performanceResult.data)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load achievements")
       console.error(error)
     } finally {

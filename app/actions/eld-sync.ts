@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getELDDevices, getELDDevice } from "./eld"
 import { mapProviderDriverId } from "./eld-driver-mapping"
@@ -304,7 +305,7 @@ async function syncKeepTruckinData(device: any, sinceMs?: number | null) {
 
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to sync KeepTruckin data"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to sync KeepTruckin data"
     return { error: message, data: null }
   }
 }
@@ -600,7 +601,7 @@ async function syncSamsaraData(device: any, sinceMs?: number | null) {
 
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to sync Samsara data"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to sync Samsara data"
     return { error: message, data: null }
   }
 }
@@ -944,7 +945,7 @@ async function syncGeotabData(device: any, sinceMs?: number | null) {
 
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "Failed to sync Geotab data"
+    const message = error instanceof Error ? errorMessage(error) : "Failed to sync Geotab data"
     return { error: message, data: null }
   }
 }

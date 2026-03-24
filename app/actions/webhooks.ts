@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import crypto from "crypto"
@@ -54,9 +55,9 @@ export async function getWebhooks() {
     }
 
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -87,9 +88,9 @@ export async function getWebhook(id: string) {
     }
 
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -375,9 +376,9 @@ export async function deliverWebhook(
     if (privateIpPatterns.some(pattern => pattern.test(resolvedIp))) {
       return { success: false, error: "Webhook URL resolves to private/internal IP address - SSRF protection" }
     }
-  } catch (dnsError: any) {
+  } catch (dnsError: unknown) {
     // If DNS resolution fails, block the request
-    return { success: false, error: `DNS resolution failed: ${dnsError.message}` }
+    return { success: false, error: `DNS resolution failed: ${errorMessage(dnsError)}` }
   }
 
   // Attempt delivery
@@ -425,13 +426,13 @@ export async function deliverWebhook(
     }
 
     return { success: response.ok, error: response.ok ? undefined : `HTTP ${response.status}` }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Update delivery record with error
     await supabase
       .from("webhook_deliveries")
       .update({
         status: "failed",
-        error_message: error.message || "Network error",
+        error_message: errorMessage(error, "Network error"),
         attempts: 1,
       })
       .eq("id", delivery.id)
@@ -448,7 +449,7 @@ export async function deliverWebhook(
         .eq("id", delivery.id)
     }
 
-    return { success: false, error: error.message || "Network error" }
+    return { success: false, error: errorMessage(error, "Network error") }
   }
 }
 

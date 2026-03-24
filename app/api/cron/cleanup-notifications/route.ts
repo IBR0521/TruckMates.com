@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { cleanupReadNotifications } from "@/app/actions/notifications"
 import { createAdminClient } from "@/lib/supabase/admin"
 
@@ -51,10 +52,10 @@ export async function GET(request: Request) {
         auditLogsCutoffISO: auditCutoffISO,
       },
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Cron Cleanup] Unexpected error:", error)
     return NextResponse.json(
-      { error: error?.message || "Cleanup failed", success: false },
+      { error: errorMessage(error, "Cleanup failed"), success: false },
       { status: 500 }
     )
   }

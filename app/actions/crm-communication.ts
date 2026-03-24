@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission } from "@/lib/server-permissions"
@@ -97,8 +98,8 @@ export async function logCommunication(input: {
 
     revalidatePath("/dashboard/crm")
     return { data: data as CommunicationLog, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to log communication", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to log communication"), data: null }
   }
 }
 
@@ -167,8 +168,8 @@ export async function getCommunicationTimeline(filters: {
     }))
 
     return { data: formattedData as CommunicationLog[], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get communication timeline", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get communication timeline"), data: null }
   }
 }
 
@@ -270,8 +271,8 @@ export async function logCommunicationFromWebhook(input: {
 
     revalidatePath("/dashboard/crm")
     return { data: data as CommunicationLog, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to log communication", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to log communication"), data: null }
   }
 }
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { errorMessage } from "@/lib/error-message"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -122,8 +123,8 @@ export default function TaxFuelReconciliationPage() {
       if (!driversResult.error && driversResult.data) {
         setDrivers(driversResult.data)
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to load data")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to load data"))
     } finally {
       setLoading(false)
     }
@@ -158,8 +159,8 @@ export default function TaxFuelReconciliationPage() {
         resetForm()
         loadData()
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to create fuel purchase")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to create fuel purchase"))
     }
   }
 
@@ -192,8 +193,8 @@ export default function TaxFuelReconciliationPage() {
         resetForm()
         loadData()
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to update fuel purchase")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to update fuel purchase"))
     }
   }
 
@@ -206,8 +207,8 @@ export default function TaxFuelReconciliationPage() {
         toast.success("Fuel purchase deleted successfully")
         loadData()
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to delete fuel purchase")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to delete fuel purchase"))
     }
   }
 
@@ -281,8 +282,8 @@ export default function TaxFuelReconciliationPage() {
         setShowCreateDialog(true)
         toast.success("Receipt data extracted! Please review and save.")
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to process receipt")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to process receipt"))
     } finally {
       setIsUploadingReceipt(false)
       event.target.value = "" // Reset input

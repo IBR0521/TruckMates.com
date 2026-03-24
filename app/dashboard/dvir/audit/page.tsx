@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -90,8 +91,8 @@ export default function DVIRAuditPage() {
           toast.error("Please allow popups to view the DVIR audit report")
         }
       }
-    } catch (error: any) {
-      toast.error("Failed to generate DVIR audit report: " + (error.message || "Unknown error"))
+    } catch (error: unknown) {
+      toast.error("Failed to generate DVIR audit report: " + (errorMessage(error, "Unknown error")))
     } finally {
       setIsGenerating(false)
     }

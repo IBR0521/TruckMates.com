@@ -10,6 +10,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { geocodeAddress } from "./integrations-google-maps"
@@ -253,8 +254,8 @@ export async function createAddressBookEntry(
       } as AddressBookEntry,
       error: null,
     }
-  } catch (error: any) {
-    return { data: null, error: error.message || "Failed to create address book entry" }
+  } catch (error: unknown) {
+    return { data: null, error: errorMessage(error, "Failed to create address book entry") }
   }
 }
 
@@ -392,8 +393,8 @@ export async function getAddressBookEntries(filters?: {
     })
 
     return { data: entries, error: null }
-  } catch (error: any) {
-    return { data: [], error: error.message || "Failed to fetch address book entries" }
+  } catch (error: unknown) {
+    return { data: [], error: errorMessage(error, "Failed to fetch address book entries") }
   }
 }
 
@@ -441,8 +442,8 @@ export async function findNearbyAddresses(
     }))
 
     return { data: entries, error: null }
-  } catch (error: any) {
-    return { data: null, error: error.message || "Failed to find nearby addresses" }
+  } catch (error: unknown) {
+    return { data: null, error: errorMessage(error, "Failed to find nearby addresses") }
   }
 }
 
@@ -648,8 +649,8 @@ export async function geocodeAddressBookEntry(
       } as AddressBookEntry,
       error: null,
     }
-  } catch (error: any) {
-    return { data: null, error: error.message || "Failed to geocode address" }
+  } catch (error: unknown) {
+    return { data: null, error: errorMessage(error, "Failed to geocode address") }
   }
 }
 
@@ -718,8 +719,8 @@ export async function extractAddressesFromRateCon(
       },
       error: null,
     }
-  } catch (error: any) {
-    return { data: null, error: error.message || "Failed to extract addresses from document" }
+  } catch (error: unknown) {
+    return { data: null, error: errorMessage(error, "Failed to extract addresses from document") }
   }
 }
 
@@ -882,8 +883,8 @@ export async function updateAddressBookEntry(
       } as AddressBookEntry,
       error: null,
     }
-  } catch (error: any) {
-    return { data: null, error: error.message || "Failed to update address book entry" }
+  } catch (error: unknown) {
+    return { data: null, error: errorMessage(error, "Failed to update address book entry") }
   }
 }
 
@@ -932,8 +933,8 @@ export async function deleteAddressBookEntry(
     }
 
     return { error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to delete address book entry" }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to delete address book entry") }
   }
 }
 
@@ -970,8 +971,8 @@ export async function incrementAddressUsage(entryId: string): Promise<{ error: s
     }
 
     return { error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to increment usage" }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to increment usage") }
   }
 }
 

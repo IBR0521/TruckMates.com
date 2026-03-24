@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 
@@ -182,8 +183,8 @@ export async function getOnTimeDeliveryAnalytics(filters?: {
       },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get on-time delivery analytics", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get on-time delivery analytics"), data: null }
   }
 }
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { updateRouteETA } from "@/app/actions/realtime-eta"
 
@@ -89,9 +90,9 @@ export async function POST(request: NextRequest) {
       success: true,
       data: result.data
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error.message || "Failed to update ETA" },
+      { error: errorMessage(error, "Failed to update ETA") },
       { status: 500 }
     )
   }

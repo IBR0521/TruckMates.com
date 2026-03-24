@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import crypto from "crypto"
 
@@ -93,10 +94,10 @@ export async function POST(request: NextRequest) {
     }
     
     return NextResponse.json({ success: true, processed: eventType })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Samsara Webhook] Error:", error)
     return NextResponse.json(
-      { error: error.message || "Internal server error" },
+      { error: errorMessage(error, "Internal server error") },
       { status: 500 }
     )
   }

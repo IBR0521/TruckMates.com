@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -97,7 +98,7 @@ export async function getRoutes(filters?: {
     return { data: routes || [], error: null, count: count || 0 }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null, count: 0 }
   }
 }
@@ -129,7 +130,7 @@ export async function getRoute(id: string) {
     return { data: route, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null }
   }
 }
@@ -406,7 +407,7 @@ export async function updateRoute(
             })
             Sentry.captureMessage(`[updateRoute] Audit log created for field: ${change.field}`, "info")
           } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err)
+            const msg = err instanceof Error ? errorMessage(err) : String(err)
             Sentry.captureMessage(`[updateRoute] Audit log failed for field ${change.field}: ${msg}`, "error")
           }
         }
@@ -414,7 +415,7 @@ export async function updateRoute(
         Sentry.captureMessage("[updateRoute] No user found for audit logging", "warning")
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = err instanceof Error ? errorMessage(err) : String(err)
       Sentry.captureMessage(`[updateRoute] Failed to import audit log module: ${msg}`, "error")
     }
   }

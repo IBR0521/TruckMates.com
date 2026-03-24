@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react'
+import { errorMessage } from "@/lib/error-message"
 import {
   View,
   Text,
@@ -226,8 +227,8 @@ export default function DVIRScreen() {
           },
         ]
       )
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to submit DVIR')
+    } catch (error: unknown) {
+      Alert.alert('Error', errorMessage(error, 'Failed to submit DVIR'))
     } finally {
       setIsSubmitting(false)
     }

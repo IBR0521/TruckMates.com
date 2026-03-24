@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { Download, Eye, FileText, Trash2, FolderOpen, AlertTriangle, Clock, CheckSquare, Square, Upload } from "lucide-react"
 import { toast } from "sonner"
@@ -124,8 +125,8 @@ export default function DocumentsPage() {
       } else {
         toast.error("Document URL not available")
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to open document")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to open document"))
     }
   }
 
@@ -149,8 +150,8 @@ export default function DocumentsPage() {
       } else {
         toast.error("Document URL not available")
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to download document")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to download document"))
     }
   }
 
@@ -226,8 +227,8 @@ export default function DocumentsPage() {
                   toast.success(`Document "${file.name}" uploaded successfully`)
                   await loadDocuments()
                 }
-              } catch (error: any) {
-                toast.error(error?.message || "Upload failed")
+              } catch (error: unknown) {
+                toast.error(errorMessage(error, "Upload failed"))
               } finally {
                 setIsUploading(false)
                 // Reset input

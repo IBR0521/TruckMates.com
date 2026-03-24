@@ -13,6 +13,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { findNearbyDriversForLoad, type NearbyDriver } from "./proximity-dispatching"
 import { checkAssignmentConflicts } from "./dispatch-timeline"
@@ -356,8 +357,8 @@ export async function getOptimalDriverSuggestions(
     // Limit to max suggestions
     const maxSuggestions = options?.max_suggestions || 5
     return { data: suggestions.slice(0, maxSuggestions), error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get driver suggestions", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get driver suggestions"), data: null }
   }
 }
 
@@ -547,8 +548,8 @@ export async function getOptimalDriverSuggestionsForRoute(
 
     const maxSuggestions = options?.max_suggestions || 5
     return { data: suggestions.slice(0, maxSuggestions), error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get driver suggestions for route", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get driver suggestions for route"), data: null }
   }
 }
 
@@ -599,8 +600,8 @@ export async function validateAssignment(
       },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to validate assignment", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to validate assignment"), data: null }
   }
 }
 

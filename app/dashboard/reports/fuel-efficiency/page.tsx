@@ -85,7 +85,7 @@ export default function FuelEfficiencyReportPage() {
       } else {
         setReport(result.data)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load fuel efficiency report")
       console.error(error)
     } finally {

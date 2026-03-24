@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { createClient } from "@/lib/supabase/server"
 import { getQuickBooksConnection, qbQuery } from "@/lib/quickbooks/client"
@@ -33,8 +34,8 @@ export async function POST() {
       realmId: conn.realmId,
       accounts_count: Array.isArray(accounts) ? accounts.length : 0,
     })
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 })
+  } catch (error: unknown) {
+    return NextResponse.json({ error: errorMessage(error, "Internal server error") }, { status: 500 })
   }
 }
 

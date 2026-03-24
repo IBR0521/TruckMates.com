@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
@@ -106,9 +107,9 @@ export async function createInvoicePayment(invoiceId: string, amount?: number) {
       },
       error: null,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to create payment", data: null }
+    return { error: errorMessage(error, "Failed to create payment"), data: null }
   }
 }
 
@@ -150,9 +151,9 @@ export async function confirmInvoicePayment(invoiceId: string, paymentIntentId: 
 
     revalidatePath("/dashboard/accounting/invoices")
     return { data: { success: true, payment_intent: paymentIntent }, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to confirm payment", data: null }
+    return { error: errorMessage(error, "Failed to confirm payment"), data: null }
   }
 }
 
@@ -277,9 +278,9 @@ export async function processPayPalInvoicePayment(invoiceId: string, amount?: nu
       },
       error: null,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to process PayPal payment", data: null }
+    return { error: errorMessage(error, "Failed to process PayPal payment"), data: null }
   }
 }
 
@@ -368,9 +369,9 @@ export async function capturePayPalPayment(invoiceId: string, orderId: string) {
     }
 
     return { error: `Payment not completed. Status: ${capture.status}`, data: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to capture PayPal payment", data: null }
+    return { error: errorMessage(error, "Failed to capture PayPal payment"), data: null }
   }
 }
 

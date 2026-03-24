@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { useParams, useRouter } from "next/navigation"
 import { toast } from "sonner"
 
@@ -93,8 +94,8 @@ export default function EditGeofencePage() {
           entry_load_status: g?.entry_load_status || "scheduled",
           exit_load_status: g?.exit_load_status || "delivered",
         })
-      } catch (e: any) {
-        toast.error(e?.message || "Failed to load geofence")
+      } catch (e: unknown) {
+        toast.error(errorMessage(e, "Failed to load geofence"))
         router.push("/dashboard/geofencing")
       } finally {
         setIsLoading(false)
@@ -152,8 +153,8 @@ export default function EditGeofencePage() {
 
       toast.success("Geofence updated")
       router.push(`/dashboard/geofencing/${encodeURIComponent(geofenceId)}`)
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to save geofence")
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Failed to save geofence"))
     } finally {
       setIsSaving(false)
     }

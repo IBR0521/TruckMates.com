@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { ArrowLeft, FileText, Building2, MapPin, CheckCircle, XCircle, Pen, Download } from "lucide-react"
 import Link from "next/link"
@@ -115,8 +116,8 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
       toast.success("BOL downloaded as PDF")
-    } catch (error: any) {
-      toast.error("Failed to generate PDF: " + (error.message || "Unknown error"))
+    } catch (error: unknown) {
+      toast.error("Failed to generate PDF: " + (errorMessage(error, "Unknown error")))
     }
   }
 

@@ -91,7 +91,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
             : 365,
         })
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load customer data")
     } finally {
       setIsLoading(false)
@@ -116,7 +116,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         setIsPortalDialogOpen(false)
         await loadData()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to create portal access")
     }
   }
@@ -134,7 +134,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         toast.success("Portal access revoked")
         setPortalAccess(null)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to revoke portal access")
     }
   }

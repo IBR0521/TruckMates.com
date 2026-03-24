@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { updateBOLPOD } from "@/app/actions/bol"
 import { uploadDocument } from "@/app/actions/documents"
@@ -194,9 +195,9 @@ export async function POST(request: NextRequest) {
         invoiceId,
       },
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("POD capture upload error:", error)
-    const message = String(error?.message || "")
+    const message = String(errorMessage(error, ""))
     if (message.toLowerCase().includes("formdata")) {
       return NextResponse.json(
         { error: "Invalid multipart form-data payload" },
@@ -204,7 +205,7 @@ export async function POST(request: NextRequest) {
       )
     }
     return NextResponse.json(
-      { error: error.message || "Failed to upload POD" },
+      { error: errorMessage(error, "Failed to upload POD") },
       { status: 500 }
     )
   }

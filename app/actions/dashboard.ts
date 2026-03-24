@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getAuthCompany, getCachedAuthContext } from "@/lib/auth/server"
 import { cache, cacheKeys } from "@/lib/cache"
 import * as Sentry from "@sentry/nextjs"
@@ -14,12 +15,12 @@ export async function getDashboardStats() {
     let supabase
     try {
       supabase = await createClient()
-    } catch (clientError: any) {
+    } catch (clientError: unknown) {
       // Only log in development to improve performance
       if (process.env.NODE_ENV === 'development') {
         Sentry.captureException(clientError)
       }
-      const errorMessage = clientError?.message || "Failed to connect to database"
+      const connectErr = errorMessage(clientError, "Failed to connect to database")
       
       // Return minimal data with connection error info
       return {
@@ -51,9 +52,9 @@ export async function getDashboardStats() {
           overdueInvoices: [],
           upcomingDeliveries: [],
         },
-        error: errorMessage.includes('Missing Supabase') 
+        error: connectErr.includes('Missing Supabase') 
           ? "Database configuration error. Please check your Supabase settings."
-          : errorMessage.includes('timeout') || errorMessage.includes('ECONNREFUSED')
+          : connectErr.includes('timeout') || connectErr.includes('ECONNREFUSED')
           ? "Connection failed. Please check your internet connection."
           : "Database connection error. Please try again.",
       }
@@ -752,7 +753,7 @@ export async function getDashboardStats() {
       data: dashboardData,
       error: null,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Only log in development
     if (process.env.NODE_ENV === 'development') {
       Sentry.captureException(error)

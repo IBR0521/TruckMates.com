@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
@@ -47,8 +48,8 @@ export async function getSetupStatus() {
       },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get setup status", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get setup status"), data: null }
   }
 }
 
@@ -117,8 +118,8 @@ export async function updateCompanyProfile(data: {
       data: { success: true },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to update company profile", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to update company profile"), data: null }
   }
 }
 
@@ -141,8 +142,8 @@ export async function createFirstDriver(data: {
     })
 
     return result
-  } catch (error: any) {
-    return { error: error.message || "Failed to create driver", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to create driver"), data: null }
   }
 }
 
@@ -167,8 +168,8 @@ export async function createFirstTruck(data: {
     })
 
     return result
-  } catch (error: any) {
-    return { error: error.message || "Failed to create truck", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to create truck"), data: null }
   }
 }
 
@@ -255,8 +256,8 @@ export async function completeSetup() {
       data: { success: true, company_id: String(company_id) },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to complete setup", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to complete setup"), data: null }
   }
 }
 

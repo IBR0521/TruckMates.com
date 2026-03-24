@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -56,8 +57,8 @@ export default function DriverOnboardingPage({ params }: { params: Promise<{ id:
       } else {
         setDriver(driverResult.data)
       }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to load data")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to load data"))
     } finally {
       setIsLoading(false)
     }

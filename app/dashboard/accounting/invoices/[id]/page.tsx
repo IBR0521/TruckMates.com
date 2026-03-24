@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { ArrowLeft, Download, Send, Mail, MessageSquare, Share2, ChevronDown, Landmark } from "lucide-react"
 import Link from "next/link"
@@ -199,8 +200,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
       toast.success("Synced to QuickBooks")
       const refreshed = await getInvoice(id)
       if (!refreshed.error && refreshed.data) setInvoice(refreshed.data)
-    } catch (e: any) {
-      toast.error(e?.message || "QuickBooks sync failed")
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "QuickBooks sync failed"))
     } finally {
       setIsSyncing(false)
     }
@@ -218,7 +219,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
       const refreshed = await getInvoice(id)
       if (!refreshed.error && refreshed.data) setInvoice(refreshed.data)
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to send")
+      toast.error(e instanceof Error ? errorMessage(e) : "Failed to send")
     } finally {
       setSendingCustomer(false)
     }
@@ -238,7 +239,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
       const refreshed = await getInvoice(id)
       if (!refreshed.error && refreshed.data) setInvoice(refreshed.data)
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to send")
+      toast.error(e instanceof Error ? errorMessage(e) : "Failed to send")
     } finally {
       setSendingFactoring(false)
     }
@@ -256,7 +257,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
       const refreshed = await getInvoice(id)
       if (!refreshed.error && refreshed.data) setInvoice(refreshed.data)
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to update")
+      toast.error(e instanceof Error ? errorMessage(e) : "Failed to update")
     } finally {
       setMarkingFunded(false)
     }
@@ -275,8 +276,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
       }
       const refreshed = await getInvoice(id)
       if (!refreshed.error && refreshed.data) setInvoice(refreshed.data)
-    } catch (e: any) {
-      toast.error(e?.message || "QuickBooks refresh failed")
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "QuickBooks refresh failed"))
     } finally {
       setIsRefreshingPayment(false)
     }

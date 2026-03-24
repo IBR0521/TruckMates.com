@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Package, MapPin, Calendar, Truck, CheckCircle, Clock, AlertCircle } from "lucide-react"
@@ -66,8 +67,8 @@ export default function TrackingPage({ params }: { params: Promise<{ id: string 
       }
 
       setShipment(loads[0])
-    } catch (err: any) {
-      setError(err.message || "An error occurred")
+    } catch (err: unknown) {
+      setError(errorMessage(err, "An error occurred"))
     } finally {
       setIsLoading(false)
     }

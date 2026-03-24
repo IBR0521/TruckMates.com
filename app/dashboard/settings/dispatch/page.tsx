@@ -132,7 +132,7 @@ export default function DispatchSettingsPage() {
           emergency_escalation_minutes: result.data.emergency_escalation_minutes || 15,
         })
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load settings")
     } finally {
       setIsLoading(false)
@@ -149,7 +149,7 @@ export default function DispatchSettingsPage() {
       } else {
         toast.success("Dispatch settings updated")
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to save settings")
     } finally {
       setIsSaving(false)

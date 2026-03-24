@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -90,8 +91,8 @@ export async function getDVIRs(filters?: {
     }
 
     return { data: dvirs || [], error: null, count: count || 0 }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get DVIRs", data: null, count: 0 }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get DVIRs"), data: null, count: 0 }
   }
 }
 
@@ -128,8 +129,8 @@ export async function getDVIR(id: string) {
     }
 
     return { data: dvir, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get DVIR", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get DVIR"), data: null }
   }
 }
 
@@ -282,8 +283,8 @@ export async function createDVIR(formData: {
 
     revalidatePath("/dashboard/dvir")
     return { data: dvir, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to create DVIR", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to create DVIR"), data: null }
   }
 }
 
@@ -438,8 +439,8 @@ export async function updateDVIR(id: string, formData: {
     revalidatePath("/dashboard/dvir")
     revalidatePath(`/dashboard/dvir/${id}`)
     return { data: dvir, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to update DVIR", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to update DVIR"), data: null }
   }
 }
 
@@ -498,8 +499,8 @@ export async function deleteDVIR(id: string) {
 
     revalidatePath("/dashboard/dvir")
     return { data: { success: true }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to delete DVIR", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to delete DVIR"), data: null }
   }
 }
 
@@ -573,8 +574,8 @@ export async function getDVIRStats(filters?: {
     }
 
     return { data: stats || {}, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get DVIR stats", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get DVIR stats"), data: null }
   }
 }
 

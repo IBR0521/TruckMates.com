@@ -1,4 +1,5 @@
 import { EIA_US_DIESEL_DUOAREA, stateCodeToEiaGndDuoarea } from "./padd-state-map"
+import { errorMessage } from "@/lib/error-message"
 import type { StateMileRow } from "./state-mileage"
 
 export type DieselPriceByState = Record<string, { pricePerGallon: number; seriesId: string }>
@@ -51,7 +52,7 @@ async function fetchLatestGndWeeklyDiesel(
     }
     return { price, seriesId, error: null }
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "EIA request failed"
+    const msg = e instanceof Error ? errorMessage(e) : "EIA request failed"
     return { price: null, seriesId: null, error: msg }
   }
 }

@@ -6,6 +6,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -50,8 +51,8 @@ export async function buildActualRoute(
     }
 
     return { data: { built: success }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to build actual route", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to build actual route"), data: null }
   }
 }
 
@@ -81,8 +82,8 @@ export async function comparePlannedVsActualRoute(
     }
 
     return { data: comparison[0], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to compare routes", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to compare routes"), data: null }
   }
 }
 
@@ -137,8 +138,8 @@ export async function buildActualRoutesForCompleted() {
       },
       error: null
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to build actual routes", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to build actual routes"), data: null }
   }
 }
 

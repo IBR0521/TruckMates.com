@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { createInvoice } from "./accounting"
@@ -172,12 +173,12 @@ export async function autoGenerateInvoicesFromLoads() {
         }
         generated += insertedInvoices.length
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // If batch fails, add all in chunk to errors
       for (const invoice of chunk) {
         errors.push({
           load_id: invoice.load_id,
-          error: error.message || "Unknown error",
+          error: errorMessage(error, "Unknown error"),
         })
       }
     }
@@ -194,10 +195,10 @@ export async function autoGenerateInvoicesFromLoads() {
       },
       error: null,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
     return { 
-      error: error?.message || "An unexpected error occurred while generating invoices", 
+      error: errorMessage(error, "An unexpected error occurred while generating invoices"), 
       data: null 
     }
   }

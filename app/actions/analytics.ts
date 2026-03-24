@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 import * as Sentry from "@sentry/nextjs"
@@ -146,9 +147,9 @@ export async function getAnalyticsData(dateRange: number = 30) {
       },
       error: null,
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "Failed to load analytics", data: null }
+    return { error: errorMessage(error, "Failed to load analytics"), data: null }
   }
 }
 

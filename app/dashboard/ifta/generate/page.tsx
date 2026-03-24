@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { errorMessage } from "@/lib/error-message"
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -67,8 +68,8 @@ export default function GenerateIFTAPage() {
         toast.success("IFTA report generated successfully")
         router.push("/dashboard/ifta")
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to generate IFTA report")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to generate IFTA report"))
     } finally {
       setLoading(false)
     }

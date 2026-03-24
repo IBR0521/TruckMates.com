@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useRef } from 'react'
+import { errorMessage } from "@/lib/error-message"
 import {
   View,
   Text,
@@ -85,9 +86,9 @@ export default function BOLSignatureScreen() {
           },
         ]
       )
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error submitting signature:', error)
-      Alert.alert('Error', error.message || 'Failed to submit signature')
+      Alert.alert('Error', errorMessage(error, 'Failed to submit signature'))
     } finally {
       setIsSubmitting(false)
     }

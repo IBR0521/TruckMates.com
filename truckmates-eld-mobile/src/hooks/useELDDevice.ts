@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { errorMessage } from "@/lib/error-message"
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Platform } from 'react-native'
 import DeviceInfo from 'react-native-device-info'
@@ -48,9 +49,9 @@ export function useELDDevice(): UseELDDeviceReturn {
         } as ELDDevice)
       }
       setIsLoading(false)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error loading device ID:', err)
-      setError(err.message)
+      setError(errorMessage(err))
       setIsLoading(false)
     }
   }
@@ -106,9 +107,9 @@ export function useELDDevice(): UseELDDeviceReturn {
 
       setIsLoading(false)
       return true
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error registering device:', err)
-      setError(err.message)
+      setError(errorMessage(err))
       setIsLoading(false)
       return false
     }

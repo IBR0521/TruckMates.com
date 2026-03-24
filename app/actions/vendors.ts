@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateRequiredString, validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
@@ -80,9 +81,9 @@ export async function getVendors(filters?: {
     }
 
     return { data: data || [], error: null, count: count || 0 }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null, count: 0 }
   }
 }
 
@@ -112,9 +113,9 @@ export async function getVendor(id: string) {
     }
 
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -374,12 +375,12 @@ export async function updateVendor(
               },
             })
             Sentry.captureMessage(`[updateVendor] Audit log created for field: ${change.field}`, "info")
-          } catch (err: any) {
+          } catch (err: unknown) {
             Sentry.captureException(err)
           }
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       Sentry.captureException(err)
     }
   }

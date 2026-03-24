@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { errorMessage } from "@/lib/error-message"
 import { syncAllELDDevices } from "@/app/actions/eld-sync"
 
 // This endpoint can be called by Vercel Cron or external cron service
@@ -35,10 +36,10 @@ export async function GET(request: Request) {
       data: result.data,
       message: `Synced ${result.data?.synced || 0} devices, ${result.data?.failed || 0} failed`
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Cron sync error:", error)
     return NextResponse.json(
-      { error: error.message, success: false },
+      { error: errorMessage(error), success: false },
       { status: 500 }
     )
   }

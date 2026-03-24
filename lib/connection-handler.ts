@@ -1,3 +1,5 @@
+import { errorMessage } from "@/lib/error-message"
+
 /**
  * Connection error handling and retry logic
  */
@@ -66,7 +68,7 @@ export async function retryWithBackoff<T>(
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn()
-    } catch (error: any) {
+    } catch (error: unknown) {
       lastError = error
       
       // Don't retry if it's not a retryable error
@@ -86,7 +88,7 @@ export async function retryWithBackoff<T>(
       const jitter = Math.random() * 0.3 * delay
       const totalDelay = delay + jitter
       
-      console.warn(`[Connection Retry] Attempt ${attempt + 1}/${maxRetries} failed, retrying in ${Math.round(totalDelay)}ms...`, error.message)
+      console.warn(`[Connection Retry] Attempt ${attempt + 1}/${maxRetries} failed, retrying in ${Math.round(totalDelay)}ms...`, errorMessage(error))
       
       await new Promise(resolve => setTimeout(resolve, totalDelay))
     }

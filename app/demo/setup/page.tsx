@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, Suspense } from "react"
+import { errorMessage as formatCaughtError } from "@/lib/error-message"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { Loader2 } from "lucide-react"
@@ -80,9 +81,9 @@ function DemoSetupContent() {
 
         // Use window.location for full page reload to ensure session is recognized
         window.location.href = "/dashboard"
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Demo setup error:", error)
-        setErrorMessage(error?.message || "An unexpected error occurred. Please try again.")
+        setErrorMessage(formatCaughtError(error, "An unexpected error occurred. Please try again."))
         setStatus("error")
       }
     }

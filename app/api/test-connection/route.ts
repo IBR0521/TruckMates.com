@@ -45,7 +45,7 @@ export async function GET() {
       message: 'Connection successful',
       timestamp: new Date().toISOString()
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Don't leak error details
     console.error('[Test Connection] Unexpected error:', error)
     return NextResponse.json(

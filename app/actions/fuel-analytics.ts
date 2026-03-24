@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
 /**
@@ -257,8 +258,8 @@ export async function getFuelAnalytics(filters?: {
       },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get fuel analytics", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get fuel analytics"), data: null }
   }
 }
 
@@ -344,8 +345,8 @@ export async function getFuelCostPerRoute(filters?: {
       },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get fuel cost per route", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get fuel cost per route"), data: null }
   }
 }
 
@@ -608,8 +609,8 @@ export async function getFuelEfficiencyReport(filters?: {
       },
       error: null,
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get fuel efficiency report", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get fuel efficiency report"), data: null }
   }
 }
 

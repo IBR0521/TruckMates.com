@@ -7,6 +7,7 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -65,8 +66,8 @@ export async function createRouteLinestring(routeId: string) {
     }
 
     return { data: { success }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to create route LINESTRING", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to create route LINESTRING"), data: null }
   }
 }
 
@@ -102,8 +103,8 @@ export async function calculateRealtimeETA(
     }
 
     return { data: eta[0], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to calculate ETA", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to calculate ETA"), data: null }
   }
 }
 
@@ -209,8 +210,8 @@ export async function updateRouteETA(routeId: string) {
     }
 
     return { data: { update_id: updateId }, error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to update route ETA", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to update route ETA"), data: null }
   }
 }
 
@@ -260,8 +261,8 @@ export async function getRouteETA(routeId: string) {
       },
       error: null
     }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get route ETA", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get route ETA"), data: null }
   }
 }
 
@@ -292,8 +293,8 @@ export async function getETAHistory(
     }
 
     return { data: updates || [], error: null }
-  } catch (error: any) {
-    return { error: error.message || "Failed to get ETA history", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get ETA history"), data: null }
   }
 }
 
@@ -326,8 +327,8 @@ export async function getLoadETA(loadId: string) {
 
     // Get route ETA
     return await getRouteETA(load.route_id)
-  } catch (error: any) {
-    return { error: error.message || "Failed to get load ETA", data: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to get load ETA"), data: null }
   }
 }
 

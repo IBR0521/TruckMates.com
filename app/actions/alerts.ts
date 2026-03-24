@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { sendNotification } from "./notifications"
@@ -34,9 +35,9 @@ export async function getAlertRules() {
   }
 
   return { data: data || [], error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { data: [], error: error?.message || "An unexpected error occurred" }
+    return { data: [], error: errorMessage(error, "An unexpected error occurred") }
   }
 }
 
@@ -105,9 +106,9 @@ export async function createAlertRule(formData: {
 
     revalidatePath("/dashboard/settings/alerts")
     return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -198,9 +199,9 @@ export async function updateAlertRule(
 
   revalidatePath("/dashboard/settings/alerts")
   return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -253,9 +254,9 @@ export async function deleteAlertRule(ruleId: string) {
 
   revalidatePath("/dashboard/settings/alerts")
   return { data: { success: true }, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -288,7 +289,7 @@ export async function getAlertCounts() {
     },
     error: null
   }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
     return {
       data: {
@@ -297,7 +298,7 @@ export async function getAlertCounts() {
         acknowledged: 0,
         resolved: 0,
       },
-      error: error?.message || "An unexpected error occurred"
+      error: errorMessage(error, "An unexpected error occurred")
     }
   }
 }
@@ -389,9 +390,9 @@ export async function getAlerts(filters?: {
   }
 
   return { data: data || [], error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { data: [], error: error?.message || "An unexpected error occurred" }
+    return { data: [], error: errorMessage(error, "An unexpected error occurred") }
   }
 }
 
@@ -596,9 +597,9 @@ export async function createAlert(formData: {
 
   revalidatePath("/dashboard/alerts")
   return { data: alert, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -763,16 +764,16 @@ export async function processAlertEscalations() {
             shipmentNumber: alert.metadata?.shipment_number,
           }).catch(() => {})
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         Sentry.captureException(error)
       }
     }
   }
 
   return { data: { escalated: escalatedCount }, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: { escalated: 0 } }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: { escalated: 0 } }
   }
 }
 
@@ -812,9 +813,9 @@ export async function acknowledgeAlert(id: string) {
 
   revalidatePath("/dashboard/alerts")
   return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 
@@ -856,9 +857,9 @@ export async function resolveAlert(id: string) {
 
   revalidatePath("/dashboard/alerts")
   return { data, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
 }
 

@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 import * as Sentry from "@sentry/nextjs"
@@ -195,10 +196,10 @@ export async function getRevenueTrend(period: Period = 'weekly') {
     }))
 
     return { data: result, error: null }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return { 
       data: [], 
-      error: String(error?.message || error || "Failed to fetch revenue trend") 
+      error: String(errorMessage(error) || error || "Failed to fetch revenue trend") 
     }
   }
 }
