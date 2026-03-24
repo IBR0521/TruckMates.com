@@ -9,10 +9,8 @@ function getStripe() {
     return null // Return null instead of throwing - webhook will handle it
   }
   try {
-    return new Stripe(secretKey, {
-      // Use the same stable public API version as server-side Stripe client
-      apiVersion: "2026-02-25.clover",
-    })
+    // Omit apiVersion so the SDK default matches the installed stripe package (avoids CI drift across lockfile versions).
+    return new Stripe(secretKey)
   } catch (error) {
     return null
   }

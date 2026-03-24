@@ -38,18 +38,13 @@ async function getStripeClient() {
 
     // Dynamically import Stripe
     const stripe = (await import("stripe")).default
-    return new stripe(integrations.stripe_api_key, {
-      // Use a stable, public Stripe API version compatible with our usage
-      apiVersion: "2026-02-25.clover",
-    })
+    // Omit apiVersion so the SDK uses its bundled default (matches Stripe.LatestApiVersion for the installed stripe package).
+    return new stripe(integrations.stripe_api_key)
   }
 
   // Use environment variable
   const stripe = (await import("stripe")).default
-  return new stripe(STRIPE_SECRET_KEY, {
-    // Keep SDK and webhook handler aligned on the same Stripe version
-    apiVersion: "2026-02-25.clover",
-  })
+  return new stripe(STRIPE_SECRET_KEY)
 }
 
 /**
