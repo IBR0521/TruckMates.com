@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getELDDevices, getELDDevice } from "./eld"
 import { mapProviderDriverId } from "./eld-driver-mapping"
@@ -204,7 +205,7 @@ async function syncKeepTruckinData(device: any, sinceMs?: number | null) {
       logsError = error
 
       if (logsError) {
-        console.error("Error inserting ELD logs:", logsError)
+        Sentry.captureException(logsError)
         return { error: `Failed to sync logs: ${logsError.message}`, data: null }
       }
     }
@@ -241,7 +242,7 @@ async function syncKeepTruckinData(device: any, sinceMs?: number | null) {
       locationsError = error
 
       if (locationsError) {
-        console.error("Error inserting ELD locations:", locationsError)
+        Sentry.captureException(locationsError)
         return { error: `Failed to sync locations: ${locationsError.message}`, data: null }
       }
     }
@@ -274,7 +275,7 @@ async function syncKeepTruckinData(device: any, sinceMs?: number | null) {
       eventsError = error
 
       if (eventsError) {
-        console.error("Error inserting ELD events:", eventsError)
+        Sentry.captureException(eventsError)
         return { error: `Failed to sync events: ${eventsError.message}`, data: null }
       }
     }
@@ -301,9 +302,10 @@ async function syncKeepTruckinData(device: any, sinceMs?: number | null) {
       error: errors.length > 0 ? "Partial sync failure" : null
     }
 
-  } catch (error: any) {
-    console.error("KeepTruckin sync error:", error)
-    return { error: error.message || "Failed to sync KeepTruckin data", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to sync KeepTruckin data"
+    return { error: message, data: null }
   }
 }
 
@@ -464,7 +466,7 @@ async function syncSamsaraData(device: any, sinceMs?: number | null) {
         })
 
       if (logsError) {
-        console.error("Error inserting ELD logs:", logsError)
+        Sentry.captureException(logsError)
         return { error: `Failed to sync logs: ${logsError.message}`, data: null }
       }
     }
@@ -518,7 +520,7 @@ async function syncSamsaraData(device: any, sinceMs?: number | null) {
         .insert(locationsToInsert)
 
       if (locationsError) {
-        console.error("Error inserting ELD locations:", locationsError)
+        Sentry.captureException(locationsError)
         return { error: `Failed to sync locations: ${locationsError.message}`, data: null }
       }
     }
@@ -576,7 +578,7 @@ async function syncSamsaraData(device: any, sinceMs?: number | null) {
         .insert(eventsToInsert)
 
       if (eventsError) {
-        console.error("Error inserting ELD events:", eventsError)
+        Sentry.captureException(eventsError)
         return { error: `Failed to sync events: ${eventsError.message}`, data: null }
       }
     }
@@ -596,9 +598,10 @@ async function syncSamsaraData(device: any, sinceMs?: number | null) {
       error: null
     }
 
-  } catch (error: any) {
-    console.error("Samsara sync error:", error)
-    return { error: error.message || "Failed to sync Samsara data", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to sync Samsara data"
+    return { error: message, data: null }
   }
 }
 
@@ -634,10 +637,16 @@ async function syncGeotabData(device: any, sinceMs?: number | null) {
         if (allowedGeotabDomains.includes(normalized)) {
           baseUrl = `${normalized}/apiv1`
         } else {
-          console.warn("[Geotab] api_endpoint is not an allowed Geotab domain, using default:", normalized)
+          Sentry.captureMessage(
+            `[Geotab] api_endpoint is not an allowed Geotab domain, using default: ${normalized}`,
+            "warning",
+          )
         }
       } catch {
-        console.warn("[Geotab] Invalid api_endpoint value, using default:", device.api_endpoint)
+        Sentry.captureMessage(
+          `[Geotab] Invalid api_endpoint value, using default: ${String(device.api_endpoint)}`,
+          "warning",
+        )
       }
     }
     
@@ -809,7 +818,7 @@ async function syncGeotabData(device: any, sinceMs?: number | null) {
       logsError = error
 
       if (logsError) {
-        console.error("Error inserting ELD logs:", logsError)
+        Sentry.captureException(logsError)
         return { error: `Failed to sync logs: ${logsError.message}`, data: null }
       }
     }
@@ -864,7 +873,7 @@ async function syncGeotabData(device: any, sinceMs?: number | null) {
       locationsError = error
 
       if (locationsError) {
-        console.error("Error inserting ELD locations:", locationsError)
+        Sentry.captureException(locationsError)
         return { error: `Failed to sync locations: ${locationsError.message}`, data: null }
       }
     }
@@ -906,7 +915,7 @@ async function syncGeotabData(device: any, sinceMs?: number | null) {
       eventsError = error
 
       if (eventsError) {
-        console.error("Error inserting ELD events:", eventsError)
+        Sentry.captureException(eventsError)
         return { error: `Failed to sync events: ${eventsError.message}`, data: null }
       }
     }
@@ -933,9 +942,10 @@ async function syncGeotabData(device: any, sinceMs?: number | null) {
       error: errors.length > 0 ? "Partial sync failure" : null
     }
 
-  } catch (error: any) {
-    console.error("Geotab sync error:", error)
-    return { error: error.message || "Failed to sync Geotab data", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to sync Geotab data"
+    return { error: message, data: null }
   }
 }
 

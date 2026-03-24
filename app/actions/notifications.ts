@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -16,7 +17,7 @@ async function getResendClient(companyId?: string) {
   const apiKey = process.env.RESEND_API_KEY
   
   if (!apiKey) {
-    console.error("[RESEND] Platform API key not configured")
+    Sentry.captureMessage("[RESEND] Platform API key not configured", "error")
     return null
   }
 
@@ -31,11 +32,11 @@ async function getResendClient(companyId?: string) {
         .maybeSingle()
 
       if (!integrations?.resend_enabled) {
-        console.log("[RESEND] Integration not enabled for company")
+        Sentry.captureMessage("[RESEND] Integration not enabled for company", "info")
         return null
       }
     } catch (error) {
-      console.error("[RESEND] Error checking integration:", error)
+      Sentry.captureException(error)
       return null
     }
   }
@@ -45,7 +46,7 @@ async function getResendClient(companyId?: string) {
     const { Resend } = await import("resend")
     return new Resend(apiKey)
   } catch (error) {
-    console.error("[RESEND] Failed to initialize Resend client:", error)
+    Sentry.captureException(error)
     return null
   }
 }
@@ -86,9 +87,10 @@ export async function getNotificationPreferences() {
     }
 
     return { data, error: null }
-  } catch (error: any) {
-    console.error("[getNotificationPreferences] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -235,15 +237,15 @@ export async function sendNotification(
           })
 
           if (result.error) {
-            console.error("[NOTIFICATION ERROR]", result.error)
+            Sentry.captureException(result.error)
             results.email = { sent: false, reason: result.error.message || "Failed to send email" }
           } else {
             results.email = { sent: true, email: userData.email, messageId: result.data?.id }
           }
-        } catch (error: any) {
-          // Don't throw - just log and return failure
-          console.error("[NOTIFICATION ERROR]", error)
-          results.email = { sent: false, reason: error?.message || "Failed to send email" }
+        } catch (error: unknown) {
+          Sentry.captureException(error)
+          const reason = error instanceof Error ? error.message : "Failed to send email"
+          results.email = { sent: false, reason }
         }
       } else {
         results.email = { sent: false, reason: "Email service not configured" }
@@ -258,9 +260,10 @@ export async function sendNotification(
       // Type assertion: sendSMSNotification may not support all notification types
       const smsResult = await sendSMSNotification(userId, type as "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "dispatch_assigned", data)
       results.sms = smsResult
-    } catch (error: any) {
-      console.error("[SMS NOTIFICATION ERROR]", error)
-      results.sms = { sent: false, reason: error?.message || "Failed to send SMS" }
+    } catch (error: unknown) {
+      Sentry.captureException(error)
+      const reason = error instanceof Error ? error.message : "Failed to send SMS"
+      results.sms = { sent: false, reason }
     }
   }
 
@@ -339,11 +342,11 @@ export async function sendNotification(
       })
 
     if (notifError) {
-      console.error("[NOTIFICATION] Failed to insert notification record:", notifError)
+      Sentry.captureException(notifError)
       // Don't fail the entire function if DB insert fails
     }
-  } catch (error: any) {
-    console.error("[NOTIFICATION] Error inserting notification record:", error)
+  } catch (error: unknown) {
+    Sentry.captureException(error)
     // Don't fail the entire function if DB insert fails
   }
 
@@ -656,7 +659,7 @@ export async function sendTestEmail() {
     })
 
     if (result.error) {
-      console.error("[TEST EMAIL ERROR]", result.error)
+      Sentry.captureException(result.error)
       return { sent: false, error: result.error.message || "Failed to send test email" }
     }
 
@@ -666,9 +669,10 @@ export async function sendTestEmail() {
       messageId: result.data?.id,
       message: "Test email sent successfully! Check your inbox." 
     }
-  } catch (error: any) {
-    console.error("[TEST EMAIL ERROR]", error)
-    return { sent: false, error: error?.message || "Failed to send test email" }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to send test email"
+    return { sent: false, error: message }
   }
 }
 

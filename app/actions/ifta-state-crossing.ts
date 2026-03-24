@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -101,9 +102,10 @@ async function reverseGeocodeCoordinates(latitude: number, longitude: number) {
     }
     
     return geocodeResult
-  } catch (error: any) {
-    console.error("[IFTA State Crossing] Reverse geocoding error:", error)
-    return { error: error?.message || "Failed to reverse geocode coordinates", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to reverse geocode coordinates"
+    return { error: message, data: null }
   }
 }
 
@@ -143,7 +145,7 @@ export async function detectStateCrossing(params: {
     if (geocodeResult.error || !geocodeResult.data) {
       // If reverse geocoding fails, we can't detect state crossing
       // Log error but don't fail (location is still saved)
-      console.warn("[IFTA State Crossing] Failed to get state:", geocodeResult.error)
+      Sentry.captureMessage(`[IFTA State Crossing] Failed to get state: ${geocodeResult.error}`, "warning")
       return { error: geocodeResult.error, data: null }
     }
 
@@ -173,7 +175,7 @@ export async function detectStateCrossing(params: {
     const { data: previousCrossing, error: previousCrossingError } = await query.maybeSingle()
 
     if (previousCrossingError) {
-      console.error("[IFTA State Crossing] Failed to load previous crossing:", previousCrossingError)
+      Sentry.captureException(previousCrossingError)
       return { error: previousCrossingError.message, data: null }
     }
 
@@ -220,7 +222,10 @@ export async function detectStateCrossing(params: {
           })
         
         if (exitError) {
-          console.warn("[IFTA State Crossing] Failed to log exit crossing:", exitError)
+          Sentry.captureMessage(
+            `[IFTA State Crossing] Failed to log exit crossing: ${exitError.message}`,
+            "warning",
+          )
         }
       }
       
@@ -256,7 +261,7 @@ export async function detectStateCrossing(params: {
     )
 
     if (crossingError) {
-      console.error("[IFTA State Crossing] Database error:", crossingError)
+      Sentry.captureException(crossingError)
       return { error: crossingError.message, data: null }
     }
 
@@ -271,9 +276,10 @@ export async function detectStateCrossing(params: {
       },
       error: null,
     }
-  } catch (error: any) {
-    console.error("[IFTA State Crossing] Error:", error)
-    return { error: error?.message || "Failed to detect state crossing", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to detect state crossing"
+    return { error: message, data: null }
   }
 }
 
@@ -305,14 +311,15 @@ export async function getStateMileageBreakdown(params: {
     )
 
     if (error) {
-      console.error("[IFTA State Mileage] Database error:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
     return { data: stateMileage || [], error: null }
-  } catch (error: any) {
-    console.error("[IFTA State Mileage] Error:", error)
-    return { error: error?.message || "Failed to get state mileage breakdown", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to get state mileage breakdown"
+    return { error: message, data: null }
   }
 }
 
@@ -365,14 +372,15 @@ export async function getStateCrossings(params: {
     const { data: crossings, error } = await query
 
     if (error) {
-      console.error("[IFTA State Crossings] Database error:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
     return { data: crossings || [], error: null }
-  } catch (error: any) {
-    console.error("[IFTA State Crossings] Error:", error)
-    return { error: error?.message || "Failed to get state crossings", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to get state crossings"
+    return { error: message, data: null }
   }
 }
 

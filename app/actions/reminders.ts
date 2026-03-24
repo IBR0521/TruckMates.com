@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -93,14 +94,17 @@ export async function getReminders(filters?: {
     }
 
     return { data: data || [], error: null }
-  } catch (error: any) {
-    console.error("Error in getReminders:", error)
-    // LOW FIX 4: Return actual error for non-table-missing errors
-    // Only suppress the 'table does not exist' error with empty array fallback
-    if (error?.code === "42P01" || error?.message?.includes("does not exist")) {
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const msg = error instanceof Error ? error.message : ""
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? String((error as { code: unknown }).code)
+        : ""
+    if (code === "42P01" || msg.includes("does not exist")) {
       return { data: [], error: null }
     }
-    return { data: null, error: error?.message || "Failed to load reminders" }
+    return { data: null, error: msg || "Failed to load reminders" }
   }
 }
 
@@ -224,8 +228,8 @@ export async function createReminder(formData: {
           due_date: data.due_date,
           reminder_type: data.reminder_type,
         })
-      } catch (error: any) {
-        console.error(`[REMINDER] Failed to send notification to user ${userId}:`, error)
+      } catch (error: unknown) {
+        Sentry.captureException(error)
         // Don't fail the entire operation if notification fails
       }
     }
@@ -343,7 +347,7 @@ export async function completeReminder(id: string) {
         })
 
       if (insertError) {
-        console.error("[REMINDER] Failed to schedule next occurrence:", insertError)
+        Sentry.captureException(insertError)
         return {
           data,
           error: null,
@@ -355,10 +359,10 @@ export async function completeReminder(id: string) {
 
     revalidatePath("/dashboard/reminders")
     return { data, error: null }
-  } catch (error: any) {
-    console.error("Error in completeReminder:", error)
-    // Return error gracefully to prevent server crashes
-    return { error: error?.message || "Failed to complete reminder", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to complete reminder"
+    return { error: message, data: null }
   }
 }
 
@@ -432,13 +436,17 @@ export async function getOverdueReminders() {
     }
 
     return { data: data || [], error: null }
-  } catch (error: any) {
-    console.error("Error in getOverdueReminders:", error)
-    // LOW FIX 4: Return actual error for non-table-missing errors
-    if (error?.code === "42P01" || error?.message?.includes("does not exist")) {
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const msg = error instanceof Error ? error.message : ""
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? String((error as { code: unknown }).code)
+        : ""
+    if (code === "42P01" || msg.includes("does not exist")) {
       return { data: [], error: null }
     }
-    return { data: null, error: error?.message || "Failed to load overdue reminders" }
+    return { data: null, error: msg || "Failed to load overdue reminders" }
   }
 }
 
@@ -493,9 +501,10 @@ export async function updateReminder(
 
     revalidatePath("/dashboard/reminders")
     return { data, error: null }
-  } catch (error: any) {
-    console.error("Error in updateReminder:", error)
-    return { error: error?.message || "Failed to update reminder", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to update reminder"
+    return { error: message, data: null }
   }
 }
 
@@ -524,9 +533,10 @@ export async function deleteReminder(id: string) {
 
     revalidatePath("/dashboard/reminders")
     return { data: { success: true }, error: null }
-  } catch (error: any) {
-    console.error("Error in deleteReminder:", error)
-    return { error: error?.message || "Failed to delete reminder", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to delete reminder"
+    return { error: message, data: null }
   }
 }
 

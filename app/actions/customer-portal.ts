@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -12,7 +13,7 @@ async function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY
   
   if (!apiKey) {
-    console.error("[RESEND] Platform API key not configured")
+    Sentry.captureMessage("[RESEND] Platform API key not configured", "error")
     return null
   }
 
@@ -28,12 +29,12 @@ async function getResendClient() {
         .maybeSingle()
 
       if (!integrations?.resend_enabled) {
-        console.log("[RESEND] Integration not enabled for company")
+        Sentry.captureMessage("[RESEND] Integration not enabled for company", "info")
         return null
       }
     }
   } catch (error) {
-    console.error("[RESEND] Error checking integration:", error)
+    Sentry.captureException(error)
     return null
   }
   
@@ -182,17 +183,17 @@ export async function createCustomerPortalAccess(formData: {
           expiresAt: expiresAt,
         })
       } catch (emailError) {
-        // Don't fail the whole operation if email fails
-        console.error("Failed to send portal access email:", emailError)
+        Sentry.captureException(emailError)
       }
     }
 
     revalidatePath("/dashboard/settings/customer-portal")
     revalidatePath(`/dashboard/customers/${formData.customer_id}`)
     return { data, error: null }
-  } catch (error: any) {
-    console.error("[createCustomerPortalAccess] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -224,7 +225,7 @@ async function sendPortalAccessEmail(data: {
   const resend = await getResendClient()
 
   if (!resend) {
-    console.log("[PORTAL EMAIL] Resend not configured, skipping email")
+    Sentry.captureMessage("[PORTAL EMAIL] Resend not configured, skipping email", "info")
     return { sent: false, reason: "Email service not configured" }
   }
 
@@ -304,14 +305,15 @@ async function sendPortalAccessEmail(data: {
     })
 
     if (result.error) {
-      console.error("[PORTAL EMAIL ERROR]", result.error)
+      Sentry.captureException(result.error)
       return { sent: false, reason: result.error.message || "Failed to send email" }
     }
 
     return { sent: true, email: data.customerEmail, messageId: result.data?.id }
-  } catch (error: any) {
-    console.error("[PORTAL EMAIL ERROR]", error)
-    return { sent: false, reason: error?.message || "Failed to send email" }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const reason = error instanceof Error ? error.message : "Failed to send email"
+    return { sent: false, reason }
   }
 }
 
@@ -381,9 +383,10 @@ export async function getPortalAccessByToken(token: string) {
       .eq("id", data.id)
 
     return { data, error: null }
-  } catch (error: any) {
-    console.error("[getPortalAccessByToken] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -449,9 +452,10 @@ export async function getCustomerPortalLoads(token: string) {
     }
 
     return { data: loads || [], error: null }
-  } catch (error: any) {
-    console.error("[getCustomerPortalLoads] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -548,9 +552,10 @@ export async function getCustomerPortalLoad(token: string, loadId: string) {
       },
       error: null,
     }
-  } catch (error: any) {
-    console.error("[getCustomerPortalLoad] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -611,9 +616,10 @@ export async function getCustomerPortalDocuments(token: string, loadId?: string)
   }
 
   return { data: data || [], error: null }
-  } catch (error: any) {
-    console.error("[getCustomerPortalDocuments] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -661,9 +667,10 @@ export async function getCustomerPortalInvoices(token: string) {
     }
 
     return { data: data || [], error: null }
-  } catch (error: any) {
-    console.error("[getCustomerPortalInvoices] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -703,9 +710,10 @@ export async function getCustomerPortalAccess(customerId: string) {
     }
 
     return { data, error: null }
-  } catch (error: any) {
-    console.error("[getCustomerPortalAccess] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -745,8 +753,9 @@ export async function revokeCustomerPortalAccess(customerId: string) {
 
     revalidatePath("/dashboard/settings/customer-portal")
     return { data: { success: true }, error: null }
-  } catch (error: any) {
-    console.error("[revokeCustomerPortalAccess] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }

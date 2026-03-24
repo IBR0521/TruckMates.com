@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -49,9 +50,10 @@ export async function getDrivers(filters?: {
     }
 
     return { data: drivers || [], error: null, count: count || 0 }
-  } catch (error: any) {
-    console.error("[getDrivers] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null, count: 0 }
   }
 }
 
@@ -126,9 +128,10 @@ export async function getDriver(id: string) {
     }
 
     return { data: driver, error: null }
-  } catch (error: any) {
-    console.error("[getDriver] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -589,27 +592,34 @@ export async function updateDriver(
                 new_value: change.new_value,
               },
             })
-            console.log("[updateDriver] ✅ Audit log created for field:", change.field)
-          } catch (err: any) {
-            // Log error but don't fail the update
-            console.error("[updateDriver] ❌ Audit log failed for field", change.field, ":", err.message)
-            console.error("[updateDriver] Error code:", err.code)
-            // Check if it's a table missing error
-            if (err.code === "42P01" || err.message?.includes("relation") || err.message?.includes("does not exist")) {
-              console.error("[updateDriver] ⚠️ audit_logs table may not exist. Run: supabase/audit_logs_schema.sql")
+            Sentry.captureMessage(`[updateDriver] Audit log created for field: ${change.field}`, "info")
+          } catch (err: unknown) {
+            Sentry.captureException(err)
+            const msg = err instanceof Error ? err.message : String(err)
+            const code =
+              err && typeof err === "object" && "code" in err
+                ? String((err as { code?: unknown }).code)
+                : ""
+            if (code === "42P01" || msg.includes("relation") || msg.includes("does not exist")) {
+              Sentry.captureMessage(
+                "[updateDriver] audit_logs table may not exist. Run: supabase/audit_logs_schema.sql",
+                "warning",
+              )
             }
-            // Check if it's an RLS policy error
-            if (err.code === "42501" || err.message?.includes("permission denied") || err.message?.includes("policy")) {
-              console.error("[updateDriver] ⚠️ RLS policy blocking audit log insert!")
-              console.error("[updateDriver] Please update supabase/audit_logs_schema.sql with INSERT policy")
+            if (code === "42501" || msg.includes("permission denied") || msg.includes("policy")) {
+              Sentry.captureMessage(
+                "[updateDriver] RLS may block audit log insert; update supabase/audit_logs_schema.sql INSERT policy",
+                "warning",
+              )
             }
           }
         }
       } else {
-        console.warn("[updateDriver] No user found for audit logging")
+        Sentry.captureMessage("[updateDriver] No user found for audit logging", "warning")
       }
-    } catch (err: any) {
-      console.error("[updateDriver] Failed to import audit log module:", err.message)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      Sentry.captureMessage(`[updateDriver] Failed to import audit log module: ${msg}`, "error")
     }
   }
 
@@ -692,9 +702,10 @@ export async function deleteDriver(id: string) {
 
     revalidatePath("/dashboard/drivers")
     return { error: null }
-  } catch (error: any) {
-    console.error("[deleteDriver] Unexpected error:", error)
-    return { error: error?.message || "Failed to delete driver" }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to delete driver"
+    return { error: message }
   }
 }
 

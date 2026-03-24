@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -48,7 +49,7 @@ async function getGoogleMapsApiKey() {
         .eq("company_id", ctx.companyId)
       
       if (updateError) {
-        console.error("[Google Maps] Failed to enable integration:", updateError)
+        Sentry.captureException(updateError)
       }
     } else {
       // Create new record with Google Maps enabled
@@ -60,7 +61,7 @@ async function getGoogleMapsApiKey() {
         })
       
       if (insertError) {
-        console.error("[Google Maps] Failed to create integration record:", insertError)
+        Sentry.captureException(insertError)
       }
     }
   }
@@ -152,9 +153,10 @@ export async function getRouteDirections(origin: string, destination: string, wa
       data: result,
       error: null,
     }
-  } catch (error: any) {
-    console.error("[Google Maps] Directions error:", error)
-    return { error: error?.message || "Failed to get route directions", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to get route directions"
+    return { error: message, data: null }
   }
 }
 
@@ -199,7 +201,10 @@ export async function geocodeAddress(address: string) {
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error("[Google Maps] HTTP Error:", response.status, errorText)
+      Sentry.captureMessage(
+        `[Google Maps] HTTP ${response.status}: ${errorText.slice(0, 500)}`,
+        "error",
+      )
       return { 
         error: `Google Maps API returned error ${response.status}. Please check your API key and network connection.`, 
         data: null 
@@ -208,9 +213,11 @@ export async function geocodeAddress(address: string) {
 
     const data = await response.json()
 
-    // Log the full response for debugging
     if (data.status !== "OK") {
-      console.error("[Google Maps] Geocoding API Response:", JSON.stringify(data, null, 2))
+      Sentry.captureMessage(
+        `[Google Maps] Geocoding status ${data.status}: ${JSON.stringify(data).slice(0, 2000)}`,
+        "warning",
+      )
     }
 
     if (data.status !== "OK" || !data.results || data.results.length === 0) {
@@ -246,11 +253,10 @@ export async function geocodeAddress(address: string) {
       data: geocodeResult,
       error: null,
     }
-  } catch (error: any) {
-    console.error("[Google Maps] Geocoding exception:", error)
-    // Provide more detailed error information
+  } catch (error: unknown) {
+    Sentry.captureException(error)
     let errorMessage = "Failed to geocode address"
-    if (error?.message) {
+    if (error instanceof Error) {
       if (error.message.includes("API key")) {
         errorMessage = "Google Maps API key error. Please contact support."
       } else if (error.message.includes("network") || error.message.includes("fetch")) {
@@ -306,9 +312,10 @@ export async function calculateDistanceMatrix(origins: string[], destinations: s
       },
       error: null,
     }
-  } catch (error: any) {
-    console.error("[Google Maps] Distance matrix error:", error)
-    return { error: error?.message || "Failed to calculate distance matrix", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to calculate distance matrix"
+    return { error: message, data: null }
   }
 }
 
@@ -358,9 +365,10 @@ export async function optimizeRoute(origin: string, destination: string, stops: 
       },
       error: null,
     }
-  } catch (error: any) {
-    console.error("[Google Maps] Route optimization error:", error)
-    return { error: error?.message || "Failed to optimize route", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to optimize route"
+    return { error: message, data: null }
   }
 }
 
@@ -400,9 +408,10 @@ export async function getPlaceDetails(placeId: string) {
       },
       error: null,
     }
-  } catch (error: any) {
-    console.error("[Google Maps] Place details error:", error)
-    return { error: error?.message || "Failed to get place details", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to get place details"
+    return { error: message, data: null }
   }
 }
 

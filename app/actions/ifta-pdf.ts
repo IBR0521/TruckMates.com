@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -436,14 +437,15 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
         const puppeteer = await dynamicImport('puppeteer')
         puppeteerModule = puppeteer.default || puppeteer
       } catch (importError) {
-        // Puppeteer not available - this is expected in some environments (e.g., Vercel)
-        console.warn("[IFTA PDF] Puppeteer not available, returning HTML:", importError)
+        Sentry.captureMessage(
+          `[IFTA PDF] Puppeteer not available, returning HTML: ${importError instanceof Error ? importError.message : String(importError)}`,
+          "warning",
+        )
         return { pdf: null, html, error: null }
       }
       
       if (!puppeteerModule) {
-        // Puppeteer not available - return HTML as fallback
-        console.warn("[IFTA PDF] Puppeteer module not available, returning HTML")
+        Sentry.captureMessage("[IFTA PDF] Puppeteer module not available, returning HTML", "warning")
         return { pdf: null, html, error: null }
       }
 
@@ -476,15 +478,14 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
       await browser.close()
 
       return { pdf: pdfBuffer, html: null, error: null }
-    } catch (puppeteerError: any) {
-      console.error("[IFTA PDF] Puppeteer error:", puppeteerError)
-      // Fallback: return HTML if Puppeteer fails (for development or if Puppeteer not available)
-      console.warn("[IFTA PDF] Falling back to HTML output due to Puppeteer error")
+    } catch (puppeteerError: unknown) {
+      Sentry.captureException(puppeteerError)
       return { pdf: null, html, error: null }
     }
-  } catch (error: any) {
-    console.error("Error generating IFTA report PDF:", error)
-    return { pdf: null, html: null, error: error.message || "Failed to generate PDF" }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to generate PDF"
+    return { pdf: null, html: null, error: message }
   }
 }
 

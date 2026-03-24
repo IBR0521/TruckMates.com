@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -46,15 +47,13 @@ async function sendNotificationsForRouteUpdate(routeData: any) {
               destination: routeData.destination,
             })
           } catch (error) {
-            // Silently fail - don't block the main operation
-            console.error(`[NOTIFICATION] Failed to send to user ${relevantUser.id}:`, error)
+            Sentry.captureException(error)
           }
         })
       )
     }
   } catch (error) {
-    // Silently fail - this is a background function, don't block main operations
-    console.error("[sendNotificationsForRouteUpdate] Error:", error)
+    Sentry.captureException(error)
   }
 }
 
@@ -96,9 +95,10 @@ export async function getRoutes(filters?: {
     }
 
     return { data: routes || [], error: null, count: count || 0 }
-  } catch (error: any) {
-    console.error("[getRoutes] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null, count: 0 }
   }
 }
 
@@ -127,9 +127,10 @@ export async function getRoute(id: string) {
     }
 
     return { data: route, error: null }
-  } catch (error: any) {
-    console.error("[getRoute] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -382,7 +383,7 @@ export async function updateRoute(
   if (data) {
     // Don't await - send notifications in background
     sendNotificationsForRouteUpdate(data).catch((error) => {
-      console.error("[NOTIFICATION] Failed to send route update notifications:", error)
+      Sentry.captureException(error)
     })
   }
 
@@ -403,16 +404,18 @@ export async function updateRoute(
                 new_value: change.new_value,
               },
             })
-            console.log("[updateRoute] ✅ Audit log created for field:", change.field)
-          } catch (err: any) {
-            console.error("[updateRoute] ❌ Audit log failed for field", change.field, ":", err.message)
+            Sentry.captureMessage(`[updateRoute] Audit log created for field: ${change.field}`, "info")
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            Sentry.captureMessage(`[updateRoute] Audit log failed for field ${change.field}: ${msg}`, "error")
           }
         }
       } else {
-        console.warn("[updateRoute] No user found for audit logging")
+        Sentry.captureMessage("[updateRoute] No user found for audit logging", "warning")
       }
-    } catch (err: any) {
-      console.error("[updateRoute] Failed to import audit log module:", err.message)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      Sentry.captureMessage(`[updateRoute] Failed to import audit log module: ${msg}`, "error")
     }
   }
 

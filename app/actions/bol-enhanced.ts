@@ -5,6 +5,7 @@
  * Includes PDF storage and signed BOL management
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -59,8 +60,7 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
       const { createAdminClient } = await import("@/lib/supabase/admin")
       supabase = createAdminClient()
     } catch (error) {
-      // If admin client not available, continue with regular client
-      console.warn("[storeSignedBOLPDF] Admin client not available, using regular client")
+      Sentry.captureMessage("[storeSignedBOLPDF] Admin client not available, using regular client", "warning")
     }
 
     // Get BOL data with explicit column selection
@@ -147,11 +147,12 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
           data: null 
         }
       }
-    } catch (error: any) {
-      console.error("[storeSignedBOLPDF] PDF generation error:", error)
-      return { 
-        error: `Failed to generate PDF: ${error?.message || "Unknown error"}`, 
-        data: null 
+    } catch (error: unknown) {
+      Sentry.captureException(error)
+      const detail = error instanceof Error ? error.message : "Unknown error"
+      return {
+        error: `Failed to generate PDF: ${detail}`,
+        data: null,
       }
     }
 
@@ -177,7 +178,7 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
       })
 
     if (uploadError) {
-      console.error("Error uploading BOL PDF:", uploadError)
+      Sentry.captureException(uploadError)
       return { error: uploadError.message, data: null }
     }
 
@@ -201,7 +202,7 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
       .eq("id", bolId)
 
     if (updateError) {
-      console.error("Error updating BOL with PDF URL:", updateError)
+      Sentry.captureException(updateError)
       // Don't fail if metadata update fails
     }
 
@@ -213,9 +214,10 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
     revalidatePath("/dashboard/bols")
 
     return { data: { pdf_url: pdfUrl }, error: null }
-  } catch (error: any) {
-    console.error("[storeSignedBOLPDF] Unexpected error:", error)
-    return { error: error?.message || "Failed to store BOL PDF", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to store BOL PDF"
+    return { error: message, data: null }
   }
 }
 
@@ -268,8 +270,10 @@ export async function autoStoreBOLPDFOnCompletion(bolId: string, companyId?: str
       const { createAdminClient } = await import("@/lib/supabase/admin")
       supabase = createAdminClient()
     } catch (error) {
-      // If admin client not available, continue with regular client
-      console.warn("[autoStoreBOLPDFOnCompletion] Admin client not available, using regular client")
+      Sentry.captureMessage(
+        "[autoStoreBOLPDFOnCompletion] Admin client not available, using regular client",
+        "warning",
+      )
     }
 
     try {
@@ -299,13 +303,15 @@ export async function autoStoreBOLPDFOnCompletion(bolId: string, companyId?: str
       }
 
       return { error: "BOL is not completed. POD signature required.", data: null }
-    } catch (error: any) {
-      console.error("[autoStoreBOLPDFOnCompletion] Inner error:", error)
-      return { error: error?.message || "Failed to auto-store BOL PDF", data: null }
+    } catch (error: unknown) {
+      Sentry.captureException(error)
+      const message = error instanceof Error ? error.message : "Failed to auto-store BOL PDF"
+      return { error: message, data: null }
     }
-  } catch (error: any) {
-    console.error("[autoStoreBOLPDFOnCompletion] Unexpected error:", error)
-    return { error: error?.message || "Failed to auto-store BOL PDF", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to auto-store BOL PDF"
+    return { error: message, data: null }
   }
 }
 

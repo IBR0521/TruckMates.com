@@ -8,10 +8,15 @@
  * - Parts Inventory Integration
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+
+function unknownErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
+}
 
 /** `public.fault_code_maintenance_rules` — supabase/eld_fault_code_maintenance.sql */
 const FAULT_CODE_MAINTENANCE_RULES_SELECT =
@@ -53,7 +58,7 @@ export async function analyzeFaultCodeAndCreateMaintenance(eventId: string) {
     )
 
     if (error) {
-      console.error("[Fault Code Analysis] Error:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
@@ -61,9 +66,9 @@ export async function analyzeFaultCodeAndCreateMaintenance(eventId: string) {
     revalidatePath("/dashboard/eld/events")
 
     return { data: { maintenance_id: maintenanceId }, error: null }
-  } catch (error: any) {
-    console.error("[Fault Code Analysis] Error:", error)
-    return { error: error.message || "Failed to analyze fault code", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to analyze fault code"), data: null }
   }
 }
 
@@ -91,7 +96,7 @@ export async function batchAnalyzePendingFaultCodes(limit: number = 100) {
     })
 
     if (error) {
-      console.error("[Batch Fault Code Analysis] Error:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
@@ -99,9 +104,9 @@ export async function batchAnalyzePendingFaultCodes(limit: number = 100) {
     revalidatePath("/dashboard/eld/events")
 
     return { data: data?.[0] || { processed: 0, created: 0, skipped: 0 }, error: null }
-  } catch (error: any) {
-    console.error("[Batch Fault Code Analysis] Error:", error)
-    return { error: error.message || "Failed to batch analyze fault codes", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to batch analyze fault codes"), data: null }
   }
 }
 
@@ -192,9 +197,9 @@ export async function uploadMaintenanceDocument(
     revalidatePath(`/dashboard/maintenance/${maintenanceId}`)
 
     return { data: doc, error: null }
-  } catch (error: any) {
-    console.error("[Upload Maintenance Document] Error:", error)
-    return { error: error.message || "Failed to upload document", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to upload document"), data: null }
   }
 }
 
@@ -225,9 +230,9 @@ export async function getMaintenanceDocuments(maintenanceId: string) {
     }
 
     return { data: documents || [], error: null }
-  } catch (error: any) {
-    console.error("[Get Maintenance Documents] Error:", error)
-    return { error: error.message || "Failed to get documents", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to get documents"), data: null }
   }
 }
 
@@ -292,7 +297,7 @@ export async function deleteMaintenanceDocument(documentId: string) {
     if (storagePath) {
       const { error: removeError } = await supabase.storage.from("documents").remove([storagePath])
       if (removeError) {
-        console.error("[deleteMaintenanceDocument] Failed to remove file from storage:", removeError)
+        Sentry.captureException(removeError)
         // Continue with DB deletion even if storage deletion fails
       }
     }
@@ -313,9 +318,9 @@ export async function deleteMaintenanceDocument(documentId: string) {
     revalidatePath(`/dashboard/maintenance/${document.maintenance_id}`)
 
     return { data: { success: true }, error: null }
-  } catch (error: any) {
-    console.error("[Delete Maintenance Document] Error:", error)
-    return { error: error.message || "Failed to delete document", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to delete document"), data: null }
   }
 }
 
@@ -354,7 +359,7 @@ export async function createWorkOrderFromMaintenance(maintenanceId: string) {
     })
 
     if (error) {
-      console.error("[Create Work Order] Error:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
@@ -362,9 +367,9 @@ export async function createWorkOrderFromMaintenance(maintenanceId: string) {
     revalidatePath(`/dashboard/maintenance/${maintenanceId}`)
 
     return { data: { work_order_id: workOrderId }, error: null }
-  } catch (error: any) {
-    console.error("[Create Work Order] Error:", error)
-    return { error: error.message || "Failed to create work order", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to create work order"), data: null }
   }
 }
 
@@ -420,9 +425,9 @@ export async function getWorkOrder(workOrderId: string) {
     }
 
     return { data: workOrder, error: null }
-  } catch (error: any) {
-    console.error("[Get Work Order] Error:", error)
-    return { error: error.message || "Failed to get work order", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to get work order"), data: null }
   }
 }
 
@@ -480,9 +485,9 @@ export async function getWorkOrders(filters?: {
     }
 
     return { data: workOrders || [], error: null }
-  } catch (error: any) {
-    console.error("[Get Work Orders] Error:", error)
-    return { error: error.message || "Failed to get work orders", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to get work orders"), data: null }
   }
 }
 
@@ -544,9 +549,9 @@ export async function updateWorkOrder(
     revalidatePath(`/dashboard/maintenance/${workOrder.maintenance_id}`)
 
     return { data: workOrder, error: null }
-  } catch (error: any) {
-    console.error("[Update Work Order] Error:", error)
-    return { error: error.message || "Failed to update work order", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to update work order"), data: null }
   }
 }
 
@@ -585,16 +590,16 @@ export async function checkAndReserveParts(workOrderId: string) {
     })
 
     if (error) {
-      console.error("[Check Parts] Error:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
     revalidatePath("/dashboard/maintenance")
 
     return { data: data || [], error: null }
-  } catch (error: any) {
-    console.error("[Check Parts] Error:", error)
-    return { error: error.message || "Failed to check parts", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to check parts"), data: null }
   }
 }
 
@@ -647,7 +652,7 @@ export async function completeWorkOrder(
     })
 
     if (error) {
-      console.error("[Complete Work Order] Error:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
@@ -655,9 +660,9 @@ export async function completeWorkOrder(
     revalidatePath(`/dashboard/maintenance/${maintenanceId}`)
 
     return { data: { maintenance_id: maintenanceId }, error: null }
-  } catch (error: any) {
-    console.error("[Complete Work Order] Error:", error)
-    return { error: error.message || "Failed to complete work order", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to complete work order"), data: null }
   }
 }
 
@@ -685,9 +690,9 @@ export async function getFaultCodeRules() {
     }
 
     return { data: rules || [], error: null }
-  } catch (error: any) {
-    console.error("[Get Fault Code Rules] Error:", error)
-    return { error: error.message || "Failed to get fault code rules", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to get fault code rules"), data: null }
   }
 }
 
@@ -763,9 +768,9 @@ export async function upsertFaultCodeRule(rule: {
 
       return { data: newRule, error: null }
     }
-  } catch (error: any) {
-    console.error("[Upsert Fault Code Rule] Error:", error)
-    return { error: error.message || "Failed to save fault code rule", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to save fault code rule"), data: null }
   }
 }
 
@@ -799,9 +804,9 @@ export async function deleteFaultCodeRule(ruleId: string) {
 
     revalidatePath("/dashboard/maintenance/fault-code-rules")
     return { data: { success: true }, error: null }
-  } catch (error: any) {
-    console.error("[Delete Fault Code Rule] Error:", error)
-    return { error: error.message || "Failed to delete fault code rule", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to delete fault code rule"), data: null }
   }
 }
 
@@ -826,9 +831,9 @@ export async function checkLowStockForMaintenanceParts() {
     }
 
     return { data: data || [], error: null }
-  } catch (error: any) {
-    console.error("[Check Low Stock] Error:", error)
-    return { error: error.message || "Failed to check low stock", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to check low stock"), data: null }
   }
 }
 
@@ -867,9 +872,9 @@ export async function autoCreatePartOrdersForLowStock(reorderMultiplier: number 
     revalidatePath("/dashboard/maintenance")
 
     return { data: data || [], error: null }
-  } catch (error: any) {
-    console.error("[Auto Create Part Orders] Error:", error)
-    return { error: error.message || "Failed to create part orders", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: unknownErrorMessage(error, "Failed to create part orders"), data: null }
   }
 }
 

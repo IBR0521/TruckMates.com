@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -85,7 +86,7 @@ export async function generateBOLPDF(bolId: string): Promise<{
       if (!imageData) {
         const response = await fetch(signatureUrl)
         if (!response.ok) {
-          console.warn(`[BOL PDF] Failed to fetch signature image: ${signatureUrl}`)
+          Sentry.captureMessage(`[BOL PDF] Failed to fetch signature image: ${signatureUrl}`, "warning")
           return null
         }
         imageData = await response.arrayBuffer()
@@ -98,7 +99,7 @@ export async function generateBOLPDF(bolId: string): Promise<{
       
       return `data:${contentType};base64,${base64}`
     } catch (error) {
-      console.error(`[BOL PDF] Error converting signature to base64:`, error)
+      Sentry.captureException(error)
       return null
     }
   }
@@ -456,9 +457,10 @@ export async function generateBOLPDF(bolId: string): Promise<{
   `
 
   return { html, error: null }
-  } catch (error: any) {
-    console.error("[generateBOLPDF] Unexpected error:", error)
-    return { html: "", error: error?.message || "Failed to generate BOL PDF" }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to generate BOL PDF"
+    return { html: "", error: message }
   }
 }
 
@@ -543,11 +545,12 @@ export async function generateBOLPDFFile(bolId: string): Promise<{
       } finally {
         await browser.close()
       }
-    } catch (error: any) {
-      console.error("[generateBOLPDFFile] PDF generation error:", error)
-      return { 
-        pdf: null, 
-        error: `Failed to generate PDF: ${error?.message || "Unknown error"}` 
+    } catch (error: unknown) {
+      Sentry.captureException(error)
+      const detail = error instanceof Error ? error.message : "Unknown error"
+      return {
+        pdf: null,
+        error: `Failed to generate PDF: ${detail}`,
       }
     }
 
@@ -556,9 +559,10 @@ export async function generateBOLPDFFile(bolId: string): Promise<{
     }
 
     return { pdf: pdfBuffer, error: null }
-  } catch (error: any) {
-    console.error("[generateBOLPDFFile] Error:", error)
-    return { pdf: null, error: error?.message || "Failed to generate BOL PDF" }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to generate BOL PDF"
+    return { pdf: null, error: message }
   }
 }
 
