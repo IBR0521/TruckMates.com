@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
+import * as Sentry from "@sentry/nextjs"
 
 export interface CRMDocument {
   id: string
@@ -169,7 +170,7 @@ export async function getCRMDocuments(filters?: {
     if (error) {
       // If table doesn't exist, return empty array instead of error
       if (error.message?.includes("does not exist") || error.code === "42P01" || error.message?.includes("schema cache")) {
-        console.warn("[CRM Documents] Table crm_documents does not exist. Please run the SQL migration.")
+        Sentry.captureMessage("[CRM Documents] Table crm_documents does not exist. Please run the SQL migration.", "warning")
         return { data: [], error: null }
       }
       return { error: error.message, data: null }
@@ -209,12 +210,12 @@ export async function getExpiringCRMDocuments(
     if (error) {
       // If table doesn't exist, return empty array
       if (error.message?.includes("does not exist") || error.code === "42P01" || error.message?.includes("schema cache")) {
-        console.warn("[CRM Documents] Table crm_documents does not exist. Please run the SQL migration.")
+        Sentry.captureMessage("[CRM Documents] Table crm_documents does not exist. Please run the SQL migration.", "warning")
         return { data: [], error: null }
       }
       
       // Fallback: Query directly if RPC function doesn't exist
-      console.warn("[CRM Documents] RPC function error, using direct query:", error.message)
+      Sentry.captureMessage(`[CRM Documents] RPC function error, using direct query: ${error.message}`, "warning")
       
       const endDate = new Date()
       endDate.setDate(endDate.getDate() + daysAhead)
@@ -235,7 +236,7 @@ export async function getExpiringCRMDocuments(
       if (directError) {
         // If table doesn't exist, return empty array instead of error
         if (directError.message?.includes("does not exist") || directError.code === "42P01" || directError.message?.includes("schema cache")) {
-          console.warn("[CRM Documents] Table crm_documents does not exist. Please run the SQL migration.")
+          Sentry.captureMessage("[CRM Documents] Table crm_documents does not exist. Please run the SQL migration.", "warning")
           return { data: [], error: null }
         }
         return { error: directError.message, data: null }
@@ -334,7 +335,7 @@ export async function deleteCRMDocument(documentId: string): Promise<{
     if (storagePath) {
       const { error: removeError } = await supabase.storage.from("documents").remove([storagePath])
       if (removeError) {
-        console.error("[deleteCRMDocument] Failed to remove file from storage:", removeError)
+        Sentry.captureException(removeError)
         // Continue with DB deletion even if storage deletion fails
       }
     }

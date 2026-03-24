@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import type { EmployeeRole } from "@/lib/roles"
+import * as Sentry from "@sentry/nextjs"
 
 /**
  * Check if company name is available
@@ -109,7 +110,7 @@ export async function registerSuperAdmin(data: {
         const adminSupabase = createAdminClient()
         await adminSupabase.auth.admin.deleteUser(authData.user.id)
       } catch (deleteError) {
-        console.error('[REGISTRATION] Failed to delete orphaned auth user:', deleteError)
+        Sentry.captureException(deleteError)
         // Continue even if deletion fails - log the error
       }
       
@@ -132,11 +133,14 @@ export async function registerSuperAdmin(data: {
         p_company_id: companyId
       })
       if (integrationError) {
-        console.warn('[REGISTRATION] Failed to auto-enable platform integrations:', integrationError.message)
+        Sentry.captureMessage(
+          `[REGISTRATION] Failed to auto-enable platform integrations: ${integrationError.message}`,
+          "warning",
+        )
         // Don't fail registration if this fails - it's optional
       }
     } catch (error) {
-      console.warn('[REGISTRATION] Error enabling platform integrations:', error)
+      Sentry.captureException(error)
       // Don't fail registration if this fails
     }
 

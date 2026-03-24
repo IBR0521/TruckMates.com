@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -233,10 +234,10 @@ export async function markAllNotificationsAsRead() {
     ])
 
     if (notificationsResult.error) {
-      console.error("[NOTIFICATIONS] Error marking notifications:", notificationsResult.error)
+      Sentry.captureException(notificationsResult.error)
     }
     if (alertsResult.error) {
-      console.error("[ALERTS] Error marking alerts:", alertsResult.error)
+      Sentry.captureException(alertsResult.error)
     }
 
     return { data: { success: true }, error: null }

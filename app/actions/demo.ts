@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
 
 const DEMO_COMPANY_NAME = "Demo Logistics Company"
 
@@ -68,7 +69,7 @@ export async function setupDemoCompany(userId: string | null) {
           })
         
         if (insertError && !insertError.message.includes('duplicate')) {
-          console.error("Error creating user record:", insertError)
+          Sentry.captureException(insertError)
         }
       }
     }

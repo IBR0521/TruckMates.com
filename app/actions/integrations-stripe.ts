@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
 
 /**
  * Stripe Integration Backend
@@ -111,7 +112,7 @@ export async function createInvoicePayment(invoiceId: string, amount?: number) {
       error: null,
     }
   } catch (error: any) {
-    console.error("[Stripe] Payment creation error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to create payment", data: null }
   }
 }
@@ -155,7 +156,7 @@ export async function confirmInvoicePayment(invoiceId: string, paymentIntentId: 
     revalidatePath("/dashboard/accounting/invoices")
     return { data: { success: true, payment_intent: paymentIntent }, error: null }
   } catch (error: any) {
-    console.error("[Stripe] Payment confirmation error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to confirm payment", data: null }
   }
 }
@@ -282,7 +283,7 @@ export async function processPayPalInvoicePayment(invoiceId: string, amount?: nu
       error: null,
     }
   } catch (error: any) {
-    console.error("[PayPal] Payment error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to process PayPal payment", data: null }
   }
 }
@@ -373,7 +374,7 @@ export async function capturePayPalPayment(invoiceId: string, orderId: string) {
 
     return { error: `Payment not completed. Status: ${capture.status}`, data: null }
   } catch (error: any) {
-    console.error("[PayPal] Capture error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to capture PayPal payment", data: null }
   }
 }

@@ -5,6 +5,7 @@
  * Provides real-time performance data for customers and vendors
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -100,7 +101,10 @@ export async function getCustomerPerformanceMetrics(filters?: {
     if (error) {
       // If view doesn't exist, return empty data instead of error
       if (error.message?.includes("does not exist") || error.code === "42P01" || error.message?.includes("schema cache")) {
-        console.warn("[CRM Performance] View crm_customer_performance does not exist. Please run the SQL migration.")
+        Sentry.captureMessage(
+          "[CRM Performance] View crm_customer_performance does not exist. Please run the SQL migration.",
+          "warning",
+        )
         return { data: [], error: null }
       }
       return { error: error.message, data: null }
@@ -117,9 +121,10 @@ export async function getCustomerPerformanceMetrics(filters?: {
     }
 
     return { data: filteredData as CustomerPerformanceMetrics[], error: null }
-  } catch (error: any) {
-    console.error("[getCustomerPerformanceMetrics] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -168,7 +173,10 @@ export async function getCustomerPerformance(customerId: string): Promise<{
     if (error) {
       // If view doesn't exist, return null data instead of error
       if (error.message?.includes("does not exist") || error.code === "42P01" || error.message?.includes("schema cache")) {
-        console.warn("[CRM Performance] View crm_customer_performance does not exist. Please run the SQL migration.")
+        Sentry.captureMessage(
+          "[CRM Performance] View crm_customer_performance does not exist. Please run the SQL migration.",
+          "warning",
+        )
         return { data: null, error: null }
       }
       return { error: error.message, data: null }
@@ -230,7 +238,10 @@ export async function getVendorPerformanceMetrics(filters?: {
     if (error) {
       // CRITICAL FIX: Handle schema cache errors gracefully - view might not exist
       if (error.message?.includes("schema cache") || error.message?.includes("does not exist") || error.code === "42P01") {
-        console.warn("[CRM Performance] View crm_vendor_performance does not exist. Please run the SQL migration.")
+        Sentry.captureMessage(
+          "[CRM Performance] View crm_vendor_performance does not exist. Please run the SQL migration.",
+          "warning",
+        )
         return { data: [], error: null }
       }
       return { error: error.message, data: null }
@@ -287,7 +298,10 @@ export async function getVendorPerformance(vendorId: string): Promise<{
     if (error) {
       // CRITICAL FIX: Handle schema cache errors gracefully - view might not exist
       if (error.message?.includes("schema cache") || error.message?.includes("does not exist") || error.code === "42P01") {
-        console.warn("[CRM Performance] View crm_vendor_performance does not exist. Please run the SQL migration.")
+        Sentry.captureMessage(
+          "[CRM Performance] View crm_vendor_performance does not exist. Please run the SQL migration.",
+          "warning",
+        )
         return { data: null, error: null }
       }
       return { error: error.message, data: null }
@@ -351,7 +365,10 @@ export async function getRelationshipInsights(): Promise<{
     if (customersError) {
       // If view doesn't exist, return empty data instead of error
       if (customersError.message?.includes("does not exist") || customersError.code === "42P01" || customersError.message?.includes("schema cache")) {
-        console.warn("[CRM Performance] View crm_customer_performance does not exist. Please run the SQL migration.")
+        Sentry.captureMessage(
+          "[CRM Performance] View crm_customer_performance does not exist. Please run the SQL migration.",
+          "warning",
+        )
         return {
           data: {
             top_customers: [],
@@ -393,7 +410,10 @@ export async function getRelationshipInsights(): Promise<{
     if (vendorsError2) {
       // CRITICAL FIX: Handle schema cache errors gracefully - view might not exist
       if (vendorsError2.message?.includes("schema cache") || vendorsError2.message?.includes("does not exist") || vendorsError2.code === "42P01") {
-        console.warn("[CRM Performance] View crm_vendor_performance does not exist. Please run the SQL migration.")
+        Sentry.captureMessage(
+          "[CRM Performance] View crm_vendor_performance does not exist. Please run the SQL migration.",
+          "warning",
+        )
         return {
           data: {
             top_customers: customers.filter((c) => c.total_revenue > 0)

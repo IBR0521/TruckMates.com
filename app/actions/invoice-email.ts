@@ -34,7 +34,7 @@ export async function getResendClient() {
       }
 
       if (!integrations?.resend_enabled) {
-        console.log("[RESEND] Integration not enabled for company")
+        Sentry.captureMessage("[RESEND] Integration not enabled for company", "info")
         return null
       }
     }

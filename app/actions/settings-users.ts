@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
+import * as Sentry from "@sentry/nextjs"
 
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
@@ -42,7 +43,7 @@ export async function getCompanyUsers() {
 
     return { data: usersWithStatus, error: null }
   } catch (error: any) {
-    console.error("[getCompanyUsers] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -111,19 +112,19 @@ export async function updateUserRole(userId: string, newRole: string) {
       })
 
       if (authError) {
-        console.error("[updateUserRole] Failed to update auth metadata:", authError)
+        Sentry.captureException(authError)
         // Don't fail the request, but log the error
         // The role is still updated in the database
       }
     } catch (error) {
-      console.error("[updateUserRole] Failed to import admin client:", error)
+      Sentry.captureException(error)
       // Continue - role is still updated in database
     }
 
     revalidatePath("/dashboard/settings/users")
     return { success: true, error: null }
   } catch (error: any) {
-    console.error("[updateUserRole] Unexpected error:", error)
+    Sentry.captureException(error)
     return { success: false, error: error?.message || "An unexpected error occurred" }
   }
 }
@@ -181,17 +182,17 @@ export async function removeUser(userId: string) {
       const { error: deleteError } = await adminSupabase.auth.admin.deleteUser(userId)
 
       if (deleteError) {
-        console.error("[removeUser] Failed to delete auth account:", deleteError)
+        Sentry.captureException(deleteError)
         // Don't fail the request, but log the error
       }
     } catch (error) {
-      console.error("[removeUser] Failed to import admin client:", error)
+      Sentry.captureException(error)
     }
 
     revalidatePath("/dashboard/settings/users")
     return { success: true, error: null }
   } catch (error: any) {
-    console.error("[removeUser] Unexpected error:", error)
+    Sentry.captureException(error)
     return { success: false, error: error?.message || "An unexpected error occurred" }
   }
 }
@@ -363,7 +364,7 @@ export async function inviteUser(data: {
     if (!resend) {
       // If email service is not configured, still create the invitation
       // User can manually share the invitation link
-      console.warn("[INVITE USER] Email service not configured, invitation created but email not sent")
+      Sentry.captureMessage("[INVITE USER] Email service not configured, invitation created but email not sent", "warning")
       return {
         data: {
           invitation,
@@ -449,7 +450,7 @@ export async function inviteUser(data: {
     })
 
     if (emailResult.error) {
-      console.error("[INVITE USER] Email send error:", emailResult.error)
+      Sentry.captureException(emailResult.error)
       // Still return success since invitation was created
       return {
         data: {
@@ -472,7 +473,7 @@ export async function inviteUser(data: {
       error: null,
     }
   } catch (error: any) {
-    console.error("[INVITE USER] Error sending email:", error)
+    Sentry.captureException(error)
     // Still return success since invitation was created
     return {
       data: {

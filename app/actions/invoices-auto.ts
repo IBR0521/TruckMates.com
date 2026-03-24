@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { createInvoice } from "./accounting"
 import { checkCreatePermission } from "@/lib/server-permissions"
+import * as Sentry from "@sentry/nextjs"
 
 // BUG-010 FIX: Add try/catch and permission check
 export async function autoGenerateInvoicesFromLoads() {
@@ -194,7 +195,7 @@ export async function autoGenerateInvoicesFromLoads() {
       error: null,
     }
   } catch (error: any) {
-    console.error("[autoGenerateInvoicesFromLoads] Unexpected error:", error)
+    Sentry.captureException(error)
     return { 
       error: error?.message || "An unexpected error occurred while generating invoices", 
       data: null 

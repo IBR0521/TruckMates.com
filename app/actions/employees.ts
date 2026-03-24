@@ -6,6 +6,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 import { sendNotification } from "./notifications"
+import * as Sentry from "@sentry/nextjs"
 
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
@@ -38,7 +39,7 @@ export async function getEmployees() {
 
     return { data: employees, error: null }
   } catch (error: any) {
-    console.error("[EMPLOYEES] Error in getEmployees:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to fetch employees", data: null }
   }
 }
@@ -121,11 +122,11 @@ export async function updateEmployee(
       })
 
       if (authError) {
-        console.error("[updateEmployee] Failed to sync email with auth.users:", authError)
+        Sentry.captureException(authError)
         // Don't fail the request, but log the error
       }
     } catch (error) {
-      console.error("[updateEmployee] Failed to import admin client:", error)
+      Sentry.captureException(error)
     }
   }
 
@@ -188,11 +189,11 @@ export async function removeEmployee(employeeId: string) {
       const { error: signOutError } = await adminSupabase.auth.admin.signOut(employeeId, "others")
       
       if (signOutError) {
-        console.error("[removeEmployee] Failed to revoke sessions:", signOutError)
+        Sentry.captureException(signOutError)
         // Don't fail the request, but log the error
       }
     } catch (error) {
-      console.error("[removeEmployee] Failed to import admin client:", error)
+      Sentry.captureException(error)
     }
   }
 

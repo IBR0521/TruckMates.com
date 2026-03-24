@@ -2,30 +2,42 @@
 
 import React from "react"
 import dynamic from "next/dynamic"
+import { usePathname } from "next/navigation"
 
-// Dynamically import all client components with ssr: false to prevent SSR issues
 const QueryProvider = dynamic(
-  () => import("@/components/providers/query-provider").then(mod => ({ default: mod.QueryProvider })),
+  () =>
+    import("@/components/providers/query-provider").then((mod) => ({
+      default: mod.QueryProvider,
+    })),
   { ssr: false }
 )
 
 const ThemeProvider = dynamic(
-  () => import("@/components/theme-provider").then(mod => ({ default: mod.ThemeProvider })),
+  () =>
+    import("@/components/theme-provider").then((mod) => ({
+      default: mod.ThemeProvider,
+    })),
   { ssr: false }
 )
 
 const KeyboardShortcutsProvider = dynamic(
-  () => import("@/components/keyboard-shortcuts").then(mod => ({ default: mod.KeyboardShortcutsProvider })),
+  () =>
+    import("@/components/keyboard-shortcuts").then((mod) => ({
+      default: mod.KeyboardShortcutsProvider,
+    })),
   { ssr: false }
 )
 
 const GlobalSearch = dynamic(
-  () => import("@/components/global-search").then(mod => ({ default: mod.GlobalSearch })),
+  () =>
+    import("@/components/global-search").then((mod) => ({
+      default: mod.GlobalSearch,
+    })),
   { ssr: false }
 )
 
 const Toaster = dynamic(
-  () => import("sonner").then(mod => ({ default: mod.Toaster })),
+  () => import("sonner").then((mod) => ({ default: mod.Toaster })),
   { ssr: false }
 )
 
@@ -33,28 +45,44 @@ interface ClientProvidersProps {
   children: React.ReactNode
 }
 
+/** Routes that need React Query, theme context, shortcuts, and global search */
+function useIsAppShellRoute() {
+  const pathname = usePathname()
+  if (!pathname) return false
+  return (
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/marketplace/dashboard") ||
+    pathname.startsWith("/account-setup") ||
+    pathname.startsWith("/portal") ||
+    pathname.startsWith("/tracking")
+  )
+}
+
 export function ClientProviders({ children }: ClientProvidersProps) {
-  const [mounted, setMounted] = React.useState(false)
+  const isAppShellRoute = useIsAppShellRoute()
 
-  React.useEffect(() => {
-    setMounted(true)
-  }, [])
+  // Public/marketing: minimal shell (no React Query / theme bundle).
+  if (!isAppShellRoute) {
+    return (
+      <>
+        {children}
+        <Toaster />
+      </>
+    )
+  }
 
-  // Always wrap with QueryProvider so useQuery never throws "No QueryClient set"
+  // App shell: single stable tree from the first client render.
+  // Do NOT gate ThemeProvider on a "mounted" flag — that swapped the React tree after one tick,
+  // remounted the whole dashboard, re-ran effects (setup checks, React Query), and felt like a full reload.
   return (
     <QueryProvider>
-      {mounted ? (
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-          <KeyboardShortcutsProvider>
-            {children}
-            <GlobalSearch />
-          </KeyboardShortcutsProvider>
-        </ThemeProvider>
-      ) : (
-        children
-      )}
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+        <KeyboardShortcutsProvider>
+          {children}
+          <GlobalSearch />
+        </KeyboardShortcutsProvider>
+      </ThemeProvider>
       <Toaster />
     </QueryProvider>
   )
 }
-

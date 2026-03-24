@@ -6,6 +6,7 @@
  * Falls back to internal rate database from historical loads
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { geocodeAddress } from "./integrations-google-maps"
@@ -103,7 +104,7 @@ async function getExternalRateSuggestion(
     try {
       return await getDATiQRate(origin, destination, equipmentType, datIqApiKey)
     } catch (error) {
-      console.error("DAT iQ API error:", error)
+      Sentry.captureException(error)
     }
   }
 
@@ -111,7 +112,7 @@ async function getExternalRateSuggestion(
     try {
       return await getTruckstopRate(origin, destination, equipmentType, truckstopApiKey)
     } catch (error) {
-      console.error("Truckstop API error:", error)
+      Sentry.captureException(error)
     }
   }
 

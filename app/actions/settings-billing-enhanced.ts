@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -146,7 +147,10 @@ export async function savePaymentMethod(paymentMethod: {
     if (rpcError && !paymentMethod.id) {
       // If this is a new payment method, we'll set default after insert
       // For existing, RPC should work
-      console.warn("[savePaymentMethod] RPC failed, will set default after insert:", rpcError)
+      Sentry.captureMessage(
+        `[savePaymentMethod] RPC failed, will set default after insert: ${rpcError.message}`,
+        "warning",
+      )
     }
   }
 

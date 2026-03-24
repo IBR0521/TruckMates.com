@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -126,9 +127,10 @@ export async function upsertDriverPayRule(rule: DriverPayRule) {
 
     revalidatePath("/dashboard/accounting/settlements")
     return { data, error: null }
-  } catch (error: any) {
-    console.error("[upsertDriverPayRule] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 

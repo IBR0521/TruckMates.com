@@ -2,6 +2,7 @@
 
 import { checkCreatePermission } from "@/lib/server-permissions"
 import { sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
+import * as Sentry from "@sentry/nextjs"
 
 // Polyfill for DOMMatrix and other browser APIs needed for pdfjs-dist in Node.js
 // MUST be set up BEFORE importing pdfjs-dist
@@ -17,7 +18,7 @@ if (typeof globalThis.DOMMatrix === 'undefined') {
       globalThis.DOMMatrixReadOnly = dommatrix
     }
   } catch (e) {
-    console.warn("[DOCUMENT_ANALYSIS] Failed to load dommatrix, using fallback:", e)
+    Sentry.captureException(e)
     // Minimal DOMMatrix polyfill
     globalThis.DOMMatrix = class DOMMatrix {
       a = 1; b = 0; c = 0; d = 1; e = 0; f = 0
@@ -58,7 +59,7 @@ async function getPdfjsLib() {
       // FIXED: Use proper dynamic import() - Next.js supports this natively
       pdfjsLib = await import("pdfjs-dist")
     } catch (e) {
-      console.error("[DOCUMENT_ANALYSIS] Failed to load pdfjs-dist:", e)
+      Sentry.captureException(e)
       throw e
     }
   }
@@ -74,7 +75,7 @@ async function getCanvas() {
       const canvasModule = require("canvas")
       createCanvas = canvasModule.createCanvas
     } catch (e) {
-      console.warn("[DOCUMENT_ANALYSIS] Canvas module not available, PDF to image conversion will be disabled")
+      Sentry.captureMessage("[DOCUMENT_ANALYSIS] Canvas module not available, PDF to image conversion will be disabled", "warning")
       createCanvas = false // Mark as unavailable
     }
   }
@@ -319,7 +320,7 @@ export async function analyzeDocument(fileUrl: string, fileName: string): Promis
     }
   } catch (error) {
     // FIXED: Fail closed - if rate limit check fails, deny the request
-    console.error("[Document Analysis] Rate limit check failed:", error)
+    Sentry.captureException(error)
     return {
       error: "Rate limit check failed. Request denied for security.",
       data: null
@@ -522,12 +523,7 @@ ACTION:
 
         // Check file size (OpenAI Vision has limits - typically 20MB for base64)
         const base64SizeMB = imageBase64.length / (1024 * 1024)
-        console.log("[DOCUMENT_ANALYSIS] Image processed:", {
-          mimeType,
-          sizeMB: base64SizeMB.toFixed(2),
-          base64Length: imageBase64.length,
-          fileName
-        })
+        Sentry.captureMessage(`[DOCUMENT_ANALYSIS] Image processed: ${fileName} (${base64SizeMB.toFixed(2)}MB, ${mimeType})`, "info")
         
         if (base64SizeMB > 20) {
           return {
@@ -544,7 +540,7 @@ ACTION:
           }
         })
       } catch (fetchError: any) {
-        console.error("[DOCUMENT_ANALYSIS] Image fetch error:", fetchError)
+        Sentry.captureException(fetchError)
         return {
           error: `Failed to process image document: ${fetchError?.message || "Unknown error"}. Please check the file URL and try again.`,
           data: null
@@ -613,11 +609,7 @@ ACTION:
         
         // Check file size (OpenAI Vision has limits)
         const base64SizeMB = pdfBase64.length / (1024 * 1024)
-        console.log("[DOCUMENT_ANALYSIS] PDF processed:", {
-          sizeMB: base64SizeMB.toFixed(2),
-          base64Length: pdfBase64.length,
-          fileName
-        })
+        Sentry.captureMessage(`[DOCUMENT_ANALYSIS] PDF processed: ${fileName} (${base64SizeMB.toFixed(2)}MB)`, "info")
         
         if (base64SizeMB > 20) {
           return {
@@ -628,7 +620,7 @@ ACTION:
         
         // Convert PDF to image using pdfjs-dist and canvas
         try {
-          console.log("[DOCUMENT_ANALYSIS] Converting PDF to image...")
+          Sentry.captureMessage("[DOCUMENT_ANALYSIS] Converting PDF to image...", "info")
           
           // Load PDF document (no worker needed for server-side)
           const pdfjs = await getPdfjsLib()
@@ -639,7 +631,7 @@ ACTION:
           })
           
           const pdfDocument = await loadingTask.promise
-          console.log("[DOCUMENT_ANALYSIS] PDF loaded, pages:", pdfDocument.numPages)
+          Sentry.captureMessage(`[DOCUMENT_ANALYSIS] PDF loaded, pages: ${pdfDocument.numPages}`, "info")
           
           // Get first page (or you could loop through all pages)
           const page = await pdfDocument.getPage(1)
@@ -648,7 +640,7 @@ ACTION:
           // Check if canvas is available
           const canvasFn = await getCanvas()
           if (!canvasFn) {
-            console.warn("[DOCUMENT_ANALYSIS] Canvas not available, skipping PDF to image conversion")
+            Sentry.captureMessage("[DOCUMENT_ANALYSIS] Canvas not available, skipping PDF to image conversion", "warning")
             // Return the PDF as-is without image conversion
             // Note: We can't analyze PDF without converting to image, so return null for extractedData
             return {
@@ -672,11 +664,10 @@ ACTION:
           const imageBase64 = imageBuffer.toString('base64')
           const mimeType = 'image/png'
           
-          console.log("[DOCUMENT_ANALYSIS] PDF converted to image:", {
-            width: viewport.width,
-            height: viewport.height,
-            sizeMB: (imageBase64.length / (1024 * 1024)).toFixed(2)
-          })
+          Sentry.captureMessage(
+            `[DOCUMENT_ANALYSIS] PDF converted to image: ${Math.round(viewport.width)}x${Math.round(viewport.height)}, ${(imageBase64.length / (1024 * 1024)).toFixed(2)}MB`,
+            "info",
+          )
           
           // Check size
           const base64SizeMB = imageBase64.length / (1024 * 1024)
@@ -701,14 +692,14 @@ ACTION:
             content[0].text += `\n\nNOTE: ${multiPageWarning}`
           }
         } catch (pdfError: any) {
-          console.error("[DOCUMENT_ANALYSIS] PDF conversion error:", pdfError)
+          Sentry.captureException(pdfError)
           return {
             error: `Failed to convert PDF to image: ${pdfError?.message || "Unknown error"}. Please try converting the PDF to images manually and upload those instead.`,
             data: null
           }
         }
       } catch (fetchError: any) {
-        console.error("[DOCUMENT_ANALYSIS] PDF fetch error:", fetchError)
+        Sentry.captureException(fetchError)
         return {
           error: `Failed to process PDF document: ${fetchError?.message || "Unknown error"}. Please check the file URL and try again.`,
           data: null
@@ -771,7 +762,7 @@ ACTION:
       
       try {
         rawErrorText = await openaiResponse.text()
-        console.error("[DOCUMENT_ANALYSIS] OpenAI API raw error response:", rawErrorText)
+        Sentry.captureMessage(`[DOCUMENT_ANALYSIS] OpenAI API raw error response: ${rawErrorText.substring(0, 500)}`, "error")
         
         try {
           errorDetails = JSON.parse(rawErrorText)
@@ -785,14 +776,10 @@ ACTION:
         errorMessage = `HTTP ${openaiResponse.status}: ${openaiResponse.statusText}`
       }
       
-      console.error("[DOCUMENT_ANALYSIS] OpenAI API error details:", {
-        status: openaiResponse.status,
-        statusText: openaiResponse.statusText,
-        error: errorMessage,
-        rawResponse: rawErrorText.substring(0, 500),
-        details: errorDetails,
-        model: modelUsed
-      })
+      Sentry.captureMessage(
+        `[DOCUMENT_ANALYSIS] OpenAI API error details: status=${openaiResponse.status}, statusText=${openaiResponse.statusText}, model=${modelUsed}, error=${errorMessage}`,
+        "error",
+      )
       
       // Check if it's a rate limit error
       if (errorMessage.includes("quota") || errorMessage.includes("rate") || errorMessage.includes("rate_limit") || openaiResponse.status === 429) {
@@ -840,12 +827,12 @@ ACTION:
     try {
       openaiData = await openaiResponse.json()
     } catch (jsonError: any) {
-      console.error("[DOCUMENT_ANALYSIS] Failed to parse OpenAI response:", jsonError)
+      Sentry.captureException(jsonError)
       try {
         const responseText = await openaiResponse.text()
-        console.error("[DOCUMENT_ANALYSIS] Raw response text:", responseText.substring(0, 500))
+        Sentry.captureMessage(`[DOCUMENT_ANALYSIS] Raw response text: ${responseText.substring(0, 500)}`, "error")
       } catch (textError) {
-        console.error("[DOCUMENT_ANALYSIS] Could not read response text:", textError)
+        Sentry.captureException(textError)
       }
       return {
         error: "Failed to parse OpenAI response. The API returned an unexpected format. Please try again.",
@@ -897,7 +884,7 @@ ACTION:
       warning: multiPageWarning || null // FIXED: Return warning to user
     }
   } catch (error: any) {
-    console.error("[DOCUMENT_ANALYSIS] Error:", error)
+    Sentry.captureException(error)
     
     // Provide more specific error messages
     if (error?.message?.includes("fetch")) {
@@ -964,34 +951,34 @@ export async function analyzeDocumentFromUrl(
     const publicMatch = fileUrl.match(/\/storage\/v1\/object\/public\/documents\/([^?]+)/)
     if (publicMatch) {
       filePath = decodeURIComponent(publicMatch[1])
-      console.log("[DOCUMENT_ANALYSIS] Detected public URL format, extracting path:", filePath)
+      Sentry.captureMessage(`[DOCUMENT_ANALYSIS] Detected public URL format, extracting path: ${filePath}`, "info")
     } else {
       // Try signed URL format
       const signMatch = fileUrl.match(/\/storage\/v1\/object\/sign\/documents\/([^?]+)/)
       if (signMatch) {
         // Already a signed URL, but extract path to create a fresh one
         filePath = decodeURIComponent(signMatch[1])
-        console.log("[DOCUMENT_ANALYSIS] Detected signed URL format, extracting path:", filePath)
+        Sentry.captureMessage(`[DOCUMENT_ANALYSIS] Detected signed URL format, extracting path: ${filePath}`, "info")
       } else {
         // Try generic format
         const genericMatch = fileUrl.match(/\/storage\/v1\/object\/[^/]+\/documents\/([^?]+)/)
         if (genericMatch) {
           filePath = decodeURIComponent(genericMatch[1])
-          console.log("[DOCUMENT_ANALYSIS] Detected generic URL format, extracting path:", filePath)
+          Sentry.captureMessage(`[DOCUMENT_ANALYSIS] Detected generic URL format, extracting path: ${filePath}`, "info")
         }
       }
     }
     
     // If we have a file path, create a signed URL (required for private buckets)
     if (filePath) {
-      console.log("[DOCUMENT_ANALYSIS] Creating signed URL for path:", filePath)
+      Sentry.captureMessage(`[DOCUMENT_ANALYSIS] Creating signed URL for path: ${filePath}`, "info")
       
       const { data: signedUrlData, error: signedUrlError } = await supabase.storage
         .from("documents")
         .createSignedUrl(filePath, 3600) // 1 hour expiry
 
       if (signedUrlError) {
-        console.error("[DOCUMENT_ANALYSIS] Failed to create signed URL:", signedUrlError)
+        Sentry.captureException(signedUrlError)
         
         // If signed URL creation fails, this is CRITICAL for private buckets
         // We cannot use public URLs for private buckets
@@ -1023,10 +1010,10 @@ ACTION:
         }
       } else if (signedUrlData?.signedUrl) {
         signedUrl = signedUrlData.signedUrl
-        console.log("[DOCUMENT_ANALYSIS] Successfully created signed URL:", signedUrl.substring(0, 100) + "...")
+        Sentry.captureMessage(`[DOCUMENT_ANALYSIS] Successfully created signed URL: ${signedUrl.substring(0, 100)}...`, "info")
       } else {
         // Signed URL data is null - this shouldn't happen, but fail safely
-        console.error("[DOCUMENT_ANALYSIS] Signed URL data is null!")
+        Sentry.captureMessage("[DOCUMENT_ANALYSIS] Signed URL data is null!", "error")
         return {
           error: `Signed URL creation returned no data. This is unexpected.
 
@@ -1040,7 +1027,7 @@ Please try uploading a NEW document.`,
       }
     } else {
       // If we can't extract path, this is a problem for private buckets
-      console.error("[DOCUMENT_ANALYSIS] Could not extract file path from URL:", fileUrl)
+      Sentry.captureMessage(`[DOCUMENT_ANALYSIS] Could not extract file path from URL: ${fileUrl}`, "error")
       return {
         error: `Cannot extract file path from URL. The URL format may be incorrect.
 
@@ -1063,7 +1050,7 @@ ACTION:
     // CRITICAL: If we still have a public URL and bucket is private, this will fail
     // Make sure we're using the signed URL
     if (signedUrl.includes('/public/documents/')) {
-      console.error("[DOCUMENT_ANALYSIS] Still using public URL after signed URL creation attempt!")
+      Sentry.captureMessage("[DOCUMENT_ANALYSIS] Still using public URL after signed URL creation attempt!", "error")
       return {
         error: `Cannot use public URL for private bucket. Signed URL creation may have failed.
 

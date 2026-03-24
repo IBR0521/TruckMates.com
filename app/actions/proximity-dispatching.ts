@@ -5,6 +5,7 @@
  * Find closest available drivers near a load pickup location
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { geocodeAddress } from "./integrations-google-maps"
@@ -113,14 +114,15 @@ export async function findNearbyDriversForLoad(
     })
 
     if (error) {
-      console.error('Proximity dispatching error:', error)
+      Sentry.captureException(error)
       return { error: error.message || "Failed to find nearby drivers", data: null }
     }
 
     return { data: drivers || [], error: null }
-  } catch (error: any) {
-    console.error('Proximity dispatching exception:', error)
-    return { error: error.message || "Failed to find nearby drivers", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to find nearby drivers"
+    return { error: message, data: null }
   }
 }
 

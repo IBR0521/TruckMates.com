@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
@@ -516,7 +517,7 @@ export async function generateYearEndTaxReport(year: number): Promise<{
     return { data, error: null }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Failed to build year-end report"
-    console.error("[generateYearEndTaxReport]", e)
+    Sentry.captureException(e)
     return { data: null, error: msg }
   }
 }

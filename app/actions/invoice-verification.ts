@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
+import * as Sentry from "@sentry/nextjs"
 
 /**
  * Invoice Three-Way Matching
@@ -28,7 +29,7 @@ export async function verifyInvoiceMatch(invoiceId: string) {
     })
 
     if (error) {
-      console.error("[Invoice Verification] Database error:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
@@ -41,7 +42,7 @@ export async function verifyInvoiceMatch(invoiceId: string) {
 
     return { data: data[0], error: null }
   } catch (error: any) {
-    console.error("[Invoice Verification] Error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to verify invoice", data: null }
   }
 }
@@ -99,7 +100,7 @@ export async function getInvoiceVerification(invoiceId: string) {
 
     return { data, error: null }
   } catch (error: any) {
-    console.error("[getInvoiceVerification] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -145,7 +146,7 @@ export async function getInvoicesRequiringReview() {
 
     return { data: data || [], error: null }
   } catch (error: any) {
-    console.error("[Invoice Verification] Error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to get invoices requiring review", data: null }
   }
 }
@@ -196,7 +197,7 @@ export async function approveInvoiceManually(invoiceId: string, reason?: string)
 
     return { data, error: null }
   } catch (error: any) {
-    console.error("[Invoice Verification] Error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to approve invoice", data: null }
   }
 }
@@ -299,7 +300,7 @@ export async function batchVerifyInvoices() {
       error: null,
     }
   } catch (error: any) {
-    console.error("[Invoice Verification] Error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to batch verify invoices", data: null }
   }
 }

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { validateRequiredString, sanitizeString } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+import * as Sentry from "@sentry/nextjs"
 
 /** `public.geofences` — geofencing_schema.sql + PostGIS columns from postgis_migration.sql */
 const GEOFENCE_FULL_SELECT =
@@ -32,13 +33,13 @@ async function isPointInGeofencePostGIS(
     })
     
     if (error) {
-      console.warn('PostGIS function failed, using fallback:', error)
+      Sentry.captureException(error)
       return false
     }
     
     return data === true
   } catch (error) {
-    console.warn('PostGIS function error, using fallback:', error)
+    Sentry.captureException(error)
     return false
   }
 }
@@ -574,7 +575,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
           .single()
 
         if (visitError) {
-          console.error("[geofencing] Failed to insert entry zone_visit:", visitError)
+          Sentry.captureException(visitError)
           continue
         }
 
@@ -605,7 +606,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
             const { autoUpdateLoadStatusFromGeofence } = await import("./auto-status-updates")
             await autoUpdateLoadStatusFromGeofence(visit.id, 'entry')
           } catch (error) {
-            console.error("Failed to auto-update load status on entry:", error)
+            Sentry.captureException(error)
           }
         }
       } else if (!isInside && wasInside) {
@@ -636,7 +637,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
           .single()
 
         if (visitError) {
-          console.error("[geofencing] Failed to insert exit zone_visit:", visitError)
+          Sentry.captureException(visitError)
           continue
         }
 
@@ -694,7 +695,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
             const { autoUpdateLoadStatusFromGeofence } = await import("./auto-status-updates")
             await autoUpdateLoadStatusFromGeofence(visit.id, 'exit')
           } catch (error) {
-            console.error("Failed to auto-update load status on exit:", error)
+            Sentry.captureException(error)
           }
         }
         
@@ -704,7 +705,7 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
             const { finalizeDetention } = await import("./detention-tracking")
             await finalizeDetention(visit.id)
           } catch (error) {
-            console.error("Failed to finalize detention on exit:", error)
+            Sentry.captureException(error)
           }
         }
       }

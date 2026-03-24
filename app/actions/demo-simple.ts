@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@supabase/supabase-js"
+import * as Sentry from "@sentry/nextjs"
 
 // BUG-068 FIX: Use environment variables instead of hardcoded credentials
 // Never hardcode credentials in source code - use env vars or generate random passwords
@@ -34,7 +35,7 @@ async function markDemoCompanySetupComplete(adminClient: any, companyId: string)
       } as any)
       .eq("id", companyId)
   } catch (error) {
-    console.warn("Failed to mark demo company setup complete:", error)
+    Sentry.captureException(error)
     // Don't block demo access if this fails
   }
 }
@@ -192,17 +193,20 @@ export async function createDemoAndSignIn() {
     // Populate demo data - with timeout to prevent hanging
     if (companyId) {
       try {
-        console.log("Cleaning up existing demo data for company before repopulating:", companyId)
+        Sentry.captureMessage(`Cleaning up existing demo data for company before repopulating: ${companyId}`, "info")
         // Ensure each demo run starts from a clean slate so new users see a fresh environment
         try {
           await adminClient.rpc('cleanup_demo_data_for_company', {
             p_company_id: companyId,
           })
         } catch (err: any) {
-          console.warn("cleanup_demo_data_for_company failed (continuing anyway):", err?.message || String(err))
+          Sentry.captureMessage(
+            `cleanup_demo_data_for_company failed (continuing anyway): ${err?.message || String(err)}`,
+            "warning",
+          )
         }
 
-        console.log("Starting demo data population for company:", companyId)
+        Sentry.captureMessage(`Starting demo data population for company: ${companyId}`, "info")
         
         // Add timeout wrapper to prevent infinite hanging
         const populateWithTimeout = Promise.race([
@@ -218,14 +222,14 @@ export async function createDemoAndSignIn() {
         const { data: populateResult, error: populateError } = await populateWithTimeout
         
         if (populateError) {
-          console.error("Demo data population RPC error:", populateError)
+          Sentry.captureException(populateError)
           
           // Check for common errors
           const errorMsg = populateError.message || String(populateError)
           
           // If timeout or function missing, continue anyway - company is created
           if (errorMsg.includes('timed out') || errorMsg.includes('does not exist') || (errorMsg.includes('function') && errorMsg.includes('not found'))) {
-            console.warn("Demo data population failed, but continuing with company creation:", errorMsg)
+            Sentry.captureMessage(`Demo data population failed, but continuing with company creation: ${errorMsg}`, "warning")
             if (companyId) {
               await markDemoCompanySetupComplete(adminClient, companyId)
             }
@@ -241,7 +245,7 @@ export async function createDemoAndSignIn() {
           }
           
           // For other errors, also continue but warn
-          console.warn("Demo data population had an error, but continuing:", errorMsg)
+          Sentry.captureMessage(`Demo data population had an error, but continuing: ${errorMsg}`, "warning")
           if (companyId) {
             await markDemoCompanySetupComplete(adminClient, companyId)
           }
@@ -265,33 +269,39 @@ export async function createDemoAndSignIn() {
           // Log the result with counts
           if (typeof populateResult === 'object' && 'counts' in populateResult) {
             const counts = populateResult.counts as any
-            console.log(`✅ Demo data populated:`, {
-              drivers: counts.drivers || 0,
-              trucks: counts.trucks || 0,
-              loads: counts.loads || 0,
-              routes: counts.routes || 0,
-              customers: counts.customers || 0,
-              invoices: counts.invoices || 0
-            })
+            Sentry.captureMessage(
+              `Demo data populated: ${JSON.stringify({
+                drivers: counts.drivers || 0,
+                trucks: counts.trucks || 0,
+                loads: counts.loads || 0,
+                routes: counts.routes || 0,
+                customers: counts.customers || 0,
+                invoices: counts.invoices || 0,
+              })}`,
+              "info",
+            )
             
             // If no data was created, warn
             if ((counts.drivers || 0) === 0 && (counts.loads || 0) === 0) {
-              console.warn("⚠️ Warning: Function returned success but no data was created. This might mean data already exists or there was an issue.")
+              Sentry.captureMessage(
+                "Warning: Function returned success but no data was created. This might mean data already exists or there was an issue.",
+                "warning",
+              )
             }
           } else {
-            console.log("✅ Demo data populated successfully:", populateResult)
+            Sentry.captureMessage(`Demo data populated successfully: ${JSON.stringify(populateResult)}`, "info")
           }
         } else {
-          console.warn("⚠️ Demo data population returned no result")
+          Sentry.captureMessage("Warning: Demo data population returned no result", "warning")
         }
       } catch (err: any) {
-        console.error("Demo data population exception:", err)
+        Sentry.captureException(err)
         
         const errorMsg = err?.message || String(err)
         
         // Don't fail on timeout or missing function - company is created
         if (errorMsg.includes('timed out') || errorMsg.includes('does not exist') || (errorMsg.includes('function') && errorMsg.includes('not found'))) {
-          console.warn("Demo data population failed, but continuing with company creation:", errorMsg)
+          Sentry.captureMessage(`Demo data population failed, but continuing with company creation: ${errorMsg}`, "warning")
           if (companyId) {
             await markDemoCompanySetupComplete(adminClient, companyId)
           }
@@ -306,7 +316,7 @@ export async function createDemoAndSignIn() {
         }
         
         // For other errors, continue anyway
-        console.warn("Demo data population had an exception, but continuing:", errorMsg)
+        Sentry.captureMessage(`Demo data population had an exception, but continuing: ${errorMsg}`, "warning")
         if (companyId) {
           await markDemoCompanySetupComplete(adminClient, companyId)
         }
@@ -328,7 +338,7 @@ export async function createDemoAndSignIn() {
     return { success: true, userId, companyId }
   } catch (error: unknown) {
     // Log the full error for debugging
-    console.error("[createDemoAndSignIn] Error:", error)
+    Sentry.captureException(error)
     
     // Return a user-friendly error message
     const errorMessage = error instanceof Error 

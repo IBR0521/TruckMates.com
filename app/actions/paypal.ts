@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
+import * as Sentry from "@sentry/nextjs"
 
 // PayPal API configuration
 const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || ""
@@ -99,7 +100,7 @@ export async function createPayPalSubscription(planId: string) {
 
     if (!productResponse.ok) {
       const errorData = await productResponse.json()
-      console.error("PayPal product creation error:", errorData)
+      Sentry.captureException(errorData)
       return { error: "Failed to create PayPal product", data: null }
     }
 
@@ -164,7 +165,7 @@ export async function createPayPalSubscription(planId: string) {
 
     if (!planResponse.ok) {
       const errorData = await planResponse.json()
-      console.error("PayPal plan creation error:", errorData)
+      Sentry.captureException(errorData)
       return { error: "Failed to create PayPal billing plan", data: null }
     }
 
@@ -205,7 +206,7 @@ export async function createPayPalSubscription(planId: string) {
 
     if (!subscriptionResponse.ok) {
       const errorData = await subscriptionResponse.json()
-      console.error("PayPal subscription creation error:", errorData)
+      Sentry.captureException(errorData)
       return { error: "Failed to create PayPal subscription", data: null }
     }
 
@@ -220,7 +221,7 @@ export async function createPayPalSubscription(planId: string) {
 
     return { data: { url: approvalLink, subscriptionId: subscription.id }, error: null }
   } catch (error: any) {
-    console.error("PayPal subscription error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to create PayPal subscription", data: null }
   }
 }
@@ -253,7 +254,7 @@ export async function verifyPayPalSubscription(subscriptionId: string) {
 
     return { data: subscription, error: null }
   } catch (error: any) {
-    console.error("PayPal verification error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to verify PayPal subscription", data: null }
   }
 }

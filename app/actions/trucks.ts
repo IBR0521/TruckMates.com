@@ -5,6 +5,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateTruckData, sanitizeString } from "@/lib/validation"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+import * as Sentry from "@sentry/nextjs"
 
 /** Full row: `public.trucks` in supabase/schema.sql + supabase/trucks_schema_extended.sql */
 const TRUCK_FULL_SELECT = `
@@ -52,7 +53,7 @@ export async function getTrucks(filters?: {
 
     return { data: trucks || [], error: null, count: count || 0 }
   } catch (error: any) {
-    console.error("[getTrucks] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
   }
 }
@@ -83,7 +84,7 @@ export async function getTruck(id: string) {
 
     return { data: truck, error: null }
   } catch (error: any) {
-    console.error("[getTruck] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -416,10 +417,10 @@ export async function updateTruck(
     try {
       const { autoScheduleMaintenanceFromMileage } = await import("./auto-maintenance")
       await autoScheduleMaintenanceFromMileage(id).catch((err) => {
-        console.warn("[updateTruck] Auto-maintenance scheduling failed:", err.message)
+        Sentry.captureException(err)
       })
     } catch (error) {
-      console.warn("[updateTruck] Failed to import auto-maintenance:", error)
+      Sentry.captureException(error)
     }
   }
 
@@ -440,16 +441,16 @@ export async function updateTruck(
                 new_value: change.new_value,
               },
             })
-            console.log("[updateTruck] ✅ Audit log created for field:", change.field)
+            Sentry.captureMessage(`[updateTruck] Audit log created for field: ${change.field}`, "info")
           } catch (err: any) {
-            console.error("[updateTruck] ❌ Audit log failed for field", change.field, ":", err.message)
+            Sentry.captureException(err)
           }
         }
       } else {
-        console.warn("[updateTruck] No user found for audit logging")
+        Sentry.captureMessage("[updateTruck] No user found for audit logging", "warning")
       }
     } catch (err: any) {
-      console.error("[updateTruck] Failed to import audit log module:", err.message)
+      Sentry.captureException(err)
     }
   }
 
@@ -532,7 +533,7 @@ export async function deleteTruck(id: string) {
     revalidatePath("/dashboard/trucks")
     return { error: null }
   } catch (error: any) {
-    console.error("[deleteTruck] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to delete truck" }
   }
 }

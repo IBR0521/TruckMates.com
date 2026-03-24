@@ -7,6 +7,7 @@
  * - Pre-trip requirement checking
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -45,14 +46,15 @@ export async function checkPreTripDVIRRequired(
     })
 
     if (error) {
-      console.error("[Check Pre-Trip DVIR] Error:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
     return { data: { required: data || false }, error: null }
-  } catch (error: any) {
-    console.error("[Check Pre-Trip DVIR] Error:", error)
-    return { error: error.message || "Failed to check pre-trip requirement", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to check pre-trip requirement"
+    return { error: message, data: null }
   }
 }
 
@@ -80,14 +82,15 @@ export async function getDVIRsForAudit(filters?: {
     })
 
     if (error) {
-      console.error("[Get DVIRs for Audit] Error:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
     return { data: data || [], error: null }
-  } catch (error: any) {
-    console.error("[Get DVIRs for Audit] Error:", error)
-    return { error: error.message || "Failed to get DVIRs for audit", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to get DVIRs for audit"
+    return { error: message, data: null }
   }
 }
 
@@ -128,7 +131,7 @@ export async function createWorkOrdersFromDVIRDefects(
     })
 
     if (error) {
-      console.error("[Create Work Orders from DVIR] Error:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
@@ -136,9 +139,10 @@ export async function createWorkOrdersFromDVIRDefects(
     revalidatePath("/dashboard/maintenance/work-orders")
 
     return { data: data || [], error: null }
-  } catch (error: any) {
-    console.error("[Create Work Orders from DVIR] Error:", error)
-    return { error: error.message || "Failed to create work orders", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to create work orders"
+    return { error: message, data: null }
   }
 }
 
@@ -192,9 +196,10 @@ export async function getDVIRWorkOrders(
     }
 
     return { data: workOrders || [], error: null }
-  } catch (error: any) {
-    console.error("[Get DVIR Work Orders] Error:", error)
-    return { error: error.message || "Failed to get work orders", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to get work orders"
+    return { error: message, data: null }
   }
 }
 

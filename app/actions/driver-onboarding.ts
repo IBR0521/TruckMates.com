@@ -5,6 +5,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
+import * as Sentry from "@sentry/nextjs"
 
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
@@ -94,7 +95,7 @@ export async function initializeDriverOnboarding(driverId: string) {
     .single()
 
   if (error) {
-    console.error("[initializeDriverOnboarding] Error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error.message }
   }
 
@@ -139,7 +140,7 @@ export async function getDriverOnboarding(driverId: string) {
     .maybeSingle()
 
   if (error) {
-    console.error("[getDriverOnboarding] Error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error.message }
   }
 
@@ -188,7 +189,7 @@ export async function updateOnboardingStep(driverId: string, step: number) {
     .single()
 
   if (error) {
-    console.error("[updateOnboardingStep] Error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error.message }
   }
 
@@ -315,7 +316,7 @@ export async function markDocumentUploaded(driverId: string, documentType: strin
     .single()
 
   if (error) {
-    console.error("[markDocumentUploaded] Error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error.message }
   }
 
@@ -394,7 +395,7 @@ export async function completeDriverOnboarding(driverId: string) {
     .single()
 
   if (error) {
-    console.error("[completeDriverOnboarding] Error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error.message }
   }
 
@@ -448,7 +449,7 @@ export async function getAllDriverOnboarding(filters?: {
   const { data, error } = await query
 
   if (error) {
-    console.error("[getAllDriverOnboarding] Error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error.message }
   }
 

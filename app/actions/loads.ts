@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
 import { createRoute } from "./routes"
 import { sendNotification } from "./notifications"
@@ -66,14 +67,14 @@ async function sendNotificationsForLoadUpdate(loadData: any) {
             })
           } catch (error) {
             // Silently fail - don't block the main operation
-            console.error(`[NOTIFICATION] Failed to send to user ${relevantUser.id}:`, error)
+            Sentry.captureException(error)
           }
         })
       )
     }
   } catch (error) {
     // Silently fail - this is a background function, don't block main operations
-    console.error("[sendNotificationsForLoadUpdate] Error:", error)
+    Sentry.captureException(error)
   }
 }
 
@@ -118,16 +119,16 @@ export async function getLoads(filters?: {
     if (error) {
       // Check if table doesn't exist
       if (error.code === "42P01" || error.message.includes("does not exist")) {
-        console.error("[getLoads] Loads table does not exist")
+        Sentry.captureMessage("[getLoads] Loads table does not exist", "error")
         return { data: [], error: null, count: 0 } // Return empty array instead of error
       }
-      console.error("[getLoads] Error fetching loads:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null, count: 0 }
     }
 
     return { data: loads || [], error: null, count: count || 0 }
   } catch (error: any) {
-    console.error("[getLoads] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
   }
 }
@@ -151,10 +152,10 @@ export async function getLoad(id: string) {
     if (error) {
       // Check if table doesn't exist
       if (error.code === "42P01" || error.message.includes("does not exist")) {
-        console.error("[getLoad] Loads table does not exist")
+        Sentry.captureMessage("[getLoad] Loads table does not exist", "error")
         return { error: "Loads table does not exist", data: null }
       }
-      console.error("[getLoad] Error fetching load:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
@@ -164,7 +165,7 @@ export async function getLoad(id: string) {
 
     return { data: load, error: null }
   } catch (error: any) {
-    console.error("[getLoad] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -562,7 +563,7 @@ export async function createLoad(formData: {
         }
       }
     } catch (err) {
-      console.warn("Failed to get load suggestions for auto-assignment:", err)
+      Sentry.captureException(err)
     }
   }
 
@@ -734,7 +735,7 @@ export async function createLoad(formData: {
         .eq("id", data.truck_id)
         .eq("company_id", ctx.companyId)
     } catch (truckUpdateError) {
-      console.warn("[createLoad] Failed to update truck status:", truckUpdateError)
+      Sentry.captureException(truckUpdateError)
       // Don't fail load creation if truck status update fails
     }
   }
@@ -744,10 +745,10 @@ export async function createLoad(formData: {
     try {
       const { scheduleCheckCallsForLoad } = await import("./check-calls")
       await scheduleCheckCallsForLoad(data.id).catch((err) => {
-        console.warn("[createLoad] Check calls scheduling failed (table may not exist):", err.message)
+        Sentry.captureException(err)
       })
     } catch (err: any) {
-      console.warn("[createLoad] Failed to import check-calls:", err.message)
+      Sentry.captureException(err)
     }
   }
 
@@ -767,10 +768,10 @@ export async function createLoad(formData: {
         status: data.status,
       },
     }).catch((err) => {
-      console.warn("[createLoad] Alert creation failed (table may not exist):", err.message)
+        Sentry.captureException(err)
     })
   } catch (error) {
-    console.error("[AUTO-ALERT] Failed to create alert:", error)
+    Sentry.captureException(error)
   }
 
   revalidatePath("/dashboard/loads")
@@ -787,18 +788,18 @@ export async function createLoad(formData: {
       destination: formData.destination,
     })
   } catch (error) {
-    console.warn("[createLoad] Webhook trigger failed:", error)
+    Sentry.captureException(error)
   }
 
   // Auto-match load to trucks using DFM
   try {
     const { autoMatchLoadToTrucks } = await import("./dfm-matching")
     await autoMatchLoadToTrucks(data.id).catch((err) =>
-      console.warn("[createLoad] DFM auto-match failed:", err.message)
+      Sentry.captureException(err)
     )
   } catch (error) {
     // Don't fail load creation if DFM fails
-    console.warn("[createLoad] DFM auto-match error:", error)
+    Sentry.captureException(error)
   }
   
   return { data, error: null }
@@ -1041,7 +1042,7 @@ export async function updateLoad(
       .maybeSingle()
 
     if (existingInvoiceError) {
-      console.error("[updateLoad] Failed checking existing invoice:", existingInvoiceError)
+      Sentry.captureException(existingInvoiceError)
       return { error: existingInvoiceError.message || "Failed to validate existing invoice", data: null }
     }
 
@@ -1070,17 +1071,17 @@ export async function updateLoad(
         .single()
 
       if (invoiceError) {
-        console.error("[updateLoad] Failed to auto-generate invoice:", invoiceError)
+        Sentry.captureException(invoiceError)
         // Don't fail the load update if invoice creation fails
       } else if (newInvoice) {
-        console.log(`[AUTO-INVOICE] Invoice ${invoiceNumber} created automatically for load ${data.shipment_number}`)
+        Sentry.captureMessage(`[AUTO-INVOICE] Invoice ${invoiceNumber} created automatically for load ${data.shipment_number}`, "info")
         
         // Auto-add detention fees to invoice if any exist
         try {
           const { autoAddDetentionsToInvoice } = await import("./detention-tracking")
           await autoAddDetentionsToInvoice(id)
         } catch (error) {
-          console.error("[updateLoad] Failed to auto-add detentions:", error)
+          Sentry.captureException(error)
         }
         
         // Auto-send invoice email if enabled in settings
@@ -1101,20 +1102,20 @@ export async function updateLoad(
               subject: settings.invoice_email_subject || "Invoice {INVOICE_NUMBER} from {COMPANY_NAME}",
               body: settings.invoice_email_body || "",
             }).catch((emailError) => {
-              console.warn("[AUTO-INVOICE] Failed to auto-send invoice email:", emailError)
+              Sentry.captureException(emailError)
             })
           }
         } catch (emailError) {
-          console.warn("[AUTO-INVOICE] Failed to check auto-send settings:", emailError)
+          Sentry.captureException(emailError)
         }
 
         try {
           const { maybeAutoSubmitFactoringOnInvoiceCreated } = await import("./factoring-email")
           await maybeAutoSubmitFactoringOnInvoiceCreated(newInvoice.id).catch((err) =>
-            console.warn("[AUTO-INVOICE] Factoring auto-submit:", err),
+            Sentry.captureException(err),
           )
         } catch (e) {
-          console.warn("[AUTO-INVOICE] Factoring hook:", e)
+          Sentry.captureException(e)
         }
 
         // Return invoice info so UI can show notification
@@ -1132,7 +1133,7 @@ export async function updateLoad(
   if (data) {
     // Don't await - send notifications in background
     sendNotificationsForLoadUpdate(data).catch((error) => {
-      console.error("[NOTIFICATION] Failed to send load update notifications:", error)
+      Sentry.captureException(error)
     })
   }
 
@@ -1152,10 +1153,10 @@ export async function updateLoad(
           new_status: formData.status,
         },
       }).catch((err) => {
-        console.warn("[updateLoad] Alert creation failed (table may not exist):", err.message)
+        Sentry.captureException(err)
       })
     } catch (err: any) {
-      console.warn("[updateLoad] Failed to import alerts:", err.message)
+      Sentry.captureException(err)
     }
   }
 
@@ -1165,7 +1166,7 @@ export async function updateLoad(
       const { scheduleCheckCallsForLoad } = await import("./check-calls")
       await scheduleCheckCallsForLoad(id)
     } catch (error) {
-      console.error("[AUTO-CHECK-CALLS] Failed to schedule check calls:", error)
+      Sentry.captureException(error)
     }
   }
 
@@ -1187,18 +1188,18 @@ export async function updateLoad(
                 new_value: change.new_value,
               },
             })
-            console.log("[updateLoad] ✅ Audit log created for field:", change.field)
+            Sentry.captureMessage(`[updateLoad] Audit log created for field: ${change.field}`, "info")
           } catch (err: any) {
             // Log error but don't fail the update
-            console.error("[updateLoad] ❌ Audit log failed for field", change.field, ":", err.message)
-            console.error("[updateLoad] Error code:", err.code)
+            Sentry.captureException(err)
+            Sentry.captureMessage(`[updateLoad] Audit log error code: ${String(err?.code ?? "unknown")}`, "error")
           }
         }
       } else {
-        console.warn("[updateLoad] No user found for audit logging")
+        Sentry.captureMessage("[updateLoad] No user found for audit logging", "warning")
       }
     } catch (err: any) {
-      console.error("[updateLoad] Failed to import audit log module:", err.message)
+      Sentry.captureException(err)
     }
   }
 
@@ -1484,7 +1485,7 @@ export async function duplicateLoad(id: string) {
     .single()
 
   if (createError || !newLoad) {
-    console.error("[duplicateLoad] Error creating duplicate:", createError)
+    Sentry.captureException(createError)
     return { error: createError?.message || "Failed to create duplicate load", data: null }
   }
 

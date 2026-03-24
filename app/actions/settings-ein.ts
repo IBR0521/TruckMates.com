@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
 
 /**
  * V3-003 FIX: Remove fake EIN generation - EINs are issued by the IRS, not generated randomly
@@ -66,7 +67,7 @@ export async function updateEIN(einNumber: string): Promise<{ data: { ein: strin
       error: null,
     }
   } catch (error: any) {
-    console.error("[updateEIN] Error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }

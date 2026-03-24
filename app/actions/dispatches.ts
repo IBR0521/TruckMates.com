@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkEditPermission } from "@/lib/server-permissions"
+import * as Sentry from "@sentry/nextjs"
 
 /**
  * Get unassigned loads (loads without driver or truck assigned, or with pending status)
@@ -58,7 +59,7 @@ export async function getUnassignedLoads() {
 
     return { data: unassignedLoads, error: null }
   } catch (error: any) {
-    console.error("[getUnassignedLoads] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -111,7 +112,7 @@ export async function getUnassignedRoutes() {
 
     return { data: unassignedRoutes, error: null }
   } catch (error: any) {
-    console.error("[getUnassignedRoutes] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -232,7 +233,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
       )
     } catch (error) {
       // Silently fail - don't block assignment
-      console.error("[SMS] Failed to send dispatch notification:", error)
+      Sentry.captureException(error)
     }
   }
 
@@ -249,7 +250,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
         truck_id: truckId,
       })
     } catch (error) {
-      console.warn("[quickAssignLoad] Webhook trigger failed:", error)
+      Sentry.captureException(error)
     }
   }
   
@@ -390,7 +391,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
       )
     } catch (error) {
       // Silently fail - don't block assignment
-      console.error("[SMS] Failed to send route notification:", error)
+      Sentry.captureException(error)
     }
   }
 
@@ -407,7 +408,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
         truck_id: truckId,
       })
     } catch (error) {
-      console.warn("[quickAssignRoute] Webhook trigger failed:", error)
+      Sentry.captureException(error)
     }
   }
   

@@ -5,6 +5,7 @@
  * Find return loads when driver is 2 hours from drop-off
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -115,7 +116,7 @@ export async function checkAndNotifyBackhaulOpportunities(routeId: string) {
         }
       })
     } catch (alertError) {
-      console.error("Failed to create backhaul alert:", alertError)
+      Sentry.captureException(alertError)
       // Don't fail the function if alert creation fails
     }
 

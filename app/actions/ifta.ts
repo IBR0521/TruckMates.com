@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { getELDMileageData } from "./eld"
 import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 import { STATE_FUEL_TAX_RATES, getFuelTaxRate } from "@/lib/fuel-tax-rates"
+import * as Sentry from "@sentry/nextjs"
 
 const IFTA_REPORT_SELECT =
   "id, company_id, quarter, year, period, total_miles, fuel_purchased, tax_owed, status, filed_date, state_breakdown, truck_ids, include_eld, created_at, updated_at"
@@ -31,7 +32,7 @@ export async function getIFTAReports() {
 
     return { data: reports, error: null }
   } catch (error: any) {
-    console.error("[getIFTAReports] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -154,10 +155,9 @@ export async function createIFTAReport(formData: {
     end_date: periodEnd,
   })
   if (tripSheetAgg.error) {
-    console.warn(
-      "[IFTA] Trip sheet aggregates skipped:",
-      tripSheetAgg.error,
-      "(Run supabase/trip_sheets_schema.sql if manual trip sheets are required.)",
+    Sentry.captureMessage(
+      `[IFTA] Trip sheet aggregates skipped: ${tripSheetAgg.error} (Run supabase/trip_sheets_schema.sql if manual trip sheets are required.)`,
+      "warning",
     )
   }
   const tripMilesByState = tripSheetAgg.data?.milesByState || {}
@@ -323,7 +323,10 @@ export async function createIFTAReport(formData: {
             .lte("created_at", periodEnd)
           
           if (fallbackRoutes && fallbackRoutes.length > 0) {
-            console.warn("[IFTA] Using created_at for route filtering - trip dates (route_start_time/route_departure_time) not available")
+            Sentry.captureMessage(
+              "[IFTA] Using created_at for route filtering - trip dates (route_start_time/route_departure_time) not available",
+              "warning",
+            )
           }
           
           routes = fallbackRoutes || []

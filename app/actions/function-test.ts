@@ -31,6 +31,7 @@ import * as loadMileageActions from "./load-mileage"
 import * as invoicesAutoActions from "./invoices-auto"
 import * as maintenanceActions from "./maintenance"
 import * as eldManualActions from "./eld-manual"
+import * as Sentry from "@sentry/nextjs"
 
 /**
  * Comprehensive function test that tests EVERY function in the platform
@@ -78,35 +79,35 @@ export async function testAllPlatformFunctions() {
         try {
           tested.push(value)
         } catch (e: any) {
-          console.error('[FUNCTION TEST] pushTested error:', e?.message || e)
+          Sentry.captureException(e)
         }
       },
       pushPassed: (value: any) => {
         try {
           passed.push(value)
         } catch (e: any) {
-          console.error('[FUNCTION TEST] pushPassed error:', e?.message || e)
+          Sentry.captureException(e)
         }
       },
       pushFailed: (value: any) => {
         try {
           failed.push(value)
         } catch (e: any) {
-          console.error('[FUNCTION TEST] pushFailed error:', e?.message || e)
+          Sentry.captureException(e)
         }
       },
       pushSkipped: (value: any) => {
         try {
           skipped.push(value)
         } catch (e: any) {
-          console.error('[FUNCTION TEST] pushSkipped error:', e?.message || e)
+          Sentry.captureException(e)
         }
       },
       pushError: (value: any) => {
         try {
           errors.push(value)
         } catch (e: any) {
-          console.error('[FUNCTION TEST] pushError error:', e?.message || e)
+          Sentry.captureException(e)
         }
       },
       getResults: () => ({
@@ -129,14 +130,14 @@ export async function testAllPlatformFunctions() {
   const pushError = (value: any) => store.pushError(value)
 
   const startTime = Date.now()
-  console.log(`[FUNCTION TEST] Starting comprehensive function test...`)
+  Sentry.captureMessage("[FUNCTION TEST] Starting comprehensive function test...", "info")
 
   try {
     // Results object is already initialized as const above
     // ============================================
     // 1. DASHBOARD FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Dashboard functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Dashboard functions...", "info")
     try {
       const dashboardResult = await dashboardActions.getDashboardStats()
       pushTested("getDashboardStats")
@@ -149,7 +150,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 2. USER FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing User functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing User functions...", "info")
     // getUserProfile removed - functionality merged into getCurrentUser
     try {
       const currentUser = await getCurrentUser()
@@ -163,7 +164,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 3. COMPANY FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Company functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Company functions...", "info")
     try {
       const company = await companyActions.getCompany()
       pushTested("getCompany")
@@ -176,7 +177,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 4. DRIVER FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Driver functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Driver functions...", "info")
     try {
       const drivers = await driversActions.getDrivers()
       pushTested("getDrivers")
@@ -246,7 +247,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 5. TRUCK FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Truck functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Truck functions...", "info")
     try {
       const trucks = await trucksActions.getTrucks()
       pushTested("getTrucks")
@@ -273,7 +274,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 6. LOAD FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Load functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Load functions...", "info")
     try {
       const loads = await loadsActions.getLoads()
       pushTested("getLoads")
@@ -326,7 +327,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 7. ROUTE FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Route functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Route functions...", "info")
     try {
       const routes = await routesActions.getRoutes()
       pushTested("getRoutes")
@@ -428,7 +429,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 8. CUSTOMER FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Customer functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Customer functions...", "info")
     try {
       const customers = await customersActions.getCustomers()
       pushTested("getCustomers")
@@ -531,7 +532,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 9. VENDOR FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Vendor functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Vendor functions...", "info")
     try {
       const vendors = await vendorsActions.getVendors()
       pushTested("getVendors")
@@ -625,7 +626,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 10. ACCOUNTING FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Accounting functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Accounting functions...", "info")
     try {
       const invoices = await accountingActions.getInvoices()
       pushTested("getInvoices")
@@ -714,7 +715,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 11. BOL FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing BOL functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing BOL functions...", "info")
     try {
       const bols = await bolActions.getBOLs()
       pushTested("getBOLs")
@@ -789,7 +790,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 11.5. MAINTENANCE FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Maintenance functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Maintenance functions...", "info")
     try {
       const maintenance = await maintenanceActions.getMaintenance()
       pushTested("getMaintenance")
@@ -849,7 +850,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 12. ELD FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing ELD functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing ELD functions...", "info")
     try {
       const devices = await eldActions.getELDDevices()
       pushTested("getELDDevices")
@@ -1063,7 +1064,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 13. IFTA FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing IFTA functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing IFTA functions...", "info")
     try {
       const iftaReports = await iftaActions.getIFTAReports()
       pushTested("getIFTAReports")
@@ -1106,7 +1107,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 14. REPORT FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Report functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Report functions...", "info")
     try {
       const revenueReport = await reportsActions.getRevenueReport(
         new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
@@ -1146,7 +1147,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 15. DISPATCH FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Dispatch functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Dispatch functions...", "info")
     try {
       const unassignedLoads = await dispatchesActions.getUnassignedLoads()
       pushTested("getUnassignedLoads")
@@ -1168,7 +1169,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 16. ADDRESS BOOK FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Address Book functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Address Book functions...", "info")
     try {
       const contacts = await addressBookActions.getAddressBookContacts()
       pushTested("getAddressBookContacts")
@@ -1181,7 +1182,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 17. DOCUMENT FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Document functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Document functions...", "info")
     try {
       const documents = await documentsActions.getDocuments()
       pushTested("getDocuments")
@@ -1218,7 +1219,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 18. EMPLOYEE FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Employee functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Employee functions...", "info")
     try {
       const employees = await employeesActions.getEmployees()
       pushTested("getEmployees")
@@ -1233,7 +1234,7 @@ export async function testAllPlatformFunctions() {
     // ============================================
     // 19. NOTIFICATION FUNCTIONS
     // ============================================
-    console.log(`[FUNCTION TEST] Testing Notification functions...`)
+    Sentry.captureMessage("[FUNCTION TEST] Testing Notification functions...", "info")
     try {
       const preferences = await notificationsActions.getNotificationPreferences()
       pushTested("getNotificationPreferences")
@@ -1281,7 +1282,7 @@ export async function testAllPlatformFunctions() {
       error: null,
     }
   } catch (error: any) {
-    console.error("[FUNCTION TEST] Global error:", error)
+    Sentry.captureException(error)
     // Get results from store - always safe
     const results = store.getResults()
     return {

@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -274,9 +275,10 @@ export async function importComdataFuelData(
 
     revalidatePath("/dashboard/accounting/tax-fuel")
     return { data: importResult, error: null }
-  } catch (error: any) {
-    console.error("Error importing Comdata fuel data:", error)
-    return { error: error.message || "Failed to import fuel data", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to import fuel data"
+    return { error: message, data: null }
   }
 }
 

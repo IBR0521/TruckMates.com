@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateRequiredString, validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
+import * as Sentry from "@sentry/nextjs"
 
 /** `public.vendors` — supabase/crm_schema_complete.sql */
 const VENDOR_FULL_SELECT = `
@@ -80,7 +81,7 @@ export async function getVendors(filters?: {
 
     return { data: data || [], error: null, count: count || 0 }
   } catch (error: any) {
-    console.error("[getVendors] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
   }
 }
@@ -112,7 +113,7 @@ export async function getVendor(id: string) {
 
     return { data, error: null }
   } catch (error: any) {
-    console.error("[getVendor] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -372,14 +373,14 @@ export async function updateVendor(
                 new_value: change.new_value,
               },
             })
-            console.log("[updateVendor] ✅ Audit log created for field:", change.field)
+            Sentry.captureMessage(`[updateVendor] Audit log created for field: ${change.field}`, "info")
           } catch (err: any) {
-            console.error("[updateVendor] ❌ Audit log failed for field", change.field, ":", err.message)
+            Sentry.captureException(err)
           }
         }
       }
     } catch (err: any) {
-      console.error("[updateVendor] Failed to import audit log module:", err.message)
+      Sentry.captureException(err)
     }
   }
 

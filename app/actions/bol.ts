@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
+import * as Sentry from "@sentry/nextjs"
 
 // Get all BOLs
 export async function getBOLs(filters?: {
@@ -48,7 +49,7 @@ export async function getBOLs(filters?: {
 
     return { data, error: null }
   } catch (error: any) {
-    console.error("[getBOLs] Unexpected error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error?.message || "An unexpected error occurred" }
   }
 }
@@ -87,7 +88,7 @@ export async function getBOL(id: string) {
 
     return { data, error: null }
   } catch (error: any) {
-    console.error("[getBOL] Unexpected error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error?.message || "An unexpected error occurred" }
   }
 }
@@ -219,7 +220,7 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
       error: null,
     }
   } catch (error: any) {
-    console.error("[getBOLDataFromLoad] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to get BOL data from load", data: null }
   }
 }
@@ -347,7 +348,7 @@ export async function createBOL(formData: {
     revalidatePath("/dashboard/bols")
     return { data, error: null }
   } catch (error: any) {
-    console.error("[createBOL] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -394,7 +395,10 @@ export async function updateBOLSignature(
     const mappedRole = (await getUserRole()) || ""
     const canSignConsignee = ["super_admin", "operations_manager", "dispatcher"].includes(mappedRole)
     if (signatureType === "consignee" && !canSignConsignee) {
-      console.warn(`[BOL] Consignee signature added by user with role: ${(await getUserRole()) || ""}`)
+      Sentry.captureMessage(
+        `[BOL] Consignee signature added by user with role: ${(await getUserRole()) || ""}`,
+        "warning",
+      )
     }
 
     const signatureField = `${signatureType}_signature`
@@ -458,11 +462,11 @@ export async function updateBOLSignature(
       try {
         const { autoStoreBOLPDFOnCompletion } = await import("./bol-enhanced")
         await autoStoreBOLPDFOnCompletion(bolId, ctx.companyId).catch((err) => {
-          console.error("Failed to auto-store BOL PDF:", err)
+          Sentry.captureException(err)
           // Don't fail if PDF storage fails
         })
       } catch (error) {
-        console.error("Error importing bol-enhanced:", error)
+        Sentry.captureException(error)
       }
     }
 
@@ -470,7 +474,7 @@ export async function updateBOLSignature(
     revalidatePath(`/dashboard/bols/${bolId}`)
     return { data, error: null }
   } catch (error: any) {
-    console.error("[updateBOLSignature] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -537,11 +541,11 @@ export async function updateBOLPOD(
       try {
         const { autoStoreBOLPDFOnCompletion } = await import("./bol-enhanced")
         await autoStoreBOLPDFOnCompletion(bolId, ctx.companyId).catch((err) => {
-          console.error("Failed to auto-store BOL PDF:", err)
+          Sentry.captureException(err)
           // Don't fail if PDF storage fails
         })
       } catch (error) {
-        console.error("Error importing bol-enhanced:", error)
+        Sentry.captureException(error)
       }
     }
 
@@ -549,7 +553,7 @@ export async function updateBOLPOD(
     revalidatePath(`/dashboard/bols/${bolId}`)
     return { data, error: null }
   } catch (error: any) {
-    console.error("[updateBOLPOD] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -579,7 +583,7 @@ export async function getBOLTemplates() {
 
   return { data, error: null }
   } catch (error: any) {
-    console.error("[getBOLTemplates] Unexpected error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error?.message || "An unexpected error occurred" }
   }
 }
@@ -633,7 +637,7 @@ export async function createBOLTemplate(formData: {
   revalidatePath("/dashboard/bols/templates")
   return { data, error: null }
   } catch (error: any) {
-    console.error("[createBOLTemplate] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }

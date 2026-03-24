@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
+import * as Sentry from "@sentry/nextjs"
 
 type Period = 'weekly' | 'monthly' | 'yearly'
 
@@ -97,7 +98,7 @@ export async function getRevenueTrend(period: Period = 'weekly') {
       .order("created_at", { ascending: true })
 
     if (invoicesError) {
-      console.error("[getRevenueTrend] Error fetching invoices:", invoicesError)
+      Sentry.captureException(invoicesError)
     }
 
     // FIXED: Track which loads have invoices to prevent double-counting
@@ -120,7 +121,7 @@ export async function getRevenueTrend(period: Period = 'weekly') {
       .limit(10000) // Reasonable limit for trend analysis
 
     if (loadsError) {
-      console.error("[getRevenueTrend] Error fetching loads:", loadsError)
+      Sentry.captureException(loadsError)
     }
 
     // Group revenue by period

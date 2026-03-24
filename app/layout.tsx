@@ -7,16 +7,20 @@ import { ErrorBoundary } from "@/app/error-boundary"
 import "./globals.css"
 
 // Load fonts - must be const at module scope
-const geist = Geist({ 
+const geist = Geist({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-geist-sans",
+  adjustFontFallback: true,
 })
 
-const geistMono = Geist_Mono({ 
+const geistMono = Geist_Mono({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-geist-mono",
+  // Mono is for code/VINs in the app — not needed for first paint on marketing pages
+  preload: false,
+  adjustFontFallback: true,
 })
 
 export const metadata: Metadata = {

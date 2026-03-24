@@ -5,6 +5,7 @@
  * Track and report idle time using GPS and engine status data
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -52,7 +53,7 @@ export async function detectIdleTime(
     })
 
     if (error) {
-      console.error("Failed to detect idle time:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 

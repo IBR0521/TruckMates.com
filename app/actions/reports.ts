@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
@@ -151,9 +152,10 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
       },
       error: null,
     }
-  } catch (error: any) {
-    console.error("[getRevenueReport] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -303,9 +305,10 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
       },
       error: null,
     }
-  } catch (error: any) {
-    console.error("[getProfitLossReport] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -439,9 +442,10 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
       },
       error: null,
     }
-  } catch (error: any) {
-    console.error("[getDriverPaymentsReport] Unexpected error:", error)
-    return { error: error?.message || "Failed to get driver payments report", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to get driver payments report"
+    return { error: message, data: null }
   }
 }
 
@@ -546,9 +550,10 @@ export async function getMonthlyRevenueTrend(months = 6) {
     }
 
     return { data: trend, error: null }
-  } catch (error: any) {
-    console.error("Error in getMonthlyRevenueTrend:", error)
-    return { error: error?.message || "Failed to fetch revenue trend", data: [] }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to fetch revenue trend"
+    return { error: message, data: [] }
   }
 }
 

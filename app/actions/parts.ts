@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
 
 /** Matches `parts` in supabase/parts_inventory_schema.sql */
 const PARTS_SELECT = `
@@ -56,7 +57,7 @@ export async function getParts(filters?: {
 
     return { data, error: null }
   } catch (error: any) {
-    console.error("[getParts] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -88,7 +89,7 @@ export async function getPart(id: string) {
 
     return { data, error: null }
   } catch (error: any) {
-    console.error("[getPart] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }

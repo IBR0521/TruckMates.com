@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
+import * as Sentry from "@sentry/nextjs"
 
 /**
  * Get analytics dashboard data
@@ -146,7 +147,7 @@ export async function getAnalyticsData(dateRange: number = 30) {
       error: null,
     }
   } catch (error: any) {
-    console.error("[getAnalyticsData] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to load analytics", data: null }
   }
 }

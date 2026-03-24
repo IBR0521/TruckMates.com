@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getCompanySettings } from "./number-formats"
 import { handleDbError } from "@/lib/db-helpers"
+import * as Sentry from "@sentry/nextjs"
 
 /**
  * Get check calls for a load, route, or driver
@@ -62,7 +63,7 @@ export async function getCheckCalls(filters?: {
 
     return { data: data || [], error: null }
   } catch (error: any) {
-    console.error("[getCheckCalls] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }

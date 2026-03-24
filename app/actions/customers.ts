@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -89,7 +90,7 @@ export async function getCustomers(filters?: {
 
     return { data: data || [], error: null, count: count || 0 }
   } catch (error: any) {
-    console.error("[getCustomers] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
   }
 }
@@ -121,7 +122,7 @@ export async function getCustomer(id: string) {
 
     return { data, error: null }
   } catch (error: any) {
-    console.error("[getCustomer] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -421,15 +422,18 @@ export async function updateCustomer(
               new_value: change.new_value,
             },
           }).catch((err: any) => {
-            console.error("[updateCustomer] ❌ Audit log failed for field", change.field, ":", err.message)
+            Sentry.captureException(err)
             return null
           })
         )
         await Promise.all(auditLogPromises)
-        console.log("[updateCustomer] ✅ Audit logs created for", changes.length, "fields")
+        Sentry.captureMessage(
+          `[updateCustomer] Audit logs created for ${changes.length} fields`,
+          "info"
+        )
       }
     } catch (err: any) {
-      console.error("[updateCustomer] Failed to import audit log module:", err.message)
+      Sentry.captureException(err)
     }
   }
 

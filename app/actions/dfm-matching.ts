@@ -5,6 +5,7 @@
  * Automatically matches loads to available trucks
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -156,12 +157,14 @@ export async function autoMatchLoadToTrucks(loadId: string) {
               matches_count: matchesResult.data.length,
               top_match_score: matchesResult.data[0]?.match_score || 0,
               top_match_truck: matchesResult.data[0]?.truck_number || "Unknown"
-            }).catch(err => console.error("Notification failed:", err))
+            }).catch((err) => {
+              Sentry.captureException(err)
+            })
           }
         }
       }
     } catch (notificationError) {
-      console.error("Failed to send DFM notifications:", notificationError)
+      Sentry.captureException(notificationError)
       // Don't fail the function if notifications fail
     }
 

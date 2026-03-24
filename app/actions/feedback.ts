@@ -5,6 +5,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { sanitizeString } from "@/lib/validation"
 import { escapeHtml } from "@/lib/html-escape"
+import * as Sentry from "@sentry/nextjs"
 
 // Initialize Resend for email notifications (uses platform API key)
 async function getResendClient() {
@@ -12,7 +13,7 @@ async function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY
   
   if (!apiKey) {
-    console.error("[RESEND] Platform API key not configured")
+    Sentry.captureMessage("[RESEND] Platform API key not configured", "error")
     return null
   }
 
@@ -28,17 +29,17 @@ async function getResendClient() {
         .maybeSingle()
 
       if (integrationsError) {
-        console.error("[RESEND] Failed checking company integration:", integrationsError)
+        Sentry.captureException(integrationsError)
         return null
       }
 
       if (!integrations?.resend_enabled) {
-        console.log("[RESEND] Integration not enabled for company")
+        Sentry.captureMessage("[RESEND] Integration not enabled for company", "info")
         return null
       }
     }
   } catch (error) {
-    console.error("[RESEND] Error checking integration:", error)
+    Sentry.captureException(error)
     return null
   }
   
@@ -46,7 +47,7 @@ async function getResendClient() {
     const { Resend } = await import("resend")
     return new Resend(apiKey)
   } catch (error) {
-    console.error("[RESEND] Failed to initialize Resend client:", error)
+    Sentry.captureException(error)
     return null
   }
 }
@@ -63,7 +64,7 @@ async function sendFeedbackEmail(feedbackData: {
 }) {
   const resend = await getResendClient()
   if (!resend) {
-    console.log("[FEEDBACK EMAIL] Resend not configured, skipping email")
+    Sentry.captureMessage("[FEEDBACK EMAIL] Resend not configured, skipping email", "info")
     return { sent: false, reason: "Email service not configured" }
   }
 
@@ -153,13 +154,13 @@ async function sendFeedbackEmail(feedbackData: {
     })
 
     if (result.error) {
-      console.error("[FEEDBACK EMAIL ERROR]", result.error)
+      Sentry.captureException(result.error)
       return { sent: false, reason: result.error.message || "Failed to send email" }
     }
 
     return { sent: true, email: adminEmail, messageId: result.data?.id }
   } catch (error: any) {
-    console.error("[FEEDBACK EMAIL ERROR]", error)
+    Sentry.captureException(error)
     return { sent: false, reason: error?.message || "Failed to send email" }
   }
 }
@@ -207,7 +208,7 @@ export async function getFeedback(filters?: {
 
     return { data: feedback || [], error: null, count: count || 0 }
   } catch (error: any) {
-    console.error("[FEEDBACK] Error in getFeedback:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to fetch feedback", data: null, count: 0 }
   }
 }
@@ -340,13 +341,13 @@ export async function createFeedback(formData: {
       companyName: companyData?.name,
     }).catch((emailError) => {
       // Don't fail the feedback submission if email fails
-      console.error("[FEEDBACK] Failed to send email notification:", emailError)
+      Sentry.captureException(emailError)
     })
 
     revalidatePath("/dashboard/feedback")
     return { data: feedback, error: null }
   } catch (error: any) {
-    console.error("[FEEDBACK] Error in createFeedback:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to create feedback", data: null }
   }
 }

@@ -14,6 +14,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
 
 // Get Twilio client (returns null if not configured)
 async function getTwilioClient() {
@@ -30,12 +31,12 @@ async function getTwilioClient() {
     const dynamicImport = new Function('moduleName', 'return import(moduleName)')
     const twilioModule = await dynamicImport("twilio").catch(() => null)
     if (!twilioModule || !twilioModule.default) {
-      console.log("[SMS] Twilio SDK not installed. Run: npm install twilio")
+      Sentry.captureMessage("[SMS] Twilio SDK not installed. Run: npm install twilio", "warning")
       return null
     }
     return twilioModule.default(accountSid, authToken)
   } catch (error) {
-    console.log("[SMS] Twilio SDK not installed. Run: npm install twilio")
+    Sentry.captureMessage("[SMS] Twilio SDK not installed. Run: npm install twilio", "warning")
     return null
   }
 }
@@ -109,7 +110,7 @@ export async function sendSMS(phoneNumber: string, message: string) {
       error: null,
     }
   } catch (error: any) {
-    console.error("[SMS ERROR]", error)
+    Sentry.captureException(error)
     return {
       sent: false,
       error: error?.message || "Failed to send SMS",

@@ -5,6 +5,7 @@
  * Uses Google Maps API for traffic-aware routing and HOS integration
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getRouteDirections } from "./integrations-google-maps"
@@ -174,7 +175,7 @@ export async function updateTrafficRoutesForActiveRoutes() {
       const result = await updateTrafficAwareRoute(route.id)
       if (result.error) {
         errors++
-        console.error(`Failed to update traffic for route ${route.id}:`, result.error)
+        Sentry.captureMessage(`Failed to update traffic for route ${route.id}: ${result.error}`, "error")
       } else {
         updated++
       }

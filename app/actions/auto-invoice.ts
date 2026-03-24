@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { createInvoice } from "./accounting"
 import { getLoad } from "./loads"
+import * as Sentry from "@sentry/nextjs"
 
 /**
  * Auto-generate invoice when POD is captured
@@ -102,12 +103,12 @@ export async function autoGenerateInvoiceOnPOD(loadId: string) {
           const { linkDocumentToRecord } = await import("./document-routing")
           for (const doc of podDocuments) {
             await linkDocumentToRecord(doc.id, "invoice", invoiceResult.data.id).catch(
-              (err) => console.error("Failed to link POD to invoice:", err)
+              (err) => Sentry.captureException(err)
             )
           }
         }
       } catch (error) {
-        console.error("Failed to attach POD documents:", error)
+        Sentry.captureException(error)
         // Don't fail if document linking fails
       }
     }

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getDVIRsForAudit } from "./dvir-enhanced"
 import { escapeHtml } from "@/lib/html-escape"
+import * as Sentry from "@sentry/nextjs"
 
 /**
  * Generate DVIR Audit PDF HTML
@@ -357,7 +358,7 @@ export async function generateDVIRAuditPDF(filters: any) {
 
   return { html, error: null }
   } catch (error: any) {
-    console.error("[Generate DVIR Audit PDF] Error:", error)
+    Sentry.captureException(error)
     return { html: "", error: error.message || "Failed to generate DVIR audit PDF" }
   }
 }

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission, checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
+import * as Sentry from "@sentry/nextjs"
 
 export async function getDocuments(filters?: {
   limit?: number
@@ -41,7 +42,7 @@ export async function getDocuments(filters?: {
 
   return { data: documents || [], error: null, count: count || 0 }
   } catch (error: any) {
-    console.error("[getDocuments] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
   }
 }
@@ -99,7 +100,7 @@ export async function deleteDocument(id: string) {
 
     // Log storage error but don't fail if file doesn't exist
     if (storageError && !storageError.message.includes('not found')) {
-      console.warn("Failed to delete file from storage:", storageError.message)
+      Sentry.captureMessage(`Failed to delete file from storage: ${storageError.message}`, "warning")
     }
   }
 
@@ -114,7 +115,7 @@ export async function deleteDocument(id: string) {
   revalidatePath("/dashboard/documents")
   return { error: null }
   } catch (error: any) {
-    console.error("[deleteDocument] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred" }
   }
 }
@@ -180,7 +181,7 @@ export async function deleteDocuments(ids: string[]) {
 
     // Log storage error but don't fail if files don't exist
     if (storageError && !storageError.message.includes('not found')) {
-      console.warn("Failed to delete some files from storage:", storageError.message)
+      Sentry.captureMessage(`Failed to delete some files from storage: ${storageError.message}`, "warning")
     }
   }
 

@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
 import { createMaintenance } from "./maintenance"
 
 /**
@@ -155,7 +156,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
           skipped++
         }
       } catch (error) {
-        console.error(`[AUTO-MAINTENANCE] Failed to schedule ${serviceType}:`, error)
+        Sentry.captureException(error)
         skipped++
       }
     }
@@ -168,7 +169,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
     const { checkAndSendMaintenanceAlerts } = await import("./predictive-maintenance-alerts")
     await checkAndSendMaintenanceAlerts(truckId, currentMileage)
   } catch (error) {
-    console.error("[AUTO-MAINTENANCE] Failed to check maintenance alerts:", error)
+    Sentry.captureException(error)
     // Don't fail the function if alert check fails
   }
   
@@ -177,7 +178,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
     error: null,
   }
   } catch (error: any) {
-    console.error("[autoScheduleMaintenanceFromMileage] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -240,7 +241,7 @@ export async function autoScheduleMaintenanceForAllTrucks(): Promise<{
     error: null,
   }
   } catch (error: any) {
-    console.error("[autoScheduleMaintenanceForAllTrucks] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }

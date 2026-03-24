@@ -5,6 +5,7 @@
  * Advanced spatial queries using PostGIS functions
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -142,7 +143,7 @@ export async function calculateDistancePostGIS(
     })
 
     if (error) {
-      console.warn('PostGIS distance calculation failed:', error)
+      Sentry.captureException(error)
       return null
     }
 
@@ -151,7 +152,7 @@ export async function calculateDistancePostGIS(
       distance_miles: data.distance_meters / 1609.34
     }
   } catch (error) {
-    console.warn('PostGIS distance calculation error:', error)
+    Sentry.captureException(error)
     return null
   }
 }
@@ -194,7 +195,7 @@ export async function findNearestLocations(
 
     if (error) {
       // Fallback to old method if RPC function doesn't exist
-      console.warn('PostGIS nearest locations RPC failed, using fallback:', error)
+      Sentry.captureException(error)
       
       let query = supabase
         .from('eld_locations')

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
 
 export interface AddressBookContact {
   id: string
@@ -227,7 +228,7 @@ export async function getAddressBookContacts(filters?: {
 
     return { data: filteredContacts, error: null }
   } catch (error: any) {
-    console.error("[getAddressBookContacts] Unexpected error:", error)
+    Sentry.captureException(error)
     return { data: [], error: error?.message || "Failed to fetch contacts" }
   }
 }
@@ -382,7 +383,7 @@ export async function getAddressBookContact(
 
     return { data: contact, error: contact ? null : "Contact not found" }
   } catch (error: any) {
-    console.error("[getAddressBookContact] Unexpected error:", error)
+    Sentry.captureException(error)
     return { data: null, error: error?.message || "Failed to fetch contact" }
   }
 }

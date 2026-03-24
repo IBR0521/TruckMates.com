@@ -9,6 +9,7 @@
  * - Integration with Map & Zones (Geofencing)
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { geocodeAddress } from "./integrations-google-maps"
@@ -135,7 +136,10 @@ export async function createAddressBookEntry(
             
             if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
               geocoding_status = "failed"
-              console.error("[Address Book] Invalid coordinates from geocoding:", { lat, lng })
+              Sentry.captureMessage(
+                `[Address Book] Invalid coordinates from geocoding: lat=${lat} lng=${lng}`,
+                "error",
+              )
             } else {
               coordinates = { lat, lng }
               geocoding_status = "verified"
@@ -145,8 +149,10 @@ export async function createAddressBookEntry(
             }
           } else {
             geocoding_status = "failed"
-            // Log the error for debugging
-            console.error("[Address Book] Auto-geocoding failed:", geocodeResult.error)
+            Sentry.captureMessage(
+              `[Address Book] Auto-geocoding failed: ${geocodeResult.error}`,
+              "error",
+            )
           }
         } else {
           // Address too short, mark as pending

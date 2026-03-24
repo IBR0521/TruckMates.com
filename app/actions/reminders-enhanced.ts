@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -40,14 +41,15 @@ export async function autoCreateMaintenanceReminders(): Promise<{
     })
 
     if (error) {
-      console.error("Error auto-creating maintenance reminders:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
     return { data: { created: data || 0 }, error: null }
-  } catch (error: any) {
-    console.error("Unhandled error in autoCreateMaintenanceReminders:", error)
-    return { error: error.message || "Failed to create reminders", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to create reminders"
+    return { error: message, data: null }
   }
 }
 
@@ -104,9 +106,10 @@ export async function getDashboardReminders(limit: number = 5): Promise<{
     })
 
     return { data: allReminders.slice(0, limit), error: null }
-  } catch (error: any) {
-    console.error("Unhandled error in getDashboardReminders:", error)
-    return { error: error.message || "Failed to get reminders", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to get reminders"
+    return { error: message, data: null }
   }
 }
 

@@ -5,6 +5,7 @@
  * Track actual driven route from GPS locations and compare with planned route
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -122,7 +123,7 @@ export async function buildActualRoutesForCompleted() {
 
       if (result.error) {
         errors++
-        console.error(`Failed to build actual route for ${route.id}:`, result.error)
+        Sentry.captureMessage(`Failed to build actual route for ${route.id}: ${result.error}`, "error")
       } else {
         built++
       }

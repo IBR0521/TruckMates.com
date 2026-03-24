@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -34,9 +35,10 @@ export async function calculateMileage(origin: string, destination: string): Pro
       }
     }
     return { miles: null, error: "Invalid response from Google Maps API" }
-  } catch (error: any) {
-    console.error("Mileage calculation error:", error)
-    return { miles: null, error: error.message || "Failed to calculate mileage" }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to calculate mileage"
+    return { miles: null, error: message }
   }
 }
 

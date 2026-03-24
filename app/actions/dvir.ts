@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -530,7 +531,7 @@ export async function getDVIRStats(filters?: {
 
     if (error) {
       // Fallback to client-side calculation if RPC doesn't exist
-      console.warn("get_dvir_stats RPC not found, using fallback:", error)
+      Sentry.captureMessage(`get_dvir_stats RPC error, using fallback: ${error.message}`, "warning")
       let query = supabase
         .from("dvir")
         .select("id, status, defects_found, safe_to_operate, inspection_type")

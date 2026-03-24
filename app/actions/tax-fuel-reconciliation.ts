@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -480,7 +481,7 @@ export async function generateIFTAReport(quarter: number, year: number) {
     )
 
     if (breakdownError) {
-      console.error("Failed to create state breakdowns:", breakdownError)
+      Sentry.captureException(breakdownError)
     }
   }
 

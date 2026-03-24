@@ -1,8 +1,9 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedAuthContext } from "@/lib/auth/server"
+import { getAuthCompany, getCachedAuthContext } from "@/lib/auth/server"
 import { cache, cacheKeys } from "@/lib/cache"
+import * as Sentry from "@sentry/nextjs"
 
 /**
  * FAST dashboard stats - optimized for speed with aggressive timeouts
@@ -16,7 +17,7 @@ export async function getDashboardStats() {
     } catch (clientError: any) {
       // Only log in development to improve performance
       if (process.env.NODE_ENV === 'development') {
-        console.error("Failed to create Supabase client:", clientError)
+        Sentry.captureException(clientError)
       }
       const errorMessage = clientError?.message || "Failed to connect to database"
       
@@ -138,7 +139,7 @@ export async function getDashboardStats() {
     } catch (countError) {
       // Only log in development
       if (process.env.NODE_ENV === 'development') {
-        console.error("Error fetching counts:", countError)
+        Sentry.captureException(countError)
       }
       // If counts fail, use zeros
       countResults = Array(10).fill({ count: 0 })
@@ -186,7 +187,7 @@ export async function getDashboardStats() {
     ]).catch((error) => {
       // Log error in development
       if (process.env.NODE_ENV === 'development') {
-        console.warn("Recent activities query failed:", error)
+        Sentry.captureException(error)
       }
       // Return empty arrays if query fails
       return Array(14).fill({ data: [] })
@@ -230,29 +231,10 @@ export async function getDashboardStats() {
       recentDvir = results[12]?.data || []
       recentGeofences = results[13]?.data || []
       
-      // Log in development for debugging
-      if (process.env.NODE_ENV === 'development') {
-        console.log("Recent activities data:", {
-          loads: recentLoads.length,
-          drivers: recentDrivers.length,
-          maintenance: recentMaintenance.length,
-          routes: recentRoutes.length,
-          invoices: recentInvoices.length,
-          settlements: recentSettlements.length,
-          addressBook: recentAddressBook.length,
-          trucks: recentTrucks.length,
-          customers: recentCustomers.length,
-          vendors: recentVendors.length,
-          documents: recentDocuments.length,
-          bols: recentBols.length,
-          dvir: recentDvir.length,
-          geofences: recentGeofences.length,
-        })
-      }
     } catch (error) {
       // If there's an error, use empty arrays
       if (process.env.NODE_ENV === 'development') {
-        console.warn("Recent activities query failed:", error)
+        Sentry.captureException(error)
       }
     }
 
@@ -509,7 +491,7 @@ export async function getDashboardStats() {
       // If timeout, continue with empty arrays
       // Only log in development
       if (process.env.NODE_ENV === 'development') {
-        console.warn("Card data queries timed out, using empty data")
+        Sentry.captureMessage("Card data queries timed out, using empty data", "warning")
       }
     }
 
@@ -647,7 +629,7 @@ export async function getDashboardStats() {
     } catch (error) {
       // Only log in development
       if (process.env.NODE_ENV === 'development') {
-        console.error("Error fetching revenue trend:", error)
+        Sentry.captureException(error)
       }
       // Generate empty data for last 7 days if error occurs
       const now = new Date()
@@ -676,7 +658,7 @@ export async function getDashboardStats() {
     } catch (error) {
       // Only log in development
       if (process.env.NODE_ENV === 'development') {
-        console.error("Error fetching load status:", error)
+        Sentry.captureException(error)
       }
       allLoads = []
     }
@@ -726,7 +708,7 @@ export async function getDashboardStats() {
     } catch (error) {
       // Only log in development
       if (process.env.NODE_ENV === 'development') {
-        console.error("Error fetching alerts:", error)
+        Sentry.captureException(error)
       }
       // Use empty arrays if alerts fail
     }
@@ -773,7 +755,7 @@ export async function getDashboardStats() {
   } catch (error: any) {
     // Only log in development
     if (process.env.NODE_ENV === 'development') {
-      console.error("Error in getDashboardStats:", error)
+      Sentry.captureException(error)
     }
     // Return minimal data instead of error to prevent UI blocking
     return {
@@ -810,3 +792,22 @@ export async function getDashboardStats() {
   }
 }
 
+/**
+ * One server action for the dashboard home: company + stats together.
+ * Cuts the client from two sequential round-trips (auth then stats) to one parallel call.
+ */
+export async function getDashboardBootstrap() {
+  const [auth, stats] = await Promise.all([
+    getAuthCompany(),
+    getDashboardStats(),
+  ])
+  return {
+    authCompany:
+      auth.companyId != null
+        ? { companyId: auth.companyId, companyName: auth.companyName }
+        : null,
+    authError: auth.error ?? null,
+    dashboardData: stats.data,
+    dashboardError: stats.error,
+  }
+}

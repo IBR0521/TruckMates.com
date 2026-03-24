@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { handleDbError } from "@/lib/db-helpers"
+import * as Sentry from "@sentry/nextjs"
 
 /** Matches `public.chat_threads` in supabase/trucklogics_features_schema.sql */
 const CHAT_THREAD_SELECT = `
@@ -69,7 +70,7 @@ export async function getChatThreads(filters?: {
 
     return { data: threads || [], error: null }
   } catch (error: any) {
-    console.error("[getChatThreads] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "Failed to load chat threads", data: null }
   }
 }

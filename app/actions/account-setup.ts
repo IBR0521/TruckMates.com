@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
 import { createDriver } from "./drivers"
 import { createTruck } from "./trucks"
@@ -84,7 +85,7 @@ export async function updateCompanyProfile(data: {
     )
 
     if (rpcError) {
-      console.error("[updateCompanyProfile] RPC error:", rpcError)
+      Sentry.captureException(rpcError)
       // Fallback to direct update if RPC doesn't exist
       const updateData: any = {}
       if (data.business_address) updateData.address = data.business_address
@@ -182,11 +183,11 @@ async function enablePlatformIntegrations(companyId: string) {
       p_company_id: companyId
     })
     if (error) {
-      console.warn('[SETUP] Failed to auto-enable platform integrations:', error.message)
+      Sentry.captureException(error)
       // Don't fail setup if this fails - it's optional
     }
   } catch (error) {
-    console.warn('[SETUP] Error enabling platform integrations:', error)
+    Sentry.captureException(error)
     // Don't fail setup if this fails
   }
 }

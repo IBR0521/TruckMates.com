@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -44,7 +45,7 @@ export async function getMaintenance(filters?: {
 
     return { data: maintenance || [], error: null, count: count || 0 }
   } catch (error: any) {
-    console.error("[getMaintenance] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null, count: 0 }
   }
 }
@@ -150,12 +151,12 @@ export async function createMaintenance(formData: {
       scheduled_date: formData.scheduled_date,
     })
     } catch (error) {
-      console.warn("[createMaintenance] Webhook trigger failed:", error)
+      Sentry.captureException(error)
     }
     
     return { data, error: null }
   } catch (error: any) {
-    console.error("[createMaintenance] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }

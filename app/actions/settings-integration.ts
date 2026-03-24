@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
 
 export async function getIntegrationSettings() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
@@ -101,7 +102,7 @@ export async function getIntegrationSettings() {
 
     return { data: safeData, error: null }
   } catch (error: any) {
-    console.error("[getIntegrationSettings] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }

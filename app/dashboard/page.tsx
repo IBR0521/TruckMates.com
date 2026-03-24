@@ -21,8 +21,7 @@ import {
 import Link from "next/link"
 import { useMemo, useState, useEffect } from "react"
 import { toast } from "sonner"
-import { useDashboardStats } from "@/lib/hooks/use-dashboard-stats"
-import { useAuthCompany } from "@/lib/hooks/use-auth-company"
+import { useDashboardPageData } from "@/lib/hooks/use-dashboard-page"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -120,8 +119,9 @@ function TimeAgo({ timestamp }: { timestamp: string | null | undefined }) {
 }
 
 export default function DashboardPage() {
-  const { data: authCompany } = useAuthCompany()
-  const { data: dashboardData, isLoading, error } = useDashboardStats()
+  const { data, isLoading, error } = useDashboardPageData()
+  const authCompany = data?.authCompany ?? null
+  const dashboardData = data?.dashboardData
 
   // Check email service configuration (for managers/owners only)
   const [emailServiceStatus, setEmailServiceStatus] = useState<{ configured: boolean; isManager: boolean } | null>(null)

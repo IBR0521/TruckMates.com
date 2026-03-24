@@ -10,6 +10,7 @@
  * - Route sequencing for efficiency
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -63,7 +64,7 @@ async function getCoordinates(address: string): Promise<{ lat: number; lng: numb
     }
     return null
   } catch (error) {
-    console.error("Geocoding error:", error)
+    Sentry.captureException(error)
     return null
   }
 }
@@ -98,7 +99,7 @@ async function getRouteDistanceAndTime(
     }
     return null
   } catch (error) {
-    console.error("Distance Matrix API error:", error)
+    Sentry.captureException(error)
     return null
   }
 }
@@ -137,7 +138,7 @@ async function getTollCost(
     }
     return 0
   } catch (error) {
-    console.error("Toll cost calculation error:", error)
+    Sentry.captureException(error)
     return 0
   }
 }
@@ -533,7 +534,8 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
       total_cost: optimizationResult.totalCost,
     })
   } catch (error) {
-    console.warn("[optimizeMultiStopRoute] Webhook trigger failed:", error)
+    const msg = error instanceof Error ? error.message : String(error)
+    Sentry.captureMessage(`[optimizeMultiStopRoute] Webhook trigger failed: ${msg}`, "warning")
   }
   
   return {

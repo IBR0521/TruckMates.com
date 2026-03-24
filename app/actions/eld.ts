@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -34,9 +35,10 @@ export async function getELDDevices() {
     }
 
     return { data: devices, error: null }
-  } catch (error: any) {
-    console.error("[getELDDevices] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -75,9 +77,10 @@ export async function getELDDevice(id: string) {
     }
 
     return { data: device, error: null }
-  } catch (error: any) {
-    console.error("[getELDDevice] Unexpected error:", error)
-    return { error: error?.message || "An unexpected error occurred", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 
@@ -151,9 +154,10 @@ export async function createELDDevice(formData: {
 
     revalidatePath("/dashboard/eld")
     return { data, error: null }
-  } catch (error: any) {
-    console.error("[createELDDevice] Unexpected error:", error)
-    return { error: error?.message || "Failed to create ELD device", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to create ELD device"
+    return { error: message, data: null }
   }
 }
 
@@ -222,9 +226,10 @@ export async function updateELDDevice(
 
     revalidatePath("/dashboard/eld")
     return { data, error: null }
-  } catch (error: any) {
-    console.error("[updateELDDevice] Unexpected error:", error)
-    return { error: error?.message || "Failed to update ELD device", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to update ELD device"
+    return { error: message, data: null }
   }
 }
 
@@ -262,9 +267,10 @@ export async function deleteELDDevice(id: string) {
 
     revalidatePath("/dashboard/eld")
     return { error: null, data: { id } }
-  } catch (error: any) {
-    console.error("[deleteELDDevice] Unexpected error:", error)
-    return { error: error?.message || "Failed to delete ELD device", data: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? error.message : "Failed to delete ELD device"
+    return { error: message, data: null }
   }
 }
 

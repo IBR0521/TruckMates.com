@@ -6,6 +6,7 @@
  * Provides hyper-accurate arrival times that update every 60 seconds
  */
 
+import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -147,7 +148,7 @@ export async function updateRouteETA(routeId: string) {
         const { updateTrafficAwareRoute } = await import("./enhanced-eta")
         await updateTrafficAwareRoute(routeId)
       } catch (error) {
-        console.error("Failed to update traffic route (non-blocking):", error)
+        Sentry.captureException(error)
       }
     }
 
@@ -195,7 +196,7 @@ export async function updateRouteETA(routeId: string) {
         return { data: { enhanced: true, eta: enhancedResult.data }, error: null }
       }
     } catch (error) {
-      console.error("Enhanced ETA failed, falling back to standard:", error)
+      Sentry.captureException(error)
     }
 
     // Fallback to original calculation

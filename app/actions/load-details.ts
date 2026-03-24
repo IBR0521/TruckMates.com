@@ -7,6 +7,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
 
 export interface LoadDetails {
   id: string
@@ -197,7 +198,7 @@ export async function getLoadDetails(loadId: string): Promise<{
       }
     } catch (error) {
       // Notes table might not exist, that's okay
-      console.log("[getLoadDetails] Notes table not found")
+      Sentry.captureMessage("[getLoadDetails] Notes table not found", "info")
     }
 
     // Get driver HOS if driver is assigned
@@ -226,7 +227,7 @@ export async function getLoadDetails(loadId: string): Promise<{
           current_status: currentStatus,
         }
       } catch (error) {
-        console.error("[getLoadDetails] Failed to get driver HOS:", error)
+        Sentry.captureException(error)
       }
     }
 

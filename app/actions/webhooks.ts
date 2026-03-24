@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import crypto from "crypto"
+import * as Sentry from "@sentry/nextjs"
 
 /** Matches `webhooks` in supabase/webhooks_schema.sql */
 const WEBHOOK_SELECT = "id, company_id, url, events, secret, active, description, created_at, updated_at"
@@ -54,7 +55,7 @@ export async function getWebhooks() {
 
     return { data, error: null }
   } catch (error: any) {
-    console.error("[getWebhooks] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -87,7 +88,7 @@ export async function getWebhook(id: string) {
 
     return { data, error: null }
   } catch (error: any) {
-    console.error("[getWebhook] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -474,7 +475,7 @@ export async function triggerWebhook(
   // Deliver to all matching webhooks (async, don't wait)
   webhooks.forEach((webhook: { id: string; [key: string]: any }) => {
     deliverWebhook(webhook.id, eventType, payload).catch((error) => {
-      console.error(`[WEBHOOK] Failed to deliver webhook ${webhook.id}:`, error)
+      Sentry.captureException(error)
     })
   })
 }

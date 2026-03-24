@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { sendNotification } from "./notifications"
 import { handleDbError } from "@/lib/db-helpers"
+import * as Sentry from "@sentry/nextjs"
 
 /**
  * Get alert rules
@@ -34,7 +35,7 @@ export async function getAlertRules() {
 
   return { data: data || [], error: null }
   } catch (error: any) {
-    console.error("[getAlertRules] Unexpected error:", error)
+    Sentry.captureException(error)
     return { data: [], error: error?.message || "An unexpected error occurred" }
   }
 }
@@ -105,7 +106,7 @@ export async function createAlertRule(formData: {
     revalidatePath("/dashboard/settings/alerts")
     return { data, error: null }
   } catch (error: any) {
-    console.error("[createAlertRule] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -198,7 +199,7 @@ export async function updateAlertRule(
   revalidatePath("/dashboard/settings/alerts")
   return { data, error: null }
   } catch (error: any) {
-    console.error("[updateAlertRule] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -253,7 +254,7 @@ export async function deleteAlertRule(ruleId: string) {
   revalidatePath("/dashboard/settings/alerts")
   return { data: { success: true }, error: null }
   } catch (error: any) {
-    console.error("[deleteAlertRule] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -288,7 +289,7 @@ export async function getAlertCounts() {
     error: null
   }
   } catch (error: any) {
-    console.error("[getAlertCounts] Unexpected error:", error)
+    Sentry.captureException(error)
     return {
       data: {
         active: 0,
@@ -389,7 +390,7 @@ export async function getAlerts(filters?: {
 
   return { data: data || [], error: null }
   } catch (error: any) {
-    console.error("[getAlerts] Unexpected error:", error)
+    Sentry.captureException(error)
     return { data: [], error: error?.message || "An unexpected error occurred" }
   }
 }
@@ -596,7 +597,7 @@ export async function createAlert(formData: {
   revalidatePath("/dashboard/alerts")
   return { data: alert, error: null }
   } catch (error: any) {
-    console.error("[createAlert] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -626,7 +627,7 @@ export async function processAlertEscalations() {
     .eq("is_active", true)
 
   if (rulesError) {
-    console.error("[processAlertEscalations] Failed to load alert rules:", rulesError)
+    Sentry.captureException(rulesError)
     return { error: rulesError.message || "Failed to load alert rules", data: null }
   }
 
@@ -668,7 +669,7 @@ export async function processAlertEscalations() {
       .lte("created_at", threshold)
 
     if (alertsError) {
-      console.error("[processAlertEscalations] Failed to load alerts:", alertsError)
+      Sentry.captureException(alertsError)
       continue
     }
 
@@ -703,7 +704,7 @@ export async function processAlertEscalations() {
           .eq("company_id", rule.company_id)
 
         if (updateError) {
-          console.error("[processAlertEscalations] Failed to update alert:", updateError)
+          Sentry.captureException(updateError)
           continue
         }
 
@@ -763,14 +764,14 @@ export async function processAlertEscalations() {
           }).catch(() => {})
         }
       } catch (error: any) {
-        console.error("[processAlertEscalations] Error processing alert:", error)
+        Sentry.captureException(error)
       }
     }
   }
 
   return { data: { escalated: escalatedCount }, error: null }
   } catch (error: any) {
-    console.error("[processAlertEscalations] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: { escalated: 0 } }
   }
 }
@@ -812,7 +813,7 @@ export async function acknowledgeAlert(id: string) {
   revalidatePath("/dashboard/alerts")
   return { data, error: null }
   } catch (error: any) {
-    console.error("[acknowledgeAlert] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }
@@ -856,7 +857,7 @@ export async function resolveAlert(id: string) {
   revalidatePath("/dashboard/alerts")
   return { data, error: null }
   } catch (error: any) {
-    console.error("[resolveAlert] Unexpected error:", error)
+    Sentry.captureException(error)
     return { error: error?.message || "An unexpected error occurred", data: null }
   }
 }

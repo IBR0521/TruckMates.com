@@ -5,6 +5,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
+import * as Sentry from "@sentry/nextjs"
 
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
@@ -73,13 +74,13 @@ export async function getIFTATaxRates(filters?: {
     const { data, error } = await query
 
     if (error) {
-      console.error("Error fetching IFTA tax rates:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
     return { data: data as IFTATaxRate[], error: null }
   } catch (error: any) {
-    console.error("Unhandled error in getIFTATaxRates:", error)
+    Sentry.captureException(error)
     return { error: error.message || "Failed to get tax rates", data: null }
   }
 }
@@ -111,7 +112,7 @@ export async function getIFTATaxRate(
     })
 
     if (error) {
-      console.error("Error fetching IFTA tax rate:", error)
+      Sentry.captureException(error)
       // FIXED: Distinguish 'rate not found' (use default, no error) from 'DB error' (return error)
       // For real database failures, return error so callers can alert the user
       return { data: null, error: `Database error: ${error.message}. Tax rates could not be verified.` }
@@ -124,7 +125,7 @@ export async function getIFTATaxRate(
 
     return { data: data || 0.25, error: null }
   } catch (error: any) {
-    console.error("Unhandled error in getIFTATaxRate:", error)
+    Sentry.captureException(error)
     // FIXED: Return error for real exceptions, not silent default
     return { data: null, error: `Failed to get tax rate: ${error.message}` }
   }
@@ -155,7 +156,7 @@ export async function getIFTATaxRatesForQuarter(
     })
 
     if (error) {
-      console.error("Error fetching IFTA tax rates for quarter:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
@@ -169,7 +170,7 @@ export async function getIFTATaxRatesForQuarter(
 
     return { data: ratesMap, error: null }
   } catch (error: any) {
-    console.error("Unhandled error in getIFTATaxRatesForQuarter:", error)
+    Sentry.captureException(error)
     return { error: error.message || "Failed to get tax rates", data: null }
   }
 }
@@ -226,14 +227,14 @@ export async function upsertIFTATaxRate(formData: {
       .single()
 
     if (error) {
-      console.error("Error upserting IFTA tax rate:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
     revalidatePath("/dashboard/accounting/ifta/tax-rates")
     return { data: data as IFTATaxRate, error: null }
   } catch (error: any) {
-    console.error("Unhandled error in upsertIFTATaxRate:", error)
+    Sentry.captureException(error)
     return { error: error.message || "Failed to update tax rate", data: null }
   }
 }
@@ -288,14 +289,14 @@ export async function bulkUpdateIFTATaxRates(
     })
 
     if (error) {
-      console.error("Error bulk updating IFTA tax rates:", error)
+      Sentry.captureException(error)
       return { error: error.message, data: null }
     }
 
     revalidatePath("/dashboard/accounting/ifta/tax-rates")
     return { data: { updated: rates.length }, error: null }
   } catch (error: any) {
-    console.error("Unhandled error in bulkUpdateIFTATaxRates:", error)
+    Sentry.captureException(error)
     return { error: error.message || "Failed to bulk update tax rates", data: null }
   }
 }
@@ -326,14 +327,14 @@ export async function deleteIFTATaxRate(id: string): Promise<{
       .eq("company_id", ctx.companyId)
 
     if (error) {
-      console.error("Error deleting IFTA tax rate:", error)
+      Sentry.captureException(error)
       return { error: error.message }
     }
 
     revalidatePath("/dashboard/accounting/ifta/tax-rates")
     return { error: null }
   } catch (error: any) {
-    console.error("Unhandled error in deleteIFTATaxRate:", error)
+    Sentry.captureException(error)
     return { error: error.message || "Failed to delete tax rate" }
   }
 }

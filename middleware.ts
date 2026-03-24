@@ -2,6 +2,21 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+
+  const isProtectedRoute =
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/marketplace/dashboard') ||
+    pathname.startsWith('/account-setup') ||
+    pathname.startsWith('/portal') ||
+    pathname.startsWith('/tracking')
+
+  // Skip Supabase for public routes so marketing/login pages are not blocked by
+  // session refresh / getUser network latency (or hangs when offline / misconfigured).
+  if (!isProtectedRoute) {
+    return NextResponse.next({ request })
+  }
+
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -26,54 +41,22 @@ export async function middleware(request: NextRequest) {
       },
     })
 
-    // Refresh session
     await supabase.auth.getSession()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    // Check authentication for protected routes
-    const { data: { user } } = await supabase.auth.getUser()
-
-    const isPublicRoute = 
-      request.nextUrl.pathname.startsWith('/login') ||
-      request.nextUrl.pathname.startsWith('/register') ||
-      request.nextUrl.pathname.startsWith('/plans') ||
-      request.nextUrl.pathname.startsWith('/pricing') ||
-      request.nextUrl.pathname.startsWith('/demo') ||
-      request.nextUrl.pathname.startsWith('/privacy') ||
-      request.nextUrl.pathname.startsWith('/terms') ||
-      request.nextUrl.pathname === '/'
-
-    const isProtectedRoute = 
-      request.nextUrl.pathname.startsWith('/dashboard') ||
-      request.nextUrl.pathname.startsWith('/marketplace/dashboard') ||
-      request.nextUrl.pathname.startsWith('/account-setup') ||
-      request.nextUrl.pathname.startsWith('/portal') ||
-      request.nextUrl.pathname.startsWith('/tracking')
-
-    if (isProtectedRoute && !user) {
+    if (!user) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
       return NextResponse.redirect(url)
     }
 
     return response
-  } catch (error) {
-    // EXT-001 FIX: Fail closed, not open - redirect to login on any error
-    // If Supabase is unreachable, don't allow unauthenticated access to protected routes
-    const isProtectedRoute = 
-      request.nextUrl.pathname.startsWith('/dashboard') ||
-      request.nextUrl.pathname.startsWith('/marketplace/dashboard') ||
-      request.nextUrl.pathname.startsWith('/account-setup') ||
-      request.nextUrl.pathname.startsWith('/portal') ||
-      request.nextUrl.pathname.startsWith('/tracking')
-    
-    if (isProtectedRoute) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      return NextResponse.redirect(url)
-    }
-    
-    // For public routes, allow through even on error
-    return NextResponse.next({ request })
+  } catch {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
   }
 }
 
@@ -82,5 +65,3 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
-
-
