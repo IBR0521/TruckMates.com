@@ -97,9 +97,7 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
       let chromiumArgs: string[] | undefined
 
       try {
-        // @ts-ignore - webpackIgnore: true prevents bundling these optional dependencies
         const puppeteerCore = await import(/* webpackIgnore: true */ "puppeteer-core").catch(() => null)
-        // @ts-ignore - @sparticuz/chromium is optional and may not be installed
         const chromiumModule = await import(/* webpackIgnore: true */ "@sparticuz/chromium").catch(() => null)
         
         if (puppeteerCore && chromiumModule) {
@@ -110,8 +108,8 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
           chromiumArgs = chromium.args
         }
       } catch {
-        // Fallback to regular puppeteer for local development
-        // @ts-ignore - webpackIgnore: true prevents bundling this optional dependency
+        // Fallback: full `puppeteer` is optional (dev); production uses puppeteer-core + chromium
+        // @ts-expect-error — `puppeteer` may not be installed; optional fallback for local dev
         puppeteer = await import(/* webpackIgnore: true */ "puppeteer").catch(() => null)
       }
       

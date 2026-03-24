@@ -1,9 +1,9 @@
 // Supabase Edge Function: HOS Exception Alerts
 // Runs every 15 minutes to scan driver HOS status and send proactive alerts
 
-// @ts-ignore - Deno runtime import
+// @ts-expect-error — Deno URL imports are not resolved by the app TypeScript project
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-// @ts-ignore - Deno runtime import
+// @ts-expect-error — Deno URL imports are not resolved by the app TypeScript project
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 // Deno global type declaration for TypeScript

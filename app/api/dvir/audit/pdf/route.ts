@@ -53,22 +53,18 @@ export async function GET(req: NextRequest) {
 
       // Try puppeteer-core first (for serverless/Vercel)
       try {
-        // @ts-ignore - webpackIgnore: true prevents bundling these optional dependencies
         const puppeteerCore = await import(/* webpackIgnore: true */ "puppeteer-core").catch(() => null)
-        // @ts-ignore - @sparticuz/chromium may not be installed in all environments
         const chromiumModule = await import(/* webpackIgnore: true */ "@sparticuz/chromium").catch(() => null)
         const chromium = chromiumModule?.default || chromiumModule
         
         if (puppeteerCore && chromium) {
           puppeteer = puppeteerCore
-          // @ts-ignore - @sparticuz/chromium types may not be complete
           executablePath = await (chromium as any).executablePath()
-          // @ts-ignore - @sparticuz/chromium types may not be complete
           chromiumArgs = (chromium as any).args
         }
       } catch {
-        // Fallback to regular puppeteer for local development
-        // @ts-ignore - webpackIgnore: true prevents bundling this optional dependency
+        // Fallback: full `puppeteer` is optional (dev); production uses puppeteer-core + chromium
+        // @ts-expect-error — `puppeteer` may not be installed; optional fallback for local dev
         puppeteer = await import(/* webpackIgnore: true */ "puppeteer").catch(() => null)
       }
 

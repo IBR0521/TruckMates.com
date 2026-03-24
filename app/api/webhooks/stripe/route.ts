@@ -11,7 +11,7 @@ function getStripe() {
   try {
     return new Stripe(secretKey, {
       // Use the same stable public API version as server-side Stripe client
-      apiVersion: "2025-11-17.clover",
+      apiVersion: "2026-02-25.clover",
     })
   } catch (error) {
     return null

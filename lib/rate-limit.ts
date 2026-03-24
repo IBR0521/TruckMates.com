@@ -66,9 +66,9 @@ export async function rateLimit(
     
     if (redisUrl && redisToken) {
       // Use Upstash Redis for production-grade rate limiting
-      // @ts-ignore - Optional dependency, may not be installed
+      // @ts-expect-error — Optional @upstash/* packages; install when using Redis rate limiting
       const { Ratelimit } = await import(/* webpackIgnore: true */ "@upstash/ratelimit")
-      // @ts-ignore - Optional dependency, may not be installed
+      // @ts-expect-error — Optional @upstash/* packages; install when using Redis rate limiting
       const { Redis } = await import(/* webpackIgnore: true */ "@upstash/redis")
       
       const redis = new Redis({ url: redisUrl, token: redisToken })

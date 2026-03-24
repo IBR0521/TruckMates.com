@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { uploadDocument } from "@/app/actions/documents"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { sanitizeString } from "@/lib/validation"
-import * as bolActions from "@/app/actions/bol"
+import { updateBOLSignature } from "@/app/actions/bol"
 
 /**
  * Upload BOL signature from mobile app
@@ -117,12 +117,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Update BOL with signature
-    // @ts-ignore - updateBOLSignature exists but TypeScript may not recognize it
-    const updateResult = await (bolActions as any).updateBOLSignature(bolId, signatureType, {
+    const updateResult = await updateBOLSignature(
+      bolId,
+      signatureType as "shipper" | "driver" | "consignee",
+      {
       signature_url: signatureUrl,
       signed_by: sanitizedSignedByName, // FIXED: Sanitized
       signed_at: new Date().toISOString(),
-    })
+    }
+    )
 
     if (updateResult.error) {
       return NextResponse.json(
