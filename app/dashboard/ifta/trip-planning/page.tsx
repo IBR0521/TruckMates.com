@@ -1,11 +1,22 @@
 "use client"
 
 import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
 import { ArrowLeft, Calculator } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { TripPlanningEstimatorPanel } from "@/components/trip-planning-estimator-panel"
+import { useEffect } from "react"
 
 export default function IFTATripPlanningPage() {
+  const router = useRouter()
+  const pathname = usePathname()
+
+  useEffect(() => {
+    if (pathname === "/dashboard/ifta/trip-planning") {
+      router.replace("/dashboard/ifta?tab=trip-planning")
+    }
+  }, [pathname, router])
+
   return (
     <div className="w-full">
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">

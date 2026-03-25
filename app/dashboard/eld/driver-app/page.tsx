@@ -108,7 +108,7 @@ export default function DriverAppPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <div className="bg-transparent p-0">
       <div className="max-w-md mx-auto space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -192,7 +192,7 @@ export default function DriverAppPage() {
 
             {/* Remaining Hours - Big Numbers */}
             <div className="grid grid-cols-2 gap-4">
-              <Card className="p-6 bg-card/50 border-border">
+              <Card className="p-6 bg-card border-border">
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground mb-2">Remaining Driving</p>
                   <p
@@ -210,7 +210,7 @@ export default function DriverAppPage() {
                 </div>
               </Card>
 
-              <Card className="p-6 bg-card/50 border-border">
+              <Card className="p-6 bg-card border-border">
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground mb-2">Remaining On-Duty</p>
                   <p

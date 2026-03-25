@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -28,6 +29,15 @@ import {
 import { format } from "date-fns"
 
 export default function DriverAchievementsPage() {
+  const router = useRouter()
+  const pathname = usePathname()
+
+  useEffect(() => {
+    if (pathname === "/dashboard/drivers/achievements") {
+      router.replace("/dashboard/drivers?tab=performance&performanceTab=achievements")
+    }
+  }, [pathname, router])
+
   const [badges, setBadges] = useState<any[]>([])
   const [performance, setPerformance] = useState<any>(null)
   const [drivers, setDrivers] = useState<any[]>([])

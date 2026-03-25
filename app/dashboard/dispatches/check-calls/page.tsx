@@ -13,6 +13,7 @@ import { getDrivers } from "@/app/actions/drivers"
 import { getLoads } from "@/app/actions/loads"
 import { Radio, Clock, MapPin, AlertTriangle, CheckCircle2, XCircle } from "lucide-react"
 import { format } from "date-fns"
+import { usePathname, useRouter } from "next/navigation"
 
 export default function CheckCallsPage() {
   const [checkCalls, setCheckCalls] = useState<any[]>([])
@@ -21,6 +22,15 @@ export default function CheckCallsPage() {
   const [filter, setFilter] = useState("all") // all, pending, completed, missed, overdue
   const [drivers, setDrivers] = useState<any[]>([])
   const [loads, setLoads] = useState<any[]>([])
+
+  const router = useRouter()
+  const pathname = usePathname()
+
+  useEffect(() => {
+    if (pathname === "/dashboard/dispatches/check-calls") {
+      router.replace("/dashboard/dispatches?tab=check-calls")
+    }
+  }, [pathname, router])
 
   useEffect(() => {
     loadData()

@@ -34,8 +34,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import Link from "next/link"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useRouter, useSearchParams } from "next/navigation"
+import AlertsPage from "../alerts/page"
+import RemindersPage from "../reminders/page"
 
-export default function NotificationsPage() {
+function NotificationsTabContent() {
   const [notifications, setNotifications] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [filters, setFilters] = useState({
@@ -363,6 +367,40 @@ export default function NotificationsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function NotificationsPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const tabParam = (searchParams.get("tab") || "notifications").toLowerCase()
+  const activeTab = ["notifications", "alerts", "reminders"].includes(tabParam) ? tabParam : "notifications"
+
+  return (
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) =>
+        router.push(`/dashboard/notifications?tab=${encodeURIComponent(value)}`)
+      }
+      className="w-full"
+    >
+      <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-3">
+        <TabsTrigger value="notifications">Notifications</TabsTrigger>
+        <TabsTrigger value="alerts">Alerts</TabsTrigger>
+        <TabsTrigger value="reminders">Reminders</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="notifications">
+        <NotificationsTabContent />
+      </TabsContent>
+      <TabsContent value="alerts">
+        <AlertsPage />
+      </TabsContent>
+      <TabsContent value="reminders">
+        <RemindersPage />
+      </TabsContent>
+    </Tabs>
   )
 }
 

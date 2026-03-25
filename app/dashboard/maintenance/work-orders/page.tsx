@@ -8,10 +8,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Search, Filter, Eye, Wrench, Calendar, DollarSign, Truck } from "lucide-react"
 import Link from "next/link"
 import { useState, useEffect } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { getWorkOrders } from "@/app/actions/maintenance-enhanced"
 
 export default function WorkOrdersPage() {
+  const router = useRouter()
+  const pathname = usePathname()
+
+  useEffect(() => {
+    if (pathname === "/dashboard/maintenance/work-orders") {
+      router.replace("/dashboard/maintenance?tab=work-orders")
+    }
+  }, [pathname, router])
+
   const [workOrders, setWorkOrders] = useState<any[]>([])
   const [filteredWorkOrders, setFilteredWorkOrders] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)

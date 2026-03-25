@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { exportToExcel } from "@/lib/export-utils"
 import { toast } from "sonner"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useState, useEffect } from "react"
 import { getMaintenance, deleteMaintenance } from "@/app/actions/maintenance"
 import {
@@ -22,9 +22,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import WorkOrdersPage from "./work-orders/page"
+import FaultCodeRulesPage from "./fault-code-rules/page"
+import PredictiveMaintenancePage from "./predictive/page"
 
 export default function MaintenancePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const tabParam = (searchParams.get("tab") || "schedule").toLowerCase()
+  const activeTab = ["schedule", "work-orders", "predictive", "fault-code-rules"].includes(tabParam)
+    ? tabParam
+    : "schedule"
+
   const [maintenanceRecords, setMaintenanceRecords] = useState<any[]>([])
   const [filteredMaintenance, setFilteredMaintenance] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -111,7 +122,20 @@ export default function MaintenancePage() {
   }
 
   return (
-    <div className="w-full">
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => router.push(`/dashboard/maintenance?tab=${encodeURIComponent(value)}`)}
+      className="w-full"
+    >
+      <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-4">
+        <TabsTrigger value="schedule">Schedule</TabsTrigger>
+        <TabsTrigger value="work-orders">Work Orders</TabsTrigger>
+        <TabsTrigger value="predictive">Predictive</TabsTrigger>
+        <TabsTrigger value="fault-code-rules">Fault Code Rules</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="schedule">
+        <div className="w-full">
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Maintenance Schedule</h1>
@@ -278,6 +302,20 @@ export default function MaintenancePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+        </div>
+      </TabsContent>
+
+      <TabsContent value="work-orders">
+        <WorkOrdersPage />
+      </TabsContent>
+
+      <TabsContent value="predictive">
+        <PredictiveMaintenancePage />
+      </TabsContent>
+
+      <TabsContent value="fault-code-rules">
+        <FaultCodeRulesPage />
+      </TabsContent>
+    </Tabs>
   )
 }

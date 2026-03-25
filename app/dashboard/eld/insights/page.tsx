@@ -117,7 +117,7 @@ export default function ELDInsightsPage() {
   return (
     <div className="w-full">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
+      <div className="border-b border-border bg-card px-8 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Insights</h1>
           <p className="text-sm text-muted-foreground mt-1">Analysis of your fleet data</p>
@@ -246,7 +246,7 @@ export default function ELDInsightsPage() {
                         </div>
                         <p className="text-sm text-muted-foreground mb-3">{insight.description}</p>
                         {insight.action && (
-                          <div className="p-3 bg-background/50 rounded border border-border/50">
+                          <div className="p-3 bg-background rounded border border-border/50">
                             <p className="text-xs font-medium text-foreground mb-1">Recommended Action:</p>
                             <p className="text-sm text-muted-foreground">{insight.action}</p>
                           </div>

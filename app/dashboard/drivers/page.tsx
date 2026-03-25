@@ -29,7 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { getDrivers, deleteDriver, bulkDeleteDrivers, bulkUpdateDriverStatus, updateDriver } from "@/app/actions/drivers"
 import { importDriversFromCsv } from "@/app/actions/import-drivers"
 import { AccessGuard } from "@/components/access-guard"
@@ -37,6 +37,9 @@ import { InlineEdit } from "@/components/dashboard/inline-edit"
 import { DefensiveDelete } from "@/components/dashboard/defensive-delete"
 import { AuditTrail } from "@/components/dashboard/audit-trail"
 import { History } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import DriverLeaderboardPage from "./leaderboard/page"
+import DriverAchievementsPage from "./achievements/page"
 
 function DriversPageContent() {
   const router = useRouter()
@@ -813,9 +816,61 @@ function DriversPageContent() {
 }
 
 export default function DriversPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const topTabParam = (searchParams.get("tab") || "drivers").toLowerCase()
+  const topTab = topTabParam === "performance" ? "performance" : "drivers"
+
+  const performanceTabParam = (searchParams.get("performanceTab") || "leaderboard").toLowerCase()
+  const performanceTab = performanceTabParam === "achievements" ? "achievements" : "leaderboard"
+
   return (
     <AccessGuard requiredFeature="drivers">
-      <DriversPageContent />
+      <Tabs
+        value={topTab}
+        onValueChange={(value) => {
+          const nextTopTab = value === "performance" ? "performance" : "drivers"
+          if (nextTopTab === "drivers") {
+            router.push("/dashboard/drivers?tab=drivers")
+          } else {
+            router.push(`/dashboard/drivers?tab=performance&performanceTab=${encodeURIComponent(performanceTab)}`)
+          }
+        }}
+        className="w-full"
+      >
+        <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-2">
+          <TabsTrigger value="drivers">Drivers</TabsTrigger>
+          <TabsTrigger value="performance">Performance</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="drivers">
+          <DriversPageContent />
+        </TabsContent>
+
+        <TabsContent value="performance">
+          <Tabs
+            value={performanceTab}
+            onValueChange={(value) => {
+              const nextPerfTab = value === "achievements" ? "achievements" : "leaderboard"
+              router.push(`/dashboard/drivers?tab=performance&performanceTab=${encodeURIComponent(nextPerfTab)}`)
+            }}
+            className="w-full"
+          >
+            <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-2">
+              <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
+              <TabsTrigger value="achievements">Achievements</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="leaderboard">
+              <DriverLeaderboardPage />
+            </TabsContent>
+            <TabsContent value="achievements">
+              <DriverAchievementsPage />
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+      </Tabs>
     </AccessGuard>
   )
 }

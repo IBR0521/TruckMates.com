@@ -9,7 +9,8 @@
     "dev:alt": "next dev -p 3001",
     "dev:open": "next dev -p 3000 --hostname 0.0.0.0 --webpack",
     "lint": "eslint .",
-    "start": "next start"
+    "start": "next start",
+    "e2e:smoke": "node scripts/truckmates-smoke.mjs"
   },
   "dependencies": {
     "@here/flexpolyline": "^0.1.0",
@@ -89,6 +90,7 @@
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "playwright": "^1.51.0"
   }
 }

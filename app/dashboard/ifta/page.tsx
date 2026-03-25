@@ -5,10 +5,11 @@ import { Card } from "@/components/ui/card"
 import { Calculator, Download, FileSpreadsheet, FileText, Plus, Receipt, Settings, Trash2 } from "lucide-react"
 import { exportToExcel } from "@/lib/export-utils"
 import { toast } from "sonner"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useState, useEffect } from "react"
 import { getIFTAReports, deleteIFTAReport } from "@/app/actions/tax-fuel-reconciliation"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,9 +20,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import IFTATripPlanningPage from "./trip-planning/page"
+import IFTATripSheetPage from "./trip-sheet/page"
 
 export default function IFTAPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const tabParam = (searchParams.get("tab") || "reports").toLowerCase()
+  const activeTab = ["reports", "trip-planning", "trip-sheet"].includes(tabParam) ? tabParam : "reports"
+
   const [iftaReports, setIftaReports] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -91,7 +99,7 @@ export default function IFTAPage() {
             <Download className="w-4 h-4 mr-2" />
             Export Report
           </Button>
-          <Link href="/dashboard/ifta/trip-planning">
+          <Link href="/dashboard/ifta?tab=trip-planning">
             <Button
               variant="outline"
               className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
@@ -100,7 +108,7 @@ export default function IFTAPage() {
               Trip planning
             </Button>
           </Link>
-          <Link href="/dashboard/ifta/trip-sheet">
+          <Link href="/dashboard/ifta?tab=trip-sheet">
             <Button
               variant="outline"
               className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground"
@@ -118,7 +126,19 @@ export default function IFTAPage() {
         </div>
       </div>
 
-      <div className="p-8">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => router.push(`/dashboard/ifta?tab=${encodeURIComponent(value)}`)}
+        className="w-full"
+      >
+        <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-3">
+          <TabsTrigger value="reports">Reports</TabsTrigger>
+          <TabsTrigger value="trip-planning">Trip Planning</TabsTrigger>
+          <TabsTrigger value="trip-sheet">Trip Sheet</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="reports">
+          <div className="p-8">
         <div className="max-w-7xl mx-auto space-y-6">
           <Card className="border border-border p-5 md:p-6">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -133,13 +153,13 @@ export default function IFTAPage() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 shrink-0">
-                <Link href="/dashboard/ifta/trip-planning">
+                <Link href="/dashboard/ifta?tab=trip-planning">
                   <Button>
                     <Calculator className="w-4 h-4 mr-2" />
                     Trip planning
                   </Button>
                 </Link>
-                <Link href="/dashboard/ifta/trip-sheet">
+                <Link href="/dashboard/ifta?tab=trip-sheet">
                   <Button variant="outline" type="button">
                     <FileSpreadsheet className="w-4 h-4 mr-2" />
                     Trip sheet
@@ -283,6 +303,16 @@ export default function IFTAPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+        </TabsContent>
+
+        <TabsContent value="trip-planning">
+          <IFTATripPlanningPage />
+        </TabsContent>
+
+        <TabsContent value="trip-sheet">
+          <IFTATripSheetPage />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

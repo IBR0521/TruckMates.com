@@ -31,7 +31,10 @@ import {
   BookOpen,
 } from "lucide-react"
 import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import CheckCallsPage from "./check-calls/page"
 import {
   getUnassignedLoads,
   getUnassignedRoutes,
@@ -65,6 +68,12 @@ import { createClient } from "@/lib/supabase/client"
 import { useRealtimeSubscription } from "@/lib/hooks/use-realtime"
 
 export default function DispatchesPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const tabParam = (searchParams.get("tab") || "dispatch").toLowerCase()
+  const activeTab = tabParam === "check-calls" ? "check-calls" : "dispatch"
+
   const [unassignedLoads, setUnassignedLoads] = useState<any[]>([])
   const [unassignedRoutes, setUnassignedRoutes] = useState<any[]>([])
   const [drivers, setDrivers] = useState<any[]>([])
@@ -397,7 +406,20 @@ export default function DispatchesPage() {
   }
 
   return (
-    <div className="w-full">
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) =>
+        router.push(`/dashboard/dispatches?tab=${encodeURIComponent(value)}`)
+      }
+      className="w-full"
+    >
+      <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-2">
+        <TabsTrigger value="dispatch">Dispatch Board</TabsTrigger>
+        <TabsTrigger value="check-calls">Check Calls</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="dispatch">
+        <div className="w-full">
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex items-center justify-between">
         <div>
@@ -1306,7 +1328,13 @@ export default function DispatchesPage() {
           )}
         </SheetContent>
       </Sheet>
-    </div>
+        </div>
+      </TabsContent>
+
+      <TabsContent value="check-calls">
+        <CheckCallsPage />
+      </TabsContent>
+    </Tabs>
   )
 }
 

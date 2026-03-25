@@ -23,8 +23,11 @@ import { toast } from "sonner"
 import { getAlertRules, createAlertRule, updateAlertRule, deleteAlertRule } from "@/app/actions/alerts"
 // import { getUsers } from "@/app/actions/user" // Will be implemented later
 import { Bell, Plus, Trash2, Edit2, Save } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useRouter, useSearchParams } from "next/navigation"
+import ReminderSettingsPage from "../reminder/page"
 
-export default function AlertsSettingsPage() {
+function AlertsTabContent() {
   const [alertRules, setAlertRules] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -466,6 +469,36 @@ export default function AlertsSettingsPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+export default function AlertsSettingsPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const tabParam = (searchParams.get("tab") || "alerts").toLowerCase()
+  const activeTab = tabParam === "reminders" ? "reminders" : "alerts"
+
+  return (
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) =>
+        router.push(`/dashboard/settings/alerts?tab=${encodeURIComponent(value)}`)
+      }
+      className="w-full"
+    >
+      <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-2">
+        <TabsTrigger value="alerts">Alert Rules</TabsTrigger>
+        <TabsTrigger value="reminders">Reminders</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="alerts">
+        <AlertsTabContent />
+      </TabsContent>
+      <TabsContent value="reminders">
+        <ReminderSettingsPage />
+      </TabsContent>
+    </Tabs>
   )
 }
 

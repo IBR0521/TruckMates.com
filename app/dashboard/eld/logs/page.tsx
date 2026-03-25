@@ -102,7 +102,7 @@ export default function ELDLogsPage() {
   return (
     <div className="w-full">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
+      <div className="border-b border-border bg-card px-8 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">ELD Log Entries</h1>
           <p className="text-sm text-muted-foreground mt-1">View Hours of Service (HOS) logs</p>
@@ -130,7 +130,7 @@ export default function ELDLogsPage() {
           </div>
 
           {/* Filters */}
-          <Card className="p-4 bg-card/50 border-border">
+          <Card className="p-4 bg-card border-border">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Driver</label>
@@ -202,14 +202,14 @@ export default function ELDLogsPage() {
           {isLoading ? (
             <p className="text-muted-foreground text-center py-8">Loading logs...</p>
           ) : logs.length === 0 ? (
-            <Card className="p-12 text-center bg-card/50 border-border">
+            <Card className="p-12 text-center bg-card border-border">
               <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">No log entries found</p>
             </Card>
           ) : (
             <div className="space-y-3">
               {logs.map((log) => (
-                <Card key={log.id} className="p-4 bg-card/50 border-border">
+                <Card key={log.id} className="p-4 bg-card border-border">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-4 flex-1">
                       <div className={`px-3 py-1 rounded border ${getLogTypeColor(log.log_type)}`}>

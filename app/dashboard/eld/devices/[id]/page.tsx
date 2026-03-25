@@ -121,7 +121,7 @@ export default function ELDDeviceDetailsPage() {
   return (
     <div className="w-full">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
+      <div className="border-b border-border bg-card px-4 md:px-8 py-4 md:py-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/dashboard/eld/devices">

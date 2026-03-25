@@ -208,8 +208,6 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               isCollapsed={shouldShowCollapsed}
             >
               <NavItem href="/dashboard/drivers" label="Driver List" isSubitem isCollapsed={shouldShowCollapsed} />
-              <NavItem href="/dashboard/drivers/leaderboard" label="Leaderboard" isSubitem isCollapsed={shouldShowCollapsed} />
-              <NavItem href="/dashboard/drivers/achievements" label="Achievements" isSubitem isCollapsed={shouldShowCollapsed} />
               {userRole && canCreateFeature(userRole, "drivers") && (
                 <NavItem href="/dashboard/drivers/add" label="Add Driver" isSubitem isCollapsed={shouldShowCollapsed} />
               )}
@@ -321,33 +319,17 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               <NavItem href="/dashboard/accounting/expenses" label="Expenses" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/accounting/settlements" label="Settlements" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/accounting/tax-fuel" label="Tax & Fuel" isSubitem isCollapsed={shouldShowCollapsed} />
-              {userRole &&
-                (canViewFeature(userRole, "reports") || canViewFeature(userRole, "accounting")) && (
-                  <NavItem href="/dashboard/reports/year-end" label="Year-End Tax Report" isSubitem isCollapsed={shouldShowCollapsed} />
-                )}
-              {userRole && canViewFeature(userRole, "fuel_analytics") && (
-                <NavItem href="/dashboard/fuel-analytics" label="Fuel Analytics" isSubitem isCollapsed={shouldShowCollapsed} />
-              )}
             </DropdownItem>
           )}
 
           {/* Maintenance - Show if user can view maintenance */}
           {userRole && canViewFeature(userRole, "maintenance") && (
-            <DropdownItem
+            <NavItem
+              href="/dashboard/maintenance"
               icon={Wrench}
               label="Maintenance"
-              href="/dashboard/maintenance"
-              isOpen={maintenanceOpen}
-              onToggle={() => setMaintenanceOpen(!maintenanceOpen)}
               isCollapsed={shouldShowCollapsed}
-            >
-              <NavItem href="/dashboard/maintenance" label="Schedule" isSubitem isCollapsed={shouldShowCollapsed} />
-              {userRole && canCreateFeature(userRole, "maintenance") && (
-                <NavItem href="/dashboard/maintenance/add" label="Add Service" isSubitem isCollapsed={shouldShowCollapsed} />
-              )}
-              <NavItem href="/dashboard/maintenance/work-orders" label="Work Orders" isSubitem isCollapsed={shouldShowCollapsed} />
-              <NavItem href="/dashboard/maintenance/fault-code-rules" label="Fault Code Rules" isSubitem isCollapsed={shouldShowCollapsed} />
-            </DropdownItem>
+            />
           )}
 
           {/* DVIR - Show if user can view DVIR */}
@@ -357,68 +339,32 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
 
           {/* ELD Service - Show if user can view ELD */}
           {userRole && canViewFeature(userRole, "eld") && (
-            <>
-              <DropdownItem
-                icon={Shield}
-                label="ELD Service"
-                href="/dashboard/eld"
-                isOpen={eldOpen}
-                onToggle={() => setEldOpen(!eldOpen)}
-                isCollapsed={shouldShowCollapsed}
-              >
-                <NavItem href="/dashboard/eld" label="ELD Dashboard" isSubitem isCollapsed={shouldShowCollapsed} />
-                <NavItem href="/dashboard/eld/devices" label="Devices" isSubitem isCollapsed={shouldShowCollapsed} />
-                {process.env.NODE_ENV !== "production" && (
-                  <NavItem href="/dashboard/eld/simulator" label="Device Simulator" isSubitem isCollapsed={shouldShowCollapsed} />
-                )}
-                <NavItem href="/dashboard/eld/health" label="Fleet Health" isSubitem isCollapsed={shouldShowCollapsed} />
-                <NavItem href="/dashboard/eld/insights" label="Insights" isSubitem isCollapsed={shouldShowCollapsed} />
-              </DropdownItem>
-              {/* ELD Simulator: dev only - BUG-069 FMCSA compliance */}
-              {process.env.NODE_ENV !== "production" && !shouldShowCollapsed && (
-                <NavItem href="/dashboard/eld/simulator" icon={Radio} label="ELD Simulator" isCollapsed={shouldShowCollapsed} />
-              )}
-            </>
+            <NavItem
+              href="/dashboard/eld"
+              icon={Shield}
+              label="ELD"
+              isCollapsed={shouldShowCollapsed}
+            />
           )}
 
-          {/* IFTA — always show Reports + Trip sheet as separate links (dropdown hid subitems until expand) */}
+          {/* IFTA — one destination with internal tabs */}
           {userRole && canViewFeature(userRole, "ifta") && (
-            <>
-              <NavItem href="/dashboard/ifta" icon={Receipt} label="IFTA reports" isCollapsed={shouldShowCollapsed} />
-              <NavItem
-                href="/dashboard/ifta/trip-planning"
-                icon={Calculator}
-                label="Trip planning"
-                isCollapsed={shouldShowCollapsed}
-              />
-              <NavItem
-                href="/dashboard/ifta/trip-sheet"
-                icon={FileSpreadsheet}
-                label="IFTA trip sheet"
-                isCollapsed={shouldShowCollapsed}
-              />
-            </>
+            <NavItem
+              href="/dashboard/ifta"
+              icon={Receipt}
+              label="IFTA"
+              isCollapsed={shouldShowCollapsed}
+            />
           )}
 
           {/* Reports - Show if user can view reports */}
           {userRole && canViewFeature(userRole, "reports") && (
-            <DropdownItem 
-              icon={BarChart3} 
-              label="Reports" 
-              href="/dashboard/reports/analytics"
-              isOpen={reportsOpen} 
-              onToggle={() => setReportsOpen(!reportsOpen)}
+            <NavItem
+              href="/dashboard/reports"
+              icon={BarChart3}
+              label="Reports"
               isCollapsed={shouldShowCollapsed}
-            >
-              <NavItem href="/dashboard/reports/analytics" label="Analytics" isSubitem isCollapsed={shouldShowCollapsed} />
-              <NavItem href="/dashboard/reports/revenue" label="Revenue" isSubitem isCollapsed={shouldShowCollapsed} />
-              <NavItem href="/dashboard/reports/profit-loss" label="Profit & Loss" isSubitem isCollapsed={shouldShowCollapsed} />
-              <NavItem href="/dashboard/reports/driver-payments" label="Driver Payments" isSubitem isCollapsed={shouldShowCollapsed} />
-              <NavItem href="/dashboard/reports/detention" label="Detention Time" isSubitem isCollapsed={shouldShowCollapsed} />
-              <NavItem href="/dashboard/reports/fuel-efficiency" label="Fuel Efficiency" isSubitem isCollapsed={shouldShowCollapsed} />
-              <NavItem href="/dashboard/reports/on-time-delivery" label="On-Time Delivery" isSubitem isCollapsed={shouldShowCollapsed} />
-              <NavItem href="/dashboard/reports/year-end" label="Year-End Tax Report" isSubitem isCollapsed={shouldShowCollapsed} />
-            </DropdownItem>
+            />
           )}
 
           {/* Documents - Show if user can view documents */}
@@ -429,15 +375,6 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
           {/* Notifications - Show if user can view alerts */}
           {userRole && canViewFeature(userRole, "alerts") && (
             <NavItem href="/dashboard/notifications" icon={Bell} label="Notifications" isCollapsed={shouldShowCollapsed} />
-          )}
-          {/* Alerts - Show if user can view alerts (legacy, redirects to notifications) */}
-          {userRole && canViewFeature(userRole, "alerts") && (
-            <NavItem href="/dashboard/alerts" icon={AlertTriangle} label="Alerts" isCollapsed={shouldShowCollapsed} />
-          )}
-
-          {/* Reminders - Show if user can view reminders */}
-          {userRole && canViewFeature(userRole, "reminders") && (
-            <NavItem href="/dashboard/reminders" icon={Calendar} label="Reminders" isCollapsed={shouldShowCollapsed} />
           )}
 
           {/* BOLs - Show if user can view BOL */}
@@ -467,7 +404,10 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               <NavItem href="/dashboard/settings" label="General" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/users" label="Users" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/invoice" label="Invoice" isSubitem isCollapsed={shouldShowCollapsed} />
+                <NavItem href="/dashboard/settings/billing" label="Billing" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/factoring" label="Factoring" isSubitem isCollapsed={shouldShowCollapsed} />
+                <NavItem href="/dashboard/settings/integration" label="Integration" isSubitem isCollapsed={shouldShowCollapsed} />
+                <NavItem href="/dashboard/settings/portal" label="Portal" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/load" label="Load" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/dispatch" label="Dispatch" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/business" label="Business" isSubitem isCollapsed={shouldShowCollapsed} />

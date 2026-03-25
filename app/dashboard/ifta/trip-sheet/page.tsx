@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { errorMessage } from "@/lib/error-message"
+import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Plus, Trash2, FileSpreadsheet } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -26,6 +27,15 @@ const US_STATES = [
 ]
 
 export default function IFTATripSheetPage() {
+  const router = useRouter()
+  const pathname = usePathname()
+
+  useEffect(() => {
+    if (pathname === "/dashboard/ifta/trip-sheet") {
+      router.replace("/dashboard/ifta?tab=trip-sheet")
+    }
+  }, [pathname, router])
+
   const [trucks, setTrucks] = useState<Array<{ id: string; truck_number: string }>>([])
   const [drivers, setDrivers] = useState<Array<{ id: string; name: string }>>([])
   const [recent, setRecent] = useState<any[]>([])

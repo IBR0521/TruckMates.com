@@ -8,6 +8,7 @@
 
 # testing
 /coverage
+playwright-smoke-report.json
 
 # next.js
 /.next/

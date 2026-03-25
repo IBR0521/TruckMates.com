@@ -74,7 +74,7 @@ export default function FleetHealthPage() {
   if (isLoading) {
     return (
       <div className="w-full">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
+        <div className="border-b border-border bg-card px-8 py-4">
           <h1 className="text-2xl font-bold text-foreground">Fleet Health Dashboard</h1>
         </div>
         <div className="p-4 md:p-8">
@@ -87,7 +87,7 @@ export default function FleetHealthPage() {
   return (
     <div className="w-full">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex items-center justify-between">
+      <div className="border-b border-border bg-card px-4 md:px-8 py-4 md:py-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Fleet Health Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-1">Real-time overview of your fleet status</p>

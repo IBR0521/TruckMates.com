@@ -136,7 +136,7 @@ export default function ELDViolationsPage() {
   return (
     <div className="w-full">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex items-center justify-between">
+      <div className="border-b border-border bg-card px-4 md:px-8 py-4 md:py-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">ELD Violations</h1>
           <p className="text-sm text-muted-foreground mt-1">View and manage HOS violations</p>
@@ -158,7 +158,7 @@ export default function ELDViolationsPage() {
       <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Filters */}
-          <Card className="p-4 bg-card/50 border-border">
+          <Card className="p-4 bg-card border-border">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Driver</label>
@@ -229,7 +229,7 @@ export default function ELDViolationsPage() {
           {isLoading ? (
             <p className="text-muted-foreground text-center py-8">Loading violations...</p>
           ) : violations.length === 0 ? (
-            <Card className="p-12 text-center bg-card/50 border-border">
+            <Card className="p-12 text-center bg-card border-border">
               <CheckCircle2 className="w-12 h-12 text-green-400 mx-auto mb-4" />
               <p className="text-muted-foreground">No violations found</p>
             </Card>
@@ -264,7 +264,7 @@ export default function ELDViolationsPage() {
                         )}
                       </div>
                       {violation.resolution_notes && (
-                        <div className="mt-2 p-2 bg-background/50 rounded text-sm">
+                        <div className="mt-2 p-2 bg-background rounded text-sm">
                           <p className="font-medium">Resolution Notes:</p>
                           <p className="text-muted-foreground">{violation.resolution_notes}</p>
                         </div>

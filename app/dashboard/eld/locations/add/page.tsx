@@ -107,7 +107,7 @@ export default function AddELDLocationPage() {
 
   return (
     <div className="w-full">
-      <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
+      <div className="border-b border-border bg-card px-8 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Add ELD Location Entry</h1>
           <p className="text-sm text-muted-foreground mt-1">Manually create a new GPS location entry</p>

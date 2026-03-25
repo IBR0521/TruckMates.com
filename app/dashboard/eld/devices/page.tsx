@@ -217,7 +217,7 @@ export default function ELDDevicesPage() {
   if (isLoading) {
     return (
       <div className="w-full">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
+        <div className="border-b border-border bg-card px-8 py-4">
           <h1 className="text-2xl font-bold text-foreground">ELD Devices</h1>
         </div>
         <div className="p-4 md:p-8">
@@ -230,7 +230,7 @@ export default function ELDDevicesPage() {
   return (
     <div className="w-full">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
+      <div className="border-b border-border bg-card px-8 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">ELD Devices</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage your Electronic Logging Devices</p>
@@ -263,7 +263,7 @@ export default function ELDDevicesPage() {
           {/* Devices Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredDevices.map((device) => (
-              <Card key={device.id} className="p-6 bg-card/50 border-border">
+              <Card key={device.id} className="p-6 bg-card border-border">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-primary/10 rounded-lg">
@@ -335,7 +335,7 @@ export default function ELDDevicesPage() {
           </div>
 
           {filteredDevices.length === 0 && (
-            <Card className="p-12 text-center bg-card/50 border-border">
+            <Card className="p-12 text-center bg-card border-border">
               <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">No ELD devices found</p>
               <Button onClick={() => setShowAddDialog(true)} className="mt-4">

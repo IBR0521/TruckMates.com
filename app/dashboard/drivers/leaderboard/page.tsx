@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -27,6 +28,15 @@ import {
 } from "@/components/ui/select"
 
 export default function DriverLeaderboardPage() {
+  const router = useRouter()
+  const pathname = usePathname()
+
+  useEffect(() => {
+    if (pathname === "/dashboard/drivers/leaderboard") {
+      router.replace("/dashboard/drivers?tab=performance&performanceTab=leaderboard")
+    }
+  }, [pathname, router])
+
   const [leaderboard, setLeaderboard] = useState<DriverPerformanceScore[]>([])
   const [periodType, setPeriodType] = useState<'weekly' | 'monthly' | 'yearly'>('monthly')
   const [isLoading, setIsLoading] = useState(true)

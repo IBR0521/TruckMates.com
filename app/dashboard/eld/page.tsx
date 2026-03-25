@@ -56,8 +56,19 @@ import {
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import ELDDevicesPage from "./devices/page"
+import ELDHealthPage from "./health/page"
+import ELDInsightsPage from "./insights/page"
+import ELDLogsPage from "./logs/page"
+import ELDViolationsPage from "./violations/page"
+import DriverAppPage from "./driver-app/page"
 
 export default function ELDPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
   const [devices, setDevices] = useState<any[]>([])
   const [events, setEvents] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -89,6 +100,11 @@ export default function ELDPage() {
     loadData()
     loadTrucks()
   }, [])
+
+  const tabParam = (searchParams.get("tab") || "overview").toLowerCase()
+  const activeTab = ["overview", "devices", "logs", "violations", "health", "insights"].includes(tabParam)
+    ? tabParam
+    : "overview"
 
   async function loadTrucks() {
     const result = await getTrucks()
@@ -193,7 +209,7 @@ export default function ELDPage() {
   if (isLoading) {
     return (
       <div className="w-full">
-        <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4">
+        <div className="border-b border-border bg-card px-8 py-4">
           <h1 className="text-2xl font-bold text-foreground">ELD Service</h1>
         </div>
         <div className="p-4 md:p-8">
@@ -207,9 +223,28 @@ export default function ELDPage() {
 
 
   return (
-    <div className="w-full">
+    <div className="relative w-full bg-background">
+      {/* Opaque cover to ensure any underlying decorative/background layer can't show through */}
+      <div className="absolute inset-0 bg-background -z-10" aria-hidden="true" />
+
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => router.push(`/dashboard/eld?tab=${encodeURIComponent(value)}`)}
+        className="w-full relative z-10"
+      >
+        <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-3">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="devices">Devices</TabsTrigger>
+          <TabsTrigger value="logs">Logs</TabsTrigger>
+          <TabsTrigger value="violations">Violations</TabsTrigger>
+          <TabsTrigger value="health">Health</TabsTrigger>
+          <TabsTrigger value="insights">Insights</TabsTrigger>
+        </TabsList>
+
+      <TabsContent value="overview">
+        <div className="w-full bg-background">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-8 py-4 flex items-center justify-between">
+      <div className="border-b border-border bg-card px-8 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">ELD Service</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage Electronic Logging Devices</p>
@@ -432,6 +467,11 @@ export default function ELDPage() {
                 </Link>
               </div>
             </Card>
+
+            <div className="mt-6">
+              {/* Driver HOS lookup embedded in ELD overview */}
+              <DriverAppPage />
+            </div>
 
             <Card className="p-6 border-border">
               <div className="flex items-center justify-between mb-4">
@@ -802,6 +842,35 @@ export default function ELDPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </div>
+      </TabsContent>
+
+      <TabsContent value="devices">
+        <div className="w-full bg-background">
+          <ELDDevicesPage />
+        </div>
+      </TabsContent>
+      <TabsContent value="logs">
+        <div className="w-full bg-background">
+          <ELDLogsPage />
+        </div>
+      </TabsContent>
+      <TabsContent value="violations">
+        <div className="w-full bg-background">
+          <ELDViolationsPage />
+        </div>
+      </TabsContent>
+      <TabsContent value="health">
+        <div className="w-full bg-background">
+          <ELDHealthPage />
+        </div>
+      </TabsContent>
+        <TabsContent value="insights">
+          <div className="w-full bg-background">
+            <ELDInsightsPage />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

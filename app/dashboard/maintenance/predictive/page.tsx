@@ -6,8 +6,18 @@ import { Button } from "@/components/ui/button"
 import { AlertCircle, Calendar, DollarSign, TrendingUp, Wrench } from "lucide-react"
 import { toast } from "sonner"
 import { predictMaintenanceNeeds, createMaintenanceFromPrediction } from "@/app/actions/maintenance-predictive"
+import { usePathname, useRouter } from "next/navigation"
 
 export default function PredictiveMaintenancePage() {
+  const router = useRouter()
+  const pathname = usePathname()
+
+  useEffect(() => {
+    if (pathname === "/dashboard/maintenance/predictive") {
+      router.replace("/dashboard/maintenance?tab=predictive")
+    }
+  }, [pathname, router])
+
   const [predictions, setPredictions] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [schedulingId, setSchedulingId] = useState<string | null>(null)

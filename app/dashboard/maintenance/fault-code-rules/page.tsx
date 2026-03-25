@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/table"
 import { Plus, Edit, Trash2, Search, AlertCircle, Wrench } from "lucide-react"
 import { useState, useEffect } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
   getFaultCodeRules,
@@ -44,6 +45,15 @@ import {
 } from "@/components/ui/alert-dialog"
 
 export default function FaultCodeRulesPage() {
+  const router = useRouter()
+  const pathname = usePathname()
+
+  useEffect(() => {
+    if (pathname === "/dashboard/maintenance/fault-code-rules") {
+      router.replace("/dashboard/maintenance?tab=fault-code-rules")
+    }
+  }, [pathname, router])
+
   const [rules, setRules] = useState<any[]>([])
   const [filteredRules, setFilteredRules] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
