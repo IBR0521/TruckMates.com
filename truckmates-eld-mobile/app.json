@@ -1,5 +1,42 @@
 {
-  "name": "TruckMatesELD",
-  "displayName": "TruckMates ELD"
+  "expo": {
+    "name": "TruckMates ELD Driver",
+    "slug": "truckmates-eld-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "truckmateseld",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0b1220"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.truckmates.eld.mobile",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "TruckMates needs location to build compliant ELD logs.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "TruckMates needs background location for accurate driving logs.",
+        "UIBackgroundModes": [
+          "location"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.truckmates.eld.mobile",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE"
+      ]
+    },
+    "extra": {
+      "apiUrl": "",
+      "supabaseUrl": "",
+      "supabaseAnonKey": ""
+    }
+  }
 }
-

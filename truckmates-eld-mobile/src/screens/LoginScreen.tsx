@@ -1,173 +1,85 @@
-/**
- * Login Screen
- * Driver authentication with TruckMates account
- */
+import React, { useState } from "react"
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native"
+import { useAuth } from "../context/AuthContext"
+import { colors } from "../theme/tokens"
 
-import React, { useState } from 'react'
-import { errorMessage } from "@/lib/error-message"
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native'
-import { authService } from '../services/api'
-import { useNavigation } from '@react-navigation/native'
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import type { RootStackParamList } from '../App'
+export function LoginScreen() {
+  const { signIn } = useAuth()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
-type LoginScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  'Login'
->
-
-export default function LoginScreen() {
-  const navigation = useNavigation<LoginScreenNavigationProp>()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-
-  async function handleLogin() {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please enter email and password')
-      return
-    }
-
-    setIsLoading(true)
+  async function handleSignIn() {
+    setBusy(true)
+    setError(null)
     try {
-      console.log('Attempting to sign in...')
-      const { data, error } = await authService.signIn(email, password)
-
-      if (error) {
-        console.error('Login error:', error)
-        Alert.alert('Login Failed', error.message || 'Invalid email or password')
-        setIsLoading(false)
-        return
-      }
-
-      if (data?.session) {
-        console.log('Login successful, session:', data.session?.user?.email)
-        // Navigation will automatically switch to next screen based on auth state
-        // The auth state change listener in App.tsx will handle navigation
-        // No need to set loading to false here - let the auth state change handle it
-      } else {
-        console.warn('Login succeeded but no session data')
-        Alert.alert('Login Failed', 'No session data received')
-        setIsLoading(false)
-      }
-    } catch (error: unknown) {
-      console.error('Login exception:', error)
-      Alert.alert('Error', errorMessage(error, 'An error occurred during login'))
-      setIsLoading(false)
+      await signIn(email.trim(), password)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Sign in failed")
+    } finally {
+      setBusy(false)
     }
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.content}>
-        <Text style={styles.title}>TruckMates ELD</Text>
-        <Text style={styles.subtitle}>Electronic Logging Device</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>TruckMates Driver ELD</Text>
+      <Text style={styles.subtitle}>Sign in with your TruckMates driver account</Text>
 
-        <View style={styles.form}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-          />
+      <TextInput
+        autoCapitalize="none"
+        keyboardType="email-address"
+        placeholder="Email"
+        placeholderTextColor={colors.mutedText}
+        style={styles.input}
+        value={email}
+        onChangeText={setEmail}
+      />
+      <TextInput
+        secureTextEntry
+        placeholder="Password"
+        placeholderTextColor={colors.mutedText}
+        style={styles.input}
+        value={password}
+        onChangeText={setPassword}
+      />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-          />
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <TouchableOpacity
-            style={[styles.button, isLoading && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={isLoading}
-          >
-            <Text style={styles.buttonText}>
-              {isLoading ? 'Signing in...' : 'Sign In'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.footer}>
-          Use your TruckMates account to sign in
-        </Text>
-      </View>
-    </KeyboardAvoidingView>
+      <Pressable style={styles.button} onPress={handleSignIn} disabled={busy}>
+        {busy ? <ActivityIndicator color={colors.text} /> : <Text style={styles.buttonText}>Sign In</Text>}
+      </Pressable>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    justifyContent: "center",
+    backgroundColor: colors.background,
+    padding: 20,
+    gap: 12,
   },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 8,
-    color: '#1a1a1a',
-  },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#666',
-    marginBottom: 48,
-  },
-  form: {
-    marginBottom: 24,
-  },
+  title: { color: colors.text, fontSize: 26, fontWeight: "700" },
+  subtitle: { color: colors.mutedText, marginBottom: 12 },
   input: {
+    backgroundColor: colors.surface,
+    color: colors.text,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 16,
-    fontSize: 16,
-    marginBottom: 16,
-    backgroundColor: '#f9f9f9',
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
   },
   button: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 13,
+    alignItems: "center",
+    marginTop: 6,
   },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  footer: {
-    textAlign: 'center',
-    color: '#999',
-    fontSize: 14,
-  },
+  buttonText: { color: colors.text, fontWeight: "700" },
+  error: { color: colors.danger },
 })
-

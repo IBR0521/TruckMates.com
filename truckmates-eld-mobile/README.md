@@ -1,112 +1,50 @@
-# TruckMates ELD Mobile App
+# TruckMates ELD Mobile (Driver App)
 
-A React Native mobile application that functions as an Electronic Logging Device (ELD) for truck drivers, integrating with the TruckMates platform.
+Driver-first mobile ELD application for TruckMates platform.
 
-## Features
+## Goals
 
-- 📍 Real-time GPS tracking with background location services
-- ⏱️ Hours of Service (HOS) tracking and compliance
-- 🚨 Violation detection and alerts
-- 📊 Automatic log creation based on driving status
-- 🔄 Offline capability with sync when online
-- 👤 Driver authentication via TruckMates account
-- 🚛 Truck assignment and management
+- Driver-only UX (no back-office complexity)
+- Real-world ELD behavior foundation (duty status, HOS logs, DVIR, events)
+- Offline-first sync with queue/retry
+- Clean architecture for maintainability
 
-## Prerequisites
+## Tech
 
-- Node.js 18+ and npm/yarn
-- React Native CLI (`npm install -g react-native-cli`)
-- iOS Development: Xcode 14+ (Mac only)
-- Android Development: Android Studio with Android SDK
-- Expo CLI (optional, if using Expo) or React Native CLI
+- Expo + React Native + TypeScript
+- Supabase Auth (`@supabase/supabase-js`)
+- TruckMates platform API (`/api/eld/mobile/*`)
+- AsyncStorage queue for resilient sync
 
-## Quick Start
+## Environment
 
-1. **Install dependencies:**
-   ```bash
-   npm install
-   # or
-   yarn install
-   ```
+Create `.env`:
 
-2. **Configure API endpoint:**
-   
-   Create a `.env` file in the root directory:
-   ```env
-   API_BASE_URL=https://your-truckmates-platform.com/api
-   SUPABASE_URL=your-supabase-url
-   SUPABASE_ANON_KEY=your-supabase-anon-key
-   ```
-
-3. **Run on iOS:**
-   ```bash
-   npm run ios
-   # or
-   yarn ios
-   ```
-
-4. **Run on Android:**
-   ```bash
-   npm run android
-   # or
-   yarn android
-   ```
-
-## Project Structure
-
-```
-truckmates-eld-mobile/
-├── src/
-│   ├── components/       # Reusable UI components
-│   ├── screens/          # Screen components
-│   ├── services/         # API services and business logic
-│   ├── hooks/            # Custom React hooks
-│   ├── utils/            # Utility functions
-│   ├── types/            # TypeScript type definitions
-│   ├── constants/        # App constants
-│   └── navigation/       # Navigation setup
-├── android/              # Android native code
-├── ios/                  # iOS native code
-├── assets/               # Images, fonts, etc.
-└── __tests__/            # Tests
+```bash
+EXPO_PUBLIC_PLATFORM_API_URL=http://localhost:3000
+EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-## Building for Production
+## Run
 
-### iOS
+```bash
+npm install
+npm run start
+```
 
-1. Update version in `ios/TruckMatesELD/Info.plist`
-2. Build archive in Xcode
-3. Upload to App Store Connect
+## Current Foundation
 
-### Android
+- Auth session + driver login
+- Device registration (`/api/eld/mobile/register`)
+- Queue and flush for locations/logs/events
+- Driver dashboard duty status controls
+- Basic tab shell: Home / HOS / DVIR / Settings
 
-1. Update version in `android/app/build.gradle`
-2. Generate release APK/AAB:
-   ```bash
-   cd android && ./gradlew assembleRelease
-   # or for AAB (required for Play Store):
-   ./gradlew bundleRelease
-   ```
+## Planned Next Milestones
 
-## Deployment to App Stores
-
-See `DEPLOYMENT.md` for detailed instructions on deploying to:
-- Apple App Store
-- Google Play Store
-
-## API Integration
-
-The app communicates with TruckMates platform via these endpoints:
-
-- `POST /api/eld/mobile/register` - Register device
-- `POST /api/eld/mobile/locations` - Send GPS locations
-- `POST /api/eld/mobile/logs` - Send HOS logs
-- `POST /api/eld/mobile/events` - Send events/violations
-
-All endpoints require authentication via Supabase Auth token.
-
-## License
-
-Proprietary - All rights reserved
-
+1. Full HOS clocks + 24-hour grid + certification workflow
+2. Automated motion-based duty transitions
+3. DVIR full forms and defect workflows
+4. DOT inspection mode and export package
+5. Background sync scheduler and richer diagnostics
