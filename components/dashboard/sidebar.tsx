@@ -382,9 +382,9 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             <NavItem href="/dashboard/bols" icon={FileText} label="Bill of Lading" isCollapsed={shouldShowCollapsed} />
           )}
 
-          {/* Employees - Super Admin only */}
-          {userRole === "super_admin" && (
-            <NavItem href="/dashboard/employees" icon={UserCog} label="Employees" isCollapsed={shouldShowCollapsed} />
+          {/* Same destination as Settings → Users: invites, roles, roster (avoid duplicating “Employees” vs “Users”) */}
+          {userRole && (userRole === "super_admin" || userRole === "operations_manager") && (
+            <NavItem href="/dashboard/settings/users" icon={UserCog} label="Users & invites" isCollapsed={shouldShowCollapsed} />
           )}
 
         </nav>

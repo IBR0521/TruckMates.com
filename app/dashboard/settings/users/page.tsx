@@ -256,15 +256,18 @@ export default function UsersSettingsPage() {
               </Button>
             </div>
 
-            {/* Pending Invitations */}
-            {pendingInvitations.length > 0 && (
+            {/* Pending Invitations — only rows still awaiting registration (accepted invites are reconciled server-side) */}
+            {pendingInvitations.some((i) => i.status === "pending") && (
               <div className="border rounded-lg p-4 bg-secondary/50">
                 <h3 className="font-semibold mb-3 flex items-center gap-2">
                   <Mail className="w-4 h-4" />
-                  Pending Invitations ({pendingInvitations.filter(i => i.status === "pending").length})
+                  Pending Invitations (
+                  {pendingInvitations.filter((i) => i.status === "pending").length})
                 </h3>
                 <div className="space-y-2">
-                  {pendingInvitations.map((invitation) => {
+                  {pendingInvitations
+                    .filter((invitation) => invitation.status === "pending")
+                    .map((invitation) => {
                     const isExpired = new Date(invitation.expires_at) < new Date()
                     const isPending = invitation.status === "pending" && !isExpired
                     

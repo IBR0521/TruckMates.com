@@ -21,6 +21,9 @@ const STOPPED_TO_ON_DUTY_MS = 5 * 60 * 1000
 const STALE_POSITION_MS = 3 * 60 * 1000
 const DIAGNOSTIC_POLL_MS = 60 * 1000
 const DIAGNOSTIC_CLEAR_WINDOW_MS = 5 * 60 * 1000
+const WATCH_TIME_INTERVAL_MS = 5000
+const WATCH_DISTANCE_INTERVAL_M = 10
+const FALLBACK_POLL_INTERVAL_MS = 5000
 
 export function AutoEldProvider({ children }: { children: React.ReactNode }) {
   const { userId, assignedTruckId } = useAuth()
@@ -31,6 +34,7 @@ export function AutoEldProvider({ children }: { children: React.ReactNode }) {
   const [lastSpeedMph, setLastSpeedMph] = useState<number | null>(null)
 
   const watchRef = useRef<Location.LocationSubscription | null>(null)
+  const fallbackPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const stationarySinceRef = useRef<number | null>(null)
   const warnedThirtyRef = useRef(false)
   const warnedExceededRef = useRef(false)
@@ -83,6 +87,13 @@ export function AutoEldProvider({ children }: { children: React.ReactNode }) {
     if (diagnosticsTimerRef.current) {
       clearInterval(diagnosticsTimerRef.current)
       diagnosticsTimerRef.current = null
+    }
+  }
+
+  function stopFallbackPolling() {
+    if (fallbackPollRef.current) {
+      clearInterval(fallbackPollRef.current)
+      fallbackPollRef.current = null
     }
   }
 
@@ -234,14 +245,122 @@ export function AutoEldProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function processLocationSample(input: {
+    latitude: number
+    longitude: number
+    speed: number
+    heading?: number
+  }) {
+    lastPositionAtRef.current = Date.now()
+    if (staleLocationWarnedRef.current) {
+      staleLocationWarnedRef.current = false
+      await emitEvent("Location feed restored", "info", undefined, "device_malfunction")
+    }
+    if (streamFailureRef.current) {
+      streamFailureRef.current = false
+      await emitEvent("Location stream recovered", "info", undefined, "device_malfunction")
+    }
+
+    const speedMph = input.speed
+    setLastSpeedMph(speedMph)
+
+    await enqueue({
+      type: "locations",
+      payload: [
+        {
+          timestamp: new Date().toISOString(),
+          latitude: input.latitude,
+          longitude: input.longitude,
+          speed: speedMph,
+          heading: input.heading,
+          driver_id: userId || undefined,
+        },
+      ],
+    })
+
+    const now = Date.now()
+    const latestStatus = currentStatusRef.current
+    const hasAssignedTruck = Boolean(assignedTruckRef.current)
+    if (speedMph >= DRIVING_SPEED_MPH) {
+      stationarySinceRef.current = null
+      if (latestStatus !== "driving") {
+        await updateStatus("driving")
+        await emitEvent("Auto status changed to Driving", "info", { speed_mph: speedMph })
+      }
+      if (!hasAssignedTruck) {
+        await openSegment("Vehicle movement detected without assigned truck.")
+      }
+    } else if (latestStatus === "driving" && speedMph <= STOPPED_SPEED_MPH) {
+      if (!stationarySinceRef.current) {
+        stationarySinceRef.current = now
+      } else if (now - stationarySinceRef.current >= STOPPED_TO_ON_DUTY_MS) {
+        await updateStatus("on_duty")
+        stationarySinceRef.current = null
+        await closeSegment()
+        await emitEvent("Auto status changed to On Duty", "info", { speed_mph: speedMph })
+      }
+    } else {
+      stationarySinceRef.current = null
+    }
+
+    await handleViolationEvents()
+    await evaluateDiagnosticClearWindow()
+  }
+
+  function startForegroundFallbackPolling() {
+    stopFallbackPolling()
+    fallbackPollRef.current = setInterval(() => {
+      void (async () => {
+        try {
+          const current = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          })
+          const speedMps = typeof current.coords.speed === "number" ? Math.max(current.coords.speed, 0) : 0
+          const speedMph = speedMps * 2.23694
+          await processLocationSample({
+            latitude: current.coords.latitude,
+            longitude: current.coords.longitude,
+            speed: speedMph,
+            heading: typeof current.coords.heading === "number" ? current.coords.heading : undefined,
+          })
+        } catch {
+          // polling failures are handled by diagnostics loop
+        }
+      })()
+    }, FALLBACK_POLL_INTERVAL_MS)
+  }
+
   async function startMonitoring() {
     if (watchRef.current) return
 
     const fg = await Location.requestForegroundPermissionsAsync()
     if (fg.status !== "granted") throw new Error("Location permission denied")
 
-    const bg = await Location.requestBackgroundPermissionsAsync()
-    if (bg.status !== "granted") throw new Error("Background location permission denied")
+    let backgroundStatus: string | undefined
+    try {
+      const bg = await Location.requestBackgroundPermissionsAsync()
+      backgroundStatus = bg.status
+    } catch (error) {
+      backgroundStatus = "request_failed"
+      await emitEvent(
+        "Background permission request failed - using foreground monitoring",
+        "warning",
+        {
+          error: error instanceof Error ? error.message : "unknown_error",
+        },
+        "device_malfunction"
+      )
+    }
+    if (backgroundStatus && backgroundStatus !== "granted") {
+      await emitEvent(
+        "Background location denied - using foreground monitoring",
+        "warning",
+        {
+          background_status: backgroundStatus,
+        },
+        "device_malfunction"
+      )
+    }
 
     lastPositionAtRef.current = Date.now()
     staleLocationWarnedRef.current = false
@@ -251,89 +370,54 @@ export function AutoEldProvider({ children }: { children: React.ReactNode }) {
     healthySinceRef.current = null
     clearReadyEmittedRef.current = false
 
-    watchRef.current = await Location.watchPositionAsync(
-      {
-        accuracy: Location.Accuracy.Balanced,
-        timeInterval: 30000,
-        distanceInterval: 100,
-      },
-      (position) => {
-        void (async () => {
-          try {
-            lastPositionAtRef.current = Date.now()
-            if (staleLocationWarnedRef.current) {
-              staleLocationWarnedRef.current = false
-              await emitEvent("Location feed restored", "info", undefined, "device_malfunction")
-            }
-            if (streamFailureRef.current) {
-              streamFailureRef.current = false
-              await emitEvent("Location stream recovered", "info", undefined, "device_malfunction")
-            }
-
-            const speedMps = typeof position.coords.speed === "number" ? Math.max(position.coords.speed, 0) : 0
-            const speedMph = speedMps * 2.23694
-            setLastSpeedMph(speedMph)
-
-            await enqueue({
-              type: "locations",
-              payload: [
-                {
-                  timestamp: new Date().toISOString(),
-                  latitude: position.coords.latitude,
-                  longitude: position.coords.longitude,
-                  speed: speedMph,
-                  heading: typeof position.coords.heading === "number" ? position.coords.heading : undefined,
-                  driver_id: userId || undefined,
-                },
-              ],
-            })
-
-            const now = Date.now()
-            const latestStatus = currentStatusRef.current
-            const hasAssignedTruck = Boolean(assignedTruckRef.current)
-            if (speedMph >= DRIVING_SPEED_MPH) {
+    try {
+      watchRef.current = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: WATCH_TIME_INTERVAL_MS,
+          distanceInterval: WATCH_DISTANCE_INTERVAL_M,
+        },
+        (position) => {
+          void (async () => {
+            try {
+              const speedMps = typeof position.coords.speed === "number" ? Math.max(position.coords.speed, 0) : 0
+              const speedMph = speedMps * 2.23694
+              await processLocationSample({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                speed: speedMph,
+                heading: typeof position.coords.heading === "number" ? position.coords.heading : undefined,
+              })
+            } catch (error) {
+              if (!streamFailureRef.current) {
+                streamFailureRef.current = true
+                markMalfunctionActive()
+                await emitEvent(
+                  "Location stream interruption",
+                  "critical",
+                  {
+                    error: error instanceof Error ? error.message : "unknown_error",
+                  },
+                  "device_malfunction"
+                )
+              }
               stationarySinceRef.current = null
-              if (latestStatus !== "driving") {
-                await updateStatus("driving")
-                await emitEvent("Auto status changed to Driving", "info", { speed_mph: speedMph })
-              }
-              if (!hasAssignedTruck) {
-                await openSegment("Vehicle movement detected without assigned truck.")
-              }
-            } else if (latestStatus === "driving" && speedMph <= STOPPED_SPEED_MPH) {
-              if (!stationarySinceRef.current) {
-                stationarySinceRef.current = now
-              } else if (now - stationarySinceRef.current >= STOPPED_TO_ON_DUTY_MS) {
-                await updateStatus("on_duty")
-                stationarySinceRef.current = null
-                await closeSegment()
-                await emitEvent("Auto status changed to On Duty", "info", { speed_mph: speedMph })
-              }
-            } else {
-              stationarySinceRef.current = null
+              setLastSpeedMph(null)
             }
-
-            await handleViolationEvents()
-            await evaluateDiagnosticClearWindow()
-          } catch (error) {
-            if (!streamFailureRef.current) {
-              streamFailureRef.current = true
-              markMalfunctionActive()
-              await emitEvent(
-                "Location stream interruption",
-                "critical",
-                {
-                  error: error instanceof Error ? error.message : "unknown_error",
-                },
-                "device_malfunction"
-              )
-            }
-            stationarySinceRef.current = null
-            setLastSpeedMph(null)
-          }
-        })()
-      }
-    )
+          })()
+        }
+      )
+    } catch (error) {
+      await emitEvent(
+        "Live watcher unavailable - using foreground polling",
+        "warning",
+        {
+          error: error instanceof Error ? error.message : "unknown_error",
+        },
+        "device_malfunction"
+      )
+      startForegroundFallbackPolling()
+    }
 
     startDiagnosticsPolling()
     setEnabled(true)
@@ -343,6 +427,7 @@ export function AutoEldProvider({ children }: { children: React.ReactNode }) {
   function stopMonitoring() {
     watchRef.current?.remove()
     watchRef.current = null
+    stopFallbackPolling()
     stopDiagnosticsPolling()
     stationarySinceRef.current = null
     lastPositionAtRef.current = null
@@ -360,6 +445,7 @@ export function AutoEldProvider({ children }: { children: React.ReactNode }) {
     return () => {
       watchRef.current?.remove()
       watchRef.current = null
+      stopFallbackPolling()
       stopDiagnosticsPolling()
     }
   }, [])

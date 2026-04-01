@@ -51,8 +51,8 @@ export function KeyboardShortcutsProvider({ children }: { children: React.ReactN
     },
     {
       keys: ["G", "E"],
-      description: "Go to Employees",
-      action: () => router.push("/dashboard/employees"),
+      description: "Go to Users & invites",
+      action: () => router.push("/dashboard/settings/users"),
       category: "Navigation",
     },
     {

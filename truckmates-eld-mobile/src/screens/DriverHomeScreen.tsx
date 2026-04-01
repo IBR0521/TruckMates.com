@@ -1,11 +1,11 @@
-import React, { useState } from "react"
+import React, { useMemo, useState } from "react"
 import { Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native"
 import { useAutoEld } from "../context/AutoEldContext"
 import { useAuth } from "../context/AuthContext"
 import { useHos } from "../context/HosContext"
 import { useUnassignedDriving } from "../context/UnassignedDrivingContext"
 import { captureAndQueueLocation, requestLocationPermissions } from "../services/location-tracker"
-import { formatMinutes } from "../services/hos-engine"
+import { computeHosClocksWithSettings, formatMinutes } from "../services/hos-engine"
 import { flushQueue } from "../services/sync-queue"
 import { colors } from "../theme/tokens"
 import type { DutyStatus } from "../types/eld"
@@ -17,17 +17,32 @@ const labels: Record<DutyStatus, string> = {
   on_duty: "On Duty",
 }
 
+const BUILD_MARKER = "clock-fix-v3"
+
 export function DriverHomeScreen() {
   const { sessionToken, deviceId, userId, assignedTruckId } = useAuth()
-  const { clocks, currentStatus, shortHaulSession, updateStatus } = useHos()
+  const { entries, exceptionSettings, currentStatus, shortHaulSession, updateStatus } = useHos()
   const { enabled, lastSpeedMph, startMonitoring, stopMonitoring } = useAutoEld()
   const { segments, claimAll } = useUnassignedDriving()
   const [status, setStatus] = useState<DutyStatus>("off_duty")
   const [syncing, setSyncing] = useState(false)
+  const [nowIso, setNowIso] = useState(() => new Date().toISOString())
 
   React.useEffect(() => {
     setStatus(currentStatus)
   }, [currentStatus])
+
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setNowIso(new Date().toISOString())
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const clocks = useMemo(
+    () => computeHosClocksWithSettings(entries, exceptionSettings, nowIso),
+    [entries, exceptionSettings, nowIso]
+  )
 
   async function setDutyStatus(next: DutyStatus) {
     await updateStatus(next)
@@ -74,6 +89,7 @@ export function DriverHomeScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Driver Dashboard</Text>
+      <Text style={styles.muted}>Build: {BUILD_MARKER}</Text>
       <Text style={styles.muted}>Current duty status</Text>
       <Text style={styles.status}>{labels[status]}</Text>
 

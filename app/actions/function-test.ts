@@ -22,7 +22,7 @@ import * as documentsActions from "./documents"
 import * as dashboardActions from "./dashboard"
 import { getCurrentUser } from "@/lib/auth/server"
 import * as companyActions from "./company"
-import * as employeesActions from "./employees"
+import * as settingsUsersActions from "./settings-users"
 import * as notificationsActions from "./notifications"
 import * as eldAdvancedActions from "./eld-advanced"
 import * as eldInsightsActions from "./eld-insights"
@@ -1218,16 +1218,16 @@ export async function testAllPlatformFunctions() {
     }
 
     // ============================================
-    // 18. EMPLOYEE FUNCTIONS
+    // 18. TEAM / USERS (Settings → Users roster)
     // ============================================
-    Sentry.captureMessage("[FUNCTION TEST] Testing Employee functions...", "info")
+    Sentry.captureMessage("[FUNCTION TEST] Testing getCompanyUsers...", "info")
     try {
-      const employees = await employeesActions.getEmployees()
-      pushTested("getEmployees")
-      if (employees.data) pushPassed("getEmployees")
-      else pushFailed({ function: "getEmployees", error: employees.error })
+      const companyUsers = await settingsUsersActions.getCompanyUsers()
+      pushTested("getCompanyUsers")
+      if (companyUsers.data) pushPassed("getCompanyUsers")
+      else pushFailed({ function: "getCompanyUsers", error: companyUsers.error })
     } catch (error: unknown) {
-      pushFailed({ function: "getEmployees", error: errorMessage(error) })
+      pushFailed({ function: "getCompanyUsers", error: errorMessage(error) })
     }
 
     // Invitation functions removed

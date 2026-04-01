@@ -12,7 +12,7 @@ function dateKey(iso: string): string {
 }
 
 function clamp(value: number): number {
-  return Math.max(0, Math.floor(value))
+  return Math.max(0, value)
 }
 
 function durationMinutes(entry: HosLogEntry, nowIso: string): number {
@@ -146,7 +146,9 @@ export function certifyDay(entries: HosLogEntry[], day: string): HosLogEntry[] {
 }
 
 export function formatMinutes(minutes: number): string {
-  const hrs = Math.floor(minutes / 60)
-  const mins = minutes % 60
-  return `${hrs}h ${mins}m`
+  const totalSeconds = Math.max(0, Math.floor(minutes * 60))
+  const hrs = Math.floor(totalSeconds / 3600)
+  const mins = Math.floor((totalSeconds % 3600) / 60)
+  const secs = totalSeconds % 60
+  return `${hrs}h ${mins}m ${secs}s`
 }

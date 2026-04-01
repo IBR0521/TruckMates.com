@@ -99,10 +99,9 @@ export default function DashboardLayoutClient({
         // Skip check for specific pages that should be accessible
         if (typeof window !== "undefined") {
           const pathname = window.location.pathname
-          // Skip check on account setup, employees, and other admin pages
+          // Skip check on account setup and other admin pages
           if (
             pathname.includes("/account-setup") ||
-            pathname.includes("/dashboard/employees") ||
             pathname.includes("/dashboard/settings") ||
             pathname.includes("/register") ||
             pathname.includes("/login")

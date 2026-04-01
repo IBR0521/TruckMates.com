@@ -92,6 +92,7 @@ export function HosProvider({ children }: { children: React.ReactNode }) {
   const { userId } = useAuth()
   const [entries, setEntries] = useState<HosLogEntry[]>([])
   const [audits, setAudits] = useState<HosEditAudit[]>([])
+  const [clockNowIso, setClockNowIso] = useState(() => new Date().toISOString())
   const [exceptionSettings, setExceptionSettings] = useState<HosExceptionSettings>({
     adverseDrivingEnabled: false,
     adverseDrivingReason: "",
@@ -124,6 +125,15 @@ export function HosProvider({ children }: { children: React.ReactNode }) {
         setShortHaulSession(savedShortHaul)
       }
     })()
+  }, [])
+
+  useEffect(() => {
+    const tick = setInterval(() => {
+      setClockNowIso(new Date().toISOString())
+    }, 1000)
+    return () => {
+      clearInterval(tick)
+    }
   }, [])
 
   async function persist(nextEntries: HosLogEntry[], nextAudits: HosEditAudit[] = audits) {
@@ -427,8 +437,8 @@ export function HosProvider({ children }: { children: React.ReactNode }) {
   }
 
   const clocks = useMemo(
-    () => computeHosClocksWithSettings(entries, exceptionSettings),
-    [entries, exceptionSettings]
+    () => computeHosClocksWithSettings(entries, exceptionSettings, clockNowIso),
+    [entries, exceptionSettings, clockNowIso]
   )
   const currentStatus = useMemo<DutyStatus>(() => {
     const active = [...entries].reverse().find((e) => !e.endTime)

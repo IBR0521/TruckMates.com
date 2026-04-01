@@ -359,30 +359,25 @@ export default function SettingsPage() {
             )}
           </Card>
 
-          {/* Employee Management - Only for Managers */}
+          {/* Team / users — Only for Managers */}
           {isManager && (
             <Card className="border-border p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <Users className="w-5 h-5 text-primary" />
-                  <h2 className="text-xl font-bold text-foreground">Employee Management</h2>
+                  <h2 className="text-xl font-bold text-foreground">Team & users</h2>
                 </div>
               </div>
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Manage your employees and control access to your company account.
+                  Invite people, assign roles, and manage the full team list in{" "}
+                  <strong className="text-foreground">Settings → Users</strong>.
                 </p>
                 <div className="flex flex-wrap gap-3">
                   <Link href="/dashboard/settings/users" className="flex-1 min-w-[140px]">
                     <Button className="w-full">
                       <Users className="w-4 h-4 mr-2" />
-                      Add employee
-                    </Button>
-                  </Link>
-                  <Link href="/dashboard/employees" className="flex-1 min-w-[140px]">
-                    <Button variant="outline" className="w-full">
-                      <Users className="w-4 h-4 mr-2" />
-                      View All Employees
+                      Open Users & invites
                     </Button>
                   </Link>
                   <Link href="/dashboard/drivers" className="flex-1 min-w-[140px]">

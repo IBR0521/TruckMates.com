@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native"
 import { useHos } from "../context/HosContext"
-import { formatMinutes } from "../services/hos-engine"
+import { computeHosClocksWithSettings, formatMinutes } from "../services/hos-engine"
 import { colors } from "../theme/tokens"
 
 function hhmm(iso: string | undefined): string {
@@ -19,7 +19,6 @@ export function HosScreen() {
     audits,
     auditChainValid,
     exceptionSettings,
-    clocks,
     certifyToday,
     editEntry,
     annotateEntry,
@@ -46,7 +45,12 @@ export function HosScreen() {
   const [shortHaulNotes, setShortHaulNotes] = useState(shortHaulSession?.notes || "")
   const [useManualReturnOverride, setUseManualReturnOverride] = useState(false)
   const [returnedToTerminal, setReturnedToTerminal] = useState(shortHaulSession?.returnedToTerminal ?? true)
+  const [nowIso, setNowIso] = useState(() => new Date().toISOString())
   const selectedEntry = useMemo(() => entries.find((entry) => entry.id === selectedEntryId) || null, [entries, selectedEntryId])
+  const clocks = useMemo(
+    () => computeHosClocksWithSettings(entries, exceptionSettings, nowIso),
+    [entries, exceptionSettings, nowIso]
+  )
 
   useEffect(() => {
     setAdverseEnabled(exceptionSettings.adverseDrivingEnabled)
@@ -60,6 +64,13 @@ export function HosScreen() {
     setShortHaulNotes(shortHaulSession.notes || "")
     setReturnedToTerminal(shortHaulSession.returnedToTerminal ?? true)
   }, [shortHaulSession])
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowIso(new Date().toISOString())
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   function beginEdit(entryId: string) {
     const entry = entries.find((item) => item.id === entryId)

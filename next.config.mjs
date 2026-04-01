@@ -60,6 +60,15 @@ const nextConfig = {
   output: 'standalone', // Use standalone output to avoid static generation issues
   // Performance: Enable React strict mode for better development experience
   reactStrictMode: true,
+  async redirects() {
+    return [
+      {
+        source: "/dashboard/employees",
+        destination: "/dashboard/settings/users",
+        permanent: true,
+      },
+    ]
+  },
   // Externalize optional dependencies to prevent build errors
   // These packages are dynamically imported and may not be installed
   serverExternalPackages: [

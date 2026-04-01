@@ -18,6 +18,7 @@ function EmployeeRegisterForm() {
   const searchParams = useSearchParams()
   const roleParam = searchParams.get("role") as EmployeeRole | null
   const invitationCode = searchParams.get("invitation")
+  const hasInvitation = Boolean(invitationCode)
 
   // Roles that are allowed for self-registration (no managers or super admins)
   const selfRegisterRoles: EmployeeRole[] = [
@@ -28,7 +29,9 @@ function EmployeeRegisterForm() {
   ]
 
   const defaultRole: EmployeeRole =
-    roleParam && selfRegisterRoles.includes(roleParam) ? roleParam : "driver"
+    roleParam && (selfRegisterRoles.includes(roleParam) || roleParam === "operations_manager")
+      ? roleParam
+      : "driver"
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -61,11 +64,11 @@ function EmployeeRegisterForm() {
     try {
       const result = await registerEmployee({
         fullName: formData.fullName.trim(),
-        email: formData.email,
+        email: formData.email.trim(),
         password: formData.password,
         role: formData.role,
-        companyId: formData.companyId || undefined,
-        invitationCode: formData.invitationCode || undefined,
+        companyId: formData.companyId.trim() || undefined,
+        invitationCode: formData.invitationCode.trim() || undefined,
       } as any)
 
       if (result.error) {
@@ -143,12 +146,12 @@ function EmployeeRegisterForm() {
                 value={formData.role} 
                 onValueChange={(value) => setFormData({ ...formData, role: value as EmployeeRole })}
               >
-                <SelectTrigger className="mt-2 bg-input border-border text-foreground">
+                <SelectTrigger className="mt-2 bg-input border-border text-foreground" disabled={hasInvitation}>
                   <SelectValue placeholder="Select your role" />
                 </SelectTrigger>
                 <SelectContent>
                   {Object.values(ROLES)
-                    .filter(role => selfRegisterRoles.includes(role.id))
+                    .filter(role => selfRegisterRoles.includes(role.id) || role.id === "operations_manager")
                     .map((role) => (
                       <SelectItem key={role.id} value={role.id}>
                         {role.name}
@@ -156,6 +159,11 @@ function EmployeeRegisterForm() {
                     ))}
                 </SelectContent>
               </Select>
+              {hasInvitation && (
+                <p className="text-xs text-primary mt-1">
+                  Role is locked by the invitation link.
+                </p>
+              )}
               {formData.role && ROLES[formData.role] && (
                 <p className="text-xs text-muted-foreground mt-1">
                   {ROLES[formData.role].description}

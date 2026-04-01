@@ -192,35 +192,44 @@ export async function registerEmployee(data: {
   password: string
   role: string
   companyId?: string
+  invitationCode?: string
 }) {
   try {
     const supabase = await createClient()
 
     const role = data.role as EmployeeRole
 
-    // HIGH FIX 5: Use allowlist instead of blocklist for role validation
     const ALLOWED_SELF_REGISTER_ROLES: EmployeeRole[] = ["dispatcher", "safety_compliance", "financial_controller", "driver"]
-    if (!ALLOWED_SELF_REGISTER_ROLES.includes(role)) {
-      return {
-        data: null,
-        error: `You cannot self-register as ${role}. Only ${ALLOWED_SELF_REGISTER_ROLES.join(", ")} roles can self-register.`,
-      }
-    }
+    const ALLOWED_INVITED_REGISTER_ROLES: EmployeeRole[] = [
+      "operations_manager",
+      "dispatcher",
+      "safety_compliance",
+      "financial_controller",
+      "driver",
+    ]
 
     // HIGH FIX: Require invite token for company registration
-    // Check if invitation_code table exists, if not fall back to companyId validation
     let companyId: string | null = null
-    
-    // Try to get invitation token from data (could be passed as invitationCode or companyId)
-    const invitationCode = (data as any).invitationCode || data.companyId
-    
-    if (invitationCode) {
-      // Check if it's an invitation code (UUID format or alphanumeric)
+
+    // Normalize: trim whitespace; support code pasted in "company ID" field on older flows
+    const inviteToken = String(
+      (data.invitationCode ?? data.companyId ?? "").trim(),
+    )
+
+    if (inviteToken) {
+      if (!ALLOWED_INVITED_REGISTER_ROLES.includes(role)) {
+        return {
+          data: null,
+          error: `Invalid invited role: ${role}.`,
+        }
+      }
+
+      // Check if it's an invitation code (6-digit or alphanumeric)
       // First try to find it in invitation_codes table
       const { data: invitation, error: inviteError } = await supabase
         .from("invitation_codes")
         .select("company_id, email, status, expires_at")
-        .eq("invitation_code", invitationCode)
+        .eq("invitation_code", inviteToken)
         .eq("status", "pending")
         .gt("expires_at", new Date().toISOString())
         .maybeSingle()
@@ -245,6 +254,12 @@ export async function registerEmployee(data: {
         }
       }
     } else {
+      if (!ALLOWED_SELF_REGISTER_ROLES.includes(role)) {
+        return {
+          data: null,
+          error: `You cannot self-register as ${role}. Only ${ALLOWED_SELF_REGISTER_ROLES.join(", ")} roles can self-register.`,
+        }
+      }
       return { 
         data: null, 
         error: "Invitation code or company ID is required. Please use a valid invitation link." 
@@ -291,36 +306,69 @@ export async function registerEmployee(data: {
       // Ignore auto-confirm failure; Supabase will still enforce normal email confirmation
     }
 
-    // Update user record
+    // Update user record with admin client so invited employee is reliably attached
+    // to the target company even if normal RLS/session propagation is delayed.
     const updateData: any = {
+      id: authData.user.id,
+      email: data.email.toLowerCase(),
       full_name: data.fullName.trim(),
       role,
       company_id: companyId, // Use validated companyId from invitation
-    }
-    
-    // BUG FIX: invitationCode already declared above, reuse it instead of redeclaring
-    // If invitation code was used, mark it as accepted
-    // invitationCode is already defined on line 168, so we can use it here
-    if (invitationCode && typeof invitationCode === 'string') {
-      await supabase
-        .from("invitation_codes")
-        .update({
-          status: "accepted",
-          accepted_at: new Date().toISOString(),
-          accepted_by: authData.user.id,
-        })
-        .eq("invitation_code", invitationCode)
-        .eq("status", "pending")
+      employee_status: "active",
     }
 
-    const { error: updateError } = await supabase
-      .from('users')
-      .update(updateData)
-      .eq('id', authData.user.id)
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const adminSupabase = createAdminClient()
+
+    const { error: updateError } = await adminSupabase
+      .from("users")
+      .upsert(updateData, { onConflict: "id" })
 
     if (updateError) {
       const errorMsg = updateError.message || String(updateError) || "Failed to update user"
       return { data: null, error: errorMsg.substring(0, 200) }
+    }
+
+    // Mark invitation as accepted only after user/company assignment succeeded.
+    if (inviteToken) {
+      const acceptPayload = {
+        status: "accepted" as const,
+        accepted_at: new Date().toISOString(),
+        accepted_by: authData.user.id,
+      }
+
+      const { data: acceptedRows, error: acceptError } = await adminSupabase
+        .from("invitation_codes")
+        .update(acceptPayload)
+        .eq("invitation_code", inviteToken)
+        .eq("status", "pending")
+        .select("id")
+
+      if (acceptError) {
+        return { data: null, error: acceptError.message.substring(0, 200) }
+      }
+
+      // Fallback: code mismatch (whitespace, copy/paste) but user+company already match invite email
+      if (!acceptedRows || acceptedRows.length === 0) {
+        const emailLower = data.email.toLowerCase()
+        const { data: byEmail, error: byEmailError } = await adminSupabase
+          .from("invitation_codes")
+          .update(acceptPayload)
+          .eq("company_id", companyId)
+          .eq("email", emailLower)
+          .eq("status", "pending")
+          .select("id")
+
+        if (byEmailError) {
+          return { data: null, error: byEmailError.message.substring(0, 200) }
+        }
+        if (!byEmail?.length) {
+          // Account exists; invitation row may still look "pending" until Manage Users runs reconciliation
+          Sentry.captureMessage(
+            `[registerEmployee] Invitation not marked accepted (companyId=${companyId}, email=${emailLower})`,
+          )
+        }
+      }
     }
 
     return {
