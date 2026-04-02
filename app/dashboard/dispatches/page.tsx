@@ -256,35 +256,46 @@ export default function DispatchesPage() {
   async function loadHOSData() {
     setHosLoading(true)
     try {
+      // Load via server action first — same origin, no extra client fetch hop; avoids
+      // "Failed to fetch" when the dev server is restarting or the route is temporarily unreachable.
+      const primary = await getAllDriversHOSStatus()
+      if (!primary.error && primary.data) {
+        setDriversHOS(primary.data)
+      }
+
+      // Best-effort refresh via API (Bearer) when a session token exists; failures are ignored
+      // so we keep server-action data and do not surface network TypeErrors in the dev overlay.
       const supabase = createClient()
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData.session?.access_token
-      const res = await fetch("/api/dispatch/hos", {
-        method: "GET",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        console.error("Failed to load HOS data (api):", body?.error || `HTTP ${res.status}`)
-        // Fallback to server action path if API auth/channel is unstable.
-        const fallback = await getAllDriversHOSStatus()
-        if (fallback.error) {
-          console.error("Failed to load HOS data (fallback):", fallback.error)
-        } else if (fallback.data) {
-          setDriversHOS(fallback.data)
+      if (!token || typeof window === "undefined") {
+        return
+      }
+
+      try {
+        const url = `${window.location.origin}/api/dispatch/hos`
+        const res = await fetch(url, {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const body = await res.json().catch(() => ({}))
+        if (res.ok && Array.isArray(body?.data)) {
+          setDriversHOS(body.data)
         }
-      } else if (Array.isArray(body?.data)) {
-        setDriversHOS(body.data)
+      } catch {
+        /* keep primary HOS data */
       }
     } catch (error: unknown) {
-      console.error("Failed to load HOS data (exception):", error)
+      if (process.env.NODE_ENV === "development") {
+        console.warn("loadHOSData:", error)
+      }
       try {
         const fallback = await getAllDriversHOSStatus()
         if (!fallback.error && fallback.data) {
           setDriversHOS(fallback.data)
         }
-      } catch (fallbackError) {
-        console.error("Failed to load HOS data (fallback exception):", fallbackError)
+      } catch {
+        /* ignore */
       }
     } finally {
       setHosLoading(false)
