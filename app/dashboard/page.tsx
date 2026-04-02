@@ -634,8 +634,16 @@ export default function DashboardPage() {
             <PerformanceMetrics
               fleetUtilization={stats.fleetUtilization}
               totalLoads={stats.totalLoads}
-              onTimeDeliveryRate={dashboardData?.totalLoads > 0 && dashboardData?.inTransitLoads > 0 ? Math.round((dashboardData.inTransitLoads / dashboardData.totalLoads) * 100) : 0}
-              averageLoadValue={dashboardData?.totalRevenue && dashboardData?.totalLoads ? (dashboardData.totalRevenue / dashboardData.totalLoads) : 0}
+              onTimeDeliveryRate={
+                stats.totalLoads > 0 && stats.inTransitLoads > 0
+                  ? Math.round((stats.inTransitLoads / stats.totalLoads) * 100)
+                  : 0
+              }
+              averageLoadValue={
+                dashboardData && dashboardData.totalLoads > 0
+                  ? dashboardData.totalRevenue / dashboardData.totalLoads
+                  : 0
+              }
             />
           </Suspense>
 

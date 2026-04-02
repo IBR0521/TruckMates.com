@@ -11,6 +11,15 @@ import { sendNotification } from "./notifications"
 import { validateLoadData, validatePricingData, sanitizeString, sanitizeEmail, sanitizePhone, validateAddress } from "@/lib/validation"
 import { ALL_LOAD_STATUSES, getAllowedNextLoadStatuses, normalizeLoadStatus, parseLoadStatus } from "@/lib/load-status"
 
+/** Subset of load fields used for background notifications after updates */
+type LoadUpdateNotificationPayload = {
+  driver_id?: string | null
+  shipment_number?: string | null
+  status?: string | null
+  origin?: string | null
+  destination?: string | null
+}
+
 const LOAD_DETAIL_SELECT = `
   id, company_id, shipment_number, origin, destination, status,
   load_date, estimated_delivery, actual_delivery,
@@ -32,7 +41,7 @@ const LOAD_DETAIL_SELECT = `
 `
 
 // Helper function to send notifications in background (non-blocking)
-async function sendNotificationsForLoadUpdate(loadData: any) {
+async function sendNotificationsForLoadUpdate(loadData: LoadUpdateNotificationPayload) {
   try {
     const supabase = await createClient()
     const ctx = await getCachedAuthContext()
@@ -58,7 +67,7 @@ async function sendNotificationsForLoadUpdate(loadData: any) {
     // BUG-018 FIX: Only send notifications to relevant users, not all company users
     if (relevantUsers && relevantUsers.length > 0) {
       await Promise.all(
-        relevantUsers.map(async (relevantUser: { id: string; role: string; [key: string]: any }) => {
+        relevantUsers.map(async (relevantUser: { id: string; role: string }) => {
           try {
             await sendNotification(relevantUser.id, "load_update", {
               shipmentNumber: loadData.shipment_number,

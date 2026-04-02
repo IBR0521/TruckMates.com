@@ -5,27 +5,16 @@ import { Button } from "@/components/ui/button"
 import { AlertTriangle, Wrench, FileText, Package, ArrowRight } from "lucide-react"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
+import type {
+  MaintenanceAlertRow,
+  OverdueInvoiceAlertRow,
+  UpcomingDeliveryRow,
+} from "@/lib/types/dashboard-stats"
 
 interface AlertsSectionProps {
-  upcomingMaintenance: Array<{
-    id: string
-    service_type: string
-    scheduled_date: string
-    status: string
-  }>
-  overdueInvoices: Array<{
-    id: string
-    invoice_number: string
-    due_date: string
-    amount: number
-    status: string
-  }>
-  upcomingDeliveries: Array<{
-    id: string
-    shipment_number: string
-    estimated_delivery: string
-    status: string
-  }>
+  upcomingMaintenance: MaintenanceAlertRow[]
+  overdueInvoices: OverdueInvoiceAlertRow[]
+  upcomingDeliveries: UpcomingDeliveryRow[]
 }
 
 export function AlertsSection({ upcomingMaintenance, overdueInvoices, upcomingDeliveries }: AlertsSectionProps) {

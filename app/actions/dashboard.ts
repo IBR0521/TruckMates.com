@@ -5,11 +5,45 @@ import { errorMessage } from "@/lib/error-message"
 import { getAuthCompany, getCachedAuthContext } from "@/lib/auth/server"
 import { cache, cacheKeys } from "@/lib/cache"
 import * as Sentry from "@sentry/nextjs"
+import type {
+  DashboardCardDriverRow,
+  DashboardCardLoadRow,
+  DashboardCardRouteRow,
+  DashboardCardTruckRow,
+  DashboardStats,
+  ExpenseAmountRow,
+  InvoiceAmountRow,
+  LoadRevenueRow,
+  LoadStatusRow,
+  MaintenanceAlertRow,
+  OverdueInvoiceAlertRow,
+  RecentAddressBookActivityRow,
+  RecentBolActivityRow,
+  RecentCustomerActivityRow,
+  RecentDocumentActivityRow,
+  RecentDriverActivityRow,
+  RecentDvirActivityRow,
+  RecentGeofenceActivityRow,
+  RecentInvoiceActivityRow,
+  RecentLoadActivityRow,
+  RecentMaintenanceActivityRow,
+  RecentRouteActivityRow,
+  RecentSettlementActivityRow,
+  RecentTruckActivityRow,
+  RecentVendorActivityRow,
+  UpcomingDeliveryRow,
+} from "@/lib/types/dashboard-stats"
+
+type AuthRaceResult =
+  | Awaited<ReturnType<typeof getCachedAuthContext>>
+  | { companyId: null; error: string }
+
+type SupabaseCountHead = { count: number | null }
 
 /**
  * FAST dashboard stats - optimized for speed with aggressive timeouts
  */
-export async function getDashboardStats() {
+export async function getDashboardStats(): Promise<{ data: DashboardStats; error: string | null }> {
   try {
     // Try to create Supabase client with error handling
     let supabase
@@ -68,10 +102,8 @@ export async function getDashboardStats() {
       }, 5000) // Reduced to 5 seconds for faster failure detection
     })
 
-    const { companyId, error: authError } = await Promise.race([
-      authPromise,
-      authTimeout
-    ]) as any
+    const authOutcome = (await Promise.race([authPromise, authTimeout])) as AuthRaceResult
+    const { companyId, error: authError } = authOutcome
 
     if (authError || !companyId) {
       // Check if it's a connection error
@@ -116,13 +148,13 @@ export async function getDashboardStats() {
 
     // Check cache first (60 second TTL for dashboard stats - increased for better performance)
     const cacheKey = cacheKeys.dashboardStats(companyId)
-    const cached = cache.get<any>(cacheKey)
+    const cached = cache.get<DashboardStats>(cacheKey)
     if (cached) {
       return { data: cached, error: null }
     }
 
     // Get counts for all entities - optimized to use count queries instead of fetching data
-    let countResults: any[] = []
+    let countResults: SupabaseCountHead[] = []
     try {
       countResults = await Promise.all([
         // Total counts
@@ -200,37 +232,37 @@ export async function getDashboardStats() {
       }, 5000) // 5 seconds timeout
     })
 
-    let recentLoads: any[] = []
-    let recentDrivers: any[] = []
-    let recentMaintenance: any[] = []
-    let recentRoutes: any[] = []
-    let recentInvoices: any[] = []
-    let recentSettlements: any[] = []
-    let recentAddressBook: any[] = []
-    let recentTrucks: any[] = []
-    let recentCustomers: any[] = []
-    let recentVendors: any[] = []
-    let recentDocuments: any[] = []
-    let recentBols: any[] = []
-    let recentDvir: any[] = []
-    let recentGeofences: any[] = []
+    let recentLoads: RecentLoadActivityRow[] = []
+    let recentDrivers: RecentDriverActivityRow[] = []
+    let recentMaintenance: RecentMaintenanceActivityRow[] = []
+    let recentRoutes: RecentRouteActivityRow[] = []
+    let recentInvoices: RecentInvoiceActivityRow[] = []
+    let recentSettlements: RecentSettlementActivityRow[] = []
+    let recentAddressBook: RecentAddressBookActivityRow[] = []
+    let recentTrucks: RecentTruckActivityRow[] = []
+    let recentCustomers: RecentCustomerActivityRow[] = []
+    let recentVendors: RecentVendorActivityRow[] = []
+    let recentDocuments: RecentDocumentActivityRow[] = []
+    let recentBols: RecentBolActivityRow[] = []
+    let recentDvir: RecentDvirActivityRow[] = []
+    let recentGeofences: RecentGeofenceActivityRow[] = []
 
     try {
-      const results = await Promise.race([activityPromise, activityTimeout]) as any[]
-      recentLoads = results[0]?.data || []
-      recentDrivers = results[1]?.data || []
-      recentMaintenance = results[2]?.data || []
-      recentRoutes = results[3]?.data || []
-      recentInvoices = results[4]?.data || []
-      recentSettlements = results[5]?.data || []
-      recentAddressBook = results[6]?.data || []
-      recentTrucks = results[7]?.data || []
-      recentCustomers = results[8]?.data || []
-      recentVendors = results[9]?.data || []
-      recentDocuments = results[10]?.data || []
-      recentBols = results[11]?.data || []
-      recentDvir = results[12]?.data || []
-      recentGeofences = results[13]?.data || []
+      const results = (await Promise.race([activityPromise, activityTimeout])) as Array<{ data: unknown }>
+      recentLoads = (results[0]?.data as RecentLoadActivityRow[]) || []
+      recentDrivers = (results[1]?.data as RecentDriverActivityRow[]) || []
+      recentMaintenance = (results[2]?.data as RecentMaintenanceActivityRow[]) || []
+      recentRoutes = (results[3]?.data as RecentRouteActivityRow[]) || []
+      recentInvoices = (results[4]?.data as RecentInvoiceActivityRow[]) || []
+      recentSettlements = (results[5]?.data as RecentSettlementActivityRow[]) || []
+      recentAddressBook = (results[6]?.data as RecentAddressBookActivityRow[]) || []
+      recentTrucks = (results[7]?.data as RecentTruckActivityRow[]) || []
+      recentCustomers = (results[8]?.data as RecentCustomerActivityRow[]) || []
+      recentVendors = (results[9]?.data as RecentVendorActivityRow[]) || []
+      recentDocuments = (results[10]?.data as RecentDocumentActivityRow[]) || []
+      recentBols = (results[11]?.data as RecentBolActivityRow[]) || []
+      recentDvir = (results[12]?.data as RecentDvirActivityRow[]) || []
+      recentGeofences = (results[13]?.data as RecentGeofenceActivityRow[]) || []
       
     } catch (error) {
       // If there's an error, use empty arrays
@@ -288,7 +320,7 @@ export async function getDashboardStats() {
         if (route && (route.created_at || route.updated_at)) {
           recentActivity.push({
             action: `Route ${route.name || 'Unknown'} was ${route.status === "completed" ? "completed" : route.status === "in_progress" ? "started" : "created"}`,
-            time: route.updated_at || route.created_at,
+            time: String(route.updated_at ?? route.created_at ?? ""),
             type: route.status === "completed" ? "success" : route.status === "in_progress" ? "info" : "default",
           })
         }
@@ -311,7 +343,7 @@ export async function getDashboardStats() {
 
     // Process settlements
     if (Array.isArray(recentSettlements) && recentSettlements.length > 0) {
-      recentSettlements.forEach((settlement: any) => {
+      recentSettlements.forEach((settlement: RecentSettlementActivityRow) => {
         if (settlement && settlement.created_at) {
           const driverName = settlement.drivers?.name || "Driver"
           const netPay = settlement.net_pay ? Number(settlement.net_pay).toFixed(2) : "0.00"
@@ -339,7 +371,8 @@ export async function getDashboardStats() {
             fuel_station: "Fuel Station",
             other: "Address",
           }
-          const categoryLabel = categoryLabels[entry.category] || "Address"
+          const categoryKey = entry.category ?? "other"
+          const categoryLabel = categoryLabels[categoryKey] || "Address"
           recentActivity.push({
             action: `${categoryLabel} address "${entry.name || 'Unknown'}" was added to address book`,
             time: entry.created_at,
@@ -477,17 +510,17 @@ export async function getDashboardStats() {
       setTimeout(() => reject(new Error("Connection timeout. Please check your internet connection.")), 5000) // Reduced to 5 seconds for faster failure
     })
     
-    let recentDriversData: any = null
-    let recentTrucksData: any = null
-    let recentRoutesData: any = null
-    let recentLoadsData: any = null
+    let recentDriversData: DashboardCardDriverRow[] | null = null
+    let recentTrucksData: DashboardCardTruckRow[] | null = null
+    let recentRoutesData: DashboardCardRouteRow[] | null = null
+    let recentLoadsData: DashboardCardLoadRow[] | null = null
     
     try {
-      const results = await Promise.race([cardQueries, cardTimeout]) as any[]
-      recentDriversData = results[0]?.data
-      recentTrucksData = results[1]?.data
-      recentRoutesData = results[2]?.data
-      recentLoadsData = results[3]?.data
+      const results = (await Promise.race([cardQueries, cardTimeout])) as Array<{ data: unknown }>
+      recentDriversData = (results[0]?.data as DashboardCardDriverRow[]) ?? null
+      recentTrucksData = (results[1]?.data as DashboardCardTruckRow[]) ?? null
+      recentRoutesData = (results[2]?.data as DashboardCardRouteRow[]) ?? null
+      recentLoadsData = (results[3]?.data as DashboardCardLoadRow[]) ?? null
     } catch (error) {
       // If timeout, continue with empty arrays
       // Only log in development
@@ -527,28 +560,29 @@ export async function getDashboardStats() {
       }, 2000) // Reduced to 2 seconds for faster failure
     })
 
-    const [
-      { data: allInvoices },
-      { data: expenses },
-      { data: pendingInvoices },
-      { data: loads },
-    ] = await Promise.race([financialPromise, financialTimeout]) as any
+    const financialOutcome = (await Promise.race([financialPromise, financialTimeout])) as [
+      { data: InvoiceAmountRow[] | null },
+      { data: ExpenseAmountRow[] | null },
+      { data: InvoiceAmountRow[] | null },
+      { data: LoadRevenueRow[] | null },
+    ]
+    const [{ data: allInvoices }, { data: expenses }, { data: pendingInvoices }, { data: loads }] = financialOutcome
 
     // Calculate financial metrics - combine invoices and loads
-    let totalRevenue = allInvoices?.reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0) || 0
+    let totalRevenue = allInvoices?.reduce((sum: number, inv: InvoiceAmountRow) => sum + (Number(inv.amount) || 0), 0) || 0
     
     // Add revenue from loads
     if (loads) {
-      const loadRevenue = loads.reduce((sum: number, load: any) => {
+      const loadRevenue = loads.reduce((sum: number, load: LoadRevenueRow) => {
         return sum + (Number(load.total_rate) || Number(load.value) || 0)
       }, 0)
       totalRevenue += loadRevenue
     }
     
-    const totalExpenses = expenses?.reduce((sum: number, exp: any) => sum + (Number(exp.amount) || 0), 0) || 0
+    const totalExpenses = expenses?.reduce((sum: number, exp: ExpenseAmountRow) => sum + (Number(exp.amount) || 0), 0) || 0
     const netProfit = totalRevenue - totalExpenses
     const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100) : 0
-    const outstandingInvoices = pendingInvoices?.reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0) || 0
+    const outstandingInvoices = pendingInvoices?.reduce((sum: number, inv: InvoiceAmountRow) => sum + (Number(inv.amount) || 0), 0) || 0
 
     // Get revenue trend data (last 7 days) - match chart title
     let revenueTrendData: Array<{ date: string; amount: number }> = []
@@ -582,7 +616,7 @@ export async function getDashboardStats() {
       
       // Process invoices - use created_at as primary date
       if (invoices && invoices.length > 0) {
-        invoices.forEach((inv: any) => {
+        invoices.forEach((inv: InvoiceAmountRow) => {
           let dateStr = ''
           if (inv.created_at) {
             const date = new Date(inv.created_at)
@@ -603,7 +637,7 @@ export async function getDashboardStats() {
       
       // Process loads - combine with invoice data
       if (loadsForTrend && loadsForTrend.length > 0) {
-        loadsForTrend.forEach((load: any) => {
+        loadsForTrend.forEach((load: LoadRevenueRow) => {
           if (load.created_at) {
             const date = new Date(load.created_at)
             const dateStr = date.toISOString().split('T')[0]
@@ -647,7 +681,7 @@ export async function getDashboardStats() {
 
     // MEDIUM FIX: Add limit to prevent unbounded query
     // Get load status distribution
-    let allLoads: any[] = []
+    let allLoads: LoadStatusRow[] = []
     try {
       const loadStatusResult = await supabase
         .from("loads")
@@ -666,15 +700,15 @@ export async function getDashboardStats() {
 
     // Count loads by status
     const loadStatusCounts: Record<string, number> = {}
-    allLoads?.forEach((load: any) => {
+    allLoads?.forEach((load: LoadStatusRow) => {
       const status = load.status || 'unknown'
       loadStatusCounts[status] = (loadStatusCounts[status] || 0) + 1
     })
 
     // Get critical alerts
-    let upcomingMaintenance: any[] = []
-    let overdueInvoices: any[] = []
-    let upcomingDeliveries: any[] = []
+    let upcomingMaintenance: MaintenanceAlertRow[] = []
+    let overdueInvoices: OverdueInvoiceAlertRow[] = []
+    let upcomingDeliveries: UpcomingDeliveryRow[] = []
     
     try {
       const alertsResults = await Promise.all([
@@ -684,14 +718,14 @@ export async function getDashboardStats() {
           .in("status", ["overdue", "scheduled"])
           .lte("scheduled_date", new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
           .limit(5)
-          .then((res: any) => res)
+          .then((res: { data: unknown }) => res)
           .catch(() => ({ data: [], error: null })),
         supabase.from("invoices")
           .select("id, invoice_number, due_date, amount, status")
           .eq("company_id", companyId)
           .eq("status", "overdue")
           .limit(5)
-          .then((res: any) => res)
+          .then((res: { data: unknown }) => res)
           .catch(() => ({ data: [], error: null })),
         supabase.from("loads")
           .select("id, shipment_number, estimated_delivery, status")
@@ -699,13 +733,13 @@ export async function getDashboardStats() {
           .eq("status", "in_transit")
           .lte("estimated_delivery", new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString())
           .limit(5)
-          .then((res: any) => res)
+          .then((res: { data: unknown }) => res)
           .catch(() => ({ data: [], error: null })),
       ])
       
-      upcomingMaintenance = alertsResults[0]?.data || []
-      overdueInvoices = alertsResults[1]?.data || []
-      upcomingDeliveries = alertsResults[2]?.data || []
+      upcomingMaintenance = (alertsResults[0]?.data as MaintenanceAlertRow[] | null) ?? []
+      overdueInvoices = (alertsResults[1]?.data as OverdueInvoiceAlertRow[] | null) ?? []
+      upcomingDeliveries = (alertsResults[2]?.data as UpcomingDeliveryRow[] | null) ?? []
     } catch (error) {
       // Only log in development
       if (process.env.NODE_ENV === 'development') {
@@ -715,7 +749,7 @@ export async function getDashboardStats() {
     }
 
 
-    const dashboardData = {
+    const dashboardData: DashboardStats = {
       totalDrivers,
       activeDrivers,
       totalTrucks,

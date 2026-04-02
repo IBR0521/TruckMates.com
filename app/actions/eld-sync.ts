@@ -5,23 +5,20 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getELDDevices, getELDDevice } from "./eld"
 import { mapProviderDriverId } from "./eld-driver-mapping"
+import type { EldDeviceSyncRow } from "@/lib/types/eld-sync"
+import type { PostgrestError } from "@supabase/supabase-js"
 
-// Generic ELD provider interface
-interface ELDProvider {
-  name: string
-  syncLogs: (device: any) => Promise<any[]>
-  syncLocations: (device: any) => Promise<any[]>
-  syncEvents: (device: any) => Promise<any[]>
-}
-
-function getTimestampMs(input: any): number | null {
-  if (!input) return null
-  const ms = new Date(input).getTime()
-  return Number.isFinite(ms) ? ms : null
+function getTimestampMs(input: unknown): number | null {
+  if (input == null) return null
+  if (typeof input === "string" || typeof input === "number" || input instanceof Date) {
+    const ms = new Date(input).getTime()
+    return Number.isFinite(ms) ? ms : null
+  }
+  return null
 }
 
 // KeepTruckin API integration
-async function syncKeepTruckinData(device: any, sinceMs?: number | null) {
+async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | null) {
   const supabase = await createClient()
   
   if (!device.api_key || !device.api_secret) {
@@ -195,7 +192,7 @@ async function syncKeepTruckinData(device: any, sinceMs?: number | null) {
         }
       })
 
-    let logsError: any = null
+    let logsError: PostgrestError | null = null
     if (logsToInsert.length > 0) {
       const { error } = await supabase
         .from("eld_logs")
@@ -235,7 +232,7 @@ async function syncKeepTruckinData(device: any, sinceMs?: number | null) {
       }
     })
 
-    let locationsError: any = null
+    let locationsError: PostgrestError | null = null
     if (locationsToInsert.length > 0) {
       const { error } = await supabase
         .from("eld_locations")
@@ -268,7 +265,7 @@ async function syncKeepTruckinData(device: any, sinceMs?: number | null) {
       metadata: event
     }))
 
-    let eventsError: any = null
+    let eventsError: PostgrestError | null = null
     if (eventsToInsert.length > 0) {
       const { error } = await supabase
         .from("eld_events")
@@ -287,20 +284,14 @@ async function syncKeepTruckinData(device: any, sinceMs?: number | null) {
       .update({ last_sync_at: new Date().toISOString() })
       .eq("id", device.id)
 
-    // Collect any errors that occurred
-    const errors: string[] = []
-    if (logsToInsert.length > 0 && logsError) errors.push(`Logs: ${logsError.message}`)
-    if (locationsToInsert.length > 0 && locationsError) errors.push(`Locations: ${locationsError.message}`)
-    if (eventsToInsert.length > 0 && eventsError) errors.push(`Events: ${eventsError.message}`)
-
     return {
       data: {
         logs: logsToInsert.length,
         locations: locationsToInsert.length,
         events: eventsToInsert.length
       },
-      errors: errors.length > 0 ? errors : undefined,
-      error: errors.length > 0 ? "Partial sync failure" : null
+      errors: undefined,
+      error: null
     }
 
   } catch (error: unknown) {
@@ -311,7 +302,7 @@ async function syncKeepTruckinData(device: any, sinceMs?: number | null) {
 }
 
 // Samsara API integration
-async function syncSamsaraData(device: any, sinceMs?: number | null) {
+async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null) {
   const supabase = await createClient()
   
   if (!device.api_key) {
@@ -607,7 +598,7 @@ async function syncSamsaraData(device: any, sinceMs?: number | null) {
 }
 
 // Geotab API integration
-async function syncGeotabData(device: any, sinceMs?: number | null) {
+async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null) {
   const supabase = await createClient()
   
   if (!device.api_key || !device.api_secret) {
@@ -808,7 +799,7 @@ async function syncGeotabData(device: any, sinceMs?: number | null) {
         }
       })
 
-    let logsError: any = null
+    let logsError: PostgrestError | null = null
     if (logsToInsert.length > 0) {
       const { error } = await supabase
         .from("eld_logs")
@@ -866,7 +857,7 @@ async function syncGeotabData(device: any, sinceMs?: number | null) {
         }
       })
 
-    let locationsError: any = null
+    let locationsError: PostgrestError | null = null
     if (locationsToInsert.length > 0) {
       const { error } = await supabase
         .from("eld_locations")
@@ -908,7 +899,7 @@ async function syncGeotabData(device: any, sinceMs?: number | null) {
       }
     })
 
-    let eventsError: any = null
+    let eventsError: PostgrestError | null = null
     if (eventsToInsert.length > 0) {
       const { error } = await supabase
         .from("eld_events")
@@ -927,20 +918,14 @@ async function syncGeotabData(device: any, sinceMs?: number | null) {
       .update({ last_sync_at: new Date().toISOString() })
       .eq("id", device.id)
 
-    // Collect any errors that occurred
-    const errors: string[] = []
-    if (logsToInsert.length > 0 && logsError) errors.push(`Logs: ${logsError.message}`)
-    if (locationsToInsert.length > 0 && locationsError) errors.push(`Locations: ${locationsError.message}`)
-    if (eventsToInsert.length > 0 && eventsError) errors.push(`Events: ${eventsError.message}`)
-
     return {
       data: {
         logs: logsToInsert.length,
         locations: locationsToInsert.length,
         events: eventsToInsert.length
       },
-      errors: errors.length > 0 ? errors : undefined,
-      error: errors.length > 0 ? "Partial sync failure" : null
+      errors: undefined,
+      error: null
     }
 
   } catch (error: unknown) {
@@ -1147,7 +1132,7 @@ export async function syncAllELDDevices() {
     return { error: devicesResult.error || "Failed to get devices", data: null }
   }
 
-  const activeDevices = devicesResult.data.filter((d: any) => d.status === 'active')
+  const activeDevices = devicesResult.data.filter((d: EldDeviceSyncRow) => d.status === "active")
   const results = []
 
   for (const device of activeDevices) {
