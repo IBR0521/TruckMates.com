@@ -26,4 +26,10 @@ export interface EldDeviceSyncRow {
 /** JSON blobs from external ELD HTTP APIs — unknown shape per vendor/version */
 export type ProviderApiJson = Record<string, unknown>
 
+/** Row from `eld_driver_mappings` used when batching provider → internal driver IDs */
+export interface EldDriverMappingRow {
+  provider_driver_id: string
+  internal_driver_id: string
+}
+
 export type { PostgrestError }

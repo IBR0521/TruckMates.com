@@ -5,7 +5,7 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getELDDevices, getELDDevice } from "./eld"
 import { mapProviderDriverId } from "./eld-driver-mapping"
-import type { EldDeviceSyncRow } from "@/lib/types/eld-sync"
+import type { EldDeviceSyncRow, EldDriverMappingRow, ProviderApiJson } from "@/lib/types/eld-sync"
 import type { PostgrestError } from "@supabase/supabase-js"
 
 function getTimestampMs(input: unknown): number | null {
@@ -15,6 +15,59 @@ function getTimestampMs(input: unknown): number | null {
     return Number.isFinite(ms) ? ms : null
   }
   return null
+}
+
+/** First non-nullish field among keys (vendor payloads vary by camelCase/snake_case). */
+function pv(obj: ProviderApiJson | null | undefined, ...keys: string[]): unknown {
+  if (!obj) return undefined
+  for (const k of keys) {
+    const v = obj[k]
+    if (v !== undefined && v !== null) return v
+  }
+  return undefined
+}
+
+function pvString(obj: ProviderApiJson | null | undefined, ...keys: string[]): string | undefined {
+  const v = pv(obj, ...keys)
+  if (v === undefined || v === null) return undefined
+  if (typeof v === "string") return v
+  if (typeof v === "number" && Number.isFinite(v)) return String(v)
+  return undefined
+}
+
+function pvNum(obj: ProviderApiJson | null | undefined, ...keys: string[]): number | undefined {
+  const v = pv(obj, ...keys)
+  if (typeof v === "number" && Number.isFinite(v)) return v
+  if (typeof v === "string") {
+    const n = Number(v)
+    if (Number.isFinite(n)) return n
+  }
+  return undefined
+}
+
+function nestedRecord(obj: ProviderApiJson | null | undefined, key: string): ProviderApiJson | null {
+  if (!obj) return null
+  const v = obj[key]
+  if (v !== null && typeof v === "object" && !Array.isArray(v)) return v as ProviderApiJson
+  return null
+}
+
+function asProviderArray(raw: unknown): ProviderApiJson[] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter((x): x is ProviderApiJson => typeof x === "object" && x !== null && !Array.isArray(x))
+}
+
+function geotabNestedDriverId(obj: ProviderApiJson): string | null {
+  const d = nestedRecord(obj, "driver")
+  const id = d ? pv(d, "id") : undefined
+  if (id !== undefined && id !== null) return String(id)
+  const flat = pv(obj, "driverId")
+  if (flat !== undefined && flat !== null) return String(flat)
+  return null
+}
+
+function isDefinedProviderId(id: unknown): id is string | number {
+  return id !== null && id !== undefined
 }
 
 // KeepTruckin API integration
@@ -57,17 +110,11 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
       throw new Error(`Motive/KeepTruckin API error: ${logsResponse.statusText}`)
     }
 
-    const logsData = await logsResponse.json()
-    const logsAll = logsData.logs || []
+    const logsData = (await logsResponse.json()) as { logs?: unknown }
+    const logsAll = asProviderArray(logsData.logs)
     const logs = sinceMs
-      ? logsAll.filter((log: any) => {
-          const ts =
-            log.start_time ||
-            log.start_datetime ||
-            log.end_time ||
-            log.end_datetime ||
-            log.date ||
-            log.log_date
+      ? logsAll.filter((log) => {
+          const ts = pv(log, "start_time", "start_datetime", "end_time", "end_datetime", "date", "log_date")
           const ms = getTimestampMs(ts)
           return ms !== null && ms >= sinceMs
         })
@@ -93,11 +140,11 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
       })
     }
 
-    const locationsData = await locationsResponse.json()
-    const locationsAll = locationsData.locations || []
+    const locationsData = (await locationsResponse.json()) as { locations?: unknown }
+    const locationsAll = asProviderArray(locationsData.locations)
     const locations = sinceMs
-      ? locationsAll.filter((loc: any) => {
-          const ts = loc.timestamp || loc.datetime
+      ? locationsAll.filter((loc) => {
+          const ts = pv(loc, "timestamp", "datetime")
           const ms = getTimestampMs(ts)
           return ms !== null && ms >= sinceMs
         })
@@ -123,11 +170,11 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
       })
     }
 
-    const eventsData = await eventsResponse.json()
-    const eventsAll = eventsData.violations || []
+    const eventsData = (await eventsResponse.json()) as { violations?: unknown }
+    const eventsAll = asProviderArray(eventsData.violations)
     const events = sinceMs
-      ? eventsAll.filter((event: any) => {
-          const ts = event.event_time || event.datetime || event.occurred_at || event.timestamp
+      ? eventsAll.filter((event) => {
+          const ts = pv(event, "event_time", "datetime", "occurred_at", "timestamp")
           const ms = getTimestampMs(ts)
           return ms !== null && ms >= sinceMs
         })
@@ -136,9 +183,7 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
     // Store logs in database
     // OPTIMIZATION: Batch fetch all driver mappings to avoid N+1 queries
     const uniqueProviderDriverIds = [...new Set(
-      logs
-        .map((log: any) => log.driver_id || log.driverId)
-        .filter((id: any) => id !== null && id !== undefined)
+      logs.map((log) => pv(log, "driver_id", "driverId")).filter(isDefinedProviderId)
     )]
     
     // Fetch all mappings in a single query
@@ -152,45 +197,59 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
     
     // Create lookup map
     const driverIdMap = new Map<string, string>()
-    mappings?.forEach((m: any) => {
+    mappings?.forEach((m: EldDriverMappingRow) => {
       driverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
     })
     
     // Map provider driver IDs to internal driver IDs
-    const logsToInsert = logs.map((log: any) => {
-      const providerDriverId = log.driver_id || log.driverId || null
-      const internalDriverId = providerDriverId
-        ? driverIdMap.get(String(providerDriverId)) || null
-        : null
+    const logsToInsert = logs.map((log) => {
+      const providerDriverId = pv(log, "driver_id", "driverId")
+      const internalDriverId =
+        providerDriverId !== undefined && providerDriverId !== null
+          ? driverIdMap.get(String(providerDriverId)) || null
+          : null
 
-        return {
-          company_id: device.company_id,
-          eld_device_id: device.id,
-          driver_id: internalDriverId,
-      truck_id: device.truck_id || null,
-      log_date: log.date || log.log_date,
-      log_type: mapKeepTruckinStatus(log.status),
-      start_time: log.start_time || log.start_datetime,
-      end_time: log.end_time || log.end_datetime,
-      duration_minutes: log.duration_minutes || calculateDuration(log.start_time, log.end_time),
-      location_start: log.start_location ? {
-        lat: log.start_location.latitude,
-        lng: log.start_location.longitude,
-        address: log.start_location.address
-      } : null,
-      location_end: log.end_location ? {
-        lat: log.end_location.latitude,
-        lng: log.end_location.longitude,
-        address: log.end_location.address
-      } : null,
-      odometer_start: log.odometer_start || log.start_odometer,
-      odometer_end: log.odometer_end || log.end_odometer,
-      miles_driven: log.miles_driven || (log.odometer_end && log.odometer_start ? log.odometer_end - log.odometer_start : null),
-      engine_hours: log.engine_hours,
-          violations: log.violations || null,
-          raw_data: log
-        }
-      })
+      const startLoc = nestedRecord(log, "start_location")
+      const endLoc = nestedRecord(log, "end_location")
+      const odometerStart = pvNum(log, "odometer_start", "start_odometer")
+      const odometerEnd = pvNum(log, "odometer_end", "end_odometer")
+
+      return {
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: internalDriverId,
+        truck_id: device.truck_id || null,
+        log_date: pv(log, "date", "log_date"),
+        log_type: mapKeepTruckinStatus(pvString(log, "status") ?? ""),
+        start_time: pv(log, "start_time", "start_datetime"),
+        end_time: pv(log, "end_time", "end_datetime"),
+        duration_minutes:
+          pvNum(log, "duration_minutes") ??
+          calculateDuration(pvString(log, "start_time") ?? "", pvString(log, "end_time") ?? ""),
+        location_start: startLoc
+          ? {
+              lat: pvNum(startLoc, "latitude"),
+              lng: pvNum(startLoc, "longitude"),
+              address: pvString(startLoc, "address"),
+            }
+          : null,
+        location_end: endLoc
+          ? {
+              lat: pvNum(endLoc, "latitude"),
+              lng: pvNum(endLoc, "longitude"),
+              address: pvString(endLoc, "address"),
+            }
+          : null,
+        odometer_start: odometerStart,
+        odometer_end: odometerEnd,
+        miles_driven:
+          pvNum(log, "miles_driven") ??
+          (odometerEnd != null && odometerStart != null ? odometerEnd - odometerStart : null),
+        engine_hours: pvNum(log, "engine_hours"),
+        violations: pv(log, "violations") ?? null,
+        raw_data: log,
+      }
+    })
 
     let logsError: PostgrestError | null = null
     if (logsToInsert.length > 0) {
@@ -210,25 +269,26 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
 
     // Store locations in database
     // Reuse driver mapping for locations
-    const locationsToInsert = locations.map((loc: any) => {
-      const providerDriverId = loc.driver_id || loc.driverId || null
-      const internalDriverId = providerDriverId
-        ? driverIdMap.get(String(providerDriverId)) || null
-        : null
+    const locationsToInsert = locations.map((loc) => {
+      const providerDriverId = pv(loc, "driver_id", "driverId")
+      const internalDriverId =
+        providerDriverId !== undefined && providerDriverId !== null
+          ? driverIdMap.get(String(providerDriverId)) || null
+          : null
 
       return {
         company_id: device.company_id,
         eld_device_id: device.id,
         driver_id: internalDriverId,
         truck_id: device.truck_id || null,
-        timestamp: loc.timestamp || loc.datetime,
-        latitude: loc.latitude || loc.lat,
-        longitude: loc.longitude || loc.lng,
-        address: loc.address || loc.formatted_address,
-        speed: loc.speed || null,
-        heading: loc.heading || loc.bearing || null,
-        odometer: loc.odometer || null,
-        engine_status: loc.engine_status || (loc.engine_on ? "on" : "off")
+        timestamp: pv(loc, "timestamp", "datetime"),
+        latitude: pvNum(loc, "latitude", "lat"),
+        longitude: pvNum(loc, "longitude", "lng"),
+        address: pvString(loc, "address", "formatted_address"),
+        speed: pvNum(loc, "speed") ?? null,
+        heading: pvNum(loc, "heading", "bearing") ?? null,
+        odometer: pvNum(loc, "odometer") ?? null,
+        engine_status: pvString(loc, "engine_status") ?? (pv(loc, "engine_on") === true ? "on" : "off"),
       }
     })
 
@@ -246,24 +306,29 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
     }
 
     // Store events in database
-    const eventsToInsert = events.map((event: any) => ({
-      company_id: device.company_id,
-      eld_device_id: device.id,
-      driver_id: event.driver_id || null,
-      truck_id: device.truck_id || null,
-      event_type: mapKeepTruckinEventType(event.type),
-      severity: event.severity || "warning",
-      title: event.title || event.violation_type,
-      description: event.description || event.message,
-      event_time: event.event_time || event.datetime,
-      location: event.location ? {
-        lat: event.location.latitude,
-        lng: event.location.longitude,
-        address: event.location.address
-      } : null,
-      resolved: false,
-      metadata: event
-    }))
+    const eventsToInsert = events.map((event) => {
+      const eLoc = nestedRecord(event, "location")
+      return {
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: pv(event, "driver_id") ?? null,
+        truck_id: device.truck_id || null,
+        event_type: mapKeepTruckinEventType(pvString(event, "type") ?? ""),
+        severity: pvString(event, "severity") ?? "warning",
+        title: pvString(event, "title", "violation_type"),
+        description: pvString(event, "description", "message"),
+        event_time: pv(event, "event_time", "datetime"),
+        location: eLoc
+          ? {
+              lat: pvNum(eLoc, "latitude"),
+              lng: pvNum(eLoc, "longitude"),
+              address: pvString(eLoc, "address"),
+            }
+          : null,
+        resolved: false,
+        metadata: event,
+      }
+    })
 
     let eventsError: PostgrestError | null = null
     if (eventsToInsert.length > 0) {
@@ -333,19 +398,21 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
       throw new Error(`Samsara API error: ${logsResponse.statusText}`)
     }
 
-    const logsData = await logsResponse.json()
-    const logsAll = logsData.data || []
+    const logsData = (await logsResponse.json()) as { data?: unknown }
+    const logsAll = asProviderArray(logsData.data)
     const logs = sinceMs
-      ? logsAll.filter((log: any) => {
-          const ts =
-            log.startTime ||
-            log.start_time ||
-            log.logStartTime ||
-            log.endTime ||
-            log.end_time ||
-            log.logEndTime ||
-            log.date ||
-            log.log_date
+      ? logsAll.filter((log) => {
+          const ts = pv(
+            log,
+            "startTime",
+            "start_time",
+            "logStartTime",
+            "endTime",
+            "end_time",
+            "logEndTime",
+            "date",
+            "log_date"
+          )
           const ms = getTimestampMs(ts)
           return ms !== null && ms >= sinceMs
         })
@@ -359,11 +426,11 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
       }
     })
 
-    const locationsData = await locationsResponse.json()
-    const locationsAll = locationsData.data || []
+    const locationsData = (await locationsResponse.json()) as { data?: unknown }
+    const locationsAll = asProviderArray(locationsData.data)
     const locations = sinceMs
-      ? locationsAll.filter((loc: any) => {
-          const ts = loc.time || loc.timestamp || loc.datetime
+      ? locationsAll.filter((loc) => {
+          const ts = pv(loc, "time", "timestamp", "datetime")
           const ms = getTimestampMs(ts)
           return ms !== null && ms >= sinceMs
         })
@@ -381,11 +448,11 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
       throw new Error(`Samsara events API error: ${eventsResponse.statusText}`)
     }
 
-    const eventsData = await eventsResponse.json()
-    const eventsAll = eventsData.data || []
+    const eventsData = (await eventsResponse.json()) as { data?: unknown }
+    const eventsAll = asProviderArray(eventsData.data)
     const events = sinceMs
-      ? eventsAll.filter((event: any) => {
-          const ts = event.time || event.timestamp || event.eventTime
+      ? eventsAll.filter((event) => {
+          const ts = pv(event, "time", "timestamp", "eventTime")
           const ms = getTimestampMs(ts)
           return ms !== null && ms >= sinceMs
         })
@@ -393,9 +460,7 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
 
     // OPTIMIZATION: Batch fetch all driver mappings to avoid N+1 queries
     const uniqueProviderDriverIds = [...new Set(
-      logs
-        .map((log: any) => log.driver_id || log.driverId)
-        .filter((id: any) => id !== null && id !== undefined)
+      logs.map((log) => pv(log, "driver_id", "driverId")).filter(isDefinedProviderId)
     )]
     
     // Fetch all mappings in a single query
@@ -409,45 +474,62 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
     
     // Create lookup map
     const driverIdMap = new Map<string, string>()
-    mappings?.forEach((m: any) => {
+    mappings?.forEach((m: EldDriverMappingRow) => {
       driverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
     })
     
     // Transform and store logs
-    const logsToInsert = logs.map((log: any) => {
-      const providerDriverId = log.driver_id || log.driverId || null
-      const internalDriverId = providerDriverId
-        ? driverIdMap.get(String(providerDriverId)) || null
-        : null
+    const logsToInsert = logs.map((log) => {
+      const providerDriverId = pv(log, "driver_id", "driverId")
+      const internalDriverId =
+        providerDriverId !== undefined && providerDriverId !== null
+          ? driverIdMap.get(String(providerDriverId)) || null
+          : null
 
-        return {
-          company_id: device.company_id,
-          eld_device_id: device.id,
-          driver_id: internalDriverId,
-      truck_id: device.truck_id || null,
-      log_date: log.date || log.logDate || new Date().toISOString().split('T')[0],
-      log_type: mapSamsaraStatus(log.status || log.dutyStatus),
-      start_time: log.startTime || log.start_time || log.logStartTime,
-      end_time: log.endTime || log.end_time || log.logEndTime,
-      duration_minutes: log.durationMinutes || calculateDuration(log.startTime, log.endTime),
-      location_start: log.startLocation ? {
-        lat: log.startLocation.latitude || log.startLocation.lat,
-        lng: log.startLocation.longitude || log.startLocation.lng,
-        address: log.startLocation.address || log.startLocation.formattedAddress
-      } : null,
-      location_end: log.endLocation ? {
-        lat: log.endLocation.latitude || log.endLocation.lat,
-        lng: log.endLocation.longitude || log.endLocation.lng,
-        address: log.endLocation.address || log.endLocation.formattedAddress
-      } : null,
-      odometer_start: log.startOdometer || log.odometerStart,
-      odometer_end: log.endOdometer || log.odometerEnd,
-      miles_driven: log.milesDriven || (log.endOdometer && log.startOdometer ? log.endOdometer - log.startOdometer : null),
-      engine_hours: log.engineHours || null,
-          violations: log.violations || null,
-          raw_data: log
-        }
-      })
+      const startL = nestedRecord(log, "startLocation")
+      const endL = nestedRecord(log, "endLocation")
+      const odometerStart = pvNum(log, "startOdometer", "odometerStart")
+      const odometerEnd = pvNum(log, "endOdometer", "odometerEnd")
+
+      return {
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: internalDriverId,
+        truck_id: device.truck_id || null,
+        log_date: pvString(log, "date", "logDate") ?? new Date().toISOString().split("T")[0],
+        log_type: mapSamsaraStatus(pvString(log, "status", "dutyStatus") ?? ""),
+        start_time: pv(log, "startTime", "start_time", "logStartTime"),
+        end_time: pv(log, "endTime", "end_time", "logEndTime"),
+        duration_minutes:
+          pvNum(log, "durationMinutes") ??
+          calculateDuration(
+            pvString(log, "startTime", "start_time", "logStartTime") ?? "",
+            pvString(log, "endTime", "end_time", "logEndTime") ?? ""
+          ),
+        location_start: startL
+          ? {
+              lat: pvNum(startL, "latitude", "lat"),
+              lng: pvNum(startL, "longitude", "lng"),
+              address: pvString(startL, "address", "formattedAddress"),
+            }
+          : null,
+        location_end: endL
+          ? {
+              lat: pvNum(endL, "latitude", "lat"),
+              lng: pvNum(endL, "longitude", "lng"),
+              address: pvString(endL, "address", "formattedAddress"),
+            }
+          : null,
+        odometer_start: odometerStart,
+        odometer_end: odometerEnd,
+        miles_driven:
+          pvNum(log, "milesDriven") ??
+          (odometerEnd != null && odometerStart != null ? odometerEnd - odometerStart : null),
+        engine_hours: pvNum(log, "engineHours") ?? null,
+        violations: pv(log, "violations") ?? null,
+        raw_data: log,
+      }
+    })
 
     if (logsToInsert.length > 0) {
       const { error: logsError } = await supabase
@@ -465,9 +547,7 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
 
     // OPTIMIZATION: Batch fetch driver mappings for locations
     const uniqueLocationDriverIds = [...new Set(
-      locations
-        .map((loc: any) => loc.driverId || loc.driver_id)
-        .filter((id: any) => id !== null && id !== undefined)
+      locations.map((loc) => pv(loc, "driverId", "driver_id")).filter(isDefinedProviderId)
     )]
     
     const { data: locationMappings } = await supabase
@@ -479,32 +559,35 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
       .in("provider_driver_id", uniqueLocationDriverIds.map(String))
     
     const locationDriverIdMap = new Map<string, string>()
-    locationMappings?.forEach((m: any) => {
+    locationMappings?.forEach((m: EldDriverMappingRow) => {
       locationDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
     })
     
     // Transform and store locations
-    const locationsToInsert = locations.map((loc: any) => {
-      const providerDriverId = loc.driverId || loc.driver_id || null
-      const internalDriverId = providerDriverId
-        ? locationDriverIdMap.get(String(providerDriverId)) || null
-        : null
+    const locationsToInsert = locations.map((loc) => {
+      const providerDriverId = pv(loc, "driverId", "driver_id")
+      const internalDriverId =
+        providerDriverId !== undefined && providerDriverId !== null
+          ? locationDriverIdMap.get(String(providerDriverId)) || null
+          : null
 
-        return {
-          company_id: device.company_id,
-          eld_device_id: device.id,
-          driver_id: internalDriverId,
-      truck_id: device.truck_id || null,
-      timestamp: loc.time || loc.timestamp || loc.datetime || new Date().toISOString(),
-      latitude: loc.latitude || loc.lat,
-      longitude: loc.longitude || loc.lng || loc.lon,
-      address: loc.address || loc.formattedAddress || loc.name,
-      speed: loc.speed || loc.speedMph || null,
-      heading: loc.heading || loc.bearing || null,
-      odometer: loc.odometer || loc.odometerMiles || null,
-          engine_status: loc.engineState || (loc.engineOn ? "on" : "off") || "unknown"
-        }
-      })
+      return {
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: internalDriverId,
+        truck_id: device.truck_id || null,
+        timestamp: pv(loc, "time", "timestamp", "datetime") ?? new Date().toISOString(),
+        latitude: pvNum(loc, "latitude", "lat"),
+        longitude: pvNum(loc, "longitude", "lng", "lon"),
+        address: pvString(loc, "address", "formattedAddress", "name"),
+        speed: pvNum(loc, "speed", "speedMph") ?? null,
+        heading: pvNum(loc, "heading", "bearing") ?? null,
+        odometer: pvNum(loc, "odometer", "odometerMiles") ?? null,
+        engine_status:
+          pvString(loc, "engineState") ??
+          (pv(loc, "engineOn") === true ? "on" : pv(loc, "engineOn") === false ? "off" : "unknown"),
+      }
+    })
 
     if (locationsToInsert.length > 0) {
       const { error: locationsError } = await supabase
@@ -519,9 +602,7 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
 
     // OPTIMIZATION: Batch fetch driver mappings for events
     const uniqueEventDriverIds = [...new Set(
-      events
-        .map((event: any) => event.driverId || event.driver_id)
-        .filter((id: any) => id !== null && id !== undefined)
+      events.map((event) => pv(event, "driverId", "driver_id")).filter(isDefinedProviderId)
     )]
     
     const { data: eventMappings } = await supabase
@@ -533,36 +614,41 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
       .in("provider_driver_id", uniqueEventDriverIds.map(String))
     
     const eventDriverIdMap = new Map<string, string>()
-    eventMappings?.forEach((m: any) => {
+    eventMappings?.forEach((m: EldDriverMappingRow) => {
       eventDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
     })
     
     // Transform and store events
-    const eventsToInsert = events.map((event: any) => {
-      const providerDriverId = event.driverId || event.driver_id || null
-      const internalDriverId = providerDriverId
-        ? eventDriverIdMap.get(String(providerDriverId)) || null
-        : null
+    const eventsToInsert = events.map((event) => {
+      const providerDriverId = pv(event, "driverId", "driver_id")
+      const internalDriverId =
+        providerDriverId !== undefined && providerDriverId !== null
+          ? eventDriverIdMap.get(String(providerDriverId)) || null
+          : null
 
-        return {
-          company_id: device.company_id,
-          eld_device_id: device.id,
-          driver_id: internalDriverId,
-          truck_id: device.truck_id || null,
-          event_type: mapSamsaraEventType(event.type || event.eventType),
-          severity: event.severity || event.priority || "warning",
-          title: event.title || event.name || event.eventType || "Event",
-          description: event.description || event.message || event.details,
-          event_time: event.time || event.timestamp || event.eventTime || new Date().toISOString(),
-          location: event.location ? {
-            lat: event.location.latitude || event.location.lat,
-            lng: event.location.longitude || event.location.lng,
-            address: event.location.address || event.location.formattedAddress
-          } : null,
-          resolved: false,
-          metadata: event
-        }
-      })
+      const eLoc = nestedRecord(event, "location")
+
+      return {
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: internalDriverId,
+        truck_id: device.truck_id || null,
+        event_type: mapSamsaraEventType(pvString(event, "type", "eventType") ?? ""),
+        severity: pvString(event, "severity", "priority") ?? "warning",
+        title: pvString(event, "title", "name", "eventType") ?? "Event",
+        description: pvString(event, "description", "message", "details"),
+        event_time: pv(event, "time", "timestamp", "eventTime") ?? new Date().toISOString(),
+        location: eLoc
+          ? {
+              lat: pvNum(eLoc, "latitude", "lat"),
+              lng: pvNum(eLoc, "longitude", "lng"),
+              address: pvString(eLoc, "address", "formattedAddress"),
+            }
+          : null,
+        resolved: false,
+        metadata: event,
+      }
+    })
 
     if (eventsToInsert.length > 0) {
       const { error: eventsError } = await supabase
@@ -678,11 +764,11 @@ async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null)
       })
     })
 
-    const logsData = await logsResponse.json()
-    const logsAll = logsData.result || []
+    const logsData = (await logsResponse.json()) as { result?: unknown }
+    const logsAll = asProviderArray(logsData.result)
     const logs = sinceMs
-      ? logsAll.filter((log: any) => {
-          const ts = log.startDateTime || log.dateTime || log.date || log.logDate || log.startDate
+      ? logsAll.filter((log) => {
+          const ts = pv(log, "startDateTime", "dateTime", "date", "logDate", "startDate")
           const ms = getTimestampMs(ts)
           return ms !== null && ms >= sinceMs
         })
@@ -705,11 +791,11 @@ async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null)
       })
     })
 
-    const locationsData = await locationsResponse.json()
-    const locationsAll = locationsData.result || []
+    const locationsData = (await locationsResponse.json()) as { result?: unknown }
+    const locationsAll = asProviderArray(locationsData.result)
     const locations = sinceMs
-      ? locationsAll.filter((loc: any) => {
-          const ts = loc.dateTime || loc.date
+      ? locationsAll.filter((loc) => {
+          const ts = pv(loc, "dateTime", "date")
           const ms = getTimestampMs(ts)
           return ms !== null && ms >= sinceMs
         })
@@ -732,11 +818,11 @@ async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null)
       })
     })
 
-    const eventsData = await eventsResponse.json()
-    const eventsAll = eventsData.result || []
+    const eventsData = (await eventsResponse.json()) as { result?: unknown }
+    const eventsAll = asProviderArray(eventsData.result)
     const events = sinceMs
-      ? eventsAll.filter((event: any) => {
-          const ts = event.dateTime || event.date || event.occurredAt
+      ? eventsAll.filter((event) => {
+          const ts = pv(event, "dateTime", "date", "occurredAt")
           const ms = getTimestampMs(ts)
           return ms !== null && ms >= sinceMs
         })
@@ -744,9 +830,7 @@ async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null)
 
     // OPTIMIZATION: Batch fetch all driver mappings to avoid N+1 queries
     const uniqueGeotabDriverIds = [...new Set(
-      logs
-        .map((log: any) => log.driver?.id || log.driverId)
-        .filter((id: any) => id !== null && id !== undefined)
+      logs.map((log) => geotabNestedDriverId(log)).filter((id): id is string => id != null && id !== "")
     )]
     
     const { data: geotabMappings } = await supabase
@@ -758,46 +842,59 @@ async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null)
       .in("provider_driver_id", uniqueGeotabDriverIds.map(String))
     
     const geotabDriverIdMap = new Map<string, string>()
-    geotabMappings?.forEach((m: any) => {
+    geotabMappings?.forEach((m: EldDriverMappingRow) => {
       geotabDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
     })
     
     // Transform and store Geotab data
-    const logsToInsert = logs.map((log: any) => {
-      const providerDriverId = log.driver?.id || log.driverId || null
-      const internalDriverId = providerDriverId
-        ? geotabDriverIdMap.get(String(providerDriverId)) || null
-        : null
+    const logsToInsert = logs.map((log) => {
+      const providerDriverId = geotabNestedDriverId(log)
+      const internalDriverId = providerDriverId ? geotabDriverIdMap.get(String(providerDriverId)) || null : null
 
-        return {
-          company_id: device.company_id,
-          eld_device_id: device.id,
-          driver_id: internalDriverId,
-      truck_id: device.truck_id || null,
-      log_date: log.date ? new Date(log.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      log_type: mapGeotabStatus(log.dutyStatus),
-      start_time: log.startDateTime || log.date,
-      end_time: log.endDateTime || log.date,
-      // Geotab duration is in seconds, not milliseconds
-      duration_minutes: log.duration ? Math.round(log.duration / 60) : null,
-      location_start: log.startLocation ? {
-        lat: log.startLocation.latitude,
-        lng: log.startLocation.longitude,
-        address: log.startLocation.address
-      } : null,
-      location_end: log.endLocation ? {
-        lat: log.endLocation.latitude,
-        lng: log.endLocation.longitude,
-        address: log.endLocation.address
-      } : null,
-      odometer_start: log.startOdometer,
-      odometer_end: log.endOdometer,
-          miles_driven: log.distance ? log.distance * 0.000621371 : null, // Convert meters to miles
-          engine_hours: log.engineHours || null,
-          violations: log.violations || null,
-          raw_data: log
-        }
-      })
+      const startLoc = nestedRecord(log, "startLocation")
+      const endLoc = nestedRecord(log, "endLocation")
+      const dateRaw = pv(log, "date")
+
+      return {
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: internalDriverId,
+        truck_id: device.truck_id || null,
+        log_date: dateRaw
+          ? new Date(String(dateRaw)).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        log_type: mapGeotabStatus(pvString(log, "dutyStatus") ?? ""),
+        start_time: pv(log, "startDateTime", "date"),
+        end_time: pv(log, "endDateTime", "date"),
+        duration_minutes: (() => {
+          const dur = pvNum(log, "duration")
+          return dur != null ? Math.round(dur / 60) : null
+        })(),
+        location_start: startLoc
+          ? {
+              lat: pvNum(startLoc, "latitude"),
+              lng: pvNum(startLoc, "longitude"),
+              address: pvString(startLoc, "address"),
+            }
+          : null,
+        location_end: endLoc
+          ? {
+              lat: pvNum(endLoc, "latitude"),
+              lng: pvNum(endLoc, "longitude"),
+              address: pvString(endLoc, "address"),
+            }
+          : null,
+        odometer_start: pvNum(log, "startOdometer"),
+        odometer_end: pvNum(log, "endOdometer"),
+        miles_driven: (() => {
+          const dist = pvNum(log, "distance")
+          return dist != null ? dist * 0.000621371 : null
+        })(),
+        engine_hours: pvNum(log, "engineHours") ?? null,
+        violations: pv(log, "violations") ?? null,
+        raw_data: log,
+      }
+    })
 
     let logsError: PostgrestError | null = null
     if (logsToInsert.length > 0) {
@@ -817,9 +914,7 @@ async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null)
 
     // Reuse driver mapping for locations if needed
     const uniqueGeotabLocationDriverIds = [...new Set(
-      locations
-        .map((loc: any) => loc.driver?.id || loc.driverId)
-        .filter((id: any) => id !== null && id !== undefined)
+      locations.map((loc) => geotabNestedDriverId(loc)).filter((id): id is string => id != null && id !== "")
     )]
     
     const { data: geotabLocationMappings } = await supabase
@@ -831,31 +926,32 @@ async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null)
       .in("provider_driver_id", uniqueGeotabLocationDriverIds.map(String))
     
     const geotabLocationDriverIdMap = new Map<string, string>()
-    geotabLocationMappings?.forEach((m: any) => {
+    geotabLocationMappings?.forEach((m: EldDriverMappingRow) => {
       geotabLocationDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
     })
     
-    const locationsToInsert = locations.map((loc: any) => {
-      const providerDriverId = loc.driver?.id || loc.driverId || null
+    const locationsToInsert = locations.map((loc) => {
+      const providerDriverId = geotabNestedDriverId(loc)
       const internalDriverId = providerDriverId
         ? geotabLocationDriverIdMap.get(String(providerDriverId)) || null
         : null
 
-        return {
-          company_id: device.company_id,
-          eld_device_id: device.id,
-          driver_id: internalDriverId,
-          truck_id: device.truck_id || null,
-          timestamp: loc.dateTime || loc.date || new Date().toISOString(),
-          latitude: loc.latitude,
-          longitude: loc.longitude,
-          address: loc.address || null,
-          speed: loc.speed ? Math.round(loc.speed * 2.23694) : null, // Convert m/s to mph
-          heading: loc.heading || null,
-          odometer: loc.odometer || null,
-          engine_status: loc.engineStatus || "unknown"
-        }
-      })
+      const spd = pvNum(loc, "speed")
+      return {
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: internalDriverId,
+        truck_id: device.truck_id || null,
+        timestamp: pv(loc, "dateTime", "date") ?? new Date().toISOString(),
+        latitude: pvNum(loc, "latitude"),
+        longitude: pvNum(loc, "longitude"),
+        address: pvString(loc, "address") ?? null,
+        speed: spd != null ? Math.round(spd * 2.23694) : null,
+        heading: pvNum(loc, "heading") ?? null,
+        odometer: pvNum(loc, "odometer") ?? null,
+        engine_status: pvString(loc, "engineStatus") ?? "unknown",
+      }
+    })
 
     let locationsError: PostgrestError | null = null
     if (locationsToInsert.length > 0) {
@@ -870,32 +966,39 @@ async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null)
       }
     }
 
-    const eventsToInsert = events.map((event: any) => {
-      // Extract fault code information
-      const faultCode = event.faultCode?.code || event.faultCode?.id || event.code || null
-      const faultCodeCategory = determineFaultCodeCategory(event.faultCode?.name || event.faultCode?.code || event.title)
-      const faultCodeDescription = event.faultCode?.description || event.description || null
-      
+    const eventsToInsert = events.map((event) => {
+      const fc = nestedRecord(event, "faultCode")
+      const driverObj = nestedRecord(event, "driver")
+      const faultCode = pv(fc, "code") ?? pv(fc, "id") ?? pv(event, "code") ?? null
+      const faultCodeCategory = determineFaultCodeCategory(
+        pvString(fc, "name") ?? pvString(fc, "code") ?? pvString(event, "title") ?? ""
+      )
+      const faultCodeDescription = pvString(fc, "description") ?? pvString(event, "description") ?? null
+      const eLoc = nestedRecord(event, "location")
+      const driverIdRaw = driverObj ? pv(driverObj, "id") : pv(event, "driver_id")
+
       return {
         company_id: device.company_id,
         eld_device_id: device.id,
-        driver_id: event.driver?.id || null,
+        driver_id: driverIdRaw != null ? String(driverIdRaw) : null,
         truck_id: device.truck_id || null,
-        event_type: mapGeotabEventType(event.faultCode?.name),
-        severity: event.severity || "warning",
-        title: event.faultCode?.name || "Event",
+        event_type: mapGeotabEventType(fc ? (pvString(fc, "name") ?? "") : ""),
+        severity: pvString(event, "severity") ?? "warning",
+        title: (fc ? pvString(fc, "name") : undefined) ?? "Event",
         description: faultCodeDescription,
-        event_time: event.dateTime || event.date || new Date().toISOString(),
-        location: event.location ? {
-          lat: event.location.latitude,
-          lng: event.location.longitude,
-          address: event.location.address
-        } : null,
+        event_time: pv(event, "dateTime", "date") ?? new Date().toISOString(),
+        location: eLoc
+          ? {
+              lat: pvNum(eLoc, "latitude"),
+              lng: pvNum(eLoc, "longitude"),
+              address: pvString(eLoc, "address"),
+            }
+          : null,
         resolved: false,
         fault_code: faultCode,
         fault_code_category: faultCodeCategory,
         fault_code_description: faultCodeDescription,
-        metadata: event
+        metadata: event,
       }
     })
 
