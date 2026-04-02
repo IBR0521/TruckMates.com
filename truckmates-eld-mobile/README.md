@@ -21,7 +21,7 @@ Driver-first mobile ELD application for TruckMates platform.
 Create `.env`:
 
 ```bash
-EXPO_PUBLIC_PLATFORM_API_URL=http://localhost:3000
+EXPO_PUBLIC_PLATFORM_API_URL=http://localhost:3004 # use the same port your platform server is running on
 EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```

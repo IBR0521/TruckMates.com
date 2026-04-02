@@ -4,14 +4,27 @@ import { useAuth } from "../context/AuthContext"
 import { flushQueue, getQueueStats } from "../services/sync-queue"
 import { colors } from "../theme/tokens"
 
+const SYNC_TIMEOUT_MS = 30000
+
 export function SettingsScreen() {
   const { signOut, sessionToken, deviceId, assignedTruckId, setAssignedTruckId } = useAuth()
   const [truck, setTruck] = useState(assignedTruckId || "")
   const [stats, setStats] = useState({ totalItems: 0, locations: 0, logs: 0, events: 0, dvirs: 0 })
   const [syncing, setSyncing] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null)
 
   async function refreshStats() {
-    setStats(await getQueueStats())
+    setRefreshing(true)
+    try {
+      const next = await getQueueStats()
+      setStats(next)
+      setLastRefreshedAt(new Date().toLocaleTimeString())
+    } catch (e) {
+      Alert.alert("Refresh failed", e instanceof Error ? e.message : "Unable to refresh sync stats")
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   useEffect(() => {
@@ -30,7 +43,15 @@ export function SettingsScreen() {
     }
     setSyncing(true)
     try {
-      await flushQueue(sessionToken, deviceId)
+      await Promise.race([
+        flushQueue(sessionToken, deviceId),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`Sync timeout after ${Math.round(SYNC_TIMEOUT_MS / 1000)}s`)),
+            SYNC_TIMEOUT_MS
+          )
+        ),
+      ])
       await refreshStats()
       Alert.alert("Sync complete", "Pending queue flushed.")
     } catch (e) {
@@ -59,16 +80,19 @@ export function SettingsScreen() {
 
       <View style={styles.syncPanel}>
         <Text style={styles.item}>Sync Health</Text>
+        <Text style={styles.value}>
+          Last refresh: {lastRefreshedAt || "Not yet"}
+        </Text>
         <Text style={styles.value}>Queue items: {stats.totalItems}</Text>
         <Text style={styles.value}>Locations: {stats.locations}</Text>
         <Text style={styles.value}>Logs: {stats.logs}</Text>
         <Text style={styles.value}>Events: {stats.events}</Text>
         <Text style={styles.value}>DVIRs: {stats.dvirs}</Text>
         <View style={styles.syncActions}>
-          <Pressable style={styles.refreshButton} onPress={() => void refreshStats()}>
-            <Text style={styles.saveText}>Refresh</Text>
+          <Pressable style={styles.refreshButton} onPress={() => void refreshStats()} disabled={refreshing}>
+            <Text style={styles.saveText}>{refreshing ? "Refreshing..." : "Refresh"}</Text>
           </Pressable>
-          <Pressable style={styles.flushButton} onPress={() => void flushPending()} disabled={syncing}>
+          <Pressable style={styles.flushButton} onPress={() => void flushPending()} disabled={syncing || refreshing}>
             <Text style={styles.saveText}>{syncing ? "Syncing..." : "Flush Now"}</Text>
           </Pressable>
         </View>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
-import { createClient } from "@/lib/supabase/server"
-import { getCachedAuthContext } from "@/lib/auth/server"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { getMobileAuthContext } from "@/lib/auth/mobile"
 
 type StateCrossingCacheEntry = {
   lat: number
@@ -50,7 +50,7 @@ function haversineDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
  */
 export async function POST(request: NextRequest) {
   try {
-    const { companyId, error: authError } = await getCachedAuthContext()
+    const { companyId, error: authError } = await getMobileAuthContext(request)
     
     if (authError || !companyId) {
       return NextResponse.json(
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     const body = await request.json()
     const { device_id, locations } = body
 

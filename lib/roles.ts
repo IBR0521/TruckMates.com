@@ -77,6 +77,8 @@ export function getRoleInfo(roleId: EmployeeRole): RoleInfo | undefined {
 // Map old role names to new system (for backward compatibility)
 export function mapLegacyRole(legacyRole: string | null | undefined): EmployeeRole {
   if (!legacyRole) return "driver" // Default fallback
+
+  const normalizedRole = String(legacyRole).trim().toLowerCase()
   
   const mapping: Record<string, EmployeeRole> = {
     // Old roles map to new roles
@@ -99,8 +101,8 @@ export function mapLegacyRole(legacyRole: string | null | undefined): EmployeeRo
   }
   
   // If it's already in the mapping, use the mapped value
-  if (mapping[legacyRole]) {
-    return mapping[legacyRole]
+  if (mapping[normalizedRole]) {
+    return mapping[normalizedRole]
   }
   
   // Check if it's already a valid EmployeeRole
@@ -113,8 +115,8 @@ export function mapLegacyRole(legacyRole: string | null | undefined): EmployeeRo
     "driver"
   ]
   
-  if (validRoles.includes(legacyRole as EmployeeRole)) {
-    return legacyRole as EmployeeRole
+  if (validRoles.includes(normalizedRole as EmployeeRole)) {
+    return normalizedRole as EmployeeRole
   }
   
   // Fallback to driver for unknown roles

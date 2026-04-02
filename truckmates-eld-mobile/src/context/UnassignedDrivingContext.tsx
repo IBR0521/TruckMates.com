@@ -23,6 +23,7 @@ type UnassignedDrivingContextValue = {
 }
 
 const STORAGE_KEY = "unassigned_driving_segments_v1"
+const scopedKey = (base: string, userId: string) => `${base}:${userId}`
 const UnassignedDrivingContext = createContext<UnassignedDrivingContextValue | null>(null)
 
 export function UnassignedDrivingProvider({ children }: { children: React.ReactNode }) {
@@ -32,14 +33,19 @@ export function UnassignedDrivingProvider({ children }: { children: React.ReactN
 
   useEffect(() => {
     void (async () => {
-      const saved = await storage.get<UnassignedSegment[]>(STORAGE_KEY)
-      if (saved) setSegments(saved)
+      if (!userId) {
+        setSegments([])
+        return
+      }
+      const saved = await storage.get<UnassignedSegment[]>(scopedKey(STORAGE_KEY, userId))
+      setSegments(saved || [])
     })()
-  }, [])
+  }, [userId])
 
   async function persist(next: UnassignedSegment[]) {
     setSegments(next)
-    await storage.set(STORAGE_KEY, next)
+    if (!userId) return
+    await storage.set(scopedKey(STORAGE_KEY, userId), next)
   }
 
   async function openSegment(reason: string) {

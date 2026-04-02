@@ -207,20 +207,49 @@ export async function getLoadDetails(loadId: string): Promise<{
     if (load.driver_id) {
       try {
         const { calculateRemainingHOS } = await import("./eld-advanced")
-        const hosResult = await calculateRemainingHOS(load.driver_id)
-        
-        // Get current status
-        const { data: latestLog } = await supabase
-          .from("eld_logs")
-          .select("log_type, end_time")
-          .eq("driver_id", load.driver_id)
-          .order("start_time", { ascending: false })
-          .limit(1)
+        const { data: driverIdentity } = await supabase
+          .from("drivers")
+          .select("id, user_id")
+          .eq("id", load.driver_id)
           .maybeSingle()
 
-        const currentStatus = latestLog?.end_time === null 
-          ? latestLog?.log_type || "off_duty"
-          : "off_duty"
+        const logDriverIds = Array.from(
+          new Set(
+            [driverIdentity?.id, driverIdentity?.user_id]
+              .filter((id): id is string => typeof id === "string" && id.length > 0)
+          )
+        )
+
+        // Get latest status across both internal driver id and linked auth user id
+        const { data: latestLogs } = await supabase
+          .from("eld_logs")
+          .select("driver_id, log_type, log_date, start_time, end_time, created_at")
+          .in("driver_id", logDriverIds.length > 0 ? logDriverIds : [load.driver_id])
+          .order("start_time", { ascending: false })
+          .limit(50)
+
+        const orderedLogs = [...(latestLogs || [])].sort((a: any, b: any) => {
+          const byStart = new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
+          if (byStart !== 0) return byStart
+          return new Date(b.created_at || b.start_time).getTime() - new Date(a.created_at || a.start_time).getTime()
+        })
+        const latestLog = orderedLogs.find((log: any) => log.end_time === null) || orderedLogs[0]
+        const today = new Date().toISOString().split("T")[0]
+        const hasTodayByDriverId = (latestLogs || []).some(
+          (log: { driver_id: string; log_date: string }) => log.driver_id === load.driver_id && log.log_date === today
+        )
+        const hasTodayByUserId = (latestLogs || []).some(
+          (log: { driver_id: string; log_date: string }) =>
+            Boolean(driverIdentity?.user_id) && log.driver_id === driverIdentity?.user_id && log.log_date === today
+        )
+        const hosSourceId =
+          hasTodayByDriverId
+            ? load.driver_id
+            : hasTodayByUserId && driverIdentity?.user_id
+              ? driverIdentity.user_id
+              : load.driver_id
+        const hosResult = await calculateRemainingHOS(hosSourceId)
+        const currentStatus = latestLog?.log_type || "off_duty"
 
         driverHOS = {
           remaining_drive_hours: hosResult.data?.remainingDriving || 0,

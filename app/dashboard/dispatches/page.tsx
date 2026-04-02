@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -93,6 +93,7 @@ export default function DispatchesPage() {
   const [loadDetailsLoading, setLoadDetailsLoading] = useState(false)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [showDispatchAssist, setShowDispatchAssist] = useState<string | null>(null)
+  const hosRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Get company ID for real-time filtering
   useEffect(() => {
@@ -117,10 +118,24 @@ export default function DispatchesPage() {
     loadData()
     loadHOSData()
     
-    // Refresh HOS data every 30 seconds (keep as fallback)
-    const hosInterval = setInterval(loadHOSData, 60000) // Reduced to 60s for better performance
-    return () => clearInterval(hosInterval)
+    // Fallback polling even if realtime misses an event.
+    const hosInterval = setInterval(loadHOSData, 15000)
+    return () => {
+      clearInterval(hosInterval)
+      if (hosRefreshTimer.current) {
+        clearTimeout(hosRefreshTimer.current)
+        hosRefreshTimer.current = null
+      }
+    }
   }, [])
+
+  function requestHosRefresh() {
+    if (hosRefreshTimer.current) return
+    hosRefreshTimer.current = setTimeout(() => {
+      hosRefreshTimer.current = null
+      void loadHOSData()
+    }, 800)
+  }
 
   // Real-time subscription for loads (Phase 1: Visual Clarity)
   useRealtimeSubscription<any>(
@@ -197,6 +212,25 @@ export default function DispatchesPage() {
     }
   )
 
+  // Auto-refresh HOS card when new ELD logs arrive (no manual refresh needed).
+  useRealtimeSubscription<any>(
+    "eld_logs",
+    {
+      filter: companyId ? `company_id=eq.${companyId}` : undefined,
+      event: "*",
+      enabled: !!companyId,
+      onInsert: () => {
+        requestHosRefresh()
+      },
+      onUpdate: () => {
+        requestHosRefresh()
+      },
+      onDelete: () => {
+        requestHosRefresh()
+      },
+    }
+  )
+
   async function loadData() {
     setIsLoading(true)
     try {
@@ -222,14 +256,36 @@ export default function DispatchesPage() {
   async function loadHOSData() {
     setHosLoading(true)
     try {
-      const result = await getAllDriversHOSStatus()
-      if (result.error) {
-        console.error("Failed to load HOS data:", result.error)
-      } else if (result.data) {
-        setDriversHOS(result.data)
+      const supabase = createClient()
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch("/api/dispatch/hos", {
+        method: "GET",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        console.error("Failed to load HOS data (api):", body?.error || `HTTP ${res.status}`)
+        // Fallback to server action path if API auth/channel is unstable.
+        const fallback = await getAllDriversHOSStatus()
+        if (fallback.error) {
+          console.error("Failed to load HOS data (fallback):", fallback.error)
+        } else if (fallback.data) {
+          setDriversHOS(fallback.data)
+        }
+      } else if (Array.isArray(body?.data)) {
+        setDriversHOS(body.data)
       }
     } catch (error: unknown) {
-      console.error("Failed to load HOS data:", error)
+      console.error("Failed to load HOS data (exception):", error)
+      try {
+        const fallback = await getAllDriversHOSStatus()
+        if (!fallback.error && fallback.data) {
+          setDriversHOS(fallback.data)
+        }
+      } catch (fallbackError) {
+        console.error("Failed to load HOS data (fallback exception):", fallbackError)
+      }
     } finally {
       setHosLoading(false)
     }
@@ -248,6 +304,13 @@ export default function DispatchesPage() {
   }
 
   function getHOSStatus(driver: DriverHOSStatus): { label: string; color: string } {
+    const normalizedStatus = String(driver.current_status || "").trim().toLowerCase()
+    if (normalizedStatus === "off_duty") {
+      return { label: "Off Duty", color: "text-slate-400" }
+    }
+    if (normalizedStatus === "sleeper_berth") {
+      return { label: "Sleeper Berth", color: "text-indigo-400" }
+    }
     if (!driver.can_drive) {
       return { label: "Cannot Drive", color: "text-orange-500" } // Changed from red to orange
     }

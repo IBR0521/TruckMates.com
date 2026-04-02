@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
-import { createClient } from "@/lib/supabase/server"
-import { getCachedAuthContext } from "@/lib/auth/server"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { getMobileAuthContext } from "@/lib/auth/mobile"
 
 /**
  * Register mobile app as ELD device
@@ -18,7 +18,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
  */
 export async function POST(request: NextRequest) {
   try {
-    const { companyId, error: authError } = await getCachedAuthContext()
+    const { companyId, user, error: authError } = await getMobileAuthContext(request)
     
     if (authError || !companyId) {
       return NextResponse.json(
@@ -27,7 +27,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = await createClient()
+    // Driver-only access: non-driver roles cannot use ELD mobile registration.
+    const normalizedRole = String(user?.role || "").trim().toLowerCase()
+    if (normalizedRole !== "driver") {
+      return NextResponse.json(
+        { error: "Access denied. ELD app is available for Driver accounts only." },
+        { status: 403 }
+      )
+    }
+
+    const supabase = createAdminClient()
     const body = await request.json()
     const {
       device_name,
@@ -68,7 +77,7 @@ export async function POST(request: NextRequest) {
       .from("eld_devices")
       .select("id, company_id")
       .eq("device_serial_number", device_serial_number)
-      .single()
+      .maybeSingle()
     
     // SECURITY: Prevent device serial hijacking - reject if exists with different company
     if (existingDevice && existingDevice.company_id !== companyId) {
@@ -78,15 +87,29 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Upsert device (update if exists with same serial, create if new)
-    const { data: device, error } = await supabase
-      .from("eld_devices")
-      .upsert(deviceData, {
-        onConflict: "device_serial_number",
-        ignoreDuplicates: false,
-      })
-      .select()
-      .single()
+    // Write device without requiring DB-level unique constraint on device_serial_number.
+    // If a row exists for this company+serial, update it; otherwise insert a new row.
+    let device: any = null
+    let error: any = null
+    if (existingDevice?.id && existingDevice.company_id === companyId) {
+      const result = await supabase
+        .from("eld_devices")
+        .update(deviceData)
+        .eq("id", existingDevice.id)
+        .eq("company_id", companyId)
+        .select()
+        .single()
+      device = result.data
+      error = result.error
+    } else {
+      const result = await supabase
+        .from("eld_devices")
+        .insert(deviceData)
+        .select()
+        .single()
+      device = result.data
+      error = result.error
+    }
 
     if (error) {
       console.error("Error registering ELD device:", error)

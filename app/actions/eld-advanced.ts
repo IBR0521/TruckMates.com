@@ -46,8 +46,22 @@ export async function calculateRemainingHOS(driverId: string, date?: string) {
   let offDutyMinutes = 0
   let sleeperMinutes = 0
 
-  logs?.forEach((log: { log_type: string; duration_minutes: number | null }) => {
-    const duration = log.duration_minutes || 0
+  const timeline = [...(logs || [])].sort(
+    (a: { start_time: string }, b: { start_time: string }) =>
+      new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  )
+
+  timeline.forEach((log: { log_type: string; duration_minutes: number | null; start_time: string; end_time: string | null }, idx: number) => {
+    let duration = log.duration_minutes || 0
+    if (!duration && log.start_time) {
+      const start = new Date(log.start_time).getTime()
+      const nextStart = timeline[idx + 1]?.start_time ? new Date(timeline[idx + 1].start_time).getTime() : null
+      const explicitEnd = log.end_time ? new Date(log.end_time).getTime() : null
+      const inferredEnd = explicitEnd || nextStart || Date.now()
+      if (Number.isFinite(start) && Number.isFinite(inferredEnd) && inferredEnd > start) {
+        duration = Math.floor((inferredEnd - start) / 60000)
+      }
+    }
     switch (log.log_type) {
       case "driving":
         drivingMinutes += duration

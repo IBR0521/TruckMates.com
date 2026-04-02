@@ -197,7 +197,7 @@ export async function registerEmployee(data: {
   try {
     const supabase = await createClient()
 
-    const role = data.role as EmployeeRole
+    const role = String(data.role).trim().toLowerCase() as EmployeeRole
 
     const ALLOWED_SELF_REGISTER_ROLES: EmployeeRole[] = ["dispatcher", "safety_compliance", "financial_controller", "driver"]
     const ALLOWED_INVITED_REGISTER_ROLES: EmployeeRole[] = [
@@ -327,6 +327,52 @@ export async function registerEmployee(data: {
     if (updateError) {
       const errorMsg = updateError.message || String(updateError) || "Failed to update user"
       return { data: null, error: errorMsg.substring(0, 200) }
+    }
+
+    // If the joined user is a driver, create/update their `public.drivers` row so they
+    // automatically appear in the Drivers list (and are treated as drivers elsewhere).
+    if (role === "driver" && companyId) {
+      try {
+        const userId = String(authData.user.id)
+        const companyIdStr = String(companyId)
+        const normalizedEmail = data.email.toLowerCase().trim()
+        const driverName = data.fullName.trim()
+
+        const { data: existingDrivers } = await adminSupabase
+          .from("drivers")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("company_id", companyIdStr)
+          .limit(1)
+
+        if (existingDrivers && existingDrivers.length > 0) {
+          await adminSupabase
+            .from("drivers")
+            .update({
+              name: driverName,
+              email: normalizedEmail,
+              phone: null,
+              status: "active",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", userId)
+            .eq("company_id", companyIdStr)
+        } else {
+          await adminSupabase.from("drivers").insert({
+            user_id: userId,
+            company_id: companyIdStr,
+            name: driverName,
+            email: normalizedEmail,
+            phone: null,
+            status: "active",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+        }
+      } catch (e: unknown) {
+        // Driver list would be incomplete, but we shouldn't break onboarding.
+        Sentry.captureException(e)
+      }
     }
 
     // Mark invitation as accepted only after user/company assignment succeeded.

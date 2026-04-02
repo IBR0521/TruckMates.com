@@ -5,7 +5,8 @@ import type { HosClocks, HosEditAudit, HosExceptionSettings, HosLogEntry, HosSho
 import { storage } from "../services/storage"
 import { certifyDay, computeHosClocksWithSettings, transitionStatus } from "../services/hos-engine"
 import { getCurrentEldLocation, requestLocationPermissions } from "../services/location-tracker"
-import { enqueue } from "../services/sync-queue"
+import { enqueue, flushQueue } from "../services/sync-queue"
+import { supabase } from "../services/supabase"
 
 type HosContextValue = {
   entries: HosLogEntry[]
@@ -29,6 +30,8 @@ const STORAGE_KEY = "hos_entries_v1"
 const AUDIT_STORAGE_KEY = "hos_edit_audits_v1"
 const EXCEPTION_STORAGE_KEY = "hos_exception_settings_v1"
 const SHORT_HAUL_STORAGE_KEY = "hos_short_haul_session_v1"
+const DEVICE_ID_KEY = "eld_device_id_v1"
+const scopedKey = (base: string, userId: string) => `${base}:${userId}`
 
 const HosContext = createContext<HosContextValue | null>(null)
 
@@ -101,10 +104,17 @@ export function HosProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     void (async () => {
-      const saved = await storage.get<HosLogEntry[]>(STORAGE_KEY)
-      const savedAudits = await storage.get<HosEditAudit[]>(AUDIT_STORAGE_KEY)
-      const savedExceptions = await storage.get<HosExceptionSettings>(EXCEPTION_STORAGE_KEY)
-      const savedShortHaul = await storage.get<HosShortHaulSession>(SHORT_HAUL_STORAGE_KEY)
+      if (!userId) {
+        setEntries([])
+        setAudits([])
+        setExceptionSettings({ adverseDrivingEnabled: false, adverseDrivingReason: "" })
+        setShortHaulSession(null)
+        return
+      }
+      const saved = await storage.get<HosLogEntry[]>(scopedKey(STORAGE_KEY, userId))
+      const savedAudits = await storage.get<HosEditAudit[]>(scopedKey(AUDIT_STORAGE_KEY, userId))
+      const savedExceptions = await storage.get<HosExceptionSettings>(scopedKey(EXCEPTION_STORAGE_KEY, userId))
+      const savedShortHaul = await storage.get<HosShortHaulSession>(scopedKey(SHORT_HAUL_STORAGE_KEY, userId))
       if (saved) setEntries(saved)
       if (savedAudits) {
         const normalized = savedAudits.map((audit) => {
@@ -125,7 +135,7 @@ export function HosProvider({ children }: { children: React.ReactNode }) {
         setShortHaulSession(savedShortHaul)
       }
     })()
-  }, [])
+  }, [userId])
 
   useEffect(() => {
     const tick = setInterval(() => {
@@ -139,8 +149,9 @@ export function HosProvider({ children }: { children: React.ReactNode }) {
   async function persist(nextEntries: HosLogEntry[], nextAudits: HosEditAudit[] = audits) {
     setEntries(nextEntries)
     setAudits(nextAudits)
-    await storage.set(STORAGE_KEY, nextEntries)
-    await storage.set(AUDIT_STORAGE_KEY, nextAudits)
+    if (!userId) return
+    await storage.set(scopedKey(STORAGE_KEY, userId), nextEntries)
+    await storage.set(scopedKey(AUDIT_STORAGE_KEY, userId), nextAudits)
   }
 
   async function setAdverseDrivingCondition(input: { enabled: boolean; reason: string }) {
@@ -153,7 +164,9 @@ export function HosProvider({ children }: { children: React.ReactNode }) {
       adverseDrivingActivatedAt: input.enabled ? new Date().toISOString() : undefined,
     }
     setExceptionSettings(next)
-    await storage.set(EXCEPTION_STORAGE_KEY, next)
+    if (userId) {
+      await storage.set(scopedKey(EXCEPTION_STORAGE_KEY, userId), next)
+    }
     await enqueue({
       type: "events",
       payload: [
@@ -189,7 +202,9 @@ export function HosProvider({ children }: { children: React.ReactNode }) {
       terminalLongitude: terminalLocation.longitude,
     }
     setShortHaulSession(next)
-    await storage.set(SHORT_HAUL_STORAGE_KEY, next)
+    if (userId) {
+      await storage.set(scopedKey(SHORT_HAUL_STORAGE_KEY, userId), next)
+    }
     await enqueue({
       type: "events",
       payload: [
@@ -246,7 +261,9 @@ export function HosProvider({ children }: { children: React.ReactNode }) {
       notes: input.notes?.trim() || shortHaulSession.notes,
     }
     setShortHaulSession(next)
-    await storage.set(SHORT_HAUL_STORAGE_KEY, next)
+    if (userId) {
+      await storage.set(scopedKey(SHORT_HAUL_STORAGE_KEY, userId), next)
+    }
     await enqueue({
       type: "events",
       payload: [
@@ -272,19 +289,60 @@ export function HosProvider({ children }: { children: React.ReactNode }) {
 
   async function updateStatus(status: DutyStatus) {
     const nowIso = new Date().toISOString()
+    const active = [...entries].reverse().find((entry) => !entry.endTime)
     const nextEntries = transitionStatus(entries, status, nowIso)
     await persist(nextEntries)
+    const payload: Array<{
+      log_date: string
+      log_type: DutyStatus
+      start_time: string
+      end_time?: string
+      duration_minutes?: number
+      driver_id?: string
+    }> = []
+
+    if (active?.startTime) {
+      const startMs = new Date(active.startTime).getTime()
+      const endMs = new Date(nowIso).getTime()
+      const durationMinutes =
+        Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs
+          ? Math.floor((endMs - startMs) / 60000)
+          : undefined
+      payload.push({
+        log_date: active.logDate,
+        log_type: active.status,
+        start_time: active.startTime,
+        end_time: nowIso,
+        duration_minutes: durationMinutes,
+        driver_id: userId || undefined,
+      })
+    }
+    payload.push({
+      log_date: nowIso.slice(0, 10),
+      log_type: status,
+      start_time: nowIso,
+      driver_id: userId || undefined,
+    })
+
     await enqueue({
       type: "logs",
-      payload: [
-        {
-          log_date: nowIso.slice(0, 10),
-          log_type: status,
-          start_time: nowIso,
-          driver_id: userId || undefined,
-        },
-      ],
+      payload,
     })
+
+    // Push status transitions immediately so platform HOS reflects changes without delay.
+    try {
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      const sessionUserId = data.session?.user?.id || userId
+      if (token && sessionUserId) {
+        const deviceId = await storage.get<string>(scopedKey(DEVICE_ID_KEY, sessionUserId))
+        if (deviceId) {
+          await flushQueue(token, deviceId)
+        }
+      }
+    } catch {
+      // Background queue retry loop still handles eventual sync.
+    }
   }
 
   async function certifyToday() {

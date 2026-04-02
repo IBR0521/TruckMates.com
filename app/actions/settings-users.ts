@@ -86,14 +86,16 @@ export async function updateUserRole(userId: string, newRole: string) {
       return { error: "Only managers can update user roles", success: false }
     }
 
+    const normalizedNewRole = String(newRole).trim().toLowerCase()
+
     // Validate newRole against exact 6 roles
     const VALID_ROLES = ["super_admin", "operations_manager", "dispatcher", "safety_compliance", "financial_controller", "driver"]
-    if (!VALID_ROLES.includes(newRole)) {
+    if (!VALID_ROLES.includes(normalizedNewRole)) {
       return { error: `Invalid role: ${newRole}. Must be one of: ${VALID_ROLES.join(", ")}`, success: false }
     }
 
     // Prevent self-promotion to super_admin
-    if (userId === ctx.userId && newRole === "super_admin") {
+    if (userId === ctx.userId && normalizedNewRole === "super_admin") {
       return { error: "You cannot promote yourself to super_admin", success: false }
     }
 
@@ -107,7 +109,7 @@ export async function updateUserRole(userId: string, newRole: string) {
       super_admin: 4,
     }
     const callerLevel = roleHierarchy[role] || 0
-    const targetLevel = roleHierarchy[newRole] || 0
+    const targetLevel = roleHierarchy[normalizedNewRole] || 0
     if (targetLevel > callerLevel) {
       return { error: `You cannot assign a role higher than your own (${role})`, success: false }
     }
@@ -119,7 +121,7 @@ export async function updateUserRole(userId: string, newRole: string) {
     // after authorization checks, scoped by id + company_id.
     const { data: targetRow, error: targetErr } = await adminSupabase
       .from("users")
-      .select("id, company_id")
+      .select("id, company_id, email, full_name, phone, role")
       .eq("id", userId)
       .maybeSingle()
 
@@ -132,7 +134,7 @@ export async function updateUserRole(userId: string, newRole: string) {
 
     const { data: updated, error: updateErr } = await adminSupabase
       .from("users")
-      .update({ role: newRole })
+      .update({ role: normalizedNewRole })
       .eq("id", userId)
       .eq("company_id", ctx.companyId)
       .select("id")
@@ -155,8 +157,8 @@ export async function updateUserRole(userId: string, newRole: string) {
         const { error: authError } = await adminSupabase.auth.admin.updateUserById(userId, {
           user_metadata: {
             ...existing,
-            employee_role: newRole,
-            role: newRole,
+            employee_role: normalizedNewRole,
+            role: normalizedNewRole,
           },
         })
         if (authError) {
@@ -168,6 +170,55 @@ export async function updateUserRole(userId: string, newRole: string) {
     }
 
     revalidatePath("/dashboard/settings/users")
+
+    // If the manager just set this user as a driver, upsert the corresponding
+    // row in `public.drivers` so they show up automatically in the Drivers list.
+    // Note: Drivers list is driven by `public.drivers`, not `public.users.role`.
+    if (normalizedNewRole === "driver" && ctx.companyId) {
+      try {
+        const driverUserId = userId
+        const companyId = ctx.companyId
+        const emailLower = (targetRow?.email || "").toLowerCase().trim()
+        const fullName = (targetRow?.full_name || targetRow?.email || "Driver").toString().trim()
+        const phone = targetRow?.phone || null
+
+        const { data: existingDrivers } = await adminSupabase
+          .from("drivers")
+          .select("id")
+          .eq("user_id", driverUserId)
+          .eq("company_id", companyId)
+          .limit(1)
+
+        if (existingDrivers && existingDrivers.length > 0) {
+          await adminSupabase
+            .from("drivers")
+            .update({
+              name: fullName,
+              email: emailLower || null,
+              phone,
+              status: "active",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", driverUserId)
+            .eq("company_id", companyId)
+        } else {
+          await adminSupabase.from("drivers").insert({
+            user_id: driverUserId,
+            company_id: companyId,
+            name: fullName,
+            email: emailLower || null,
+            phone,
+            status: "active",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+        }
+      } catch (e: unknown) {
+        // Don't block the role update if driver row creation fails.
+        Sentry.captureException(e)
+      }
+    }
+
     return { success: true, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
@@ -647,7 +698,7 @@ async function reconcileInvitationsWithExistingUsers(companyId: string) {
           const meta = authUser.user_metadata
           const rawRole =
             (meta.employee_role as string) || (meta.role as string) || "driver"
-          const role = mapLegacyRole(rawRole)
+          const role = mapLegacyRole(String(rawRole).trim().toLowerCase())
           const fullName =
             (meta.full_name as string)?.trim() ||
             profile?.full_name ||
@@ -667,6 +718,47 @@ async function reconcileInvitationsWithExistingUsers(companyId: string) {
           )
 
           if (!upsertErr) acceptorId = authUser.id
+
+          // If the invited employee is a driver, ensure they also exist in `public.drivers`
+          // so they show up automatically in the Drivers list.
+          if (!upsertErr && role === "driver" && acceptorId) {
+            try {
+              const { data: existingDrivers } = await admin
+                .from("drivers")
+                .select("id")
+                .eq("user_id", acceptorId)
+                .eq("company_id", companyId)
+                .limit(1)
+
+              if (existingDrivers && existingDrivers.length > 0) {
+                await admin
+                  .from("drivers")
+                  .update({
+                    name: fullName,
+                    email: emailLower,
+                    phone: null,
+                    status: "active",
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("user_id", acceptorId)
+                  .eq("company_id", companyId)
+              } else {
+                await admin.from("drivers").insert({
+                  user_id: acceptorId,
+                  company_id: companyId,
+                  name: fullName,
+                  email: emailLower,
+                  phone: null,
+                  status: "active",
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                })
+              }
+            } catch (e: unknown) {
+              // Don't block invitation reconciliation if driver row creation fails.
+              Sentry.captureException(e)
+            }
+          }
         }
       }
 

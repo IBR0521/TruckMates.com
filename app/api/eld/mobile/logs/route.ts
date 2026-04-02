@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
-import { createClient } from "@/lib/supabase/server"
-import { getCachedAuthContext } from "@/lib/auth/server"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { getMobileAuthContext } from "@/lib/auth/mobile"
 
 /**
  * Receive HOS (Hours of Service) log entries from mobile app
@@ -29,7 +29,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
  */
 export async function POST(request: NextRequest) {
   try {
-    const { companyId, error: authError } = await getCachedAuthContext()
+    const { companyId, user, error: authError } = await getMobileAuthContext(request)
     
     if (authError || !companyId) {
       return NextResponse.json(
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     const body = await request.json()
     const { device_id, logs } = body
 
@@ -65,6 +65,41 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Resolve driver IDs so ELD logs always store internal drivers.id.
+    // Mobile app may send auth user id; platform dashboards read by drivers.id.
+    const candidateDriverIds = Array.from(
+      new Set(
+        logs
+          .map((log: any) => String(log?.driver_id || user?.id || "").trim())
+          .filter((id: string) => id.length > 0)
+      )
+    )
+
+    const mapByDriverId = new Map<string, string>()
+    const mapByUserId = new Map<string, string>()
+    if (candidateDriverIds.length > 0) {
+      const { data: byDriverId } = await supabase
+        .from("drivers")
+        .select("id, user_id")
+        .eq("company_id", companyId)
+        .in("id", candidateDriverIds)
+
+      const { data: byUserId } = await supabase
+        .from("drivers")
+        .select("id, user_id")
+        .eq("company_id", companyId)
+        .in("user_id", candidateDriverIds)
+
+      ;(byDriverId || []).forEach((row: { id: string; user_id: string | null }) => {
+        mapByDriverId.set(String(row.id), String(row.id))
+        if (row.user_id) mapByUserId.set(String(row.user_id), String(row.id))
+      })
+      ;(byUserId || []).forEach((row: { id: string; user_id: string | null }) => {
+        mapByDriverId.set(String(row.id), String(row.id))
+        if (row.user_id) mapByUserId.set(String(row.user_id), String(row.id))
+      })
+    }
+
     // Transform and validate logs
     const logsToInsert = logs
       .filter((log: any) => log.log_type && log.start_time) // Filter invalid logs
@@ -75,7 +110,12 @@ export async function POST(request: NextRequest) {
         return {
           company_id: companyId,
           eld_device_id: device_id,
-          driver_id: log.driver_id || null,
+          driver_id:
+            (() => {
+              const raw = String(log.driver_id || user?.id || "").trim()
+              if (!raw) return null
+              return mapByDriverId.get(raw) || mapByUserId.get(raw) || null
+            })(),
           truck_id: device.truck_id || log.truck_id || null,
           log_date: logDate,
           log_type: log.log_type || log.status, // 'driving', 'on_duty', 'off_duty', 'sleeper_berth'

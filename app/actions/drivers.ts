@@ -7,6 +7,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateDriverData, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+import { mapLegacyRole } from "@/lib/roles"
 
 export async function getDrivers(filters?: {
   status?: string
@@ -25,6 +26,60 @@ export async function getDrivers(filters?: {
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) {
       return { error: ctx.error || "Not authenticated", data: null, count: 0 }
+    }
+
+    // Reconcile: ensure that any user whose role is 'driver' also has a row in `public.drivers`
+    // so the Drivers list stays in sync (Drivers list is driven by `public.drivers` only).
+    try {
+      const { createAdminClient } = await import("@/lib/supabase/admin")
+      const admin = createAdminClient()
+
+      // Fetch all users for the company and normalize role in JS.
+      // This avoids any SQL/syntax quirks with case-insensitive filters.
+      const { data: companyUsers } = await admin
+        .from("users")
+        .select("id, email, full_name, phone, role")
+        .eq("company_id", ctx.companyId)
+
+      const { data: existingDrivers } = await admin
+        .from("drivers")
+        .select("user_id")
+        .eq("company_id", ctx.companyId)
+
+      const existingByUserId = new Set((existingDrivers || []).map((d: any) => String(d.user_id)))
+
+      const missing = (companyUsers || [])
+        .filter((u: any) => {
+          if (!u?.id) return false
+          const normalizedRole = mapLegacyRole(String(u?.role ?? "").trim())
+          if (normalizedRole !== "driver") return false
+          return !existingByUserId.has(String(u.id))
+        })
+        .map((u: any) => {
+          const emailLower = (u.email || "").toLowerCase().trim()
+          const name =
+            (u.full_name || "").toString().trim() ||
+            (emailLower ? emailLower.split("@")[0] : "") ||
+            "Driver"
+
+          return {
+            user_id: String(u.id),
+            company_id: ctx.companyId,
+            name,
+            email: emailLower || null,
+            phone: u.phone || null,
+            status: "active",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+        })
+
+      if (missing.length > 0) {
+        await admin.from("drivers").insert(missing)
+      }
+    } catch (e: unknown) {
+      // Do not fail the Drivers list if reconciliation fails.
+      Sentry.captureException(e)
     }
 
     // Build query with selective columns and pagination

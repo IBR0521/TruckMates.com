@@ -17,6 +17,7 @@ type EventContextValue = {
 }
 
 const STORAGE_KEY = "driver_events_v1"
+const scopedKey = (base: string, userId: string) => `${base}:${userId}`
 const EventContext = createContext<EventContextValue | null>(null)
 
 export function EventProvider({ children }: { children: React.ReactNode }) {
@@ -25,14 +26,19 @@ export function EventProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     void (async () => {
-      const saved = await storage.get<DriverEvent[]>(STORAGE_KEY)
-      if (saved) setEvents(saved)
+      if (!userId) {
+        setEvents([])
+        return
+      }
+      const saved = await storage.get<DriverEvent[]>(scopedKey(STORAGE_KEY, userId))
+      setEvents(saved || [])
     })()
-  }, [])
+  }, [userId])
 
   async function persist(next: DriverEvent[]) {
     setEvents(next)
-    await storage.set(STORAGE_KEY, next)
+    if (!userId) return
+    await storage.set(scopedKey(STORAGE_KEY, userId), next)
   }
 
   async function addEvent(input: {
@@ -58,7 +64,9 @@ export function EventProvider({ children }: { children: React.ReactNode }) {
       next = [event, ...prev].slice(0, 300)
       return next
     })
-    await storage.set(STORAGE_KEY, next)
+    if (userId) {
+      await storage.set(scopedKey(STORAGE_KEY, userId), next)
+    }
 
     await enqueue({
       type: "events",
@@ -97,7 +105,9 @@ export function EventProvider({ children }: { children: React.ReactNode }) {
       })
       return next
     })
-    await storage.set(STORAGE_KEY, next)
+    if (userId) {
+      await storage.set(scopedKey(STORAGE_KEY, userId), next)
+    }
 
     if (!acknowledgedEvent) return
     await enqueue({

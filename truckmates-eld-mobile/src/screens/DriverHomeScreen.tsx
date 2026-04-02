@@ -4,9 +4,12 @@ import { useAutoEld } from "../context/AutoEldContext"
 import { useAuth } from "../context/AuthContext"
 import { useHos } from "../context/HosContext"
 import { useUnassignedDriving } from "../context/UnassignedDrivingContext"
+import { registerDevice } from "../services/eld-api"
 import { captureAndQueueLocation, requestLocationPermissions } from "../services/location-tracker"
+import { storage } from "../services/storage"
+import { supabase } from "../services/supabase"
 import { computeHosClocksWithSettings, formatMinutes } from "../services/hos-engine"
-import { flushQueue } from "../services/sync-queue"
+import { flushQueue, getQueueStats } from "../services/sync-queue"
 import { colors } from "../theme/tokens"
 import type { DutyStatus } from "../types/eld"
 
@@ -17,7 +20,10 @@ const labels: Record<DutyStatus, string> = {
   on_duty: "On Duty",
 }
 
-const BUILD_MARKER = "clock-fix-v3"
+const BUILD_MARKER = "clock-fix-v6"
+const DEVICE_ID_KEY = "eld_device_id_v1"
+const scopedKey = (base: string, id: string) => `${base}:${id}`
+const SYNC_TIMEOUT_MS = 30000
 
 export function DriverHomeScreen() {
   const { sessionToken, deviceId, userId, assignedTruckId } = useAuth()
@@ -45,17 +51,68 @@ export function DriverHomeScreen() {
   )
 
   async function setDutyStatus(next: DutyStatus) {
-    await updateStatus(next)
+    try {
+      await updateStatus(next)
+    } catch (e) {
+      Alert.alert("Status update failed", e instanceof Error ? e.message : "Unknown error")
+    }
   }
 
   async function syncNow() {
-    if (!sessionToken || !deviceId) return
+    let token = sessionToken
+    let resolvedDeviceId = deviceId
+    let resolvedUserId = userId
+
+    // Self-heal on demand: recover session/device even if context hydration lagged.
+    if (!token || !resolvedUserId) {
+      const { data } = await supabase.auth.getSession()
+      token = data.session?.access_token ?? null
+      resolvedUserId = data.session?.user?.id ?? null
+    }
+    if (!token || !resolvedUserId) {
+      Alert.alert("Sync unavailable", "Session missing. Please sign out and sign in again.")
+      return
+    }
+    if (!resolvedDeviceId) {
+      resolvedDeviceId = await storage.get<string>(scopedKey(DEVICE_ID_KEY, resolvedUserId))
+    }
+    if (!resolvedDeviceId) {
+      try {
+        const registration = await registerDevice(token)
+        resolvedDeviceId = registration.device_id
+        await storage.set(scopedKey(DEVICE_ID_KEY, resolvedUserId), registration.device_id)
+      } catch (e) {
+        Alert.alert("Sync unavailable", e instanceof Error ? e.message : "Unable to register device")
+        return
+      }
+    }
+
     setSyncing(true)
     try {
-      const allowed = await requestLocationPermissions()
-      if (allowed) await captureAndQueueLocation(userId || undefined)
-      await flushQueue(sessionToken, deviceId)
-      Alert.alert("Sync complete", "ELD data synced successfully.")
+      const before = await getQueueStats()
+      // Never block manual sync on GPS/location capture.
+      void (async () => {
+        try {
+          const allowed = await requestLocationPermissions()
+          if (allowed) await captureAndQueueLocation(userId || undefined)
+        } catch {
+          // Ignore capture errors for manual sync speed.
+        }
+      })()
+      await Promise.race([
+        flushQueue(token, resolvedDeviceId),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`Sync timeout after ${Math.round(SYNC_TIMEOUT_MS / 1000)}s`)),
+            SYNC_TIMEOUT_MS
+          )
+        ),
+      ])
+      const after = await getQueueStats()
+      Alert.alert(
+        "Sync complete",
+        `Synced successfully.\nQueue before: ${before.totalItems}\nQueue now: ${after.totalItems}`
+      )
     } catch (e) {
       Alert.alert("Sync failed", e instanceof Error ? e.message : "Unknown error")
     } finally {
@@ -172,7 +229,11 @@ export function DriverHomeScreen() {
         ))}
       </View>
 
-      <Pressable style={styles.syncButton} onPress={() => void syncNow()} disabled={syncing}>
+      <Pressable
+        style={[styles.syncButton, syncing && styles.syncButtonDisabled]}
+        onPress={() => void syncNow()}
+        disabled={syncing}
+      >
         <Text style={styles.syncButtonText}>{syncing ? "Syncing..." : "Sync ELD Data"}</Text>
       </Pressable>
     </View>
@@ -250,5 +311,6 @@ const styles = StyleSheet.create({
     padding: 13,
     alignItems: "center",
   },
+  syncButtonDisabled: { opacity: 0.65 },
   syncButtonText: { color: colors.text, fontWeight: "700" },
 })

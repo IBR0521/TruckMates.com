@@ -11,6 +11,7 @@ type DvirContextValue = {
 }
 
 const STORAGE_KEY = "dvir_reports_v1"
+const scopedKey = (base: string, userId: string) => `${base}:${userId}`
 const DvirContext = createContext<DvirContextValue | null>(null)
 
 export function DvirProvider({ children }: { children: React.ReactNode }) {
@@ -19,10 +20,14 @@ export function DvirProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     void (async () => {
-      const saved = await storage.get<LocalDvirReport[]>(STORAGE_KEY)
-      if (saved) setReports(saved)
+      if (!userId) {
+        setReports([])
+        return
+      }
+      const saved = await storage.get<LocalDvirReport[]>(scopedKey(STORAGE_KEY, userId))
+      setReports(saved || [])
     })()
-  }, [])
+  }, [userId])
 
   async function submitDvir(payload: ELDDvir) {
     const now = new Date().toISOString()
@@ -46,7 +51,9 @@ export function DvirProvider({ children }: { children: React.ReactNode }) {
 
     setReports((prev) => {
       const next = [report, ...prev].slice(0, 100)
-      void storage.set(STORAGE_KEY, next)
+      if (userId) {
+        void storage.set(scopedKey(STORAGE_KEY, userId), next)
+      }
       return next
     })
   }
