@@ -7,3 +7,8 @@ web-build/
 *.log
 *.tmp
 coverage/
+
+# Secrets and local env (never commit)
+.env
+.env.*
+!.env.example
