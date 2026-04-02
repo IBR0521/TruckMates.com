@@ -78,7 +78,7 @@ async function computeDriversHOSStatusWithCompany(
   const driverIds = drivers.map((d: { id: string; user_id?: string | null; truck_id: string | null }) => d.id)
   const driverUserIds = drivers
     .map((d: { id: string; user_id?: string | null; truck_id: string | null }) => d.user_id)
-    .filter((id): id is string => typeof id === "string" && id.length > 0)
+    .filter((id: string | null | undefined): id is string => typeof id === "string" && id.length > 0)
   const logDriverIds = Array.from(new Set([...driverIds, ...driverUserIds]))
   const eightDaysAgo = new Date()
   eightDaysAgo.setDate(eightDaysAgo.getDate() - 8)
