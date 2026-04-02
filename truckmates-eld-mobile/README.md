@@ -32,6 +32,17 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 - **Physical phone (Expo Go):** `localhost` points at the phone, not your computer. The app rewrites `localhost` to your dev machine IP using Expo’s `hostUri` when possible. If sync still fails, set `EXPO_PUBLIC_PLATFORM_API_URL` to `http://<your-lan-ip>:3004` (same Wi‑Fi as the phone).
 - **Android emulator:** `localhost` is rewritten to `10.0.2.2` automatically so the emulator reaches the host.
 
+### `ERR_CONNECTION_TIMED_OUT` (browser or app)
+
+The client never reached your machine. Check in order:
+
+1. **Platform is running** on the port in `.env` (e.g. `3004`), bound to all interfaces:  
+   `npx next dev -p 3004 --hostname 0.0.0.0`  
+   From the **same computer**, open `http://127.0.0.1:3004/api/health` (or `/api/test-connection` if you use it). If that fails, fix the server first.
+2. **Phone or tablet:** do not use `http://localhost:3004` in Safari/Chrome on the device — use `http://<your-Mac-LAN-IP>:3004` (System Settings → Network, same Wi‑Fi as the phone). Update `EXPO_PUBLIC_PLATFORM_API_URL` to that URL and restart Expo.
+3. **macOS firewall:** allow incoming connections for Node/Terminal, or temporarily disable the firewall to confirm.
+4. **VPN / corporate network** can block device ↔ laptop; try the same Wi‑Fi without VPN.
+
 ## Run
 
 ```bash
