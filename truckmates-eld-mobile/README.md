@@ -26,6 +26,12 @@ EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
+### Platform API URL and “connection lost” / localhost
+
+- **iOS Simulator (Mac):** `http://localhost:3004` (or `127.0.0.1`) is correct if Next.js binds to the host (e.g. `--hostname 0.0.0.0` and port `3004`).
+- **Physical phone (Expo Go):** `localhost` points at the phone, not your computer. The app rewrites `localhost` to your dev machine IP using Expo’s `hostUri` when possible. If sync still fails, set `EXPO_PUBLIC_PLATFORM_API_URL` to `http://<your-lan-ip>:3004` (same Wi‑Fi as the phone).
+- **Android emulator:** `localhost` is rewritten to `10.0.2.2` automatically so the emulator reaches the host.
+
 ## Run
 
 ```bash

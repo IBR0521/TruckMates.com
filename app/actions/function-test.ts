@@ -64,11 +64,11 @@ export async function testAllPlatformFunctions() {
 
   // Create arrays using a closure pattern - absolutely guaranteed to exist
   const createResultsStore = () => {
-    const tested: any[] = []
-    const passed: any[] = []
-    const failed: any[] = []
-    const skipped: any[] = []
-    const errors: any[] = []
+    const tested: unknown[] = []
+    const passed: unknown[] = []
+    const failed: unknown[] = []
+    const skipped: unknown[] = []
+    const errors: unknown[] = []
     
     return {
       tested,
@@ -76,35 +76,35 @@ export async function testAllPlatformFunctions() {
       failed,
       skipped,
       errors,
-      pushTested: (value: any) => {
+      pushTested: (value: unknown) => {
         try {
           tested.push(value)
         } catch (e: unknown) {
           Sentry.captureException(e)
         }
       },
-      pushPassed: (value: any) => {
+      pushPassed: (value: unknown) => {
         try {
           passed.push(value)
         } catch (e: unknown) {
           Sentry.captureException(e)
         }
       },
-      pushFailed: (value: any) => {
+      pushFailed: (value: unknown) => {
         try {
           failed.push(value)
         } catch (e: unknown) {
           Sentry.captureException(e)
         }
       },
-      pushSkipped: (value: any) => {
+      pushSkipped: (value: unknown) => {
         try {
           skipped.push(value)
         } catch (e: unknown) {
           Sentry.captureException(e)
         }
       },
-      pushError: (value: any) => {
+      pushError: (value: unknown) => {
         try {
           errors.push(value)
         } catch (e: unknown) {
@@ -124,11 +124,11 @@ export async function testAllPlatformFunctions() {
   const store = createResultsStore()
   
   // Helper functions that use the store
-  const pushTested = (value: any) => store.pushTested(value)
-  const pushPassed = (value: any) => store.pushPassed(value)
-  const pushFailed = (value: any) => store.pushFailed(value)
-  const pushSkipped = (value: any) => store.pushSkipped(value)
-  const pushError = (value: any) => store.pushError(value)
+  const pushTested = (value: unknown) => store.pushTested(value)
+  const pushPassed = (value: unknown) => store.pushPassed(value)
+  const pushFailed = (value: unknown) => store.pushFailed(value)
+  const pushSkipped = (value: unknown) => store.pushSkipped(value)
+  const pushError = (value: unknown) => store.pushError(value)
 
   const startTime = Date.now()
   Sentry.captureMessage("[FUNCTION TEST] Starting comprehensive function test...", "info")
@@ -389,12 +389,20 @@ export async function testAllPlatformFunctions() {
           const stops = await routeStopsActions.getRouteStops(routes.data[0].id)
           if (stops.data && stops.data.length > 2) {
             const optOrder = await routeOptimizationActions.optimizeRouteOrder(
-              stops.data.map((s: any) => ({
-                id: s.id,
-                address: s.address || s.location_name || "Test Address",
-                lat: s.latitude || 34.0522,
-                lng: s.longitude || -118.2437,
-              }))
+              stops.data.map(
+                (s: {
+                  id: string
+                  address?: string | null
+                  location_name?: string | null
+                  latitude?: number | null
+                  longitude?: number | null
+                }) => ({
+                  id: s.id,
+                  address: s.address || s.location_name || "Test Address",
+                  lat: s.latitude || 34.0522,
+                  lng: s.longitude || -118.2437,
+                })
+              )
             )
             pushTested("optimizeRouteOrder")
             if (optOrder.optimizedOrder) {
@@ -755,12 +763,12 @@ export async function testAllPlatformFunctions() {
         // Check if load already has a BOL (unique constraint on load_id)
         const existingBOLs = await bolActions.getBOLs()
         const existingBOLsList = existingBOLs.data || []
-        const loadWithoutBOL = loads.data.find((load: any) => 
-          !existingBOLsList.some((bol: any) => bol.load_id === load.id)
+        const loadWithoutBOL = loads.data.find((load: { id: string }) =>
+          !existingBOLsList.some((bol: { load_id: string }) => bol.load_id === load.id)
         )
         
         if (loadWithoutBOL) {
-          const bol = await (bolActions as any).createBOL({
+          const bol = await bolActions.createBOL({
             load_id: loadWithoutBOL.id,
             shipper_name: `Test Shipper ${Date.now()}`,
             shipper_address: "123 Test St",

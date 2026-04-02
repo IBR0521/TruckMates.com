@@ -1,6 +1,6 @@
 import { ENV } from "../config/env"
 
-const REQUEST_TIMEOUT_MS = 12000
+const REQUEST_TIMEOUT_MS = 30000
 
 export async function apiRequest<T>(
   path: string,
