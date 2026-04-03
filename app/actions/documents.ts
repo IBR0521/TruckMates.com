@@ -19,8 +19,10 @@ function driverCanAccessDocumentRow(args: {
   driver_id: string | null | undefined
   file_url: string | null | undefined
   myDriverId: string | null
-  userId: string
+  /** Null when unauthenticated — treated as no access */
+  userId: string | null
 }): boolean {
+  if (!args.userId) return false
   const path = args.file_url || ""
   const ownUpload = path.startsWith(`${args.userId}/`)
   if (!args.myDriverId) {
