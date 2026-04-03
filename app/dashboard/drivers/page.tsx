@@ -95,9 +95,10 @@ function DriversPageContent() {
   const loadDrivers = async () => {
     setIsLoading(true)
     try {
-      const result = await Promise.race([
+      type DriversLoadResult = { data?: any[] | null; error?: string | null; count?: number }
+      const result: DriversLoadResult = await Promise.race([
         getDrivers(),
-        new Promise<{ data?: any[]; error?: string }>((resolve) =>
+        new Promise<DriversLoadResult>((resolve) =>
           setTimeout(() => resolve({ error: "Loading drivers timed out. Please retry." }), 60000)
         ),
       ])
