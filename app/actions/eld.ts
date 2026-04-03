@@ -4,9 +4,57 @@ import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { ensureDriverIdForUser } from "@/lib/eld/ensure-driver"
+import { resolveTruckIdForDriver } from "@/lib/eld/resolve-driver-truck"
+import { mapLegacyRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 
-// Get all ELD devices for a company
+/** Drivers: same provisioning as dashboard/mobile (`ensureDriverIdForUser`). Others: DB lookup only. */
+async function resolveDriverIdForELD(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  companyId: string,
+  userId: string,
+  role: ReturnType<typeof mapLegacyRole> | null
+): Promise<string | null> {
+  if (role !== "driver") {
+    const { data: row } = await supabase
+      .from("drivers")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("user_id", userId)
+      .maybeSingle()
+    return row?.id ? String(row.id) : null
+  }
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const id = await ensureDriverIdForUser(createAdminClient(), companyId, userId)
+    if (id) return id
+  } catch {
+    // Missing service role or DB error — fall back to plain read
+  }
+  const { data: row } = await supabase
+    .from("drivers")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("user_id", userId)
+    .maybeSingle()
+  return row?.id ? String(row.id) : null
+}
+
+/** Driver ELD scope: devices are tied to `truck_id`; logs/events to `driver_id` / truck. */
+async function getDriverTruckIdForUser(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  companyId: string,
+  userId: string,
+  role: ReturnType<typeof mapLegacyRole> | null
+): Promise<string | null> {
+  const driverId = await resolveDriverIdForELD(supabase, companyId, userId, role)
+  if (!driverId) return null
+  const { createAdminClient } = await import("@/lib/supabase/admin")
+  return resolveTruckIdForDriver(createAdminClient(), companyId, driverId)
+}
+
+// Get all ELD devices for a company (drivers: only devices on their assigned truck)
 export async function getELDDevices() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
@@ -17,7 +65,7 @@ export async function getELDDevices() {
       return { error: ctx.error || "Not authenticated", data: null }
     }
 
-    const { data: devices, error } = await supabase
+    let query = supabase
       .from("eld_devices")
       .select(`
         *,
@@ -30,6 +78,17 @@ export async function getELDDevices() {
       `)
       .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
+
+    const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+    if (role === "driver" && ctx.userId) {
+      const truckId = await getDriverTruckIdForUser(supabase, ctx.companyId, ctx.userId, role)
+      if (!truckId) {
+        return { data: [], error: null }
+      }
+      query = query.eq("truck_id", truckId)
+    }
+
+    const { data: devices, error } = await query
 
     if (error) {
       return { error: error.message, data: null }
@@ -75,6 +134,15 @@ export async function getELDDevice(id: string) {
 
     if (!device) {
       return { error: "ELD device not found", data: null }
+    }
+
+    const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+    if (role === "driver" && ctx.userId) {
+      const truckId = await getDriverTruckIdForUser(supabase, ctx.companyId, ctx.userId, role)
+      const devTruck = device.truck_id ? String(device.truck_id) : null
+      if (!truckId || !devTruck || devTruck !== truckId) {
+        return { error: "ELD device not found", data: null }
+      }
     }
 
     return { data: device, error: null }
@@ -299,6 +367,15 @@ export async function getELDLogs(filters?: {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
+  const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+  let driverScopeId: string | null = null
+  if (role === "driver" && ctx.userId) {
+    driverScopeId = await resolveDriverIdForELD(supabase, ctx.companyId, ctx.userId, role)
+    if (!driverScopeId) {
+      return { data: [], error: null, count: 0 }
+    }
+  }
+
   let query = supabase
     .from("eld_logs")
     .select(`
@@ -321,13 +398,18 @@ export async function getELDLogs(filters?: {
     .order("log_date", { ascending: false })
     .order("start_time", { ascending: false })
 
+  if (driverScopeId) {
+    query = query.eq("driver_id", driverScopeId)
+  } else {
+    if (filters?.driver_id) {
+      query = query.eq("driver_id", filters.driver_id)
+    }
+  }
+
   if (filters?.eld_device_id) {
     query = query.eq("eld_device_id", filters.eld_device_id)
   }
-  if (filters?.driver_id) {
-    query = query.eq("driver_id", filters.driver_id)
-  }
-  if (filters?.truck_id) {
+  if (!driverScopeId && filters?.truck_id) {
     query = query.eq("truck_id", filters.truck_id)
   }
   if (filters?.start_date) {
@@ -365,11 +447,23 @@ export async function getELDEvents(filters?: {
   limit?: number
   offset?: number
 }) {
+  try {
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+  let driverScopeId: string | null = null
+  let driverTruckId: string | null = null
+  if (role === "driver" && ctx.userId) {
+    driverScopeId = await resolveDriverIdForELD(supabase, ctx.companyId, ctx.userId, role)
+    driverTruckId = await getDriverTruckIdForUser(supabase, ctx.companyId, ctx.userId, role)
+    if (!driverScopeId) {
+      return { data: [], error: null, count: 0 }
+    }
   }
 
   let query = supabase
@@ -392,14 +486,25 @@ export async function getELDEvents(filters?: {
     .eq("company_id", ctx.companyId)
     .order("event_time", { ascending: false })
 
+  if (driverScopeId) {
+    if (driverTruckId) {
+      query = query.or(
+        `driver_id.eq.${driverScopeId},truck_id.eq.${driverTruckId}`
+      )
+    } else {
+      query = query.eq("driver_id", driverScopeId)
+    }
+  } else {
+    if (filters?.driver_id) {
+      query = query.eq("driver_id", filters.driver_id)
+    }
+    if (filters?.truck_id) {
+      query = query.eq("truck_id", filters.truck_id)
+    }
+  }
+
   if (filters?.eld_device_id) {
     query = query.eq("eld_device_id", filters.eld_device_id)
-  }
-  if (filters?.driver_id) {
-    query = query.eq("driver_id", filters.driver_id)
-  }
-  if (filters?.truck_id) {
-    query = query.eq("truck_id", filters.truck_id)
   }
   if (filters?.event_type) {
     query = query.eq("event_type", filters.event_type)
@@ -427,6 +532,13 @@ export async function getELDEvents(filters?: {
   }
 
   return { data: events || [], error: null, count: count || 0 }
+  } catch (e: unknown) {
+    Sentry.captureException(e)
+    return {
+      error: errorMessage(e, "Failed to load ELD events"),
+      data: null,
+    }
+  }
 }
 
 // Get ELD mileage data for IFTA reports
@@ -442,13 +554,26 @@ export async function getELDMileageData(filters: {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
+  const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+  let truckIds = filters.truck_ids
+  if (role === "driver" && ctx.userId) {
+    const myTruck = await getDriverTruckIdForUser(supabase, ctx.companyId, ctx.userId, role)
+    if (!myTruck) {
+      return { data: { logs: [], mileageByTruck: {}, totalMiles: 0 }, error: null }
+    }
+    truckIds = filters.truck_ids.filter((id) => id === myTruck)
+    if (truckIds.length === 0) {
+      return { data: { logs: [], mileageByTruck: {}, totalMiles: 0 }, error: null }
+    }
+  }
+
   // Get mileage data from ELD logs for the specified trucks and date range
   // V3-007 FIX: Add LIMIT to prevent OOM on large datasets
   const { data: logs, error } = await supabase
     .from("eld_logs")
     .select("truck_id, miles_driven, log_date, location_start, location_end")
     .eq("company_id", ctx.companyId)
-    .in("truck_id", filters.truck_ids)
+    .in("truck_id", truckIds)
     .gte("log_date", filters.start_date)
     .lte("log_date", filters.end_date)
     .eq("log_type", "driving")

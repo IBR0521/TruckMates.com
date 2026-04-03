@@ -30,7 +30,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useRouter, useSearchParams } from "next/navigation"
-import { getDrivers, deleteDriver, bulkDeleteDrivers, bulkUpdateDriverStatus, updateDriver } from "@/app/actions/drivers"
+import {
+  getDrivers,
+  deleteDriver,
+  bulkDeleteDrivers,
+  bulkUpdateDriverStatus,
+  updateDriver,
+  emergencyPurgeDriversKeepOne,
+} from "@/app/actions/drivers"
 import { importDriversFromCsv } from "@/app/actions/import-drivers"
 import { AccessGuard } from "@/components/access-guard"
 import { InlineEdit } from "@/components/dashboard/inline-edit"
@@ -54,6 +61,9 @@ function DriversPageContent() {
   const [isBulkMode, setIsBulkMode] = useState(false)
   const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
   const [isImporting, setIsImporting] = useState(false)
+  const [totalDriverCount, setTotalDriverCount] = useState(0)
+  const [purgePhrase, setPurgePhrase] = useState("")
+  const [isPurging, setIsPurging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const handleImportCsv = async (file: File | null) => {
@@ -88,12 +98,13 @@ function DriversPageContent() {
       const result = await Promise.race([
         getDrivers(),
         new Promise<{ data?: any[]; error?: string }>((resolve) =>
-          setTimeout(() => resolve({ error: "Loading drivers timed out. Please retry." }), 15000)
+          setTimeout(() => resolve({ error: "Loading drivers timed out. Please retry." }), 60000)
         ),
       ])
       if (result.error) {
         toast.error(result.error)
         setDriversList([])
+        setTotalDriverCount(0)
         return
       }
       if (result.data) {
@@ -101,12 +112,35 @@ function DriversPageContent() {
       } else {
         setDriversList([])
       }
+      if (typeof result.count === "number") {
+        setTotalDriverCount(result.count)
+      }
     } catch (error: unknown) {
       console.error("Error loading drivers:", error)
       toast.error(errorMessage(error, "Failed to load drivers"))
       setDriversList([])
+      setTotalDriverCount(0)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleEmergencyPurgeKeepOne = async () => {
+    setIsPurging(true)
+    try {
+      const result = await emergencyPurgeDriversKeepOne(purgePhrase)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success(`Removed ${result.deleted} duplicate driver row(s). Kept driver id ${result.keptId}.`)
+      setPurgePhrase("")
+      await loadDrivers()
+      router.refresh()
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Purge failed"))
+    } finally {
+      setIsPurging(false)
     }
   }
 
@@ -444,6 +478,34 @@ function DriversPageContent() {
       {/* Content */}
       <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
+          {totalDriverCount > 50 && (
+            <Card className="border-destructive/40 bg-destructive/5 p-4 mb-6">
+              <p className="text-sm font-medium text-foreground mb-1">Duplicate driver rows detected</p>
+              <p className="text-xs text-muted-foreground mb-3">
+                Database shows <strong>{totalDriverCount}</strong> driver rows for your company. To merge everything into{" "}
+                <strong>one</strong> driver (repointing loads, ELD, etc., first), type the phrase below and run the merge.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                <div className="flex-1">
+                  <Input
+                    value={purgePhrase}
+                    onChange={(e) => setPurgePhrase(e.target.value)}
+                    placeholder="CONFIRM PURGE KEEP ONE DRIVER"
+                    className="font-mono text-sm"
+                    autoComplete="off"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={isPurging}
+                  onClick={() => void handleEmergencyPurgeKeepOne()}
+                >
+                  {isPurging ? "Merging…" : "Merge to one driver"}
+                </Button>
+              </div>
+            </Card>
+          )}
           {/* Search and Filters */}
           {!isLoading && driversList.length > 0 && (
             <Card className="border-border/50 p-4 mb-6">

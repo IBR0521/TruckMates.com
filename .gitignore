@@ -59,6 +59,7 @@ next-env.d.ts
 !README.md
 !CHANGELOG.md
 
-# ELD mobile app is a separate Git repo; ignore its metadata in this monorepo
-truckmates-eld-mobile/.git/
+# Design package extracts (reference only)
+.tmp-design-extract/
+.tmp-design-1775160715578/
 

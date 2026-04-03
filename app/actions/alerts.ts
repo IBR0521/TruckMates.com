@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
 import { sendNotification } from "./notifications"
 import { handleDbError } from "@/lib/db-helpers"
 import * as Sentry from "@sentry/nextjs"
@@ -321,10 +322,10 @@ export async function getAlerts(filters?: {
       return { error: ctx.error || "Not authenticated", data: null }
     }
 
-    // Fetch role and driver_id for filtering (auth already cached above)
+    // Fetch role for filtering; driver PK is drivers.id (user_id → users), not users.driver_id
     const { data: userRow, error: userRowError } = await supabase
       .from("users")
-      .select("role, driver_id")
+      .select("role")
       .eq("id", ctx.userId!)
       .maybeSingle()
     if (userRowError) {
@@ -333,7 +334,10 @@ export async function getAlerts(filters?: {
     const userRole = userRow?.role || "driver"
     const elevatedRoles = ["super_admin", "operations_manager", "manager", "owner", "admin"]
     const effectiveRole = elevatedRoles.includes(userRole) ? "manager" : userRole
-    const driverId = userRow?.driver_id
+    let driverId: string | null = null
+    if (effectiveRole === "driver" && ctx.userId) {
+      driverId = await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, "driver")
+    }
 
   // V3-007 FIX: Replace select(*) with explicit columns
   let query = supabase

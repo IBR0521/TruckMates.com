@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { calendarDateYmdLocal } from "@/lib/eld/hos-calendar-date"
+import { computeDailyRemainingFromEldLogs } from "@/lib/hos/compute-daily-remaining"
 
 /** `public.eld_logs` — supabase/eld_schema.sql */
 const ELD_LOGS_SELECT =
@@ -11,24 +13,15 @@ const ELD_LOGS_SELECT =
 const ELD_EVENTS_SELECT =
   "id, company_id, eld_device_id, driver_id, truck_id, event_type, severity, title, description, event_time, location, resolved, resolved_at, resolved_by, metadata, created_at, fault_code, fault_code_category, fault_code_description, maintenance_created, maintenance_id"
 
-// HOS Rules (Hours of Service)
-const HOS_RULES = {
-  MAX_DRIVING_HOURS: 11, // Maximum driving hours in a day
-  MAX_ON_DUTY_HOURS: 14, // Maximum on-duty hours in a day
-  MIN_OFF_DUTY_HOURS: 10, // Minimum off-duty hours before next shift
-  MIN_BREAK_HOURS: 0.5, // Minimum break (30 minutes) after 8 hours driving
-  MAX_DRIVING_WEEK: 60, // Maximum driving hours in 7 days
-  MAX_DRIVING_WEEK_8: 70, // Maximum driving hours in 8 days
-}
-
 // Calculate remaining HOS hours for a driver
 export async function calculateRemainingHOS(driverId: string, date?: string) {
   const supabase = await createClient()
-  const targetDate = date || new Date().toISOString().split('T')[0]
+  const ctx = await getCachedAuthContext()
+  const targetDate = date || calendarDateYmdLocal(new Date())
 
-  // Get all logs for the driver for the current day
+  // Get all logs for the driver for the current day (same calendar day as duty inserts)
   // V3-007 FIX: Add LIMIT (single day should be safe, but add limit for safety)
-  const { data: logs, error } = await supabase
+  let query = supabase
     .from("eld_logs")
     .select(ELD_LOGS_SELECT)
     .eq("driver_id", driverId)
@@ -36,80 +29,28 @@ export async function calculateRemainingHOS(driverId: string, date?: string) {
     .order("start_time", { ascending: true })
     .limit(500) // V3-007: Limit per day (should be more than enough for one day)
 
+  if (ctx.companyId) {
+    query = query.eq("company_id", ctx.companyId)
+  }
+
+  const { data: logs, error } = await query
+
   if (error) {
     return { error: error.message, data: null }
   }
 
-  // Calculate totals
-  let drivingMinutes = 0
-  let onDutyMinutes = 0
-  let offDutyMinutes = 0
-  let sleeperMinutes = 0
-
-  const timeline = [...(logs || [])].sort(
-    (a: { start_time: string }, b: { start_time: string }) =>
-      new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-  )
-
-  timeline.forEach((log: { log_type: string; duration_minutes: number | null; start_time: string; end_time: string | null }, idx: number) => {
-    let duration = log.duration_minutes || 0
-    if (!duration && log.start_time) {
-      const start = new Date(log.start_time).getTime()
-      const nextStart = timeline[idx + 1]?.start_time ? new Date(timeline[idx + 1].start_time).getTime() : null
-      const explicitEnd = log.end_time ? new Date(log.end_time).getTime() : null
-      const inferredEnd = explicitEnd || nextStart || Date.now()
-      if (Number.isFinite(start) && Number.isFinite(inferredEnd) && inferredEnd > start) {
-        duration = Math.floor((inferredEnd - start) / 60000)
-      }
-    }
-    switch (log.log_type) {
-      case "driving":
-        drivingMinutes += duration
-        onDutyMinutes += duration
-        break
-      case "on_duty":
-        onDutyMinutes += duration
-        break
-      case "off_duty":
-        offDutyMinutes += duration
-        break
-      case "sleeper_berth":
-        sleeperMinutes += duration
-        break
-    }
-  })
-
-  const drivingHours = drivingMinutes / 60
-  const onDutyHours = onDutyMinutes / 60
-  const offDutyHours = (offDutyMinutes + sleeperMinutes) / 60
-
-  // Calculate remaining hours
-  const remainingDriving = Math.max(0, HOS_RULES.MAX_DRIVING_HOURS - drivingHours)
-  const remainingOnDuty = Math.max(0, HOS_RULES.MAX_ON_DUTY_HOURS - onDutyHours)
-  const needsBreak = drivingHours >= 8 && offDutyHours < HOS_RULES.MIN_BREAK_HOURS
-
-  // Check for violations
-  const violations: string[] = []
-  if (drivingHours > HOS_RULES.MAX_DRIVING_HOURS) {
-    violations.push(`Exceeded ${HOS_RULES.MAX_DRIVING_HOURS}-hour driving limit`)
-  }
-  if (onDutyHours > HOS_RULES.MAX_ON_DUTY_HOURS) {
-    violations.push(`Exceeded ${HOS_RULES.MAX_ON_DUTY_HOURS}-hour on-duty limit`)
-  }
-  if (needsBreak) {
-    violations.push("Break required: 30 minutes off-duty needed after 8 hours driving")
-  }
+  const computed = computeDailyRemainingFromEldLogs(logs || [], Date.now())
 
   return {
     data: {
-      drivingHours: parseFloat(drivingHours.toFixed(2)),
-      onDutyHours: parseFloat(onDutyHours.toFixed(2)),
-      offDutyHours: parseFloat(offDutyHours.toFixed(2)),
-      remainingDriving: parseFloat(remainingDriving.toFixed(2)),
-      remainingOnDuty: parseFloat(remainingOnDuty.toFixed(2)),
-      needsBreak,
-      violations,
-      canDrive: remainingDriving > 0 && remainingOnDuty > 0 && !needsBreak,
+      drivingHours: computed.drivingHours,
+      onDutyHours: computed.onDutyHours,
+      offDutyHours: computed.offDutyHours,
+      remainingDriving: computed.remainingDriving,
+      remainingOnDuty: computed.remainingOnDuty,
+      needsBreak: computed.needsBreak,
+      violations: computed.violations,
+      canDrive: computed.canDrive,
     },
     error: null,
   }
@@ -221,6 +162,7 @@ export async function getFleetHealth() {
     .from("eld_events")
     .select("id, severity, resolved")
     .eq("company_id", ctx.companyId)
+    .eq("event_type", "hos_violation")
     .eq("resolved", false)
     .gte("event_time", yesterday)
 

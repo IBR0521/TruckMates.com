@@ -52,9 +52,17 @@ export default function ELDViolationsPage() {
     loadData()
   }, [])
 
+  // Use primitive deps so Radix Select / setFilters identity changes cannot retrigger an infinite load loop.
   useEffect(() => {
     loadViolations()
-  }, [filters])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- filters is expanded below
+  }, [
+    filters.driver_id,
+    filters.status,
+    filters.severity,
+    filters.start_date,
+    filters.end_date,
+  ])
 
   async function loadData() {
     try {
@@ -65,6 +73,13 @@ export default function ELDViolationsPage() {
     }
   }
 
+  function resolvedFilterForStatus(status: string): boolean | undefined {
+    if (status === "resolved") return true
+    if (status === "open") return false
+    // acknowledged / dismissed / all — no resolved column in DB; load client-neutral and filter later if needed
+    return undefined
+  }
+
   async function loadViolations() {
     setIsLoading(true)
     try {
@@ -72,18 +87,20 @@ export default function ELDViolationsPage() {
         event_type: "hos_violation",
         driver_id: filters.driver_id || undefined,
         severity: filters.severity || undefined,
-        resolved: filters.status === "resolved" ? true : filters.status === "unresolved" ? false : undefined,
+        resolved: resolvedFilterForStatus(filters.status),
         start_date: filters.start_date || undefined,
         end_date: filters.end_date || undefined,
       })
 
       if (result.error) {
         toast.error(result.error)
-      } else if (result.data) {
-        setViolations(result.data)
+        setViolations([])
+      } else {
+        setViolations(result.data || [])
       }
     } catch (error) {
       toast.error("Failed to load violations")
+      setViolations([])
     } finally {
       setIsLoading(false)
     }
@@ -235,42 +252,44 @@ export default function ELDViolationsPage() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {violations.map((violation) => (
+              {violations.map((violation) => {
+                const displayStatus = violation.resolved ? "resolved" : "open"
+                const headline =
+                  violation.title ||
+                  (violation.event_type ? String(violation.event_type).replace(/_/g, " ") : "HOS violation")
+                return (
                 <Card key={violation.id} className={`p-4 border ${getSeverityColor(violation.severity)}`}>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <AlertTriangle className="w-5 h-5" />
                         <h3 className="font-semibold text-foreground">
-                          {violation.violation_type.replace("_", " ")}
+                          {headline}
                         </h3>
                         <span className={`px-2 py-1 rounded text-xs font-medium ${getSeverityColor(violation.severity)}`}>
-                          {violation.severity}
+                          {violation.severity || "—"}
                         </span>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(violation.status)}`}>
-                          {violation.status}
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(displayStatus)}`}>
+                          {displayStatus}
                         </span>
                       </div>
-                      <p className="text-sm text-muted-foreground mb-2">{violation.description}</p>
+                      {violation.event_type ? (
+                        <p className="text-xs text-muted-foreground mb-1 capitalize">
+                          {String(violation.event_type).replace(/_/g, " ")}
+                        </p>
+                      ) : null}
+                      <p className="text-sm text-muted-foreground mb-2">{violation.description || "—"}</p>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span>{violation.drivers?.name || "Unknown Driver"}</span>
                         <span>•</span>
-                        <span>{new Date(violation.violation_date).toLocaleDateString()}</span>
-                        {violation.violation_code && (
-                          <>
-                            <span>•</span>
-                            <span>Code: {violation.violation_code}</span>
-                          </>
-                        )}
+                        <span>
+                          {violation.event_time
+                            ? new Date(violation.event_time).toLocaleString()
+                            : "—"}
+                        </span>
                       </div>
-                      {violation.resolution_notes && (
-                        <div className="mt-2 p-2 bg-background rounded text-sm">
-                          <p className="font-medium">Resolution Notes:</p>
-                          <p className="text-muted-foreground">{violation.resolution_notes}</p>
-                        </div>
-                      )}
                     </div>
-                    {violation.status === "open" && (
+                    {!violation.resolved && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -284,7 +303,8 @@ export default function ELDViolationsPage() {
                     )}
                   </div>
                 </Card>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

@@ -5,8 +5,16 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
 import { sendNotification } from "./notifications"
 import { handleDbError } from "@/lib/db-helpers"
+
+/** Same elevated roles as alerts: fleet sees company-wide reminders; only `driver` is scoped. */
+function isFleetReminderRole(rawRole: string | undefined | null): boolean {
+  const r = rawRole ?? "driver"
+  const elevatedRoles = ["super_admin", "operations_manager", "manager", "owner", "admin"]
+  return elevatedRoles.includes(r) || r !== "driver"
+}
 
 /** Matches `public.reminders` in supabase/trucklogics_features_schema.sql */
 const REMINDERS_SELECT = `
@@ -40,6 +48,19 @@ export async function getReminders(filters?: {
       .select(REMINDERS_SELECT)
       .eq("company_id", ctx.companyId)
       .order("due_date", { ascending: true })
+
+    if (ctx.userId && ctx.user && !isFleetReminderRole(ctx.user.role)) {
+      const myDriverId = await resolveDriverIdForSessionUser(
+        supabase,
+        ctx.companyId,
+        ctx.userId,
+        "driver"
+      )
+      if (!myDriverId) {
+        return { data: [], error: null }
+      }
+      query = query.eq("driver_id", myDriverId)
+    }
 
     if (filters?.reminder_type) {
       query = query.eq("reminder_type", filters.reminder_type)
@@ -271,6 +292,18 @@ export async function completeReminder(id: string) {
       return { error: "Reminder not found", data: null }
     }
 
+    if (ctx.userId && ctx.user && !isFleetReminderRole(ctx.user.role)) {
+      const myDriverId = await resolveDriverIdForSessionUser(
+        supabase,
+        ctx.companyId,
+        ctx.userId,
+        "driver"
+      )
+      if (!myDriverId || String(reminder.driver_id || "") !== myDriverId) {
+        return { error: "You can only complete reminders assigned to you", data: null }
+      }
+    }
+
   // Update reminder
   const { data, error } = await supabase
     .from("reminders")
@@ -417,7 +450,7 @@ export async function getOverdueReminders() {
 
     const today = new Date().toISOString().split('T')[0]
 
-    const { data, error } = await supabase
+    let overdueQuery = supabase
       .from("reminders")
       .select(REMINDERS_SELECT)
       .eq("company_id", ctx.companyId)
@@ -425,6 +458,21 @@ export async function getOverdueReminders() {
       .lt("due_date", today)
       .order("due_date", { ascending: true })
       .limit(200)
+
+    if (ctx.userId && ctx.user && !isFleetReminderRole(ctx.user.role)) {
+      const myDriverId = await resolveDriverIdForSessionUser(
+        supabase,
+        ctx.companyId,
+        ctx.userId,
+        "driver"
+      )
+      if (!myDriverId) {
+        return { data: [], error: null }
+      }
+      overdueQuery = overdueQuery.eq("driver_id", myDriverId)
+    }
+
+    const { data, error } = await overdueQuery
 
     if (error) {
       // If table doesn't exist, return empty array instead of error

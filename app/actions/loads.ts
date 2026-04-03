@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { mapLegacyRole } from "@/lib/roles"
 import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
 import { createRoute } from "./routes"
@@ -107,12 +108,31 @@ export async function getLoads(filters?: {
       return { error: ctx.error || "Not authenticated", data: null, count: 0 }
     }
 
+    const mappedRole = ctx.user ? mapLegacyRole(ctx.user.role) : null
+    let assignedDriverId: string | null = null
+    if (mappedRole === "driver" && ctx.userId) {
+      const { data: driverRow } = await supabase
+        .from("drivers")
+        .select("id")
+        .eq("company_id", ctx.companyId)
+        .eq("user_id", ctx.userId)
+        .maybeSingle()
+      assignedDriverId = driverRow?.id ? String(driverRow.id) : null
+      if (!assignedDriverId) {
+        return { data: [], error: null, count: 0 }
+      }
+    }
+
     // Build query with pagination
     let query = supabase
       .from("loads")
       .select("id, shipment_number, origin, destination, status, driver_id, truck_id, load_date, estimated_delivery, created_at, company_name, value", { count: "exact" })
       .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
+
+    if (assignedDriverId) {
+      query = query.eq("driver_id", assignedDriverId)
+    }
 
     // Apply filters
     if (filters?.status) {
@@ -171,6 +191,21 @@ export async function getLoad(id: string) {
 
     if (!load) {
       return { error: "Load not found", data: null }
+    }
+
+    const mappedRole = ctx.user ? mapLegacyRole(ctx.user.role) : null
+    if (mappedRole === "driver" && ctx.userId) {
+      const { data: driverRow } = await supabase
+        .from("drivers")
+        .select("id")
+        .eq("company_id", ctx.companyId)
+        .eq("user_id", ctx.userId)
+        .maybeSingle()
+      const driverPk = driverRow?.id ? String(driverRow.id) : null
+      const assigned = load.driver_id ? String(load.driver_id) : null
+      if (!driverPk || !assigned || assigned !== driverPk) {
+        return { error: "Load not found", data: null }
+      }
     }
 
     return { data: load, error: null }

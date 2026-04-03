@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getMobileAuthContext } from "@/lib/auth/mobile"
+import { ensureDriverIdForUser } from "@/lib/eld/ensure-driver"
 
 /**
  * Receive HOS (Hours of Service) log entries from mobile app
@@ -100,6 +101,16 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // If no drivers row exists yet, create it so eld_logs.driver_id always resolves (FK → drivers.id).
+    let ensuredDriverId: string | null = null
+    if (user?.id) {
+      ensuredDriverId = await ensureDriverIdForUser(supabase, companyId, user.id)
+      if (ensuredDriverId) {
+        mapByDriverId.set(ensuredDriverId, ensuredDriverId)
+        mapByUserId.set(String(user.id), ensuredDriverId)
+      }
+    }
+
     // Transform and validate logs
     const logsToInsert = logs
       .filter((log: any) => log.log_type && log.start_time) // Filter invalid logs
@@ -113,8 +124,10 @@ export async function POST(request: NextRequest) {
           driver_id:
             (() => {
               const raw = String(log.driver_id || user?.id || "").trim()
-              if (!raw) return null
-              return mapByDriverId.get(raw) || mapByUserId.get(raw) || null
+              if (!raw) return ensuredDriverId
+              return (
+                mapByDriverId.get(raw) || mapByUserId.get(raw) || ensuredDriverId || null
+              )
             })(),
           truck_id: device.truck_id || log.truck_id || null,
           log_date: logDate,
@@ -133,20 +146,15 @@ export async function POST(request: NextRequest) {
         }
       })
 
-    if (logsToInsert.length === 0) {
+    const withDriver = logsToInsert.filter((row) => row.driver_id)
+    if (withDriver.length === 0) {
       return NextResponse.json(
-        { error: "No valid logs to insert" },
+        { error: "Could not resolve driver for logs. Ensure your account is a driver in this company." },
         { status: 400 }
       )
     }
 
-    // Upsert logs (update if exists, insert if new)
-    const { error: insertError } = await supabase
-      .from("eld_logs")
-      .upsert(logsToInsert, {
-        onConflict: "id",
-        ignoreDuplicates: false,
-      })
+    const { error: insertError } = await supabase.from("eld_logs").insert(withDriver)
 
     if (insertError) {
       console.error("Error inserting logs:", insertError)
@@ -164,8 +172,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      inserted: logsToInsert.length,
-      message: `Successfully synced ${logsToInsert.length} log(s)`,
+      inserted: withDriver.length,
+      message: `Successfully synced ${withDriver.length} log(s)`,
     })
   } catch (error: unknown) {
     console.error("Log sync error:", error)

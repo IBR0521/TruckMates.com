@@ -5,9 +5,17 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
+import { mapLegacyRole } from "@/lib/roles"
 import { validateRequiredString, validateNonNegativeNumber, validateDate, sanitizeString } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
+/**
+ * DVIR visibility & mutations:
+ * - **driver** — Only that user’s own inspections (`drivers.id` for their login). Client cannot widen scope.
+ * - **Fleet roles** — `super_admin`, `operations_manager`, `dispatcher`, `safety_compliance`, `financial_controller`:
+ *   unchanged: full company DVIR access (same as RLS), including optional `driver_id` / `truck_id` filters on list & stats.
+ */
 /**
  * Get all DVIRs with optional filters
  */
@@ -24,11 +32,24 @@ export async function getDVIRs(filters?: {
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
+    const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+    const myDriverId =
+      role === "driver"
+        ? await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
+        : null
+
+    /** Drivers only ever see their own inspections (ignore client-supplied driver_id). */
+    if (role === "driver") {
+      if (!myDriverId) {
+        return { data: [], error: null, count: 0 }
+      }
+    }
+
     // Build query with pagination
     let query = supabase
       .from("dvir")
@@ -59,8 +80,9 @@ export async function getDVIRs(filters?: {
       .order("inspection_date", { ascending: false })
       .order("created_at", { ascending: false })
 
-    // Apply filters
-    if (filters?.driver_id) {
+    if (role === "driver" && myDriverId) {
+      query = query.eq("driver_id", myDriverId)
+    } else if (filters?.driver_id) {
       query = query.eq("driver_id", filters.driver_id)
     }
     if (filters?.truck_id) {
@@ -103,11 +125,17 @@ export async function getDVIR(id: string) {
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
+    const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+    const myDriverId =
+      role === "driver"
+        ? await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
+        : null
+
     const { data: dvir, error } = await supabase
       .from("dvir")
       .select(`
@@ -125,6 +153,10 @@ export async function getDVIR(id: string) {
     }
 
     if (!dvir) {
+      return { error: "DVIR not found", data: null }
+    }
+
+    if (role === "driver" && myDriverId && String(dvir.driver_id) !== myDriverId) {
       return { error: "DVIR not found", data: null }
     }
 
@@ -161,7 +193,7 @@ export async function createDVIR(formData: {
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
@@ -169,6 +201,17 @@ export async function createDVIR(formData: {
   const permissionCheck = await checkCreatePermission("dvir")
   if (!permissionCheck.allowed) {
     return { error: permissionCheck.error || "You don't have permission to create DVIR records", data: null }
+  }
+
+  const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+  if (role === "driver") {
+    const myDriverId = await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
+    if (!myDriverId || formData.driver_id !== myDriverId) {
+      return {
+        error: "You can only create DVIR inspections for your own driver profile.",
+        data: null,
+      }
+    }
   }
 
   // Validate driver_id and truck_id ownership
@@ -314,7 +357,7 @@ export async function updateDVIR(id: string, formData: {
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
@@ -324,10 +367,16 @@ export async function updateDVIR(id: string, formData: {
     return { error: permissionCheck.error || "You don't have permission to update DVIR records", data: null }
   }
 
+  const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+  const myDriverId =
+    role === "driver"
+      ? await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
+      : null
+
   // Get current DVIR to check if it's certified and get baseline values for status calculation
   const { data: currentDVIR, error: currentDVIRError } = await supabase
     .from("dvir")
-    .select("certified, certified_by, certified_date, defects_found, defects, status")
+    .select("certified, certified_by, certified_date, defects_found, defects, status, driver_id")
     .eq("id", id)
     .eq("company_id", ctx.companyId)
     .maybeSingle()
@@ -338,6 +387,10 @@ export async function updateDVIR(id: string, formData: {
 
   if (!currentDVIR) {
     return { error: "DVIR not found", data: null }
+  }
+
+  if (role === "driver" && myDriverId && String(currentDVIR.driver_id) !== myDriverId) {
+    return { error: "You can only update your own DVIR records.", data: null }
   }
 
   // Prevent re-opening certified DVIRs
@@ -451,7 +504,7 @@ export async function deleteDVIR(id: string) {
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
@@ -461,10 +514,16 @@ export async function deleteDVIR(id: string) {
     return { error: permissionCheck.error || "You don't have permission to delete DVIR records", data: null }
   }
 
+  const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+  const myDriverId =
+    role === "driver"
+      ? await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
+      : null
+
   // Check if DVIR is certified - prevent deletion of certified DVIRs for compliance
   const { data: dvir, error: dvirFetchError } = await supabase
     .from("dvir")
-    .select("certified, inspection_date")
+    .select("certified, inspection_date, driver_id")
     .eq("id", id)
     .eq("company_id", ctx.companyId)
     .maybeSingle()
@@ -473,12 +532,20 @@ export async function deleteDVIR(id: string) {
     return { error: dvirFetchError.message, data: null }
   }
 
-  if (dvir?.certified) {
+  if (!dvir) {
+    return { error: "DVIR not found", data: null }
+  }
+
+  if (role === "driver" && myDriverId && String(dvir.driver_id) !== myDriverId) {
+    return { error: "You can only delete your own DVIR records.", data: null }
+  }
+
+  if (dvir.certified) {
     return { error: "Cannot delete a certified DVIR. FMCSA regulations require DVIR records to be retained for at least 90 days.", data: null }
   }
 
   // Check if DVIR is within 90-day retention period
-  if (dvir?.inspection_date) {
+  if (dvir.inspection_date) {
     const inspectionDate = new Date(dvir.inspection_date)
     const daysSinceInspection = Math.floor((Date.now() - inspectionDate.getTime()) / (1000 * 60 * 60 * 24))
     if (daysSinceInspection < 90) {
@@ -516,16 +583,41 @@ export async function getDVIRStats(filters?: {
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
+    const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+    const myDriverId =
+      role === "driver"
+        ? await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
+        : null
+
+    const scopedDriverId =
+      role === "driver" ? myDriverId : filters?.driver_id || null
+    const scopedTruckId = role === "driver" ? null : filters?.truck_id || null
+
+    if (role === "driver" && !myDriverId) {
+      const empty = {
+        total: 0,
+        passed: 0,
+        failed: 0,
+        defects_corrected: 0,
+        with_defects: 0,
+        unsafe: 0,
+        pre_trip: 0,
+        post_trip: 0,
+        on_road: 0,
+      }
+      return { data: empty, error: null }
+    }
+
     // Use RPC function for efficient server-side aggregation instead of fetching all records
     const { data: stats, error } = await supabase.rpc("get_dvir_stats", {
       p_company_id: ctx.companyId,
-      p_driver_id: filters?.driver_id || null,
-      p_truck_id: filters?.truck_id || null,
+      p_driver_id: scopedDriverId,
+      p_truck_id: scopedTruckId,
       p_start_date: filters?.start_date || null,
       p_end_date: filters?.end_date || null,
     })
@@ -539,11 +631,11 @@ export async function getDVIRStats(filters?: {
         .eq("company_id", ctx.companyId)
         .limit(10000) // Cap at 10k to prevent memory issues
 
-      if (filters?.driver_id) {
-        query = query.eq("driver_id", filters.driver_id)
+      if (scopedDriverId) {
+        query = query.eq("driver_id", scopedDriverId)
       }
-      if (filters?.truck_id) {
-        query = query.eq("truck_id", filters.truck_id)
+      if (scopedTruckId) {
+        query = query.eq("truck_id", scopedTruckId)
       }
       if (filters?.start_date) {
         query = query.gte("inspection_date", filters.start_date)

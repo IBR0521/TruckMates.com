@@ -11,6 +11,7 @@ import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { mapLegacyRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission } from "@/lib/server-permissions"
 
@@ -72,6 +73,14 @@ export async function getDVIRsForAudit(filters?: {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  /** Drivers use scoped DVIR list; fleet roles keep full audit export access. */
+  if (ctx.user && mapLegacyRole(ctx.user.role) === "driver") {
+    return {
+      error: "Fleet audit export is not available on the driver account. Use DVIR reports for your inspections.",
+      data: null,
+    }
   }
 
   try {

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { mapLegacyRole } from '@/lib/roles'
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
@@ -50,6 +51,21 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
       return NextResponse.redirect(url)
+    }
+
+    // Drivers use a single HOS page at /dashboard/eld — block fleet ELD sub-routes.
+    const eldPath = pathname.replace(/\/$/, '') || '/'
+    if (eldPath.startsWith('/dashboard/eld') && eldPath !== '/dashboard/eld') {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (mapLegacyRole(profile?.role) === 'driver') {
+        const url = request.nextUrl.clone()
+        url.pathname = '/dashboard/eld'
+        return NextResponse.redirect(url)
+      }
     }
 
     return response

@@ -119,7 +119,7 @@ export default function DispatchesPage() {
     loadHOSData()
     
     // Fallback polling even if realtime misses an event.
-    const hosInterval = setInterval(loadHOSData, 15000)
+    const hosInterval = setInterval(loadHOSData, 5000)
     return () => {
       clearInterval(hosInterval)
       if (hosRefreshTimer.current) {
@@ -321,6 +321,12 @@ export default function DispatchesPage() {
     }
     if (normalizedStatus === "sleeper_berth") {
       return { label: "Sleeper Berth", color: "text-indigo-400" }
+    }
+    if (normalizedStatus === "driving") {
+      return { label: "Driving", color: "text-blue-500" }
+    }
+    if (normalizedStatus === "on_duty") {
+      return { label: "On Duty", color: "text-cyan-500" }
     }
     if (!driver.can_drive) {
       return { label: "Cannot Drive", color: "text-orange-500" } // Changed from red to orange

@@ -4,6 +4,8 @@ import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
+import { mapLegacyRole } from "@/lib/roles"
 
 /** `public.notifications` — supabase/notifications_table.sql */
 const NOTIFICATIONS_LIST_SELECT =
@@ -27,11 +29,25 @@ export async function getUnifiedNotifications(filters?: {
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
     return { error: ctx.error || "Not authenticated", data: null, count: 0 }
   }
 
   try {
+    const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+    const myDriverId = await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
+
+    let loadIdsForDriver: string[] = []
+    if (role === "driver" && myDriverId) {
+      const { data: loadRows } = await supabase
+        .from("loads")
+        .select("id")
+        .eq("company_id", ctx.companyId)
+        .eq("driver_id", myDriverId)
+        .limit(500)
+      loadIdsForDriver = (loadRows || []).map((r: { id: string }) => String(r.id))
+    }
+
     const unifiedNotifications: any[] = []
 
     // Get system notifications
@@ -74,13 +90,25 @@ export async function getUnifiedNotifications(filters?: {
       }
     }
 
-    // Get alerts
+    // Get alerts (fleet: whole company; driver: targeted to them or their assigned loads only)
     if (!filters?.type || filters.type === "all" || filters.type === "alerts") {
+      if (role === "driver" && !myDriverId) {
+        // No driver profile — skip company-wide alerts
+      } else {
       let alertsQuery = supabase
         .from("alerts")
         .select(ALERTS_LIST_SELECT, { count: "exact" })
         .eq("company_id", ctx.companyId)
         .order("created_at", { ascending: false })
+
+      if (role === "driver" && myDriverId) {
+        if (loadIdsForDriver.length === 0) {
+          alertsQuery = alertsQuery.eq("driver_id", myDriverId)
+        } else {
+          const inList = loadIdsForDriver.join(",")
+          alertsQuery = alertsQuery.or(`driver_id.eq.${myDriverId},load_id.in.(${inList})`)
+        }
+      }
 
       if (filters?.priority) {
         alertsQuery = alertsQuery.eq("priority", filters.priority)
@@ -97,8 +125,8 @@ export async function getUnifiedNotifications(filters?: {
         }
       }
 
-      // FIXED: Add server-side search filter
-      if (filters?.search) {
+      // Search: fleet can use OR on title/message. Drivers already use OR for driver/load scope — filter search in memory.
+      if (filters?.search && role !== "driver") {
         alertsQuery = alertsQuery.or(`title.ilike.%${filters.search}%,message.ilike.%${filters.search}%`)
       }
 
@@ -109,7 +137,16 @@ export async function getUnifiedNotifications(filters?: {
       const { data: alerts, error: alertsError } = await alertsQuery
 
       if (!alertsError && alerts) {
-        alerts.forEach((alert: any) => {
+        let alertRows = alerts as any[]
+        if (role === "driver" && filters?.search) {
+          const q = filters.search.toLowerCase()
+          alertRows = alertRows.filter(
+            (a) =>
+              (a.title && String(a.title).toLowerCase().includes(q)) ||
+              (a.message && String(a.message).toLowerCase().includes(q))
+          )
+        }
+        alertRows.forEach((alert: any) => {
           unifiedNotifications.push({
             id: alert.id,
             type: "alert",
@@ -130,6 +167,7 @@ export async function getUnifiedNotifications(filters?: {
           })
         })
       }
+    }
     }
 
     // Sort by created_at (newest first)
@@ -162,7 +200,7 @@ export async function markNotificationAsRead(notificationId: string, notificatio
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
@@ -181,7 +219,37 @@ export async function markNotificationAsRead(notificationId: string, notificatio
         return { error: error.message, data: null }
       }
     } else if (notificationType === "alert") {
-      // FIXED: Add company_id ownership check for alerts
+      const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+      const myDriverId = await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
+
+      if (role === "driver") {
+        if (!myDriverId) {
+          return { error: "Not found", data: null }
+        }
+        const { data: alertRow } = await supabase
+          .from("alerts")
+          .select("driver_id, load_id")
+          .eq("id", notificationId)
+          .eq("company_id", ctx.companyId)
+          .maybeSingle()
+        if (!alertRow) {
+          return { error: "Not found", data: null }
+        }
+        const { data: loadRows } = await supabase
+          .from("loads")
+          .select("id")
+          .eq("company_id", ctx.companyId)
+          .eq("driver_id", myDriverId)
+          .limit(500)
+        const loadIds = new Set((loadRows || []).map((r: { id: string }) => String(r.id)))
+        const ok =
+          String(alertRow.driver_id) === myDriverId ||
+          (!!alertRow.load_id && loadIds.has(String(alertRow.load_id)))
+        if (!ok) {
+          return { error: "Not found", data: null }
+        }
+      }
+
       const { error } = await supabase
         .from("alerts")
         .update({
@@ -189,7 +257,7 @@ export async function markNotificationAsRead(notificationId: string, notificatio
           acknowledged_at: new Date().toISOString(),
         })
         .eq("id", notificationId)
-        .eq("company_id", ctx.companyId) // FIXED: Add ownership check
+        .eq("company_id", ctx.companyId)
 
       if (error) {
         return { error: error.message, data: null }
@@ -209,11 +277,44 @@ export async function markAllNotificationsAsRead() {
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
+    const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+    const myDriverId = await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
+
+    let alertsUpdate = supabase
+      .from("alerts")
+      .update({
+        status: "acknowledged",
+        acknowledged_at: new Date().toISOString(),
+      })
+      .eq("company_id", ctx.companyId)
+      .in("status", ["pending", "active"])
+
+    if (role === "driver" && myDriverId) {
+      const { data: loadRows } = await supabase
+        .from("loads")
+        .select("id")
+        .eq("company_id", ctx.companyId)
+        .eq("driver_id", myDriverId)
+        .limit(500)
+      const loadIds = (loadRows || []).map((r: { id: string }) => String(r.id))
+      if (loadIds.length === 0) {
+        alertsUpdate = alertsUpdate.eq("driver_id", myDriverId)
+      } else {
+        const inList = loadIds.join(",")
+        alertsUpdate = alertsUpdate.or(`driver_id.eq.${myDriverId},load_id.in.(${inList})`)
+      }
+    }
+
+    const alertsPromise =
+      role === "driver" && !myDriverId
+        ? Promise.resolve({ error: null })
+        : alertsUpdate
+
     const [notificationsResult, alertsResult] = await Promise.all([
       supabase
         .from("notifications")
@@ -223,15 +324,7 @@ export async function markAllNotificationsAsRead() {
         })
         .eq("user_id", ctx.userId ?? "")
         .eq("read", false),
-      // Mark all unresolved alerts as acknowledged
-      supabase
-        .from("alerts")
-        .update({
-          status: "acknowledged",
-          acknowledged_at: new Date().toISOString(),
-        })
-        .eq("company_id", ctx.companyId)
-        .in("status", ["pending", "active"]),
+      alertsPromise,
     ])
 
     if (notificationsResult.error) {

@@ -5,7 +5,9 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { mapLegacyRole } from "@/lib/roles"
 
 const NOTIFICATION_PREFS_SELECT =
   "id, user_id, email_alerts, sms_alerts, weekly_reports, route_updates, load_updates, maintenance_alerts, payment_reminders, created_at, updated_at"
@@ -705,7 +707,37 @@ export async function deleteNotification(notificationId: string, notificationTyp
         return { error: error.message, data: null }
       }
     } else if (notificationType === "alert") {
-      // Delete from alerts table (with company_id check)
+      const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+      const myDriverId = await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
+
+      if (role === "driver") {
+        if (!myDriverId) {
+          return { error: "Not found", data: null }
+        }
+        const { data: alertRow } = await supabase
+          .from("alerts")
+          .select("driver_id, load_id")
+          .eq("id", notificationId)
+          .eq("company_id", ctx.companyId)
+          .maybeSingle()
+        if (!alertRow) {
+          return { error: "Not found", data: null }
+        }
+        const { data: loadRows } = await supabase
+          .from("loads")
+          .select("id")
+          .eq("company_id", ctx.companyId)
+          .eq("driver_id", myDriverId)
+          .limit(500)
+        const loadIds = new Set((loadRows || []).map((r: { id: string }) => String(r.id)))
+        const ok =
+          String(alertRow.driver_id) === myDriverId ||
+          (!!alertRow.load_id && loadIds.has(String(alertRow.load_id)))
+        if (!ok) {
+          return { error: "Not found", data: null }
+        }
+      }
+
       const { error } = await supabase
         .from("alerts")
         .delete()
@@ -740,14 +772,40 @@ export async function getUnreadNotificationCount() {
     return { error: "No company found", data: null }
   }
 
-  // Use efficient COUNT queries instead of fetching all records
+  const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+  const myDriverId = await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
+
   const [notificationsResult, alertsResult] = await Promise.all([
     supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", ctx.userId).eq("read", false),
-    supabase.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", ctx.companyId).in("status", ["pending", "active"]),
+    (async () => {
+      if (role === "driver" && !myDriverId) {
+        return { count: 0 }
+      }
+      let q = supabase
+        .from("alerts")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", ctx.companyId)
+        .in("status", ["pending", "active"])
+      if (role === "driver" && myDriverId) {
+        const { data: loadRows } = await supabase
+          .from("loads")
+          .select("id")
+          .eq("company_id", ctx.companyId)
+          .eq("driver_id", myDriverId)
+          .limit(500)
+        const loadIds = (loadRows || []).map((r: { id: string }) => String(r.id))
+        if (loadIds.length === 0) {
+          q = q.eq("driver_id", myDriverId)
+        } else {
+          q = q.or(`driver_id.eq.${myDriverId},load_id.in.(${loadIds.join(",")})`)
+        }
+      }
+        return await q
+    })(),
   ])
 
   const notificationsCount = notificationsResult.count || 0
-  const alertsCount = alertsResult.count || 0
+  const alertsCount = alertsResult.count ?? 0
 
   return {
     data: {

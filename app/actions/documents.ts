@@ -4,8 +4,30 @@ import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
+import { mapLegacyRole } from "@/lib/roles"
 import { checkViewPermission, checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 import * as Sentry from "@sentry/nextjs"
+
+/**
+ * Documents:
+ * - **driver** — rows tied to their `drivers.id`, uploads under their auth folder (`{userId}/…` in `file_url`), or fleet can set `driver_id` on upload.
+ * - **Fleet** — full company document list (unchanged).
+ */
+
+function driverCanAccessDocumentRow(args: {
+  driver_id: string | null | undefined
+  file_url: string | null | undefined
+  myDriverId: string | null
+  userId: string
+}): boolean {
+  const path = args.file_url || ""
+  const ownUpload = path.startsWith(`${args.userId}/`)
+  if (!args.myDriverId) {
+    return ownUpload
+  }
+  return (args.driver_id != null && String(args.driver_id) === args.myDriverId) || ownUpload
+}
 
 export async function getDocuments(filters?: {
   limit?: number
@@ -22,20 +44,34 @@ export async function getDocuments(filters?: {
     const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
     return { error: ctx.error || "Not authenticated", data: null, count: 0 }
   }
+
+  const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+  const myDriverId = await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
 
   // Build query with pagination (default limit 25 for faster initial loads, max 100)
   const limit = Math.min(filters?.limit || 25, 100)
   const offset = filters?.offset || 0
 
-  const { data: documents, error, count } = await supabase
+  let listQuery = supabase
     .from("documents")
     .select("id, name, type, file_url, file_size, upload_date, expiry_date, company_id, truck_id, driver_id", { count: "exact" })
     .eq("company_id", ctx.companyId)
     .order("upload_date", { ascending: false })
-    .range(offset, offset + limit - 1)
+
+  if (role === "driver") {
+    if (myDriverId) {
+      listQuery = listQuery.or(
+        `driver_id.eq.${myDriverId},file_url.like.${ctx.userId}/%`
+      )
+    } else {
+      listQuery = listQuery.like("file_url", `${ctx.userId}/%`)
+    }
+  }
+
+  const { data: documents, error, count } = await listQuery.range(offset, offset + limit - 1)
 
   if (error) {
     return { error: error.message, data: null, count: 0 }
@@ -58,21 +94,36 @@ export async function deleteDocument(id: string) {
     }
 
     const supabase = await createClient()
-    const ctx = await getCachedAuthContext()
-    if (ctx.error || !ctx.companyId) {
-      return { error: ctx.error || "Not authenticated" }
-    }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { error: ctx.error || "Not authenticated" }
+  }
+
+  const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+  const myDriverId = await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
 
   // First, get the document to retrieve the file path (with company_id check)
   const { data: document, error: docError } = await supabase
     .from("documents")
-    .select("file_url")
+    .select("file_url, driver_id")
     .eq("id", id)
     .eq("company_id", ctx.companyId)
     .single()
 
   if (docError || !document) {
     return { error: docError?.message || "Document not found" }
+  }
+
+  if (
+    role === "driver" &&
+    !driverCanAccessDocumentRow({
+      driver_id: document.driver_id,
+      file_url: document.file_url,
+      myDriverId,
+      userId: ctx.userId,
+    })
+  ) {
+    return { error: "Document not found" }
   }
 
   // Extract file path from URL
@@ -131,9 +182,12 @@ export async function deleteDocuments(ids: string[]) {
 
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
     return { error: ctx.error || "Not authenticated", deletedCount: 0 }
   }
+
+  const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+  const myDriverId = await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
 
   if (!ids || ids.length === 0) {
     return { error: "No documents selected" }
@@ -142,12 +196,27 @@ export async function deleteDocuments(ids: string[]) {
   // Get all documents to retrieve file paths (with company filter)
   const { data: documents, error: docError } = await supabase
     .from("documents")
-    .select("id, file_url")
+    .select("id, file_url, driver_id")
     .in("id", ids)
     .eq("company_id", ctx.companyId)
 
   if (docError || !documents || documents.length === 0) {
     return { error: docError?.message || "Documents not found" }
+  }
+
+  if (role === "driver") {
+    const forbidden = documents.some(
+      (d) =>
+        !driverCanAccessDocumentRow({
+          driver_id: d.driver_id,
+          file_url: d.file_url,
+          myDriverId,
+          userId: ctx.userId,
+        })
+    )
+    if (forbidden) {
+      return { error: "You can only delete your own documents.", deletedCount: 0 }
+    }
   }
 
   // Extract and collect all file paths
@@ -209,20 +278,35 @@ export async function getDocumentUrl(documentId: string) {
 
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
+
+  const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+  const myDriverId = await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
 
   // FIXED: Get document record with company_id filter to prevent cross-company access
   const { data: document, error: docError } = await supabase
     .from("documents")
-    .select("file_url, name")
+    .select("file_url, name, driver_id")
     .eq("id", documentId)
     .eq("company_id", ctx.companyId)
     .single()
 
   if (docError || !document) {
     return { error: docError?.message || "Document not found", data: null }
+  }
+
+  if (
+    role === "driver" &&
+    !driverCanAccessDocumentRow({
+      driver_id: document.driver_id,
+      file_url: document.file_url,
+      myDriverId,
+      userId: ctx.userId,
+    })
+  ) {
+    return { error: "Document not found", data: null }
   }
 
   // If file_url is already a full URL, try to extract the path
@@ -285,9 +369,12 @@ export async function uploadDocument(
 
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
+
+  const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+  const myDriverId = await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
 
   try {
     // FIXED: Validate MIME type against allowlist before upload
@@ -335,6 +422,7 @@ export async function uploadDocument(
         file_size: file.size,
         upload_date: new Date().toISOString().split("T")[0],
         expiry_date: metadata?.expiry_date || null,
+        ...(role === "driver" && myDriverId ? { driver_id: myDriverId } : {}),
       })
       .select()
       .single()

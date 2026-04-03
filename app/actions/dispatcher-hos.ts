@@ -5,11 +5,10 @@
  * Get real-time HOS status for all drivers for dispatcher dashboard
  */
 
-import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { calculateRemainingHOS } from "./eld-advanced"
+import { computeDailyRemainingFromEldLogs } from "@/lib/hos/compute-daily-remaining"
 
 type EldLog = {
   driver_id: string
@@ -37,13 +36,83 @@ export interface DriverHOSStatus {
   last_update: string
 }
 
-async function computeDriversHOSStatusWithCompany(
+type DriverRow = {
+  id: string
+  user_id?: string | null
+  name: string
+  status: string
+  truck_id: string | null
+}
+
+/**
+ * `public.drivers` can contain multiple rows for the same person (mobile `ensureDriver` +
+ * web reconciliation). HOS must show one card per logical driver and merge ELD logs keyed
+ * by any of the duplicate `drivers.id` values.
+ */
+function clusterActiveDriversForHos(drivers: DriverRow[]): { canonical: DriverRow; allDriverIds: string[] }[] {
+  const byUserId = new Map<string, DriverRow[]>()
+  const noUser: DriverRow[] = []
+  for (const d of drivers) {
+    const u = d.user_id?.trim()
+    if (u) {
+      if (!byUserId.has(u)) byUserId.set(u, [])
+      byUserId.get(u)!.push(d)
+    } else {
+      noUser.push(d)
+    }
+  }
+  const clusters: { canonical: DriverRow; allDriverIds: string[] }[] = []
+  for (const rows of byUserId.values()) {
+    const sorted = [...rows].sort((a, b) => a.id.localeCompare(b.id))
+    clusters.push({ canonical: sorted[0], allDriverIds: sorted.map((r) => r.id) })
+  }
+  const namesWithUserId = new Set([...byUserId.values()].flat().map((d) => d.name.trim().toLowerCase()))
+  const byName = new Map<string, DriverRow[]>()
+  for (const d of noUser) {
+    const nk = d.name.trim().toLowerCase()
+    if (namesWithUserId.has(nk)) continue
+    if (!byName.has(nk)) byName.set(nk, [])
+    byName.get(nk)!.push(d)
+  }
+  for (const rows of byName.values()) {
+    const sorted = [...rows].sort((a, b) => a.id.localeCompare(b.id))
+    clusters.push({ canonical: sorted[0], allDriverIds: sorted.map((r) => r.id) })
+  }
+  return clusters
+}
+
+function mergeClusterLogs(
+  logsByDriver: Map<string, EldLog[]>,
+  allDriverIds: string[],
+  userId: string | null | undefined
+): EldLog[] {
+  const merged: EldLog[] = []
+  const seen = new Set<string>()
+  function take(logs: EldLog[] | undefined) {
+    for (const log of logs || []) {
+      const k = `${log.driver_id}|${log.start_time}|${log.log_type}|${log.log_date || ""}`
+      if (seen.has(k)) continue
+      seen.add(k)
+      merged.push(log)
+    }
+  }
+  for (const id of allDriverIds) {
+    take(logsByDriver.get(id))
+  }
+  if (userId) {
+    take(logsByDriver.get(userId))
+  }
+  return merged
+}
+
+/** Shared by dispatcher UI and `GET /api/dispatch/hos` so numbers always match. */
+export async function computeDriversHOSStatusWithCompany(
   companyId: string,
   clientFactory: () => Promise<any> | any
 ): Promise<{ data: DriverHOSStatus[] | null; error: string | null }> {
   const supabase = await clientFactory()
   // Get all active drivers
-  const { data: drivers, error: driversError } = await supabase
+  const { data: driversRaw, error: driversError } = await supabase
     .from("drivers")
     .select("id, user_id, name, status, truck_id")
     .eq("company_id", companyId)
@@ -53,12 +122,17 @@ async function computeDriversHOSStatusWithCompany(
     return { error: driversError.message, data: null }
   }
 
-  if (!drivers || drivers.length === 0) {
+  if (!driversRaw || driversRaw.length === 0) {
     return { data: [], error: null }
   }
 
+  const drivers = driversRaw as DriverRow[]
+  const clusters = clusterActiveDriversForHos(drivers)
+
   // Get truck numbers for drivers that have trucks assigned
-  const truckIds = drivers.filter((d: { id: string; truck_id: string | null }) => d.truck_id).map((d: { id: string; truck_id: string | null }) => d.truck_id) as string[]
+  const truckIds = clusters
+    .map((c) => c.canonical.truck_id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0)
   const trucksMap = new Map<string, string>()
   
   if (truckIds.length > 0) {
@@ -74,12 +148,12 @@ async function computeDriversHOSStatusWithCompany(
     }
   }
 
-  // Batch fetch all ELD logs for all drivers to avoid N+1 queries
-  const driverIds = drivers.map((d: { id: string; user_id?: string | null; truck_id: string | null }) => d.id)
-  const driverUserIds = drivers
-    .map((d: { id: string; user_id?: string | null; truck_id: string | null }) => d.user_id)
+  // Batch fetch all ELD logs for all drivers to avoid N+1 queries (include every duplicate id)
+  const allPhysicalDriverIds = clusters.flatMap((c) => c.allDriverIds)
+  const driverUserIds = clusters
+    .map((c) => c.canonical.user_id)
     .filter((id: string | null | undefined): id is string => typeof id === "string" && id.length > 0)
-  const logDriverIds = Array.from(new Set([...driverIds, ...driverUserIds]))
+  const logDriverIds = Array.from(new Set([...allPhysicalDriverIds, ...driverUserIds]))
   const eightDaysAgo = new Date()
   eightDaysAgo.setDate(eightDaysAgo.getDate() - 8)
   
@@ -102,32 +176,27 @@ async function computeDriversHOSStatusWithCompany(
     })
   }
 
-  // Get HOS status for each driver (now using batched data)
+  // Get HOS status for each logical driver (one card per cluster; logs merged across duplicate rows)
   const driversWithHOS = await Promise.all(
-    drivers.map(async (driver: { id: string; user_id?: string | null; name: string; truck_id: string | null }) => {
-      // Get current status from latest log (from batched data)
-      const idLogs = logsByDriver.get(driver.id) || []
-      const userLogs = driver.user_id ? logsByDriver.get(driver.user_id) || [] : []
-      const driverLogs = [...idLogs, ...userLogs].sort(
-        (a, b) => {
-          const byStart = new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
-          if (byStart !== 0) return byStart
-          return new Date(b.created_at || b.start_time).getTime() - new Date(a.created_at || a.start_time).getTime()
-        }
-      )
+    clusters.map(async ({ canonical: driver, allDriverIds }) => {
+      const merged = mergeClusterLogs(logsByDriver, allDriverIds, driver.user_id)
+      const driverLogs = merged.sort((a, b) => {
+        const byStart = new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
+        if (byStart !== 0) return byStart
+        return new Date(b.created_at || b.start_time).getTime() - new Date(a.created_at || a.start_time).getTime()
+      })
       const latestOpenLog = driverLogs.find((log) => log.end_time === null)
       const latestLog = latestOpenLog || driverLogs[0]
       const today = new Date().toISOString().split("T")[0]
-      const hasTodayByDriverId = idLogs.some((log) => log.log_date === today)
-      const hasTodayByUserId = userLogs.some((log) => log.log_date === today)
-      const hosSourceId =
-        hasTodayByDriverId
-          ? driver.id
-          : hasTodayByUserId && driver.user_id
-            ? driver.user_id
-            : driver.id
-      const hosResult = await calculateRemainingHOS(hosSourceId)
-      
+      // Same math as `/api/eld/mobile/logs` + `calculateRemainingHOS`: use today's logs for this driver only.
+      // Match on `log_date` and fall back to `start_time` UTC date so rows still count if `log_date` was wrong/missing.
+      const todayLogs = driverLogs.filter((log) => {
+        if (log.log_date === today) return true
+        const startDay = typeof log.start_time === "string" ? log.start_time.slice(0, 10) : ""
+        return startDay === today
+      })
+      const hosComputed = computeDailyRemainingFromEldLogs(todayLogs, Date.now())
+
       const currentStatus = latestLog?.log_type || "off_duty"
 
       // Calculate weekly on-duty hours (70-hour/8-day rule) from batched data
@@ -155,13 +224,13 @@ async function computeDriversHOSStatusWithCompany(
         truck_id: driver.truck_id,
         truck_number: driver.truck_id ? trucksMap.get(driver.truck_id) || null : null,
         current_status: currentStatus,
-        remaining_drive_hours: hosResult.data?.remainingDriving || 0,
-        remaining_on_duty_hours: hosResult.data?.remainingOnDuty || 0,
+        remaining_drive_hours: hosComputed.remainingDriving,
+        remaining_on_duty_hours: hosComputed.remainingOnDuty,
         weekly_on_duty_hours: parseFloat(weeklyOnDutyHours.toFixed(2)),
         remaining_weekly_hours: parseFloat(remainingWeeklyHours.toFixed(2)),
-        needs_break: hosResult.data?.needsBreak || false,
-        violations: hosResult.data?.violations || [],
-        can_drive: hosResult.data?.canDrive || false,
+        needs_break: hosComputed.needsBreak,
+        violations: hosComputed.violations,
+        can_drive: hosComputed.canDrive,
         last_update: new Date().toISOString(),
       } as DriverHOSStatus
     })
@@ -188,15 +257,14 @@ export async function getAllDriversHOSStatus(): Promise<{
   data: DriverHOSStatus[] | null
   error: string | null
 }> {
-  const supabase = await createClient()
-
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
   try {
-    return await computeDriversHOSStatusWithCompany(ctx.companyId, () => supabase)
+    // Same admin client as `/api/dispatch/hos` so RLS never hides `eld_logs` rows the API can see.
+    return await computeDriversHOSStatusWithCompany(ctx.companyId, () => createAdminClient())
   } catch (error: unknown) {
     return { error: errorMessage(error, "Failed to get drivers HOS status"), data: null }
   }

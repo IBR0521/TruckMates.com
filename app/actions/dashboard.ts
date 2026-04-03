@@ -3,6 +3,9 @@
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getAuthCompany, getCachedAuthContext } from "@/lib/auth/server"
+import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
+import { getDriverDashboardSnapshot } from "@/app/actions/driver-dashboard"
+import type { DriverDashboardSnapshot } from "@/lib/types/driver-dashboard"
 import { cache, cacheKeys } from "@/lib/cache"
 import * as Sentry from "@sentry/nextjs"
 import type {
@@ -829,20 +832,45 @@ export async function getDashboardStats(): Promise<{ data: DashboardStats; error
 
 /**
  * One server action for the dashboard home: company + stats together.
- * Cuts the client from two sequential round-trips (auth then stats) to one parallel call.
+ * Drivers get a compliance snapshot only — no fleet financial aggregates.
  */
-export async function getDashboardBootstrap() {
-  const [auth, stats] = await Promise.all([
-    getAuthCompany(),
-    getDashboardStats(),
-  ])
+export async function getDashboardBootstrap(): Promise<{
+  authCompany: { companyId: string; companyName: string | null } | null
+  authError: string | null
+  userRole: EmployeeRole | null
+  dashboardData: DashboardStats | null
+  driverDashboard: DriverDashboardSnapshot | null
+  dashboardError: string | null
+}> {
+  const [auth, ctx] = await Promise.all([getAuthCompany(), getCachedAuthContext()])
+
+  const userRole = ctx.user ? mapLegacyRole(ctx.user.role) : null
+
+  if (userRole === "driver") {
+    const driverDashboard = await getDriverDashboardSnapshot()
+    return {
+      authCompany:
+        auth.companyId != null
+          ? { companyId: auth.companyId, companyName: auth.companyName }
+          : null,
+      authError: auth.error ?? null,
+      userRole,
+      dashboardData: null,
+      driverDashboard: driverDashboard.data,
+      dashboardError: driverDashboard.error,
+    }
+  }
+
+  const stats = await getDashboardStats()
   return {
     authCompany:
       auth.companyId != null
         ? { companyId: auth.companyId, companyName: auth.companyName }
         : null,
     authError: auth.error ?? null,
+    userRole,
     dashboardData: stats.data,
+    driverDashboard: null,
     dashboardError: stats.error,
   }
 }

@@ -158,13 +158,27 @@ export async function createELDEvent(formData: {
     return { error: "Only managers can create ELD events", data: null }
   }
 
+  let resolvedDriverId = formData.driver_id?.trim() || null
+  const truckId = formData.truck_id?.trim() || null
+  if (!resolvedDriverId && truckId) {
+    const { data: truck } = await supabase
+      .from("trucks")
+      .select("current_driver_id")
+      .eq("id", truckId)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+    if (truck?.current_driver_id) {
+      resolvedDriverId = String(truck.current_driver_id)
+    }
+  }
+
   const { data, error } = await supabase
     .from("eld_events")
     .insert({
       company_id: ctx.companyId,
       eld_device_id: formData.eld_device_id,
-      driver_id: formData.driver_id || null,
-      truck_id: formData.truck_id || null,
+      driver_id: resolvedDriverId,
+      truck_id: truckId,
       event_type: formData.event_type,
       severity: formData.severity || "warning",
       title: formData.title,
@@ -182,5 +196,6 @@ export async function createELDEvent(formData: {
   }
 
   revalidatePath("/dashboard/eld/violations")
+  revalidatePath("/dashboard")
   return { data, error: null }
 }

@@ -233,8 +233,7 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
   driver: {
     view: [
       "dashboard",
-      "routes", // Only assigned routes
-      "loads", // Only assigned loads
+      "loads", // Assigned loads only (server-filtered); routes folded into "My load" UX
       "eld",
       "dvir",
       "documents", // Personal documents only

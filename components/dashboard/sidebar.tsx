@@ -27,6 +27,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Bell,
+  Package,
   Calendar,
   MessageSquare,
   Sparkles,
@@ -194,6 +195,17 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
 
         {/* Navigation */}
         <nav className={`flex-1 py-6 space-y-2 overflow-y-auto ${shouldShowCollapsed ? "px-2" : "px-4"}`}>
+          {userRole === "driver" ? (
+            <>
+              <NavItem href="/dashboard" icon={BarChart3} label="Dashboard" isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/loads" icon={Package} label="My load" isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/eld" icon={Shield} label="ELD / HOS" isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/dvir" icon={FileCheck} label="DVIR" isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/documents" icon={FolderOpen} label="Documents" isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/notifications" icon={Bell} label="Notifications" isCollapsed={shouldShowCollapsed} />
+            </>
+          ) : (
+            <>
           {/* Dashboard is always visible */}
           <NavItem href="/dashboard" icon={BarChart3} label="Dashboard" isCollapsed={shouldShowCollapsed} />
 
@@ -386,7 +398,8 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
           {userRole && (userRole === "super_admin" || userRole === "operations_manager") && (
             <NavItem href="/dashboard/settings/users" icon={UserCog} label="Users & invites" isCollapsed={shouldShowCollapsed} />
           )}
-
+            </>
+          )}
         </nav>
 
         {/* Footer */}

@@ -5,9 +5,59 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
+import { cache, cacheKeys } from "@/lib/cache"
 import { validateDriverData, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { mapLegacyRole } from "@/lib/roles"
+import {
+  collapseDuplicateDriversByEmail,
+  purgeAllDriversKeepOneForCompany,
+} from "@/lib/drivers/collapse-duplicate-driver-rows"
+
+function invalidateDriverDashboardCaches(companyId: string) {
+  cache.delete(cacheKeys.dashboardStats(companyId))
+}
+
+/**
+ * Emergency: merge the entire driver table for this company down to **one** row
+ * (prefers a row with `user_id` set), repointing FKs first. Typed confirmation required.
+ */
+export async function emergencyPurgeDriversKeepOne(confirmPhrase: string) {
+  try {
+    const expected = "CONFIRM PURGE KEEP ONE DRIVER"
+    if ((confirmPhrase || "").trim() !== expected) {
+      return { error: `Type exactly: ${expected}`, deleted: 0, keptId: null as string | null }
+    }
+
+    const permission = await checkDeletePermission("drivers")
+    if (!permission.allowed) {
+      return { error: permission.error || "You don't have permission to delete drivers", deleted: 0, keptId: null }
+    }
+
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", deleted: 0, keptId: null }
+    }
+
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const admin = createAdminClient()
+
+    const { keptId, deleted } = await purgeAllDriversKeepOneForCompany(admin, ctx.companyId)
+
+    invalidateDriverDashboardCaches(ctx.companyId)
+    revalidatePath("/dashboard/drivers")
+    revalidatePath("/dashboard")
+
+    return { error: null, deleted, keptId }
+  } catch (e: unknown) {
+    Sentry.captureException(e)
+    return {
+      error: errorMessage(e, "Purge failed"),
+      deleted: 0,
+      keptId: null as string | null,
+    }
+  }
+}
 
 export async function getDrivers(filters?: {
   status?: string
@@ -43,17 +93,58 @@ export async function getDrivers(filters?: {
 
       const { data: existingDrivers } = await admin
         .from("drivers")
-        .select("user_id")
+        .select("user_id, email")
         .eq("company_id", ctx.companyId)
 
-      const existingByUserId = new Set((existingDrivers || []).map((d: any) => String(d.user_id)))
+      // Never treat String(null) as a real id — that was causing a new insert on every page load
+      // when duplicate rows had user_id null (Set contained the literal "null", not the auth UUID).
+      const existingByUserId = new Set(
+        (existingDrivers || [])
+          .filter((d: { user_id?: string | null }) => d.user_id != null && String(d.user_id).length > 0)
+          .map((d: { user_id: string }) => String(d.user_id))
+      )
+      const existingByEmail = new Set(
+        (existingDrivers || [])
+          .map((d: { email?: string | null }) => (d.email || "").toLowerCase().trim())
+          .filter(Boolean)
+      )
+
+      // Link orphan rows (user_id null, same email) to the auth user — avoids another duplicate insert.
+      for (const u of companyUsers || []) {
+        if (!u?.id) continue
+        if (mapLegacyRole(String(u.role ?? "").trim()) !== "driver") continue
+        if (existingByUserId.has(String(u.id))) continue
+        const emailLower = (u.email || "").toLowerCase().trim()
+        if (!emailLower) continue
+        if (!existingByEmail.has(emailLower)) continue
+        const { data: orphan } = await admin
+          .from("drivers")
+          .select("id")
+          .eq("company_id", ctx.companyId)
+          .eq("email", emailLower)
+          .is("user_id", null)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        if (orphan?.id) {
+          await admin
+            .from("drivers")
+            .update({ user_id: String(u.id), updated_at: new Date().toISOString() })
+            .eq("id", orphan.id)
+          existingByUserId.add(String(u.id))
+        }
+      }
 
       const missing = (companyUsers || [])
         .filter((u: any) => {
           if (!u?.id) return false
           const normalizedRole = mapLegacyRole(String(u?.role ?? "").trim())
           if (normalizedRole !== "driver") return false
-          return !existingByUserId.has(String(u.id))
+          const uid = String(u.id)
+          if (existingByUserId.has(uid)) return false
+          const emailLower = (u.email || "").toLowerCase().trim()
+          if (emailLower && existingByEmail.has(emailLower)) return false
+          return true
         })
         .map((u: any) => {
           const emailLower = (u.email || "").toLowerCase().trim()
@@ -76,6 +167,20 @@ export async function getDrivers(filters?: {
 
       if (missing.length > 0) {
         await admin.from("drivers").insert(missing)
+      }
+
+      // Merge existing duplicate rows (same email) so the Drivers UI and HOS are not repeated.
+      const { data: emailRows } = await admin.from("drivers").select("email").eq("company_id", ctx.companyId)
+      const emailDupCounts = new Map<string, number>()
+      for (const d of emailRows || []) {
+        const em = (d.email || "").toLowerCase().trim()
+        if (!em) continue
+        emailDupCounts.set(em, (emailDupCounts.get(em) || 0) + 1)
+      }
+      if ([...emailDupCounts.values()].some((c) => c > 1)) {
+        await collapseDuplicateDriversByEmail(admin, ctx.companyId)
+        invalidateDriverDashboardCaches(ctx.companyId)
+        revalidatePath("/dashboard")
       }
     } catch (e: unknown) {
       // Do not fail the Drivers list if reconciliation fails.
@@ -693,7 +798,6 @@ export async function deleteDriver(id: string) {
       return { error: permission.error || "You don't have permission to delete drivers" }
     }
 
-    const supabase = await createClient()
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) {
       return { error: ctx.error || "Not authenticated" }
@@ -705,12 +809,26 @@ export async function deleteDriver(id: string) {
       return { error: "Invalid driver ID format" }
     }
 
-    // BUG-024 FIX: Check for dependencies before deleting driver
-    // Check for active loads
-    const { data: activeLoads } = await supabase
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const admin = createAdminClient()
+
+    const { data: driverRow } = await admin
+      .from("drivers")
+      .select("id")
+      .eq("id", id)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+
+    if (!driverRow?.id) {
+      return { error: "Driver not found" }
+    }
+
+    // BUG-024 FIX: Check for dependencies before deleting driver (admin: consistent with RLS)
+    const { data: activeLoads } = await admin
       .from("loads")
       .select("id, shipment_number, status")
       .eq("driver_id", id)
+      .eq("company_id", ctx.companyId)
       .in("status", ["assigned", "in_transit", "delivered", "pending"])
 
     if (activeLoads && activeLoads.length > 0) {
@@ -720,11 +838,11 @@ export async function deleteDriver(id: string) {
       }
     }
 
-    // Check for unsubmitted DVIRs
-    const { data: openDVIRs } = await supabase
+    const { data: openDVIRs } = await admin
       .from("dvir")
       .select("id, inspection_date")
       .eq("driver_id", id)
+      .eq("company_id", ctx.companyId)
       .eq("status", "pending")
 
     if (openDVIRs && openDVIRs.length > 0) {
@@ -733,11 +851,11 @@ export async function deleteDriver(id: string) {
       }
     }
 
-    // Check for ELD device mappings
-    const { data: eldDevices } = await supabase
+    const { data: eldDevices } = await admin
       .from("eld_devices")
       .select("id, device_name")
       .eq("driver_id", id)
+      .eq("company_id", ctx.companyId)
 
     if (eldDevices && eldDevices.length > 0) {
       const deviceNames = eldDevices.map((d: { device_name?: string; id: string }) => d.device_name || d.id).join(", ")
@@ -746,17 +864,22 @@ export async function deleteDriver(id: string) {
       }
     }
 
-    const { error } = await supabase
+    const { error, count } = await admin
       .from("drivers")
-      .delete()
+      .delete({ count: "exact" })
       .eq("id", id)
       .eq("company_id", ctx.companyId)
 
     if (error) {
       return { error: error.message }
     }
+    if (count === 0) {
+      return { error: "Could not delete driver" }
+    }
 
+    invalidateDriverDashboardCaches(ctx.companyId)
     revalidatePath("/dashboard/drivers")
+    revalidatePath("/dashboard")
     return { error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
@@ -767,50 +890,77 @@ export async function deleteDriver(id: string) {
 
 // Bulk operations for workflow optimization
 export async function bulkDeleteDrivers(ids: string[]) {
-  const supabase = await createClient()
+  const permission = await checkDeletePermission("drivers")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to delete drivers", data: null }
+  }
+
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
-  // DAT-004 FIX: Check for active assignments before bulk delete
-  // Prevent deleting drivers who are currently on active loads
-  const { data: activeLoads } = await supabase
+  if (!ids.length) {
+    return { error: "No drivers selected", data: null }
+  }
+
+  const { createAdminClient } = await import("@/lib/supabase/admin")
+  const admin = createAdminClient()
+
+  const { data: owned } = await admin
+    .from("drivers")
+    .select("id")
+    .in("id", ids)
+    .eq("company_id", ctx.companyId)
+
+  const validIds = (owned || []).map((r: { id: string }) => r.id)
+  if (validIds.length === 0) {
+    return { error: "No matching drivers found for your company", data: null }
+  }
+
+  const { data: activeLoads } = await admin
     .from("loads")
     .select("id, driver_id, shipment_number, status")
-    .in("driver_id", ids)
+    .in("driver_id", validIds)
     .in("status", ["scheduled", "in_transit"])
     .eq("company_id", ctx.companyId)
 
   if (activeLoads && activeLoads.length > 0) {
-    const blockedDriverIds = [...new Set(activeLoads.map((load: { id: string; driver_id: string | null; shipment_number: string | null; status: string }) => load.driver_id))]
-    const blockedDrivers = await supabase
+    const blockedDriverIds = [
+      ...new Set(
+        activeLoads.map(
+          (load: { driver_id: string | null }) => load.driver_id
+        ).filter(Boolean) as string[]
+      ),
+    ]
+    const { data: blockedDrivers } = await admin
       .from("drivers")
       .select("id, name")
       .in("id", blockedDriverIds)
       .eq("company_id", ctx.companyId)
 
-    if (blockedDrivers.data && blockedDrivers.data.length > 0) {
-      const driverNames = blockedDrivers.data.map((d: { id: string; name: string | null }) => d.name).join(", ")
-      return { 
+    if (blockedDrivers && blockedDrivers.length > 0) {
+      const driverNames = blockedDrivers.map((d: { name: string | null }) => d.name).join(", ")
+      return {
         error: `Cannot delete drivers with active loads: ${driverNames}. Please reassign or complete their loads first.`,
-        data: null 
+        data: null,
       }
     }
   }
 
-  const { error } = await supabase
-    .from("drivers")
-    .delete()
-    .in("id", ids)
-    .eq("company_id", ctx.companyId)
-
-  if (error) {
-    return { error: error.message, data: null }
+  const DELETE_CHUNK = 400
+  for (let i = 0; i < validIds.length; i += DELETE_CHUNK) {
+    const chunk = validIds.slice(i, i + DELETE_CHUNK)
+    const { error } = await admin.from("drivers").delete().in("id", chunk).eq("company_id", ctx.companyId)
+    if (error) {
+      return { error: error.message, data: null }
+    }
   }
 
+  invalidateDriverDashboardCaches(ctx.companyId)
   revalidatePath("/dashboard/drivers")
-  return { data: { deleted: ids.length }, error: null }
+  revalidatePath("/dashboard")
+  return { data: { deleted: validIds.length }, error: null }
 }
 
 export async function bulkUpdateDriverStatus(ids: string[], status: string) {
