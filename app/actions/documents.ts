@@ -206,7 +206,7 @@ export async function deleteDocuments(ids: string[]) {
 
   if (role === "driver") {
     const forbidden = documents.some(
-      (d) =>
+      (d: { driver_id: string | null; file_url: string | null }) =>
         !driverCanAccessDocumentRow({
           driver_id: d.driver_id,
           file_url: d.file_url,
