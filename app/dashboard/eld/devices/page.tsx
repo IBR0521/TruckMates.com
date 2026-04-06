@@ -49,6 +49,28 @@ import {
 import { getTrucks } from "@/app/actions/trucks"
 import { toast } from "sonner"
 import Link from "next/link"
+import { cn } from "@/lib/utils"
+
+function eldSyncDot(lastSyncAt: string | null | undefined) {
+  if (lastSyncAt == null || lastSyncAt === "") {
+    return { cls: "bg-red-500", title: "Never synced" }
+  }
+  const t = new Date(lastSyncAt).getTime()
+  if (!Number.isFinite(t)) {
+    return { cls: "bg-red-500", title: "Invalid sync time" }
+  }
+  const ageMin = (Date.now() - t) / 60000
+  if (ageMin < 0) {
+    return { cls: "bg-emerald-500", title: "Recently synced" }
+  }
+  if (ageMin < 15) {
+    return { cls: "bg-emerald-500", title: `Synced ${Math.max(0, Math.round(ageMin))} min ago` }
+  }
+  if (ageMin < 120) {
+    return { cls: "bg-amber-400", title: `Last sync ${Math.round(ageMin)} min ago` }
+  }
+  return { cls: "bg-red-500", title: `Stale — ${Math.round(ageMin / 60)}h since sync` }
+}
 
 export default function ELDDevicesPage() {
   const [devices, setDevices] = useState<any[]>([])
@@ -262,7 +284,9 @@ export default function ELDDevicesPage() {
 
           {/* Devices Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredDevices.map((device) => (
+            {filteredDevices.map((device) => {
+              const sync = eldSyncDot(device.last_sync_at)
+              return (
               <Card key={device.id} className="p-6 bg-card border-border">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -270,7 +294,14 @@ export default function ELDDevicesPage() {
                       <Shield className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-foreground">{device.device_name}</h3>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full", sync.cls)}
+                          title={sync.title}
+                          aria-hidden
+                        />
+                        <h3 className="font-semibold text-foreground">{device.device_name}</h3>
+                      </div>
                       <p className="text-xs text-muted-foreground">{device.device_serial_number}</p>
                     </div>
                   </div>
@@ -331,7 +362,7 @@ export default function ELDDevicesPage() {
                   </Button>
                 </div>
               </Card>
-            ))}
+            )})}
           </div>
 
           {filteredDevices.length === 0 && (

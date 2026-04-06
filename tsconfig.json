@@ -33,7 +33,9 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    "/Users/ibrohimrahmat/.cache/truckmates-next/8905a06d5c30/.next/types/**/*.ts",
+    "/Users/ibrohimrahmat/.cache/truckmates-next/8905a06d5c30/.next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

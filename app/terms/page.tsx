@@ -33,7 +33,7 @@ export default function TermsPage() {
 
           <div className="prose prose-invert max-w-none">
             <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">Terms of Service</h1>
-            <p className="text-muted-foreground mb-8">Last updated: December 2024</p>
+            <p className="text-muted-foreground mb-8">Last updated: April 6, 2026</p>
 
             <Card className="bg-card border-border p-8 mb-8">
               <section className="mb-8">
@@ -97,11 +97,17 @@ export default function TermsPage() {
                   are billed monthly or annually based on your selected plan.
                 </p>
 
-                <h3 className="text-xl font-semibold text-foreground mb-3">4.2 Free Trial</h3>
+                <h3 className="text-xl font-semibold text-foreground mb-3">4.2 Free tier and paid plans</h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  We offer a 7-day free trial period. No payment information is required to start the trial. 
-                  At the end of the trial period, your subscription will automatically convert to a paid plan 
-                  unless you cancel before the trial ends.
+                  We offer a <strong className="text-foreground">Free tier</strong> with limits described on our
+                  pricing page. The Free tier remains available at no charge until you upgrade to a paid plan or close
+                  your account; it does not automatically convert to a paid subscription.
+                </p>
+                <p className="text-muted-foreground leading-relaxed mb-4">
+                  <strong className="text-foreground">Paid plans</strong> are billed monthly or annually in advance,
+                  as shown when you subscribe. We may offer time-limited trials of paid plans from time to time; if you
+                  enroll in a trial, the duration, renewal, and billing terms presented at signup (including whether a
+                  payment method is required) control what happens when the trial ends.
                 </p>
 
                 <h3 className="text-xl font-semibold text-foreground mb-3">4.3 Payment Terms</h3>
@@ -255,9 +261,10 @@ export default function TermsPage() {
               <section className="mb-8">
                 <h2 className="text-2xl font-bold text-foreground mb-4">13. Governing Law</h2>
                 <p className="text-muted-foreground leading-relaxed">
-                  These Terms shall be governed by and construed in accordance with the laws of [Your Jurisdiction], 
-                  without regard to its conflict of law provisions. Any disputes arising from these Terms shall be 
-                  resolved in the courts of [Your Jurisdiction].
+                  These Terms shall be governed by and construed in accordance with the laws of the State of Delaware,
+                  without regard to its conflict of law provisions. Any disputes arising from these Terms shall be
+                  resolved in the state and federal courts located in Delaware, except where applicable law requires
+                  otherwise.
                 </p>
               </section>
 
@@ -269,9 +276,6 @@ export default function TermsPage() {
                 <div className="bg-secondary/50 p-4 rounded-lg">
                   <p className="text-foreground font-semibold mb-2">TruckMates Legal Team</p>
                   <p className="text-muted-foreground">Email: legal@truckmates.com</p>
-                  <p className="text-muted-foreground mt-2">
-                    Address: [Your Company Address]
-                  </p>
                 </div>
               </section>
             </Card>

@@ -40,16 +40,34 @@ export function computeDailyRemainingFromEldLogs(
   )
 
   timeline.forEach((log, idx) => {
-    let duration = log.duration_minutes || 0
-    if (!duration && log.start_time) {
-      const start = new Date(log.start_time).getTime()
-      const nextStart = timeline[idx + 1]?.start_time
-        ? new Date(timeline[idx + 1].start_time).getTime()
-        : null
-      const explicitEnd = log.end_time ? new Date(log.end_time).getTime() : null
-      const inferredEnd = explicitEnd || nextStart || nowMs
-      if (Number.isFinite(start) && Number.isFinite(inferredEnd) && inferredEnd > start) {
+    let duration = 0
+    const start = log.start_time ? new Date(log.start_time).getTime() : NaN
+    const nextStart = timeline[idx + 1]?.start_time
+      ? new Date(timeline[idx + 1].start_time).getTime()
+      : null
+    const explicitEnd = log.end_time ? new Date(log.end_time).getTime() : null
+
+    /**
+     * Open segment (`end_time` null): always infer length to `nowMs` (and cap at next log start if any).
+     * Do not trust `duration_minutes` — providers/sync often write a stale partial duration while the
+     * segment is still open, which freezes drive/shift clocks until the next server refresh.
+     */
+    const isOpen = !log.end_time
+    if (isOpen && Number.isFinite(start)) {
+      const inferredEnd =
+        nextStart != null && Number.isFinite(nextStart) && nextStart > start
+          ? Math.min(nextStart, nowMs)
+          : nowMs
+      if (Number.isFinite(inferredEnd) && inferredEnd > start) {
         duration = Math.floor((inferredEnd - start) / 60000)
+      }
+    } else if (Number.isFinite(start)) {
+      duration = log.duration_minutes || 0
+      if (!duration) {
+        const inferredEnd = explicitEnd ?? nextStart ?? nowMs
+        if (Number.isFinite(inferredEnd) && inferredEnd > start) {
+          duration = Math.floor((inferredEnd - start) / 60000)
+        }
       }
     }
     switch (log.log_type) {

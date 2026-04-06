@@ -1,5 +1,23 @@
+import { createRequire } from 'node:module'
+import crypto from 'node:crypto'
+import os from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const require = createRequire(import.meta.url)
+
+// Keep `.next` off iCloud/Desktop (or other sync folders): partial writes cause ENOENT / missing
+// vendor-chunks and 500s. Vercel/CI keep the default in-repo output.
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const projectKey = crypto.createHash('sha256').update(__dirname).digest('hex').slice(0, 12)
+const distDir =
+  process.env.VERCEL === '1' || process.env.CI === 'true'
+    ? '.next'
+    : path.join(os.homedir(), '.cache', 'truckmates-next', projectKey, '.next')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir,
   typescript: {
     // BUG-002 FIX: Enable TypeScript error checking - critical for production safety
     ignoreBuildErrors: false,
@@ -60,6 +78,8 @@ const nextConfig = {
   output: 'standalone', // Use standalone output to avoid static generation issues
   // Performance: Enable React strict mode for better development experience
   reactStrictMode: true,
+  // Dev: allow webpack HMR when the browser uses http://127.0.0.1 while Next binds to [::1]
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
   async redirects() {
     return [
       {
@@ -71,6 +91,27 @@ const nextConfig = {
   },
   // Externalize optional dependencies to prevent build errors
   // These packages are dynamically imported and may not be installed
+  // Next dev with --webpack stores PackFileCache under `.next/dev/cache`. That layer is fragile on
+  // iCloud/Desktop sync and some disks (missing *.pack.gz → unhandledRejection → torn manifests
+  // like app-paths-manifest.json / routes-manifest.json → 500 / "unable to handle request").
+  // Default: no persistent webpack cache in dev. Opt in with NEXT_WEBPACK_DISK_CACHE=1 if your
+  // project lives on a fast local disk and you want faster rebuilds.
+  webpack: (config, { dev }) => {
+    if (dev && process.env.NEXT_WEBPACK_DISK_CACHE !== '1') {
+      config.cache = false
+    }
+    // Webpack can mis-resolve `styled-jsx` when pulling recharts → lodash, yielding
+    // `createStyleRegistry is not a function` at runtime. Pin to the package entry.
+    // `dom-helpers/*` subpaths use tiny package.json stubs; on some disks / sync (e.g. Desktop+iCloud)
+    // resolution fails with "No file content" — alias to the real modules (react-transition-group).
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'styled-jsx': require.resolve('styled-jsx'),
+      'dom-helpers/addClass': path.join(__dirname, 'node_modules/dom-helpers/esm/addClass.js'),
+      'dom-helpers/removeClass': path.join(__dirname, 'node_modules/dom-helpers/esm/removeClass.js'),
+    }
+    return config
+  },
   serverExternalPackages: [
     'twilio',
     'canvas',
@@ -84,8 +125,6 @@ const nextConfig = {
     '@sparticuz/chromium', // Optional - Chromium for serverless
     '@tanstack/react-query', // Fix Turbopack timeout issues
   ],
-  // Note: Webpack config removed - Next.js 16 uses Turbopack by default
-  // Turbopack handles bundle optimization automatically
 }
 
 export default nextConfig

@@ -15,8 +15,16 @@ const PLANS = [
     priceMonthly: 0,
     priceYearly: 0,
     limits: "Up to 2 trucks",
-    included: ["GPS tracking", "Basic dispatch", "ELD compliance", "1 user only"],
-    excluded: ["IFTA reporting", "Invoicing", "AI features", "API access"],
+    included: [
+      "Up to 2 trucks",
+      "GPS & fleet map",
+      "Dispatch",
+      "ELD compliance tools",
+      "IFTA reporting",
+      "Invoicing & settlements (fair-use limits)",
+      "1 user",
+    ],
+    excluded: ["AI assistant", "API access", "Marketplace", "Priority support"],
     cta: "Get started free",
     href: "/register",
     highlighted: false,
@@ -89,7 +97,6 @@ const PLANS = [
 const ADDONS = [
   { name: "Extra trucks", description: "Go over your plan limit without upgrading", price: "$5 / truck / mo" },
   { name: "AI features pack", description: "Receipt OCR, document analysis, TruckMates AI chat", price: "$29 / mo" },
-  { name: "Samsara / Motive sync", description: "ELD webhook integration for existing hardware", price: "$19 / mo" },
 ]
 
 export default function PricingPage() {

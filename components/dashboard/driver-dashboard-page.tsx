@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Card } from "@/components/ui/card"
 import { DriverDashboardHome } from "@/components/dashboard/driver-dashboard-home"
 import { getDriverDashboardSnapshot } from "@/app/actions/driver-dashboard"
+import { calendarDateYmdLocal } from "@/lib/eld/hos-calendar-date"
 import { useDashboardPageData } from "@/lib/hooks/use-dashboard-page"
 
 /**
@@ -18,7 +19,9 @@ export function DriverDashboardPage() {
   const liveSnapshot = useQuery({
     queryKey: ["driverDashboardSnapshot", sessionUserId],
     queryFn: async () => {
-      const r = await getDriverDashboardSnapshot()
+      const r = await getDriverDashboardSnapshot({
+        localLogDateYmd: calendarDateYmdLocal(new Date()),
+      })
       if (r.error) throw new Error(r.error)
       return r.data
     },
@@ -26,7 +29,7 @@ export function DriverDashboardPage() {
     staleTime: 0,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
-    refetchInterval: 45_000,
+    refetchInterval: 15_000,
   })
 
   const authCompany = data?.authCompany ?? null

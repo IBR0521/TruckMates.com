@@ -33,7 +33,7 @@ export default function PrivacyPage() {
 
           <div className="prose prose-invert max-w-none">
             <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">Privacy Policy</h1>
-            <p className="text-muted-foreground mb-8">Last updated: December 2024</p>
+            <p className="text-muted-foreground mb-8">Last updated: April 6, 2026</p>
 
             <Card className="bg-card border-border p-8 mb-8">
               <section className="mb-8">
@@ -198,9 +198,6 @@ export default function PrivacyPage() {
                 <div className="bg-secondary/50 p-4 rounded-lg">
                   <p className="text-foreground font-semibold mb-2">TruckMates Privacy Team</p>
                   <p className="text-muted-foreground">Email: privacy@truckmates.com</p>
-                  <p className="text-muted-foreground mt-2">
-                    Address: [Your Company Address]
-                  </p>
                 </div>
               </section>
             </Card>

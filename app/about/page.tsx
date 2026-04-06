@@ -1,10 +1,9 @@
 import Link from "next/link"
-import { ArrowLeft, Building2, Users, Target, Award } from "lucide-react"
+import { ArrowLeft, Wrench } from "lucide-react"
 
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-      {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur">
         <div className="container mx-auto px-4 py-16">
           <Link href="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors">
@@ -12,90 +11,34 @@ export default function AboutPage() {
             Back to Home
           </Link>
           <div className="max-w-3xl">
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-              About TruckMates
-            </h1>
-            <p className="text-xl text-muted-foreground">
-              Empowering logistics companies with comprehensive fleet management solutions
-            </p>
+            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">About TruckMates</h1>
+            <p className="text-xl text-muted-foreground">Built small, on purpose.</p>
           </div>
         </div>
       </div>
 
-      {/* Mission */}
       <div className="container mx-auto px-4 py-16">
-        <div className="max-w-4xl mx-auto">
-          <div className="p-8 rounded-lg border border-border bg-card mb-12">
-            <div className="flex items-center gap-3 mb-4">
-              <Target className="w-8 h-8 text-primary" />
-              <h2 className="text-3xl font-bold text-foreground">Our Mission</h2>
-            </div>
-            <p className="text-lg text-muted-foreground leading-relaxed">
-              TruckMates was built with a simple mission: to make fleet management easier, more efficient, and more profitable for logistics companies of all sizes. We believe that technology should simplify operations, not complicate them.
-            </p>
-          </div>
-
-          {/* Company Info */}
-          <div className="grid md:grid-cols-2 gap-8 mb-12">
-            <div className="p-8 rounded-lg border border-border bg-card">
-              <div className="flex items-center gap-3 mb-4">
-                <Building2 className="w-6 h-6 text-primary" />
-                <h3 className="text-2xl font-semibold text-foreground">Company</h3>
-              </div>
-              <p className="text-muted-foreground mb-4">
-                TruckMates is a leading provider of fleet management and logistics software solutions.
-              </p>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p><strong className="text-foreground">Launched:</strong> 2024</p>
-                <p><strong className="text-foreground">Headquarters:</strong> United States</p>
-                <p><strong className="text-foreground">Industry:</strong> Logistics & Transportation Technology</p>
-                <p><strong className="text-foreground">Mission:</strong> Simplify fleet management for logistics companies of all sizes</p>
-                <p><strong className="text-foreground">Focus:</strong> All-in-one platform for fleet operations, compliance, and growth</p>
-              </div>
-            </div>
-
-            <div className="p-8 rounded-lg border border-border bg-card">
-              <div className="flex items-center gap-3 mb-4">
-                <Users className="w-6 h-6 text-primary" />
-                <h3 className="text-2xl font-semibold text-foreground">Team</h3>
-              </div>
-              <p className="text-muted-foreground mb-4">
-                Our team consists of experienced developers, logistics experts, and customer success professionals dedicated to helping your business succeed.
-              </p>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p><strong className="text-foreground">Team Size:</strong> Growing team of experts</p>
-                <p><strong className="text-foreground">Expertise:</strong> Software development, logistics operations, customer success</p>
-                <p><strong className="text-foreground">Focus:</strong> Customer Success & Product Innovation</p>
-                <p><strong className="text-foreground">Values:</strong> Innovation, Reliability, Support, Transparency</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Values */}
+        <div className="max-w-3xl mx-auto space-y-8">
           <div className="p-8 rounded-lg border border-border bg-card">
-            <div className="flex items-center gap-3 mb-6">
-              <Award className="w-8 h-8 text-primary" />
-              <h2 className="text-3xl font-bold text-foreground">Our Values</h2>
-            </div>
-            <div className="grid md:grid-cols-3 gap-6">
-              <div>
-                <h3 className="font-semibold text-foreground mb-2">Innovation</h3>
-                <p className="text-sm text-muted-foreground">
-                  We continuously innovate to provide cutting-edge solutions that keep your fleet ahead of the competition.
-                </p>
-              </div>
-              <div>
-                <h3 className="font-semibold text-foreground mb-2">Reliability</h3>
-                <p className="text-sm text-muted-foreground">
-                  Your operations depend on us. We ensure 99.9% uptime and reliable service you can count on.
-                </p>
-              </div>
-              <div>
-                <h3 className="font-semibold text-foreground mb-2">Support</h3>
-                <p className="text-sm text-muted-foreground">
-                  Our dedicated support team is here to help you succeed, with fast response times and expert guidance.
-                </p>
-              </div>
+            <p className="text-lg text-muted-foreground leading-relaxed mb-6">
+              TruckMates was built by <strong className="text-foreground">a single developer</strong> who watched small
+              fleet operators drown in spreadsheets, paper BOLs, and tools that weren&apos;t built for how they actually
+              work. The product launched in <strong className="text-foreground">2024</strong> — not from a venture-backed
+              &quot;customer success team,&quot; but from one person shipping software for fleets that need professional
+              operations without enterprise pricing or enterprise complexity.
+            </p>
+            <p className="text-lg text-muted-foreground leading-relaxed mb-6">
+              We focus on <strong className="text-foreground">fleets roughly 5–20 trucks</strong> — owner-operators and
+              small carriers who run the business themselves and don&apos;t have time for inflated marketing or fake ROI
+              numbers. If that sounds like you, the product is aimed at you.
+            </p>
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50 border border-border">
+              <Wrench className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+              <p className="text-sm text-muted-foreground">
+                We&apos;d rather say &quot;here&apos;s what works today&quot; than promise what isn&apos;t shipped. Check
+                the <Link href="/integrations">integrations page</Link>, the <Link href="/pricing">pricing</Link> page, and
+                the in-app demo — then decide.
+              </p>
             </div>
           </div>
         </div>
@@ -103,4 +46,3 @@ export default function AboutPage() {
     </div>
   )
 }
-

@@ -29,6 +29,7 @@ import {
   type EldLogLike,
 } from "@/lib/hos/compute-daily-remaining"
 import type { DriverDashboardSnapshot } from "@/lib/types/driver-dashboard"
+import { calendarDateYmdLocal } from "@/lib/eld/hos-calendar-date"
 
 function localYmd(d: Date): string {
   const y = d.getFullYear()
@@ -81,7 +82,9 @@ export function DriverEldPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const snapResult = await getDriverDashboardSnapshot()
+      const snapResult = await getDriverDashboardSnapshot({
+        localLogDateYmd: calendarDateYmdLocal(new Date()),
+      })
       if (snapResult.error) {
         toast.error(snapResult.error)
         setSnapshot(null)
@@ -155,7 +158,7 @@ export function DriverEldPage() {
   /** Advance “now” for open-ended log segments so drive/shift clocks count down between server refreshes. */
   useEffect(() => {
     if (!isToday) return
-    const id = setInterval(() => setLiveNowMs(Date.now()), 30_000)
+    const id = setInterval(() => setLiveNowMs(Date.now()), 1000)
     return () => clearInterval(id)
   }, [isToday])
 
@@ -407,7 +410,7 @@ export function DriverEldPage() {
                         (driveClock ?? 0) < 1 ? "text-destructive" : "text-foreground"
                       }`}
                     >
-                      {driveClock != null ? `${driveClock.toFixed(1)}h` : "—"}
+                      {driveClock != null ? `${driveClock.toFixed(2)}h` : "—"}
                     </p>
                     <p className="mt-1 text-[11px] text-muted-foreground">11h max</p>
                   </div>
@@ -418,7 +421,7 @@ export function DriverEldPage() {
                         (shiftClock ?? 0) < 1 ? "text-destructive" : "text-foreground"
                       }`}
                     >
-                      {shiftClock != null ? `${shiftClock.toFixed(1)}h` : "—"}
+                      {shiftClock != null ? `${shiftClock.toFixed(2)}h` : "—"}
                     </p>
                     <p className="mt-1 text-[11px] text-muted-foreground">14h window</p>
                   </div>

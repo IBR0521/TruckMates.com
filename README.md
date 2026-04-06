@@ -21,6 +21,13 @@ TruckMates is a multi-tenant logistics platform for carriers and fleets. It comb
 
 ## Local Development
 
+**Run every `npm` command from the project root** (the folder that contains this repo’s `package.json`). If your shell prompt shows `~` (home directory), `npm` will error with `ENOENT: package.json` and the app will not start—`ERR_CONNECTION_REFUSED` in the browser means nothing is listening on port 3000.
+
+```bash
+# Example if the project lives on your Desktop (quotes handle spaces and parentheses in the folder name):
+cd ~/Desktop/"logistics-saa-s-design (1)"
+```
+
 1. Install dependencies:
 
 ```bash
@@ -39,7 +46,16 @@ cp .env.example .env.local
 npm run dev
 ```
 
-App runs on `http://localhost:3000`.
+If port 3000 is busy: `npm run ports:free-3000`. For a clean cache: `npm run dev:fresh` (clears `.next` then starts Webpack — first compile can take several minutes; wait for `✓ Ready`).
+
+Open **`http://127.0.0.1:3000`**. Run all commands from this repo root (not `~`). If `.next` errors or vanish mid-dev, avoid iCloud-synced Desktop folders; use a normal path like `~/Projects/...`.
+
+If the app shows **“unable to handle this request”** / **HTTP 500** with `Module not found` for random files under `node_modules` (e.g. `lucide-react` icons or `@tanstack/...`), your install is **corrupted** (common after interrupted installs or cloud sync). Run:
+
+```bash
+npm run deps:reinstall
+npm run dev:fresh
+```
 
 ## Required Environment Variables
 

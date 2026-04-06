@@ -63,3 +63,5 @@ next-env.d.ts
 .tmp-design-extract/
 .tmp-design-1775160715578/
 
+# Accidental local path mirror (e.g. Next distDir cache copied under repo root)
+/Users/

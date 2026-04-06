@@ -3,7 +3,9 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { calendarDateYmdLocal } from "@/lib/eld/hos-calendar-date"
-import { computeDailyRemainingFromEldLogs } from "@/lib/hos/compute-daily-remaining"
+import { computeDailyRemainingFromEldLogs, type EldLogLike } from "@/lib/hos/compute-daily-remaining"
+import { mapLegacyRole } from "@/lib/roles"
+import { getDrivers } from "@/app/actions/drivers"
 
 /** `public.eld_logs` — supabase/eld_schema.sql */
 const ELD_LOGS_SELECT =
@@ -346,5 +348,315 @@ export async function getPredictiveAlerts() {
   return {
     data: alerts,
     error: null,
+  }
+}
+
+function formatHoursParts(hours: number): string {
+  const h = Math.max(0, Math.floor(hours))
+  const m = Math.round((hours - h) * 60)
+  return `${h}h ${String(m).padStart(2, "0")}m`
+}
+
+function deriveDutyFromTodayLogs(logs: EldLogLike[]): {
+  dutyKey: string
+  label: string
+} {
+  if (!logs.length) {
+    return { dutyKey: "unknown", label: "No duty today" }
+  }
+  const sorted = [...logs].sort(
+    (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  )
+  const open = [...sorted].reverse().find((l) => !l.end_time)
+  if (open) {
+    const key = open.log_type || "unknown"
+    return {
+      dutyKey: key,
+      label:
+        key === "driving"
+          ? "Driving"
+          : key === "on_duty"
+            ? "On duty"
+            : key === "sleeper_berth"
+              ? "Sleeper"
+              : key === "off_duty"
+                ? "Off duty"
+                : key.replace(/_/g, " "),
+    }
+  }
+  return { dutyKey: "off_duty", label: "Off duty" }
+}
+
+type LogWithLocation = EldLogLike & {
+  location_start?: unknown
+  location_end?: unknown
+}
+
+function locationLineFromLogOrLoc(
+  logs: EldLogLike[],
+  loc: { address?: string | null; latitude?: number | string | null; longitude?: number | string | null } | null
+): string | null {
+  if (loc?.address && String(loc.address).trim()) {
+    return String(loc.address).trim()
+  }
+  const last = [...logs].sort(
+    (a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
+  )[0] as LogWithLocation | undefined
+  const end = last?.location_end as { address?: string } | undefined
+  const start = last?.location_start as { address?: string } | undefined
+  if (end?.address) return String(end.address)
+  if (start?.address) return String(start.address)
+  if (loc && loc.latitude != null && loc.longitude != null) {
+    return `${Number(loc.latitude).toFixed(3)}, ${Number(loc.longitude).toFixed(3)}`
+  }
+  return null
+}
+
+export type FleetHosSnapshotRow = {
+  driverId: string
+  driverName: string
+  truckLabel: string
+  dutyKey: string
+  statusLabel: string
+  rowTone: "driving" | "on_duty" | "off" | "violation"
+  drivingLeftDisplay: string
+  onDutyLeftDisplay: string
+  lastLocation: string | null
+  openViolationCount: number
+  approachingLimit: boolean
+}
+
+/**
+ * Fleet-wide HOS snapshot for the ELD overview: one row per driver with clocks, duty, location, violations.
+ */
+export async function getFleetHOSSnapshot() {
+  try {
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null as FleetHosSnapshotRow[] | null }
+    }
+
+    const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+    if (role === "driver") {
+      return { error: "Fleet view is not available for driver accounts", data: null }
+    }
+
+    const driversResult = await getDrivers({ limit: 100 })
+    if (driversResult.error || !driversResult.data) {
+      return { error: driversResult.error || "Could not load drivers", data: null }
+    }
+
+    const drivers = driversResult.data
+    if (drivers.length === 0) {
+      return { data: [], error: null }
+    }
+
+    const supabase = await createClient()
+    const targetDate = calendarDateYmdLocal(new Date())
+    const driverIds = drivers.map((d: { id: string }) => d.id)
+
+    const truckIds = [
+      ...new Set(
+        drivers
+          .map((d: { truck_id?: string | null }) => d.truck_id)
+          .filter((id: string | null | undefined): id is string => Boolean(id))
+      ),
+    ]
+
+    const [trucksRes, logsRes, eventsRes, locRes] = await Promise.all([
+      truckIds.length
+        ? supabase.from("trucks").select("id, truck_number").eq("company_id", ctx.companyId).in("id", truckIds)
+        : Promise.resolve({ data: [] as { id: string; truck_number: string }[], error: null as null }),
+      supabase
+        .from("eld_logs")
+        .select(ELD_LOGS_SELECT)
+        .eq("company_id", ctx.companyId)
+        .eq("log_date", targetDate)
+        .in("driver_id", driverIds)
+        .order("start_time", { ascending: true })
+        .limit(5000),
+      supabase
+        .from("eld_events")
+        .select("driver_id")
+        .eq("company_id", ctx.companyId)
+        .eq("event_type", "hos_violation")
+        .eq("resolved", false)
+        .in("driver_id", driverIds),
+      supabase
+        .from("eld_locations")
+        .select("driver_id, timestamp, address, latitude, longitude")
+        .eq("company_id", ctx.companyId)
+        .in("driver_id", driverIds)
+        .order("timestamp", { ascending: false })
+        .limit(800),
+    ])
+
+    if (logsRes.error) {
+      return { error: logsRes.error.message, data: null }
+    }
+    if (eventsRes.error) {
+      return { error: eventsRes.error.message, data: null }
+    }
+    if (trucksRes.error) {
+      return { error: trucksRes.error.message, data: null }
+    }
+
+    const truckMap = new Map<string, string>()
+    for (const t of trucksRes.data || []) {
+      truckMap.set(t.id, t.truck_number)
+    }
+
+    const logsByDriver = new Map<string, EldLogLike[]>()
+    for (const row of (logsRes.data || []) as Array<EldLogLike & { driver_id?: string }>) {
+      const did = row.driver_id
+      if (!did) continue
+      const arr = logsByDriver.get(did) || []
+      arr.push(row as EldLogLike)
+      logsByDriver.set(did, arr)
+    }
+
+    const openViolationsByDriver = new Map<string, number>()
+    for (const e of eventsRes.data || []) {
+      const did = (e as { driver_id?: string | null }).driver_id
+      if (!did) continue
+      openViolationsByDriver.set(did, (openViolationsByDriver.get(did) || 0) + 1)
+    }
+
+    const latestLocByDriver = new Map<string, { address?: string | null; latitude?: number | string | null; longitude?: number | string | null }>()
+    if (!locRes.error) {
+      for (const loc of locRes.data || []) {
+        const did = (loc as { driver_id?: string | null }).driver_id
+        if (!did || latestLocByDriver.has(did)) continue
+        latestLocByDriver.set(did, loc as { address?: string | null; latitude?: number | string | null; longitude?: number | string | null })
+      }
+    }
+
+    const nowMs = Date.now()
+    const rows: FleetHosSnapshotRow[] = []
+
+    for (const d of drivers) {
+      const driverId = d.id as string
+      const name = (d.name as string) || "Driver"
+      const tid = d.truck_id as string | null | undefined
+      const truckLabel = tid ? truckMap.get(tid) || "—" : "—"
+
+      const logs = logsByDriver.get(driverId) || []
+      const computed = computeDailyRemainingFromEldLogs(logs, nowMs)
+      const duty = deriveDutyFromTodayLogs(logs)
+      const openCount = openViolationsByDriver.get(driverId) || 0
+
+      const inViolation = computed.violations.length > 0 || openCount > 0
+
+      const approachingLimit =
+        !inViolation &&
+        (computed.remainingDriving < 1 ||
+          computed.remainingOnDuty < 1 ||
+          computed.needsBreak)
+
+      let rowTone: FleetHosSnapshotRow["rowTone"] = "off"
+      if (inViolation) rowTone = "violation"
+      else if (duty.dutyKey === "driving") rowTone = "driving"
+      else if (duty.dutyKey === "on_duty") rowTone = "on_duty"
+
+      const hideClocks = computed.violations.length > 0
+      const drivingLeftDisplay = hideClocks ? "—" : formatHoursParts(computed.remainingDriving)
+      const onDutyLeftDisplay = hideClocks ? "—" : formatHoursParts(computed.remainingOnDuty)
+
+      const lastLocation = locationLineFromLogOrLoc(logs, latestLocByDriver.get(driverId) || null)
+
+      rows.push({
+        driverId,
+        driverName: name,
+        truckLabel,
+        dutyKey: duty.dutyKey,
+        statusLabel: inViolation ? "In violation" : duty.label,
+        rowTone,
+        drivingLeftDisplay,
+        onDutyLeftDisplay,
+        lastLocation,
+        openViolationCount: openCount,
+        approachingLimit,
+      })
+    }
+
+    return { data: rows, error: null }
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Failed to load fleet HOS"
+    return { error: message, data: null }
+  }
+}
+
+export type ViolationRepeatOffenderRow = {
+  driverId: string
+  driverName: string
+  count: number
+}
+
+/** Drivers with 2+ HOS violation events in the last 30 days (all severities). */
+export async function getViolationRepeatOffendersLast30Days() {
+  try {
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null as ViolationRepeatOffenderRow[] | null }
+    }
+
+    const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+    if (role === "driver") {
+      return { error: "Not available for driver accounts", data: null }
+    }
+
+    const supabase = await createClient()
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+    const { data: events, error } = await supabase
+      .from("eld_events")
+      .select("driver_id")
+      .eq("company_id", ctx.companyId)
+      .eq("event_type", "hos_violation")
+      .gte("event_time", since)
+      .not("driver_id", "is", null)
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    const counts = new Map<string, number>()
+    for (const e of events || []) {
+      const id = (e as { driver_id: string }).driver_id
+      counts.set(id, (counts.get(id) || 0) + 1)
+    }
+
+    const repeatIds = [...counts.entries()].filter(([, n]) => n >= 2).map(([id]) => id)
+    if (repeatIds.length === 0) {
+      return { data: [], error: null }
+    }
+
+    const { data: driverRows, error: dErr } = await supabase
+      .from("drivers")
+      .select("id, name")
+      .eq("company_id", ctx.companyId)
+      .in("id", repeatIds)
+
+    if (dErr) {
+      return { error: dErr.message, data: null }
+    }
+
+    const nameById = new Map<string, string>()
+    for (const r of driverRows || []) {
+      nameById.set((r as { id: string }).id, (r as { name: string }).name || "Driver")
+    }
+
+    const data: ViolationRepeatOffenderRow[] = repeatIds
+      .map((driverId: string) => ({
+        driverId,
+        driverName: nameById.get(driverId) || "Unknown driver",
+        count: counts.get(driverId) || 0,
+      }))
+      .sort((a, b) => b.count - a.count)
+
+    return { data, error: null }
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Failed to load repeat offenders"
+    return { error: message, data: null }
   }
 }

@@ -5,8 +5,15 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev -p 3000 --hostname 0.0.0.0 --webpack",
+    "dev:fresh": "rm -rf .next node_modules/.cache && NEXT_TELEMETRY_DISABLED=1 next dev -p 3000 --hostname 0.0.0.0 --webpack",
+    "dev:fresh:turbo": "rm -rf .next node_modules/.cache && NEXT_TELEMETRY_DISABLED=1 next dev -p 3000 --hostname 0.0.0.0",
+    "ports:free-3000": "lsof -ti :3000 | xargs kill -9 2>/dev/null || true",
+    "deps:reinstall": "rm -rf node_modules .next && npm install",
+    "dev:3003": "next dev -p 3003 --hostname :: --webpack",
+    "dev:3003:turbo": "next dev -p 3003 --hostname ::",
     "dev:3004": "next dev -p 3004 --hostname 0.0.0.0",
     "dev:3004:webpack": "next dev -p 3004 --hostname 0.0.0.0 --webpack",
+    "dev:webpack": "next dev -p 3000 --hostname 0.0.0.0 --webpack",
     "dev:turbo": "next dev -p 3000 --hostname 0.0.0.0",
     "dev:alt": "next dev -p 3001",
     "dev:open": "next dev -p 3000 --hostname 0.0.0.0 --webpack",
@@ -63,14 +70,14 @@
     "embla-carousel-react": "8.5.1",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
-    "next": "^16.0.7",
-    "next-themes": "^0.4.6",
+    "next": "^16.2.2",
     "pdfjs-dist": "^3.11.174",
     "puppeteer-core": "^24.37.5",
     "react": "19.2.0",
     "react-day-picker": "9.8.0",
     "react-dom": "19.2.0",
     "react-hook-form": "^7.60.0",
+    "react-is": "19.2.4",
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.4",
     "resend": "^6.5.2",
@@ -96,5 +103,8 @@
     "tw-animate-css": "1.3.3",
     "typescript": "^5",
     "typescript-eslint": "^8.58.0"
+  },
+  "overrides": {
+    "react-is": "19.2.4"
   }
 }

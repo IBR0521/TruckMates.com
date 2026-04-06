@@ -2,6 +2,36 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { mapLegacyRole } from '@/lib/roles'
 
+/** Avoid hanging forever when Supabase is unreachable or misconfigured (browser spinner on /dashboard/*). */
+const SUPABASE_MIDDLEWARE_FETCH_MS = 12_000
+
+function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> {
+  const combined = new AbortController()
+  const t = setTimeout(() => combined.abort(), SUPABASE_MIDDLEWARE_FETCH_MS)
+  const userSignal = init?.signal
+  if (userSignal) {
+    if (userSignal.aborted) {
+      clearTimeout(t)
+      return Promise.reject(new DOMException('Aborted', 'AbortError'))
+    }
+    userSignal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(t)
+        combined.abort()
+      },
+      { once: true }
+    )
+  }
+  return fetch(input, {
+    ...init,
+    signal: combined.signal,
+  }).finally(() => clearTimeout(t))
+}
+
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
@@ -29,6 +59,7 @@ export async function middleware(request: NextRequest) {
     let response = NextResponse.next({ request })
 
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      global: { fetch: fetchWithTimeout },
       cookies: {
         getAll() {
           return request.cookies.getAll()

@@ -29,6 +29,7 @@ import {
   Plus
 } from "lucide-react"
 import { getELDEvents, resolveELDEvent } from "@/app/actions/eld"
+import { getViolationRepeatOffendersLast30Days } from "@/app/actions/eld-advanced"
 import { getDrivers } from "@/app/actions/drivers"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -36,6 +37,9 @@ import Link from "next/link"
 export default function ELDViolationsPage() {
   const [violations, setViolations] = useState<any[]>([])
   const [drivers, setDrivers] = useState<any[]>([])
+  const [repeatOffenders, setRepeatOffenders] = useState<
+    { driverId: string; driverName: string; count: number }[]
+  >([])
   const [isLoading, setIsLoading] = useState(true)
   const [showResolveDialog, setShowResolveDialog] = useState(false)
   const [selectedViolation, setSelectedViolation] = useState<any>(null)
@@ -50,6 +54,19 @@ export default function ELDViolationsPage() {
 
   useEffect(() => {
     loadData()
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadRepeat() {
+      const res = await getViolationRepeatOffendersLast30Days()
+      if (cancelled) return
+      if (res.data) setRepeatOffenders(res.data)
+    }
+    void loadRepeat()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   // Use primitive deps so Radix Select / setFilters identity changes cannot retrigger an infinite load loop.
@@ -174,6 +191,36 @@ export default function ELDViolationsPage() {
       {/* Content */}
       <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
+          {repeatOffenders.length > 0 && (
+            <Card className="border-border bg-card p-4 md:p-6">
+              <h2 className="mb-1 text-lg font-semibold text-foreground">Repeat offenders (30 days)</h2>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Drivers with two or more HOS violation events in the last 30 days — review patterns before they escalate.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {repeatOffenders.map((r) => (
+                  <button
+                    key={r.driverId}
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-left text-sm transition hover:bg-muted/70"
+                    onClick={() =>
+                      setFilters((f) => ({
+                        ...f,
+                        driver_id: r.driverId,
+                        status: "all",
+                        start_date: "",
+                        end_date: "",
+                      }))
+                    }
+                  >
+                    <span className="font-medium text-foreground">{r.driverName}</span>
+                    <span className="tabular-nums text-muted-foreground">{r.count} violations</span>
+                  </button>
+                ))}
+              </div>
+            </Card>
+          )}
+
           {/* Filters */}
           <Card className="p-4 bg-card border-border">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">

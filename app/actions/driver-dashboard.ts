@@ -8,7 +8,10 @@ import { mapLegacyRole } from "@/lib/roles"
 import { ensureDriverIdForUser } from "@/lib/eld/ensure-driver"
 import { calendarDateYmdLocal } from "@/lib/eld/hos-calendar-date"
 import { calculateRemainingHOS } from "@/app/actions/eld-advanced"
-import type { EldLogLike } from "@/lib/hos/compute-daily-remaining"
+import {
+  computeDailyRemainingFromEldLogs,
+  type EldLogLike,
+} from "@/lib/hos/compute-daily-remaining"
 import type {
   DriverDashboardSnapshot,
   DriverHosSeverity,
@@ -17,6 +20,20 @@ import type {
 const ELD_LOGS_MINIMAL = "id, log_type, start_time, end_time, duration_minutes, log_date"
 
 const ACTIVE_LOAD_STATUSES = ["draft", "pending", "scheduled", "in_transit"] as const
+
+const LOG_DATE_YMD_RE = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Prefer the browser's calendar day (passed from client) for `log_date` / DVIR "today".
+ * Server-only `calendarDateYmdLocal(new Date())` often follows UTC on hosts (e.g. Vercel), which
+ * can disagree with the driver's local day and leave dashboard HOS empty while ELD shows logs.
+ */
+function resolveDriverLogDateYmd(localLogDateYmd: string | undefined): string {
+  if (localLogDateYmd && LOG_DATE_YMD_RE.test(localLogDateYmd)) {
+    return localLogDateYmd
+  }
+  return calendarDateYmdLocal(new Date())
+}
 
 function hoursFromMinutes(totalMinutes: number): number {
   return Math.round((totalMinutes / 60) * 100) / 100
@@ -62,7 +79,10 @@ function hosSeverity(args: {
  * Ensures a `public.drivers` row exists for this user (same as mobile ELD / getDrivers reconcile):
  * links orphan rows by email or inserts — RLS often blocks drivers from inserting themselves, so we use the admin client.
  */
-export async function getDriverDashboardSnapshot(): Promise<{
+export async function getDriverDashboardSnapshot(opts?: {
+  /** Driver's local calendar YYYY-MM-DD (from `calendarDateYmdLocal` in the browser). */
+  localLogDateYmd?: string
+}): Promise<{
   data: DriverDashboardSnapshot | null
   error: string | null
 }> {
@@ -124,7 +144,7 @@ export async function getDriverDashboardSnapshot(): Promise<{
     }
   }
 
-  const today = calendarDateYmdLocal(new Date())
+  const today = resolveDriverLogDateYmd(opts?.localLogDateYmd)
 
   const emptyDvir = {
     preTripCompletedToday: false,
@@ -221,7 +241,33 @@ export async function getDriverDashboardSnapshot(): Promise<{
     eldEventsListQuery,
   ])
 
-  const hosData = hosResult.data
+  // If calculateRemainingHOS errors (RLS/schema drift), mirror DriverELDPage: derive clocks from today's logs.
+  let hosData = hosResult.data
+  if (hosResult.error || !hosData) {
+    const { data: dayLogs, error: dayLogsError } = await supabase
+      .from("eld_logs")
+      .select("log_type, start_time, end_time, duration_minutes, log_date")
+      .eq("driver_id", driverId)
+      .eq("company_id", ctx.companyId)
+      .eq("log_date", today)
+      .order("start_time", { ascending: true })
+      .limit(500)
+
+    if (!dayLogsError) {
+      const computed = computeDailyRemainingFromEldLogs((dayLogs || []) as EldLogLike[], Date.now())
+      hosData = {
+        drivingHours: computed.drivingHours,
+        onDutyHours: computed.onDutyHours,
+        offDutyHours: computed.offDutyHours,
+        remainingDriving: computed.remainingDriving,
+        remainingOnDuty: computed.remainingOnDuty,
+        needsBreak: computed.needsBreak,
+        violations: computed.violations,
+        canDrive: computed.canDrive,
+      }
+    }
+  }
+
   const mergedViolations = [...(hosData?.violations || [])]
   const weekLogs = (weekLogsResult.data || []) as EldLogLike[]
   const weeklyOnDutyHours = hoursFromMinutes(sumOnDutyMinutesFromLogs(weekLogs))
