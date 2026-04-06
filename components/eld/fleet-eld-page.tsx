@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import ELDDevicesPage from "@/app/dashboard/eld/devices/page"
 import ELDHealthPage from "@/app/dashboard/eld/health/page"
 import ELDInsightsPage from "@/app/dashboard/eld/insights/page"
-import ELDLogsPage from "@/app/dashboard/eld/logs/page"
+import { EldLogsTab } from "@/components/eld/eld-logs-tab"
 import ELDViolationsPage from "@/app/dashboard/eld/violations/page"
 import { FleetHosDashboard } from "@/components/eld/fleet-hos-dashboard"
 
@@ -78,8 +78,8 @@ export function FleetEldPage() {
             <div className="border-b border-border bg-card px-4 py-4 md:px-8">
               <h1 className="text-2xl font-bold text-foreground">ELD Service</h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                Live fleet HOS on the Overview tab — switch tabs above for devices, logs, violations, health, and
-                insights.
+                Overview shows driver HOS only. Device hardware lives on the Devices tab; the 24-hour log grid is on
+                the Logs tab.
               </p>
             </div>
 
@@ -115,7 +115,7 @@ export function FleetEldPage() {
         </TabsContent>
         <TabsContent value="logs">
           <div className="w-full bg-background">
-            <ELDLogsPage />
+            <EldLogsTab embeddedInEldShell />
           </div>
         </TabsContent>
         <TabsContent value="violations">

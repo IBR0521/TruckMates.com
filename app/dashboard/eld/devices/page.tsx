@@ -51,25 +51,56 @@ import { toast } from "sonner"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 
-function eldSyncDot(lastSyncAt: string | null | undefined) {
+function eldSyncStatus(lastSyncAt: string | null | undefined) {
   if (lastSyncAt == null || lastSyncAt === "") {
-    return { cls: "bg-red-500", title: "Never synced" }
+    return {
+      dotCls: "bg-red-500",
+      textCls: "text-red-600 dark:text-red-400",
+      title: "Never synced",
+      line: "Never synced",
+    }
   }
   const t = new Date(lastSyncAt).getTime()
   if (!Number.isFinite(t)) {
-    return { cls: "bg-red-500", title: "Invalid sync time" }
+    return {
+      dotCls: "bg-red-500",
+      textCls: "text-red-600 dark:text-red-400",
+      title: "Invalid sync time",
+      line: "Invalid sync time",
+    }
   }
   const ageMin = (Date.now() - t) / 60000
+  const ts = new Date(lastSyncAt).toLocaleString()
   if (ageMin < 0) {
-    return { cls: "bg-emerald-500", title: "Recently synced" }
+    return {
+      dotCls: "bg-emerald-500",
+      textCls: "text-emerald-600 dark:text-emerald-400",
+      title: "Recently synced",
+      line: ts,
+    }
   }
   if (ageMin < 15) {
-    return { cls: "bg-emerald-500", title: `Synced ${Math.max(0, Math.round(ageMin))} min ago` }
+    return {
+      dotCls: "bg-emerald-500",
+      textCls: "text-emerald-600 dark:text-emerald-400",
+      title: `Synced ${Math.max(0, Math.round(ageMin))} min ago`,
+      line: `${ts} · fresh`,
+    }
   }
   if (ageMin < 120) {
-    return { cls: "bg-amber-400", title: `Last sync ${Math.round(ageMin)} min ago` }
+    return {
+      dotCls: "bg-amber-400",
+      textCls: "text-amber-700 dark:text-amber-300",
+      title: `Last sync ${Math.round(ageMin)} min ago`,
+      line: `${ts} · check connection`,
+    }
   }
-  return { cls: "bg-red-500", title: `Stale — ${Math.round(ageMin / 60)}h since sync` }
+  return {
+    dotCls: "bg-red-500",
+    textCls: "text-red-600 dark:text-red-400",
+    title: `Stale — ${Math.round(ageMin / 60)}h since sync`,
+    line: `${ts} · stale`,
+  }
 }
 
 export default function ELDDevicesPage() {
@@ -285,7 +316,7 @@ export default function ELDDevicesPage() {
           {/* Devices Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredDevices.map((device) => {
-              const sync = eldSyncDot(device.last_sync_at)
+              const sync = eldSyncStatus(device.last_sync_at)
               return (
               <Card key={device.id} className="p-6 bg-card border-border">
                 <div className="flex items-start justify-between mb-4">
@@ -296,7 +327,7 @@ export default function ELDDevicesPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span
-                          className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full", sync.cls)}
+                          className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full", sync.dotCls)}
                           title={sync.title}
                           aria-hidden
                         />
@@ -326,11 +357,10 @@ export default function ELDDevicesPage() {
                       <span>{device.trucks.truck_number}</span>
                     </div>
                   )}
-                  {device.last_sync_at && (
-                    <p className="text-xs text-muted-foreground">
-                      Last sync: {new Date(device.last_sync_at).toLocaleString()}
-                    </p>
-                  )}
+                  <p className={cn("text-xs font-medium", sync.textCls)} title={sync.title}>
+                    <span className="text-muted-foreground font-normal">Last sync: </span>
+                    {sync.line}
+                  </p>
                 </div>
 
                 <div className="flex gap-2">
@@ -362,7 +392,8 @@ export default function ELDDevicesPage() {
                   </Button>
                 </div>
               </Card>
-            )})}
+              )
+            })}
           </div>
 
           {filteredDevices.length === 0 && (

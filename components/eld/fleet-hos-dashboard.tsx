@@ -133,7 +133,8 @@ export function FleetHosDashboard() {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Fleet HOS — right now</h2>
           <p className="text-xs text-muted-foreground">
-            Today&apos;s clocks and duty from ELD logs. Sorted with tightest drive time first by default.
+            Driver-level status from today&apos;s logs (not the device hardware list). Sorted with tightest drive
+            time first. Open the Devices tab to manage ELD hardware.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
