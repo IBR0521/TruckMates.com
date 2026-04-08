@@ -2,14 +2,19 @@
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Plus, Download, Eye, DollarSign } from "lucide-react"
+import { Plus, Download, Eye, DollarSign, CheckCircle2, UserCheck } from "lucide-react"
 import { exportToExcel } from "@/lib/export-utils"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { useState, useEffect } from "react"
-import { getSettlements, deleteSettlement } from "@/app/actions/accounting"
+import { useState, useEffect, useMemo } from "react"
+import { approveSettlementAsDriver, getSettlements, deleteSettlement, markSettlementPaid } from "@/app/actions/accounting"
 import { getDrivers } from "@/app/actions/drivers"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { getCurrentUser } from "@/lib/auth/server"
+import { mapLegacyRole } from "@/lib/roles"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +32,11 @@ export default function SettlementsPage() {
   const [drivers, setDrivers] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [payingId, setPayingId] = useState<string | null>(null)
+  const [selectedDriver, setSelectedDriver] = useState<string>("all")
+  const [startDate, setStartDate] = useState<string>("")
+  const [endDate, setEndDate] = useState<string>("")
+  const [isDriverUser, setIsDriverUser] = useState(false)
 
   const loadSettlements = async () => {
     setIsLoading(true)
@@ -50,11 +60,52 @@ export default function SettlementsPage() {
 
   useEffect(() => {
     loadSettlements()
+    void loadUserRole()
   }, [])
+
+  const loadUserRole = async () => {
+    const userResult = await getCurrentUser()
+    if (!userResult.error && userResult.data) {
+      setIsDriverUser(mapLegacyRole(userResult.data.role) === "driver")
+    }
+  }
+
+  const filteredSettlements = useMemo(() => {
+    return settlements.filter((settlement) => {
+      const driverMatch = selectedDriver === "all" || settlement.driver_id === selectedDriver
+      const inStart = !startDate || (settlement.period_start && settlement.period_start >= startDate)
+      const inEnd = !endDate || (settlement.period_end && settlement.period_end <= endDate)
+      return driverMatch && inStart && inEnd
+    })
+  }, [settlements, selectedDriver, startDate, endDate])
+
+  const handleMarkPaid = async (id: string, paymentMethod?: string) => {
+    setPayingId(id)
+    const result = await markSettlementPaid(id, paymentMethod)
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success("Settlement marked as paid")
+      await loadSettlements()
+    }
+    setPayingId(null)
+  }
+
+  const handleDriverApprove = async (id: string) => {
+    setPayingId(id)
+    const result = await approveSettlementAsDriver(id, "web_app")
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success("Settlement approved")
+      await loadSettlements()
+    }
+    setPayingId(null)
+  }
 
   const handleExport = () => {
     try {
-      const exportData = settlements.map(({ id, company_id, driver_id, loads, created_at, updated_at, ...rest }) => rest)
+      const exportData = filteredSettlements.map(({ id, company_id, driver_id, loads, created_at, updated_at, ...rest }) => rest)
       exportToExcel(exportData, "settlements")
       toast.success("Settlements exported successfully")
     } catch (error) {
@@ -108,20 +159,49 @@ export default function SettlementsPage() {
             <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Total Paid</p>
               <p className="text-3xl font-bold text-green-400">
-                ${settlements.filter(s => s.status === "paid").reduce((sum, s) => sum + (parseFloat(s.net_pay) || 0), 0).toFixed(2)}
+                ${filteredSettlements.filter(s => s.status === "paid").reduce((sum, s) => sum + (parseFloat(s.net_pay) || 0), 0).toFixed(2)}
               </p>
             </Card>
             <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Pending Payments</p>
               <p className="text-3xl font-bold text-yellow-400">
-                ${settlements.filter(s => s.status === "pending").reduce((sum, s) => sum + (parseFloat(s.net_pay) || 0), 0).toFixed(2)}
+                ${filteredSettlements.filter(s => s.status === "pending").reduce((sum, s) => sum + (parseFloat(s.net_pay) || 0), 0).toFixed(2)}
               </p>
             </Card>
             <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Total Settlements</p>
-              <p className="text-3xl font-bold text-foreground">{settlements.length}</p>
+              <p className="text-3xl font-bold text-foreground">{filteredSettlements.length}</p>
             </Card>
           </div>
+
+          <Card className="border border-border/50 p-4 md:p-6">
+            <div className="grid md:grid-cols-3 gap-4">
+              <div>
+                <Label className="mb-2 block">Driver</Label>
+                <Select value={selectedDriver} onValueChange={setSelectedDriver}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All drivers" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Drivers</SelectItem>
+                    {drivers.map((driver) => (
+                      <SelectItem key={driver.id} value={driver.id}>
+                        {driver.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="mb-2 block">Period Start From</Label>
+                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </div>
+              <div>
+                <Label className="mb-2 block">Period End To</Label>
+                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
+            </div>
+          </Card>
 
           {/* Settlements Table */}
           {isLoading ? (
@@ -130,7 +210,7 @@ export default function SettlementsPage() {
                 <p className="text-muted-foreground">Loading settlements...</p>
               </div>
             </Card>
-          ) : settlements.length === 0 ? (
+          ) : filteredSettlements.length === 0 ? (
             <Card className="border border-border/50 p-8">
               <div className="text-center py-12">
                 <DollarSign className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
@@ -162,7 +242,7 @@ export default function SettlementsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {settlements.map((settlement) => {
+                      {filteredSettlements.map((settlement) => {
                         const driver = drivers.find((d) => d.id === settlement.driver_id)
                         return (
                           <tr key={settlement.id} className="border-b border-border hover:bg-secondary/20 transition">
@@ -188,6 +268,28 @@ export default function SettlementsPage() {
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-2">
+                                {(settlement.status || "").toLowerCase() !== "paid" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={payingId === settlement.id}
+                                    onClick={() => handleMarkPaid(settlement.id, settlement.payment_method)}
+                                  >
+                                    <CheckCircle2 className="w-4 h-4 mr-1" />
+                                    {payingId === settlement.id ? "Saving..." : "Mark Paid"}
+                                  </Button>
+                                )}
+                                {isDriverUser && !settlement.driver_approved && (settlement.status || "").toLowerCase() !== "cancelled" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={payingId === settlement.id}
+                                    onClick={() => handleDriverApprove(settlement.id)}
+                                  >
+                                    <UserCheck className="w-4 h-4 mr-1" />
+                                    {payingId === settlement.id ? "Saving..." : "Approve"}
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -208,7 +310,7 @@ export default function SettlementsPage() {
 
               {/* Mobile: Cards */}
               <div className="md:hidden space-y-4">
-                {settlements.map((settlement) => {
+                {filteredSettlements.map((settlement) => {
                   const driver = drivers.find((d) => d.id === settlement.driver_id)
                   return (
                     <Card key={settlement.id} className="border border-border/50 p-4">
@@ -249,15 +351,41 @@ export default function SettlementsPage() {
                         </div>
 
                         <div className="pt-2 border-t border-border/30">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => router.push(`/dashboard/accounting/settlements/${settlement.id}`)}
-                          >
-                            <Eye className="w-4 h-4 mr-2" />
-                            View Details
-                          </Button>
+                          <div className="flex gap-2">
+                            {(settlement.status || "").toLowerCase() !== "paid" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                                disabled={payingId === settlement.id}
+                                onClick={() => handleMarkPaid(settlement.id, settlement.payment_method)}
+                              >
+                                <CheckCircle2 className="w-4 h-4 mr-2" />
+                                {payingId === settlement.id ? "Saving..." : "Mark Paid"}
+                              </Button>
+                            )}
+                            {isDriverUser && !settlement.driver_approved && (settlement.status || "").toLowerCase() !== "cancelled" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                                disabled={payingId === settlement.id}
+                                onClick={() => handleDriverApprove(settlement.id)}
+                              >
+                                <UserCheck className="w-4 h-4 mr-2" />
+                                {payingId === settlement.id ? "Saving..." : "Approve"}
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => router.push(`/dashboard/accounting/settlements/${settlement.id}`)}
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              View Details
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </Card>

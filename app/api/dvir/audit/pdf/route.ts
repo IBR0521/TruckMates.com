@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
 
       try {
         const page = await browser.newPage()
-        await page.setContent(htmlResult.html, { waitUntil: "networkidle0" })
+        await page.setContent(htmlResult.html, { waitUntil: "load" })
 
         const pdfBuffer = await page.pdf({
           format: "Letter",
@@ -114,10 +114,14 @@ export async function GET(req: NextRequest) {
       }
     } catch (error: unknown) {
       console.error("[DVIR Audit PDF] Puppeteer error:", error)
-      return NextResponse.json(
-        { error: errorMessage(error, "Failed to generate DVIR audit PDF") },
-        { status: 500 }
-      )
+      // Prefer a usable HTML report over a hard 500 when Chromium/Puppeteer fails (common in local dev).
+      return new NextResponse(htmlResult.html, {
+        headers: {
+          "Content-Type": "text/html",
+          "Content-Disposition": `inline; filename="dvir-audit-report.html"`,
+          "X-DVIR-Audit-PDF-Fallback": "puppeteer-error",
+        },
+      })
     }
   } catch (error: unknown) {
     console.error("[DVIR Audit PDF] Error:", error)

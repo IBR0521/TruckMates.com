@@ -16,6 +16,7 @@ import {
   MapPin,
   Settings as SettingsIcon,
   CreditCard,
+  DollarSign,
   Globe,
   Lock,
   Eye,
@@ -388,6 +389,26 @@ export default function SettingsPage() {
                   </Link>
                 </div>
               </div>
+            </Card>
+          )}
+
+          {isManager && (
+            <Card className="border-border p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <CreditCard className="w-5 h-5 text-primary" />
+                  <h2 className="text-xl font-bold text-foreground">Driver Pay Rules</h2>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Configure per-mile, percentage, flat, or hybrid pay rules for each driver.
+              </p>
+              <Link href="/dashboard/settings/pay-rules">
+                <Button>
+                  <DollarSign className="w-4 h-4 mr-2" />
+                  Manage Pay Rules
+                </Button>
+              </Link>
             </Card>
           )}
 

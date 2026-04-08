@@ -7,6 +7,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
 import { validatePricingData, validateNonNegativeNumber, sanitizeString, validateDate, validateRequiredString } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+import { mapLegacyRole } from "@/lib/roles"
 
 export async function getInvoices(filters?: {
   load_id?: string
@@ -177,6 +178,154 @@ export async function getSettlements() {
   } catch (error: unknown) {
     Sentry.captureException(error)
     return { error: errorMessage(error, "An unexpected error occurred"), data: null }
+  }
+}
+
+export async function getSettlement(id: string) {
+  try {
+    const supabase = await createClient()
+
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
+
+    const { data: settlement, error } = await supabase
+      .from("settlements")
+      .select(`
+        id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, net_pay, status, paid_date, payment_method, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at,
+        drivers:driver_id (
+          id,
+          name
+        )
+      `)
+      .eq("id", id)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+
+    if (error || !settlement) {
+      return { error: error?.message || "Settlement not found", data: null }
+    }
+
+    return { data: settlement, error: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
+  }
+}
+
+export async function markSettlementPaid(id: string, paymentMethod?: string) {
+  try {
+    const supabase = await createClient()
+
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
+
+    const permissionCheck = await checkEditPermission("settlements")
+    if (!permissionCheck.allowed) {
+      return { error: permissionCheck.error || "You don't have permission to update settlements", data: null }
+    }
+
+    const updateData: Record<string, any> = {
+      status: "paid",
+      paid_date: new Date().toISOString(),
+    }
+    if (paymentMethod) {
+      updateData.payment_method = sanitizeString(paymentMethod, 50)
+    }
+
+    const { data, error } = await supabase
+      .from("settlements")
+      .update(updateData)
+      .eq("id", id)
+      .eq("company_id", ctx.companyId)
+      .neq("status", "paid")
+      .select("id, status, paid_date, payment_method")
+      .maybeSingle()
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+    if (!data) {
+      return { error: "Settlement is already paid or not found", data: null }
+    }
+
+    revalidatePath("/dashboard/accounting/settlements")
+    revalidatePath(`/dashboard/accounting/settlements/${id}`)
+    return { data, error: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: errorMessage(error, "Failed to mark settlement as paid"), data: null }
+  }
+}
+
+export async function approveSettlementAsDriver(settlementId: string, approvalMethod: "web_app" | "mobile_app" | "email" | "sms" = "web_app") {
+  try {
+    const supabase = await createClient()
+
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId || !ctx.userId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
+
+    if (!ctx.user || mapLegacyRole(ctx.user.role) !== "driver") {
+      return { error: "Only driver accounts can approve settlements", data: null }
+    }
+
+    const { data: driver, error: driverError } = await supabase
+      .from("drivers")
+      .select("id")
+      .eq("user_id", ctx.userId)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+
+    if (driverError || !driver) {
+      return { error: "Driver profile not found", data: null }
+    }
+
+    const { data: settlement, error: settlementError } = await supabase
+      .from("settlements")
+      .select("id, status, driver_approved")
+      .eq("id", settlementId)
+      .eq("company_id", ctx.companyId)
+      .eq("driver_id", driver.id)
+      .maybeSingle()
+
+    if (settlementError || !settlement) {
+      return { error: "Settlement not found", data: null }
+    }
+    if (settlement.driver_approved) {
+      return { error: "Settlement already approved", data: null }
+    }
+    if (settlement.status === "cancelled") {
+      return { error: "Cannot approve a cancelled settlement", data: null }
+    }
+
+    const { data, error } = await supabase
+      .from("settlements")
+      .update({
+        driver_approved: true,
+        driver_approved_at: new Date().toISOString(),
+        driver_approval_method: approvalMethod,
+      })
+      .eq("id", settlementId)
+      .eq("company_id", ctx.companyId)
+      .eq("driver_id", driver.id)
+      .select("id, driver_approved, driver_approved_at, driver_approval_method")
+      .maybeSingle()
+
+    if (error || !data) {
+      return { error: error?.message || "Failed to approve settlement", data: null }
+    }
+
+    revalidatePath("/dashboard/accounting/settlements")
+    revalidatePath(`/dashboard/accounting/settlements/${settlementId}`)
+    return { data, error: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: errorMessage(error, "Failed to approve settlement"), data: null }
   }
 }
 

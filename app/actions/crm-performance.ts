@@ -45,6 +45,11 @@ export interface VendorPerformanceMetrics {
   transactions_per_month: number
 }
 
+export interface CRMRevenueSnapshot {
+  this_month_revenue: number
+  outstanding_invoices: number
+}
+
 /**
  * Get performance metrics for all customers
  */
@@ -469,6 +474,125 @@ export async function getRelationshipInsights(): Promise<{
     }
   } catch (error: unknown) {
     return { error: errorMessage(error, "Failed to get relationship insights"), data: null }
+  }
+}
+
+/**
+ * Revenue snapshot for CRM dashboard
+ */
+export async function getCRMRevenueSnapshot(): Promise<{ data: CRMRevenueSnapshot | null; error: string | null }> {
+  try {
+    const supabase = await createClient()
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
+
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
+
+    const { data: monthInvoices, error: monthError } = await supabase
+      .from("invoices")
+      .select("amount, issue_date")
+      .eq("company_id", ctx.companyId)
+      .gte("issue_date", startOfMonth)
+      .lte("issue_date", endOfMonth)
+      .limit(5000)
+
+    if (monthError) {
+      return { error: monthError.message, data: null }
+    }
+
+    const { data: outstandingInvoices, error: outstandingError } = await supabase
+      .from("invoices")
+      .select("amount, status")
+      .eq("company_id", ctx.companyId)
+      .in("status", ["pending", "sent", "overdue", "partial", "partially_paid"])
+      .limit(5000)
+
+    if (outstandingError) {
+      return { error: outstandingError.message, data: null }
+    }
+
+    const this_month_revenue =
+      (monthInvoices || []).reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0)
+    const outstanding_invoices =
+      (outstandingInvoices || []).reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0)
+
+    return {
+      data: {
+        this_month_revenue,
+        outstanding_invoices,
+      },
+      error: null,
+    }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to load CRM revenue snapshot"), data: null }
+  }
+}
+
+/**
+ * Customers with no recent loads (default 30 days)
+ */
+export async function getInactiveCustomers(days = 30): Promise<{
+  data: Array<{
+    customer_id: string
+    name: string
+    company_name: string | null
+    last_load_date: string | null
+    days_inactive: number
+    total_revenue: number
+    total_loads: number
+  }> | null
+  error: string | null
+}> {
+  try {
+    const supabase = await createClient()
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
+
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - days)
+
+    const { data, error } = await supabase
+      .from("crm_customer_performance")
+      .select("customer_id, name, company_name, last_load_date, total_revenue, total_loads, status")
+      .eq("company_id", ctx.companyId)
+      .eq("status", "active")
+      .order("last_load_date", { ascending: true, nullsFirst: true })
+      .limit(1000)
+
+    if (error) {
+      if (error.message?.includes("does not exist") || error.code === "42P01" || error.message?.includes("schema cache")) {
+        return { data: [], error: null }
+      }
+      return { error: error.message, data: null }
+    }
+
+    const now = new Date().getTime()
+    const inactive = (data || [])
+      .filter((c: any) => !c.last_load_date || new Date(c.last_load_date).getTime() < cutoff.getTime())
+      .map((c: any) => {
+        const lastLoadMs = c.last_load_date ? new Date(c.last_load_date).getTime() : 0
+        const days_inactive = c.last_load_date ? Math.floor((now - lastLoadMs) / (1000 * 60 * 60 * 24)) : days
+        return {
+          customer_id: c.customer_id,
+          name: c.name,
+          company_name: c.company_name,
+          last_load_date: c.last_load_date,
+          days_inactive,
+          total_revenue: Number(c.total_revenue || 0),
+          total_loads: Number(c.total_loads || 0),
+        }
+      })
+      .sort((a: { days_inactive: number }, b: { days_inactive: number }) => b.days_inactive - a.days_inactive)
+
+    return { data: inactive, error: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "Failed to load inactive customers"), data: null }
   }
 }
 
