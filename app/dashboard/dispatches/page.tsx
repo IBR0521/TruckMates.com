@@ -340,11 +340,32 @@ export default function DispatchesPage() {
     return { label: "Available", color: "text-green-500" }
   }
 
+  async function maybeWarnPreTripMissing(truckId: string | null | undefined) {
+    if (!truckId) return
+    try {
+      const { checkPreTripDVIRRequired } = await import("@/app/actions/dvir-enhanced")
+      const res = await checkPreTripDVIRRequired(truckId)
+      if (res.error) return
+      if (res.data?.required) {
+        toast.warning(
+          "This truck has no passing pre-trip DVIR logged for today. Confirm safety before dispatch.",
+          { duration: 8000 },
+        )
+      }
+    } catch {
+      // Non-blocking
+    }
+  }
+
   async function handleAssignLoad(loadId: string, driverId?: string, truckId?: string) {
     if (!driverId && !truckId) {
       toast.error("Please select a driver or truck")
       return
     }
+
+    const load = unassignedLoads.find((l) => l.id === loadId)
+    const effectiveTruckId = truckId ?? load?.truck_id
+    await maybeWarnPreTripMissing(effectiveTruckId)
 
     setAssigning(`load-${loadId}`)
     try {
@@ -367,6 +388,10 @@ export default function DispatchesPage() {
       toast.error("Please select a driver or truck")
       return
     }
+
+    const route = unassignedRoutes.find((r) => r.id === routeId)
+    const effectiveTruckId = truckId ?? route?.truck_id
+    await maybeWarnPreTripMissing(effectiveTruckId)
 
     setAssigning(`route-${routeId}`)
     try {
@@ -413,6 +438,7 @@ export default function DispatchesPage() {
   }
 
   async function handleAssignFromNearby(loadId: string, driverId: string, truckId: string) {
+    await maybeWarnPreTripMissing(truckId)
     setAssigning(`load-${loadId}`)
     setNearbyDriversModal({ open: false, loadId: null, drivers: [] })
     try {

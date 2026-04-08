@@ -10,7 +10,10 @@ import { sendNotification } from "./notifications"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 
 const ROUTE_DETAIL_SELECT =
-  "id, company_id, name, origin, destination, distance, estimated_time, priority, status, driver_id, truck_id, waypoints, estimated_arrival, depot_name, depot_address, pre_route_time_minutes, post_route_time_minutes, route_start_time, route_departure_time, route_complete_time, route_type, scenario, notes, special_instructions, estimated_fuel_cost, estimated_toll_cost, total_estimated_cost, created_at, updated_at"
+  "id, company_id, name, origin, destination, distance, estimated_time, priority, status, driver_id, truck_id, waypoints, estimated_arrival, depot_name, depot_address, pre_route_time_minutes, post_route_time_minutes, route_start_time, route_departure_time, route_complete_time, route_type, scenario, notes, special_instructions, estimated_fuel_cost, estimated_toll_cost, total_estimated_cost, origin_coordinates, destination_coordinates, traffic_distance_meters, traffic_duration_minutes, created_at, updated_at"
+
+const ROUTE_LIST_SELECT =
+  "id, name, origin, destination, status, driver_id, truck_id, priority, created_at, updated_at, distance, estimated_time, estimated_fuel_cost, estimated_toll_cost, total_estimated_cost, origin_coordinates, destination_coordinates, traffic_distance_meters, traffic_duration_minutes"
 
 // Helper function to send notifications in background (non-blocking)
 async function sendNotificationsForRouteUpdate(routeData: any) {
@@ -75,7 +78,7 @@ export async function getRoutes(filters?: {
     // Build query with selective columns and pagination
     let query = supabase
       .from("routes")
-      .select("id, name, origin, destination, status, driver_id, truck_id, priority, created_at, updated_at", { count: "exact" })
+      .select(ROUTE_LIST_SELECT, { count: "exact" })
       .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
@@ -100,6 +103,49 @@ export async function getRoutes(filters?: {
     Sentry.captureException(error)
     const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
     return { error: message, data: null, count: 0 }
+  }
+}
+
+/** Loads linked to routes (loads.route_id). Used on the routes list for quick navigation. */
+export async function getLoadsByRouteIds(routeIds: string[]) {
+  try {
+    if (routeIds.length === 0) {
+      return { data: {} as Record<string, Array<{ id: string; shipment_number: string | null; status: string | null }>>, error: null }
+    }
+
+    const supabase = await createClient()
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
+
+    const { data: rows, error } = await supabase
+      .from("loads")
+      .select("id, route_id, shipment_number, status")
+      .eq("company_id", ctx.companyId)
+      .in("route_id", routeIds)
+
+    if (error) {
+      return { error: error.message, data: null }
+    }
+
+    const byRoute: Record<string, Array<{ id: string; shipment_number: string | null; status: string | null }>> = {}
+    for (const r of rows || []) {
+      const rid = r.route_id as string | null
+      if (!rid) continue
+      if (!byRoute[rid]) byRoute[rid] = []
+      byRoute[rid].push({
+        id: r.id as string,
+        shipment_number: (r.shipment_number as string | null) ?? null,
+        status: (r.status as string | null) ?? null,
+      })
+    }
+
+    return { data: byRoute, error: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
+    return { error: message, data: null }
   }
 }
 

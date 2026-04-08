@@ -5,6 +5,9 @@ import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import * as Sentry from "@sentry/nextjs"
+import { generateBOLPDFFile } from "./bol-pdf"
+import { getResendClient } from "./invoice-email"
+import { escapeHtml } from "@/lib/html-escape"
 
 // Get all BOLs
 export async function getBOLs(filters?: {
@@ -24,7 +27,13 @@ export async function getBOLs(filters?: {
     // V3-007 FIX: Replace select(*) with explicit columns and add LIMIT
     let query = supabase
       .from("bols")
-      .select("id, bol_number, load_id, template_id, shipper_name, consignee_name, carrier_name, pickup_date, delivery_date, freight_charges, status, created_at, updated_at")
+      .select(`
+        id, bol_number, load_id, template_id, shipper_name, consignee_name, carrier_name,
+        pickup_date, delivery_date, freight_charges, status, created_at, updated_at,
+        shipper_signature, driver_signature, consignee_signature,
+        pod_received_date, pod_received_by, pod_delivery_condition, special_instructions,
+        loads:load_id (id, shipment_number, contents)
+      `)
       .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
       .limit(1000)
@@ -74,7 +83,7 @@ export async function getBOL(id: string) {
     // V3-007 FIX: Replace select(*) with explicit columns
     const { data, error } = await supabase
       .from("bols")
-      .select("id, company_id, bol_number, load_id, template_id, shipper_name, shipper_address, shipper_city, shipper_state, shipper_zip, shipper_phone, shipper_email, consignee_name, consignee_address, consignee_city, consignee_state, consignee_zip, consignee_phone, consignee_email, carrier_name, carrier_mc_number, carrier_dot_number, pickup_date, delivery_date, freight_charges, payment_terms, special_instructions, shipper_signature, driver_signature, consignee_signature, status, created_at, updated_at, metadata")
+      .select("id, company_id, bol_number, load_id, template_id, shipper_name, shipper_address, shipper_city, shipper_state, shipper_zip, shipper_phone, shipper_email, consignee_name, consignee_address, consignee_city, consignee_state, consignee_zip, consignee_phone, consignee_email, carrier_name, carrier_mc_number, carrier_dot_number, pickup_date, delivery_date, freight_charges, payment_terms, special_instructions, shipper_signature, driver_signature, consignee_signature, status, pod_photos, pod_notes, pod_received_by, pod_received_date, pod_delivery_condition, created_at, updated_at")
       .eq("id", id)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
@@ -550,9 +559,44 @@ export async function updateBOLPOD(
       }
     }
 
+    let invoiceAutomation: {
+      invoiceId?: string
+      alreadyExists?: boolean
+      triggered?: boolean
+      error?: string | null
+    } | null = null
+
+    // Trigger invoice automation once POD is captured.
+    // This is idempotent: autoGenerateInvoiceOnPOD returns existing invoice if already created.
+    if (data && (data as any).load_id && ((data as any).pod_received_date || (data as any).pod_received_by)) {
+      try {
+        const { autoGenerateInvoiceOnPOD } = await import("./auto-invoice")
+        const invoiceResult = await autoGenerateInvoiceOnPOD((data as any).load_id)
+        if (invoiceResult.error) {
+          invoiceAutomation = {
+            triggered: true,
+            error: invoiceResult.error,
+          }
+        } else {
+          invoiceAutomation = {
+            triggered: true,
+            invoiceId: invoiceResult.data?.invoiceId,
+            alreadyExists: invoiceResult.data?.alreadyExists,
+            error: null,
+          }
+        }
+      } catch (error) {
+        Sentry.captureException(error)
+        invoiceAutomation = {
+          triggered: true,
+          error: errorMessage(error, "Invoice automation failed"),
+        }
+      }
+    }
+
     revalidatePath("/dashboard/bols")
     revalidatePath(`/dashboard/bols/${bolId}`)
-    return { data, error: null }
+    return { data: { ...(data as any), _invoice_automation: invoiceAutomation }, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
     return { error: errorMessage(error, "An unexpected error occurred"), data: null }
@@ -640,6 +684,188 @@ export async function createBOLTemplate(formData: {
   } catch (error: unknown) {
     Sentry.captureException(error)
     return { error: errorMessage(error, "An unexpected error occurred"), data: null }
+  }
+}
+
+export async function updateBOLStatus(bolId: string, status: "draft" | "sent" | "signed" | "delivered" | "completed") {
+  try {
+    const supabase = await createClient()
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
+
+    const { data, error } = await supabase
+      .from("bols")
+      .update({ status })
+      .eq("id", bolId)
+      .eq("company_id", ctx.companyId)
+      .select("id, status")
+      .single()
+
+    if (error) return { error: error.message, data: null }
+    revalidatePath("/dashboard/bols")
+    revalidatePath(`/dashboard/bols/${bolId}`)
+    return { data, error: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: errorMessage(error, "Failed to update BOL status"), data: null }
+  }
+}
+
+export async function getBOLStats() {
+  try {
+    const supabase = await createClient()
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
+    const today = new Date().toISOString().slice(0, 10)
+
+    const [{ count: total }, { count: sent }, { count: completed }, { data: awaitingRows }] = await Promise.all([
+      supabase.from("bols").select("id", { count: "exact", head: true }).eq("company_id", ctx.companyId),
+      supabase.from("bols").select("id", { count: "exact", head: true }).eq("company_id", ctx.companyId).eq("status", "sent"),
+      supabase.from("bols").select("id", { count: "exact", head: true }).eq("company_id", ctx.companyId).gte("updated_at", `${today}T00:00:00.000Z`).eq("status", "completed"),
+      supabase
+        .from("bols")
+        .select("id, status, shipper_signature, driver_signature, consignee_signature")
+        .eq("company_id", ctx.companyId)
+        .in("status", ["sent", "signed", "delivered"]),
+    ])
+
+    const awaitingSignature = (awaitingRows || []).filter(
+      (b: any) => !b.shipper_signature || !b.driver_signature || !b.consignee_signature
+    ).length
+
+    return {
+      data: {
+        total: total || 0,
+        awaiting_signature: awaitingSignature,
+        sent: sent || 0,
+        completed_today: completed || 0,
+      },
+      error: null,
+    }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: errorMessage(error, "Failed to load BOL stats"), data: null }
+  }
+}
+
+export async function sendBOLEmail(bolId: string, options?: { subject?: string; body?: string }) {
+  try {
+    const supabase = await createClient()
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null }
+
+    const { data: bol, error } = await supabase
+      .from("bols")
+      .select("id, bol_number, status, consignee_name, consignee_email")
+      .eq("id", bolId)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+
+    if (error || !bol) return { error: error?.message || "BOL not found", data: null }
+    if (!bol.consignee_email || !String(bol.consignee_email).includes("@")) {
+      return { error: "Consignee email is missing on this BOL", data: null }
+    }
+
+    const pdfResult = await generateBOLPDFFile(bolId)
+    if (pdfResult.error || !pdfResult.pdf) return { error: pdfResult.error || "Failed to generate PDF", data: null }
+
+    const resend = await getResendClient()
+    if (!resend) return { error: "Email service not configured", data: null }
+
+    const subject = options?.subject || `Bill of Lading ${bol.bol_number}`
+    const bodyText =
+      options?.body ||
+      `Hello ${bol.consignee_name || "Consignee"},\n\nPlease find attached Bill of Lading ${bol.bol_number}.\n\nThank you.`
+
+    const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
+    const emailResult = await resend.emails.send({
+      from: fromEmail,
+      to: [bol.consignee_email],
+      subject,
+      text: bodyText,
+      html: `<p>${escapeHtml(bodyText).replace(/\n/g, "<br>")}</p>`,
+      attachments: [
+        {
+          filename: `${bol.bol_number}.pdf`,
+          content: Buffer.from(pdfResult.pdf).toString("base64"),
+        },
+      ],
+    })
+
+    if (emailResult.error) return { error: emailResult.error.message || "Failed to send email", data: null }
+
+    if (bol.status === "draft") {
+      await supabase.from("bols").update({ status: "sent" }).eq("id", bolId).eq("company_id", ctx.companyId)
+    }
+    revalidatePath("/dashboard/bols")
+    revalidatePath(`/dashboard/bols/${bolId}`)
+    return { data: { sent: true }, error: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: errorMessage(error, "Failed to send BOL email"), data: null }
+  }
+}
+
+export async function markBOLPODReceived(bolId: string, receivedBy: string, condition: string, notes?: string) {
+  return updateBOLPOD(bolId, {
+    pod_received_by: receivedBy,
+    pod_received_date: new Date().toISOString(),
+    pod_delivery_condition: condition,
+    pod_notes: notes,
+  })
+}
+
+export async function updateBOLTemplate(id: string, formData: { name: string; description?: string; is_default?: boolean }) {
+  try {
+    const supabase = await createClient()
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
+
+    if (formData.is_default) {
+      await supabase.from("bol_templates").update({ is_default: false }).eq("company_id", ctx.companyId)
+    }
+
+    const { data, error } = await supabase
+      .from("bol_templates")
+      .update({
+        name: formData.name,
+        description: formData.description || null,
+        is_default: !!formData.is_default,
+      })
+      .eq("id", id)
+      .eq("company_id", ctx.companyId)
+      .select()
+      .single()
+    if (error) return { error: error.message, data: null }
+    revalidatePath("/dashboard/bols/templates")
+    return { data, error: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: errorMessage(error, "Failed to update template"), data: null }
+  }
+}
+
+export async function deleteBOLTemplate(id: string) {
+  try {
+    const supabase = await createClient()
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
+
+    const { error } = await supabase.from("bol_templates").delete().eq("id", id).eq("company_id", ctx.companyId)
+    if (error) return { error: error.message, data: null }
+    revalidatePath("/dashboard/bols/templates")
+    return { data: { deleted: true }, error: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: errorMessage(error, "Failed to delete template"), data: null }
   }
 }
 

@@ -20,6 +20,10 @@ import { getELDDevice, syncELDData } from "@/app/actions/eld"
 import { getELDLogs, getELDEvents } from "@/app/actions/eld"
 import { toast } from "sonner"
 import Link from "next/link"
+import {
+  EldDeviceSyncStatus,
+  getDeviceLastSyncAt,
+} from "@/components/eld/eld-device-sync-status"
 
 export default function ELDDeviceDetailsPage() {
   const params = useParams()
@@ -239,14 +243,10 @@ export default function ELDDeviceDetailsPage() {
                       </p>
                     </div>
                   )}
-                  {device.last_sync_at && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">Last Sync</p>
-                      <p className="font-medium">
-                        {new Date(device.last_sync_at).toLocaleString()}
-                      </p>
-                    </div>
-                  )}
+                  <div>
+                    <p className="mb-2 text-sm text-muted-foreground">Last sync</p>
+                    <EldDeviceSyncStatus lastSyncAt={getDeviceLastSyncAt(device)} />
+                  </div>
                 </div>
               </Card>
 

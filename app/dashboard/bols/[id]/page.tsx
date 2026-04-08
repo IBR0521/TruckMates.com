@@ -121,6 +121,31 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
     }
   }
 
+  const handleMarkPOD = async () => {
+    const receivedBy = window.prompt("POD received by (name)") || ""
+    if (!receivedBy.trim()) return
+    const condition = window.prompt("Delivery condition (e.g. good / damaged)") || "good"
+    const notes = window.prompt("POD notes (optional)") || undefined
+
+    const result = await (bolActions as any).markBOLPODReceived(id, receivedBy.trim(), condition.trim() || "good", notes)
+    if (result.error) {
+      toast.error(result.error)
+      return
+    }
+    toast.success("POD marked received")
+    const invoiceAutomation = result.data?._invoice_automation
+    if (invoiceAutomation?.triggered) {
+      if (invoiceAutomation.error) {
+        toast.warning(`Invoice automation: ${invoiceAutomation.error}`)
+      } else if (invoiceAutomation.alreadyExists) {
+        toast.info("Invoice already exists for this load")
+      } else if (invoiceAutomation.invoiceId) {
+        toast.success("Invoice auto-created from POD")
+      }
+    }
+    loadBOL()
+  }
+
   if (isLoading) {
     return (
       <div className="w-full">
@@ -169,6 +194,10 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
         </div>
         <div className="flex items-center gap-2">
           {getStatusBadge(bol.status)}
+          <Button variant="outline" size="sm" onClick={handleMarkPOD}>
+            <CheckCircle className="w-4 h-4 mr-2" />
+            Mark POD Received
+          </Button>
           <Button
             variant="outline"
             size="sm"

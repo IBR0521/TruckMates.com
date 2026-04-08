@@ -36,6 +36,47 @@ export async function getRouteStops(routeId: string) {
   }
 }
 
+/** One query: stop counts per route id (for list views). */
+export async function getRouteStopCounts(routeIds: string[]) {
+  try {
+    if (routeIds.length === 0) {
+      return { data: {} as Record<string, number>, error: null }
+    }
+
+    const supabase = await createClient()
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
+
+    const { data: rows, error } = await supabase
+      .from("route_stops")
+      .select("route_id")
+      .eq("company_id", ctx.companyId)
+      .in("route_id", routeIds)
+
+    if (error) {
+      if (error.code === "42P01" || error.message.includes("does not exist")) {
+        return { data: {}, error: null }
+      }
+      return { error: error.message, data: null }
+    }
+
+    const counts: Record<string, number> = {}
+    for (const id of routeIds) {
+      counts[id] = 0
+    }
+    for (const row of rows || []) {
+      const rid = row.route_id as string
+      counts[rid] = (counts[rid] || 0) + 1
+    }
+
+    return { data: counts, error: null }
+  } catch (error: unknown) {
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
+  }
+}
+
 // Create a route stop
 export async function createRouteStop(routeId: string, stopData: {
   stop_number: number

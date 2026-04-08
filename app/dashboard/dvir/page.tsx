@@ -12,6 +12,8 @@ import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import { getDVIRs, deleteDVIR, getDVIRStats } from "@/app/actions/dvir"
+import { getTrucksWithUnresolvedDVIRDefects } from "@/app/actions/dvir-enhanced"
+import { defectSeverityLabel, summarizeDefectSeverities } from "@/lib/dvir-defects"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +25,34 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+function DefectsListCell({ dvir }: { dvir: { defects_found?: boolean; defects?: unknown } }) {
+  const summary = summarizeDefectSeverities(dvir.defects)
+  if (!dvir.defects_found) {
+    return <span className="text-muted-foreground">None</span>
+  }
+  if (!summary) {
+    const n = Array.isArray(dvir.defects) ? dvir.defects.length : 0
+    return <span className="text-red-400 font-medium">{n} defect(s)</span>
+  }
+  const color =
+    summary.highest === "critical"
+      ? "bg-red-500"
+      : summary.highest === "major"
+        ? "bg-orange-500"
+        : summary.highest === "minor"
+          ? "bg-yellow-400"
+          : "bg-muted-foreground"
+  return (
+    <div className="flex items-start gap-2 max-w-[220px]">
+      <span className={`mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full ${color}`} aria-hidden />
+      <div className="min-w-0">
+        <p className="text-sm text-foreground leading-tight">{defectSeverityLabel(summary)}</p>
+        <p className="text-xs text-muted-foreground">{summary.total} item(s)</p>
+      </div>
+    </div>
+  )
+}
+
 export default function DVIRPage() {
   const router = useRouter()
   const [dvirRecords, setDvirRecords] = useState<any[]>([])
@@ -33,10 +63,20 @@ export default function DVIRPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState("all")
   const [stats, setStats] = useState<any>(null)
+  const [openDefectTrucks, setOpenDefectTrucks] = useState<
+    Array<{
+      truck_id: string
+      truck_number: string | null
+      dvir_count: number
+      defect_item_count: number
+      last_inspection_date: string | null
+      highest_severity: "critical" | "major" | "minor" | "other"
+    }>
+  >([])
 
   const loadDVIRs = async (filters?: { status?: string; inspection_type?: string; search?: string; offset?: number }) => {
     setIsLoading(true)
-    const [dvirResult, statsResult] = await Promise.all([
+    const [dvirResult, statsResult, trucksResult] = await Promise.all([
       getDVIRs({
         status: filters?.status !== "all" ? filters?.status : undefined,
         inspection_type: filters?.inspection_type !== "all" ? filters?.inspection_type : undefined,
@@ -44,6 +84,7 @@ export default function DVIRPage() {
         offset: filters?.offset || 0,
       }),
       getDVIRStats(),
+      getTrucksWithUnresolvedDVIRDefects(2),
     ])
     
     if (dvirResult.error) {
@@ -65,6 +106,12 @@ export default function DVIRPage() {
 
     if (statsResult.data) {
       setStats(statsResult.data)
+    }
+
+    if (trucksResult?.data) {
+      setOpenDefectTrucks(trucksResult.data)
+    } else {
+      setOpenDefectTrucks([])
     }
     
     setIsLoading(false)
@@ -191,6 +238,46 @@ export default function DVIRPage() {
             </div>
           )}
 
+          {openDefectTrucks.length > 0 && (
+            <Card className="border border-amber-500/30 bg-amber-500/5 p-4 md:p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="w-5 h-5 text-amber-500" />
+                <h2 className="text-lg font-semibold text-foreground">Trucks with unresolved defects (last 48h)</h2>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                These vehicles had DVIRs with defects not marked corrected. Review before dispatch.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-muted-foreground">
+                      <th className="py-2 pr-4">Truck</th>
+                      <th className="py-2 pr-4">Open DVIRs</th>
+                      <th className="py-2 pr-4">Defect items</th>
+                      <th className="py-2 pr-4">Highest</th>
+                      <th className="py-2">Last inspection</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {openDefectTrucks.map((row) => (
+                      <tr key={row.truck_id} className="border-b border-border/40">
+                        <td className="py-2 pr-4 font-medium text-foreground">{row.truck_number || row.truck_id.slice(0, 8)}</td>
+                        <td className="py-2 pr-4">{row.dvir_count}</td>
+                        <td className="py-2 pr-4">{row.defect_item_count}</td>
+                        <td className="py-2 pr-4 capitalize">{row.highest_severity}</td>
+                        <td className="py-2 text-muted-foreground">
+                          {row.last_inspection_date
+                            ? new Date(row.last_inspection_date).toLocaleString()
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
           {/* Filters */}
           <Card className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -299,13 +386,7 @@ export default function DVIRPage() {
                           <td className="px-6 py-4 text-foreground">{dvir.trucks?.truck_number || "N/A"}</td>
                           <td className="px-6 py-4">{getStatusBadge(dvir.status)}</td>
                           <td className="px-6 py-4">
-                            {dvir.defects_found ? (
-                              <span className="text-red-400 font-medium">
-                                {Array.isArray(dvir.defects) ? dvir.defects.length : 0} defect(s)
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">None</span>
-                            )}
+                            <DefectsListCell dvir={dvir} />
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
@@ -355,13 +436,11 @@ export default function DVIRPage() {
                       </div>
                       
                       <div className="pt-2 border-t border-border/30">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">Defects</span>
-                          <span className={dvir.defects_found ? "text-red-400 font-medium" : "text-muted-foreground"}>
-                            {dvir.defects_found
-                              ? `${Array.isArray(dvir.defects) ? dvir.defects.length : 0} found`
-                              : "None"}
-                          </span>
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-xs text-muted-foreground shrink-0">Defects</span>
+                          <div className="text-right min-w-0">
+                            <DefectsListCell dvir={dvir} />
+                          </div>
                         </div>
                       </div>
 

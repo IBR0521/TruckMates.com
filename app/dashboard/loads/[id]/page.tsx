@@ -492,18 +492,26 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
       backUrl="/dashboard/loads"
       editUrl={`/dashboard/loads/${id}/edit`}
       actions={
-        load.customer_id ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9"
-            onClick={handleShareTrackingLink}
-            disabled={isCreatingPortal}
-          >
-            <Share2 className="w-4 h-4 mr-2" />
-            {isCreatingPortal ? "Creating..." : "Share Tracking Link"}
-          </Button>
-        ) : null
+        <div className="flex items-center gap-2">
+          <Link href={`/dashboard/bols/create?loadId=${id}`}>
+            <Button variant="outline" size="sm" className="h-9">
+              <FileText className="w-4 h-4 mr-2" />
+              Create BOL
+            </Button>
+          </Link>
+          {load.customer_id ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              onClick={handleShareTrackingLink}
+              disabled={isCreatingPortal}
+            >
+              <Share2 className="w-4 h-4 mr-2" />
+              {isCreatingPortal ? "Creating..." : "Share Tracking Link"}
+            </Button>
+          ) : null}
+        </div>
       }
     >
       <div className="space-y-6">

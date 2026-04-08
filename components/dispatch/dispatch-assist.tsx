@@ -59,6 +59,20 @@ export function DispatchAssist({ loadId, onAssigned, onClose }: DispatchAssistPr
   }
 
   async function handleAssign(suggestion: DriverSuggestion) {
+    if (suggestion.truck_id) {
+      try {
+        const { checkPreTripDVIRRequired } = await import("@/app/actions/dvir-enhanced")
+        const res = await checkPreTripDVIRRequired(suggestion.truck_id)
+        if (!res.error && res.data?.required) {
+          toast.warning(
+            "This truck has no passing pre-trip DVIR logged for today. Confirm safety before dispatch.",
+            { duration: 8000 },
+          )
+        }
+      } catch {
+        // non-blocking
+      }
+    }
     setAssigning(suggestion.driver_id)
     try {
       const result = await quickAssignLoad(loadId, suggestion.driver_id, suggestion.truck_id)

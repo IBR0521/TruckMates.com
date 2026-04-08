@@ -39,12 +39,34 @@ export default function ReportsPage() {
       onValueChange={(value) => router.push(`/dashboard/reports?tab=${encodeURIComponent(value)}`)}
       className="w-full"
     >
-      <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-4">
-        <TabsTrigger value="analytics">Analytics</TabsTrigger>
-        <TabsTrigger value="revenue">Revenue</TabsTrigger>
-        <TabsTrigger value="profit-loss">P&amp;L</TabsTrigger>
-        <TabsTrigger value="driver-payments">Payments</TabsTrigger>
-      </TabsList>
+      <div className="mx-4 md:mx-8 mt-4 max-w-full overflow-x-auto pb-1 [scrollbar-width:thin]">
+        <TabsList className="inline-flex h-auto min-h-9 w-max max-w-none flex-nowrap items-stretch justify-start gap-0.5 rounded-lg p-[3px]">
+          <TabsTrigger className="shrink-0 flex-none px-3" value="analytics">
+            Analytics
+          </TabsTrigger>
+          <TabsTrigger className="shrink-0 flex-none px-3" value="revenue">
+            Revenue
+          </TabsTrigger>
+          <TabsTrigger className="shrink-0 flex-none px-3" value="profit-loss">
+            P&amp;L
+          </TabsTrigger>
+          <TabsTrigger className="shrink-0 flex-none px-3" value="driver-payments">
+            Payments
+          </TabsTrigger>
+          <TabsTrigger className="shrink-0 flex-none px-3" value="detention">
+            Detention
+          </TabsTrigger>
+          <TabsTrigger className="shrink-0 flex-none px-3" value="fuel">
+            Fuel
+          </TabsTrigger>
+          <TabsTrigger className="shrink-0 flex-none px-3" value="on-time-delivery">
+            On-Time
+          </TabsTrigger>
+          <TabsTrigger className="shrink-0 flex-none px-3" value="year-end">
+            Year-End Tax
+          </TabsTrigger>
+        </TabsList>
+      </div>
 
       <TabsContent value="analytics">
         <AnalyticsPage />
@@ -58,14 +80,6 @@ export default function ReportsPage() {
       <TabsContent value="driver-payments">
         <DriverPaymentsPage />
       </TabsContent>
-
-      {/* Second row of tabs (rest of the reports suite) */}
-      <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-4">
-        <TabsTrigger value="detention">Detention</TabsTrigger>
-        <TabsTrigger value="fuel">Fuel</TabsTrigger>
-        <TabsTrigger value="on-time-delivery">On-Time</TabsTrigger>
-        <TabsTrigger value="year-end">Year-End Tax</TabsTrigger>
-      </TabsList>
 
       <TabsContent value="detention">
         <DetentionPage />

@@ -50,58 +50,11 @@ import { getTrucks } from "@/app/actions/trucks"
 import { toast } from "sonner"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-
-function eldSyncStatus(lastSyncAt: string | null | undefined) {
-  if (lastSyncAt == null || lastSyncAt === "") {
-    return {
-      dotCls: "bg-red-500",
-      textCls: "text-red-600 dark:text-red-400",
-      title: "Never synced",
-      line: "Never synced",
-    }
-  }
-  const t = new Date(lastSyncAt).getTime()
-  if (!Number.isFinite(t)) {
-    return {
-      dotCls: "bg-red-500",
-      textCls: "text-red-600 dark:text-red-400",
-      title: "Invalid sync time",
-      line: "Invalid sync time",
-    }
-  }
-  const ageMin = (Date.now() - t) / 60000
-  const ts = new Date(lastSyncAt).toLocaleString()
-  if (ageMin < 0) {
-    return {
-      dotCls: "bg-emerald-500",
-      textCls: "text-emerald-600 dark:text-emerald-400",
-      title: "Recently synced",
-      line: ts,
-    }
-  }
-  if (ageMin < 15) {
-    return {
-      dotCls: "bg-emerald-500",
-      textCls: "text-emerald-600 dark:text-emerald-400",
-      title: `Synced ${Math.max(0, Math.round(ageMin))} min ago`,
-      line: `${ts} · fresh`,
-    }
-  }
-  if (ageMin < 120) {
-    return {
-      dotCls: "bg-amber-400",
-      textCls: "text-amber-700 dark:text-amber-300",
-      title: `Last sync ${Math.round(ageMin)} min ago`,
-      line: `${ts} · check connection`,
-    }
-  }
-  return {
-    dotCls: "bg-red-500",
-    textCls: "text-red-600 dark:text-red-400",
-    title: `Stale — ${Math.round(ageMin / 60)}h since sync`,
-    line: `${ts} · stale`,
-  }
-}
+import {
+  EldDeviceSyncStatus,
+  getDeviceLastSyncAt,
+  getEldSyncVisual,
+} from "@/components/eld/eld-device-sync-status"
 
 export default function ELDDevicesPage() {
   const [devices, setDevices] = useState<any[]>([])
@@ -312,27 +265,28 @@ export default function ELDDevicesPage() {
               className="pl-10"
             />
           </div>
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Sync health:</span> green = last sync under 15 min, amber =
+            15 min–2 h, red = over 2 h or never. Cards use a colored left edge plus the sync panel below.
+          </p>
 
           {/* Devices Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredDevices.map((device) => {
-              const sync = eldSyncStatus(device.last_sync_at)
+              const lastSync = getDeviceLastSyncAt(device)
+              const sync = getEldSyncVisual(lastSync)
               return (
-              <Card key={device.id} className="p-6 bg-card border-border">
-                <div className="flex items-start justify-between mb-4">
+              <Card
+                key={device.id}
+                className={cn("overflow-hidden border-border bg-card p-6 border-l-4", sync.cardBorderCls)}
+              >
+                <div className="mb-4 flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-lg">
-                      <Shield className="w-5 h-5 text-primary" />
+                    <div className="rounded-lg bg-primary/10 p-2">
+                      <Shield className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full", sync.dotCls)}
-                          title={sync.title}
-                          aria-hidden
-                        />
-                        <h3 className="font-semibold text-foreground">{device.device_name}</h3>
-                      </div>
+                      <h3 className="font-semibold text-foreground">{device.device_name}</h3>
                       <p className="text-xs text-muted-foreground">{device.device_serial_number}</p>
                     </div>
                   </div>
@@ -357,10 +311,7 @@ export default function ELDDevicesPage() {
                       <span>{device.trucks.truck_number}</span>
                     </div>
                   )}
-                  <p className={cn("text-xs font-medium", sync.textCls)} title={sync.title}>
-                    <span className="text-muted-foreground font-normal">Last sync: </span>
-                    {sync.line}
-                  </p>
+                  <EldDeviceSyncStatus lastSyncAt={lastSync} />
                 </div>
 
                 <div className="flex gap-2">

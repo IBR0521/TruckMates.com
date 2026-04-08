@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Edit2, FileCheck, AlertTriangle, CheckCircle } from "lucide-react"
+import { Edit2, FileCheck, AlertTriangle, CheckCircle, Wrench, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { use } from "react"
 import { useRouter } from "next/navigation"
@@ -11,12 +11,15 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { DetailPageLayout, DetailSection, InfoGrid, InfoField } from "@/components/dashboard/detail-page-layout"
 import { getDVIR } from "@/app/actions/dvir"
+import { createWorkOrdersFromDVIRDefects, getDVIRWorkOrders } from "@/app/actions/dvir-enhanced"
 
 export default function DVIRDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
   const [dvir, setDvir] = useState<any>(null)
+  const [workOrders, setWorkOrders] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [creatingWorkOrders, setCreatingWorkOrders] = useState(false)
 
   useEffect(() => {
     if (id === "add") {
@@ -31,12 +34,38 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
         router.push("/dashboard/dvir")
       } else if (result.data) {
         setDvir(result.data)
+        const wo = await getDVIRWorkOrders(id)
+        if (!wo.error && wo.data) {
+          setWorkOrders(wo.data)
+        }
       }
       setIsLoading(false)
     }
 
     loadDVIR()
   }, [id, router])
+
+  const handleCreateWorkOrders = async () => {
+    setCreatingWorkOrders(true)
+    try {
+      const result = await createWorkOrdersFromDVIRDefects(id)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success(
+        result.data?.length
+          ? `Created ${result.data.length} maintenance work order(s)`
+          : "Work order request completed",
+      )
+      const refreshed = await getDVIR(id)
+      if (refreshed.data) setDvir(refreshed.data)
+      const wo = await getDVIRWorkOrders(id)
+      if (!wo.error && wo.data) setWorkOrders(wo.data)
+    } finally {
+      setCreatingWorkOrders(false)
+    }
+  }
 
   if (id === "add") {
     return null
@@ -83,6 +112,8 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   const defects = Array.isArray(dvir.defects) ? dvir.defects : []
+  const showCreateWorkOrderCta =
+    !!dvir.defects_found && dvir.status !== "defects_corrected"
 
   return (
     <DetailPageLayout
@@ -90,6 +121,19 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
       subtitle={`${dvir.drivers?.name || "Unknown Driver"} • ${dvir.trucks?.truck_number || "N/A"}`}
       backUrl="/dashboard/dvir"
       editUrl={`/dashboard/dvir/${encodeURIComponent(dvir.id)}/edit`}
+      actions={
+        showCreateWorkOrderCta ? (
+          <Button
+            size="sm"
+            className="h-9"
+            onClick={handleCreateWorkOrders}
+            disabled={creatingWorkOrders}
+          >
+            <Wrench className="w-4 h-4 mr-2" />
+            {creatingWorkOrders ? "Creating…" : "Create Maintenance Work Order"}
+          </Button>
+        ) : null
+      }
     >
       <div className="space-y-6">
         {/* Status Card */}
@@ -133,6 +177,39 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         </Card>
 
+        {/* Linked maintenance work orders */}
+        {(workOrders.length > 0 || showCreateWorkOrderCta) && (
+          <Card className="border border-border/50 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Wrench className="w-5 h-5 text-primary" />
+              <h3 className="text-lg font-semibold text-foreground">Maintenance work orders</h3>
+            </div>
+            {workOrders.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No work orders linked yet. Use &quot;Create Maintenance Work Order&quot; above to generate them from
+                defects.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {workOrders.map((wo: any) => (
+                  <li key={wo.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/50 bg-secondary/20 px-3 py-2">
+                    <span className="font-medium text-foreground">
+                      {wo.work_order_number || wo.id}
+                      {wo.title ? ` — ${wo.title}` : ""}
+                    </span>
+                    <Link href={`/dashboard/maintenance/work-orders/${wo.id}`}>
+                      <Button variant="outline" size="sm" className="h-8">
+                        Open
+                        <ExternalLink className="w-3.5 h-3.5 ml-1" />
+                      </Button>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        )}
+
         {/* Inspection Details */}
         <DetailSection title="Inspection Details" icon={<FileCheck className="w-5 h-5" />}>
           <InfoGrid cols={2}>
@@ -167,6 +244,15 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
         </DetailSection>
 
         {/* Defects */}
+        {dvir.defects_found && defects.length === 0 && (
+          <DetailSection title="Defects" icon={<AlertTriangle className="w-5 h-5" />}>
+            <p className="text-sm text-muted-foreground">
+              Defects were recorded on this inspection, but no line items are stored in the defect list. Check notes and
+              certification below, or edit the DVIR to add defect details.
+            </p>
+          </DetailSection>
+        )}
+
         {dvir.defects_found && defects.length > 0 && (
           <DetailSection title="Defects Found" icon={<AlertTriangle className="w-5 h-5" />}>
             <div className="space-y-4">

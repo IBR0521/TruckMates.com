@@ -18,12 +18,13 @@ import Link from "next/link"
 import { toast } from "sonner"
 import * as bolActions from "@/app/actions/bol"
 import { getLoads } from "@/app/actions/loads"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
 export default function CreateBOLPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [loads, setLoads] = useState<any[]>([])
   const [templates, setTemplates] = useState<any[]>([])
@@ -66,6 +67,13 @@ export default function CreateBOLPage() {
   useEffect(() => {
     loadData()
   }, [])
+
+  useEffect(() => {
+    const loadId = searchParams.get("loadId")
+    if (loadId) {
+      setFormData((prev) => ({ ...prev, load_id: loadId }))
+    }
+  }, [searchParams])
 
   useEffect(() => {
     if (formData.load_id && loads.length > 0) {
