@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkCreatePermission } from "@/lib/server-permissions"
+import { createMaintenance } from "./maintenance"
 
 /**
  * Predict maintenance needs based on truck usage, mileage, and maintenance history
@@ -24,9 +25,7 @@ export async function predictMaintenanceNeeds(truckId?: string) {
       truck_number,
       make,
       model,
-      current_mileage,
-      last_maintenance_mileage,
-      last_maintenance_date
+      mileage
     `)
     .eq("company_id", ctx.companyId)
     .eq("status", "active")
@@ -52,21 +51,22 @@ export async function predictMaintenanceNeeds(truckId?: string) {
   // This prevents loading entire history into memory
   const { data: maintenanceHistory } = await supabase
     .from("maintenance")
-    .select("truck_id, service_type, mileage, service_date")
+    .select("truck_id, service_type, mileage, scheduled_date")
     .in("truck_id", truckIds)
     .eq("status", "completed")
-    .order("service_date", { ascending: false })
+    .order("scheduled_date", { ascending: false })
     .limit(1000) // Cap at 1000 rows to prevent memory issues
 
   // Predict maintenance needs
-  const predictions = trucks.map((truck: { id: string; truck_number: string; make: string | null; model: string | null; current_mileage: number | null; last_maintenance_mileage: number | null; last_maintenance_date: string | null; [key: string]: any }) => {
-    const truckMaintenance = maintenanceHistory?.filter((m: { truck_id: string; service_type: string; mileage: number | null; service_date: string; [key: string]: any }) => m.truck_id === truck.id) || []
+  const predictions = trucks.map((truck: { id: string; truck_number: string; make: string | null; model: string | null; mileage: number | null; [key: string]: any }) => {
+    const truckMaintenance = maintenanceHistory?.filter((m: { truck_id: string; service_type: string; mileage: number | null; scheduled_date: string; [key: string]: any }) => m.truck_id === truck.id) || []
     
     // Calculate miles since last maintenance
     const lastMaintenance = truckMaintenance[0]
+    const currentMileage = truck.mileage || 0
     const milesSinceLastMaintenance = lastMaintenance
-      ? (truck.current_mileage || 0) - (lastMaintenance.mileage || 0)
-      : truck.current_mileage || 0
+      ? currentMileage - (lastMaintenance.mileage || 0)
+      : currentMileage
 
     // Standard maintenance intervals (miles)
     const maintenanceIntervals = {
@@ -129,9 +129,9 @@ export async function predictMaintenanceNeeds(truckId?: string) {
       truck_number: truck.truck_number,
       make: truck.make,
       model: truck.model,
-      current_mileage: truck.current_mileage || 0,
+      current_mileage: currentMileage,
       miles_since_last_maintenance: milesSinceLastMaintenance,
-      last_maintenance_date: lastMaintenance?.service_date || truck.last_maintenance_date,
+      last_maintenance_date: lastMaintenance?.scheduled_date || null,
       predicted_needs: needs,
       priority: needs.some((n) => n.priority === "high") ? "high" : needs.length > 0 ? "medium" : "low",
     }
@@ -155,54 +155,27 @@ export async function createMaintenanceFromPrediction(data: {
   estimated_cost?: number
   notes?: string
 }) {
-  const supabase = await createClient()
-
-  const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
-    return { error: ctx.error || "Not authenticated", data: null }
-  }
-
-  // RBAC check
   const permissionCheck = await checkCreatePermission("maintenance")
   if (!permissionCheck.allowed) {
     return { error: permissionCheck.error || "You don't have permission to create maintenance records", data: null }
   }
 
-  // Get truck current mileage - validate ownership
-  const { data: truck, error: truckError } = await supabase
-    .from("trucks")
-    .select("current_mileage")
-    .eq("id", data.truck_id)
-    .eq("company_id", ctx.companyId)
-    .single()
+  const today = new Date().toISOString().split("T")[0]
+  const result = await createMaintenance({
+    truck_id: data.truck_id,
+    service_type: data.service_type,
+    scheduled_date: today,
+    estimated_cost: data.estimated_cost || 0,
+    notes: data.notes || `Created from predictive maintenance: ${data.service_type}`,
+  })
 
-  if (truckError || !truck) {
-    return { error: "Truck not found or does not belong to your company", data: null }
-  }
-
-  // Create maintenance record
-  const { data: maintenance, error } = await supabase
-    .from("maintenance")
-    .insert({
-      company_id: ctx.companyId,
-      truck_id: data.truck_id,
-      service_type: data.service_type,
-      service_date: new Date().toISOString().split("T")[0],
-      mileage: truck?.current_mileage || 0,
-      cost: data.estimated_cost || 0,
-      notes: data.notes || `Created from predictive maintenance: ${data.service_type}`,
-      status: "scheduled",
-    })
-    .select()
-    .single()
-
-  if (error) {
-    return { error: error.message, data: null }
+  if (result.error) {
+    return { error: result.error, data: null }
   }
 
   revalidatePath("/dashboard/maintenance")
   revalidatePath("/dashboard/maintenance/predictive")
-  return { data: maintenance, error: null }
+  return { data: result.data, error: null }
 }
 
 

@@ -9,6 +9,18 @@ import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-ses
 import { createAdminClient } from "@/lib/supabase/admin"
 import { mapLegacyRole } from "@/lib/roles"
 
+type NotificationType =
+  | "route_update"
+  | "load_update"
+  | "maintenance_alert"
+  | "payment_reminder"
+  | "reminder_due"
+  | "dfm_matches_found"
+  | "marketplace_load_accepted"
+  | "marketplace_new_matching_load"
+  | "morning_digest"
+  | "violation_alert"
+
 const NOTIFICATION_PREFS_SELECT =
   "id, user_id, email_alerts, sms_alerts, weekly_reports, route_updates, load_updates, maintenance_alerts, payment_reminders, created_at, updated_at"
 
@@ -146,7 +158,7 @@ function escapeHtml(text: string | null | undefined): string {
 // Function to send notifications (to be called when events happen)
 export async function sendNotification(
   userId: string,
-  type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "reminder_due" | "dfm_matches_found" | "marketplace_load_accepted" | "marketplace_new_matching_load",
+  type: NotificationType,
   data: any
 ) {
   const supabase = await createClient()
@@ -158,8 +170,14 @@ export async function sendNotification(
     .eq("user_id", userId)
     .maybeSingle()
 
-  if (!preferences) {
-    return { sent: false, reason: "No preferences found" }
+  const effectivePreferences = preferences || {
+    email_alerts: true,
+    sms_alerts: false,
+    weekly_reports: true,
+    route_updates: true,
+    load_updates: true,
+    maintenance_alerts: true,
+    payment_reminders: true,
   }
 
   // Check if user wants this type of notification
@@ -167,36 +185,46 @@ export async function sendNotification(
   let shouldNotifySMS = false
   switch (type) {
     case "route_update":
-      shouldNotifyEmail = preferences.route_updates && preferences.email_alerts
-      shouldNotifySMS = preferences.route_updates && preferences.sms_alerts
+      shouldNotifyEmail = effectivePreferences.route_updates && effectivePreferences.email_alerts
+      shouldNotifySMS = effectivePreferences.route_updates && effectivePreferences.sms_alerts
       break
     case "load_update":
-      shouldNotifyEmail = preferences.load_updates && preferences.email_alerts
-      shouldNotifySMS = preferences.load_updates && preferences.sms_alerts
+      shouldNotifyEmail = effectivePreferences.load_updates && effectivePreferences.email_alerts
+      shouldNotifySMS = effectivePreferences.load_updates && effectivePreferences.sms_alerts
       break
     case "maintenance_alert":
-      shouldNotifyEmail = preferences.maintenance_alerts && preferences.email_alerts
-      shouldNotifySMS = preferences.maintenance_alerts && preferences.sms_alerts
+      shouldNotifyEmail = effectivePreferences.maintenance_alerts && effectivePreferences.email_alerts
+      shouldNotifySMS = effectivePreferences.maintenance_alerts && effectivePreferences.sms_alerts
       break
     case "payment_reminder":
-      shouldNotifyEmail = preferences.payment_reminders && preferences.email_alerts
-      shouldNotifySMS = preferences.payment_reminders && preferences.sms_alerts
+      shouldNotifyEmail = effectivePreferences.payment_reminders && effectivePreferences.email_alerts
+      shouldNotifySMS = effectivePreferences.payment_reminders && effectivePreferences.sms_alerts
       break
     case "reminder_due":
       // Use payment_reminders preference for reminder notifications
-      shouldNotifyEmail = preferences.payment_reminders && preferences.email_alerts
-      shouldNotifySMS = preferences.payment_reminders && preferences.sms_alerts
+      shouldNotifyEmail = effectivePreferences.payment_reminders && effectivePreferences.email_alerts
+      shouldNotifySMS = effectivePreferences.payment_reminders && effectivePreferences.sms_alerts
       break
     case "dfm_matches_found":
       // DFM matches - default to enabled if load_updates is enabled
-      shouldNotifyEmail = preferences.load_updates && preferences.email_alerts
-      shouldNotifySMS = preferences.load_updates && preferences.sms_alerts
+      shouldNotifyEmail = effectivePreferences.load_updates && effectivePreferences.email_alerts
+      shouldNotifySMS = effectivePreferences.load_updates && effectivePreferences.sms_alerts
       break
     case "marketplace_load_accepted":
     case "marketplace_new_matching_load":
       // Marketplace events - default to enabled if load_updates is enabled
-      shouldNotifyEmail = preferences.load_updates && preferences.email_alerts
-      shouldNotifySMS = preferences.load_updates && preferences.sms_alerts
+      shouldNotifyEmail = effectivePreferences.load_updates && effectivePreferences.email_alerts
+      shouldNotifySMS = effectivePreferences.load_updates && effectivePreferences.sms_alerts
+      break
+    case "morning_digest":
+      // Morning digest should be active for managers by default unless email is disabled.
+      shouldNotifyEmail = effectivePreferences.email_alerts
+      shouldNotifySMS = false
+      break
+    case "violation_alert":
+      // Violation alerts should use the strongest channels user has enabled.
+      shouldNotifyEmail = effectivePreferences.email_alerts
+      shouldNotifySMS = effectivePreferences.sms_alerts
       break
   }
 
@@ -261,7 +289,7 @@ export async function sendNotification(
     try {
       const { sendSMSNotification } = await import("./sms")
       // Type assertion: sendSMSNotification may not support all notification types
-      const smsResult = await sendSMSNotification(userId, type as "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "dispatch_assigned", data)
+      const smsResult = await sendSMSNotification(userId, type as "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "dispatch_assigned" | "violation_alert", data)
       results.sms = smsResult
     } catch (error: unknown) {
       Sentry.captureException(error)
@@ -320,6 +348,14 @@ export async function sendNotification(
         notificationTitle = "New Marketplace Load"
         notificationMessage = data.shipmentNumber ? `New matching load: ${data.shipmentNumber}` : "New matching load available"
         break
+      case "morning_digest":
+        notificationTitle = "Morning Operations Digest"
+        notificationMessage = `Loads in transit: ${data.inTransitLoads || 0}, active alerts: ${data.activeAlerts || 0}, overdue invoices: ${data.overdueInvoices || 0}`
+        break
+      case "violation_alert":
+        notificationTitle = data.title || "Driver Violation Alert"
+        notificationMessage = data.message || "A driver violation has been detected and requires attention."
+        break
     }
 
     // Determine priority from data or default to normal
@@ -363,7 +399,7 @@ export async function sendNotification(
 
 // Helper function to generate email content
 function getEmailContent(
-  type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "reminder_due" | "dfm_matches_found" | "marketplace_load_accepted" | "marketplace_new_matching_load",
+  type: NotificationType,
   data: any,
   userName: string
 ) {
@@ -557,6 +593,60 @@ function getEmailContent(
               ${data.origin && data.destination ? `<p><strong>Route:</strong> ${escapeHtml(data.origin)} → ${escapeHtml(data.destination)}</p>` : ""}
               ${data.rate ? `<p><strong>Rate:</strong> $${escapeHtml(String(data.rate))}</p>` : ""}
               <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/loads" class="button">View Loads</a>
+            </div>
+            <div class="footer">
+              <p>This is an automated notification from TruckMates.</p>
+            </div>
+          </div>
+        `,
+      }
+
+    case "morning_digest":
+      return {
+        subject: "Morning Operations Digest",
+        html: `
+          ${baseStyle}
+          <div class="container">
+            <div class="header">
+              <h1>Morning Operations Digest</h1>
+            </div>
+            <div class="content">
+              <p>Hello ${escapeHtml(userName)},</p>
+              <p>Here is your current operations snapshot:</p>
+              <ul>
+                <li><strong>In Transit Loads:</strong> ${escapeHtml(String(data.inTransitLoads || 0))}</li>
+                <li><strong>Scheduled Loads:</strong> ${escapeHtml(String(data.scheduledLoads || 0))}</li>
+                <li><strong>Delivered Today:</strong> ${escapeHtml(String(data.deliveredToday || 0))}</li>
+                <li><strong>Active Alerts:</strong> ${escapeHtml(String(data.activeAlerts || 0))}</li>
+                <li><strong>Critical Alerts:</strong> ${escapeHtml(String(data.criticalAlerts || 0))}</li>
+                <li><strong>Maintenance Due:</strong> ${escapeHtml(String(data.maintenanceDue || 0))}</li>
+                <li><strong>Overdue Invoices:</strong> ${escapeHtml(String(data.overdueInvoices || 0))}</li>
+              </ul>
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard" class="button">Open Dashboard</a>
+            </div>
+            <div class="footer">
+              <p>This is an automated notification from TruckMates.</p>
+            </div>
+          </div>
+        `,
+      }
+
+    case "violation_alert":
+      return {
+        subject: data.title || "Driver Violation Alert",
+        html: `
+          ${baseStyle}
+          <div class="container">
+            <div class="header">
+              <h1>Driver Violation Alert</h1>
+            </div>
+            <div class="content">
+              <p>Hello ${escapeHtml(userName)},</p>
+              <p>${escapeHtml(data.message || "A violation has been detected.")}</p>
+              ${data.driverName ? `<p><strong>Driver:</strong> ${escapeHtml(data.driverName)}</p>` : ""}
+              ${data.shipmentNumber ? `<p><strong>Load:</strong> ${escapeHtml(data.shipmentNumber)}</p>` : ""}
+              ${data.violationType ? `<p><strong>Violation Type:</strong> ${escapeHtml(data.violationType)}</p>` : ""}
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/alerts" class="button">Review Alert</a>
             </div>
             <div class="footer">
               <p>This is an automated notification from TruckMates.</p>
@@ -844,6 +934,86 @@ export async function cleanupReadNotifications(olderThanDays: number = 90) {
       data: null,
       error: errorMessage(err, "Failed to cleanup notifications"),
     }
+  }
+}
+
+/**
+ * Dispatch morning digest emails to manager/admin users.
+ * Intended for cron usage.
+ */
+export async function dispatchMorningDigests() {
+  const admin = createAdminClient()
+  const now = new Date()
+  const digestDate = now.toISOString().slice(0, 10)
+  const startOfDayIso = new Date(`${digestDate}T00:00:00.000Z`).toISOString()
+
+  const { data: managerUsers, error: usersError } = await admin
+    .from("users")
+    .select("id, company_id, full_name, role")
+    .not("company_id", "is", null)
+    .in("role", ["super_admin", "operations_manager", "admin", "owner", "manager"])
+    .limit(2000)
+
+  if (usersError) {
+    return { data: null, error: usersError.message }
+  }
+
+  const users = managerUsers || []
+  let sentCount = 0
+  let skippedCount = 0
+
+  for (const user of users) {
+    const companyId = user.company_id as string | null
+    if (!companyId) {
+      skippedCount++
+      continue
+    }
+
+    const { data: existingDigest } = await admin
+      .from("notifications")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("type", "morning_digest")
+      .gte("created_at", startOfDayIso)
+      .limit(1)
+      .maybeSingle()
+
+    if (existingDigest?.id) {
+      skippedCount++
+      continue
+    }
+
+    const [inTransit, scheduled, deliveredToday, activeAlerts, criticalAlerts, maintenanceDue, overdueInvoices] = await Promise.all([
+      admin.from("loads").select("id", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "in_transit"),
+      admin.from("loads").select("id", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "scheduled"),
+      admin.from("loads").select("id", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "delivered").gte("updated_at", startOfDayIso),
+      admin.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["pending", "active"]),
+      admin.from("alerts").select("id", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["pending", "active"]).eq("priority", "critical"),
+      admin.from("maintenance").select("id", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["scheduled", "overdue"]),
+      admin.from("invoices").select("id", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "overdue"),
+    ])
+
+    await sendNotification(user.id, "morning_digest", {
+      digestDate,
+      inTransitLoads: inTransit.count || 0,
+      scheduledLoads: scheduled.count || 0,
+      deliveredToday: deliveredToday.count || 0,
+      activeAlerts: activeAlerts.count || 0,
+      criticalAlerts: criticalAlerts.count || 0,
+      maintenanceDue: maintenanceDue.count || 0,
+      overdueInvoices: overdueInvoices.count || 0,
+    })
+
+    sentCount++
+  }
+
+  return {
+    data: {
+      sent: sentCount,
+      skipped: skippedCount,
+      digestDate,
+    },
+    error: null,
   }
 }
 

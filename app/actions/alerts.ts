@@ -599,6 +599,32 @@ export async function createAlert(formData: {
     }
   }
 
+  // Proactive path: even without a configured alert rule, high-risk violations should notify managers.
+  if (!alertRule) {
+    const isViolationEvent = formData.event_type.includes("violation") || formData.event_type.includes("hos")
+    const isHighRisk = (formData.priority || "normal") === "critical" || isViolationEvent
+    if (isHighRisk) {
+      const { data: managers } = await supabase
+        .from("users")
+        .select("id")
+        .eq("company_id", ctx.companyId)
+        .in("role", ["super_admin", "operations_manager", "admin", "owner", "manager"])
+
+      for (const manager of managers || []) {
+        await sendNotification(manager.id, "violation_alert", {
+          title: formData.title,
+          message: formData.message,
+          driverName: formData.metadata?.driver_name,
+          shipmentNumber: formData.metadata?.shipment_number,
+          violationType: formData.event_type,
+          priority: formData.priority || "critical",
+        }).catch(() => {
+          // Best effort: never block alert creation on channel delivery.
+        })
+      }
+    }
+  }
+
   revalidatePath("/dashboard/alerts")
   return { data: alert, error: null }
   } catch (error: unknown) {

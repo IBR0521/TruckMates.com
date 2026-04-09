@@ -60,12 +60,13 @@ export function useDashboardPageData() {
       } satisfies DashboardBootstrapResult
     },
     enabled: !!sessionUserId,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 30 * 1000,
     gcTime: 10 * 60 * 1000,
     retry: 1,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchInterval: false,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    refetchInterval: 30 * 1000,
+    refetchIntervalInBackground: true,
   })
 
   const isLoading =

@@ -23,7 +23,7 @@ export async function getMaintenance(filters?: {
     let query = supabase
       .from("maintenance")
       .select(
-        "id, company_id, truck_id, service_type, scheduled_date, completed_date, status, priority, estimated_cost, actual_cost, vendor, current_mileage, created_at",
+        "id, company_id, truck_id, service_type, scheduled_date, completed_date, status, priority, estimated_cost, actual_cost, vendor, mileage, created_at",
         { count: "exact" },
       )
       .eq("company_id", ctx.companyId)
@@ -126,7 +126,7 @@ export async function createMaintenance(formData: {
       truck_id: sanitizeString(formData.truck_id, 100),
       service_type: sanitizedServiceType,
       scheduled_date: formData.scheduled_date,
-      current_mileage: formData.current_mileage ? Number(formData.current_mileage) : null,
+      mileage: formData.current_mileage ? Number(formData.current_mileage) : null,
       priority: sanitizedPriority,
       estimated_cost: formData.estimated_cost ? Number(formData.estimated_cost) : null,
       notes: sanitizedNotes,
@@ -180,7 +180,7 @@ export async function getMaintenanceById(id: string) {
         make,
         model,
         year,
-        current_mileage
+        mileage
       )
     `)
     .eq("id", id)

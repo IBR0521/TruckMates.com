@@ -13,25 +13,27 @@ import {
   Truck,
   User,
   Package,
+  Building2,
   FileText,
-  DollarSign,
   Search,
-  Clock,
 } from "lucide-react"
 import { getLoads } from "@/app/actions/loads"
 import { getRoutes } from "@/app/actions/routes"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
-import { formatDate } from "@/lib/format-utils"
+import { getCustomers } from "@/app/actions/customers"
+import { getInvoices } from "@/app/actions/accounting"
+import { getDocuments } from "@/app/actions/documents"
 
 interface SearchResult {
   id: string
-  type: "load" | "route" | "driver" | "truck" | "invoice" | "document"
+  type: "load" | "route" | "driver" | "truck" | "customer" | "invoice" | "document"
   title: string
   subtitle: string
   url: string
   icon: React.ReactNode
   metadata?: string
+  keywords?: string
 }
 
 export function GlobalSearch() {
@@ -80,12 +82,15 @@ export function GlobalSearch() {
     // Debounce search
     const timeoutId = setTimeout(async () => {
       try {
-        const [loadsResult, routesResult, driversResult, trucksResult] =
+        const [loadsResult, routesResult, driversResult, trucksResult, customersResult, invoicesResult, documentsResult] =
           await Promise.all([
             getLoads(),
             getRoutes(),
             getDrivers(),
             getTrucks(),
+            getCustomers({ search: searchTerm, limit: 50 }),
+            getInvoices({ limit: 100 }),
+            getDocuments({ limit: 100 }),
           ])
 
         const allResults: SearchResult[] = []
@@ -110,6 +115,7 @@ export function GlobalSearch() {
                 url: `/dashboard/loads/${load.id}`,
                 icon: <Package className="w-4 h-4" />,
                 metadata: load.status,
+                keywords: `${load.shipment_number || ""} ${load.origin || ""} ${load.destination || ""} ${load.status || ""}`,
               })
             })
         }
@@ -134,6 +140,7 @@ export function GlobalSearch() {
                 url: `/dashboard/routes/${route.id}`,
                 icon: <Route className="w-4 h-4" />,
                 metadata: route.status,
+                keywords: `${route.name || ""} ${route.origin || ""} ${route.destination || ""} ${route.status || ""}`,
               })
             })
         }
@@ -158,6 +165,7 @@ export function GlobalSearch() {
                 url: `/dashboard/drivers/${driver.id}`,
                 icon: <User className="w-4 h-4" />,
                 metadata: driver.status,
+                keywords: `${driver.name || ""} ${driver.email || ""} ${driver.phone || ""} ${driver.license_number || ""} ${driver.status || ""}`,
               })
             })
         }
@@ -182,6 +190,73 @@ export function GlobalSearch() {
                 url: `/dashboard/trucks/${truck.id}`,
                 icon: <Truck className="w-4 h-4" />,
                 metadata: truck.status,
+                keywords: `${truck.truck_number || ""} ${truck.make || ""} ${truck.model || ""} ${truck.license_plate || ""} ${truck.status || ""}`,
+              })
+            })
+        }
+
+        // Search customers (server-side filtered via getCustomers)
+        if (customersResult.data) {
+          customersResult.data
+            .slice(0, 5)
+            .forEach((customer: any) => {
+              allResults.push({
+                id: customer.id,
+                type: "customer",
+                title: customer.name || customer.company_name || "Customer",
+                subtitle: customer.company_name || customer.email || customer.phone || "",
+                url: `/dashboard/customers/${customer.id}`,
+                icon: <Building2 className="w-4 h-4" />,
+                metadata: customer.status || customer.customer_type,
+                keywords: `${customer.name || ""} ${customer.company_name || ""} ${customer.email || ""} ${customer.phone || ""} ${customer.status || ""} ${customer.customer_type || ""}`,
+              })
+            })
+        }
+
+        // Search invoices
+        if (invoicesResult.data) {
+          invoicesResult.data
+            .filter(
+              (invoice: any) =>
+                invoice.invoice_number?.toLowerCase().includes(searchTerm) ||
+                invoice.customer_name?.toLowerCase().includes(searchTerm) ||
+                String(invoice.amount || "").toLowerCase().includes(searchTerm) ||
+                invoice.status?.toLowerCase().includes(searchTerm)
+            )
+            .slice(0, 5)
+            .forEach((invoice: any) => {
+              allResults.push({
+                id: invoice.id,
+                type: "invoice",
+                title: invoice.invoice_number || "Invoice",
+                subtitle: invoice.customer_name || "",
+                url: `/dashboard/accounting/invoices/${invoice.id}`,
+                icon: <FileText className="w-4 h-4" />,
+                metadata: invoice.status,
+                keywords: `${invoice.invoice_number || ""} ${invoice.customer_name || ""} ${invoice.amount || ""} ${invoice.status || ""}`,
+              })
+            })
+        }
+
+        // Search documents
+        if (documentsResult.data) {
+          documentsResult.data
+            .filter(
+              (document: any) =>
+                document.name?.toLowerCase().includes(searchTerm) ||
+                document.type?.toLowerCase().includes(searchTerm)
+            )
+            .slice(0, 5)
+            .forEach((document: any) => {
+              allResults.push({
+                id: document.id,
+                type: "document",
+                title: document.name || "Document",
+                subtitle: document.type || "",
+                url: `/dashboard/documents`,
+                icon: <FileText className="w-4 h-4" />,
+                metadata: document.type,
+                keywords: `${document.name || ""} ${document.type || ""}`,
               })
             })
         }
@@ -237,6 +312,7 @@ export function GlobalSearch() {
     route: "Routes",
     driver: "Drivers",
     truck: "Trucks",
+    customer: "Customers",
     invoice: "Invoices",
     document: "Documents",
   }
@@ -299,7 +375,7 @@ export function GlobalSearch() {
                   {items.map((result) => (
                     <Command.Item
                       key={result.id}
-                      value={`${result.type}-${result.id}`}
+                      value={`${result.type} ${result.title} ${result.subtitle} ${result.metadata || ""} ${result.keywords || ""}`}
                       onSelect={() => handleSelect(result)}
                       className="flex items-center gap-3 px-3 py-2"
                     >

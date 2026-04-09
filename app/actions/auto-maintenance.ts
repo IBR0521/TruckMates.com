@@ -31,7 +31,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
   // Get truck with current mileage
   const { data: truck, error: truckError } = await supabase
     .from("trucks")
-    .select("id, truck_number, current_mileage, make, model, year")
+    .select("id, truck_number, mileage, make, model, year")
     .eq("id", truckId)
     .eq("company_id", ctx.companyId)
     .maybeSingle()
@@ -42,7 +42,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
 
   // V3-013 FIX: Guard parseFloat against NaN
   const currentMileage = (() => {
-    const mileage = truck.current_mileage
+    const mileage = truck.mileage
     if (typeof mileage === "number") {
       return isNaN(mileage) || !isFinite(mileage) ? 0 : mileage
     }
@@ -53,7 +53,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
   // Get last maintenance records for this truck
   const { data: recentMaintenance } = await supabase
     .from("maintenance")
-    .select("service_type, scheduled_date, current_mileage, status")
+    .select("service_type, scheduled_date, mileage, status")
     .eq("truck_id", truckId)
     .eq("company_id", ctx.companyId)
     .in("status", ["scheduled", "in_progress"])
@@ -77,7 +77,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
   // V3-007 FIX: Add LIMIT to prevent unbounded queries
   const { data: allLastServices } = await supabase
     .from("maintenance")
-    .select("service_type, current_mileage, scheduled_date")
+    .select("service_type, mileage, scheduled_date")
     .eq("truck_id", truckId)
     .eq("company_id", ctx.companyId)
     .eq("status", "completed")
@@ -86,12 +86,12 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
     .limit(100)
 
   // Group by service_type and get most recent for each
-  const lastServiceByType: Record<string, { current_mileage: number; scheduled_date: string }> = {}
+  const lastServiceByType: Record<string, { mileage: number; scheduled_date: string }> = {}
   if (allLastServices) {
     for (const service of allLastServices) {
       if (!lastServiceByType[service.service_type]) {
         // V3-013 FIX: Guard parseFloat against NaN
-        const mileage = service.current_mileage
+        const mileage = service.mileage
         const parsedMileage = typeof mileage === "number" 
           ? (isNaN(mileage) || !isFinite(mileage) ? 0 : mileage)
           : (() => {
@@ -99,7 +99,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
               return isNaN(parsed) || !isFinite(parsed) ? 0 : parsed
             })()
         lastServiceByType[service.service_type] = {
-          current_mileage: parsedMileage,
+          mileage: parsedMileage,
           scheduled_date: service.scheduled_date || "",
         }
       }
@@ -121,7 +121,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
     // Get last service from pre-fetched data
     const lastService = lastServiceByType[serviceType]
 
-    const lastServiceMileage = lastService?.current_mileage || 0
+    const lastServiceMileage = lastService?.mileage || 0
     // V3-013 FIX: Guard against NaN in calculation
     const milesSinceLastService = isFinite(currentMileage) && isFinite(lastServiceMileage)
       ? currentMileage - lastServiceMileage

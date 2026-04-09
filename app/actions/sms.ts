@@ -122,7 +122,7 @@ export async function sendSMS(phoneNumber: string, message: string) {
 // Send SMS notification to user based on their preferences
 export async function sendSMSNotification(
   userId: string,
-  type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "dispatch_assigned",
+  type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "dispatch_assigned" | "violation_alert",
   data: any
 ) {
   const supabase = await createClient()
@@ -162,6 +162,9 @@ export async function sendSMSNotification(
     case "dispatch_assigned":
       shouldNotify = preferences.sms_alerts // Always notify for dispatches
       break
+    case "violation_alert":
+      shouldNotify = preferences.sms_alerts
+      break
   }
 
   if (!shouldNotify) {
@@ -199,7 +202,7 @@ export async function sendSMSNotification(
 
 // Generate SMS message content
 function generateSMSMessage(
-  type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "dispatch_assigned",
+  type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "dispatch_assigned" | "violation_alert",
   data: any
 ): string {
   switch (type) {
@@ -217,6 +220,9 @@ function generateSMSMessage(
 
     case "dispatch_assigned":
       return `TruckMates: New dispatch assigned! Load: ${data.shipmentNumber || "N/A"}, Origin: ${data.origin || "N/A"}, Destination: ${data.destination || "N/A"}`
+
+    case "violation_alert":
+      return `TruckMates ALERT: ${data.title || "Driver violation detected"}. ${data.driverName ? `Driver: ${data.driverName}. ` : ""}${data.violationType ? `Type: ${data.violationType}. ` : ""}${data.shipmentNumber ? `Load: ${data.shipmentNumber}.` : ""}`
 
     default:
       return `TruckMates: You have a new notification.`

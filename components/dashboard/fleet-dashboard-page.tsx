@@ -15,10 +15,8 @@ import {
   Building2,
   Wrench,
   ChevronDown,
-  Clock3,
   Activity,
   ShieldAlert,
-  CheckCircle2,
   CalendarClock,
 } from "lucide-react"
 import Link from "next/link"
@@ -173,7 +171,7 @@ function TimeAgo({ timestamp }: { timestamp: string | null | undefined }) {
 
 /** Fleet / operations dashboard (financial + fleet metrics). Not used for `driver` role. */
 export default function FleetDashboardPage() {
-  const { data, isLoading, error } = useDashboardPageData()
+  const { data, isLoading, error, isFetching } = useDashboardPageData()
   const authCompany = data?.authCompany ?? null
   const dashboardData = data?.dashboardData
   const [now, setNow] = useState<Date>(new Date())
@@ -295,7 +293,7 @@ export default function FleetDashboardPage() {
   if (isLoading && !data) {
     return (
       <div className="w-full p-4 md:p-8">
-        <div className="max-w-7xl mx-auto space-y-6">
+        <div className="mx-auto w-full max-w-[1800px] space-y-6">
           <div className="h-8 bg-secondary animate-pulse rounded w-64"></div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[1, 2, 3, 4].map((i) => (
@@ -326,7 +324,7 @@ export default function FleetDashboardPage() {
               )}
             </div>
             <div className="flex items-center gap-2 rounded-full border border-border/60 bg-background/60 px-3 py-1.5 text-xs text-muted-foreground">
-              <Clock3 className="h-3.5 w-3.5 text-emerald-400" />
+              <span className={`h-2 w-2 rounded-full ${isFetching ? "animate-pulse bg-emerald-400" : "bg-emerald-400/80"}`} />
               <span className="font-medium text-foreground">Live</span>
               <span>•</span>
               <span>{lastActivityLabel}</span>
@@ -405,7 +403,7 @@ export default function FleetDashboardPage() {
       </div>
 
       <div className="p-4 md:p-8">
-        <div className="mx-auto max-w-7xl space-y-6">
+        <div className="mx-auto w-full max-w-[1800px] space-y-6">
           {emailServiceStatus?.isManager && !emailServiceStatus.configured && !dismissedEmailBanner && (
             <Alert className="border-yellow-500/50 bg-yellow-500/10">
               <AlertCircle className="h-4 w-4 text-yellow-600" />
