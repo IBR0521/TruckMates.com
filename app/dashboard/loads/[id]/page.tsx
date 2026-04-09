@@ -14,6 +14,7 @@ import { getRoutes } from "@/app/actions/routes"
 import { getTrucks } from "@/app/actions/trucks"
 import { getLoadDeliveryPoints, getLoadSummary } from "@/app/actions/load-delivery-points"
 import { getInvoices } from "@/app/actions/accounting"
+import { autoGenerateInvoiceOnPOD } from "@/app/actions/auto-invoice"
 import { toast } from "sonner"
 import { Building2, FileText, DollarSign, Share2 } from "lucide-react"
 import {
@@ -50,6 +51,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false)
   const [portalUrl, setPortalUrl] = useState<string>("")
   const [isCreatingPortal, setIsCreatingPortal] = useState(false)
+  const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false)
 
   /** For multi-stop loads, trip planning needs one destination — use last delivery stop. */
   const lastStopRoutingAddress = useMemo(
@@ -441,6 +443,10 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     : invoiceStatus === "Invoiced" ? "info"
     : "warning"
 
+  const canGenerateInvoice =
+    !relatedInvoice &&
+    (load.status === "delivered" || load.status === "completed")
+
   // Handle share tracking link
   async function handleShareTrackingLink() {
     if (!load.customer_id) {
@@ -478,6 +484,33 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  async function handleGenerateInvoice() {
+    setIsGeneratingInvoice(true)
+    try {
+      const result = await autoGenerateInvoiceOnPOD(id)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      const invoiceId = result.data?.invoiceId
+      if (!invoiceId) {
+        toast.error("Invoice generated but no invoice ID was returned")
+        return
+      }
+      toast.success(result.data?.alreadyExists ? "Invoice already exists for this load" : "Invoice generated")
+
+      const invoicesResult = await getInvoices({ load_id: id, limit: 1 })
+      if (invoicesResult.data && invoicesResult.data.length > 0) {
+        setRelatedInvoice(invoicesResult.data[0])
+      }
+      router.push(`/dashboard/accounting/invoices/${invoiceId}`)
+    } catch (error: unknown) {
+      toast.error("Failed to generate invoice: " + errorMessage(error, "Unknown error"))
+    } finally {
+      setIsGeneratingInvoice(false)
+    }
+  }
+
   function handleCopyPortalUrl() {
     if (portalUrl) {
       navigator.clipboard.writeText(portalUrl)
@@ -493,6 +526,24 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
       editUrl={`/dashboard/loads/${id}/edit`}
       actions={
         <div className="flex items-center gap-2">
+          {canGenerateInvoice ? (
+            <Button
+              size="sm"
+              className="h-9"
+              onClick={handleGenerateInvoice}
+              disabled={isGeneratingInvoice}
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              {isGeneratingInvoice ? "Generating..." : "Generate Invoice"}
+            </Button>
+          ) : relatedInvoice?.id ? (
+            <Link href={`/dashboard/accounting/invoices/${relatedInvoice.id}`}>
+              <Button variant="outline" size="sm" className="h-9">
+                <FileText className="w-4 h-4 mr-2" />
+                View Invoice
+              </Button>
+            </Link>
+          ) : null}
           <Link href={`/dashboard/bols/create?loadId=${id}`}>
             <Button variant="outline" size="sm" className="h-9">
               <FileText className="w-4 h-4 mr-2" />

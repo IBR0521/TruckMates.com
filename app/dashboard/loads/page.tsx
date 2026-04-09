@@ -2,7 +2,7 @@
 
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, Package, Download, Eye, Edit2, Trash2, Search, Filter, Copy, MoreVertical, CheckSquare, Square } from "lucide-react"
+import { Plus, Package, Download, Eye, Edit2, Trash2, Search, Filter, Copy, MoreVertical, CheckSquare, Square, FileText } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { getLoads, deleteLoad, bulkDeleteLoads, bulkUpdateLoadStatus, duplicateLoad, updateLoad } from "@/app/actions/loads"
+import { autoGenerateInvoiceOnPOD } from "@/app/actions/auto-invoice"
 import { BulkActionsBar } from "@/components/bulk-actions-bar"
 import { InlineEdit } from "@/components/dashboard/inline-edit"
 import { DefensiveDelete } from "@/components/dashboard/defensive-delete"
@@ -50,6 +51,7 @@ export default function LoadsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isBulkMode, setIsBulkMode] = useState(false)
   const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
+  const [generatingInvoiceId, setGeneratingInvoiceId] = useState<string | null>(null)
 
   const loadLoads = async () => {
     setIsLoading(true)
@@ -237,6 +239,28 @@ export default function LoadsPage() {
       toast.error(result.error)
     }
     // Success - no toast, no reload
+  }
+
+  const handleGenerateInvoice = async (load: any) => {
+    if (!load?.id) return
+    setGeneratingInvoiceId(load.id)
+    const result = await autoGenerateInvoiceOnPOD(load.id)
+    setGeneratingInvoiceId(null)
+
+    if (result.error) {
+      toast.error(result.error)
+      return
+    }
+
+    const invoiceId = result.data?.invoiceId
+    if (!invoiceId) {
+      toast.error("Invoice generation succeeded but invoice ID was not returned")
+      return
+    }
+
+    toast.success(result.data?.alreadyExists ? "Invoice already exists for this load" : "Invoice generated")
+    await loadLoads()
+    router.push(`/dashboard/accounting/invoices/${invoiceId}`)
   }
 
   const toggleSelect = (id: string) => {
@@ -588,6 +612,29 @@ export default function LoadsPage() {
                   <div className="flex gap-2 pt-4 border-t border-border/30">
                     {load.id && typeof load.id === 'string' && load.id.trim() !== '' ? (
                       <>
+                        {load.invoice_id ? (
+                          <Link href={`/dashboard/accounting/invoices/${load.invoice_id}`}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-border/50 bg-transparent hover:bg-secondary/50"
+                            >
+                              <FileText className="w-4 h-4 mr-1" />
+                              View Invoice
+                            </Button>
+                          </Link>
+                        ) : (load.status === "delivered" || load.status === "completed") ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-border/50 bg-transparent hover:bg-secondary/50"
+                            disabled={generatingInvoiceId === load.id}
+                            onClick={() => handleGenerateInvoice(load)}
+                          >
+                            <FileText className="w-4 h-4 mr-1" />
+                            {generatingInvoiceId === load.id ? "Generating..." : "Generate Invoice"}
+                          </Button>
+                        ) : null}
                         <Link href={`/dashboard/loads/${load.id}`}>
                           <Button
                             variant="outline"

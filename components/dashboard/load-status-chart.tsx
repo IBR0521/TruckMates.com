@@ -12,8 +12,8 @@ const STATUS_COLORS: Record<string, string> = {
   delivered: "bg-green-500",
   in_transit: "bg-blue-500",
   pending: "bg-amber-500",
-  scheduled: "bg-purple-500",
-  cancelled: "bg-red-500",
+  scheduled: "bg-cyan-500",
+  cancelled: "bg-amber-500",
   draft: "bg-gray-500",
   unknown: "bg-gray-400",
 }
@@ -40,6 +40,9 @@ export function LoadStatusChart({ data }: LoadStatusChartProps) {
     .sort((a, b) => b.value - a.value)
 
   const total = chartData.reduce((sum, item) => sum + item.value, 0)
+  const onlyOneStatus = chartData.length === 1
+  const lowSample = total <= 3
+  const isSkewedDemoData = onlyOneStatus && lowSample
 
   // If no data, show empty state
   if (!data || data.length === 0 || total === 0) {
@@ -67,10 +70,17 @@ export function LoadStatusChart({ data }: LoadStatusChartProps) {
           {total} Total
         </Badge>
       </div>
+
+      {isSkewedDemoData && (
+        <div className="mb-4 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          Sample-size warning: distribution is based on very few loads, so percentages may look extreme.
+        </div>
+      )}
       
       <div className="space-y-4">
         {chartData.map((item) => {
           const percent = total > 0 ? (item.value / total) * 100 : 0
+          const barClass = isSkewedDemoData ? "bg-muted-foreground/50" : (STATUS_COLORS[item.status] || "bg-gray-400")
           return (
             <div key={item.status} className="space-y-2">
               <div className="flex items-center justify-between text-sm">
@@ -85,7 +95,7 @@ export function LoadStatusChart({ data }: LoadStatusChartProps) {
               </div>
               <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
                 <div
-                  className={`h-full ${STATUS_COLORS[item.status] || "bg-gray-400"} transition-all duration-500 rounded-full`}
+                  className={`h-full ${barClass} transition-all duration-500 rounded-full`}
                   style={{ width: `${percent}%` }}
                 />
               </div>

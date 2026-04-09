@@ -163,7 +163,7 @@ export default function LandingPageBelowFold() {
             <Link href="/register" className="mt-8 inline-block">
               <Button size="lg" className="h-12 rounded-xl px-8 font-semibold shadow-md shadow-primary/20">
                 Start free — no card
-              </Button>
+                </Button>
             </Link>
           </div>
         </div>
@@ -188,7 +188,7 @@ export default function LandingPageBelowFold() {
                   allowFullScreen
                 />
               </div>
-            </div>
+                </div>
           ) : (
             <Card className="relative overflow-hidden border-2 border-dashed border-primary/20 bg-gradient-to-br from-muted/50 to-background p-10 text-center shadow-inner">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">

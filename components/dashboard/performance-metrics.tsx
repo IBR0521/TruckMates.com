@@ -1,7 +1,7 @@
 "use client"
 
 import { Card } from "@/components/ui/card"
-import { TrendingUp, TrendingDown, Clock, Target } from "lucide-react"
+import { Activity, Clock3, Target, Truck } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
 interface PerformanceMetricsProps {
@@ -17,74 +17,51 @@ export function PerformanceMetrics({
   onTimeDeliveryRate = 0,
   averageLoadValue = 0
 }: PerformanceMetricsProps) {
-  const getUtilizationColor = (util: number) => {
-    if (util >= 80) return "text-green-400"
-    if (util >= 50) return "text-yellow-400"
-    return "text-red-400"
-  }
-
-  const getUtilizationStatus = (util: number) => {
-    if (util >= 80) return "Optimal"
-    if (util >= 50) return "Good"
-    return "Needs Improvement"
-  }
+  const utilizationTone = fleetUtilization >= 80 ? "text-emerald-400" : fleetUtilization >= 50 ? "text-amber-400" : "text-rose-400"
+  const onTimeTone = onTimeDeliveryRate >= 90 ? "text-emerald-400" : onTimeDeliveryRate >= 70 ? "text-amber-400" : "text-rose-400"
 
   return (
-    <Card className="p-6 border-border bg-card/50">
-      <div className="flex items-center gap-2 mb-4">
-        <Target className="w-5 h-5 text-primary" />
+    <Card className="border-border bg-card/50 p-5">
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Target className="h-5 w-5 text-primary" />
         <h3 className="text-lg font-semibold text-foreground">Performance Metrics</h3>
+        </div>
+        <Badge variant="outline" className="text-xs">
+          Snapshot
+        </Badge>
       </div>
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Fleet Utilization */}
-        <div className="p-4 bg-muted/30 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-muted-foreground">Fleet Utilization</p>
-            <TrendingUp className={`w-4 h-4 ${getUtilizationColor(fleetUtilization)}`} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-border/50 bg-muted/20 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Fleet Utilization</p>
+            <Truck className={`h-4 w-4 ${utilizationTone}`} />
           </div>
-          <p className={`text-2xl font-bold ${getUtilizationColor(fleetUtilization)}`}>
-            {fleetUtilization}%
-          </p>
-          <Badge 
-            variant={fleetUtilization >= 80 ? "default" : fleetUtilization >= 50 ? "secondary" : "destructive"}
-            className="mt-2 text-xs"
-          >
-            {getUtilizationStatus(fleetUtilization)}
-          </Badge>
+          <p className={`text-2xl font-bold ${utilizationTone}`}>{fleetUtilization}%</p>
         </div>
 
-        {/* Total Loads */}
-        <div className="p-4 bg-muted/30 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-muted-foreground">Total Loads</p>
-            <Target className="w-4 h-4 text-primary" />
+        <div className="rounded-lg border border-border/50 bg-muted/20 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Total Loads</p>
+            <Target className="h-4 w-4 text-primary" />
           </div>
-          <p className="text-2xl font-bold text-foreground">{totalLoads}</p>
-          <p className="text-xs text-muted-foreground mt-2">All time</p>
+          <p className="text-2xl font-bold text-foreground">{totalLoads.toLocaleString()}</p>
         </div>
 
-        {/* On-Time Delivery Rate */}
-        <div className="p-4 bg-muted/30 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-muted-foreground">On-Time Rate</p>
-            <Clock className="w-4 h-4 text-blue-500" />
+        <div className="rounded-lg border border-border/50 bg-muted/20 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">On-Time Rate</p>
+            <Clock3 className={`h-4 w-4 ${onTimeTone}`} />
           </div>
-          <p className={`text-2xl font-bold ${(onTimeDeliveryRate || 0) >= 90 ? "text-green-400" : (onTimeDeliveryRate || 0) >= 70 ? "text-yellow-400" : "text-red-400"}`}>
-            {(onTimeDeliveryRate || 0).toFixed(1)}%
-          </p>
-          <p className="text-xs text-muted-foreground mt-2">Delivery performance</p>
+          <p className={`text-2xl font-bold ${onTimeTone}`}>{(onTimeDeliveryRate || 0).toFixed(1)}%</p>
         </div>
 
-        {/* Average Load Value */}
-        <div className="p-4 bg-muted/30 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-muted-foreground">Avg Load Value</p>
-            <TrendingUp className="w-4 h-4 text-green-500" />
+        <div className="rounded-lg border border-border/50 bg-muted/20 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">Avg Load Value</p>
+            <Activity className="h-4 w-4 text-primary" />
           </div>
-          <p className="text-2xl font-bold text-foreground">
-            ${(averageLoadValue || 0) > 0 ? (averageLoadValue || 0).toLocaleString() : "0"}
-          </p>
-          <p className="text-xs text-muted-foreground mt-2">Per load</p>
+          <p className="text-2xl font-bold text-foreground">${(averageLoadValue || 0).toLocaleString()}</p>
         </div>
       </div>
     </Card>

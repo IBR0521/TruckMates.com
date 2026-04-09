@@ -3,23 +3,26 @@
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { 
-  Truck, 
+  Truck,
   Plus, 
-  TrendingUp, 
-  Users, 
+  Users,
+  FileText,
   AlertCircle, 
   Package,
-  MapPin,
   ArrowRight,
   Route,
-  FileText,
   DollarSign,
   Building2,
   Wrench,
   ChevronDown,
+  Clock3,
+  Activity,
+  ShieldAlert,
+  CheckCircle2,
+  CalendarClock,
 } from "lucide-react"
 import Link from "next/link"
-import { useMemo, useState, useEffect } from "react"
+import { useMemo, useState, useEffect, Suspense } from "react"
 import { toast } from "sonner"
 import { useDashboardPageData } from "@/lib/hooks/use-dashboard-page"
 import {
@@ -30,11 +33,64 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import dynamic from "next/dynamic"
-import { Suspense } from "react"
 import { checkEmailServiceConfigured } from "@/app/actions/settings-integration"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import type { LucideIcon } from "lucide-react"
 
-// Performance: Lazy load heavy components
+type MetricCardProps = {
+  title: string
+  icon: LucideIcon
+  tone: "good" | "warning" | "danger" | "neutral"
+  primary: string
+  secondary?: Array<{ label: string; value: string | number; tone?: "good" | "warning" | "danger" | "neutral" }>
+}
+
+const TONE_STYLES = {
+  good: "text-emerald-400 border-emerald-500/35 bg-emerald-500/8",
+  warning: "text-amber-400 border-amber-500/35 bg-amber-500/8",
+  danger: "text-rose-400 border-rose-500/35 bg-rose-500/8",
+  neutral: "text-foreground border-border/60 bg-background/50",
+}
+
+function MetricCard({ title, icon: Icon, tone, primary, secondary = [] }: MetricCardProps) {
+  return (
+    <Card className="min-w-0 border-border/60 bg-card/70 p-4 shadow-sm">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/90">{title}</p>
+          <p className={`mt-2 text-2xl font-bold leading-none ${TONE_STYLES[tone].split(" ")[0]}`}>{primary}</p>
+        </div>
+        <div className={`rounded-lg border p-2 ${TONE_STYLES[tone]}`}>
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+      {secondary.length > 0 && (
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-border/40 pt-3 md:grid-cols-3">
+          {secondary.map((item) => (
+            <div key={item.label} className="min-w-0">
+              <p className="text-[11px] text-muted-foreground">{item.label}</p>
+              <p
+                className={`text-sm font-semibold ${
+                  item.tone === "danger"
+                    ? "text-rose-400"
+                    : item.tone === "warning"
+                      ? "text-amber-400"
+                      : item.tone === "good"
+                        ? "text-emerald-400"
+                        : "text-foreground"
+                }`}
+              >
+                {item.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// Heavy widgets are now on-demand only.
 const ProfitEstimator = dynamic(() => import("@/components/dashboard/profit-estimator").then(mod => ({ default: mod.ProfitEstimator })), {
   loading: () => <div className="h-64 animate-pulse bg-muted rounded-lg" aria-label="Loading profit estimator" />,
   ssr: false
@@ -68,7 +124,6 @@ const PerformanceMetrics = dynamic(() => import("@/components/dashboard/performa
   ssr: false
 })
 
-// Helper component to calculate time ago (prevents hydration mismatch)
 function TimeAgo({ timestamp }: { timestamp: string | null | undefined }) {
   const [timeAgo, setTimeAgo] = useState<string>("")
   
@@ -90,7 +145,6 @@ function TimeAgo({ timestamp }: { timestamp: string | null | undefined }) {
       
       const diffMs = now.getTime() - activityTime.getTime()
       
-      // Handle negative differences (future dates)
       if (diffMs < 0) {
         setTimeAgo("Just now")
         return
@@ -109,7 +163,7 @@ function TimeAgo({ timestamp }: { timestamp: string | null | undefined }) {
       } else {
         setTimeAgo(`${diffDays} day${diffDays > 1 ? "s" : ""} ago`)
       }
-    } catch (error) {
+    } catch {
       setTimeAgo("Unknown time")
     }
   }, [timestamp])
@@ -122,8 +176,8 @@ export default function FleetDashboardPage() {
   const { data, isLoading, error } = useDashboardPageData()
   const authCompany = data?.authCompany ?? null
   const dashboardData = data?.dashboardData
+  const [now, setNow] = useState<Date>(new Date())
 
-  // Check email service configuration (for managers/owners only)
   const [emailServiceStatus, setEmailServiceStatus] = useState<{ configured: boolean; isManager: boolean } | null>(null)
   const [dismissedEmailBanner, setDismissedEmailBanner] = useState(false)
 
@@ -145,7 +199,11 @@ export default function FleetDashboardPage() {
     checkEmailConfig()
   }, [])
 
-  // Memoize stats to prevent unnecessary recalculations
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60000)
+    return () => clearInterval(interval)
+  }, [])
+
   const stats = useMemo(() => {
     if (!dashboardData) {
       return {
@@ -175,15 +233,57 @@ export default function FleetDashboardPage() {
     }
   }, [dashboardData])
 
-  // Memoize recent activity
   const recentActivity = useMemo(() => {
     return dashboardData?.recentActivity || []
   }, [dashboardData?.recentActivity])
 
-  // Handle errors with toast (React Query handles retries automatically)
+  const alertsCount = useMemo(() => {
+    if (!dashboardData) return 0
+    return (
+      (dashboardData.overdueInvoices?.length || 0) +
+      (dashboardData.upcomingMaintenance?.length || 0) +
+      (dashboardData.upcomingDeliveries?.length || 0)
+    )
+  }, [dashboardData])
+
+  const loadStatusStats = useMemo(() => {
+    const distribution = dashboardData?.loadStatusDistribution || []
+    const map = distribution.reduce<Record<string, number>>((acc, item) => {
+      acc[item.status] = Number(item.count || 0)
+      return acc
+    }, {})
+    const inTransit = map.in_transit || 0
+    const scheduled = map.scheduled || 0
+    const delivered = map.delivered || 0
+    const cancelled = map.cancelled || 0
+    const pending = map.pending || 0
+    return { inTransit, scheduled, delivered, cancelled, pending }
+  }, [dashboardData?.loadStatusDistribution])
+
+  const lastActivityLabel = useMemo(() => {
+    const latest = recentActivity[0]?.time
+    if (!latest) return "No recent updates"
+    const diff = now.getTime() - new Date(latest).getTime()
+    if (Number.isNaN(diff)) return "No recent updates"
+    const mins = Math.max(0, Math.floor(diff / 60000))
+    if (mins < 1) return "Updated just now"
+    if (mins < 60) return `Updated ${mins}m ago`
+    return `Updated ${Math.floor(mins / 60)}h ago`
+  }, [recentActivity, now])
+
+  const getActivityVisual = (action: string) => {
+    const value = String(action || "").toLowerCase()
+    if (value.includes("dvir")) return { icon: ShieldAlert, tone: "text-amber-400 bg-amber-500/15 border-amber-500/30" }
+    if (value.includes("bol")) return { icon: FileText, tone: "text-violet-400 bg-violet-500/15 border-violet-500/30" }
+    if (value.includes("route")) return { icon: Route, tone: "text-cyan-400 bg-cyan-500/15 border-cyan-500/30" }
+    if (value.includes("driver")) return { icon: Users, tone: "text-emerald-400 bg-emerald-500/15 border-emerald-500/30" }
+    if (value.includes("truck") || value.includes("vehicle")) return { icon: Truck, tone: "text-blue-400 bg-blue-500/15 border-blue-500/30" }
+    if (value.includes("invoice")) return { icon: DollarSign, tone: "text-amber-400 bg-amber-500/15 border-amber-500/30" }
+    return { icon: Activity, tone: "text-muted-foreground bg-muted/50 border-border/60" }
+  }
+
   if (error) {
     const errorMessage = error.message || "Failed to load dashboard data"
-    // Show connection errors more prominently
     if (errorMessage.includes('Connection') || errorMessage.includes('timeout') || errorMessage.includes('ECONNREFUSED')) {
       toast.error(errorMessage, {
         duration: 5000,
@@ -192,7 +292,6 @@ export default function FleetDashboardPage() {
     }
   }
 
-  // Show loading skeleton immediately if no data yet
   if (isLoading && !data) {
     return (
       <div className="w-full p-4 md:p-8">
@@ -212,34 +311,34 @@ export default function FleetDashboardPage() {
   }
 
   return (
-    <div className="w-full min-h-full bg-background">
-      {/* Page Header */}
-      <div className="border-b border-border bg-card/80 backdrop-blur-sm px-4 md:px-8 py-4 md:py-6">
-        <div className="flex flex-col gap-4">
+    <div className="w-full min-h-full bg-gradient-to-b from-background via-background to-muted/[0.08]">
+      <div className="relative border-b border-border/60 bg-card/40 px-4 py-5 backdrop-blur-md md:px-8 md:py-6">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_80%_at_50%_0%,hsl(var(--primary)/0.08),transparent_70%)]" />
+        <div className="relative flex flex-col gap-4">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-foreground">Dashboard</h1>
-              <p className="text-muted-foreground text-sm mt-1">Welcome back, manage your fleet efficiently</p>
+              <h1 className="text-2xl font-bold text-foreground md:text-3xl">Dashboard</h1>
+              <p className="mt-1 text-sm text-muted-foreground">Morning Operations View</p>
               {authCompany?.companyName && (
-                <p className="text-muted-foreground text-xs mt-0.5" data-testid="dashboard-company">
-                  Viewing: <span className="font-medium text-foreground">{authCompany.companyName}</span>
+                <p className="mt-1 text-xs text-muted-foreground" data-testid="dashboard-company">
+                  Viewing <span className="font-semibold text-foreground">{authCompany.companyName}</span>
                 </p>
               )}
-              <p className="sr-only">Use keyboard shortcuts: Ctrl+N for new item, Ctrl+F to search</p>
+            </div>
+            <div className="flex items-center gap-2 rounded-full border border-border/60 bg-background/60 px-3 py-1.5 text-xs text-muted-foreground">
+              <Clock3 className="h-3.5 w-3.5 text-emerald-400" />
+              <span className="font-medium text-foreground">Live</span>
+              <span>•</span>
+              <span>{lastActivityLabel}</span>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="w-full sm:w-auto">
-              <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" aria-label="Loading profit estimator" />}>
-                <ProfitEstimator />
-              </Suspense>
-            </div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 justify-end">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto" aria-label="Add new item" aria-haspopup="true" aria-expanded="false">
-                  <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
+                <Button className="w-full bg-primary text-primary-foreground shadow-md hover:bg-primary/90 sm:w-auto">
+                  <Plus className="w-4 h-4 mr-2" />
                   Add New
-                  <ChevronDown className="w-4 h-4 ml-2" aria-hidden="true" />
+                  <ChevronDown className="w-4 h-4 ml-2" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -305,10 +404,8 @@ export default function FleetDashboardPage() {
         </div>
       </div>
 
-      {/* Content Area */}
       <div className="p-4 md:p-8">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* Email Service Configuration Banner (for managers/owners only) */}
+        <div className="mx-auto max-w-7xl space-y-6">
           {emailServiceStatus?.isManager && !emailServiceStatus.configured && !dismissedEmailBanner && (
             <Alert className="border-yellow-500/50 bg-yellow-500/10">
               <AlertCircle className="h-4 w-4 text-yellow-600" />
@@ -353,348 +450,193 @@ export default function FleetDashboardPage() {
               </AlertDescription>
             </Alert>
           )}
-          {/* Financial Overview Section */}
-              <div className="grid md:grid-cols-4 gap-4">
-            <Card className="border-border bg-card/50 p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-muted-foreground text-sm font-medium mb-2">Total Revenue</p>
-                  <p className="text-2xl font-bold text-green-400">
-                    {isLoading ? "..." : `$${Number(dashboardData?.totalRevenue || 0).toLocaleString()}`}
-                  </p>
-                </div>
-                <DollarSign className="w-5 h-5 text-green-400 opacity-70" />
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">All paid invoices</p>
-            </Card>
 
-            <Card className="border-border bg-card/50 p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-muted-foreground text-sm font-medium mb-2">Total Expenses</p>
-                  <p className="text-2xl font-bold text-red-400">
-                    {isLoading ? "..." : `$${Number(dashboardData?.totalExpenses || 0).toLocaleString()}`}
-                  </p>
-                </div>
-                <DollarSign className="w-5 h-5 text-red-400 opacity-70" />
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">All expenses</p>
-            </Card>
-
-            <Card className="border-border bg-card/50 p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-muted-foreground text-sm font-medium mb-2">Net Profit</p>
-                  <p className={`text-2xl font-bold ${(dashboardData?.netProfit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {isLoading ? "..." : `$${Number(dashboardData?.netProfit || 0).toLocaleString()}`}
-                  </p>
-                </div>
-                <TrendingUp className={`w-5 h-5 opacity-70 ${(dashboardData?.netProfit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`} />
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                {dashboardData?.profitMargin ? `${Number(dashboardData.profitMargin).toFixed(1)}% margin` : "0% margin"}
-              </p>
-            </Card>
-
-            <Card className="border-border bg-card/50 p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-muted-foreground text-sm font-medium mb-2">Outstanding</p>
-                  <p className="text-2xl font-bold text-yellow-400">
-                    {isLoading ? "..." : `$${Number(dashboardData?.outstandingInvoices || 0).toLocaleString()}`}
-                  </p>
-                </div>
-                <FileText className="w-5 h-5 text-yellow-400 opacity-70" />
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">Pending invoices</p>
-            </Card>
-          </div>
-
-          {/* Charts Section */}
-          <div className="grid md:grid-cols-2 gap-6">
-            <RevenueChart data={dashboardData?.revenueTrend || []} />
-            {dashboardData?.loadStatusDistribution && dashboardData.loadStatusDistribution.length > 0 && (
-              <LoadStatusChart data={dashboardData.loadStatusDistribution} />
-            )}
-          </div>
-
-          {/* Alerts & Reminders Section */}
-          <div className="grid md:grid-cols-2 gap-6">
-            {dashboardData && (
-              <Suspense fallback={<div className="h-48 animate-pulse bg-muted rounded-lg" aria-label="Loading alerts" />}>
-                <AlertsSection
-                  upcomingMaintenance={dashboardData.upcomingMaintenance || []}
-                  overdueInvoices={dashboardData.overdueInvoices || []}
-                  upcomingDeliveries={dashboardData.upcomingDeliveries || []}
-                />
-              </Suspense>
-            )}
-            <Suspense fallback={<div className="h-48 animate-pulse bg-muted rounded-lg" aria-label="Loading reminders" />}>
-              <RemindersWidget />
-            </Suspense>
-          </div>
-
-          {/* Detailed Stats Cards with Partial Info */}
-          {/* First Row: Trucks and Drivers */}
-          <div className="grid md:grid-cols-2 gap-4">
-            {/* Active Trucks Card */}
-            <Card className="border-border bg-card/50 p-6 hover:shadow-lg transition-shadow flex flex-col">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <Truck className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Active Trucks</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      {isLoading ? "..." : stats.activeTrucks}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">{stats.totalTrucks} total</p>
-                  </div>
-                </div>
-              </div>
-              {!isLoading && dashboardData?.recentTrucks && dashboardData.recentTrucks.length > 0 && (
-                <div className="mb-3 overflow-hidden flex-1 min-h-0 max-h-32">
-                  <div className="overflow-y-auto max-h-full space-y-1.5">
-                    {dashboardData.recentTrucks.slice(0, 3).map((truck: any) => (
-                      <div key={truck.id} className="text-sm text-foreground pb-1.5 border-b border-border/30 last:border-0 last:pb-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium truncate">{truck.truck_number}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded flex-shrink-0 ${
-                            truck.status === "in_use" ? "bg-blue-500/20 text-blue-400" : "bg-green-500/20 text-green-400"
-                          }`}>
-                            {truck.status === "in_use" ? "In Use" : "Available"}
-                          </span>
-                        </div>
-                        {truck.make && truck.model && (
-                          <div className="text-xs text-muted-foreground truncate mt-0.5">
-                            {truck.make} {truck.model}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {!isLoading && (!dashboardData?.recentTrucks || dashboardData.recentTrucks.length === 0) && (
-                <div className="mb-3 overflow-hidden flex-1 min-h-0 max-h-32">
-                  <div className="text-sm text-muted-foreground italic">No active trucks</div>
-                </div>
-              )}
-              <Link href="/dashboard/trucks" className="mt-auto">
-                <Button variant="outline" size="sm" className="w-full" aria-label="View all trucks">
-                  View All Trucks
-                  <ArrowRight className="w-4 h-4 ml-2" aria-hidden="true" />
-                </Button>
-              </Link>
-            </Card>
-
-            {/* Active Drivers Card */}
-            <Card className="border-border bg-card/50 p-6 hover:shadow-lg transition-shadow flex flex-col">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-500/10 rounded-lg">
-                    <Users className="w-5 h-5 text-blue-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Active Drivers</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      {isLoading ? "..." : stats.activeDrivers}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">{stats.totalDrivers} total</p>
-                  </div>
-                </div>
-              </div>
-              {!isLoading && dashboardData?.recentDrivers && dashboardData.recentDrivers.length > 0 && (
-                <div className="mb-3 overflow-hidden flex-1 min-h-0 max-h-32">
-                  <div className="overflow-y-auto max-h-full space-y-1.5">
-                    {dashboardData.recentDrivers.slice(0, 3).map((driver: any) => (
-                      <div key={driver.id} className="text-sm text-foreground pb-1.5 border-b border-border/30 last:border-0 last:pb-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium truncate">{driver.name}</span>
-                          <span className="text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-400 flex-shrink-0">
-                            {driver.status === "on_route" ? "On Route" : "Active"}
-                          </span>
-                        </div>
-                        {driver.phone && (
-                          <div className="text-xs text-muted-foreground truncate mt-0.5">
-                            {driver.phone}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {!isLoading && (!dashboardData?.recentDrivers || dashboardData.recentDrivers.length === 0) && (
-                <div className="mb-3 overflow-hidden flex-1 min-h-0 max-h-32">
-                  <div className="text-sm text-muted-foreground italic">No active drivers</div>
-                </div>
-              )}
-              <Link href="/dashboard/drivers" className="mt-auto">
-                <Button variant="outline" size="sm" className="w-full" aria-label="View all drivers">
-                  View All Drivers
-                  <ArrowRight className="w-4 h-4 ml-2" aria-hidden="true" />
-                </Button>
-              </Link>
-            </Card>
-          </div>
-
-          {/* Second Row: Routes and Loads */}
-          <div className="grid md:grid-cols-2 gap-4">
-            {/* Active Routes Card */}
-            <Card className="border-border bg-card/50 p-6 hover:shadow-lg transition-shadow flex flex-col">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-green-500/10 rounded-lg">
-                    <Route className="w-5 h-5 text-green-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Active Routes</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      {isLoading ? "..." : stats.activeRoutes}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">{stats.totalRoutes} total</p>
-                  </div>
-                </div>
-              </div>
-              {!isLoading && dashboardData?.recentRoutes && dashboardData.recentRoutes.length > 0 && (
-                <div className="mb-3 overflow-hidden flex-1 min-h-0 max-h-32">
-                  <div className="overflow-y-auto max-h-full space-y-1.5">
-                    {dashboardData.recentRoutes.slice(0, 3).map((route: any) => (
-                      <div key={route.id} className="text-sm text-foreground pb-1.5 border-b border-border/30 last:border-0 last:pb-0">
-                        <div className="font-medium truncate">{route.name}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5 truncate">
-                          {route.origin} → {route.destination}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {!isLoading && (!dashboardData?.recentRoutes || dashboardData.recentRoutes.length === 0) && (
-                <div className="mb-3 overflow-hidden flex-1 min-h-0 max-h-32">
-                  <div className="text-sm text-muted-foreground italic">No active routes</div>
-                </div>
-              )}
-              <Link href="/dashboard/routes" className="mt-auto">
-                <Button variant="outline" size="sm" className="w-full" aria-label="View all routes">
-                  View All Routes
-                  <ArrowRight className="w-4 h-4 ml-2" aria-hidden="true" />
-                </Button>
-              </Link>
-            </Card>
-
-            {/* Recent Loads Card */}
-            <Card className="border-border bg-card/50 p-6 hover:shadow-lg transition-shadow flex flex-col">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-500/10 rounded-lg">
-                    <Package className="w-5 h-5 text-purple-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Recent Loads</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      {isLoading ? "..." : stats.inTransitLoads}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">In transit</p>
-                  </div>
-                </div>
-              </div>
-              {!isLoading && dashboardData?.recentLoads && dashboardData.recentLoads.length > 0 && (
-                <div className="mb-3 overflow-hidden flex-1 min-h-0 max-h-32">
-                  <div className="overflow-y-auto max-h-full space-y-1.5">
-                    {dashboardData.recentLoads.slice(0, 3).map((load: any) => (
-                      <div key={load.id} className="text-sm text-foreground pb-1.5 border-b border-border/30 last:border-0 last:pb-0">
-                        <div className="font-medium truncate">{load.shipment_number}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5 truncate">
-                          {load.origin} → {load.destination}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {!isLoading && (!dashboardData?.recentLoads || dashboardData.recentLoads.length === 0) && (
-                <div className="mb-3 overflow-hidden flex-1 min-h-0 max-h-32">
-                  <div className="text-sm text-muted-foreground italic">No recent loads</div>
-                </div>
-              )}
-              <Link href="/dashboard/loads" className="mt-auto">
-                <Button variant="outline" size="sm" className="w-full" aria-label="View all loads">
-                  View All Loads
-                  <ArrowRight className="w-4 h-4 ml-2" aria-hidden="true" />
-                </Button>
-              </Link>
-            </Card>
-          </div>
-
-          {/* Performance Metrics */}
-          <Suspense fallback={<div className="h-48 animate-pulse bg-muted rounded-lg" aria-label="Loading performance metrics" />}>
-            <PerformanceMetrics
-              fleetUtilization={stats.fleetUtilization}
-              totalLoads={stats.totalLoads}
-              onTimeDeliveryRate={
-                stats.totalLoads > 0 && stats.inTransitLoads > 0
-                  ? Math.round((stats.inTransitLoads / stats.totalLoads) * 100)
-                  : 0
-              }
-              averageLoadValue={
-                dashboardData && dashboardData.totalLoads > 0
-                  ? dashboardData.totalRevenue / dashboardData.totalLoads
-                  : 0
-              }
+          {/* Ops Morning View: the 5 checks */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-5">
+            <MetricCard
+              title="Loads Today"
+              icon={Package}
+              tone={loadStatusStats.cancelled > 0 ? "warning" : "good"}
+              primary={isLoading ? "..." : String(loadStatusStats.inTransit)}
+              secondary={[
+                { label: "Scheduled", value: isLoading ? "..." : loadStatusStats.scheduled },
+                { label: "Delivered", value: isLoading ? "..." : loadStatusStats.delivered, tone: "good" },
+                { label: "Cancelled", value: isLoading ? "..." : loadStatusStats.cancelled, tone: loadStatusStats.cancelled > 0 ? "warning" : "neutral" },
+              ]}
             />
-          </Suspense>
+            <MetricCard
+              title="Driver Coverage"
+              icon={Users}
+              tone={stats.activeDrivers > 0 ? "good" : "warning"}
+              primary={isLoading ? "..." : `${stats.activeDrivers} active`}
+              secondary={[
+                { label: "Total", value: isLoading ? "..." : stats.totalDrivers },
+                { label: "Idle", value: isLoading ? "..." : Math.max(0, stats.totalDrivers - stats.activeDrivers), tone: "warning" },
+                { label: "Coverage", value: isLoading ? "..." : `${stats.totalDrivers > 0 ? Math.round((stats.activeDrivers / stats.totalDrivers) * 100) : 0}%` },
+              ]}
+            />
+            <MetricCard
+              title="Receivables"
+              icon={FileText}
+              tone={(dashboardData?.outstandingInvoices || 0) > 0 ? "warning" : "good"}
+              primary={isLoading ? "..." : `$${Number(dashboardData?.outstandingInvoices || 0).toLocaleString()}`}
+              secondary={[
+                { label: "Revenue", value: isLoading ? "..." : `$${Number(dashboardData?.totalRevenue || 0).toLocaleString()}`, tone: "good" },
+                { label: "Expenses", value: isLoading ? "..." : `$${Number(dashboardData?.totalExpenses || 0).toLocaleString()}` },
+                { label: "Net", value: isLoading ? "..." : `$${Number(dashboardData?.netProfit || 0).toLocaleString()}`, tone: (dashboardData?.netProfit || 0) >= 0 ? "good" : "danger" },
+              ]}
+            />
+            <MetricCard
+              title="Exceptions"
+              icon={AlertCircle}
+              tone={alertsCount > 0 ? "danger" : "good"}
+              primary={isLoading ? "..." : `${alertsCount} total`}
+              secondary={[
+                { label: "Invoices", value: isLoading ? "..." : dashboardData?.overdueInvoices?.length || 0, tone: "danger" },
+                { label: "Deliveries", value: isLoading ? "..." : dashboardData?.upcomingDeliveries?.length || 0, tone: "warning" },
+                { label: "Maintenance", value: isLoading ? "..." : dashboardData?.upcomingMaintenance?.length || 0, tone: "warning" },
+              ]}
+            />
+            <MetricCard
+              title="Fleet Readiness"
+              icon={Wrench}
+              tone={stats.scheduledMaintenance > 0 ? "warning" : "good"}
+              primary={isLoading ? "..." : `${stats.activeTrucks}/${stats.totalTrucks}`}
+              secondary={[
+                { label: "Utilization", value: isLoading ? "..." : `${stats.fleetUtilization}%`, tone: stats.fleetUtilization >= 80 ? "good" : "warning" },
+                { label: "Maint.", value: isLoading ? "..." : stats.scheduledMaintenance, tone: stats.scheduledMaintenance > 0 ? "warning" : "good" },
+                { label: "Routes", value: isLoading ? "..." : `${stats.activeRoutes}/${stats.totalRoutes}` },
+              ]}
+            />
+          </div>
 
-          {/* Recent Activity */}
-          <Card className="border-border bg-card/50 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-foreground">Recent Activity</h3>
-            </div>
-            {isLoading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="animate-pulse flex items-center gap-3">
-                    <div className="h-2 bg-muted rounded w-2"></div>
-                    <div className="flex-1">
-                      <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
-                      <div className="h-3 bg-muted rounded w-1/4"></div>
+          <Card className="border-border/70 bg-card/40 p-4 shadow-sm md:p-6">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-foreground">Operations & Financial Insights</h2>
+                <p className="text-sm text-muted-foreground">Live operational context with finance signals in one view.</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <Card className="border-border/60 bg-card/60 p-5">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground/90">Total Revenue</p>
+                      <p className="mt-3 text-3xl font-bold text-green-400">
+                        {isLoading ? "..." : `$${Number(dashboardData?.totalRevenue || 0).toLocaleString()}`}
+                      </p>
                     </div>
+                    <DollarSign className="w-5 h-5 text-green-400 opacity-70" />
                   </div>
-                ))}
-              </div>
-            ) : recentActivity.length === 0 ? (
-              <div className="text-center py-8">
-                <Package className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-                <p className="text-muted-foreground">No recent activity</p>
-                <p className="text-sm text-muted-foreground mt-1">Activity will appear here as you use the system</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {recentActivity.map((activity: any, index: number) => {
-
-                  const typeColors = {
-                    success: "bg-green-500/20 text-green-400",
-                    error: "bg-red-500/20 text-red-400",
-                    warning: "bg-yellow-500/20 text-yellow-400",
-                    info: "bg-blue-500/20 text-blue-400",
-                    default: "bg-gray-500/20 text-gray-400",
-                  }
-
-                  return (
-                    <div key={index} className="flex items-start gap-3 pb-3 border-b border-border/30 last:border-0">
-                      <div className={`w-2 h-2 rounded-full mt-2 ${typeColors[activity.type as keyof typeof typeColors] || typeColors.default}`}></div>
-                      <div className="flex-1">
-                        <p className="text-sm text-foreground">{activity.action}</p>
-                        <p className="text-xs text-muted-foreground mt-1"><TimeAgo timestamp={activity.time} /></p>
-                      </div>
+                </Card>
+                <Card className="border-border/60 bg-card/60 p-5">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground/90">Total Expenses</p>
+                      <p className="mt-3 text-3xl font-bold text-red-400">
+                        {isLoading ? "..." : `$${Number(dashboardData?.totalExpenses || 0).toLocaleString()}`}
+                      </p>
                     </div>
-                  )
-                })}
+                    <DollarSign className="w-5 h-5 text-red-400 opacity-70" />
+                  </div>
+                </Card>
+                <Card className="border-border/60 bg-card/60 p-5">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground/90">Net Profit</p>
+                      <p className={`mt-3 text-3xl font-bold ${(dashboardData?.netProfit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {isLoading ? "..." : `$${Number(dashboardData?.netProfit || 0).toLocaleString()}`}
+                      </p>
+                    </div>
+                    <Route className={`w-5 h-5 opacity-70 ${(dashboardData?.netProfit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`} />
+                  </div>
+                </Card>
+                <Card className="border-border/60 bg-card/60 p-5">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground/90">Fleet Utilization</p>
+                      <p className="mt-3 text-3xl font-bold text-foreground">
+                        {isLoading ? "..." : `${stats.fleetUtilization}%`}
+                      </p>
+                    </div>
+                    <Truck className="w-5 h-5 text-primary opacity-70" />
+                  </div>
+                </Card>
               </div>
-            )}
-          </Card>
+
+              <div className="mt-6 grid gap-6 md:grid-cols-2">
+                <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
+                  <ProfitEstimator />
+                </Suspense>
+                <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
+                  <RevenueChart data={dashboardData?.revenueTrend || []} />
+                </Suspense>
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                {dashboardData?.loadStatusDistribution && dashboardData.loadStatusDistribution.length > 0 && (
+                  <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
+                    <LoadStatusChart data={dashboardData.loadStatusDistribution} />
+                  </Suspense>
+                )}
+                <Suspense fallback={<div className="h-48 animate-pulse bg-muted rounded-lg" />}>
+                  <RemindersWidget />
+                </Suspense>
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                {dashboardData && (
+                  <Suspense fallback={<div className="h-48 animate-pulse bg-muted rounded-lg" />}>
+                    <AlertsSection
+                      upcomingMaintenance={dashboardData.upcomingMaintenance || []}
+                      overdueInvoices={dashboardData.overdueInvoices || []}
+                      upcomingDeliveries={dashboardData.upcomingDeliveries || []}
+                    />
+                  </Suspense>
+                )}
+                <Suspense fallback={<div className="h-48 animate-pulse bg-muted rounded-lg" />}>
+                  <PerformanceMetrics
+                    fleetUtilization={stats.fleetUtilization}
+                    totalLoads={stats.totalLoads}
+                    onTimeDeliveryRate={
+                      stats.totalLoads > 0 && stats.inTransitLoads > 0
+                        ? Math.round((stats.inTransitLoads / stats.totalLoads) * 100)
+                        : 0
+                    }
+                    averageLoadValue={
+                      dashboardData && dashboardData.totalLoads > 0
+                        ? dashboardData.totalRevenue / dashboardData.totalLoads
+                        : 0
+                    }
+                  />
+                </Suspense>
+              </div>
+
+              <Card className="border-border/60 bg-card/60 p-5">
+                <h3 className="mb-4 text-lg font-semibold text-foreground">Recent Activity</h3>
+                {recentActivity.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No recent activity</p>
+                ) : (
+                  <div className="space-y-1">
+                    {recentActivity.map((activity: any, index: number) => (
+                      <div key={index} className="flex items-start gap-3 rounded-md border-b border-border/30 py-3 last:border-0">
+                        <div className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-md border ${getActivityVisual(activity.action).tone}`}>
+                          {(() => {
+                            const Icon = getActivityVisual(activity.action).icon
+                            return <Icon className="h-3.5 w-3.5" />
+                          })()}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm text-foreground">{activity.action}</p>
+                          <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <CalendarClock className="h-3 w-3" />
+                            <TimeAgo timestamp={activity.time} />
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </Card>
         </div>
       </div>
     </div>
