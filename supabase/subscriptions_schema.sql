@@ -193,7 +193,7 @@ CREATE TRIGGER update_subscription_plans_updated_at BEFORE UPDATE ON public.subs
 CREATE TRIGGER update_subscriptions_updated_at BEFORE UPDATE ON public.subscriptions
   FOR EACH ROW EXECUTE FUNCTION update_subscription_updated_at_column();
 
--- Insert default subscription plans (matches public pricing page: Free, Starter $149, Pro $299, Enterprise $499)
+-- Insert default subscription plans (legacy Free + strategy mapping: Operator/Fleet/Enterprise)
 INSERT INTO public.subscription_plans (name, display_name, price_monthly, price_yearly, max_users, max_drivers, max_vehicles, features) VALUES
   (
     'free',
@@ -207,33 +207,33 @@ INSERT INTO public.subscription_plans (name, display_name, price_monthly, price_
   ),
   (
     'starter',
-    'Starter',
-    149.00,
-    1490.00,
-    3,
+    'Operator',
+    89.00,
+    828.00,
+    2,
     NULL,
-    10,
-    '["Everything in Free", "IFTA reporting + PDF", "Invoicing & settlements", "Fuel analytics", "Maintenance tracking", "Driver scorecards", "3 users", "API & webhooks"]'::jsonb
+    5,
+    '["Loads, dispatch, BOLs, invoicing, settlements", "IFTA, ELD logs, DVIR, maintenance, reminders", "Revenue, P&L, and fuel analytics", "14-day free trial (no credit card)", "2 users included"]'::jsonb
   ),
   (
     'professional',
-    'Professional',
-    299.00,
-    2990.00,
-    10,
+    'Fleet',
+    219.00,
+    2148.00,
+    8,
     NULL,
-    30,
-    '["Everything in Starter", "Six-role access control (full team RBAC)", "AI dispatch assistant", "Marketplace access", "Customer portal", "Backhaul optimization", "API keys & webhooks", "10 users", "Priority support"]'::jsonb
+    20,
+    '["Everything in Operator", "Six-role access control (full team RBAC)", "QuickBooks sync", "Predictive maintenance", "Geofencing + route optimizer", "CRM + detention/on-time reports", "API keys & webhooks", "8 users included"]'::jsonb
   ),
   (
     'enterprise',
     'Enterprise',
-    499.00,
-    4990.00,
+    429.00,
+    4188.00,
     NULL,
     NULL,
     NULL,
-    '["Everything in Pro", "Unlimited users", "Six-role access control (full team RBAC)", "Multi-company RBAC", "Audit logs", "Custom Integrations", "Receipt OCR (AI)", "White-label portal", "Dedicated support"]'::jsonb
+    '["Everything in Fleet", "Unlimited users", "Six-role access control (full team RBAC)", "Multi-company RBAC", "Audit logs", "Custom integrations", "White-label portal", "Dedicated support + SLA"]'::jsonb
   )
 ON CONFLICT (name) DO UPDATE SET
   display_name = EXCLUDED.display_name,

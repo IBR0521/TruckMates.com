@@ -10,76 +10,60 @@ import { Logo } from "@/components/logo"
 
 const PLANS = [
   {
-    name: "Free",
-    description: "Owner operators testing the waters",
-    priceMonthly: 0,
-    priceYearly: 0,
-    limits: "Up to 2 trucks",
+    name: "Operator",
+    description: "Owner-operators needing full ops + compliance from day one",
+    priceMonthly: 89,
+    priceYearly: 828,
+    limits: "Up to 5 trucks · 2 users",
     included: [
-      "Up to 2 trucks",
-      "GPS & fleet map",
-      "Dispatch",
-      "ELD compliance tools",
-      "IFTA reporting",
-      "Invoicing & settlements (fair-use limits)",
-      "1 user",
+      "Loads, dispatch, BOLs, invoicing, settlements",
+      "IFTA, ELD logs, DVIR, maintenance, reminders",
+      "Revenue, P&L, and fuel analytics",
+      "14-day free trial (no credit card)",
+      "2 users included",
     ],
-    excluded: ["AI assistant", "API access", "Marketplace", "Priority support"],
-    cta: "Get started free",
-    href: "/register",
-    highlighted: false,
-  },
-  {
-    name: "Starter",
-    description: "Small fleets getting serious about operations",
-    priceMonthly: 149,
-    priceYearly: 1490, // 10 months
-    limits: "Up to 10 trucks",
-    included: [
-      "Everything in Free",
-      "IFTA reporting + PDF",
-      "Invoicing & settlements",
-      "Fuel analytics",
-      "Maintenance tracking",
+    excluded: [
+      "QuickBooks sync",
       "Driver scorecards",
-      "3 users",
       "API & webhooks",
+      "Predictive maintenance",
+      "Geofencing & route optimizer",
     ],
-    excluded: [],
-    cta: "Start free trial",
+    cta: "Start 14-day trial",
     href: "/register",
     highlighted: false,
   },
   {
-    name: "Professional",
-    description: "Growing fleets that need everything connected",
-    priceMonthly: 299,
-    priceYearly: 2990, // 10 months
-    limits: "Up to 30 trucks",
+    name: "Fleet",
+    description: "Growing fleets needing accounting depth and team coordination",
+    priceMonthly: 219,
+    priceYearly: 2148,
+    limits: "Up to 20 trucks · 8 users",
     included: [
-      "Everything in Starter",
+      "Everything in Operator",
       "Full six-role team permissions (Fleet tier)",
-      "AI dispatch assistant",
-      "Marketplace access",
-      "Customer portal",
-      "Backhaul optimization",
-      "API keys & webhooks",
-      "10 users",
-      "Priority support",
+      "IFTA reporting + PDF",
+      "QuickBooks sync + advanced reporting",
+      "Driver scorecards",
+      "Predictive maintenance + geofencing + route optimizer",
+      "CRM, detention/on-time reports, factoring integration",
+      "API & webhooks",
+      "8 users included",
+      "14-day free trial (no credit card)",
     ],
     excluded: [],
-    cta: "Start free trial",
+    cta: "Start 14-day trial",
     href: "/register",
     highlighted: true,
   },
   {
     name: "Enterprise",
     description: "Large operations needing full control",
-    priceMonthly: 499,
-    priceYearly: 4990, // 10 months
+    priceMonthly: 429,
+    priceYearly: 4188,
     limits: "Unlimited trucks",
     included: [
-      "Everything in Pro",
+      "Everything in Fleet",
       "Unlimited users",
       "Multi-company RBAC",
       "Audit logs",
@@ -96,8 +80,10 @@ const PLANS = [
 ]
 
 const ADDONS = [
-  { name: "Extra trucks", description: "Go over your plan limit without upgrading", price: "$5 / truck / mo" },
-  { name: "AI features pack", description: "Receipt OCR, document analysis, TruckMates AI chat", price: "$29 / mo" },
+  { name: "Extra trucks", description: "Overage beyond plan truck limit without full tier upgrade", price: "$8 / truck / mo" },
+  { name: "ELD hardware sync", description: "Samsara, Motive, or Geotab webhook integration", price: "$24 / mo" },
+  { name: "Toll routing", description: "Commercial toll lookups and route costing via TollGuru", price: "$19 / mo" },
+  { name: "Portal branding", description: "Custom logo and colors on customer-facing portal", price: "$39 / mo" },
 ]
 
 export default function PricingPage() {
@@ -150,7 +136,7 @@ export default function PricingPage() {
       </section>
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {PLANS.map((plan) => {
             const price = billingAnnual && plan.priceYearly > 0 ? plan.priceYearly / 12 : plan.priceMonthly
             return (

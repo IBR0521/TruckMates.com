@@ -6,10 +6,10 @@ Use these **exactly** everywhere (DB, Stripe metadata, PayPal custom_id, UI):
 
 | Internal `name` (lowercase) | Display name | Notes |
 |-----------------------------|--------------|--------|
-| `free` | Free | Default for new companies |
-| `starter` | Starter | $149/mo |
-| `professional` | Professional | $299/mo |
-| `enterprise` | Enterprise | $499/mo |
+| `free` | Free (legacy/default) | Kept for backward compatibility |
+| `starter` | Operator | Strategy-tier mapping |
+| `professional` | Fleet | Strategy-tier mapping |
+| `enterprise` | Enterprise | Strategy-tier mapping |
 
 **Do not use:** `simple`, `standard`, `premium`, `basic`, or any other variants. Billing and plan limits rely on these four names.
 
@@ -40,16 +40,4 @@ The platform uses a **single six-role model** in Settings → Users and server a
 
 Do **not** gate assignment of the six roles by plan in application code unless product later adds an explicit exception (none as of this note).
 
-## Six-role access control (product decision)
-
-Stakeholder clarification (strategy doc correction): **full six-role RBAC is included from the Fleet tier onward**, not Enterprise-only. The six roles are: `super_admin`, `operations_manager`, `dispatcher`, `safety_compliance`, `financial_controller`, `driver` (see `lib/roles.ts` and Settings → Users).
-
-**Internal plan mapping until billing display names are renamed:**
-
-| Strategy / marketing name | `subscription_plans.name` |
-|---------------------------|---------------------------|
-| Operator (small fleet)    | `starter`                 |
-| Fleet                     | `professional`            |
-| Enterprise                | `enterprise`              |
-
-The app does **not** gate which of the six roles you can assign by subscription tier today; limits are **seat counts** (`max_users`), not role types. **Enterprise**Differentiators remain items such as **multi-company RBAC**, audit logs, and white-label portal — not “six roles,” which is a **Fleet+** entitlement in positioning and in `subscription_plans.features` for `professional`.
+The app does **not** gate which of the six roles you can assign by subscription tier today; limits are **seat counts** (`max_users`), not role types. Enterprise differentiators stay items such as **multi-company RBAC**, audit logs, and white-label portal — not the base six roles.
