@@ -10,17 +10,14 @@ import Link from "next/link"
 import { toast } from "sonner"
 import { Logo } from "@/components/logo"
 import { createClient } from "@/lib/supabase/client"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
-  const searchParams = useSearchParams()
   const supabase = createClient()
-  const nextParam = searchParams.get("next")
-  const safeNext = nextParam && nextParam.startsWith("/") ? nextParam : "/dashboard"
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,6 +38,11 @@ export default function LoginPage() {
       if (data.user) {
         toast.success("Login successful")
         router.refresh()
+        const nextParam =
+          typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("next")
+            : null
+        const safeNext = nextParam && nextParam.startsWith("/") ? nextParam : "/dashboard"
         
         // Get company type and redirect accordingly
         try {
