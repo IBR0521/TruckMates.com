@@ -12,6 +12,8 @@ import { startPlanTrial } from "@/app/actions/subscription-onboarding"
 import { toast } from "sonner"
 import { useRouter, useSearchParams } from "next/navigation"
 
+type PlanInternalName = "starter" | "professional" | "enterprise"
+
 const PLANS = [
   {
     name: "Operator",
@@ -103,12 +105,14 @@ export default function PricingPage() {
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getUser().then((result) => {
-      setIsAuthenticated(!!result.data.user)
-    })
+    async function loadUser() {
+      const response = await supabase.auth.getUser()
+      setIsAuthenticated(!!response.data.user)
+    }
+    void loadUser()
   }, [])
 
-  const handlePlanChoose = async (planInternalName: "starter" | "professional" | "enterprise") => {
+  const handlePlanChoose = async (planInternalName: PlanInternalName) => {
     if (!isAuthenticated) {
       router.push("/register")
       return
@@ -236,7 +240,7 @@ export default function PricingPage() {
                     variant={plan.highlighted ? "default" : "outline"}
                     size="sm"
                     disabled={isChoosingPlan !== null}
-                    onClick={() => handlePlanChoose(plan.internalName)}
+                    onClick={() => handlePlanChoose(plan.internalName as PlanInternalName)}
                   >
                     {plan.cta}
                     <ArrowRight className="ml-2 w-3 h-3" />
