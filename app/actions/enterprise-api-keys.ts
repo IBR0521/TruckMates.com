@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import crypto from "crypto"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 
 /**
  * Generate a secure API key
@@ -26,6 +27,13 @@ export async function getAPIKeys() {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
+  }
+  const gate = await getCurrentCompanyFeatureAccess("api_keys")
+  if (!gate.allowed) {
+    return {
+      error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue.",
+      data: null,
+    }
   }
 
   // MEDIUM FIX 8: Select only safe fields - never return key_hash to client
@@ -57,6 +65,13 @@ export async function createAPIKey(formData: {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
+  }
+  const gate = await getCurrentCompanyFeatureAccess("api_keys")
+  if (!gate.allowed) {
+    return {
+      error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue.",
+      data: null,
+    }
   }
 
   const { getUserRole } = await import("@/lib/server-permissions")
@@ -109,6 +124,10 @@ export async function revokeAPIKey(id: string) {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated" }
+  }
+  const gate = await getCurrentCompanyFeatureAccess("api_keys")
+  if (!gate.allowed) {
+    return { error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue." }
   }
 
   const { getUserRole } = await import("@/lib/server-permissions")
@@ -163,6 +182,13 @@ export async function updateAPIKey(
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
+  const gate = await getCurrentCompanyFeatureAccess("api_keys")
+  if (!gate.allowed) {
+    return {
+      error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue.",
+      data: null,
+    }
+  }
 
   const { getUserRole } = await import("@/lib/server-permissions")
   const role = await getUserRole()
@@ -216,6 +242,13 @@ export async function getAPIKeyUsage(apiKeyId: string, days: number = 7) {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
+  }
+  const gate = await getCurrentCompanyFeatureAccess("api_keys")
+  if (!gate.allowed) {
+    return {
+      error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue.",
+      data: null,
+    }
   }
 
   const startDate = new Date()

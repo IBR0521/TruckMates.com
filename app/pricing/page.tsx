@@ -77,7 +77,7 @@ const PLANS = [
       "Multi-company RBAC",
       "Audit logs",
       "Custom Integrations",
-      "Receipt OCR (AI)",
+      "Receipt OCR (AI) — coming soon",
       "White-label portal",
       "Dedicated support",
     ],

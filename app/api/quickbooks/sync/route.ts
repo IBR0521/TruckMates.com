@@ -3,9 +3,18 @@ import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { createClient } from "@/lib/supabase/server"
 import { getQuickBooksConnection, qbQuery } from "@/lib/quickbooks/client"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 
 export async function POST() {
   try {
+    const gate = await getCurrentCompanyFeatureAccess("quickbooks")
+    if (!gate.allowed) {
+      return NextResponse.json(
+        { error: "QuickBooks is available on Fleet and Enterprise plans. Please upgrade to continue." },
+        { status: 403 }
+      )
+    }
+
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) {
       return NextResponse.json({ error: ctx.error || "Not authenticated" }, { status: 401 })

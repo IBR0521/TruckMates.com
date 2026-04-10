@@ -108,7 +108,8 @@ async function getRouteDistanceAndTime(
 // Get toll cost for a route (using Google Maps API if available)
 async function getTollCost(
   origin: { lat: number; lng: number } | string,
-  destination: { lat: number; lng: number } | string
+  destination: { lat: number; lng: number } | string,
+  companyId?: string
 ): Promise<number> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
   if (!apiKey) {
@@ -116,6 +117,11 @@ async function getTollCost(
   }
 
   try {
+    if (companyId) {
+      const { recordBillableApiUsage } = await import("@/app/actions/api-usage")
+      void recordBillableApiUsage(companyId, "tollguru", "toll_cost_estimate")
+    }
+
     const originStr = typeof origin === "string" ? origin : `${origin.lat},${origin.lng}`
     const destStr = typeof destination === "string" ? destination : `${destination.lat},${destination.lng}`
 
@@ -197,6 +203,7 @@ export async function optimizeRouteOrder(stops: Array<{
   includeTolls?: boolean
   maxWeight?: number
   maxHeight?: number
+  companyId?: string
 }): Promise<{
   optimizedOrder: Array<{ id: string; order: number }>
   totalDistance: number
@@ -301,7 +308,8 @@ export async function optimizeRouteOrder(stops: Array<{
         if (includeTolls) {
           tollCost = await getTollCost(
             { lat: currentStop.lat, lng: currentStop.lng },
-            { lat: stop.lat, lng: stop.lng }
+            { lat: stop.lat, lng: stop.lng },
+            options?.companyId
           )
         }
       } else if (currentStop.lat && currentStop.lng && stop.lat && stop.lng) {
@@ -356,7 +364,8 @@ export async function optimizeRouteOrder(stops: Array<{
         if (includeTolls) {
           actualTollCost = await getTollCost(
             { lat: currentStop.lat, lng: currentStop.lng },
-            { lat: nearestStop.lat, lng: nearestStop.lng }
+            { lat: nearestStop.lat, lng: nearestStop.lng },
+            options?.companyId
           )
         }
       } else if (currentStop.lat && currentStop.lng && nearestStop.lat && nearestStop.lng) {
@@ -502,10 +511,10 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
   }))
 
   // Optimize route order
-  const optimizationResult = await optimizeRouteOrder(stopsForOptimization)
+  const optimizationResultWithUsage = await optimizeRouteOrder(stopsForOptimization, { companyId: ctx.companyId })
 
   // Update route stops with optimized order
-  for (const optimizedStop of optimizationResult.optimizedOrder) {
+  for (const optimizedStop of optimizationResultWithUsage.optimizedOrder) {
     await supabase
       .from("route_stops")
       .update({ stop_number: optimizedStop.order })
@@ -516,8 +525,8 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
   await supabase
     .from("routes")
     .update({
-      distance: optimizationResult.totalDistance.toString() + " miles",
-      estimated_time: `${Math.round(optimizationResult.estimatedTime / 60)}h ${optimizationResult.estimatedTime % 60}m`,
+      distance: optimizationResultWithUsage.totalDistance.toString() + " miles",
+      estimated_time: `${Math.round(optimizationResultWithUsage.estimatedTime / 60)}h ${optimizationResultWithUsage.estimatedTime % 60}m`,
       // Store cost data in metadata or separate fields if available
     })
     .eq("id", routeId)
@@ -527,12 +536,12 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
     const { triggerWebhook } = await import("./webhooks")
     await triggerWebhook(ctx.companyId, "route.optimized", {
       route_id: routeId,
-      optimized_stops: optimizationResult.optimizedOrder.length,
-      total_distance: optimizationResult.totalDistance,
-      estimated_time: optimizationResult.estimatedTime,
-      total_fuel_cost: optimizationResult.totalFuelCost,
-      total_toll_cost: optimizationResult.totalTollCost,
-      total_cost: optimizationResult.totalCost,
+      optimized_stops: optimizationResultWithUsage.optimizedOrder.length,
+      total_distance: optimizationResultWithUsage.totalDistance,
+      estimated_time: optimizationResultWithUsage.estimatedTime,
+      total_fuel_cost: optimizationResultWithUsage.totalFuelCost,
+      total_toll_cost: optimizationResultWithUsage.totalTollCost,
+      total_cost: optimizationResultWithUsage.totalCost,
     })
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
@@ -541,12 +550,12 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
   
   return {
     optimized: true,
-    optimizedStops: optimizationResult.optimizedOrder,
-    distance: optimizationResult.totalDistance,
-    time: optimizationResult.estimatedTime,
-    fuelCost: optimizationResult.totalFuelCost,
-    tollCost: optimizationResult.totalTollCost,
-    totalCost: optimizationResult.totalCost,
+    optimizedStops: optimizationResultWithUsage.optimizedOrder,
+    distance: optimizationResultWithUsage.totalDistance,
+    time: optimizationResultWithUsage.estimatedTime,
+    fuelCost: optimizationResultWithUsage.totalFuelCost,
+    tollCost: optimizationResultWithUsage.totalTollCost,
+    totalCost: optimizationResultWithUsage.totalCost,
   }
 }
 

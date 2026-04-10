@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 
 function getRequiredEnv(name: string): string {
   const v = process.env[name]
@@ -11,6 +12,14 @@ function getRequiredEnv(name: string): string {
 
 export async function POST(request: NextRequest) {
   try {
+    const gate = await getCurrentCompanyFeatureAccess("quickbooks")
+    if (!gate.allowed) {
+      return NextResponse.json(
+        { error: "QuickBooks is available on Fleet and Enterprise plans. Please upgrade to continue." },
+        { status: 403 }
+      )
+    }
+
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) {
       return NextResponse.json({ error: ctx.error || "Not authenticated" }, { status: 401 })

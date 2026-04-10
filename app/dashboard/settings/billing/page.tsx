@@ -23,9 +23,17 @@ import { useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { getBillingInfo, updateBillingInfo } from "@/app/actions/settings-billing"
-import { getSubscription, getPaymentHistory, getPaymentMethods, savePaymentMethod, deletePaymentMethod } from "@/app/actions/settings-billing-enhanced"
+import {
+  getSubscription,
+  getPaymentHistory,
+  getPaymentMethods,
+  savePaymentMethod,
+  deletePaymentMethod,
+  getMonthlyApiUsageOverview,
+} from "@/app/actions/settings-billing-enhanced"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import {
   Dialog,
   DialogContent,
@@ -52,6 +60,7 @@ export default function BillingSettingsPage() {
     billing_notes: "",
   })
   const [subscription, setSubscription] = useState<any>(null)
+  const [usageRows, setUsageRows] = useState<any[]>([])
   const [paymentHistory, setPaymentHistory] = useState<any[]>([])
   const [paymentMethods, setPaymentMethods] = useState<any[]>([])
   const [showPaymentMethodDialog, setShowPaymentMethodDialog] = useState(false)
@@ -71,11 +80,12 @@ export default function BillingSettingsPage() {
     async function loadSettings() {
       setIsLoading(true)
       try {
-        const [billingResult, subscriptionResult, historyResult, methodsResult] = await Promise.all([
+        const [billingResult, subscriptionResult, historyResult, methodsResult, usageResult] = await Promise.all([
           getBillingInfo(),
           getSubscription(),
           getPaymentHistory(),
           getPaymentMethods(),
+          getMonthlyApiUsageOverview(),
         ])
 
         if (billingResult.error) {
@@ -104,6 +114,9 @@ export default function BillingSettingsPage() {
 
         if (methodsResult.data) {
           setPaymentMethods(methodsResult.data)
+        }
+        if (usageResult.data) {
+          setUsageRows(usageResult.data)
         }
       } catch (error) {
         toast.error("Failed to load billing settings")
@@ -309,6 +322,34 @@ export default function BillingSettingsPage() {
               <Button variant="outline" size="sm" className="rounded-lg mt-2" asChild>
                 <Link href="/pricing">View plans & pricing</Link>
               </Button>
+            </div>
+          )}
+        </Card>
+
+        {/* Usage */}
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold mb-4">Monthly API Usage</h2>
+          {usageRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No usage data yet for this month.</p>
+          ) : (
+            <div className="space-y-4">
+              {usageRows.map((row) => (
+                <div key={row.key} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{row.label}</span>
+                    <span className="text-muted-foreground">
+                      {row.limit == null ? `${row.used} calls` : `${row.used} / ${row.limit}`}
+                    </span>
+                  </div>
+                  {row.limit != null ? (
+                    <Progress value={row.percent || 0} />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Tracking only (no plan cap configured yet).
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </Card>

@@ -3,6 +3,7 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getQuickBooksConnection, qbFetch, qbQuery } from "@/lib/quickbooks/client"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 
 function qbEscape(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")
@@ -73,6 +74,14 @@ async function getOrCreateCustomer(conn: any, displayName: string) {
 
 export async function POST(request: NextRequest, ctxRoute: { params: Promise<{ id: string }> }) {
   try {
+    const gate = await getCurrentCompanyFeatureAccess("quickbooks")
+    if (!gate.allowed) {
+      return NextResponse.json(
+        { error: "QuickBooks is available on Fleet and Enterprise plans. Please upgrade to continue." },
+        { status: 403 }
+      )
+    }
+
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) {
       return NextResponse.json({ error: ctx.error || "Not authenticated" }, { status: 401 })

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 
 function getRequiredEnv(name: string): string {
   const v = process.env[name]
@@ -11,6 +12,13 @@ function getRequiredEnv(name: string): string {
 
 export async function GET(request: NextRequest) {
   try {
+    const gate = await getCurrentCompanyFeatureAccess("quickbooks")
+    if (!gate.allowed) {
+      return NextResponse.redirect(
+        new URL("/dashboard/settings/integration?quickbooks_error=upgrade_required", request.url)
+      )
+    }
+
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) {
       return NextResponse.redirect(new URL("/login", request.url))

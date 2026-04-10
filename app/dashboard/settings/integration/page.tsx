@@ -34,6 +34,7 @@ export default function IntegrationSettingsPage() {
     quickbooks_synced_at: null as string | null,
     quickbooks_default_income_account_id: "" as string,
     quickbooks_default_item_id: "" as string,
+    quickbooks_allowed: false,
   })
 
   useEffect(() => {
@@ -61,6 +62,7 @@ export default function IntegrationSettingsPage() {
             quickbooks_default_income_account_id:
               (result.data as any).quickbooks_default_income_account_id || "",
             quickbooks_default_item_id: (result.data as any).quickbooks_default_item_id || "",
+            quickbooks_allowed: !!(result.data as any).quickbooks_allowed,
           })
         }
       } catch (error) {
@@ -295,6 +297,11 @@ export default function IntegrationSettingsPage() {
                     <p className="text-sm text-muted-foreground">
                       Sync invoices and payments between TruckLogics and QuickBooks Online.
                     </p>
+                    {!integrations.quickbooks_allowed && (
+                      <p className="text-xs text-amber-500 mt-1">
+                        Available on Fleet and Enterprise plans.
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {integrations.has_quickbooks_connection ? (
@@ -330,12 +337,17 @@ export default function IntegrationSettingsPage() {
                         </Button>
                       </>
                     ) : (
-                      <Button asChild size="sm">
+                      <Button asChild size="sm" disabled={!integrations.quickbooks_allowed}>
                         <Link href="/api/quickbooks/connect">Connect</Link>
                       </Button>
                     )}
                   </div>
                 </div>
+                {!integrations.quickbooks_allowed && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Upgrade to Fleet or Enterprise to enable QuickBooks sync.
+                  </p>
+                )}
                 {integrations.has_quickbooks_connection && (
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     <div className="space-y-1">

@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { monthlyLimitForPlan } from "@/lib/api-usage-plan-limits"
 
 type PlanRow = {
   id?: string
@@ -184,6 +185,79 @@ export async function getSubscription(): Promise<{ data: any | null; error: stri
   }
 
   return { data: mapSubscriptionsToBillingView(data as SubscriptionRow), error: null }
+}
+
+async function countMonthlyUsage(
+  companyId: string,
+  actions: string[],
+  apiName: string = "google_maps",
+): Promise<number> {
+  const admin = createAdminClient()
+  const start = new Date()
+  start.setUTCDate(1)
+  start.setUTCHours(0, 0, 0, 0)
+
+  const { count, error } = await admin
+    .from("api_usage_log")
+    .select("id", { count: "exact", head: true })
+    .eq("company_id", companyId)
+    .eq("api_name", apiName)
+    .in("action", actions)
+    .gte("created_at", start.toISOString())
+
+  if (error) {
+    Sentry.captureMessage(`[getMonthlyApiUsageOverview] usage count failed: ${error.message}`, "warning")
+    return 0
+  }
+  return count ?? 0
+}
+
+export async function getMonthlyApiUsageOverview(): Promise<{ data: any[] | null; error: string | null }> {
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const subscription = await getSubscription()
+  const planName = String(subscription.data?.plan_name || "free").toLowerCase()
+
+  const categories = [
+    { key: "directions", label: "Directions", actions: ["directions", "optimize_route"] },
+    { key: "geocoding", label: "Geocoding", actions: ["geocoding", "reverse_geocode"] },
+    { key: "distance_matrix", label: "Distance Matrix", actions: ["distance_matrix"] },
+    { key: "places", label: "Places", actions: ["place_details", "places_autocomplete"] },
+  ] as const
+
+  const usageRows = await Promise.all(
+    categories.map(async (cat) => {
+      const used = await countMonthlyUsage(ctx.companyId!, [...cat.actions], "google_maps")
+      const limit = monthlyLimitForPlan(planName, cat.key)
+      const percent = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
+      return {
+        key: cat.key,
+        label: cat.label,
+        used,
+        limit,
+        percent,
+      }
+    }),
+  )
+
+  const tollRoutingCalls = await countMonthlyUsage(ctx.companyId, ["toll_cost_estimate"], "tollguru")
+
+  return {
+    data: [
+      ...usageRows,
+      {
+        key: "toll_routing",
+        label: "Toll Routing Calls",
+        used: tollRoutingCalls,
+        limit: null,
+        percent: null,
+      },
+    ],
+    error: null,
+  }
 }
 
 /**

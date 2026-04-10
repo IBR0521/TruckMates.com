@@ -185,6 +185,24 @@ export async function recordBillableGoogleMapsUsage(companyId: string, action: s
   }
 }
 
+/** Generic usage logger for non-Google providers (e.g. TollGuru). */
+export async function recordBillableApiUsage(companyId: string, apiName: string, action: string) {
+  try {
+    const admin = createAdminClient()
+    const { error } = await admin.from("api_usage_log").insert({
+      company_id: companyId,
+      api_name: apiName,
+      action,
+      success: true,
+    })
+    if (error) {
+      Sentry.captureMessage(`[api_usage] ${apiName} insert failed: ${error.message}`, "warning")
+    }
+  } catch (e) {
+    Sentry.captureException(e)
+  }
+}
+
 /** Called from client after debounced Places predictions / details (session-bound company). */
 export async function recordClientPlacesUsageForSession(kind: "autocomplete" | "details") {
   const ctx = await getCachedAuthContext()

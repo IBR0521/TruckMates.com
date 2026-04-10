@@ -5,6 +5,7 @@ import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 
 export async function getIntegrationSettings() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
@@ -51,6 +52,8 @@ export async function getIntegrationSettings() {
     }
 
     // CRITICAL FIX: Check platform environment variables first
+    const quickBooksGate = await getCurrentCompanyFeatureAccess("quickbooks")
+
     // These work automatically for all users - no per-company config needed
     const hasPlatformGoogleMapsKey = !!process.env.GOOGLE_MAPS_API_KEY
     const hasPlatformResendKey = !!process.env.RESEND_API_KEY
@@ -72,6 +75,7 @@ export async function getIntegrationSettings() {
           // Platform keys work automatically - check env vars
           has_google_maps_api_key: hasPlatformGoogleMapsKey,
           has_resend_api_key: hasPlatformResendKey,
+          quickbooks_allowed: quickBooksGate.allowed,
         },
         error: null,
       }
@@ -99,6 +103,7 @@ export async function getIntegrationSettings() {
       // Platform keys take priority - if they exist, service is configured
       has_google_maps_api_key: hasPlatformGoogleMapsKey || !!data.google_maps_api_key,
       has_resend_api_key: hasPlatformResendKey || !!data.resend_api_key,
+      quickbooks_allowed: quickBooksGate.allowed,
     }
 
     return { data: safeData, error: null }
