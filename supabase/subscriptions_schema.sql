@@ -223,7 +223,7 @@ INSERT INTO public.subscription_plans (name, display_name, price_monthly, price_
     10,
     NULL,
     30,
-    '["Everything in Starter", "AI dispatch assistant", "Marketplace access", "Customer portal", "Backhaul optimization", "API keys & webhooks", "10 users", "Priority support"]'::jsonb
+    '["Everything in Starter", "Six-role access control (full team RBAC)", "AI dispatch assistant", "Marketplace access", "Customer portal", "Backhaul optimization", "API keys & webhooks", "10 users", "Priority support"]'::jsonb
   ),
   (
     'enterprise',
@@ -233,7 +233,7 @@ INSERT INTO public.subscription_plans (name, display_name, price_monthly, price_
     NULL,
     NULL,
     NULL,
-    '["Everything in Pro", "Unlimited users", "Multi-company RBAC", "Audit logs", "Custom Integrations", "Receipt OCR (AI)", "White-label portal", "Dedicated support"]'::jsonb
+    '["Everything in Pro", "Unlimited users", "Six-role access control (full team RBAC)", "Multi-company RBAC", "Audit logs", "Custom Integrations", "Receipt OCR (AI)", "White-label portal", "Dedicated support"]'::jsonb
   )
 ON CONFLICT (name) DO UPDATE SET
   display_name = EXCLUDED.display_name,

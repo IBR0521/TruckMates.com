@@ -58,6 +58,7 @@ const PLANS = [
     limits: "Up to 30 trucks",
     included: [
       "Everything in Starter",
+      "Full six-role team permissions (Fleet tier)",
       "AI dispatch assistant",
       "Marketplace access",
       "Customer portal",

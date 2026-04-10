@@ -28,3 +28,28 @@ Use these **exactly** everywhere (DB, Stripe metadata, PayPal custom_id, UI):
 
 - **Enforced today:** `drivers.ts` (max_drivers), `trucks.ts` (max_vehicles), `settings-users.ts` (max_users) read limits from `subscriptions` JOIN `subscription_plans`. Ensure Stripe/PayPal webhooks always set `plan_id` so these checks work.
 - **Not in schema:** `subscription_plans` has no `max_loads` or `max_routes`. If you add them later, add the same pattern in `loads.ts` and `routes.ts` create actions.
+
+## Six-role RBAC vs subscription tier (product decision)
+
+The platform uses a **single six-role model** in Settings → Users and server actions: `super_admin`, `operations_manager`, `dispatcher`, `safety_compliance`, `financial_controller`, `driver` (see `lib/roles.ts`).
+
+**Stakeholder clarification (strategy doc correction):** six-role access must **not** be positioned as Enterprise-only. **Fleet** tier (in strategy naming) includes full six-role access on the plan list. In this codebase, **Fleet maps to the `professional` plan** until billing/UI renames tiers to Operator / Fleet / Enterprise.
+
+- **Included on Fleet (`professional`) and Enterprise (`enterprise`)** in `subscription_plans.features` and public pricing copy.
+- **Enterprise-only** stays reserved for items such as **multi-company RBAC**, audit logs, white-label portal, etc.—not the base six roles.
+
+Do **not** gate assignment of the six roles by plan in application code unless product later adds an explicit exception (none as of this note).
+
+## Six-role access control (product decision)
+
+Stakeholder clarification (strategy doc correction): **full six-role RBAC is included from the Fleet tier onward**, not Enterprise-only. The six roles are: `super_admin`, `operations_manager`, `dispatcher`, `safety_compliance`, `financial_controller`, `driver` (see `lib/roles.ts` and Settings → Users).
+
+**Internal plan mapping until billing display names are renamed:**
+
+| Strategy / marketing name | `subscription_plans.name` |
+|---------------------------|---------------------------|
+| Operator (small fleet)    | `starter`                 |
+| Fleet                     | `professional`            |
+| Enterprise                | `enterprise`              |
+
+The app does **not** gate which of the six roles you can assign by subscription tier today; limits are **seat counts** (`max_users`), not role types. **Enterprise**Differentiators remain items such as **multi-company RBAC**, audit logs, and white-label portal — not “six roles,” which is a **Fleet+** entitlement in positioning and in `subscription_plans.features` for `professional`.

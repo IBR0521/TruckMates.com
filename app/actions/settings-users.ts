@@ -88,7 +88,7 @@ export async function updateUserRole(userId: string, newRole: string) {
 
     const normalizedNewRole = String(newRole).trim().toLowerCase()
 
-    // Validate newRole against exact 6 roles
+    // Six roles are the platform RBAC model for all companies; Fleet tier explicitly includes this on the plan list (stakeholder: not Enterprise-only).
     const VALID_ROLES = ["super_admin", "operations_manager", "dispatcher", "safety_compliance", "financial_controller", "driver"]
     if (!VALID_ROLES.includes(normalizedNewRole)) {
       return { error: `Invalid role: ${newRole}. Must be one of: ${VALID_ROLES.join(", ")}`, success: false }
@@ -328,7 +328,7 @@ export async function inviteUser(data: {
     return { error: "Invalid email address", data: null }
   }
 
-  // Validate role: exact 6 roles only
+  // Six roles — Fleet tier lists full RBAC on subscription positioning; no plan-based restriction here.
   const VALID_ROLES = ["super_admin", "operations_manager", "dispatcher", "safety_compliance", "financial_controller", "driver"]
   if (!VALID_ROLES.includes(data.role)) {
     return { error: `Invalid role: ${data.role}. Must be one of: ${VALID_ROLES.join(", ")}`, data: null }

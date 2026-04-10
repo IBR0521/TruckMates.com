@@ -1,6 +1,6 @@
 import { Building2, Radio, Truck, Shield, DollarSign, User } from "lucide-react"
 
-// Simplified 6-role system
+// Six-role RBAC (Settings → Users). Subscription positioning: full six roles are included from Fleet tier (`professional` plan) onward—not Enterprise-only.
 export type EmployeeRole =
   | "super_admin"
   | "operations_manager"
