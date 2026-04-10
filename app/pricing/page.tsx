@@ -10,7 +10,7 @@ import { Logo } from "@/components/logo"
 import { createClient } from "@/lib/supabase/client"
 import { startPlanTrial } from "@/app/actions/subscription-onboarding"
 import { toast } from "sonner"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 
 type PlanInternalName = "starter" | "professional" | "enterprise"
 
@@ -99,15 +99,18 @@ export default function PricingPage() {
   const [billingAnnual, setBillingAnnual] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isChoosingPlan, setIsChoosingPlan] = useState<string | null>(null)
+  const [onboarding, setOnboarding] = useState(false)
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const onboarding = searchParams.get("onboarding") === "1"
 
   useEffect(() => {
     const supabase = createClient()
     async function loadUser() {
       const response = await supabase.auth.getUser()
       setIsAuthenticated(!!response.data.user)
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search)
+        setOnboarding(params.get("onboarding") === "1")
+      }
     }
     void loadUser()
   }, [])
