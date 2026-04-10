@@ -103,8 +103,8 @@ export default function PricingPage() {
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getUser().then(({ data }) => {
-      setIsAuthenticated(!!data.user)
+    supabase.auth.getUser().then((result) => {
+      setIsAuthenticated(!!result.data.user)
     })
   }, [])
 
