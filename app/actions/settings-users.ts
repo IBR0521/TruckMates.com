@@ -370,7 +370,7 @@ export async function inviteUser(data: {
       subscription_plans!inner(max_users)
     `)
     .eq("company_id", ctx.companyId)
-    .eq("status", "active")
+    .in("status", ["active", "trialing"])
     .maybeSingle()
 
   if (subscriptionError) {

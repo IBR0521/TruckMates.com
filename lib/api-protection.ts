@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { rateLimit } from "./rate-limit"
 
 /**
@@ -32,6 +32,7 @@ export async function checkApiUsage(
     return { allowed: false, reason: "Not authenticated" }
   }
 
+  const { getCachedUserCompany } = await import("@/lib/query-optimizer")
   const result = await getCachedUserCompany(user.id)
   if (result.error || !result.company_id) {
     return { allowed: false, reason: "No company found" }
@@ -115,17 +116,21 @@ export async function setCachedApiResult<T>(
   ttl: number = 3600
 ): Promise<void> {
   try {
-    const supabase = await createClient()
     const expiresAt = new Date(Date.now() + ttl * 1000).toISOString()
+    // Writes use service role: RLS policies on api_cache block normal JWT upserts on many deployments.
+    let supabase
+    try {
+      supabase = createAdminClient()
+    } catch {
+      supabase = await createClient()
+    }
 
-    await supabase
-      .from("api_cache")
-      .upsert({
-        key: cacheKey,
-        data,
-        expires_at: expiresAt,
-        updated_at: new Date().toISOString(),
-      })
+    await supabase.from("api_cache").upsert({
+      key: cacheKey,
+      data,
+      expires_at: expiresAt,
+      updated_at: new Date().toISOString(),
+    })
   } catch (error) {
     // Don't block if caching fails
     console.error(`[API Protection] Cache storage error:`, error)

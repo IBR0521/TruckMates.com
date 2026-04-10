@@ -10,14 +10,17 @@ import Link from "next/link"
 import { toast } from "sonner"
 import { Logo } from "@/components/logo"
 import { createClient } from "@/lib/supabase/client"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
+  const nextParam = searchParams.get("next")
+  const safeNext = nextParam && nextParam.startsWith("/") ? nextParam : "/dashboard"
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -45,9 +48,9 @@ export default function LoginPage() {
           const result = await response.json()
           
           // Marketplace is intentionally disabled for now; always send users to dashboard.
-          router.push("/dashboard")
+          router.push(safeNext)
         } catch {
-          router.push("/dashboard")
+          router.push(safeNext)
         }
       }
     } catch (error: unknown) {

@@ -137,7 +137,7 @@ export async function createTruck(formData: {
       subscription_plans!inner(max_vehicles)
     `)
     .eq("company_id", ctx.companyId)
-    .eq("status", "active")
+    .in("status", ["active", "trialing"])
     .maybeSingle()
 
   if (subscriptionError) {

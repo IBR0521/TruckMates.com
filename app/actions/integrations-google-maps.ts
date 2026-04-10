@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { recordBillableGoogleMapsUsage } from "@/app/actions/api-usage"
 
 /**
  * Google Maps Integration Backend
@@ -150,6 +151,11 @@ export async function getRouteDirections(origin: string, destination: string, wa
     // Cache the result
     await setCachedApiResult(cacheKey, result, 3600)
 
+    const ctxAfter = await getCachedAuthContext()
+    if (ctxAfter.companyId) {
+      void recordBillableGoogleMapsUsage(ctxAfter.companyId, "directions")
+    }
+
     return {
       data: result,
       error: null,
@@ -249,7 +255,12 @@ export async function geocodeAddress(address: string) {
     
     // Cache the result for 7 days
     await setCachedApiResult(cacheKey, geocodeResult, 604800)
-    
+
+    const ctxGeo = await getCachedAuthContext()
+    if (ctxGeo.companyId) {
+      void recordBillableGoogleMapsUsage(ctxGeo.companyId, "geocoding")
+    }
+
     return {
       data: geocodeResult,
       error: null,
@@ -276,6 +287,20 @@ export async function geocodeAddress(address: string) {
  */
 export async function calculateDistanceMatrix(origins: string[], destinations: string[]) {
   try {
+    const { checkApiUsage, getCachedApiResult, setCachedApiResult } = await import("@/lib/api-protection")
+    const { generateCacheKey } = await import("@/lib/api-cache-utils")
+
+    const cacheKey = generateCacheKey("google_distance_matrix", { origins, destinations })
+    const cached = await getCachedApiResult<any>(cacheKey, 604800)
+    if (cached) {
+      return { data: cached, error: null }
+    }
+
+    const rateCheck = await checkApiUsage("google_maps", "distance_matrix")
+    if (!rateCheck.allowed) {
+      return { error: rateCheck.reason || "Rate limit exceeded", data: null }
+    }
+
     const apiKey = await getGoogleMapsApiKey()
 
     const originsParam = origins.map(addr => encodeURIComponent(addr)).join("|")
@@ -300,18 +325,27 @@ export async function calculateDistanceMatrix(origins: string[], destinations: s
       return { error: `Distance matrix error: ${data.status}`, data: null }
     }
 
-    return {
-      data: {
-        rows: data.rows.map((row: any) => ({
-          elements: row.elements.map((element: any) => ({
-            distance: element.distance?.text || "N/A",
-            distance_meters: element.distance?.value || 0,
-            duration: element.duration?.text || "N/A",
-            duration_seconds: element.duration?.value || 0,
-            status: element.status,
-          })),
+    const payload = {
+      rows: data.rows.map((row: any) => ({
+        elements: row.elements.map((element: any) => ({
+          distance: element.distance?.text || "N/A",
+          distance_meters: element.distance?.value || 0,
+          duration: element.duration?.text || "N/A",
+          duration_seconds: element.duration?.value || 0,
+          status: element.status,
         })),
-      },
+      })),
+    }
+
+    await setCachedApiResult(cacheKey, payload, 604800)
+
+    const ctxDm = await getCachedAuthContext()
+    if (ctxDm.companyId) {
+      void recordBillableGoogleMapsUsage(ctxDm.companyId, "distance_matrix")
+    }
+
+    return {
+      data: payload,
       error: null,
     }
   } catch (error: unknown) {
@@ -326,6 +360,12 @@ export async function calculateDistanceMatrix(origins: string[], destinations: s
  */
 export async function optimizeRoute(origin: string, destination: string, stops: string[]) {
   try {
+    const { checkApiUsage } = await import("@/lib/api-protection")
+    const rateCheck = await checkApiUsage("google_maps", "optimize_route")
+    if (!rateCheck.allowed) {
+      return { error: rateCheck.reason || "Rate limit exceeded", data: null }
+    }
+
     const apiKey = await getGoogleMapsApiKey()
 
     // Use waypoints optimization
@@ -351,6 +391,11 @@ export async function optimizeRoute(origin: string, destination: string, stops: 
 
     const route = data.routes[0]
     const optimizedWaypointOrder = route.waypoint_order || []
+
+    const ctxOpt = await getCachedAuthContext()
+    if (ctxOpt.companyId) {
+      void recordBillableGoogleMapsUsage(ctxOpt.companyId, "optimize_route")
+    }
 
     return {
       data: {
@@ -379,6 +424,19 @@ export async function optimizeRoute(origin: string, destination: string, stops: 
  */
 export async function getPlaceDetails(placeId: string) {
   try {
+    const { checkApiUsage, getCachedApiResult, setCachedApiResult } = await import("@/lib/api-protection")
+    const { generateCacheKey } = await import("@/lib/api-cache-utils")
+    const cacheKey = generateCacheKey("google_place_details", { placeId })
+    const cached = await getCachedApiResult<any>(cacheKey, 604800)
+    if (cached) {
+      return { data: cached, error: null }
+    }
+
+    const rateCheck = await checkApiUsage("google_maps", "place_details")
+    if (!rateCheck.allowed) {
+      return { error: rateCheck.reason || "Rate limit exceeded", data: null }
+    }
+
     const apiKey = await getGoogleMapsApiKey()
 
     const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${apiKey}&fields=formatted_address,geometry,name,place_id`
@@ -400,14 +458,23 @@ export async function getPlaceDetails(placeId: string) {
       return { error: `Place details error: ${data.status}`, data: null }
     }
 
+    const detailsPayload = {
+      formatted_address: data.result.formatted_address,
+      lat: data.result.geometry.location.lat,
+      lng: data.result.geometry.location.lng,
+      name: data.result.name,
+      place_id: data.result.place_id,
+    }
+
+    await setCachedApiResult(cacheKey, detailsPayload, 604800)
+
+    const ctxPd = await getCachedAuthContext()
+    if (ctxPd.companyId) {
+      void recordBillableGoogleMapsUsage(ctxPd.companyId, "place_details")
+    }
+
     return {
-      data: {
-        formatted_address: data.result.formatted_address,
-        lat: data.result.geometry.location.lat,
-        lng: data.result.geometry.location.lng,
-        name: data.result.name,
-        place_id: data.result.place_id,
-      },
+      data: detailsPayload,
       error: null,
     }
   } catch (error: unknown) {

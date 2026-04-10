@@ -4,20 +4,14 @@
 -- Clean, professional authentication setup
 -- Run this in Supabase SQL Editor
 -- ============================================
+-- Bootstrap order: run uuid extension (below), then this file. For signup RPC that
+-- inserts subscriptions, apply subscriptions_schema.sql first so subscription_plans
+-- and subscriptions exist.
+-- ============================================
 
--- Step 1: Create users table (extends Supabase auth.users)
-CREATE TABLE IF NOT EXISTS public.users (
-  id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
-  email TEXT UNIQUE NOT NULL,
-  full_name TEXT,
-  role TEXT NOT NULL DEFAULT 'driver',
-  company_id UUID REFERENCES public.companies(id) ON DELETE SET NULL,
-  phone TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
-);
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Step 2: Create companies table
+-- Step 1: Companies first — public.users references companies(company_id)
 CREATE TABLE IF NOT EXISTS public.companies (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   name TEXT NOT NULL,
@@ -29,7 +23,7 @@ CREATE TABLE IF NOT EXISTS public.companies (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Step 2.1: Add company_type column if it doesn't exist (for existing tables)
+-- Step 1.1: Add company_type column if it doesn't exist (for existing tables)
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -41,6 +35,18 @@ BEGIN
     ALTER TABLE public.companies ADD COLUMN company_type TEXT DEFAULT NULL;
   END IF;
 END $$;
+
+-- Step 2: Users (extends Supabase auth.users)
+CREATE TABLE IF NOT EXISTS public.users (
+  id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  full_name TEXT,
+  role TEXT NOT NULL DEFAULT 'driver',
+  company_id UUID REFERENCES public.companies(id) ON DELETE SET NULL,
+  phone TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
 
 -- Step 3: Add indexes for performance
 CREATE INDEX IF NOT EXISTS idx_users_company_id ON public.users(company_id);
@@ -68,6 +74,7 @@ SET search_path = public
 AS $$
 DECLARE
   v_company_id UUID;
+  v_free_plan_id UUID;
 BEGIN
   -- Insert company (bypasses RLS because of SECURITY DEFINER)
   INSERT INTO public.companies (name, email, phone, company_type)
@@ -82,6 +89,21 @@ BEGIN
     full_name = p_name,
     phone = p_phone
   WHERE id = p_user_id;
+
+  -- Canonical subscription row: free plan (enforces limits + matches Stripe webhooks on upgrades)
+  IF to_regclass('public.subscription_plans') IS NOT NULL
+     AND to_regclass('public.subscriptions') IS NOT NULL THEN
+    SELECT id INTO v_free_plan_id
+    FROM public.subscription_plans
+    WHERE name = 'free' AND is_active IS NOT FALSE
+    LIMIT 1;
+
+    IF v_free_plan_id IS NOT NULL THEN
+      INSERT INTO public.subscriptions (company_id, plan_id, status)
+      VALUES (v_company_id, v_free_plan_id, 'active')
+      ON CONFLICT (company_id) DO NOTHING;
+    END IF;
+  END IF;
 
   -- Return as TEXT to ensure JSON serialization
   RETURN v_company_id::TEXT;

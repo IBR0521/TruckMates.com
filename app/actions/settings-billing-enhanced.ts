@@ -2,10 +2,114 @@
 
 import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+type PlanRow = {
+  id?: string
+  name?: string
+  display_name?: string
+  price_monthly?: number | string | null
+  price_yearly?: number | string | null
+  stripe_price_id_monthly?: string | null
+  stripe_price_id_yearly?: string | null
+  max_users?: number | null
+  max_drivers?: number | null
+  max_vehicles?: number | null
+  features?: unknown
+}
+
+type SubscriptionRow = {
+  id: string
+  company_id: string
+  status: string
+  stripe_subscription_id?: string | null
+  stripe_customer_id?: string | null
+  stripe_price_id?: string | null
+  current_period_start?: string | null
+  current_period_end?: string | null
+  cancel_at_period_end?: boolean | null
+  canceled_at?: string | null
+  trial_end?: string | null
+  created_at?: string
+  subscription_plans?: PlanRow | PlanRow[] | null
+}
+
+function mapSubscriptionsToBillingView(row: SubscriptionRow) {
+  const planRaw = row.subscription_plans
+  const plan = Array.isArray(planRaw) ? planRaw[0] : planRaw
+  const isYearly =
+    !!row.stripe_price_id &&
+    !!plan?.stripe_price_id_yearly &&
+    row.stripe_price_id === plan.stripe_price_id_yearly
+  const billing_cycle = isYearly ? "yearly" : "monthly"
+  const planName = (plan?.name || "free").toLowerCase()
+  const amount =
+    planName === "free"
+      ? 0
+      : isYearly
+        ? Number(plan?.price_yearly ?? 0)
+        : Number(plan?.price_monthly ?? 0)
+
+  return {
+    id: row.id,
+    company_id: row.company_id,
+    plan_name: planName,
+    plan_display_name: plan?.display_name ?? "Free",
+    status: row.status,
+    billing_cycle,
+    amount,
+    currency: "USD",
+    currency_symbol: "$",
+    start_date: row.current_period_start ?? row.created_at,
+    end_date: row.current_period_end,
+    trial_end_date: row.trial_end,
+    cancelled_at: row.canceled_at,
+    auto_renew: !!row.stripe_subscription_id && !row.cancel_at_period_end,
+    features: plan?.features ?? {},
+    max_users: plan?.max_users,
+    max_drivers: plan?.max_drivers,
+    max_vehicles: plan?.max_vehicles,
+  }
+}
+
+async function ensureFreeSubscriptionRow(companyId: string): Promise<void> {
+  const admin = createAdminClient()
+  const { data: existing, error: exErr } = await admin
+    .from("subscriptions")
+    .select("id")
+    .eq("company_id", companyId)
+    .maybeSingle()
+  if (exErr) {
+    Sentry.captureMessage(`[ensureFreeSubscriptionRow] read failed: ${exErr.message}`, "warning")
+    return
+  }
+  if (existing) return
+
+  const { data: freePlan, error: planErr } = await admin
+    .from("subscription_plans")
+    .select("id")
+    .eq("name", "free")
+    .maybeSingle()
+
+  if (planErr || !freePlan?.id) {
+    Sentry.captureMessage("[ensureFreeSubscriptionRow] missing subscription_plans row for name=free", "error")
+    return
+  }
+
+  const { error: insErr } = await admin.from("subscriptions").insert({
+    company_id: companyId,
+    plan_id: freePlan.id,
+    status: "active",
+  })
+  if (insErr && insErr.code !== "23505") {
+    Sentry.captureMessage(`[ensureFreeSubscriptionRow] insert failed: ${insErr.message}`, "error")
+  }
+}
+
 /**
- * Get subscription information
+ * Subscription for billing UI — reads canonical `subscriptions` + `subscription_plans`
+ * (same rows Stripe/PayPal webhooks update and limit checks use).
  */
 export async function getSubscription(): Promise<{ data: any | null; error: string | null }> {
   const supabase = await createClient()
@@ -14,19 +118,56 @@ export async function getSubscription(): Promise<{ data: any | null; error: stri
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
-  const { data, error } = await supabase
-    .from("company_subscriptions")
-    .select("id, company_id, plan_name, plan_display_name, status, billing_cycle, amount, currency, start_date, end_date, trial_end_date, cancelled_at, auto_renew, features")
+  const selectColumns = `
+    id,
+    company_id,
+    status,
+    stripe_subscription_id,
+    stripe_customer_id,
+    stripe_price_id,
+    current_period_start,
+    current_period_end,
+    cancel_at_period_end,
+    canceled_at,
+    trial_end,
+    created_at,
+    subscription_plans (
+      id,
+      name,
+      display_name,
+      price_monthly,
+      price_yearly,
+      stripe_price_id_monthly,
+      stripe_price_id_yearly,
+      max_users,
+      max_drivers,
+      max_vehicles,
+      features
+    )
+  `
+
+  let { data, error } = await supabase
+    .from("subscriptions")
+    .select(selectColumns)
     .eq("company_id", ctx.companyId)
     .maybeSingle()
 
-  if (error && error.code !== 'PGRST116') {
+  if (error && error.code !== "PGRST116") {
     return { error: error.message || "Failed to fetch subscription", data: null }
   }
 
-  // Platform is free - return default free subscription if none exists
   if (!data) {
-    return { 
+    await ensureFreeSubscriptionRow(ctx.companyId)
+    const second = await supabase.from("subscriptions").select(selectColumns).eq("company_id", ctx.companyId).maybeSingle()
+    data = second.data as SubscriptionRow | null
+    error = second.error
+    if (error && error.code !== "PGRST116") {
+      return { error: error.message || "Failed to fetch subscription", data: null }
+    }
+  }
+
+  if (!data) {
+    return {
       data: {
         plan_name: "free",
         plan_display_name: "Free",
@@ -34,14 +175,15 @@ export async function getSubscription(): Promise<{ data: any | null; error: stri
         billing_cycle: "monthly",
         amount: 0,
         currency: "USD",
+        currency_symbol: "$",
         auto_renew: false,
         features: {},
-      }, 
-      error: null 
+      },
+      error: null,
     }
   }
 
-  return { data, error: null }
+  return { data: mapSubscriptionsToBillingView(data as SubscriptionRow), error: null }
 }
 
 /**

@@ -34,9 +34,11 @@ function fetchWithTimeout(
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
+  const isBillingRoute = pathname.startsWith('/dashboard/settings/billing')
+  const isDashboardRoute = pathname.startsWith('/dashboard')
 
   const isProtectedRoute =
-    pathname.startsWith('/dashboard') ||
+    isDashboardRoute ||
     pathname.startsWith('/marketplace/dashboard') ||
     pathname.startsWith('/account-setup') ||
     pathname.startsWith('/portal') ||
@@ -82,6 +84,56 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
       return NextResponse.redirect(url)
+    }
+
+    // Enforce subscription onboarding/billing for dashboard access.
+    if (isDashboardRoute && !isBillingRoute) {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('role, company_id')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      const isManager = ['super_admin', 'operations_manager'].includes(String(profile?.role || ''))
+      if (profile?.company_id && isManager) {
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select(`
+            status,
+            trial_end,
+            stripe_subscription_id,
+            subscription_plans(name)
+          `)
+          .eq('company_id', profile.company_id)
+          .maybeSingle()
+
+        const planRaw = (subscription as any)?.subscription_plans
+        const planName = (Array.isArray(planRaw) ? planRaw[0]?.name : planRaw?.name || 'free') as string
+        const status = String((subscription as any)?.status || '')
+        const trialEnd = (subscription as any)?.trial_end ? new Date((subscription as any).trial_end) : null
+        const trialExpired = !!trialEnd && trialEnd.getTime() < Date.now()
+        const hasPaidSubscription = !!(subscription as any)?.stripe_subscription_id
+
+        if (!subscription || planName.toLowerCase() === 'free') {
+          const url = request.nextUrl.clone()
+          url.pathname = '/pricing'
+          url.searchParams.set('onboarding', '1')
+          return NextResponse.redirect(url)
+        }
+
+        if (
+          (status === 'trialing' && trialExpired && !hasPaidSubscription) ||
+          status === 'past_due' ||
+          status === 'canceled' ||
+          status === 'unpaid' ||
+          status === 'incomplete'
+        ) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/dashboard/settings/billing'
+          url.searchParams.set('payment_required', '1')
+          return NextResponse.redirect(url)
+        }
+      }
     }
 
     // Drivers use a single HOS page at /dashboard/eld — block fleet ELD sub-routes.

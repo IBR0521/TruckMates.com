@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { ClientProviders } from "@/components/providers/client-providers"
+import { GoogleMapsRootScript } from "@/components/google-maps-root-script"
 import { ErrorBoundary } from "@/app/error-boundary"
 import "./globals.css"
 
@@ -55,6 +56,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`${geist.variable} ${geistMono.variable} font-sans antialiased bg-background text-foreground`} suppressHydrationWarning>
+        <GoogleMapsRootScript />
         {/* Accessibility: Skip to main content link */}
         <a href="#main-content" className="skip-link">
           Skip to main content

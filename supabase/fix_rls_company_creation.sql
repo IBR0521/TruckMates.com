@@ -1,44 +1,22 @@
--- Quick fix: Create SECURITY DEFINER function to bypass RLS for company creation
--- Run this in Supabase SQL Editor to fix the RLS policy error
+-- =============================================================================
+-- create_company_for_user — superseded (do not maintain a duplicate here)
+-- =============================================================================
+--
+-- This file used to be a standalone "quick fix" copy of the registration RPC.
+-- The function body is now defined in two maintained places only:
+--
+--   1. Fresh / reference bootstrap (companies + users + RPC)
+--      → Run or consult:  auth_schema.sql
+--
+--   2. Existing production database (replace RPC + backfill subscriptions)
+--      → Run once in Supabase SQL Editor:  migrations/subscriptions_backfill_and_signup_seed.sql
+--
+-- That migration updates `create_company_for_user` (free-plan row on signup) and inserts
+-- missing `subscriptions` rows for companies that have none.
+--
+-- Prerequisite: `subscription_plans` must include `name = 'free'` (see subscriptions_schema.sql).
+-- =============================================================================
 
--- Drop existing function first (if it exists with different return type)
-DROP FUNCTION IF EXISTS public.create_company_for_user(TEXT, TEXT, TEXT, UUID, TEXT);
-
--- Create the function with TEXT return type for JSON serialization
-CREATE OR REPLACE FUNCTION public.create_company_for_user(
-  p_name TEXT,
-  p_email TEXT,
-  p_phone TEXT,
-  p_user_id UUID,
-  p_company_type TEXT DEFAULT NULL
-)
-RETURNS TEXT
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_company_id UUID;
-BEGIN
-  -- Insert company (bypasses RLS because of SECURITY DEFINER)
-  INSERT INTO public.companies (name, email, phone, company_type)
-  VALUES (p_name, p_email, p_phone, p_company_type)
-  RETURNING id INTO v_company_id;
-
-  -- Update user record to link to company
-  UPDATE public.users
-  SET 
-    company_id = v_company_id,
-    role = 'super_admin',
-    full_name = p_name,
-    phone = p_phone
-  WHERE id = p_user_id;
-
-  -- Return as TEXT to ensure JSON serialization
-  RETURN v_company_id::TEXT;
-END;
-$$;
-
--- Grant execute permission to authenticated users
-GRANT EXECUTE ON FUNCTION public.create_company_for_user(TEXT, TEXT, TEXT, UUID, TEXT) TO authenticated;
-
+-- If you ran this file by mistake, ignore the result below and run:
+--   migrations/subscriptions_backfill_and_signup_seed.sql
+SELECT 'use migrations/subscriptions_backfill_and_signup_seed.sql' AS run_this_instead;

@@ -326,7 +326,7 @@ export async function createDriver(formData: {
       subscription_plans!inner(max_drivers)
     `)
     .eq("company_id", ctx.companyId)
-    .eq("status", "active")
+    .in("status", ["active", "trialing"])
     .maybeSingle()
 
   if (subscriptionError) {

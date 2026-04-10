@@ -175,7 +175,7 @@ export default function LandingPageBelowFold() {
           <SectionHeader
             eyebrow="Demo"
             title="See the product"
-            subtitle="A short screen recording beats a wall of claims. Add NEXT_PUBLIC_DEMO_VIDEO_URL for a YouTube or Vimeo embed."
+            subtitle="Short walkthrough video plus a hands-on demo you can use right away."
           />
           {DEMO_VIDEO_URL ? (
             <div className="overflow-hidden rounded-2xl border border-border bg-muted/30 shadow-2xl ring-1 ring-black/5 dark:ring-white/10">
@@ -195,8 +195,8 @@ export default function LandingPageBelowFold() {
                 <Play className="h-8 w-8 text-primary opacity-80" strokeWidth={1.5} />
               </div>
               <p className="mx-auto max-w-md text-muted-foreground leading-relaxed">
-                Demo video not configured yet. Record 2–3 minutes: create a load, assign a driver, generate an invoice, open
-                an IFTA report — real clicks, real data.
+                Full product video is on the way. In the meantime, use the interactive demo — real screens for loads, dispatch,
+                invoicing, and compliance.
               </p>
               <Link href="/demo" className="mt-6 inline-block">
                 <Button variant="outline" size="lg" className="h-11 rounded-xl border-2 font-medium">

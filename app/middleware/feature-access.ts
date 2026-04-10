@@ -1,13 +1,11 @@
 "use server"
 
-// Feature access - platform is now free, all features are available
+// Plan-based feature gates are not wired here yet — navigation uses RBAC (`lib/feature-permissions`).
+// Billing state lives in `subscriptions` + `subscription_plans`; seat limits are enforced in server actions.
 export const FEATURE_ACCESS = {
-  // All features are available (platform is free)
   all: ["all"],
 }
 
-// Check if current user can access a feature
-// Platform is free, so all features are accessible
-export async function checkFeatureAccess(feature: string) {
+export async function checkFeatureAccess(_feature: string) {
   return { allowed: true, error: null }
 }

@@ -6,7 +6,7 @@ import { getAuthCompany, getCachedAuthContext } from "@/lib/auth/server"
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import { getDriverDashboardSnapshot } from "@/app/actions/driver-dashboard"
 import type { DriverDashboardSnapshot } from "@/lib/types/driver-dashboard"
-import { cache, cacheKeys } from "@/lib/cache"
+import { cacheKeys } from "@/lib/cache"
 import * as Sentry from "@sentry/nextjs"
 import type {
   DashboardCardDriverRow,
@@ -149,9 +149,9 @@ export async function getDashboardStats(): Promise<{ data: DashboardStats; error
       }
     }
 
-    // Check cache first (60 second TTL for dashboard stats - increased for better performance)
     const cacheKey = cacheKeys.dashboardStats(companyId)
-    const cached = cache.get<DashboardStats>(cacheKey)
+    const { getCachedApiResult, setCachedApiResult } = await import("@/lib/api-protection")
+    const cached = await getCachedApiResult<DashboardStats>(cacheKey, 60)
     if (cached) {
       return { data: cached, error: null }
     }
@@ -783,8 +783,7 @@ export async function getDashboardStats(): Promise<{ data: DashboardStats; error
       upcomingDeliveries: upcomingDeliveries || [],
     }
 
-    // Cache for 60 seconds (longer cache for better performance)
-    cache.set(cacheKey, dashboardData, 60000)
+    await setCachedApiResult(cacheKey, dashboardData, 60)
 
     return {
       data: dashboardData,

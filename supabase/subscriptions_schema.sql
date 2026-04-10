@@ -1,6 +1,8 @@
 -- Subscriptions Schema
 -- This schema supports subscription management with Stripe integration
 
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 -- Subscription plans table
 CREATE TABLE IF NOT EXISTS public.subscription_plans (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -22,7 +24,7 @@ CREATE TABLE IF NOT EXISTS public.subscription_plans (
 -- Subscriptions table - links companies to subscription plans
 CREATE TABLE IF NOT EXISTS public.subscriptions (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE NOT NULL UNIQUE,
+  company_id UUID NOT NULL UNIQUE,
   plan_id UUID REFERENCES public.subscription_plans(id) NOT NULL,
   status TEXT NOT NULL DEFAULT 'active', -- 'active', 'canceled', 'past_due', 'trialing', 'incomplete'
   stripe_subscription_id TEXT UNIQUE, -- Stripe subscription ID
@@ -41,7 +43,7 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
 -- Payment methods table - stores customer payment methods
 CREATE TABLE IF NOT EXISTS public.payment_methods (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE NOT NULL,
+  company_id UUID NOT NULL,
   stripe_payment_method_id TEXT UNIQUE NOT NULL,
   type TEXT NOT NULL, -- 'card', 'bank_account', etc.
   is_default BOOLEAN DEFAULT false,
@@ -55,7 +57,7 @@ CREATE TABLE IF NOT EXISTS public.payment_methods (
 -- Invoices table - stores billing history
 CREATE TABLE IF NOT EXISTS public.invoices (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE NOT NULL,
+  company_id UUID NOT NULL,
   subscription_id UUID REFERENCES public.subscriptions(id) ON DELETE SET NULL,
   stripe_invoice_id TEXT UNIQUE,
   amount DECIMAL(10, 2) NOT NULL,
@@ -88,6 +90,45 @@ BEGIN
       ALTER TABLE public.invoices ADD COLUMN stripe_invoice_id TEXT;
       -- Add unique constraint separately
       ALTER TABLE public.invoices ADD CONSTRAINT invoices_stripe_invoice_id_key UNIQUE (stripe_invoice_id);
+    END IF;
+  END IF;
+END $$;
+
+-- Add foreign keys to companies when companies table exists.
+DO $$
+BEGIN
+  IF to_regclass('public.companies') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conrelid = 'public.subscriptions'::regclass
+        AND conname = 'subscriptions_company_id_fkey'
+    ) THEN
+      ALTER TABLE public.subscriptions
+        ADD CONSTRAINT subscriptions_company_id_fkey
+        FOREIGN KEY (company_id) REFERENCES public.companies(id) ON DELETE CASCADE;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conrelid = 'public.payment_methods'::regclass
+        AND conname = 'payment_methods_company_id_fkey'
+    ) THEN
+      ALTER TABLE public.payment_methods
+        ADD CONSTRAINT payment_methods_company_id_fkey
+        FOREIGN KEY (company_id) REFERENCES public.companies(id) ON DELETE CASCADE;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conrelid = 'public.invoices'::regclass
+        AND conname = 'invoices_company_id_fkey'
+    ) THEN
+      ALTER TABLE public.invoices
+        ADD CONSTRAINT invoices_company_id_fkey
+        FOREIGN KEY (company_id) REFERENCES public.companies(id) ON DELETE CASCADE;
     END IF;
   END IF;
 END $$;
@@ -131,57 +172,63 @@ CREATE POLICY "Anyone can view active subscription plans"
   ON public.subscription_plans FOR SELECT
   USING (is_active = true);
 
--- RLS Policies for subscriptions
-CREATE POLICY "Users can view their company's subscription"
-  ON public.subscriptions FOR SELECT
-  USING (
-    company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid()
-    )
-  );
+-- RLS policies that depend on public.users are created only when users table exists.
+DO $$
+BEGIN
+  IF to_regclass('public.users') IS NOT NULL THEN
+    CREATE POLICY "Users can view their company's subscription"
+      ON public.subscriptions FOR SELECT
+      USING (
+        company_id IN (
+          SELECT company_id FROM public.users WHERE id = auth.uid()
+        )
+      );
 
-CREATE POLICY "Managers can insert subscriptions for their company"
-  ON public.subscriptions FOR INSERT
-  WITH CHECK (
-    company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
-    )
-  );
+    CREATE POLICY "Managers can insert subscriptions for their company"
+      ON public.subscriptions FOR INSERT
+      WITH CHECK (
+        company_id IN (
+          SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
+        )
+      );
 
-CREATE POLICY "Managers can update their company's subscription"
-  ON public.subscriptions FOR UPDATE
-  USING (
-    company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
-    )
-  );
+    CREATE POLICY "Managers can update their company's subscription"
+      ON public.subscriptions FOR UPDATE
+      USING (
+        company_id IN (
+          SELECT company_id FROM public.users WHERE id = auth.uid() AND role IN ('super_admin','operations_manager')
+        )
+      );
 
--- RLS Policies for payment_methods
-CREATE POLICY "Users can view their company's payment methods"
-  ON public.payment_methods FOR SELECT
-  USING (
-    company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid()
-    )
-  );
+    CREATE POLICY "Users can view their company's payment methods"
+      ON public.payment_methods FOR SELECT
+      USING (
+        company_id IN (
+          SELECT company_id FROM public.users WHERE id = auth.uid()
+        )
+      );
 
--- RLS Policies for invoices
-CREATE POLICY "Users can view their company's invoices"
-  ON public.invoices FOR SELECT
-  USING (
-    company_id IN (
-      SELECT company_id FROM public.users WHERE id = auth.uid()
-    )
-  );
+    CREATE POLICY "Users can view their company's invoices"
+      ON public.invoices FOR SELECT
+      USING (
+        company_id IN (
+          SELECT company_id FROM public.users WHERE id = auth.uid()
+        )
+      );
+  END IF;
+END $$;
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_subscription_updated_at_column()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
 BEGIN
   NEW.updated_at = TIMEZONE('utc'::text, NOW());
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- Triggers for updated_at (drop first so script is re-runnable)
 DROP TRIGGER IF EXISTS update_subscription_plans_updated_at ON public.subscription_plans;

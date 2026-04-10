@@ -48,6 +48,7 @@ export async function registerSuperAdmin(data: {
 }) {
   try {
     const supabase = await createClient()
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
 
     // Step 1: Check company name availability
     const nameCheck = await checkCompanyName(data.companyName)
@@ -63,6 +64,7 @@ export async function registerSuperAdmin(data: {
       email: data.email,
       password: data.password,
       options: {
+        emailRedirectTo: `${appUrl}/auth/confirm?next=/pricing%3Fonboarding%3D1`,
         data: {
           full_name: data.companyName.trim(),
           role: 'super_admin',
@@ -196,6 +198,7 @@ export async function registerEmployee(data: {
 }) {
   try {
     const supabase = await createClient()
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
 
     const role = String(data.role).trim().toLowerCase() as EmployeeRole
 
@@ -278,6 +281,7 @@ export async function registerEmployee(data: {
       email: data.email,
       password: data.password,
       options: {
+        emailRedirectTo: `${appUrl}/auth/confirm?next=/dashboard`,
         data: {
           full_name: data.fullName.trim(),
           role,

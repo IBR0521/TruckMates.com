@@ -20,6 +20,8 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
+import Link from "next/link"
 import { getBillingInfo, updateBillingInfo } from "@/app/actions/settings-billing"
 import { getSubscription, getPaymentHistory, getPaymentMethods, savePaymentMethod, deletePaymentMethod } from "@/app/actions/settings-billing-enhanced"
 import { Separator } from "@/components/ui/separator"
@@ -62,6 +64,8 @@ export default function BillingSettingsPage() {
     cardholder_name: "",
     is_default: false,
   })
+  const searchParams = useSearchParams()
+  const paymentRequired = searchParams.get("payment_required") === "1"
 
   useEffect(() => {
     async function loadSettings() {
@@ -148,6 +152,11 @@ export default function BillingSettingsPage() {
           <p className="text-muted-foreground mt-2">
             Manage your subscription and billing information
           </p>
+          {paymentRequired && (
+            <p className="mt-2 text-sm text-destructive">
+              Your trial has ended or billing is past due. Add payment to continue platform access.
+            </p>
+          )}
         </div>
 
         {isLoading ? (
@@ -251,8 +260,8 @@ export default function BillingSettingsPage() {
                 <div>
                   <p className="font-medium">{subscription.plan_display_name || subscription.plan_name || "Free"}</p>
                   <p className="text-sm text-muted-foreground">
-                    {subscription.plan_name === "free" || subscription.amount === 0 
-                      ? "Platform is currently free" 
+                    {subscription.plan_name === "free" || subscription.amount === 0
+                      ? "Free plan — upgrade for higher limits and team size."
                       : `${subscription.billing_cycle === "monthly" ? "Monthly" : "Yearly"} billing`}
                   </p>
                 </div>
@@ -282,11 +291,24 @@ export default function BillingSettingsPage() {
                   </p>
                 </div>
               </div>
+              {(subscription.plan_name === "free" || subscription.amount === 0) && (
+                <div className="pt-2">
+                  <Button variant="outline" size="sm" className="rounded-lg" asChild>
+                    <Link href="/pricing">View plans & pricing</Link>
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">No active subscription</p>
-              <p className="text-xs text-muted-foreground">The platform is currently free. All features are available at no cost.</p>
+              <p className="text-sm text-muted-foreground">Could not load subscription details.</p>
+              <p className="text-xs text-muted-foreground">
+                If this persists, confirm your database has <code className="text-xs">subscriptions</code> and{" "}
+                <code className="text-xs">subscription_plans</code> (run the subscription migration).
+              </p>
+              <Button variant="outline" size="sm" className="rounded-lg mt-2" asChild>
+                <Link href="/pricing">View plans & pricing</Link>
+              </Button>
             </div>
           )}
         </Card>

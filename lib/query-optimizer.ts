@@ -3,7 +3,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { cache, cacheKeys } from "./cache"
+import { cacheKeys } from "./cache"
 
 /**
  * Get user company_id with caching (FAST - no retries, just cache)
@@ -11,14 +11,13 @@ import { cache, cacheKeys } from "./cache"
  */
 export async function getCachedUserCompany(userId: string): Promise<{ company_id: string | null; error: string | null }> {
   const cacheKey = cacheKeys.userCompany(userId)
-  
-  // Check cache first (fast path)
-  const cached = cache.get<{ company_id: string | null }>(cacheKey)
+  const { getCachedApiResult, setCachedApiResult } = await import("@/lib/api-protection")
+
+  const cached = await getCachedApiResult<{ company_id: string | null }>(cacheKey, 60)
   if (cached) {
     return { ...cached, error: null }
   }
 
-  // Fetch from database (no retries - keep it fast)
   const supabase = await createClient()
   const { data: userData, error } = await supabase
     .from("users")
@@ -31,10 +30,8 @@ export async function getCachedUserCompany(userId: string): Promise<{ company_id
   }
 
   const result = { company_id: userData?.company_id || null }
-  
-  // CRH-007: Cache for 60 seconds to balance performance and staleness.
-  // Company association can change during onboarding, so keep TTL short.
-  cache.set(cacheKey, result, 60 * 1000)
+
+  await setCachedApiResult(cacheKey, result, 60)
 
   return { ...result, error: null }
 }

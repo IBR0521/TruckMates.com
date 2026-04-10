@@ -1,16 +1,21 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Check, X, ArrowRight } from "lucide-react"
 import { Logo } from "@/components/logo"
+import { createClient } from "@/lib/supabase/client"
+import { startPlanTrial } from "@/app/actions/subscription-onboarding"
+import { toast } from "sonner"
+import { useRouter, useSearchParams } from "next/navigation"
 
 const PLANS = [
   {
     name: "Operator",
+    internalName: "starter",
     description: "Owner-operators needing full ops + compliance from day one",
     priceMonthly: 89,
     priceYearly: 828,
@@ -35,6 +40,7 @@ const PLANS = [
   },
   {
     name: "Fleet",
+    internalName: "professional",
     description: "Growing fleets needing accounting depth and team coordination",
     priceMonthly: 219,
     priceYearly: 2148,
@@ -58,6 +64,7 @@ const PLANS = [
   },
   {
     name: "Enterprise",
+    internalName: "enterprise",
     description: "Large operations needing full control",
     priceMonthly: 429,
     priceYearly: 4188,
@@ -88,6 +95,39 @@ const ADDONS = [
 
 export default function PricingPage() {
   const [billingAnnual, setBillingAnnual] = useState(true)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isChoosingPlan, setIsChoosingPlan] = useState<string | null>(null)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const onboarding = searchParams.get("onboarding") === "1"
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => {
+      setIsAuthenticated(!!data.user)
+    })
+  }, [])
+
+  const handlePlanChoose = async (planInternalName: "starter" | "professional" | "enterprise") => {
+    if (!isAuthenticated) {
+      router.push("/register")
+      return
+    }
+    setIsChoosingPlan(planInternalName)
+    try {
+      const result = await startPlanTrial(planInternalName)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success("Trial started", {
+        description: "Your 14-day trial is now active.",
+      })
+      router.push("/dashboard")
+    } finally {
+      setIsChoosingPlan(null)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
@@ -108,6 +148,11 @@ export default function PricingPage() {
       </header>
 
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
+        {onboarding && (
+          <p className="mb-4 text-sm text-primary font-medium">
+            Choose your plan to activate your 14-day free trial.
+          </p>
+        )}
         <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
           Simple, transparent pricing
         </h1>
@@ -138,7 +183,10 @@ export default function PricingPage() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {PLANS.map((plan) => {
-            const price = billingAnnual && plan.priceYearly > 0 ? plan.priceYearly / 12 : plan.priceMonthly
+            const effectiveMonthly =
+              billingAnnual && plan.priceYearly > 0
+                ? Math.round(plan.priceYearly / 12)
+                : plan.priceMonthly
             return (
               <Card
                 key={plan.name}
@@ -157,10 +205,12 @@ export default function PricingPage() {
                     <span className="text-2xl font-bold text-foreground">$0</span>
                   ) : (
                     <>
-                      <span className="text-2xl font-bold text-foreground">${Math.round(price)}</span>
+                      <span className="text-2xl font-bold text-foreground">${effectiveMonthly}</span>
                       <span className="text-muted-foreground text-sm"> per month</span>
                       {billingAnnual && plan.priceYearly > 0 && (
-                        <p className="text-xs text-muted-foreground mt-0.5">billed annually</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          billed annually (${plan.priceYearly.toLocaleString()}/year)
+                        </p>
                       )}
                     </>
                   )}
@@ -180,12 +230,18 @@ export default function PricingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link href={plan.href} className="mt-6 block">
-                  <Button className="w-full" variant={plan.highlighted ? "default" : "outline"} size="sm">
+                <div className="mt-6 block">
+                  <Button
+                    className="w-full"
+                    variant={plan.highlighted ? "default" : "outline"}
+                    size="sm"
+                    disabled={isChoosingPlan !== null}
+                    onClick={() => handlePlanChoose(plan.internalName)}
+                  >
                     {plan.cta}
                     <ArrowRight className="ml-2 w-3 h-3" />
                   </Button>
-                </Link>
+                </div>
               </Card>
             )
           })}
