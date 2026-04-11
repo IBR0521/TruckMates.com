@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache"
 import { validateRequiredString, sanitizeString } from "@/lib/validation"
 import { sendNotification } from "./notifications"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 
 const ROUTE_DETAIL_SELECT =
   "id, company_id, name, origin, destination, distance, estimated_time, priority, status, driver_id, truck_id, waypoints, estimated_arrival, depot_name, depot_address, pre_route_time_minutes, post_route_time_minutes, route_start_time, route_departure_time, route_complete_time, route_type, scenario, notes, special_instructions, estimated_fuel_cost, estimated_toll_cost, total_estimated_cost, origin_coordinates, destination_coordinates, traffic_distance_meters, traffic_duration_minutes, created_at, updated_at"
@@ -212,6 +213,11 @@ export async function createRoute(formData: {
   const permission = await checkCreatePermission("routes")
   if (!permission.allowed) {
     return { error: permission.error || "You don't have permission to create routes", data: null }
+  }
+
+  const subscriptionAccess = await requireActiveSubscriptionForWrite()
+  if (!subscriptionAccess.allowed) {
+    return { error: subscriptionAccess.error || "Subscription inactive", data: null }
   }
 
   const supabase = await createClient()

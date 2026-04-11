@@ -266,12 +266,31 @@ export async function recordBillableApiUsage(companyId: string, apiName: string,
   }
 }
 
-/** Called from client after debounced Places predictions / details (session-bound company). */
-export async function recordClientPlacesUsageForSession(kind: "autocomplete" | "details") {
+/** Pre-flight for Places UI: block before calling Google when quota is exhausted. */
+export async function assertPlacesUsageAllowedForSession(
+  kind: "autocomplete" | "details",
+): Promise<{ allowed: boolean; reason?: string }> {
   const ctx = await getCachedAuthContext()
-  if (!ctx.companyId) return
-  await recordBillableGoogleMapsUsage(
-    ctx.companyId,
-    kind === "autocomplete" ? "places_autocomplete" : "place_details",
-  )
+  if (!ctx.companyId) {
+    return { allowed: false, reason: "Not authenticated" }
+  }
+  const action = kind === "autocomplete" ? "places_autocomplete" : "place_details"
+  return assertMonthlyGoogleMapsActionAllowed(ctx.companyId, action)
+}
+
+/** Called from client after debounced Places predictions / details (session-bound company). */
+export async function recordClientPlacesUsageForSession(
+  kind: "autocomplete" | "details",
+): Promise<{ allowed: boolean; reason?: string }> {
+  const ctx = await getCachedAuthContext()
+  if (!ctx.companyId) {
+    return { allowed: false, reason: "Not authenticated" }
+  }
+  const action = kind === "autocomplete" ? "places_autocomplete" : "place_details"
+  const gate = await assertMonthlyGoogleMapsActionAllowed(ctx.companyId, action)
+  if (!gate.allowed) {
+    return { allowed: false, reason: gate.reason }
+  }
+  await recordBillableGoogleMapsUsage(ctx.companyId, action)
+  return { allowed: true }
 }

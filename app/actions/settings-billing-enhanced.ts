@@ -244,16 +244,19 @@ export async function getMonthlyApiUsageOverview(): Promise<{ data: any[] | null
   )
 
   const tollRoutingCalls = await countMonthlyUsage(ctx.companyId, ["toll_cost_estimate"], "tollguru")
+  const tollLimit = monthlyLimitForPlan(planName, "toll_routing")
+  const tollPercent =
+    tollLimit > 0 ? Math.min(100, Math.round((tollRoutingCalls / tollLimit) * 100)) : 0
 
   return {
     data: [
       ...usageRows,
       {
         key: "toll_routing",
-        label: "Toll Routing Calls",
+        label: "Toll routing",
         used: tollRoutingCalls,
-        limit: null,
-        percent: null,
+        limit: tollLimit,
+        percent: tollPercent,
       },
     ],
     error: null,

@@ -11,6 +11,7 @@ import { createRoute } from "./routes"
 import { sendNotification } from "./notifications"
 import { validateLoadData, validatePricingData, sanitizeString, sanitizeEmail, sanitizePhone, validateAddress } from "@/lib/validation"
 import { ALL_LOAD_STATUSES, getAllowedNextLoadStatuses, normalizeLoadStatus, parseLoadStatus } from "@/lib/load-status"
+import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 
 /** Subset of load fields used for background notifications after updates */
 type LoadUpdateNotificationPayload = {
@@ -305,6 +306,11 @@ export async function createLoad(formData: {
   const permission = await checkCreatePermission("loads")
   if (!permission.allowed) {
     return { error: permission.error || "You don't have permission to create loads", data: null }
+  }
+
+  const subscriptionAccess = await requireActiveSubscriptionForWrite()
+  if (!subscriptionAccess.allowed) {
+    return { error: subscriptionAccess.error || "Subscription inactive", data: null }
   }
 
   const supabase = await createClient()

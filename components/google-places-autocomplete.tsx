@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useDebounce } from "@/lib/hooks/use-debounce"
-import { recordClientPlacesUsageForSession } from "@/app/actions/api-usage"
+import { assertPlacesUsageAllowedForSession, recordClientPlacesUsageForSession } from "@/app/actions/api-usage"
+import { toast } from "sonner"
 
 declare global {
   interface Window {
@@ -180,6 +181,14 @@ export function GooglePlacesAutocomplete({
       }
       setLoadingPredictions(true)
       try {
+        const gate = await assertPlacesUsageAllowedForSession("autocomplete")
+        if (!gate.allowed) {
+          setLoadingPredictions(false)
+          toast.error(gate.reason || "Monthly Places API limit reached for your plan.")
+          setPredictions([])
+          setOpen(false)
+          return
+        }
         const svc = new window.google.maps.places.AutocompleteService()
         svc.getPlacePredictions({ input: q, types: ["address"] }, (res: any[] | null, status: string) => {
           setLoadingPredictions(false)
@@ -191,7 +200,11 @@ export function GooglePlacesAutocomplete({
           }
           setPredictions(res)
           setOpen(true)
-          void recordClientPlacesUsageForSession("autocomplete")
+          void recordClientPlacesUsageForSession("autocomplete").then((rec) => {
+            if (!rec.allowed && rec.reason) {
+              toast.error(rec.reason)
+            }
+          })
         })
       } catch {
         setLoadingPredictions(false)
@@ -216,27 +229,38 @@ export function GooglePlacesAutocomplete({
 
   const selectPrediction = (prediction: any) => {
     if (!window.google?.maps?.places) return
-    const dummy = document.createElement("div")
-    const svc = new window.google.maps.places.PlacesService(dummy)
-    svc.getDetails(
-      {
-        placeId: prediction.place_id,
-        fields: ["address_components", "formatted_address", "geometry", "name", "place_id"],
-      },
-      (place: any, status: string) => {
-        const ok = status === window.google.maps.places.PlacesServiceStatus?.OK || status === "OK"
-        if (!ok || !place) return
-        void recordClientPlacesUsageForSession("details")
-        const parsed = parsePlaceToAddress(place)
-        const street = parsed.address_line1?.trim() || place.formatted_address || value
-        if (onPlaceSelect) {
-          setTimeout(() => onPlaceSelect(parsed), 0)
-        }
-        onChange(street)
-        setOpen(false)
-        setPredictions([])
-      },
-    )
+    void (async () => {
+      const gate = await assertPlacesUsageAllowedForSession("details")
+      if (!gate.allowed) {
+        toast.error(gate.reason || "Monthly Places API limit reached for your plan.")
+        return
+      }
+      const dummy = document.createElement("div")
+      const svc = new window.google.maps.places.PlacesService(dummy)
+      svc.getDetails(
+        {
+          placeId: prediction.place_id,
+          fields: ["address_components", "formatted_address", "geometry", "name", "place_id"],
+        },
+        (place: any, status: string) => {
+          const ok = status === window.google.maps.places.PlacesServiceStatus?.OK || status === "OK"
+          if (!ok || !place) return
+          void recordClientPlacesUsageForSession("details").then((rec) => {
+            if (!rec.allowed && rec.reason) {
+              toast.error(rec.reason)
+            }
+          })
+          const parsed = parsePlaceToAddress(place)
+          const street = parsed.address_line1?.trim() || place.formatted_address || value
+          if (onPlaceSelect) {
+            setTimeout(() => onPlaceSelect(parsed), 0)
+          }
+          onChange(street)
+          setOpen(false)
+          setPredictions([])
+        },
+      )
+    })()
   }
 
   return (
