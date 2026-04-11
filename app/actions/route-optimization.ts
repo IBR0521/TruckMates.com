@@ -14,6 +14,7 @@ import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 
 /** `public.route_stops` — supabase/route_stops_schema_safe.sql */
 const ROUTE_STOPS_FULL_SELECT =
@@ -474,6 +475,14 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { optimized: false, error: ctx.error || "Not authenticated" }
+  }
+
+  const gate = await getCurrentCompanyFeatureAccess("route_optimization")
+  if (!gate.allowed) {
+    return {
+      optimized: false,
+      error: "Route optimization is available on Fleet and Enterprise plans. Please upgrade to continue.",
+    }
   }
 
   // Get route with stops

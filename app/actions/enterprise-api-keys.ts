@@ -19,6 +19,17 @@ function generateAPIKey(): { key: string; hash: string; prefix: string } {
   return { key, hash, prefix: keyPrefix }
 }
 
+export async function getAPIKeysAccessStatus() {
+  const gate = await getCurrentCompanyFeatureAccess("api_keys")
+  return {
+    data: {
+      allowed: gate.allowed,
+      plan_name: gate.planName,
+    },
+    error: gate.error,
+  }
+}
+
 /**
  * Get all API keys for the current company
  */

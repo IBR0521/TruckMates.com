@@ -2,13 +2,13 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
 export type PlanName = "free" | "starter" | "professional" | "enterprise"
-export type PlanFeature = "quickbooks" | "api_keys"
+export type PlanFeature = "quickbooks" | "api_keys" | "route_optimization"
 
 const PLAN_FEATURES: Record<PlanName, Record<PlanFeature, boolean>> = {
-  free: { quickbooks: false, api_keys: false },
-  starter: { quickbooks: false, api_keys: false },
-  professional: { quickbooks: true, api_keys: true },
-  enterprise: { quickbooks: true, api_keys: true },
+  free: { quickbooks: false, api_keys: false, route_optimization: false },
+  starter: { quickbooks: false, api_keys: false, route_optimization: false },
+  professional: { quickbooks: true, api_keys: true, route_optimization: true },
+  enterprise: { quickbooks: true, api_keys: true, route_optimization: true },
 }
 
 function normalizePlanName(input: string | null | undefined): PlanName {

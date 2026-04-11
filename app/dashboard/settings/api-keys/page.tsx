@@ -30,6 +30,7 @@ import { Plus, Copy, Trash2, Eye, EyeOff, Key, Calendar, Activity } from "lucide
 import { toast } from "sonner"
 import {
   getAPIKeys,
+  getAPIKeysAccessStatus,
   createAPIKey,
   revokeAPIKey,
   updateAPIKey,
@@ -38,6 +39,8 @@ import { format } from "date-fns"
 
 export default function APIKeysPage() {
   const [keys, setKeys] = useState<any[]>([])
+  const [apiKeysAllowed, setApiKeysAllowed] = useState(true)
+  const [planName, setPlanName] = useState("starter")
   const [loading, setLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newKeyName, setNewKeyName] = useState("")
@@ -51,11 +54,20 @@ export default function APIKeysPage() {
   async function loadKeys() {
     setLoading(true)
     try {
-      const result = await getAPIKeys()
-      if (result.error) {
-        toast.error(result.error)
+      const access = await getAPIKeysAccessStatus()
+      const allowed = !!access.data?.allowed
+      setApiKeysAllowed(allowed)
+      setPlanName(String(access.data?.plan_name || "starter"))
+
+      if (!allowed) {
+        setKeys([])
       } else {
-        setKeys(result.data || [])
+        const result = await getAPIKeys()
+        if (result.error) {
+          toast.error(result.error)
+        } else {
+          setKeys(result.data || [])
+        }
       }
     } catch (error: unknown) {
       toast.error(errorMessage(error, "Failed to load API keys"))
@@ -65,6 +77,10 @@ export default function APIKeysPage() {
   }
 
   async function handleCreateKey() {
+    if (!apiKeysAllowed) {
+      toast.error("API keys are available on Fleet and Enterprise plans.")
+      return
+    }
     if (!newKeyName.trim()) {
       toast.error("Please enter a name for the API key")
       return
@@ -87,6 +103,10 @@ export default function APIKeysPage() {
   }
 
   async function handleRevokeKey(id: string) {
+    if (!apiKeysAllowed) {
+      toast.error("API keys are available on Fleet and Enterprise plans.")
+      return
+    }
     try {
       const result = await revokeAPIKey(id)
       if (result.error) {
@@ -101,6 +121,10 @@ export default function APIKeysPage() {
   }
 
   async function handleToggleActive(id: string, currentStatus: boolean) {
+    if (!apiKeysAllowed) {
+      toast.error("API keys are available on Fleet and Enterprise plans.")
+      return
+    }
     try {
       const result = await updateAPIKey(id, { is_active: !currentStatus })
       if (result.error) {
@@ -143,7 +167,7 @@ export default function APIKeysPage() {
           </div>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button disabled={!apiKeysAllowed}>
                 <Plus className="w-4 h-4 mr-2" />
                 Create API Key
               </Button>
@@ -176,6 +200,17 @@ export default function APIKeysPage() {
           </Dialog>
         </div>
       </div>
+
+      {!apiKeysAllowed && (
+        <div className="p-8 pb-0">
+          <Card className="p-4 border-amber-500/40 bg-amber-500/5">
+            <p className="text-sm text-amber-400">
+              API keys are available on Fleet and Enterprise plans. Your current plan is{" "}
+              <span className="font-semibold capitalize">{planName}</span>.
+            </p>
+          </Card>
+        </div>
+      )}
 
       {/* Show new key once */}
       {newKey && (
@@ -222,7 +257,7 @@ export default function APIKeysPage() {
             <p className="text-muted-foreground mb-6">
               Create your first API key to enable programmatic access to your data.
             </p>
-            <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Button onClick={() => setIsCreateDialogOpen(true)} disabled={!apiKeysAllowed}>
               <Plus className="w-4 h-4 mr-2" />
               Create API Key
             </Button>

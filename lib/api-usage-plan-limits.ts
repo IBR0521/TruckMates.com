@@ -4,8 +4,8 @@ export type GoogleUsageCategory = "directions" | "geocoding" | "distance_matrix"
 
 const UNLIMITED = 9_999_999
 
-/** Maps subscription_plans.name → monthly limits for Google Maps categories. */
-export const GOOGLE_MAPS_MONTHLY_LIMITS: Record<
+/** Maps subscription_plans.name → monthly usage limits per tracked API category. */
+export const API_MONTHLY_LIMITS: Record<
   string,
   Record<GoogleUsageCategory, number>
 > = {
@@ -55,6 +55,6 @@ export function mapUsageActionToCategory(action: string): GoogleUsageCategory | 
 
 export function monthlyLimitForPlan(planName: string | null | undefined, category: GoogleUsageCategory): number {
   const key = (planName || "starter").toLowerCase()
-  const row = GOOGLE_MAPS_MONTHLY_LIMITS[key] || GOOGLE_MAPS_MONTHLY_LIMITS.starter
-  return row[category] ?? GOOGLE_MAPS_MONTHLY_LIMITS.starter[category]
+  const row = API_MONTHLY_LIMITS[key] || API_MONTHLY_LIMITS.starter
+  return row[category] ?? API_MONTHLY_LIMITS.starter[category]
 }
