@@ -5,15 +5,22 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
+const isProd = process.env.NODE_ENV === "production"
 
-// Keep `.next` off iCloud/Desktop (or other sync folders): partial writes cause ENOENT / missing
-// vendor-chunks and 500s. Vercel/CI keep the default in-repo output.
+// Build output directory.
+// - Vercel/CI: always `.next` in the repo.
+// - Local: default `.next` in-repo so webpack/dev server are not split across volumes (Desktop/iCloud
+//   project + `~/.cache/...` dist was causing requests to hang forever with 0-byte responses).
+// - Opt-in old behavior: set `NEXT_DIST_IN_HOME=1` in `.env.local` if you prefer dist under ~/.cache
+//   (some iCloud Desktop setups prefer keeping `.next` out of synced folders).
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectKey = crypto.createHash('sha256').update(__dirname).digest('hex').slice(0, 12)
 const distDir =
   process.env.VERCEL === '1' || process.env.CI === 'true'
     ? '.next'
-    : path.join(os.homedir(), '.cache', 'truckmates-next', projectKey, '.next')
+    : process.env.NEXT_DIST_IN_HOME === '1'
+      ? path.join(os.homedir(), '.cache', 'truckmates-next', projectKey, '.next')
+      : '.next'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -86,6 +93,50 @@ const nextConfig = {
         source: "/dashboard/employees",
         destination: "/dashboard/settings/users",
         permanent: true,
+      },
+    ]
+  },
+  async headers() {
+    // In development, a strict CSP breaks Next.js HMR (needs ws://), third-party scripts (Maps),
+    // and can yield a blank white screen while the tab "loads". Ship CSP only in production.
+    if (!isProd) {
+      return [
+        {
+          source: "/(.*)",
+          headers: [{ key: "X-Content-Type-Options", value: "nosniff" }],
+        },
+      ]
+    }
+
+    const csp = [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "frame-ancestors 'none'",
+      "object-src 'none'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data: https:",
+      // HMR / dev proxies / Supabase realtime / Maps tiles & APIs
+      "connect-src 'self' http: https: ws: wss:",
+      "worker-src 'self' blob:",
+      // Next.js + Google Maps (root script + dynamic chunks from googleapis/gstatic)
+      "script-src 'self' 'unsafe-inline' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com",
+      "style-src 'self' 'unsafe-inline' https:",
+      "form-action 'self'",
+    ].join("; ")
+
+    const securityHeaders = [
+      { key: "Content-Security-Policy", value: csp },
+      { key: "X-Frame-Options", value: "DENY" },
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
+      { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+    ]
+
+    return [
+      {
+        source: "/(.*)",
+        headers: securityHeaders,
       },
     ]
   },

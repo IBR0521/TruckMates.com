@@ -8,6 +8,7 @@ import { canViewFeature, type FeatureCategory } from "@/lib/feature-permissions"
 export function useFeatureAccess() {
   const [userRole, setUserRole] = useState<EmployeeRole | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const LAST_ROLE_KEY = "tm:lastKnownUserRole"
 
   useEffect(() => {
     async function loadUserRole() {
@@ -18,9 +19,23 @@ export function useFeatureAccess() {
           const employeeRole = (result.data as any).employee_role || result.data.role
           const mappedRole = mapLegacyRole(employeeRole) as EmployeeRole
           setUserRole(mappedRole)
+          try {
+            localStorage.setItem(LAST_ROLE_KEY, mappedRole)
+          } catch {
+            // Ignore localStorage issues.
+          }
+        } else {
+          const cachedRole = typeof window !== "undefined" ? localStorage.getItem(LAST_ROLE_KEY) : null
+          if (cachedRole) {
+            setUserRole(mapLegacyRole(cachedRole) as EmployeeRole)
+          }
         }
       } catch (error) {
         console.error("Failed to load user role:", error)
+        const cachedRole = typeof window !== "undefined" ? localStorage.getItem(LAST_ROLE_KEY) : null
+        if (cachedRole) {
+          setUserRole(mapLegacyRole(cachedRole) as EmployeeRole)
+        }
       } finally {
         setIsLoading(false)
       }

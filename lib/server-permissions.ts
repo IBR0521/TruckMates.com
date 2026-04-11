@@ -2,6 +2,7 @@
 
 import * as Sentry from "@sentry/nextjs"
 import { mapLegacyRole, type EmployeeRole } from "./roles"
+import { requireActiveSubscriptionForWrite } from "./subscription-access"
 import {
   canViewFeature,
   canCreateFeature,
@@ -67,6 +68,15 @@ export async function checkCreatePermission(feature: FeatureCategory): Promise<{
       return { allowed: false, role: null, error: "User not authenticated" }
     }
 
+    const subscription = await requireActiveSubscriptionForWrite()
+    if (!subscription.allowed) {
+      return {
+        allowed: false,
+        role,
+        error: subscription.error || "Subscription inactive. Please update billing to continue.",
+      }
+    }
+
     const allowed = canCreateFeature(role, feature)
     return {
       allowed,
@@ -91,6 +101,15 @@ export async function checkEditPermission(feature: FeatureCategory): Promise<{
     const role = await getUserRole()
     if (!role) {
       return { allowed: false, role: null, error: "User not authenticated" }
+    }
+
+    const subscription = await requireActiveSubscriptionForWrite()
+    if (!subscription.allowed) {
+      return {
+        allowed: false,
+        role,
+        error: subscription.error || "Subscription inactive. Please update billing to continue.",
+      }
     }
 
     const allowed = canEditFeature(role, feature)
@@ -119,6 +138,15 @@ export async function checkDeletePermission(feature: FeatureCategory): Promise<{
       return { allowed: false, role: null, error: "User not authenticated" }
     }
 
+    const subscription = await requireActiveSubscriptionForWrite()
+    if (!subscription.allowed) {
+      return {
+        allowed: false,
+        role,
+        error: subscription.error || "Subscription inactive. Please update billing to continue.",
+      }
+    }
+
     const allowed = canDeleteFeature(role, feature)
     return {
       allowed,
@@ -143,6 +171,15 @@ export async function checkManagePermission(feature: FeatureCategory): Promise<{
     const role = await getUserRole()
     if (!role) {
       return { allowed: false, role: null, error: "User not authenticated" }
+    }
+
+    const subscription = await requireActiveSubscriptionForWrite()
+    if (!subscription.allowed) {
+      return {
+        allowed: false,
+        role,
+        error: subscription.error || "Subscription inactive. Please update billing to continue.",
+      }
     }
 
     const allowed = canManageFeature(role, feature)

@@ -8,6 +8,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { mapLegacyRole } from "@/lib/roles"
+import { getResendClientForCompany } from "@/lib/resend-client"
 
 type NotificationType =
   | "route_update"
@@ -24,46 +25,8 @@ type NotificationType =
 const NOTIFICATION_PREFS_SELECT =
   "id, user_id, email_alerts, sms_alerts, weekly_reports, route_updates, load_updates, maintenance_alerts, payment_reminders, created_at, updated_at"
 
-// Initialize Resend (checks both env var and database)
-// Initialize lazily to avoid errors if API key is not set or package not available
-// FIXED: Decouple from auth context - check company integration using target user's company_id
 async function getResendClient(companyId?: string) {
-  // Always use platform API key from environment variables
-  const apiKey = process.env.RESEND_API_KEY
-  
-  if (!apiKey) {
-    Sentry.captureMessage("[RESEND] Platform API key not configured", "error")
-    return null
-  }
-
-  // If companyId is provided, check if integration is enabled for that company
-  if (companyId) {
-    try {
-      const supabase = await createClient()
-      const { data: integrations } = await supabase
-        .from("company_integrations")
-        .select("resend_enabled")
-        .eq("company_id", companyId)
-        .maybeSingle()
-
-      if (!integrations?.resend_enabled) {
-        Sentry.captureMessage("[RESEND] Integration not enabled for company", "info")
-        return null
-      }
-    } catch (error) {
-      Sentry.captureException(error)
-      return null
-    }
-  }
-  
-  try {
-    // Dynamic import to avoid build errors if package is not installed
-    const { Resend } = await import("resend")
-    return new Resend(apiKey)
-  } catch (error) {
-    Sentry.captureException(error)
-    return null
-  }
+  return getResendClientForCompany(companyId ?? null)
 }
 
 export async function getNotificationPreferences() {

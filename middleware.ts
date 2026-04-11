@@ -160,7 +160,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Exclude all `/_next/*` (RSC, webpack HMR, chunks) and `/api/*` — middleware must not run on these.
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/|api/|favicon.ico|icon\\.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 }

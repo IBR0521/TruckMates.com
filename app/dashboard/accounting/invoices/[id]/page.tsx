@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { normalizeInvoiceLineItems } from "@/lib/invoice-line-items"
 
 export default function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -29,6 +30,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [isSyncing, setIsSyncing] = useState(false)
   const [isRefreshingPayment, setIsRefreshingPayment] = useState(false)
   const [sendingCustomer, setSendingCustomer] = useState(false)
+  const [shareMailPreparing, setShareMailPreparing] = useState(false)
   const [sendingFactoring, setSendingFactoring] = useState(false)
   const [markingFunded, setMarkingFunded] = useState(false)
 
@@ -114,9 +116,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     issueDate: invoice.issue_date ? new Date(invoice.issue_date).toLocaleDateString() : "N/A",
     paymentTerms: invoice.payment_terms || "Net 30",
     description: invoice.description || "",
-    items: invoice.items && Array.isArray(invoice.items) ? invoice.items : [
-      { description: "Service", quantity: 1, rate: Number(invoice.amount), amount: Number(invoice.amount) },
-    ],
+    items: normalizeInvoiceLineItems(invoice.items, Number(invoice.amount)),
   }
 
   const handleDownload = () => {
@@ -167,26 +167,110 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     }
   }
 
-  const handleShare = (method: string) => {
-    const message = `Invoice ${invoiceData.invoice_number} - Amount: ${invoiceData.amount} - Due: ${invoiceData.dueDate}`
-    const url = window.location.href
+  /**
+   * Share → Email: open system Mail with any recipient (mailto:).
+   * PDF cannot be embedded in mailto: — we try Web Share with attachment, else download PDF then open Mail.
+   */
+  const handleShare = async (method: string) => {
+    const companyName =
+      (invoice as { companies?: { name?: string | null } | null }).companies?.name?.trim() || "Our company"
+    const loadRef = invoice.loads && (invoice.loads as { shipment_number?: string }).shipment_number
+    const loadLine = loadRef ? `Load: ${loadRef}\n` : ""
+
+    if (method === "email") {
+      const subject = `New Invoice Submission - ${companyName} - Invoice #${invoiceData.invoice_number}`
+      const body = `Please find the invoice PDF attached (or downloaded separately).
+
+Load: ${loadRef || "—"}
+Customer: ${invoiceData.customer}
+${loadLine}Amount: ${invoiceData.amount}
+Due: ${invoiceData.dueDate}
+
+${companyName} — freight / transportation invoice.`
+
+      setShareMailPreparing(true)
+      try {
+        const pdfName = `invoice-${String(invoiceData.invoice_number).replace(/[^a-zA-Z0-9._-]+/g, "_")}.pdf`
+        const pdfRes = await fetch(`/api/accounting/invoices/${encodeURIComponent(id)}/pdf`, {
+          credentials: "same-origin",
+        })
+
+        if (pdfRes.ok) {
+          const blob = await pdfRes.blob()
+          const file = new File([blob], pdfName, { type: "application/pdf" })
+
+          if (typeof navigator !== "undefined" && navigator.share && navigator.canShare?.({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: subject,
+              text: body,
+            })
+            toast.success("Choose Mail, enter the recipient, then send")
+            setShowShareMenu(false)
+            return
+          }
+
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement("a")
+          a.href = url
+          a.download = pdfName
+          a.rel = "noopener"
+          document.body.appendChild(a)
+          a.click()
+          a.remove()
+          URL.revokeObjectURL(url)
+          await new Promise((r) => setTimeout(r, 250))
+        }
+
+        const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+        window.location.href = mailto
+        toast.info(
+          pdfRes.ok
+            ? "Mail opened — add the recipient’s address. The invoice PDF was saved to your Downloads; attach it if it’s not already in the message."
+            : "Mail opened — add the recipient. Use Download PDF on this page to attach the invoice.",
+        )
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? errorMessage(e) : "Could not prepare email")
+        try {
+          window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+        } catch {
+          /* ignore */
+        }
+      } finally {
+        setShareMailPreparing(false)
+      }
+      setShowShareMenu(false)
+      return
+    }
+
+    const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "")
+    const safeExternalBase =
+      base && !/localhost|127\.0\.0\.1|\[::1\]/i.test(base) ? base : null
+    const optionalLink = safeExternalBase
+      ? `\n\nReference (team): ${safeExternalBase}/dashboard/accounting/invoices/${id}`
+      : ""
+
+    const message = `Invoice summary — ${companyName}
+Invoice #: ${invoiceData.invoice_number}
+Customer: ${invoiceData.customer}
+${loadLine}Amount: ${invoiceData.amount}
+Due: ${invoiceData.dueDate}
+
+PDF and supporting documents are not attached here. Use TruckMates → Invoice → "Email customer" to send the full packet by email.${optionalLink}`
 
     switch (method) {
-      case "email":
-        window.location.href = `mailto:?subject=Invoice ${invoice.id}&body=${encodeURIComponent(message + "\n" + url)}`
-        toast.success("Opening email client...")
-        break
       case "whatsapp":
-        window.open(`https://wa.me/?text=${encodeURIComponent(message + " " + url)}`, "_blank")
+        window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank")
         toast.success("Opening WhatsApp...")
         break
-      case "telegram":
-        window.open(
-          `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(message)}`,
-          "_blank",
-        )
+      case "telegram": {
+        const tgUrl = safeExternalBase
+          ? `https://t.me/share/url?url=${encodeURIComponent(`${safeExternalBase}/dashboard/accounting/invoices/${id}`)}&text=${encodeURIComponent(message)}`
+          : `https://t.me/share/url?url=&text=${encodeURIComponent(message)}`
+        window.open(tgUrl, "_blank")
         toast.success("Opening Telegram...")
         break
+      }
     }
     setShowShareMenu(false)
   }
@@ -369,21 +453,32 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button onClick={() => setShowShareMenu(!showShareMenu)} variant="outline" className="border-border">
+            <Button
+              onClick={() => setShowShareMenu(!showShareMenu)}
+              variant="outline"
+              className="border-border"
+              disabled={shareMailPreparing}
+            >
               <Share2 className="w-4 h-4 mr-2" />
               Share
             </Button>
             {showShareMenu && (
-              <Card className="absolute top-12 right-0 z-10 border-border p-2 min-w-[180px]">
-                <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleShare("email")}>
+              <Card className="absolute top-12 right-0 z-10 border-border p-2 min-w-[220px]">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start"
+                  disabled={shareMailPreparing}
+                  onClick={() => void handleShare("email")}
+                >
                   <Mail className="w-4 h-4 mr-2" />
-                  Email
+                  {shareMailPreparing ? "Preparing…" : "Open in Mail app"}
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
                   className="w-full justify-start"
-                  onClick={() => handleShare("whatsapp")}
+                  onClick={() => void handleShare("whatsapp")}
                 >
                   <MessageSquare className="w-4 h-4 mr-2" />
                   WhatsApp
@@ -392,7 +487,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                   variant="ghost"
                   size="sm"
                   className="w-full justify-start"
-                  onClick={() => handleShare("telegram")}
+                  onClick={() => void handleShare("telegram")}
                 >
                   <Send className="w-4 h-4 mr-2" />
                   Telegram

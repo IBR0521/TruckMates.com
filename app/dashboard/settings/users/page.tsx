@@ -83,24 +83,37 @@ export default function UsersSettingsPage() {
           getCompanyUsers(),
           getPendingInvitations(),
         ])
-        
-        if (usersResult.error) {
-          toast.error(usersResult.error)
-        } else if (usersResult.data) {
-          setUsers(usersResult.data.map((u: any) => ({
-            id: u.id,
-            email: u.email,
-            full_name: u.full_name,
-            phone: u.phone,
-            role: u.role,
-            status: "Active",
-          })))
-        }
 
-        if (invitationsResult.error) {
-          console.error("Failed to load invitations:", invitationsResult.error)
-        } else if (invitationsResult.data) {
-          setPendingInvitations(invitationsResult.data)
+        const err = usersResult.error || invitationsResult.error
+        if (err) {
+          // Do not use console.error here — Next.js dev overlay treats it like an uncaught error.
+          if (err === "User not found") {
+            toast.error(
+              "Your login is active but there is no company profile for this account. Finish signup, or ask an admin to invite you again.",
+            )
+          } else if (err === "Not authenticated") {
+            toast.error("Please sign in again.")
+          } else {
+            toast.error(err)
+          }
+          setUsers([])
+          setPendingInvitations([])
+        } else {
+          if (usersResult.data) {
+            setUsers(
+              usersResult.data.map((u: any) => ({
+                id: u.id,
+                email: u.email,
+                full_name: u.full_name,
+                phone: u.phone,
+                role: u.role,
+                status: "Active",
+              })),
+            )
+          }
+          if (invitationsResult.data) {
+            setPendingInvitations(invitationsResult.data)
+          }
         }
       } catch (error) {
         toast.error("Failed to load users")

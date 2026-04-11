@@ -11,13 +11,17 @@ import { recordBillableGoogleMapsUsage } from "@/app/actions/api-usage"
  * Provides routing, geocoding, and distance calculations
  */
 
+/** Server-side: either name works — many setups only set the public one. */
+function mapsApiKeyFromEnv() {
+  return (process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "").trim()
+}
+
 // Get Google Maps API key (platform-wide, from environment)
 async function getGoogleMapsApiKey() {
-  // Always use platform API key from environment variables
-  const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || ""
+  const GOOGLE_MAPS_API_KEY = mapsApiKeyFromEnv()
 
   if (!GOOGLE_MAPS_API_KEY) {
-    throw new Error("Google Maps API key not configured. Please contact support.")
+    throw new Error("Add GOOGLE_MAPS_API_KEY or NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to your environment.")
   }
 
   // Check if integration is enabled for this company
@@ -125,19 +129,43 @@ export async function getRouteDirections(origin: string, destination: string, wa
 
     const route = data.routes[0]
     const legs = route.legs || []
-    const leg = legs[0]
-    const distance_meters = legs.reduce((sum: number, l: { distance?: { value?: number } }) => sum + (l.distance?.value ?? 0), 0)
-    const duration_seconds = legs.reduce((sum: number, l: { duration?: { value?: number } }) => sum + (l.duration?.value ?? 0), 0)
-
-    const allSteps = legs.flatMap((l: { steps?: unknown[] }) =>
-      Array.isArray(l?.steps) ? l.steps : [],
+    type DirLeg = {
+      distance?: { value?: number; text?: string }
+      duration?: { value?: number; text?: string }
+      duration_in_traffic?: { value?: number; text?: string }
+      steps?: unknown[]
+    }
+    const distance_meters = legs.reduce(
+      (sum: number, l: DirLeg) => sum + (l.distance?.value ?? 0),
+      0,
     )
+    /** Prefer traffic-aware duration when `departure_time` + `traffic_model` return it. */
+    const duration_seconds = legs.reduce((sum: number, l: DirLeg) => {
+      const sec = l.duration_in_traffic?.value ?? l.duration?.value ?? 0
+      return sum + sec
+    }, 0)
+
+    const allSteps = legs.flatMap((l: DirLeg) => (Array.isArray(l?.steps) ? l.steps : []))
+
+    const formatDistanceText = (meters: number) => {
+      if (meters <= 0) return "—"
+      const mi = meters / 1609.34
+      return mi >= 10 ? `${Math.round(mi)} mi` : `${Math.round(mi * 10) / 10} mi`
+    }
+    const formatDurationText = (seconds: number) => {
+      if (seconds <= 0) return "—"
+      const h = Math.floor(seconds / 3600)
+      const m = Math.floor((seconds % 3600) / 60)
+      if (h > 0) return `${h} hour${h === 1 ? "" : "s"} ${m} mins`
+      return `${m} mins`
+    }
+
     const result = {
-      distance: leg?.distance?.text ?? "",
+      distance: formatDistanceText(distance_meters),
       distance_meters,
-      duration: leg?.duration?.text ?? "",
+      duration: formatDurationText(duration_seconds),
       duration_seconds,
-      polyline: route.overview_polyline.points,
+      polyline: route.overview_polyline?.points,
       steps: allSteps.map((step: any) => ({
         instruction: step.html_instructions,
         distance: step.distance.text,
@@ -402,7 +430,7 @@ export async function optimizeRoute(origin: string, destination: string, stops: 
         optimized_stops: optimizedWaypointOrder.map((index: number) => stops[index]),
         distance: route.legs.reduce((sum: number, leg: any) => sum + leg.distance.value, 0),
         duration: route.legs.reduce((sum: number, leg: any) => sum + leg.duration.value, 0),
-        polyline: route.overview_polyline.points,
+        polyline: route.overview_polyline?.points,
         legs: route.legs.map((leg: any) => ({
           distance: leg.distance.text,
           duration: leg.duration.text,

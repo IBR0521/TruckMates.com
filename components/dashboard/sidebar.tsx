@@ -17,6 +17,7 @@ import {
   FolderOpen,
   Receipt,
   UserCog,
+  User,
   Shield,
   Upload,
   Radio,
@@ -35,6 +36,7 @@ import {
 import Link from "next/link"
 import { Logo } from "@/components/logo"
 import { getCurrentUser } from "@/lib/auth/server"
+import { createClient as createBrowserClient } from "@/lib/supabase/client"
 import {
   Tooltip,
   TooltipContent,
@@ -67,6 +69,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
   const [isDesktop, setIsDesktop] = useState(true)
   const [mounted, setMounted] = useState(false)
   const [userRole, setUserRole] = useState<EmployeeRole | null>(null)
+  const LAST_ROLE_KEY = "tm:lastKnownUserRole"
 
   // Check if we're on desktop (lg breakpoint = 1024px) - client only
   useEffect(() => {
@@ -105,34 +108,67 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
     
     async function checkUserRole() {
       try {
+        let resolvedRole: string | null = null
         const result = await getCurrentUser()
-        
+
+        if (result?.data?.role) {
+          resolvedRole = result.data.role
+        } else {
+          // Fallback for cases where server action transport fails in client runtime.
+          // We still resolve role from DB first (not JWT metadata) to keep parity with auth policy.
+          const supabase = createBrowserClient()
+          const { data: authData } = await supabase.auth.getUser()
+          const authUserId = authData?.user?.id
+
+          if (authUserId) {
+            const { data: userRow } = await supabase
+              .from("users")
+              .select("role")
+              .eq("id", authUserId)
+              .maybeSingle()
+
+            resolvedRole = userRow?.role || null
+          }
+        }
+
         if (!isMounted) return
-        
-        if (result?.data) {
-          // EXT-002 FIX: Only use role from database (ground truth) - no metadata check
-          // getCurrentUser() now only returns role from users table, not from JWT metadata
-          const role = result.data.role
-          if (role) {
-            const mappedRole = mapLegacyRole(role) as EmployeeRole
-            setUserRole(mappedRole)
-            
-            // Check if role is a manager role
+
+        if (resolvedRole) {
+          const mappedRole = mapLegacyRole(resolvedRole) as EmployeeRole
+          setUserRole(mappedRole)
+          try {
+            localStorage.setItem(LAST_ROLE_KEY, mappedRole)
+          } catch {
+            // Ignore storage failures (private mode / quota).
+          }
+
+          const managerRoles: EmployeeRole[] = ["super_admin", "operations_manager"]
+          setIsManager(managerRoles.includes(mappedRole))
+        } else {
+          const cachedRole = typeof window !== "undefined" ? localStorage.getItem(LAST_ROLE_KEY) : null
+          if (cachedRole) {
+            const mappedCachedRole = mapLegacyRole(cachedRole) as EmployeeRole
+            setUserRole(mappedCachedRole)
             const managerRoles: EmployeeRole[] = ["super_admin", "operations_manager"]
-            setIsManager(managerRoles.includes(mappedRole))
+            setIsManager(managerRoles.includes(mappedCachedRole))
           } else {
             setIsManager(false)
             setUserRole(null)
           }
-        } else {
-          setIsManager(false)
-          setUserRole(null)
         }
       } catch (error) {
         if (!isMounted) return
         console.error('[Sidebar] Role check error:', error)
-        setIsManager(false)
-        setUserRole(null)
+        const cachedRole = typeof window !== "undefined" ? localStorage.getItem(LAST_ROLE_KEY) : null
+        if (cachedRole) {
+          const mappedCachedRole = mapLegacyRole(cachedRole) as EmployeeRole
+          setUserRole(mappedCachedRole)
+          const managerRoles: EmployeeRole[] = ["super_admin", "operations_manager"]
+          setIsManager(managerRoles.includes(mappedCachedRole))
+        } else {
+          setIsManager(false)
+          setUserRole(null)
+        }
       } finally {
         if (isMounted) {
           setIsLoading(false)
@@ -200,6 +236,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               <NavItem href="/dashboard/dvir" icon={FileCheck} label="DVIR" isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/documents" icon={FolderOpen} label="Documents" isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/notifications" icon={Bell} label="Notifications" isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/account" icon={User} label="My account" isCollapsed={shouldShowCollapsed} />
             </>
           ) : (
             <>
@@ -355,7 +392,10 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
         </nav>
 
         {/* Footer */}
-        <div className={`border-t border-sidebar-border ${shouldShowCollapsed ? "p-2" : "p-4"}`}>
+        <div className={`border-t border-sidebar-border ${shouldShowCollapsed ? "p-2" : "p-4"} space-y-1`}>
+          {userRole && userRole !== "driver" && (
+            <NavItem href="/dashboard/settings/account" icon={User} label="My account" isCollapsed={shouldShowCollapsed} />
+          )}
           {/* Settings - Super Admin only */}
           {userRole === "super_admin" && (
             <DropdownItem

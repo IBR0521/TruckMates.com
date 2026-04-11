@@ -202,7 +202,15 @@ export default function DashboardLayoutClient({
                 try {
                   const { error } = await supabase.auth.signOut()
                   if (error) {
-                    toast.error("Failed to logout: " + error.message)
+                    // Network fallback: clear local session even when Supabase is temporarily unreachable.
+                    const fallback = await supabase.auth.signOut({ scope: "local" })
+                    if (fallback.error) {
+                      toast.error("Failed to logout: " + error.message)
+                    } else {
+                      toast.success("Logged out locally")
+                      router.push("/login")
+                      router.refresh()
+                    }
                   } else {
                     toast.success("Logged out successfully")
                     router.push("/login")

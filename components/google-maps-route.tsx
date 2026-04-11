@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { errorMessage } from "@/lib/error-message"
 import { MapPin, Navigation, AlertTriangle } from "lucide-react"
 import { Card } from "@/components/ui/card"
@@ -23,6 +23,8 @@ interface GoogleMapsRouteProps {
   truckHeight?: number
   contents?: string
 }
+
+const EMPTY_STOPS: NonNullable<GoogleMapsRouteProps["stops"]> = []
 
 declare global {
   interface Window {
@@ -57,11 +59,24 @@ export function GoogleMapsRoute({
   destination,
   originCoordinates,
   destinationCoordinates,
-  stops = [],
+  stops,
   weight,
   truckHeight,
   contents,
 }: GoogleMapsRouteProps) {
+  const safeStops = !Array.isArray(stops) || stops.length === 0 ? EMPTY_STOPS : stops
+  const stopsSig = useMemo(() => {
+    if (!Array.isArray(stops) || stops.length === 0) return "__empty__"
+    return JSON.stringify(
+      stops.map((s) => ({
+        a: s.address ?? "",
+        n: s.location_name ?? "",
+        sn: s.stop_number ?? 0,
+        lat: s.coordinates?.lat,
+        lng: s.coordinates?.lng,
+      })),
+    )
+  }, [stops])
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const directionsServiceRef = useRef<any>(null)
@@ -202,7 +217,7 @@ export function GoogleMapsRoute({
         }
 
         // Multi-stop with no delivery points: cannot draw route without addresses
-        if ((destination === "Multiple Locations" || destination === "Multiple locations") && (!stops || stops.length === 0)) {
+        if ((destination === "Multiple Locations" || destination === "Multiple locations") && safeStops.length === 0) {
           setError("Add delivery points to view the multi-stop route. The map will update once addresses are set.")
           setIsLoading(false)
           return
@@ -251,12 +266,12 @@ export function GoogleMapsRoute({
         }
 
         // Multi-stop: destination is "Multiple Locations" — use last delivery point as destination (no geocode of literal string)
-        const isMultiStop = !destinationCoordinates && (destination === "Multiple Locations" || destination === "Multiple locations") && stops.length > 0
+        const isMultiStop = !destinationCoordinates && (destination === "Multiple Locations" || destination === "Multiple locations") && safeStops.length > 0
         if (destinationCoordinates) {
           destCoords = destinationCoordinates
         } else if (isMultiStop) {
           // Resolve last stop as destination (geocode or use coordinates)
-          const lastStop = stops[stops.length - 1]
+          const lastStop = safeStops[safeStops.length - 1]
           if (lastStop.coordinates) {
             destCoords = lastStop.coordinates
           } else {
@@ -330,8 +345,8 @@ export function GoogleMapsRoute({
 
         // Build waypoints array
         const waypoints: any[] = []
-        if (stops.length > 0) {
-          for (const stop of stops) {
+        if (safeStops.length > 0) {
+          for (const stop of safeStops) {
             if (stop.coordinates) {
               waypoints.push({
                 location: new window.google.maps.LatLng(stop.coordinates.lat, stop.coordinates.lng),
@@ -374,7 +389,7 @@ export function GoogleMapsRoute({
           origin: new window.google.maps.LatLng(originCoords.lat, originCoords.lng),
           destination: new window.google.maps.LatLng(destCoords.lat, destCoords.lng),
           travelMode: window.google.maps.TravelMode.DRIVING,
-          optimizeWaypoints: stops.length > 0,
+          optimizeWaypoints: safeStops.length > 0,
           avoidTolls: false,
         }
 
@@ -417,7 +432,7 @@ export function GoogleMapsRoute({
               duration_seconds: totalDuration,
               waypoints: [
                 { name: origin, type: "origin" },
-                ...stops.map((stop) => ({
+                ...safeStops.map((stop) => ({
                   name: stop.location_name || stop.address,
                   type: stop.stop_type || "waypoint",
                   stop_number: stop.stop_number,
@@ -474,7 +489,7 @@ Visit: https://console.cloud.google.com/google/maps-apis`
       })
       markersRef.current = []
     }
-  }, [mapLoaded, origin, destination, originCoordinates, destinationCoordinates, stops])
+  }, [mapLoaded, origin, destination, originCoordinates, destinationCoordinates, stopsSig])
 
   // Calculate restrictions
   const restrictions: string[] = []
@@ -544,7 +559,7 @@ Visit: https://console.cloud.google.com/google/maps-apis`
           {/* Waypoints */}
           <div className="space-y-2 mb-4">
             <p className="text-xs font-medium text-muted-foreground">Route Waypoints</p>
-            {routeData.waypoints.map((waypoint: any, idx: number) => (
+            {(routeData.waypoints ?? []).map((waypoint: any, idx: number) => (
               <div key={idx} className="flex items-center gap-2 text-xs">
                 <div
                   className={`w-2 h-2 rounded-full ${
@@ -583,15 +598,15 @@ Visit: https://console.cloud.google.com/google/maps-apis`
       {/* Navigation Button */}
       <Button
         onClick={() => {
-          const googleMapsUrl = stops.length > 0
-            ? `https://www.google.com/maps/dir/${encodeURIComponent(origin)}/${stops.map(s => encodeURIComponent(s.address || s.location_name)).join('/')}/${encodeURIComponent(destination)}`
+          const googleMapsUrl = safeStops.length > 0
+            ? `https://www.google.com/maps/dir/${encodeURIComponent(origin)}/${safeStops.map(s => encodeURIComponent(s.address || s.location_name)).join('/')}/${encodeURIComponent(destination)}`
             : `https://www.google.com/maps/dir/${encodeURIComponent(origin)}/${encodeURIComponent(destination)}`
           window.open(googleMapsUrl, "_blank")
         }}
         className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
       >
         <Navigation className="w-4 h-4 mr-2" />
-        Open in Google Maps {stops.length > 0 && `(${stops.length} stops)`}
+        Open in Google Maps {safeStops.length > 0 && `(${safeStops.length} stops)`}
       </Button>
     </div>
   )

@@ -353,7 +353,7 @@ export function TripPlanningEstimatorPanel({
               Computed {new Date(estimate.computed_at).toLocaleString()}
             </p>
 
-            {estimate.state_miles.length > 0 && (
+            {(estimate.state_miles?.length ?? 0) > 0 && (
               <div>
                 <p className="text-sm font-medium text-foreground mb-2">Miles by state</p>
                 <div className="overflow-x-auto rounded border border-border/50">
@@ -365,7 +365,7 @@ export function TripPlanningEstimatorPanel({
                       </tr>
                     </thead>
                     <tbody>
-                      {estimate.state_miles.map((row) => (
+                      {(estimate.state_miles ?? []).map((row) => (
                         <tr key={row.state_code} className="border-b border-border/40">
                           <td className="px-3 py-1.5 font-mono">{row.state_code}</td>
                           <td className="px-3 py-1.5">{row.miles.toLocaleString()}</td>
@@ -381,33 +381,33 @@ export function TripPlanningEstimatorPanel({
               <div className="rounded-md bg-background/50 p-3 border border-border/40">
                 <p className="text-muted-foreground text-xs mb-1">Fuel (planning)</p>
                 <p className="text-foreground">
-                  ~{estimate.fuel.estimated_gallons.toLocaleString()} gal
-                  {estimate.fuel.estimated_cost_usd != null && (
+                  ~{(estimate.fuel?.estimated_gallons ?? 0).toLocaleString()} gal
+                  {estimate.fuel?.estimated_cost_usd != null && (
                     <> · ${estimate.fuel.estimated_cost_usd.toFixed(2)}</>
                   )}
                 </p>
-                {estimate.fuel.diesel_note && (
+                {estimate.fuel?.diesel_note && (
                   <p className="text-xs text-muted-foreground mt-1">{estimate.fuel.diesel_note}</p>
                 )}
               </div>
               <div className="rounded-md bg-background/50 p-3 border border-border/40">
                 <p className="text-muted-foreground text-xs mb-1">Tolls (estimate)</p>
                 <p className="text-foreground">
-                  {estimate.tolls.estimated_usd != null
+                  {estimate.tolls?.estimated_usd != null
                     ? `$${estimate.tolls.estimated_usd.toFixed(2)}`
                     : "—"}
                 </p>
-                {estimate.tolls.note && (
+                {estimate.tolls?.note && (
                   <p className="text-xs text-muted-foreground mt-1">{estimate.tolls.note}</p>
                 )}
               </div>
             </div>
 
-            {estimate.warnings.length > 0 && (
+            {(estimate.warnings?.length ?? 0) > 0 && (
               <div className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
                 <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
                 <ul className="list-disc pl-4 space-y-1 text-muted-foreground">
-                  {estimate.warnings.map((w, i) => (
+                  {(estimate.warnings ?? []).map((w, i) => (
                     <li key={i}>{w}</li>
                   ))}
                 </ul>

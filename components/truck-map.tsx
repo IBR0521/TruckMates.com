@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { MapPin, Truck, AlertTriangle, Navigation } from "lucide-react"
+import Link from "next/link"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
@@ -20,9 +21,38 @@ interface TruckMapProps {
     coordinates?: { lat: number; lng: number }
     stop_type?: string
   }> // Multi-stop support
+  /** When set, links to the load detail page (interactive map + trip planning). */
+  loadId?: string
 }
 
-export function TruckMap({ origin, destination, weight, truckHeight = 4.0, contents, originCoordinates, destinationCoordinates, stops = [] }: TruckMapProps) {
+/** Stable default — `stops = []` in params creates a new array every render and breaks useEffect deps. */
+const EMPTY_STOPS: NonNullable<TruckMapProps["stops"]> = []
+
+export function TruckMap({
+  origin,
+  destination,
+  weight,
+  truckHeight = 4.0,
+  contents,
+  originCoordinates,
+  destinationCoordinates,
+  stops,
+  loadId,
+}: TruckMapProps) {
+  /** Inline `[]` from parents is a new reference each render — treat empty as stable EMPTY_STOPS. */
+  const stopsList = !Array.isArray(stops) || stops.length === 0 ? EMPTY_STOPS : stops
+  const stopsDepKey = useMemo(() => {
+    if (!Array.isArray(stops) || stops.length === 0) return "__empty__"
+    return JSON.stringify(
+      stops.map((s) => ({
+        a: s.address ?? "",
+        n: s.location_name ?? "",
+        sn: s.stop_number ?? 0,
+        lat: s.coordinates?.lat,
+        lng: s.coordinates?.lng,
+      })),
+    )
+  }, [stops])
   const [route, setRoute] = useState<any>(null)
   const [restrictions, setRestrictions] = useState<string[]>([])
 
@@ -44,15 +74,12 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
       calculatedRestrictions.push("Hazmat cargo - Restricted tunnel access")
     }
 
-    // Always add truck-specific routing
-    calculatedRestrictions.push("Truck-approved highways only")
-
     setRestrictions(calculatedRestrictions)
 
     // Build waypoints array including stops
     const waypointsArray = [
       { name: origin, type: "origin" },
-      ...stops.map((stop) => ({
+      ...stopsList.map((stop) => ({
         name: stop.location_name || stop.address,
         type: stop.stop_type || "waypoint",
         stop_number: stop.stop_number,
@@ -64,7 +91,7 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
     const calculateRoute = async () => {
       try {
         const { getRouteDirections } = await import("@/app/actions/integrations-google-maps")
-        const waypointAddresses = stops.map(s => s.address || s.location_name)
+        const waypointAddresses = stopsList.map((s) => s.address || s.location_name)
         const result = await getRouteDirections(origin, destination, waypointAddresses.length > 0 ? waypointAddresses : undefined)
         
         if (result.data) {
@@ -73,22 +100,21 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
             duration: result.data.duration,
             truckFriendly: true,
             waypoints: waypointsArray,
+            polyline: result.data.polyline as string | undefined,
           })
         } else {
-          // Fallback: show estimated values with disclaimer
           setRoute({
-            distance: "Distance calculation unavailable",
-            duration: "Duration calculation unavailable",
+            distance: "—",
+            duration: "—",
             truckFriendly: true,
             waypoints: waypointsArray,
             isEstimated: true,
           })
         }
-      } catch (error) {
-        // Fallback: show estimated values with disclaimer
+      } catch {
         setRoute({
-          distance: "Distance calculation unavailable",
-          duration: "Duration calculation unavailable",
+          distance: "—",
+          duration: "—",
           truckFriendly: true,
           waypoints: waypointsArray,
           isEstimated: true,
@@ -97,13 +123,91 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
     }
     
     calculateRoute()
-  }, [origin, destination, weight, truckHeight, contents, stops])
+  }, [origin, destination, weight, truckHeight, contents, stopsDepKey])
+
+  const [roadPreviewUrl, setRoadPreviewUrl] = useState<string | null>(null)
+  const previewRevokeRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    previewRevokeRef.current && URL.revokeObjectURL(previewRevokeRef.current)
+    previewRevokeRef.current = null
+    setRoadPreviewUrl(null)
+
+    if (!route || route.isEstimated) return
+    const o = origin?.trim()
+    const d = destination?.trim()
+    if (!o || !d) return
+
+    const ctrl = new AbortController()
+    ;(async () => {
+      try {
+        const body: { origin: string; destination: string; polyline?: string } = {
+          origin: o,
+          destination: d,
+        }
+        const poly = route.polyline
+        if (typeof poly === "string" && poly.length > 0) {
+          body.polyline = poly
+        }
+
+        let res = await fetch("/api/maps/static-preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: ctrl.signal,
+        })
+        // Marker-only fallback if path failed (e.g. stale cache without polyline handling upstream)
+        if (!res.ok && body.polyline) {
+          res = await fetch("/api/maps/static-preview", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ origin: o, destination: d }),
+            signal: ctrl.signal,
+          })
+        }
+        if (!res.ok) return
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        previewRevokeRef.current = url
+        setRoadPreviewUrl(url)
+      } catch {
+        /* ignore */
+      }
+    })()
+
+    return () => {
+      ctrl.abort()
+      if (previewRevokeRef.current) {
+        URL.revokeObjectURL(previewRevokeRef.current)
+        previewRevokeRef.current = null
+      }
+    }
+  }, [route, origin, destination])
 
   return (
     <div className="space-y-4">
-      {/* Map Visualization */}
+      {/* Map Visualization — real roads when Static Maps + public key; otherwise schematic */}
       <div className="relative w-full h-80 bg-secondary/30 rounded-lg border border-border/50 overflow-hidden">
-        {/* Map Canvas */}
+        {roadPreviewUrl ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- blob URL from proxied Static Maps */}
+            <img
+              src={roadPreviewUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            {loadId && (
+              <div className="absolute bottom-2 right-2">
+                <Link
+                  href={`/dashboard/loads/${loadId}`}
+                  className="rounded-md bg-background/90 px-2 py-1 text-xs text-primary underline-offset-2 hover:underline"
+                >
+                  Full map
+                </Link>
+              </div>
+            )}
+          </>
+        ) : (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="relative w-full h-full p-6">
             {/* Origin */}
@@ -120,12 +224,12 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
                   <stop offset="100%" style={{ stopColor: "#10b981", stopOpacity: 0.8 }} />
                 </linearGradient>
               </defs>
-              {stops.length > 0 ? (
+              {stopsList.length > 0 ? (
                 // Multi-stop route path
                 <path
-                  d={`M 25 25 ${stops.map((_, i) => {
-                    const x = 25 + ((i + 1) * 50) / (stops.length + 1)
-                    const y = 25 + ((i + 1) * 45) / (stops.length + 1)
+                  d={`M 25 25 ${stopsList.map((_, i) => {
+                    const x = 25 + ((i + 1) * 50) / (stopsList.length + 1)
+                    const y = 25 + ((i + 1) * 45) / (stopsList.length + 1)
                     return `L ${x} ${y}`
                   }).join(' ')} L 75 70`}
                   stroke="url(#routeGradient)"
@@ -146,10 +250,10 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
             </svg>
 
             {/* Stops/Waypoints */}
-            {stops.length > 0 ? (
-              stops.map((stop, index) => {
-                const x = 25 + ((index + 1) * 50) / (stops.length + 1)
-                const y = 25 + ((index + 1) * 45) / (stops.length + 1)
+            {stopsList.length > 0 ? (
+              stopsList.map((stop, index) => {
+                const x = 25 + ((index + 1) * 50) / (stopsList.length + 1)
+                const y = 25 + ((index + 1) * 45) / (stopsList.length + 1)
                 return (
                   <div
                     key={stop.stop_number || index}
@@ -178,6 +282,17 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
             </div>
           </div>
         </div>
+        )}
+        {!roadPreviewUrl && loadId && (
+          <div className="absolute bottom-2 right-2">
+            <Link
+              href={`/dashboard/loads/${loadId}`}
+              className="rounded-md bg-background/90 px-2 py-1 text-xs text-primary underline-offset-2 hover:underline"
+            >
+              Full map
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Route Information */}
@@ -185,7 +300,7 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
         <Card className="border-border p-4 bg-card/50">
           <div className="flex items-center gap-2 mb-3">
             <Navigation className="w-4 h-4 text-primary" />
-            <h4 className="font-semibold text-foreground">Truck Route Details</h4>
+            <h4 className="font-semibold text-foreground">Route</h4>
           </div>
 
           <div className="grid grid-cols-2 gap-4 mb-4">
@@ -202,7 +317,7 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
           {/* Waypoints */}
           <div className="space-y-2 mb-4">
             <p className="text-xs font-medium text-muted-foreground">Route Waypoints</p>
-            {route.waypoints.map((waypoint: any, idx: number) => (
+            {(route.waypoints ?? []).map((waypoint: any, idx: number) => (
               <div key={idx} className="flex items-center gap-2 text-xs">
                 <div
                   className={`w-2 h-2 rounded-full ${
@@ -305,10 +420,10 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
             
             if (isIOS) {
               // iOS format: saddr, daddr, paddr
-              if (stops.length > 0) {
+              if (stopsList.length > 0) {
                 // Get coordinates for all stops
                 const stopCoords: string[] = []
-                for (const stop of stops) {
+                for (const stop of stopsList) {
                   const coords = await getCoordinates(stop.address || stop.location_name, stop.coordinates)
                   if (coords) stopCoords.push(coords)
                 }
@@ -330,9 +445,9 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
               }
             } else if (isAndroid) {
               // Android format: s_addr, d_addr, p_addr
-              if (stops.length > 0) {
+              if (stopsList.length > 0) {
                 const stopCoords: string[] = []
-                for (const stop of stops) {
+                for (const stop of stopsList) {
                   const coords = await getCoordinates(stop.address || stop.location_name, stop.coordinates)
                   if (coords) stopCoords.push(coords)
                 }
@@ -364,8 +479,8 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
             } else {
               // On desktop/web: Use Google Maps with truck routing (better fallback)
               // Or provide instructions to install Trucker Path app
-              const googleMapsUrl = stops.length > 0
-                ? `https://www.google.com/maps/dir/${encodeURIComponent(origin)}/${stops.map(s => encodeURIComponent(s.address || s.location_name)).join('/')}/${encodeURIComponent(destination)}`
+              const googleMapsUrl = stopsList.length > 0
+                ? `https://www.google.com/maps/dir/${encodeURIComponent(origin)}/${stopsList.map(s => encodeURIComponent(s.address || s.location_name)).join('/')}/${encodeURIComponent(destination)}`
                 : `https://www.google.com/maps/dir/${encodeURIComponent(origin)}/${encodeURIComponent(destination)}`
               
               const useTruckerPath = confirm(
@@ -388,7 +503,7 @@ export function TruckMap({ origin, destination, weight, truckHeight = 4.0, conte
         className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
       >
         <Navigation className="w-4 h-4 mr-2" />
-        Start Truck Navigation {stops.length > 0 && `(${stops.length} stops)`}
+        Start Truck Navigation {stopsList.length > 0 && `(${stopsList.length} stops)`}
       </Button>
     </div>
   )

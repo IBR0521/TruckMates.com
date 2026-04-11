@@ -5,6 +5,7 @@ import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
+import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import * as Sentry from "@sentry/nextjs"
 
@@ -311,6 +312,11 @@ export async function inviteUser(data: {
     return { error: "Only managers can invite users", data: null }
   }
 
+  const subscriptionAccess = await requireActiveSubscriptionForWrite()
+  if (!subscriptionAccess.allowed) {
+    return { error: subscriptionAccess.error || "Subscription inactive. Please update billing to continue.", data: null }
+  }
+
   // Fetch inviter full_name for email (optional)
   const { data: inviterProfile, error: inviterProfileError } = await supabase
     .from("users")
@@ -378,12 +384,12 @@ export async function inviteUser(data: {
   }
 
   if (subscription?.subscription_plans?.max_users) {
-    // Count current active users
+    // Count all company users; inactive/null employee_status should still consume a seat
+    // unless explicitly removed from the company.
     const { count: currentUserCount } = await supabase
       .from("users")
       .select("id", { count: "exact", head: true })
       .eq("company_id", ctx.companyId)
-      .eq("employee_status", "active")
 
     if (currentUserCount !== null && currentUserCount >= subscription.subscription_plans.max_users) {
       return {

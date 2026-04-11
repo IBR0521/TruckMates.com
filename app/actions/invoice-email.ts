@@ -5,51 +5,17 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { getCompanySettings } from "./number-formats"
 import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
-import { escapeHtml } from "@/lib/html-escape"
+import { getResendClientForCompany } from "@/lib/resend-client"
+import { buildInvoicePacketAttachments, buildInvoicePacketEmailContent } from "@/lib/invoice-packet-build"
 
 /** Exported for factoring / other transactional email that uses the same Resend integration. */
 export async function getResendClient() {
-  // Always use platform API key from environment variables
-  const apiKey = process.env.RESEND_API_KEY
-  
-  if (!apiKey) {
-    Sentry.captureMessage("[RESEND] Platform API key not configured", "error")
-    return null
+  const ctx = await getCachedAuthContext()
+  const client = await getResendClientForCompany(ctx.companyId ?? null)
+  if (!client) {
+    Sentry.captureMessage("[RESEND] No API key (set RESEND_API_KEY or add key in Settings → Integration)", "warning")
   }
-
-  // Check if integration is enabled for this company
-  try {
-    const supabase = await createClient()
-    const ctx = await getCachedAuthContext()
-    if (ctx.companyId) {
-      const { data: integrations, error: integrationsError } = await supabase
-        .from("company_integrations")
-        .select("resend_enabled")
-        .eq("company_id", ctx.companyId)
-        .maybeSingle()
-
-      if (integrationsError) {
-        Sentry.captureException(integrationsError)
-        return null
-      }
-
-      if (!integrations?.resend_enabled) {
-        Sentry.captureMessage("[RESEND] Integration not enabled for company", "info")
-        return null
-      }
-    }
-  } catch (error) {
-    Sentry.captureException(error)
-    return null
-  }
-  
-  try {
-    const { Resend } = await import("resend")
-    return new Resend(apiKey)
-  } catch (error) {
-    Sentry.captureException(error)
-    return null
-  }
+  return client
 }
 
 /**
@@ -58,12 +24,16 @@ export async function getResendClient() {
 export async function sendInvoiceEmail(
   invoiceId: string,
   options?: {
+    /** @deprecated Ignored — body matches factoring packet template (Settings → Factoring). */
     subject?: string
+    /** @deprecated Ignored — body matches factoring packet template. */
     body?: string
     cc_emails?: string[]
     bcc_emails?: string[]
     send_copy_to_company?: boolean
+    /** @deprecated Packet always includes invoice PDF + optional BOL/rate/POD (same as factoring). */
     include_bol?: boolean
+    /** @deprecated See include_bol. */
     auto_attach_documents?: boolean
   }
 ) {
@@ -118,75 +88,81 @@ export async function sendInvoiceEmail(
     return { error: "Invoice not found", data: null }
   }
 
-  // Get company settings for email templates
   const settingsResult = await getCompanySettings()
-  const settings = settingsResult.data || {}
+  const settings = (settingsResult.data || {}) as Record<string, unknown>
 
-    // Get company info
     const { data: company } = await supabase
       .from("companies")
       .select("name, email")
       .eq("id", ctx.companyId)
       .maybeSingle()
 
-    // Prepare email data
     const customerEmail = invoice.loads?.customers?.email || invoice.customer_name
     if (!customerEmail || !customerEmail.includes("@")) {
       return { error: "Customer email is required and must be valid", data: null }
     }
-    
-    const customerName = invoice.loads?.customers?.name || invoice.loads?.customers?.company_name || invoice.customer_name || "Customer"
-    const companyName = company?.name || settings.company_name_display || "Company"
+
+    const loadRow = invoice.loads as { shipment_number?: string | null; company_name?: string | null } | null
+    let loadNumber = loadRow?.shipment_number || "—"
+    if (!loadRow?.shipment_number && invoice.load_id) {
+      const { data: lr } = await supabase
+        .from("loads")
+        .select("shipment_number")
+        .eq("id", invoice.load_id)
+        .eq("company_id", ctx.companyId)
+        .maybeSingle()
+      if (lr?.shipment_number) loadNumber = lr.shipment_number
+    }
+
+    const customerName =
+      invoice.loads?.customers?.name ||
+      invoice.loads?.customers?.company_name ||
+      invoice.customer_name ||
+      loadRow?.company_name ||
+      "Customer"
+    const companyName = company?.name || (settings.company_name_display as string) || "Company"
     const companyEmail = company?.email || process.env.RESEND_FROM_EMAIL || "noreply@truckmates.com"
+    const amountStr = `$${Number(invoice.amount || 0).toFixed(2)}`
 
-    // Build subject with token replacement
-    let subject = options?.subject || settings.invoice_email_subject || "Invoice {INVOICE_NUMBER} from {COMPANY_NAME}"
-    subject = subject
-      .replace(/{INVOICE_NUMBER}/g, invoice.invoice_number)
-      .replace(/{COMPANY_NAME}/g, companyName)
-      .replace(/{AMOUNT}/g, `$${Number(invoice.amount).toFixed(2)}`)
+    const packet = await buildInvoicePacketAttachments(
+      supabase,
+      ctx.companyId,
+      invoiceId,
+      {
+        id: invoice.id,
+        invoice_number: invoice.invoice_number,
+        load_id: invoice.load_id,
+      },
+      {
+        factoring_include_bol: settings.factoring_include_bol !== false,
+        factoring_include_rate_conf: settings.factoring_include_rate_conf !== false,
+        factoring_include_pod: settings.factoring_include_pod !== false,
+      },
+    )
 
-    // Build body with token replacement
-    let bodyText = options?.body || settings.invoice_email_body || `Dear {CUSTOMER_NAME},\n\nPlease find attached invoice {INVOICE_NUMBER} for {AMOUNT}.\n\nPayment is due by {DUE_DATE}.\n\nThank you!`
-    bodyText = bodyText
-      .replace(/{CUSTOMER_NAME}/g, customerName)
-      .replace(/{INVOICE_NUMBER}/g, invoice.invoice_number)
-      .replace(/{AMOUNT}/g, `$${Number(invoice.amount).toFixed(2)}`)
-      .replace(/{DUE_DATE}/g, new Date(invoice.due_date).toLocaleDateString())
-      .replace(/{COMPANY_NAME}/g, companyName)
+    if (packet.error) {
+      return { error: packet.error, data: null }
+    }
 
-    // Convert plain text to HTML for better email formatting
-    const bodyHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${subject}</title>
-      </head>
-      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background-color: #f4f4f4; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
-          <h2 style="color: #2c3e50; margin-top: 0;">Invoice ${invoice.invoice_number}</h2>
-          <p style="margin: 5px 0;"><strong>Amount:</strong> $${Number(invoice.amount).toFixed(2)}</p>
-          <p style="margin: 5px 0;"><strong>Due Date:</strong> ${new Date(invoice.due_date).toLocaleDateString()}</p>
-          ${invoice.description ? `<p style="margin: 5px 0;"><strong>Description:</strong> ${escapeHtml(invoice.description)}</p>` : ""}
-        </div>
-        <div style="white-space: pre-wrap;">${bodyText.replace(/\n/g, "<br>")}</div>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-        <p style="color: #666; font-size: 12px;">This is an automated email from ${companyName}. Please do not reply to this email.</p>
-      </body>
-      </html>
-    `
+    const { subject, bodyText, bodyHtml } = buildInvoicePacketEmailContent({
+      settings,
+      invoiceNumber: invoice.invoice_number || invoice.id,
+      companyName,
+      loadNumber,
+      customerName,
+      amountStr,
+      docLines: packet.docLines,
+    })
 
-    // Get Resend client
     const resend = await getResendClient()
     
     if (!resend) {
       // If Resend is not configured, log and return error
       Sentry.captureMessage("[INVOICE EMAIL] Resend API key not configured. Email not sent.", "warning")
-      return { 
-        error: "Email service not configured. Please set RESEND_API_KEY in environment variables.", 
-        data: null 
+      return {
+        error:
+          "Email service not configured. Add RESEND_API_KEY to your server environment, or save your Resend API key under Settings → Integration.",
+        data: null,
       }
     }
 
@@ -200,13 +176,7 @@ export async function sendInvoiceEmail(
       bccEmails.push(companyEmail)
     }
 
-    // Get invoice PDF URL if available (for attachment)
-    let attachments: any[] = []
-    if (options?.include_bol || options?.auto_attach_documents) {
-      // Try to get BOL or invoice PDF
-      // This would need to be implemented based on your PDF generation setup
-      // For now, we'll skip attachments
-    }
+    const attachments = packet.attachments
 
     // Get from email (check env var, then database, then default)
     let fromEmail = process.env.RESEND_FROM_EMAIL
@@ -232,10 +202,10 @@ export async function sendInvoiceEmail(
       to: toEmails,
       cc: ccEmails.length > 0 ? ccEmails : undefined,
       bcc: bccEmails.length > 0 ? bccEmails : undefined,
-      subject: subject,
+      subject,
       html: bodyHtml,
       text: bodyText,
-      attachments: attachments.length > 0 ? attachments : undefined,
+      attachments: attachments.map((a) => ({ filename: a.filename, content: a.content })),
     })
 
     if (emailResult.error) {
@@ -257,16 +227,17 @@ export async function sendInvoiceEmail(
     revalidatePath("/dashboard/accounting/invoices")
     revalidatePath(`/dashboard/accounting/invoices/${invoiceId}`)
 
-    return { 
-      data: { 
-        sent: true, 
-        subject, 
+    return {
+      data: {
+        sent: true,
+        subject,
         body: bodyText,
         emailId: emailResult.data?.id,
         to: customerEmail,
-        messageId: emailResult.data?.id
-      }, 
-      error: null 
+        messageId: emailResult.data?.id,
+        attachmentCount: attachments.length,
+      },
+      error: null,
     }
 }
 

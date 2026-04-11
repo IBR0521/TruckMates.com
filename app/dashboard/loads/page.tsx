@@ -11,7 +11,6 @@ import Link from "next/link"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { useDebounce } from "@/lib/hooks/use-debounce"
 import { exportToExcel } from "@/lib/export-utils"
-import { TruckMap } from "@/components/truck-map"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import {
@@ -40,7 +39,6 @@ import { History } from "lucide-react"
 
 export default function LoadsPage() {
   const router = useRouter()
-  const [selectedLoad, setSelectedLoad] = useState<any | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [loadsList, setLoadsList] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -80,7 +78,6 @@ export default function LoadsPage() {
   useEffect(() => {
     loadLoads()
   }, [])
-
 
   // Memoized filter and sort for better performance
   const filteredLoads = useMemo(() => {
@@ -153,9 +150,6 @@ export default function LoadsPage() {
       setDeleteId(null)
       setDeleteDependencies([])
     } else {
-      if (selectedLoad?.id === deleteId) {
-        setSelectedLoad(null)
-      }
       toast.success("Load deleted successfully")
       setDeleteId(null)
       setDeleteDependencies([])
@@ -486,9 +480,8 @@ export default function LoadsPage() {
               </div>
             </Card>
           )}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           {/* Loads List */}
-          <div className="lg:col-span-2">
+          <div>
             {isLoading ? (
               <Card className="border-border p-8">
                 <div className="text-center py-8">
@@ -522,7 +515,9 @@ export default function LoadsPage() {
                 {filteredLoads.map((load) => (
                 <Card
                   key={load.id}
-                  className={`border-border p-4 md:p-6 hover:border-primary/50 hover:shadow-md transition ${selectedIds.has(load.id) ? 'border-primary bg-primary/5' : ''}`}
+                  className={`border-border p-4 md:p-6 hover:border-primary/50 hover:shadow-md transition ${
+                    selectedIds.has(load.id) ? "border-primary bg-primary/5" : ""
+                  }`}
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -609,8 +604,8 @@ export default function LoadsPage() {
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-2 pt-4 border-t border-border/30">
-                    {load.id && typeof load.id === 'string' && load.id.trim() !== '' ? (
+                  <div className="flex flex-wrap gap-2 pt-4 border-t border-border/30">
+                    {load.id && typeof load.id === "string" && load.id.trim() !== "" ? (
                       <>
                         {load.invoice_id ? (
                           <Link href={`/dashboard/accounting/invoices/${load.invoice_id}`}>
@@ -684,30 +679,6 @@ export default function LoadsPage() {
               </div>
             )}
           </div>
-
-          {/* Map View */}
-          <div className="lg:col-span-1">
-            <Card className="border-border p-6 sticky top-8">
-              {selectedLoad ? (
-                <TruckMap
-                  origin={selectedLoad.origin || ""}
-                  destination={selectedLoad.destination || ""}
-                  weight={selectedLoad.weight_kg || 0}
-                  truckHeight={4.2}
-                  contents={selectedLoad.contents || ""}
-                />
-              ) : (
-                <div className="h-full flex items-center justify-center text-center py-12">
-                  <div>
-                    <Package className="w-12 h-12 text-primary/30 mx-auto mb-3" />
-                    <p className="text-sm text-muted-foreground">Select a load to view truck route</p>
-                    <p className="text-xs text-muted-foreground mt-1">Route will show truck-approved paths</p>
-                  </div>
-                </div>
-              )}
-            </Card>
-          </div>
-        </div>
         </div>
       </div>
 

@@ -11,6 +11,7 @@
     "deps:reinstall": "rm -rf node_modules .next && npm install",
     "dev:3003": "next dev -p 3003 --hostname :: --webpack",
     "dev:3003:turbo": "next dev -p 3003 --hostname ::",
+    "dev:3010": "NEXT_TELEMETRY_DISABLED=1 next dev -p 3010 --hostname 127.0.0.1 --webpack",
     "dev:3004": "next dev -p 3004 --hostname 0.0.0.0",
     "dev:3004:webpack": "next dev -p 3004 --hostname 0.0.0.0 --webpack",
     "dev:webpack": "next dev -p 3000 --hostname 0.0.0.0 --webpack",

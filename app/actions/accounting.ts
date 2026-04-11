@@ -75,6 +75,7 @@ export async function getInvoice(id: string) {
         id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, stripe_invoice_id, stripe_payment_intent_id, quickbooks_id, quickbooks_synced_at,
         factoring_status, factoring_submitted_at, factoring_funded_at,
         created_at, updated_at,
+        companies:company_id ( name ),
         loads:load_id (
           id,
           shipment_number,

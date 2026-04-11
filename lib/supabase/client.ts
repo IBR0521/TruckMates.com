@@ -1,6 +1,8 @@
 import { createBrowserClient } from '@supabase/ssr'
 import { errorMessage } from "@/lib/error-message"
 
+const BROWSER_SUPABASE_TIMEOUT_MS = 12000
+
 export function createClient() {
   // Validate environment variables - don't throw, return a mock client instead
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -51,9 +53,9 @@ export function createClient() {
   return createBrowserClient(supabaseUrl, supabaseAnonKey, {
     global: {
       fetch: async (url, options = {}) => {
-        // Add timeout to fetch requests (10 seconds for browser - longer than server)
+        // Browser networks can be spiky; keep timeout high enough to avoid false "offline" errors.
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 seconds - faster timeout for better performance
+        const timeoutId = setTimeout(() => controller.abort(), BROWSER_SUPABASE_TIMEOUT_MS)
         
         try {
           const response = await fetch(url, {

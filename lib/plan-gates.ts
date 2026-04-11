@@ -1,5 +1,5 @@
-import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { getCompanySubscriptionAccess } from "@/lib/subscription-access"
 
 export type PlanName = "free" | "starter" | "professional" | "enterprise"
 export type PlanFeature =
@@ -72,22 +72,18 @@ export async function getCurrentCompanyPlanName(): Promise<{
     return { planName: "free", companyId: null, error: ctx.error || "Not authenticated" }
   }
 
-  const admin = createAdminClient()
-  const { data, error } = await admin
-    .from("subscriptions")
-    .select("subscription_plans!inner(name)")
-    .eq("company_id", ctx.companyId)
-    .in("status", ["active", "trialing"])
-    .maybeSingle()
+  const access = await getCompanySubscriptionAccess()
+  const normalized = normalizePlanName(access.planName)
 
-  if (error) {
-    return { planName: "free", companyId: ctx.companyId, error: error.message || "Failed to resolve plan" }
+  if (!access.allowed) {
+    return {
+      planName: normalized,
+      companyId: access.companyId,
+      error: access.reason || "Subscription inactive",
+    }
   }
 
-  const planRaw = (data as { subscription_plans?: { name?: string } | { name?: string }[] } | null)?.subscription_plans
-  const planName = normalizePlanName(Array.isArray(planRaw) ? planRaw[0]?.name : planRaw?.name)
-
-  return { planName, companyId: ctx.companyId, error: null }
+  return { planName: normalized, companyId: access.companyId, error: null }
 }
 
 export async function getCurrentCompanyFeatureAccess(feature: PlanFeature): Promise<{

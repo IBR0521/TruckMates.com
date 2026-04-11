@@ -4,25 +4,42 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { 
-  User, 
+import {
+  User,
   Save,
-  Mail,
-  Phone,
   Lock,
   Eye,
   EyeOff,
   Globe,
+  Download,
+  Trash2,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { getAccountSettings, updateAccountSettings, changePassword } from "@/app/actions/settings-account"
 import { getCompanySettings, updateCompanySettings } from "@/app/actions/number-formats"
+import { deleteMyOwnAccount } from "@/app/actions/account-privacy"
+import { createClient } from "@/lib/supabase/client"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 export default function AccountSettingsPage() {
+  const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [account, setAccount] = useState({
     full_name: "",
@@ -120,6 +137,55 @@ export default function AccountSettingsPage() {
       }
     } catch (error) {
       toast.error("Failed to update password")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleExportData = async () => {
+    setIsExporting(true)
+    try {
+      const res = await fetch("/api/export/company-data", {
+        method: "GET",
+        credentials: "include",
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        toast.error(typeof err?.error === "string" ? err.error : "Export failed")
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `truckmates-export-${Date.now()}.json`
+      a.rel = "noopener"
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      toast.success("Download started")
+    } catch {
+      toast.error("Could not download export")
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    setIsSaving(true)
+    try {
+      const result = await deleteMyOwnAccount(deleteConfirm)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success("Account deleted")
+      await createClient().auth.signOut({ scope: "local" })
+      router.push("/login")
+      router.refresh()
+    } catch {
+      toast.error("Account deletion failed")
     } finally {
       setIsSaving(false)
     }
@@ -273,6 +339,69 @@ export default function AccountSettingsPage() {
               <Save className="w-4 h-4 mr-2" />
               {isSaving ? "Updating..." : "Update Password"}
             </Button>
+          </div>
+        </Card>
+
+        <Card className="p-6 border-destructive/30">
+          <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
+            <Download className="w-5 h-5" />
+            Data export
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Download a JSON snapshot of data associated with your company (scope depends on your role and server configuration).
+            This does not replace a full legal data subject request process if you operate in regulated regions.
+          </p>
+          <Button type="button" variant="outline" onClick={handleExportData} disabled={isExporting}>
+            {isExporting ? "Preparing…" : "Download data export"}
+          </Button>
+        </Card>
+
+        <Card className="p-6 border-destructive/40">
+          <h2 className="text-lg font-semibold mb-2 flex items-center gap-2 text-destructive">
+            <Trash2 className="w-5 h-5" />
+            Delete account
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Permanently deletes <strong className="text-foreground">your</strong> login and profile. Your company and other
+            team members are not removed. This cannot be undone.
+          </p>
+          <div className="space-y-3 max-w-md">
+            <div className="space-y-2">
+              <Label>Type DELETE MY ACCOUNT to confirm</Label>
+              <Input
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                placeholder="DELETE MY ACCOUNT"
+                autoComplete="off"
+              />
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button type="button" variant="destructive" disabled={isSaving}>
+                  Delete my account
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    You will lose access immediately. Company data and other users stay in the system.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      void handleDeleteAccount()
+                    }}
+                  >
+                    Yes, delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </Card>
           </>

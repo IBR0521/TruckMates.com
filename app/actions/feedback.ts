@@ -7,50 +7,11 @@ import { revalidatePath } from "next/cache"
 import { sanitizeString } from "@/lib/validation"
 import { escapeHtml } from "@/lib/html-escape"
 import * as Sentry from "@sentry/nextjs"
+import { getResendClientForCompany } from "@/lib/resend-client"
 
-// Initialize Resend for email notifications (uses platform API key)
 async function getResendClient() {
-  // Always use platform API key from environment variables
-  const apiKey = process.env.RESEND_API_KEY
-  
-  if (!apiKey) {
-    Sentry.captureMessage("[RESEND] Platform API key not configured", "error")
-    return null
-  }
-
-  // Check if integration is enabled for this company
-  try {
-    const ctx = await getCachedAuthContext()
-    if (ctx.companyId) {
-      const supabase = await createClient()
-      const { data: integrations, error: integrationsError } = await supabase
-        .from("company_integrations")
-        .select("resend_enabled")
-        .eq("company_id", ctx.companyId)
-        .maybeSingle()
-
-      if (integrationsError) {
-        Sentry.captureException(integrationsError)
-        return null
-      }
-
-      if (!integrations?.resend_enabled) {
-        Sentry.captureMessage("[RESEND] Integration not enabled for company", "info")
-        return null
-      }
-    }
-  } catch (error) {
-    Sentry.captureException(error)
-    return null
-  }
-  
-  try {
-    const { Resend } = await import("resend")
-    return new Resend(apiKey)
-  } catch (error) {
-    Sentry.captureException(error)
-    return null
-  }
+  const ctx = await getCachedAuthContext()
+  return getResendClientForCompany(ctx.companyId ?? null)
 }
 
 // Send feedback notification email to admin

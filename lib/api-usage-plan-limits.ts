@@ -22,7 +22,7 @@ export const API_MONTHLY_LIMITS: Record<
     places: 300,
   },
   professional: {
-    directions: 2000,
+    directions: 3000,
     geocoding: 1500,
     distance_matrix: 2500,
     places: 1200,

@@ -55,7 +55,9 @@ export async function getIntegrationSettings() {
     const quickBooksGate = await getCurrentCompanyFeatureAccess("quickbooks")
 
     // These work automatically for all users - no per-company config needed
-    const hasPlatformGoogleMapsKey = !!process.env.GOOGLE_MAPS_API_KEY
+    const hasPlatformGoogleMapsKey = !!(
+      process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    )
     const hasPlatformResendKey = !!process.env.RESEND_API_KEY
 
     // Return defaults if no settings exist (without exposing API keys)

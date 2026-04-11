@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { htmlToPdfBuffer } from "@/lib/html-to-pdf-server"
 import { escapeHtml } from "@/lib/html-escape"
+import { normalizeInvoiceLineItems } from "@/lib/invoice-line-items"
 
 function buildInvoiceHtml(payload: {
   invoice_number: string
@@ -16,9 +17,7 @@ function buildInvoiceHtml(payload: {
   description: string | null
   items: Array<{ description?: string; quantity?: number; rate?: number; amount?: number }>
 }) {
-  const items = Array.isArray(payload.items) && payload.items.length > 0
-    ? payload.items
-    : [{ description: "Service", quantity: 1, rate: payload.amount, amount: payload.amount }]
+  const items = normalizeInvoiceLineItems(payload.items, payload.amount)
 
   const rows = items
     .map(

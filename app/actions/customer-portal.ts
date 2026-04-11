@@ -7,44 +7,11 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import crypto from "crypto"
 import { handleDbError } from "@/lib/db-helpers"
+import { getResendClientForCompany } from "@/lib/resend-client"
 
-// Helper to get Resend client (uses platform API key)
 async function getResendClient() {
-  // Always use platform API key from environment variables
-  const apiKey = process.env.RESEND_API_KEY
-  
-  if (!apiKey) {
-    Sentry.captureMessage("[RESEND] Platform API key not configured", "error")
-    return null
-  }
-
-  // Check if integration is enabled for this company
-  try {
-    const supabase = await createClient()
-    const ctx = await getCachedAuthContext()
-    if (ctx.companyId) {
-      const { data: integrations } = await supabase
-        .from("company_integrations")
-        .select("resend_enabled")
-        .eq("company_id", ctx.companyId)
-        .maybeSingle()
-
-      if (!integrations?.resend_enabled) {
-        Sentry.captureMessage("[RESEND] Integration not enabled for company", "info")
-        return null
-      }
-    }
-  } catch (error) {
-    Sentry.captureException(error)
-    return null
-  }
-  
-  try {
-    const Resend = (await import("resend")).Resend
-    return new Resend(apiKey)
-  } catch {
-    return null
-  }
+  const ctx = await getCachedAuthContext()
+  return getResendClientForCompany(ctx.companyId ?? null)
 }
 
 /**
