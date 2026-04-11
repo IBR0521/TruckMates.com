@@ -11,12 +11,9 @@
  * in production. This is only a real problem if your API routes are being abused.
  * 
  * EXT-014 FIX: For production-grade rate limiting, use Upstash Redis (free tier available).
- * 
- * To enable Upstash Redis rate limiting:
- * 1. Install: npm install @upstash/ratelimit @upstash/redis
- * 2. Set environment variables: UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN
- * 3. Uncomment the Upstash code block below and remove the in-memory fallback
- * 
+ * Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (e.g. in Vercel env); the
+ * implementation below activates automatically. Packages: @upstash/ratelimit @upstash/redis
+ *
  * See: https://upstash.com/docs/redis/overall/getstarted
  */
 
@@ -65,10 +62,7 @@ export async function rateLimit(
     const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
     
     if (redisUrl && redisToken) {
-      // Use Upstash Redis for production-grade rate limiting
-      // @ts-expect-error — Optional @upstash/* packages; install when using Redis rate limiting
       const { Ratelimit } = await import(/* webpackIgnore: true */ "@upstash/ratelimit")
-      // @ts-expect-error — Optional @upstash/* packages; install when using Redis rate limiting
       const { Redis } = await import(/* webpackIgnore: true */ "@upstash/redis")
       
       const redis = new Redis({ url: redisUrl, token: redisToken })

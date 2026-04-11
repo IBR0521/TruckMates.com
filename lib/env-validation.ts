@@ -58,6 +58,15 @@ export function validateEnv(): { valid: boolean; errors: string[]; warnings: str
     }
   }
 
+  if (
+    process.env.NODE_ENV === 'production' &&
+    (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN)
+  ) {
+    warnings.push(
+      'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN should both be set in production so rate limiting uses Redis instead of in-memory (see .env.example and lib/rate-limit.ts).',
+    )
+  }
+
   // Validate format of known variables
   if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.startsWith('http')) {
     errors.push('NEXT_PUBLIC_SUPABASE_URL must be a valid URL')

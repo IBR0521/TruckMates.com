@@ -37,6 +37,9 @@ import { getDrivers } from "@/app/actions/drivers"
 // BUG-069 FIX: ELD Simulator must not be accessible in production
 // This is a dev testing tool that allows injection of fake GPS and HOS data
 // Violates FMCSA ELD compliance if accessible in production
+// Use NODE_ENV (set by Next.js / Vercel at build time) — not a custom NEXT_PUBLIC_* var
+const isProductionBuild = process.env.NODE_ENV === "production"
+
 export default function ELDSimulatorPage() {
   const [isRunning, setIsRunning] = useState(false)
   const [deviceId, setDeviceId] = useState<string>("")
@@ -49,25 +52,14 @@ export default function ELDSimulatorPage() {
   const [trucks, setTrucks] = useState<any[]>([])
   const [drivers, setDrivers] = useState<any[]>([])
   const [simulatorInterval, setSimulatorInterval] = useState<NodeJS.Timeout | null>(null)
-  const [isProduction, setIsProduction] = useState(false)
   const [stats, setStats] = useState({
     locationsSent: 0,
     logsSent: 0,
     eventsSent: 0,
   })
 
-  useEffect(() => {
-    // BUG-069 FIX: Check if we're in production (client-side check)
-    setIsProduction(
-      typeof window !== 'undefined' && 
-      (process.env.NEXT_PUBLIC_NODE_ENV === "production" || 
-       (!window.location.hostname.includes('localhost') && 
-        !window.location.hostname.includes('127.0.0.1')))
-    )
-  }, [])
-
-  // BUG-069 FIX: Block access in production
-  if (isProduction) {
+  // BUG-069 FIX: Block access in production (matches server actions in eld-simulator.ts)
+  if (isProductionBuild) {
     return (
       <div className="p-6">
         <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-6 text-center">
