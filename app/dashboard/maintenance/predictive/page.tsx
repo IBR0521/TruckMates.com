@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { AlertCircle, Calendar, DollarSign, TrendingUp, Wrench } from "lucide-react"
 import { toast } from "sonner"
 import { predictMaintenanceNeeds, createMaintenanceFromPrediction } from "@/app/actions/maintenance-predictive"
+import { getPlanFeatureAccessStatus } from "@/app/actions/plan-feature-access"
 import { usePathname, useRouter } from "next/navigation"
 
 export default function PredictiveMaintenancePage() {
@@ -19,6 +20,8 @@ export default function PredictiveMaintenancePage() {
   }, [pathname, router])
 
   const [predictions, setPredictions] = useState<any[]>([])
+  const [predictiveAllowed, setPredictiveAllowed] = useState(true)
+  const [planName, setPlanName] = useState("starter")
   const [isLoading, setIsLoading] = useState(true)
   const [schedulingId, setSchedulingId] = useState<string | null>(null)
 
@@ -29,6 +32,20 @@ export default function PredictiveMaintenancePage() {
   const loadPredictions = async () => {
     setIsLoading(true)
     try {
+      const access = await getPlanFeatureAccessStatus("predictive_maintenance")
+      if (access.error) {
+        toast.error(access.error)
+        setPredictions([])
+        return
+      }
+      const allowed = !!access.data?.allowed
+      setPredictiveAllowed(allowed)
+      setPlanName(String(access.data?.plan_name || "starter"))
+      if (!allowed) {
+        setPredictions([])
+        return
+      }
+
       const result = await predictMaintenanceNeeds()
       if (result.error) {
         toast.error(result.error)
@@ -45,6 +62,10 @@ export default function PredictiveMaintenancePage() {
   }
 
   const handleScheduleMaintenance = async (truck: any, need: any) => {
+    if (!predictiveAllowed) {
+      toast.error("Predictive maintenance is available on Fleet and Enterprise plans.")
+      return
+    }
     setSchedulingId(`${truck.truck_id}-${need.type}`)
     try {
       const result = await createMaintenanceFromPrediction({
@@ -101,6 +122,14 @@ export default function PredictiveMaintenancePage() {
 
       <div className="p-4 sm:p-6 md:p-8">
         <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+          {!predictiveAllowed && (
+            <Card className="p-4 border-amber-500/40 bg-amber-500/5">
+              <p className="text-sm text-amber-400">
+                Predictive maintenance is available on Fleet and Enterprise plans. Your current plan is{" "}
+                <span className="font-semibold capitalize">{planName}</span>.
+              </p>
+            </Card>
+          )}
           {predictions.length === 0 ? (
             <Card className="p-8 text-center">
               <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />

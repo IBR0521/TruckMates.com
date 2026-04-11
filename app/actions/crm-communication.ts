@@ -10,6 +10,7 @@ import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission } from "@/lib/server-permissions"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 
 export interface CommunicationLog {
   id: string
@@ -36,6 +37,17 @@ export interface CommunicationLog {
   user_name?: string | null
 }
 
+async function ensureCrmAccess() {
+  const access = await getCurrentCompanyFeatureAccess("crm")
+  if (access.error) {
+    return { allowed: false, error: access.error }
+  }
+  if (!access.allowed) {
+    return { allowed: false, error: "CRM is available on Fleet and Enterprise plans" }
+  }
+  return { allowed: true as const, error: null as string | null }
+}
+
 /**
  * Log a communication (manual entry)
  */
@@ -52,6 +64,11 @@ export async function logCommunication(input: {
   occurred_at?: string
   attachments?: any[]
 }): Promise<{ data: CommunicationLog | null; error: string | null }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -113,6 +130,11 @@ export async function getCommunicationTimeline(filters: {
   type?: CommunicationLog["type"]
   limit?: number
 }): Promise<{ data: CommunicationLog[] | null; error: string | null }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -189,6 +211,11 @@ export async function logCommunicationFromWebhook(input: {
   metadata?: Record<string, any>
   occurred_at?: string
 }): Promise<{ data: CommunicationLog | null; error: string | null }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   let company_id: string | null = ctx.companyId ?? null

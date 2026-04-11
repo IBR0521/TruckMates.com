@@ -9,6 +9,7 @@ import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 
 export interface CustomerPerformanceMetrics {
   customer_id: string
@@ -50,6 +51,17 @@ export interface CRMRevenueSnapshot {
   outstanding_invoices: number
 }
 
+async function ensureCrmAccess() {
+  const access = await getCurrentCompanyFeatureAccess("crm")
+  if (access.error) {
+    return { allowed: false, error: access.error }
+  }
+  if (!access.allowed) {
+    return { allowed: false, error: "CRM is available on Fleet and Enterprise plans" }
+  }
+  return { allowed: true as const, error: null as string | null }
+}
+
 /**
  * Get performance metrics for all customers
  */
@@ -59,6 +71,11 @@ export async function getCustomerPerformanceMetrics(filters?: {
   min_loads?: number
   min_revenue?: number
 }): Promise<{ data: CustomerPerformanceMetrics[] | null; error: string | null }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     const supabase = await createClient()
@@ -141,6 +158,11 @@ export async function getCustomerPerformance(customerId: string): Promise<{
   data: CustomerPerformanceMetrics | null
   error: string | null
 }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -202,6 +224,11 @@ export async function getVendorPerformanceMetrics(filters?: {
   status?: string
   min_transactions?: number
 }): Promise<{ data: VendorPerformanceMetrics[] | null; error: string | null }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -273,6 +300,11 @@ export async function getVendorPerformance(vendorId: string): Promise<{
   data: VendorPerformanceMetrics | null
   error: string | null
 }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -331,6 +363,11 @@ export async function getRelationshipInsights(): Promise<{
   } | null
   error: string | null
 }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -481,6 +518,11 @@ export async function getRelationshipInsights(): Promise<{
  * Revenue snapshot for CRM dashboard
  */
 export async function getCRMRevenueSnapshot(): Promise<{ data: CRMRevenueSnapshot | null; error: string | null }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   try {
     const supabase = await createClient()
     const ctx = await getCachedAuthContext()
@@ -547,6 +589,11 @@ export async function getInactiveCustomers(days = 30): Promise<{
   }> | null
   error: string | null
 }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   try {
     const supabase = await createClient()
     const ctx = await getCachedAuthContext()

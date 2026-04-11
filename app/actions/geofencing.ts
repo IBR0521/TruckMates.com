@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { validateRequiredString, sanitizeString } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 import * as Sentry from "@sentry/nextjs"
 
 /** `public.geofences` — geofencing_schema.sql + PostGIS columns from postgis_migration.sql */
@@ -15,6 +16,17 @@ const GEOFENCE_FULL_SELECT =
 /** `public.zone_visits` — supabase/geofencing_schema.sql */
 const ZONE_VISITS_SELECT =
   "id, company_id, geofence_id, truck_id, driver_id, route_id, event_type, latitude, longitude, timestamp, entry_timestamp, exit_timestamp, duration_minutes, speed, heading, created_at"
+
+async function ensureGeofencingAccess() {
+  const access = await getCurrentCompanyFeatureAccess("geofencing")
+  if (access.error) {
+    return { allowed: false, error: access.error }
+  }
+  if (!access.allowed) {
+    return { allowed: false, error: "Geofencing is available on Fleet and Enterprise plans" }
+  }
+  return { allowed: true as const, error: null as string | null }
+}
 
 /**
  * Check if a point is inside a geofence using PostGIS (database-level)
@@ -131,6 +143,11 @@ export async function getGeofences(filters?: {
   truck_id?: string
   route_id?: string
 }) {
+  const access = await ensureGeofencingAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -175,6 +192,11 @@ export async function getGeofences(filters?: {
  * Get single geofence
  */
 export async function getGeofence(id: string) {
+  const access = await ensureGeofencingAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -232,6 +254,11 @@ export async function createGeofence(formData: {
   entry_load_status?: string
   exit_load_status?: string
 }) {
+  const access = await ensureGeofencingAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   // Check permission
   const permission = await checkCreatePermission("fleet_map" as any)
   if (!permission.allowed) {
@@ -339,6 +366,11 @@ export async function updateGeofence(id: string, formData: Partial<{
   entry_load_status?: string
   exit_load_status?: string
 }>) {
+  const access = await ensureGeofencingAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   // Check permission
   const permission = await checkEditPermission("fleet_map" as any)
   if (!permission.allowed) {
@@ -430,6 +462,11 @@ export async function updateGeofence(id: string, formData: Partial<{
  * Delete geofence
  */
 export async function deleteGeofence(id: string) {
+  const access = await ensureGeofencingAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   // Check permission
   const permission = await checkDeletePermission("fleet_map" as any)
   if (!permission.allowed) {
@@ -473,6 +510,11 @@ export async function deleteGeofence(id: string) {
  * This should be called periodically (e.g., from a cron job or real-time location updates)
  */
 export async function checkGeofenceEntry(truckId: string, latitude: number, longitude: number, timestamp?: string) {
+  const access = await ensureGeofencingAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -731,6 +773,11 @@ export async function getZoneVisits(filters?: {
   limit?: number
   offset?: number
 }) {
+  const access = await ensureGeofencingAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null, count: 0 }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -795,6 +842,11 @@ export async function getGeofenceStates(filters?: {
   limit?: number
   offset?: number
 }) {
+  const access = await ensureGeofencingAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null, count: 0 }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -842,6 +894,11 @@ export async function getGeofencingStats(filters?: {
   start_date?: string
   end_date?: string
 }) {
+  const access = await ensureGeofencingAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {

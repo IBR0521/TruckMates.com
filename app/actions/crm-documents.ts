@@ -10,6 +10,7 @@ import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 import * as Sentry from "@sentry/nextjs"
 
 export interface CRMDocument {
@@ -37,6 +38,17 @@ export interface ExpiringDocument extends CRMDocument {
   days_until_expiration: number
 }
 
+async function ensureCrmAccess() {
+  const access = await getCurrentCompanyFeatureAccess("crm")
+  if (access.error) {
+    return { allowed: false, error: access.error }
+  }
+  if (!access.allowed) {
+    return { allowed: false, error: "CRM is available on Fleet and Enterprise plans" }
+  }
+  return { allowed: true as const, error: null as string | null }
+}
+
 /**
  * Upload a CRM document
  */
@@ -51,6 +63,11 @@ export async function uploadCRMDocument(
     expiration_date?: string
   }
 ): Promise<{ data: CRMDocument | null; error: string | null }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -137,6 +154,11 @@ export async function getCRMDocuments(filters?: {
   document_type?: CRMDocument["document_type"]
   include_expired?: boolean
 }): Promise<{ data: CRMDocument[] | null; error: string | null }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -196,6 +218,11 @@ export async function getCRMDocuments(filters?: {
 export async function getExpiringCRMDocuments(
   daysAhead: number = 30
 ): Promise<{ data: ExpiringDocument[] | null; error: string | null }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -273,6 +300,11 @@ export async function deleteCRMDocument(documentId: string): Promise<{
   data: boolean | null
   error: string | null
 }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -365,6 +397,11 @@ export async function deleteCRMDocument(documentId: string): Promise<{
 export async function markExpirationAlertSent(
   documentId: string
 ): Promise<{ data: boolean | null; error: string | null }> {
+  const access = await ensureCrmAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {

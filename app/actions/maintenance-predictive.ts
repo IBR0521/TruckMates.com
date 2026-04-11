@@ -4,12 +4,29 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkCreatePermission } from "@/lib/server-permissions"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 import { createMaintenance } from "./maintenance"
+
+async function ensurePredictiveMaintenanceAccess() {
+  const access = await getCurrentCompanyFeatureAccess("predictive_maintenance")
+  if (access.error) {
+    return { allowed: false, error: access.error }
+  }
+  if (!access.allowed) {
+    return { allowed: false, error: "Predictive maintenance is available on Fleet and Enterprise plans" }
+  }
+  return { allowed: true as const, error: null as string | null }
+}
 
 /**
  * Predict maintenance needs based on truck usage, mileage, and maintenance history
  */
 export async function predictMaintenanceNeeds(truckId?: string) {
+  const access = await ensurePredictiveMaintenanceAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
@@ -155,6 +172,11 @@ export async function createMaintenanceFromPrediction(data: {
   estimated_cost?: number
   notes?: string
 }) {
+  const access = await ensurePredictiveMaintenanceAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const permissionCheck = await checkCreatePermission("maintenance")
   if (!permissionCheck.allowed) {
     return { error: permissionCheck.error || "You don't have permission to create maintenance records", data: null }

@@ -18,6 +18,7 @@ import {
   Calendar,
 } from "lucide-react"
 import { getDriverLeaderboard, type DriverPerformanceScore } from "@/app/actions/gamification"
+import { getPlanFeatureAccessStatus } from "@/app/actions/plan-feature-access"
 import { toast } from "sonner"
 import {
   Select,
@@ -38,6 +39,8 @@ export default function DriverLeaderboardPage() {
   }, [pathname, router])
 
   const [leaderboard, setLeaderboard] = useState<DriverPerformanceScore[]>([])
+  const [scorecardsAllowed, setScorecardsAllowed] = useState(true)
+  const [planName, setPlanName] = useState("starter")
   const [periodType, setPeriodType] = useState<'weekly' | 'monthly' | 'yearly'>('monthly')
   const [isLoading, setIsLoading] = useState(true)
 
@@ -48,6 +51,20 @@ export default function DriverLeaderboardPage() {
   async function loadLeaderboard() {
     setIsLoading(true)
     try {
+      const access = await getPlanFeatureAccessStatus("driver_scorecards")
+      if (access.error) {
+        toast.error(access.error)
+        setLeaderboard([])
+        return
+      }
+      const allowed = !!access.data?.allowed
+      setScorecardsAllowed(allowed)
+      setPlanName(String(access.data?.plan_name || "starter"))
+      if (!allowed) {
+        setLeaderboard([])
+        return
+      }
+
       const result = await getDriverLeaderboard(periodType, 20)
       if (result.error) {
         toast.error(result.error)
@@ -100,7 +117,7 @@ export default function DriverLeaderboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={periodType} onValueChange={(value: any) => setPeriodType(value)}>
+          <Select value={periodType} onValueChange={(value: any) => setPeriodType(value)} disabled={!scorecardsAllowed}>
             <SelectTrigger className="w-32">
               <SelectValue />
             </SelectTrigger>
@@ -116,6 +133,14 @@ export default function DriverLeaderboardPage() {
       {/* Content */}
       <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
+          {!scorecardsAllowed && (
+            <Card className="p-4 border-amber-500/40 bg-amber-500/5">
+              <p className="text-sm text-amber-400">
+                Driver scorecards are available on Fleet and Enterprise plans. Your current plan is{" "}
+                <span className="font-semibold capitalize">{planName}</span>.
+              </p>
+            </Card>
+          )}
           {/* Top 3 Podium */}
           {leaderboard.length >= 3 && !isLoading && (
             <div className="grid md:grid-cols-3 gap-4 mb-8">
@@ -168,7 +193,7 @@ export default function DriverLeaderboardPage() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-foreground">Full Rankings</h2>
-                <Button variant="outline" size="sm" onClick={loadLeaderboard} disabled={isLoading}>
+                <Button variant="outline" size="sm" onClick={loadLeaderboard} disabled={isLoading || !scorecardsAllowed}>
                   Refresh
                 </Button>
               </div>

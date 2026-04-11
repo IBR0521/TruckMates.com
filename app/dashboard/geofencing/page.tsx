@@ -20,11 +20,14 @@ import {
 } from "@/components/ui/alert-dialog"
 import { getGeofences, deleteGeofence } from "@/app/actions/geofencing"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { getPlanFeatureAccessStatus } from "@/app/actions/plan-feature-access"
 
 export default function GeofencingPage() {
   const [geofences, setGeofences] = useState<any[]>([])
   const [filteredGeofences, setFilteredGeofences] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [geofencingAllowed, setGeofencingAllowed] = useState(true)
+  const [planName, setPlanName] = useState("starter")
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -56,6 +59,22 @@ export default function GeofencingPage() {
 
   async function loadGeofences() {
     setIsLoading(true)
+    const access = await getPlanFeatureAccessStatus("geofencing")
+    if (access.error) {
+      toast.error(access.error)
+      setIsLoading(false)
+      return
+    }
+    const allowed = !!access.data?.allowed
+    setGeofencingAllowed(allowed)
+    setPlanName(String(access.data?.plan_name || "starter"))
+    if (!allowed) {
+      setGeofences([])
+      setFilteredGeofences([])
+      setIsLoading(false)
+      return
+    }
+
     const result = await getGeofences()
     if (result.error) {
       toast.error(result.error)
@@ -88,12 +107,19 @@ export default function GeofencingPage() {
               Create and manage location zones for tracking and alerts
             </p>
           </div>
-          <Link href="/dashboard/geofencing/add">
-            <Button>
+          {geofencingAllowed ? (
+            <Link href="/dashboard/geofencing/add">
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Create Zone
+              </Button>
+            </Link>
+          ) : (
+            <Button disabled>
               <Plus className="w-4 h-4 mr-2" />
               Create Zone
             </Button>
-          </Link>
+          )}
         </div>
 
         <div className="flex gap-4">
@@ -122,6 +148,14 @@ export default function GeofencingPage() {
       </div>
 
       <div className="p-4 md:p-8">
+        {!geofencingAllowed && (
+          <Card className="p-4 mb-4 border-amber-500/40 bg-amber-500/5">
+            <p className="text-sm text-amber-400">
+              Geofencing is available on Fleet and Enterprise plans. Your current plan is{" "}
+              <span className="font-semibold capitalize">{planName}</span>.
+            </p>
+          </Card>
+        )}
         {isLoading ? (
           <Card className="p-12 text-center">
             <p className="text-muted-foreground">Loading zones...</p>
@@ -131,12 +165,19 @@ export default function GeofencingPage() {
             <MapPin className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-xl font-bold text-foreground mb-2">No geofencing zones yet</h3>
             <p className="text-muted-foreground mb-6">Create your first zone to start tracking vehicle entry and exit.</p>
-            <Link href="/dashboard/geofencing/add">
-              <Button>
+            {geofencingAllowed ? (
+              <Link href="/dashboard/geofencing/add">
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Zone
+                </Button>
+              </Link>
+            ) : (
+              <Button disabled>
                 <Plus className="w-4 h-4 mr-2" />
                 Create Zone
               </Button>
-            </Link>
+            )}
           </Card>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -191,6 +232,7 @@ export default function GeofencingPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    disabled={!geofencingAllowed}
                     onClick={() => setDeleteId(geofence.id)}
                   >
                     <Trash2 className="w-4 h-4" />

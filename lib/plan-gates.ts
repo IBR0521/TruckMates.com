@@ -2,13 +2,52 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
 export type PlanName = "free" | "starter" | "professional" | "enterprise"
-export type PlanFeature = "quickbooks" | "api_keys" | "route_optimization"
+export type PlanFeature =
+  | "quickbooks"
+  | "api_keys"
+  | "route_optimization"
+  | "geofencing"
+  | "driver_scorecards"
+  | "predictive_maintenance"
+  | "crm"
 
 const PLAN_FEATURES: Record<PlanName, Record<PlanFeature, boolean>> = {
-  free: { quickbooks: false, api_keys: false, route_optimization: false },
-  starter: { quickbooks: false, api_keys: false, route_optimization: false },
-  professional: { quickbooks: true, api_keys: true, route_optimization: true },
-  enterprise: { quickbooks: true, api_keys: true, route_optimization: true },
+  free: {
+    quickbooks: false,
+    api_keys: false,
+    route_optimization: false,
+    geofencing: false,
+    driver_scorecards: false,
+    predictive_maintenance: false,
+    crm: false,
+  },
+  starter: {
+    quickbooks: false,
+    api_keys: false,
+    route_optimization: false,
+    geofencing: false,
+    driver_scorecards: false,
+    predictive_maintenance: false,
+    crm: false,
+  },
+  professional: {
+    quickbooks: true,
+    api_keys: true,
+    route_optimization: true,
+    geofencing: true,
+    driver_scorecards: true,
+    predictive_maintenance: true,
+    crm: true,
+  },
+  enterprise: {
+    quickbooks: true,
+    api_keys: true,
+    route_optimization: true,
+    geofencing: true,
+    driver_scorecards: true,
+    predictive_maintenance: true,
+    crm: true,
+  },
 }
 
 function normalizePlanName(input: string | null | undefined): PlanName {

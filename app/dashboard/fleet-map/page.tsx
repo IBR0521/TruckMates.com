@@ -43,12 +43,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { getPlanFeatureAccessStatus } from "@/app/actions/plan-feature-access"
 
 export default function FleetMapPage() {
   const [vehicles, setVehicles] = useState<any[]>([])
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null)
   const [selectedGeofence, setSelectedGeofence] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [geofencingAllowed, setGeofencingAllowed] = useState(true)
+  const [planName, setPlanName] = useState("starter")
   const [mapCenter, setMapCenter] = useState<[number, number]>([37.7749, -122.4194])
   const [zoom, setZoom] = useState(6)
   const [geofences, setGeofences] = useState<any[]>([])
@@ -156,11 +159,24 @@ export default function FleetMapPage() {
 
   const loadGeofences = async () => {
     try {
+      const access = await getPlanFeatureAccessStatus("geofencing")
+      if (access.error) {
+        toast.error(access.error)
+        return
+      }
+      const allowed = !!access.data?.allowed
+      setGeofencingAllowed(allowed)
+      setPlanName(String(access.data?.plan_name || "starter"))
+      if (!allowed) {
+        setGeofences([])
+        return
+      }
+
       const result = await getGeofences()
       if (result.error) {
         toast.error(result.error)
-      return
-    }
+        return
+      }
       setGeofences(result.data || [])
     } catch (error: unknown) {
       toast.error(errorMessage(error, "Failed to load geofences"))
@@ -338,11 +354,19 @@ export default function FleetMapPage() {
                 </TabsContent>
 
             <TabsContent value="zones" className="mt-4" suppressHydrationWarning>
+              {!geofencingAllowed && (
+                <Card className="p-3 mb-3 border-amber-500/40 bg-amber-500/5">
+                  <p className="text-xs text-amber-400">
+                    Geofencing is available on Fleet and Enterprise plans. Your current plan is{" "}
+                    <span className="font-semibold capitalize">{planName}</span>.
+                  </p>
+                </Card>
+              )}
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold">
                   Geofences ({geofences.length})
                 </h3>
-                <Button size="sm" onClick={() => setShowGeofenceDialog(true)}>
+                <Button size="sm" disabled={!geofencingAllowed} onClick={() => setShowGeofenceDialog(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Zone
                         </Button>
@@ -387,6 +411,7 @@ export default function FleetMapPage() {
                               <Button
                                 variant="ghost"
                               size="icon"
+                              disabled={!geofencingAllowed}
                               className="h-8 w-8"
                               onClick={(e) => e.stopPropagation()}
                             >
@@ -396,6 +421,7 @@ export default function FleetMapPage() {
                               <Button
                                 variant="ghost"
                             size="icon"
+                            disabled={!geofencingAllowed}
                             className="h-8 w-8 text-destructive hover:text-destructive"
                                 onClick={(e) => {
                                   e.stopPropagation()
@@ -413,7 +439,7 @@ export default function FleetMapPage() {
                 {geofences.length === 0 && (
                   <Card className="p-8 text-center">
                     <p className="text-muted-foreground mb-4">No geofences found</p>
-                    <Button size="sm" onClick={() => setShowGeofenceDialog(true)}>
+                    <Button size="sm" disabled={!geofencingAllowed} onClick={() => setShowGeofenceDialog(true)}>
                       <Plus className="h-4 w-4 mr-2" />
                       Create First Zone
                     </Button>
@@ -503,6 +529,10 @@ export default function FleetMapPage() {
           <form
             onSubmit={async (e) => {
               e.preventDefault()
+              if (!geofencingAllowed) {
+                toast.error("Geofencing is available on Fleet and Enterprise plans.")
+                return
+              }
               
               if (!geofenceFormData.name) {
                 toast.error("Zone name is required")

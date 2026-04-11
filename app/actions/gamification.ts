@@ -8,6 +8,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 
 /** `public.driver_badges` — supabase/gamification.sql */
 const DRIVER_BADGES_SELECT =
@@ -16,6 +17,17 @@ const DRIVER_BADGES_SELECT =
 /** `public.driver_performance_scores` — supabase/gamification.sql */
 const DRIVER_PERFORMANCE_SCORES_SELECT =
   "id, company_id, driver_id, period_start, period_end, period_type, total_loads, on_time_deliveries, on_time_rate, total_miles, total_driving_hours, idle_time_hours, violations_count, hos_violations, speeding_events, hard_braking, safety_score, compliance_score, efficiency_score, overall_score, rank, created_at, updated_at"
+
+async function ensureDriverScorecardsAccess() {
+  const access = await getCurrentCompanyFeatureAccess("driver_scorecards")
+  if (access.error) {
+    return { allowed: false, error: access.error }
+  }
+  if (!access.allowed) {
+    return { allowed: false, error: "Driver scorecards are available on Fleet and Enterprise plans" }
+  }
+  return { allowed: true as const, error: null as string | null }
+}
 
 export interface DriverBadge {
   id: string
@@ -60,6 +72,11 @@ export async function calculateDriverPerformanceScore(
   periodEnd: string,
   periodType: 'weekly' | 'monthly' | 'yearly' = 'monthly'
 ) {
+  const access = await ensureDriverScorecardsAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -91,6 +108,11 @@ export async function getDriverLeaderboard(
   periodType: 'weekly' | 'monthly' | 'yearly' = 'monthly',
   limit: number = 10
 ): Promise<{ data: DriverPerformanceScore[] | null; error: string | null }> {
+  const access = await ensureDriverScorecardsAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -139,6 +161,11 @@ export async function getDriverLeaderboard(
  * Get driver badges
  */
 export async function getDriverBadges(driverId: string) {
+  const access = await ensureDriverScorecardsAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -171,6 +198,11 @@ export async function checkAndAwardBadges(
   periodStart?: string,
   periodEnd?: string
 ) {
+  const access = await ensureDriverScorecardsAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -201,6 +233,11 @@ export async function getDriverPerformanceScore(
   driverId: string,
   periodType: 'weekly' | 'monthly' | 'yearly' = 'monthly'
 ) {
+  const access = await ensureDriverScorecardsAccess()
+  if (!access.allowed) {
+    return { error: access.error, data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {

@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import { getDriverBadges, getDriverPerformanceScore } from "@/app/actions/gamification"
 import { getDrivers } from "@/app/actions/drivers"
+import { getPlanFeatureAccessStatus } from "@/app/actions/plan-feature-access"
 import { toast } from "sonner"
 import {
   Select,
@@ -41,6 +42,8 @@ export default function DriverAchievementsPage() {
   const [badges, setBadges] = useState<any[]>([])
   const [performance, setPerformance] = useState<any>(null)
   const [drivers, setDrivers] = useState<any[]>([])
+  const [scorecardsAllowed, setScorecardsAllowed] = useState(true)
+  const [planName, setPlanName] = useState("starter")
   const [selectedDriverId, setSelectedDriverId] = useState<string>("all")
   const [isLoading, setIsLoading] = useState(true)
 
@@ -58,6 +61,24 @@ export default function DriverAchievementsPage() {
   }, [selectedDriverId])
 
   async function loadDrivers() {
+    const access = await getPlanFeatureAccessStatus("driver_scorecards")
+    if (access.error) {
+      toast.error(access.error)
+      setIsLoading(false)
+      return
+    }
+    const allowed = !!access.data?.allowed
+    setScorecardsAllowed(allowed)
+    setPlanName(String(access.data?.plan_name || "starter"))
+    if (!allowed) {
+      setDrivers([])
+      setBadges([])
+      setPerformance(null)
+      setSelectedDriverId("all")
+      setIsLoading(false)
+      return
+    }
+
     const result = await getDrivers()
     if (result.data) {
       setDrivers(result.data)
@@ -70,6 +91,7 @@ export default function DriverAchievementsPage() {
 
   async function loadAchievements() {
     if (selectedDriverId === "all") return
+    if (!scorecardsAllowed) return
 
     setIsLoading(true)
     try {
@@ -143,11 +165,19 @@ export default function DriverAchievementsPage() {
       {/* Content */}
       <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
+          {!scorecardsAllowed && (
+            <Card className="p-4 border-amber-500/40 bg-amber-500/5">
+              <p className="text-sm text-amber-400">
+                Driver scorecards are available on Fleet and Enterprise plans. Your current plan is{" "}
+                <span className="font-semibold capitalize">{planName}</span>.
+              </p>
+            </Card>
+          )}
           {/* Driver Selector */}
           <Card className="p-6">
             <div className="flex items-center gap-4">
               <label className="text-sm font-medium">Select Driver:</label>
-              <Select value={selectedDriverId} onValueChange={setSelectedDriverId}>
+              <Select value={selectedDriverId} onValueChange={setSelectedDriverId} disabled={!scorecardsAllowed}>
                 <SelectTrigger className="w-64">
                   <SelectValue />
                 </SelectTrigger>

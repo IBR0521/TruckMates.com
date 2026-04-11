@@ -37,9 +37,12 @@ import { getCustomers } from "@/app/actions/customers"
 import { getVendors } from "@/app/actions/vendors"
 import { CRMSectionHeader } from "@/components/crm/crm-section-header"
 import { getCommunicationTimeline, logCommunication } from "@/app/actions/crm-communication"
+import { getPlanFeatureAccessStatus } from "@/app/actions/plan-feature-access"
 
 export default function CRMDashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
+  const [crmAllowed, setCrmAllowed] = useState(true)
+  const [planName, setPlanName] = useState("starter")
   const [customerCount, setCustomerCount] = useState(0)
   const [vendorCount, setVendorCount] = useState(0)
   const [customerMetrics, setCustomerMetrics] = useState<CustomerPerformanceMetrics[]>([])
@@ -67,6 +70,30 @@ export default function CRMDashboardPage() {
   async function loadData() {
     setIsLoading(true)
     try {
+      const access = await getPlanFeatureAccessStatus("crm")
+      if (access.error) {
+        toast.error(access.error)
+        return
+      }
+      const allowed = !!access.data?.allowed
+      setCrmAllowed(allowed)
+      setPlanName(String(access.data?.plan_name || "starter"))
+      if (!allowed) {
+        setCustomerMetrics([])
+        setVendorMetrics([])
+        setInsights({
+          top_customers: [],
+          top_vendors: [],
+          slow_payers: [],
+          low_performers: [],
+        })
+        setExpiringDocuments([])
+        setRevenueSnapshot({ this_month_revenue: 0, outstanding_invoices: 0 })
+        setInactiveCustomers([])
+        setRecentCommunications([])
+        return
+      }
+
       const [
         customersListResult,
         vendorsListResult,
@@ -163,6 +190,10 @@ export default function CRMDashboardPage() {
   }
 
   async function handleQuickLogSubmit() {
+    if (!crmAllowed) {
+      toast.error("CRM is available on Fleet and Enterprise plans.")
+      return
+    }
     if (!quickLog.customer_id) {
       toast.error("Customer is required")
       return
@@ -204,20 +235,43 @@ export default function CRMDashboardPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <Link href="/dashboard/customers/add">
+          {crmAllowed ? (
+            <Button variant="outline" asChild>
+              <Link href="/dashboard/customers/add">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Customer
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="outline" disabled>
               <Plus className="w-4 h-4 mr-2" />
               Add Customer
-            </Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/dashboard/vendors/add">
+            </Button>
+          )}
+          {crmAllowed ? (
+            <Button variant="outline" asChild>
+              <Link href="/dashboard/vendors/add">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Vendor
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="outline" disabled>
               <Plus className="w-4 h-4 mr-2" />
               Add Vendor
-            </Link>
-          </Button>
+            </Button>
+          )}
         </div>
       </div>
+
+      {!crmAllowed && (
+        <Card className="p-4 border-amber-500/40 bg-amber-500/5">
+          <p className="text-sm text-amber-400">
+            CRM is available on Fleet and Enterprise plans. Your current plan is{" "}
+            <span className="font-semibold capitalize">{planName}</span>.
+          </p>
+        </Card>
+      )}
 
       {/* Key Metrics - cards link to Customers/Vendors where relevant */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
