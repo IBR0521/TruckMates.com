@@ -170,8 +170,11 @@ export async function getTripPlanningEstimate(input: {
 
   const tollUsd = hereTollUsd
   if (ctx.companyId && tollUsd !== null) {
-    const { recordBillableApiUsage } = await import("@/app/actions/api-usage")
-    void recordBillableApiUsage(ctx.companyId, "tollguru", "toll_cost_estimate")
+    const { assertMonthlyTollRoutingAllowed, recordBillableApiUsage } = await import("@/app/actions/api-usage")
+    const tq = await assertMonthlyTollRoutingAllowed(ctx.companyId)
+    if (tq.allowed) {
+      void recordBillableApiUsage(ctx.companyId, "tollguru", "toll_cost_estimate")
+    }
   }
   let tollNote: string | undefined
   if (hereKey && tollUsd == null) {

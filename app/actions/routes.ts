@@ -508,6 +508,11 @@ export async function deleteRoute(id: string) {
 
 // Bulk operations for workflow optimization
 export async function bulkDeleteRoutes(ids: string[]) {
+  const permission = await checkDeletePermission("routes")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to delete routes", data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -588,6 +593,11 @@ export async function bulkUpdateRouteStatus(ids: string[], status: string) {
 
 // Duplicate/clone route for workflow optimization
 export async function duplicateRoute(id: string) {
+  const permission = await checkCreatePermission("routes")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to create routes", data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {

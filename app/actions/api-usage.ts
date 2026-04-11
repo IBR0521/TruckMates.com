@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/nextjs"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import {
+  mapBillableUsageToCategory,
   mapUsageActionToCategory,
   monthlyLimitForPlan,
   type GoogleUsageCategory,
@@ -23,6 +24,8 @@ function actionsForCategory(category: GoogleUsageCategory): string[] {
       return ["distance_matrix"]
     case "places":
       return ["place_details", "places_autocomplete"]
+    case "toll_routing":
+      return ["toll_cost_estimate"]
     default:
       return []
   }
@@ -53,12 +56,18 @@ async function countMonthUsage(companyId: string, category: GoogleUsageCategory)
   const actions = actionsForCategory(category)
   if (actions.length === 0) return 0
 
-  const { count, error } = await admin
+  let q = admin
     .from("api_usage_log")
     .select("id", { count: "exact", head: true })
     .eq("company_id", companyId)
     .in("action", actions)
     .gte("created_at", start.toISOString())
+
+  if (category === "toll_routing") {
+    q = q.eq("api_name", "tollguru")
+  }
+
+  const { count, error } = await q
 
   if (error) {
     Sentry.captureMessage(`[api_usage] count failed: ${error.message}`, "warning")
@@ -125,9 +134,13 @@ async function sendQuotaEmailToManagers(params: {
     params.level === "80"
       ? `TruckMates: approaching monthly ${params.category} API limit`
       : `TruckMates: monthly ${params.category} API limit reached`
+  const detail =
+    params.category === "toll_routing"
+      ? "toll routing (TollGuru / logged toll estimates)"
+      : `Google Maps (${params.category})`
   const body = `
-    <p>Your fleet used <strong>${params.used}</strong> of <strong>${params.limit}</strong> included monthly calls for <strong>${params.category}</strong> (Google Maps).</p>
-    <p>This is a soft cap — service is not blocked. Consider upgrading or enabling caching improvements.</p>
+    <p>Your fleet used <strong>${params.used}</strong> of <strong>${params.limit}</strong> included monthly calls for <strong>${detail}</strong>.</p>
+    <p>Monthly quotas for Maps and toll routing are <strong>enforced</strong> (new API calls are blocked when over limit until next month or upgrade).</p>
   `
 
   const from = process.env.RESEND_FROM_EMAIL || "TruckMates <onboarding@resend.dev>"
@@ -136,8 +149,10 @@ async function sendQuotaEmailToManagers(params: {
   }
 }
 
-async function maybeNotifyQuota(companyId: string, action: string) {
-  const category = mapUsageActionToCategory(action)
+async function maybeNotifyQuota(companyId: string, action: string, apiName?: string) {
+  const category = apiName
+    ? mapBillableUsageToCategory(apiName, action)
+    : mapUsageActionToCategory(action)
   if (!category) return
 
   const plan = await activePlanNameForCompany(companyId)
@@ -162,9 +177,55 @@ async function maybeNotifyQuota(companyId: string, action: string) {
   }
 }
 
+const UNLIMITED_THRESHOLD = 8_000_000
+
 /**
- * Persist one billable Google Maps call for the company (soft quota tracking).
- * Does not block callers — logs only + optional warning emails.
+ * Hard block for monthly Google Maps usage (directions, geocoding, etc.) before billing a new call.
+ * Cached route hits do not consume quota (no record).
+ */
+export async function assertMonthlyGoogleMapsActionAllowed(
+  companyId: string,
+  action: string,
+): Promise<{ allowed: boolean; reason?: string }> {
+  const category = mapUsageActionToCategory(action)
+  if (!category || category === "toll_routing") return { allowed: true }
+
+  const plan = await activePlanNameForCompany(companyId)
+  const limit = monthlyLimitForPlan(plan, category)
+  if (limit >= UNLIMITED_THRESHOLD) return { allowed: true }
+
+  const used = await countMonthUsage(companyId, category)
+  if (used >= limit) {
+    return {
+      allowed: false,
+      reason: `Monthly ${category} API limit (${limit}) reached for your plan. Upgrade or try again next month.`,
+    }
+  }
+  return { allowed: true }
+}
+
+/** Hard block before logging a toll routing billable event. */
+export async function assertMonthlyTollRoutingAllowed(
+  companyId: string,
+): Promise<{ allowed: boolean; reason?: string }> {
+  const category: GoogleUsageCategory = "toll_routing"
+  const plan = await activePlanNameForCompany(companyId)
+  const limit = monthlyLimitForPlan(plan, category)
+  if (limit >= UNLIMITED_THRESHOLD) return { allowed: true }
+
+  const used = await countMonthUsage(companyId, category)
+  if (used >= limit) {
+    return {
+      allowed: false,
+      reason: `Monthly toll routing limit (${limit}) reached for your plan. Upgrade or try again next month.`,
+    }
+  }
+  return { allowed: true }
+}
+
+/**
+ * Persist one billable Google Maps call. Monthly quota for this action is enforced
+ * in `assertMonthlyGoogleMapsActionAllowed` before new API calls (e.g. directions).
  */
 export async function recordBillableGoogleMapsUsage(companyId: string, action: string) {
   try {
@@ -185,7 +246,7 @@ export async function recordBillableGoogleMapsUsage(companyId: string, action: s
   }
 }
 
-/** Generic usage logger for non-Google providers (e.g. TollGuru). */
+/** Generic usage logger for non-Google providers (e.g. TollGuru). Quota notifications use `mapBillableUsageToCategory`. */
 export async function recordBillableApiUsage(companyId: string, apiName: string, action: string) {
   try {
     const admin = createAdminClient()
@@ -197,7 +258,9 @@ export async function recordBillableApiUsage(companyId: string, apiName: string,
     })
     if (error) {
       Sentry.captureMessage(`[api_usage] ${apiName} insert failed: ${error.message}`, "warning")
+      return
     }
+    void maybeNotifyQuota(companyId, action, apiName)
   } catch (e) {
     Sentry.captureException(e)
   }

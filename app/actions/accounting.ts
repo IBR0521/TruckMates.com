@@ -7,6 +7,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
 import { validatePricingData, validateNonNegativeNumber, sanitizeString, validateDate, validateRequiredString } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 import { mapLegacyRole } from "@/lib/roles"
 
 export async function getInvoices(filters?: {
@@ -273,6 +274,11 @@ export async function approveSettlementAsDriver(settlementId: string, approvalMe
 
     if (!ctx.user || mapLegacyRole(ctx.user.role) !== "driver") {
       return { error: "Only driver accounts can approve settlements", data: null }
+    }
+
+    const sub = await requireActiveSubscriptionForWrite()
+    if (!sub.allowed) {
+      return { error: sub.error || "Subscription inactive", data: null }
     }
 
     const { data: driver, error: driverError } = await supabase

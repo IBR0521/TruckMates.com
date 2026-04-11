@@ -4,7 +4,7 @@ import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { recordBillableGoogleMapsUsage } from "@/app/actions/api-usage"
+import { assertMonthlyGoogleMapsActionAllowed, recordBillableGoogleMapsUsage } from "@/app/actions/api-usage"
 
 /**
  * Google Maps Integration Backend
@@ -75,6 +75,14 @@ async function getGoogleMapsApiKey() {
   return GOOGLE_MAPS_API_KEY
 }
 
+/** Monthly plan quota (before a new billable Google call). Cached hits skip this. */
+async function monthlyQuotaErrorForMapsAction(action: string): Promise<string | null> {
+  const ctx = await getCachedAuthContext()
+  if (!ctx.companyId) return null
+  const r = await assertMonthlyGoogleMapsActionAllowed(ctx.companyId, action)
+  return r.allowed ? null : r.reason || "Monthly API limit reached"
+}
+
 /**
  * Get route directions and distance
  */
@@ -96,6 +104,11 @@ export async function getRouteDirections(origin: string, destination: string, wa
     const rateCheck = await checkApiUsage("google_maps", "directions")
     if (!rateCheck.allowed) {
       return { error: rateCheck.reason || "Rate limit exceeded", data: null }
+    }
+
+    const quotaErr = await monthlyQuotaErrorForMapsAction("directions")
+    if (quotaErr) {
+      return { error: quotaErr, data: null }
     }
 
     const apiKey = await getGoogleMapsApiKey()
@@ -223,6 +236,11 @@ export async function geocodeAddress(address: string) {
       return { error: rateCheck.reason || "Geocoding rate limit exceeded. Please try again in a moment.", data: null }
     }
 
+    const geoQuota = await monthlyQuotaErrorForMapsAction("geocoding")
+    if (geoQuota) {
+      return { error: geoQuota, data: null }
+    }
+
     const apiKey = await getGoogleMapsApiKey()
 
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
@@ -329,6 +347,11 @@ export async function calculateDistanceMatrix(origins: string[], destinations: s
       return { error: rateCheck.reason || "Rate limit exceeded", data: null }
     }
 
+    const dmQuota = await monthlyQuotaErrorForMapsAction("distance_matrix")
+    if (dmQuota) {
+      return { error: dmQuota, data: null }
+    }
+
     const apiKey = await getGoogleMapsApiKey()
 
     const originsParam = origins.map(addr => encodeURIComponent(addr)).join("|")
@@ -392,6 +415,11 @@ export async function optimizeRoute(origin: string, destination: string, stops: 
     const rateCheck = await checkApiUsage("google_maps", "optimize_route")
     if (!rateCheck.allowed) {
       return { error: rateCheck.reason || "Rate limit exceeded", data: null }
+    }
+
+    const optQuota = await monthlyQuotaErrorForMapsAction("optimize_route")
+    if (optQuota) {
+      return { error: optQuota, data: null }
     }
 
     const apiKey = await getGoogleMapsApiKey()
@@ -463,6 +491,11 @@ export async function getPlaceDetails(placeId: string) {
     const rateCheck = await checkApiUsage("google_maps", "place_details")
     if (!rateCheck.allowed) {
       return { error: rateCheck.reason || "Rate limit exceeded", data: null }
+    }
+
+    const pdQuota = await monthlyQuotaErrorForMapsAction("place_details")
+    if (pdQuota) {
+      return { error: pdQuota, data: null }
     }
 
     const apiKey = await getGoogleMapsApiKey()

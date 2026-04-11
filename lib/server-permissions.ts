@@ -2,6 +2,10 @@
 
 import * as Sentry from "@sentry/nextjs"
 import { mapLegacyRole, type EmployeeRole } from "./roles"
+/**
+ * Create/edit/delete/manage checks call `requireActiveSubscriptionForWrite()` so inactive
+ * subscriptions cannot mutate data. Use these helpers from server actions (loads/routes/etc.).
+ */
 import { requireActiveSubscriptionForWrite } from "./subscription-access"
 import {
   canViewFeature,

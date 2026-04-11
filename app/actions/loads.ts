@@ -1326,6 +1326,11 @@ export async function deleteLoad(id: string) {
 
 // Bulk operations for workflow optimization
 export async function bulkDeleteLoads(ids: string[]) {
+  const permission = await checkDeletePermission("loads")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to delete loads", data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -1445,6 +1450,11 @@ export async function bulkUpdateLoadStatus(ids: string[], status: string) {
 
 // Duplicate/clone load for workflow optimization
 export async function duplicateLoad(id: string) {
+  const permission = await checkCreatePermission("loads")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to create loads", data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {

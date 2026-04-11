@@ -119,7 +119,11 @@ async function getTollCost(
 
   try {
     if (companyId) {
-      const { recordBillableApiUsage } = await import("@/app/actions/api-usage")
+      const { assertMonthlyTollRoutingAllowed, recordBillableApiUsage } = await import("@/app/actions/api-usage")
+      const tollQuota = await assertMonthlyTollRoutingAllowed(companyId)
+      if (!tollQuota.allowed) {
+        return 0
+      }
       void recordBillableApiUsage(companyId, "tollguru", "toll_cost_estimate")
     }
 
