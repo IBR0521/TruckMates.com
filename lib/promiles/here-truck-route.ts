@@ -1,5 +1,14 @@
 import { decode } from "@here/flexpolyline"
 import { errorMessage } from "@/lib/error-message"
+import { getCachedApiResult, setCachedApiResult } from "@/lib/api-protection"
+import { generateCacheKey } from "@/lib/api-cache-utils"
+
+/** Same corridor + truck params → reuse HERE response (official routes change slowly). */
+const HERE_TRUCK_ROUTE_CACHE_TTL_SEC = 86_400
+
+function roundCoord(n: number) {
+  return Math.round(n * 1e5) / 1e5
+}
 
 export type HereTruckRouteResult = {
   provider: "here"
@@ -79,6 +88,20 @@ export async function getHereTruckRoute(params: {
 }): Promise<{ data: HereTruckRouteResult | null; error: string | null }> {
   const { apiKey, origin, destination } = params
 
+  const cacheKey = generateCacheKey("here_truck_route_v1", {
+    olat: roundCoord(origin.lat),
+    olng: roundCoord(origin.lng),
+    dlat: roundCoord(destination.lat),
+    dlng: roundCoord(destination.lng),
+    via: (params.via ?? []).map((v) => ({ lat: roundCoord(v.lat), lng: roundCoord(v.lng) })),
+    gw: params.grossWeightKg && params.grossWeightKg > 0 ? Math.round(params.grossWeightKg) : null,
+    ax: params.axleCount && params.axleCount > 0 ? Math.round(params.axleCount) : null,
+  })
+  const cached = await getCachedApiResult<HereTruckRouteResult>(cacheKey, HERE_TRUCK_ROUTE_CACHE_TTL_SEC)
+  if (cached && Array.isArray(cached.path) && cached.path.length >= 2) {
+    return { data: cached, error: null }
+  }
+
   const url = new URL("https://router.hereapi.com/v8/routes")
   url.searchParams.set("transportMode", "truck")
   url.searchParams.set("origin", `${origin.lat},${origin.lng}`)
@@ -140,15 +163,18 @@ export async function getHereTruckRoute(params: {
       return { data: null, error: "HERE returned empty polyline" }
     }
 
+    const result: HereTruckRouteResult = {
+      provider: "here",
+      distanceMeters,
+      durationSeconds,
+      path: points,
+      rawPolyline: firstPoly,
+      tollUsd,
+    }
+    await setCachedApiResult(cacheKey, result, HERE_TRUCK_ROUTE_CACHE_TTL_SEC)
+
     return {
-      data: {
-        provider: "here",
-        distanceMeters,
-        durationSeconds,
-        path: points,
-        rawPolyline: firstPoly,
-        tollUsd,
-      },
+      data: result,
       error: null,
     }
   } catch (e: unknown) {

@@ -13,6 +13,10 @@
       "schedule": "0 12 * * *"
     },
     {
+      "path": "/api/cron/cleanup-api-cache",
+      "schedule": "15 3 * * *"
+    },
+    {
       "path": "/api/cron/cleanup-notifications",
       "schedule": "0 4 * * *"
     },

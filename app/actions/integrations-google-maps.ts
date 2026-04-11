@@ -411,7 +411,26 @@ export async function calculateDistanceMatrix(origins: string[], destinations: s
  */
 export async function optimizeRoute(origin: string, destination: string, stops: string[]) {
   try {
-    const { checkApiUsage } = await import("@/lib/api-protection")
+    const { checkApiUsage, getCachedApiResult, setCachedApiResult } = await import("@/lib/api-protection")
+    const { generateCacheKey } = await import("@/lib/api-cache-utils")
+
+    const cacheKey = generateCacheKey("google_optimize_route", { origin, destination, stops })
+    const cached = await getCachedApiResult<{
+      optimized_stops: string[]
+      distance: number
+      duration: number
+      polyline?: string
+      legs: Array<{
+        distance: string
+        duration: string
+        start_address: string
+        end_address: string
+      }>
+    }>(cacheKey, 604800)
+    if (cached) {
+      return { data: cached, error: null }
+    }
+
     const rateCheck = await checkApiUsage("google_maps", "optimize_route")
     if (!rateCheck.allowed) {
       return { error: rateCheck.reason || "Rate limit exceeded", data: null }
@@ -448,24 +467,28 @@ export async function optimizeRoute(origin: string, destination: string, stops: 
     const route = data.routes[0]
     const optimizedWaypointOrder = route.waypoint_order || []
 
+    const payload = {
+      optimized_stops: optimizedWaypointOrder.map((index: number) => stops[index]),
+      distance: route.legs.reduce((sum: number, leg: any) => sum + leg.distance.value, 0),
+      duration: route.legs.reduce((sum: number, leg: any) => sum + leg.duration.value, 0),
+      polyline: route.overview_polyline?.points,
+      legs: route.legs.map((leg: any) => ({
+        distance: leg.distance.text,
+        duration: leg.duration.text,
+        start_address: leg.start_address,
+        end_address: leg.end_address,
+      })),
+    }
+
+    await setCachedApiResult(cacheKey, payload, 604800)
+
     const ctxOpt = await getCachedAuthContext()
     if (ctxOpt.companyId) {
       void recordBillableGoogleMapsUsage(ctxOpt.companyId, "optimize_route")
     }
 
     return {
-      data: {
-        optimized_stops: optimizedWaypointOrder.map((index: number) => stops[index]),
-        distance: route.legs.reduce((sum: number, leg: any) => sum + leg.distance.value, 0),
-        duration: route.legs.reduce((sum: number, leg: any) => sum + leg.duration.value, 0),
-        polyline: route.overview_polyline?.points,
-        legs: route.legs.map((leg: any) => ({
-          distance: leg.distance.text,
-          duration: leg.duration.text,
-          start_address: leg.start_address,
-          end_address: leg.end_address,
-        })),
-      },
+      data: payload,
       error: null,
     }
   } catch (error: unknown) {

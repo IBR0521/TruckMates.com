@@ -1,6 +1,11 @@
 import { EIA_US_DIESEL_DUOAREA, stateCodeToEiaGndDuoarea } from "./padd-state-map"
 import { errorMessage } from "@/lib/error-message"
+import { getCachedApiResult, setCachedApiResult } from "@/lib/api-protection"
+import { generateCacheKey } from "@/lib/api-cache-utils"
 import type { StateMileRow } from "./state-mileage"
+
+/** EIA weekly series — safe to cache 24h; official data updates weekly. */
+const EIA_GND_CACHE_TTL_SEC = 86_400
 
 export type DieselPriceByState = Record<string, { pricePerGallon: number; seriesId: string }>
 
@@ -27,6 +32,15 @@ async function fetchLatestGndWeeklyDiesel(
   duoarea: string,
 ): Promise<{ price: number | null; seriesId: string | null; error: string | null }> {
   try {
+    const cacheKey = generateCacheKey("eia_v2_gnd_weekly_diesel", { duoarea })
+    const cached = await getCachedApiResult<{ price: number; seriesId: string | null; error: string | null }>(
+      cacheKey,
+      EIA_GND_CACHE_TTL_SEC,
+    )
+    if (cached && cached.error == null && cached.price != null) {
+      return { price: cached.price, seriesId: cached.seriesId, error: null }
+    }
+
     const url = new URL("https://api.eia.gov/v2/petroleum/pri/gnd/data/")
     url.searchParams.set("api_key", apiKey)
     url.searchParams.set("frequency", "weekly")
@@ -50,7 +64,9 @@ async function fetchLatestGndWeeklyDiesel(
     if (price == null) {
       return { price: null, seriesId: null, error: "EIA: no price in response" }
     }
-    return { price, seriesId, error: null }
+    const result = { price, seriesId, error: null as string | null }
+    await setCachedApiResult(cacheKey, result, EIA_GND_CACHE_TTL_SEC)
+    return result
   } catch (e: unknown) {
     const msg = e instanceof Error ? errorMessage(e) : "EIA request failed"
     return { price: null, seriesId: null, error: msg }
