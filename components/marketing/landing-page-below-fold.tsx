@@ -22,8 +22,6 @@ import {
 import Link from "next/link"
 import { Logo } from "@/components/logo"
 
-const DEMO_VIDEO_URL = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL
-
 function SectionHeader({
   eyebrow,
   title,
@@ -166,45 +164,6 @@ export default function LandingPageBelowFold() {
                 </Button>
             </Link>
           </div>
-        </div>
-      </section>
-
-      {/* Demo video */}
-      <section id="demo-video" className="py-20 md:py-24">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-          <SectionHeader
-            eyebrow="Demo"
-            title="See the product"
-            subtitle="Short walkthrough video plus a hands-on demo you can use right away."
-          />
-          {DEMO_VIDEO_URL ? (
-            <div className="overflow-hidden rounded-2xl border border-border bg-muted/30 shadow-2xl ring-1 ring-black/5 dark:ring-white/10">
-              <div className="aspect-video bg-black/5">
-                <iframe
-                  title="TruckMates demo video"
-                  src={DEMO_VIDEO_URL}
-                  className="h-full w-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
-                </div>
-          ) : (
-            <Card className="relative overflow-hidden border-2 border-dashed border-primary/20 bg-gradient-to-br from-muted/50 to-background p-10 text-center shadow-inner">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
-                <Play className="h-8 w-8 text-primary opacity-80" strokeWidth={1.5} />
-              </div>
-              <p className="mx-auto max-w-md text-muted-foreground leading-relaxed">
-                Full product video is on the way. In the meantime, use the interactive demo — real screens for loads, dispatch,
-                invoicing, and compliance.
-              </p>
-              <Link href="/demo" className="mt-6 inline-block">
-                <Button variant="outline" size="lg" className="h-11 rounded-xl border-2 font-medium">
-                  Open interactive demo
-                </Button>
-              </Link>
-            </Card>
-          )}
         </div>
       </section>
 

@@ -88,11 +88,11 @@ export default function LandingPage() {
             or open a free account — real screens, not slide decks.
           </p>
           <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground/90">
-            No made-up savings figures. Prefer proof?{" "}
-            <Link href="#demo-video" className="font-medium text-foreground/90 underline decoration-border underline-offset-4 hover:text-primary">
-              Watch the walkthrough
+            No made-up savings figures — try the demo or see{" "}
+            <Link href="#features" className="font-medium text-foreground/90 underline decoration-border underline-offset-4 hover:text-primary">
+              what&apos;s included
             </Link>{" "}
-            below or use the product yourself.
+            below.
           </p>
 
           <div className="mt-10 flex flex-col items-stretch justify-center gap-3 sm:mx-auto sm:max-w-xl sm:flex-row sm:items-center sm:gap-4">
