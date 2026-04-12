@@ -132,10 +132,13 @@ export function ELDRealtimeMap() {
             <p className="text-muted-foreground">Loading map...</p>
           </div>
         ) : locations.length === 0 ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center">
+          <div className="absolute inset-0 flex items-center justify-center p-6">
+            <div className="text-center max-w-md">
               <Truck className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground">No active trucks</p>
+              <p className="text-foreground font-medium mb-1">No location data</p>
+              <p className="text-sm text-muted-foreground">
+                GPS positions come from hardware ELD integrations or telematics. Duty-only (web) logging does not populate this map. Connect a hardware ELD or enable GPS on driver devices to see trucks here.
+              </p>
             </div>
           </div>
         ) : (

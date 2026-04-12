@@ -67,6 +67,12 @@ export function validateEnv(): { valid: boolean; errors: string[]; warnings: str
     )
   }
 
+  if (process.env.NODE_ENV === 'production' && !process.env.CRON_SECRET) {
+    warnings.push(
+      'CRON_SECRET is not set — scheduled /api/cron/* routes return 401 and will not run (Vercel Cron requires this bearer token).',
+    )
+  }
+
   // Validate format of known variables
   if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.startsWith('http')) {
     errors.push('NEXT_PUBLIC_SUPABASE_URL must be a valid URL')

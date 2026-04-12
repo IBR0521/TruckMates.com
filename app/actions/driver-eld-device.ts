@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { ensureDriverIdForUser } from "@/lib/eld/ensure-driver"
 import { resolveTruckIdForDriver } from "@/lib/eld/resolve-driver-truck"
+import { ensureWebEldDeviceForTruck } from "@/lib/eld/ensure-web-eld-device"
 import { mapLegacyRole } from "@/lib/roles"
 
 /**
@@ -36,58 +37,17 @@ export async function registerWebEldDevice(formData: { device_name: string }) {
       data: null,
     }
   }
-  const device_serial_number = `web-${ctx.userId}`
   const device_name = (formData.device_name || "").trim() || "Web dashboard ELD"
-  const now = new Date().toISOString()
-
-  const deviceData = {
-    company_id: ctx.companyId,
+  const ensured = await ensureWebEldDeviceForTruck(
+    admin,
+    { companyId: ctx.companyId, userId: ctx.userId },
+    truckId,
     device_name,
-    device_serial_number,
-    provider: "truckmates_mobile",
-    provider_device_id: device_serial_number,
-    truck_id: truckId,
-    status: "active",
-    firmware_version: "web",
-    installation_date: now.split("T")[0],
-    notes: JSON.stringify({ source: "web_driver_eld" }),
-    last_sync_at: now,
-    api_key: null as string | null,
-    api_secret: null as string | null,
+  )
+  if (ensured.error || !ensured.deviceId) {
+    return { error: ensured.error || "Could not save ELD device", data: null }
   }
-
-  const { data: existingDevice } = await admin
-    .from("eld_devices")
-    .select("id, company_id")
-    .eq("device_serial_number", device_serial_number)
-    .maybeSingle()
-
-  if (existingDevice && existingDevice.company_id !== ctx.companyId) {
-    return { error: "This device id is already registered to another company.", data: null }
-  }
-
-  let device: { id: string } | null = null
-  let err: { message: string } | null = null
-
-  if (existingDevice?.id && existingDevice.company_id === ctx.companyId) {
-    const result = await admin
-      .from("eld_devices")
-      .update(deviceData)
-      .eq("id", existingDevice.id)
-      .eq("company_id", ctx.companyId)
-      .select("id")
-      .single()
-    device = result.data
-    err = result.error
-  } else {
-    const result = await admin.from("eld_devices").insert(deviceData).select("id").single()
-    device = result.data
-    err = result.error
-  }
-
-  if (err || !device?.id) {
-    return { error: err?.message || "Could not save ELD device", data: null }
-  }
+  const device = { id: ensured.deviceId }
 
   revalidatePath("/dashboard/eld")
   revalidatePath("/dashboard")

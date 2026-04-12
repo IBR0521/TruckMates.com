@@ -51,5 +51,22 @@ export async function resolveTruckIdForDriver(
     return String(load.truck_id)
   }
 
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { data: recentFinished } = await supabase
+    .from("loads")
+    .select("truck_id")
+    .eq("company_id", companyId)
+    .eq("driver_id", driverId)
+    .in("status", ["delivered", "completed", "in_transit"])
+    .not("truck_id", "is", null)
+    .gte("updated_at", since)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (recentFinished?.truck_id) {
+    return String(recentFinished.truck_id)
+  }
+
   return null
 }

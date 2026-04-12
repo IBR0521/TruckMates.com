@@ -254,7 +254,11 @@ export async function getDriverDashboardSnapshot(opts?: {
       .limit(500)
 
     if (!dayLogsError) {
-      const computed = computeDailyRemainingFromEldLogs((dayLogs || []) as EldLogLike[], Date.now())
+      const computed = computeDailyRemainingFromEldLogs(
+        (dayLogs || []) as EldLogLike[],
+        Date.now(),
+        (weekLogsResult.data || []) as EldLogLike[],
+      )
       hosData = {
         drivingHours: computed.drivingHours,
         onDutyHours: computed.onDutyHours,
@@ -264,14 +268,20 @@ export async function getDriverDashboardSnapshot(opts?: {
         needsBreak: computed.needsBreak,
         violations: computed.violations,
         canDrive: computed.canDrive,
+        weeklyOnDutyHours: computed.weeklyOnDutyHours,
+        remainingWeeklyOnDuty: computed.remainingWeeklyOnDuty,
+        weeklyCapViolation: computed.weeklyCapViolation,
       }
     }
   }
 
   const mergedViolations = [...(hosData?.violations || [])]
   const weekLogs = (weekLogsResult.data || []) as EldLogLike[]
-  const weeklyOnDutyHours = hoursFromMinutes(sumOnDutyMinutesFromLogs(weekLogs))
-  const remainingCycleHours = Math.max(0, Math.round((70 - weeklyOnDutyHours) * 100) / 100)
+  const weeklyOnDutyHoursFallback = hoursFromMinutes(sumOnDutyMinutesFromLogs(weekLogs))
+  const remainingCycleHours =
+    hosData && "remainingWeeklyOnDuty" in hosData
+      ? hosData.remainingWeeklyOnDuty
+      : Math.max(0, Math.round((70 - weeklyOnDutyHoursFallback) * 100) / 100)
 
   const currentDutyStatus =
     (latestLogResult.data as { log_type?: string } | null)?.log_type || "off_duty"

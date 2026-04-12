@@ -19,14 +19,15 @@ type Segment = {
   widthPct: number
 }
 
-function parseLocalDayBounds(logDate: string): { start: number; end: number } {
+/** YYYY-MM-DD as UTC day window — matches UTC-stored `start_time` / `end_time` on `eld_logs`. */
+function parseLogDateUtcDayBounds(logDate: string): { start: number; end: number } {
   const [y, m, d] = logDate.split("-").map((x) => parseInt(x, 10))
   if (!y || !m || !d) {
     const now = new Date()
-    const s = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    const s = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
     return { start: s, end: s + MINUTES_PER_DAY * 60 * 1000 }
   }
-  const start = new Date(y, m - 1, d, 0, 0, 0, 0).getTime()
+  const start = Date.UTC(y, m - 1, d, 0, 0, 0, 0)
   return { start, end: start + MINUTES_PER_DAY * 60 * 1000 }
 }
 
@@ -35,7 +36,7 @@ function buildSegments(
   logDate: string,
   nowMs: number
 ): Segment[] {
-  const { start: dayStart, end: dayEnd } = parseLocalDayBounds(logDate)
+  const { start: dayStart, end: dayEnd } = parseLogDateUtcDayBounds(logDate)
   const timeline = [...logs].sort(
     (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
   )
@@ -82,7 +83,7 @@ type Props = {
 export function HosLogGrid({ logDate, logs, nowMs }: Props) {
   const referenceMs = useMemo(() => {
     if (nowMs != null) return nowMs
-    const { end } = parseLocalDayBounds(logDate)
+    const { end } = parseLogDateUtcDayBounds(logDate)
     return end - 1
   }, [logDate, nowMs])
 
@@ -95,7 +96,7 @@ export function HosLogGrid({ logDate, logs, nowMs }: Props) {
     <Card className="border-border bg-card/50 overflow-hidden p-3 md:p-4">
       <div className="mb-2 flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between">
         <h2 className="text-base font-semibold text-foreground">24h log</h2>
-        <p className="text-xs text-muted-foreground">Local day</p>
+        <p className="text-xs text-muted-foreground">UTC calendar day (matches log timestamps)</p>
       </div>
 
       <div className="mb-1.5 flex flex-wrap gap-2 text-xs text-muted-foreground">

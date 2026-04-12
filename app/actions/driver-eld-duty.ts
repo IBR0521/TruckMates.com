@@ -10,6 +10,7 @@ import {
 } from "@/lib/eld/driver-duty-constants"
 import { mapLegacyRole } from "@/lib/roles"
 import { calendarDateYmdLocal } from "@/lib/eld/hos-calendar-date"
+import { ensureWebEldDeviceForTruck } from "@/lib/eld/ensure-web-eld-device"
 
 /**
  * Records a duty change for the logged-in driver: closes any open segment for today,
@@ -48,7 +49,8 @@ export async function changeDriverDutyStatus(logType: DriverDutyLogType): Promis
     }
   }
 
-  const { data: device } = await admin
+  let deviceId: string | null = null
+  const { data: existingDevice } = await admin
     .from("eld_devices")
     .select("id")
     .eq("company_id", ctx.companyId)
@@ -58,12 +60,18 @@ export async function changeDriverDutyStatus(logType: DriverDutyLogType): Promis
     .limit(1)
     .maybeSingle()
 
-  if (!device?.id) {
-    return {
-      error:
-        "No active ELD device on your truck. Your fleet must add an ELD on this vehicle, or register a browser/mobile ELD from your Hours of service page.",
-      data: null,
+  if (existingDevice?.id) {
+    deviceId = String(existingDevice.id)
+  } else {
+    const ensured = await ensureWebEldDeviceForTruck(
+      admin,
+      { companyId: ctx.companyId, userId: ctx.userId },
+      truckId,
+    )
+    if (ensured.error || !ensured.deviceId) {
+      return { error: ensured.error || "Could not register web ELD for this truck.", data: null }
     }
+    deviceId = ensured.deviceId
   }
 
   const now = new Date()
@@ -100,7 +108,7 @@ export async function changeDriverDutyStatus(logType: DriverDutyLogType): Promis
     .from("eld_logs")
     .insert({
       company_id: ctx.companyId,
-      eld_device_id: device.id,
+      eld_device_id: deviceId,
       driver_id: driverId,
       truck_id: truckId,
       log_date: logDate,
