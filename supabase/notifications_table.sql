@@ -23,47 +23,63 @@ CREATE INDEX IF NOT EXISTS idx_notifications_read ON public.notifications(read);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON public.notifications(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_type ON public.notifications(type);
 
+-- Supabase Realtime (postgres_changes): publication + replica identity (run once per project / via migration)
+-- See supabase/migrations/*_notifications_realtime_publication.sql
+ALTER TABLE public.notifications REPLICA IDENTITY FULL;
+-- In Supabase SQL editor or migration (requires superuser): add table to publication if missing:
+-- ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+
 -- Enable RLS
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies
+-- RLS Policies (drop first so this file is safe to re-run)
+DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
 CREATE POLICY "Users can view their own notifications"
   ON public.notifications FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own notifications" ON public.notifications;
 CREATE POLICY "Users can update their own notifications"
   ON public.notifications FOR UPDATE
   USING (auth.uid() = user_id);
 
-CREATE POLICY "System can insert notifications for users"
-  ON public.notifications FOR INSERT
-  WITH CHECK (true); -- Allow system to create notifications
+-- INSERT: no policy for authenticated/anon — server uses service role (bypasses RLS).
+-- Do not re-add WITH CHECK (true); it triggers linter 0024 and allows JWT abuse.
 
 -- Trigger for updated_at
-CREATE TRIGGER update_notifications_updated_at 
+DROP TRIGGER IF EXISTS update_notifications_updated_at ON public.notifications;
+CREATE TRIGGER update_notifications_updated_at
   BEFORE UPDATE ON public.notifications
-  FOR EACH ROW 
+  FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
 -- Function to mark notification as read
-CREATE OR REPLACE FUNCTION mark_notification_read(notification_id UUID)
-RETURNS void AS $$
+CREATE OR REPLACE FUNCTION public.mark_notification_read(notification_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
   UPDATE public.notifications
   SET read = true, read_at = NOW()
   WHERE id = notification_id AND user_id = auth.uid();
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 -- Function to mark all notifications as read for a user
-CREATE OR REPLACE FUNCTION mark_all_notifications_read()
-RETURNS void AS $$
+CREATE OR REPLACE FUNCTION public.mark_all_notifications_read()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
   UPDATE public.notifications
   SET read = true, read_at = NOW()
   WHERE user_id = auth.uid() AND read = false;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 
 

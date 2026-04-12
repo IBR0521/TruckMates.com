@@ -270,7 +270,7 @@ export async function sendNotification(
     // Get user data for notification title/message
     const { data: userData } = await supabase
       .from("users")
-      .select("full_name")
+      .select("full_name, company_id")
       .eq("id", userId)
       .maybeSingle()
 
@@ -324,24 +324,24 @@ export async function sendNotification(
     // Determine priority from data or default to normal
     const priority = data.priority || "normal"
 
-    // Insert notification record
-    const { error: notifError } = await supabase
-      .from("notifications")
-      .insert({
-        user_id: userId,
-        type: type,
-        title: notificationTitle,
-        message: notificationMessage,
-        priority: priority,
-        read: false,
-        metadata: {
-          ...data,
-          email_sent: emailSent,
-          sms_sent: smsSent,
-          email_message_id: results.email?.messageId,
-          sms_message_id: results.sms?.messageId,
-        },
-      })
+    // Insert in-app row (service role — RLS has no permissive INSERT for JWT roles)
+    const admin = createAdminClient()
+    const { error: notifError } = await admin.from("notifications").insert({
+      user_id: userId,
+      company_id: userData?.company_id ?? null,
+      type: type,
+      title: notificationTitle,
+      message: notificationMessage,
+      priority: priority,
+      read: false,
+      metadata: {
+        ...data,
+        email_sent: emailSent,
+        sms_sent: smsSent,
+        email_message_id: results.email?.messageId,
+        sms_message_id: results.sms?.messageId,
+      },
+    })
 
     if (notifError) {
       Sentry.captureException(notifError)

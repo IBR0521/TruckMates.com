@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -534,31 +535,30 @@ export async function createAlert(formData: {
     }
 
     const notificationType = getNotificationType(formData.event_type)
+    const adminForNotifications = createAdminClient()
 
     // Send notifications
     for (const userId of notifyUserIds) {
       // FIXED: Decouple in-app notification from sendPush flag
       // Create in-app notification record when sendInApp is true and rule allows it
       if (sendInApp && alertRule.send_in_app !== false) {
-        // Create in-app notification record for Realtime subscription
-        // Note: notifications table may not exist, that's okay
-        await supabase
-          .from("notifications")
-          .insert({
-            user_id: userId,
-            title: formData.title,
-            message: formData.message,
-            type: "alert",
-            priority: priority,
-            metadata: {
-              alert_id: alert.id,
-              event_type: formData.event_type,
-            },
-            read: false,
-          })
-          .catch(() => {
-            // Notifications table might not exist, that's okay
-          })
+        // Service role insert (RLS: no permissive INSERT for JWT roles)
+        const { error: inAppErr } = await adminForNotifications.from("notifications").insert({
+          user_id: userId,
+          company_id: ctx.companyId,
+          title: formData.title,
+          message: formData.message,
+          type: "alert",
+          priority: priority,
+          metadata: {
+            alert_id: alert.id,
+            event_type: formData.event_type,
+          },
+          read: false,
+        })
+        if (inAppErr) {
+          // Notifications table may be unavailable in some envs
+        }
       }
       
       // SMS (critical only)
@@ -649,6 +649,7 @@ export async function processAlertEscalations() {
   try {
     // Use regular server client; RLS on alerts/alert_rules already scoped by company_id
     const supabase = await createClient()
+    const adminForNotifications = createAdminClient()
 
   // 1) Get all rules with escalation enabled
   const { data: rules, error: rulesError } = await supabase
@@ -766,23 +767,24 @@ export async function processAlertEscalations() {
         const notificationType = getNotificationType(alert.event_type)
 
         for (const managerId of managerIds) {
-          // In-app escalation notification
-          await supabase
-            .from("notifications")
-            .insert({
-              user_id: managerId,
-              title: escalationTitle,
-              message: escalationMessage,
-              type: "alert",
-              priority: "critical",
-              metadata: {
-                alert_id: alert.id,
-                escalated: true,
-                escalation_level: (alert.escalation_level || 0) + 1,
-              },
-              read: false,
-            })
-            .catch(() => {})
+          // In-app escalation notification (service role)
+          const { error: escNotifErr } = await adminForNotifications.from("notifications").insert({
+            user_id: managerId,
+            company_id: rule.company_id,
+            title: escalationTitle,
+            message: escalationMessage,
+            type: "alert",
+            priority: "critical",
+            metadata: {
+              alert_id: alert.id,
+              escalated: true,
+              escalation_level: (alert.escalation_level || 0) + 1,
+            },
+            read: false,
+          })
+          if (escNotifErr) {
+            // best-effort
+          }
 
           // Email escalation (best-effort)
           await sendNotification(managerId, notificationType, {

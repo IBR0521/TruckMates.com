@@ -10,7 +10,7 @@ import {
 } from "@/lib/eld/driver-duty-constants"
 import { mapLegacyRole } from "@/lib/roles"
 import { calendarDateYmdLocal } from "@/lib/eld/hos-calendar-date"
-import { ensureWebEldDeviceForTruck } from "@/lib/eld/ensure-web-eld-device"
+import { ensureWebEldRowForCurrentDriver } from "@/app/actions/driver-eld-device"
 
 /**
  * Records a duty change for the logged-in driver: closes any open segment for today,
@@ -63,11 +63,10 @@ export async function changeDriverDutyStatus(logType: DriverDutyLogType): Promis
   if (existingDevice?.id) {
     deviceId = String(existingDevice.id)
   } else {
-    const ensured = await ensureWebEldDeviceForTruck(
+    const ensured = await ensureWebEldRowForCurrentDriver("Web dashboard ELD", {
       admin,
-      { companyId: ctx.companyId, userId: ctx.userId },
       truckId,
-    )
+    })
     if (ensured.error || !ensured.deviceId) {
       return { error: ensured.error || "Could not register web ELD for this truck.", data: null }
     }
