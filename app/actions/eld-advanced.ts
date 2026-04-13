@@ -187,6 +187,34 @@ export async function getDriverScorecard(driverId: string, startDate?: string, e
   }
 }
 
+type HosDailyComputed = ReturnType<typeof computeDailyRemainingFromEldLogs>
+
+/** Batched logs already in `logMap` — compute HOS once per driver in memory (single DB round-trip for logs). */
+function computeHosMapForDrivers(
+  driverIds: string[],
+  logMap: Map<string, { today: EldLogLike[]; week: EldLogLike[] }>,
+  nowMs: number,
+): Map<string, HosDailyComputed> {
+  const m = new Map<string, HosDailyComputed>()
+  for (const id of driverIds) {
+    const buckets = logMap.get(id) || { today: [], week: [] }
+    m.set(id, computeDailyRemainingFromEldLogs(buckets.today, nowMs, buckets.week))
+  }
+  return m
+}
+
+function countApproachingFromHosMap(driverIds: string[], hosMap: Map<string, HosDailyComputed>): number {
+  let n = 0
+  for (const id of driverIds) {
+    const computed = hosMap.get(id)
+    if (!computed) continue
+    if (computed.remainingDriving < 2 || computed.needsBreak || computed.remainingWeeklyOnDuty < 2) {
+      n++
+    }
+  }
+  return n
+}
+
 // Get fleet health metrics
 export async function getFleetHealth() {
   const supabase = await createClient()
@@ -195,40 +223,33 @@ export async function getFleetHealth() {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
-  // Get all devices
-  const { data: devices, error: devicesError } = await supabase
-    .from("eld_devices")
-    .select("id, status, truck_id")
-    .eq("company_id", ctx.companyId)
-
-  if (devicesError) {
-    return { error: devicesError.message, data: null }
-  }
-
-  // Get active violations (last 24 hours)
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const { data: activeViolations, error: violationsError } = await supabase
-    .from("eld_events")
-    .select("id, severity, resolved")
-    .eq("company_id", ctx.companyId)
-    .eq("event_type", "hos_violation")
-    .eq("resolved", false)
-    .gte("event_time", yesterday)
 
-  if (violationsError) {
-    return { error: violationsError.message, data: null }
+  const [devicesRes, violationsRes, driversRes] = await Promise.all([
+    supabase.from("eld_devices").select("id, status, truck_id").eq("company_id", ctx.companyId),
+    supabase
+      .from("eld_events")
+      .select("id, severity, resolved")
+      .eq("company_id", ctx.companyId)
+      .eq("event_type", "hos_violation")
+      .eq("resolved", false)
+      .gte("event_time", yesterday),
+    supabase.from("drivers").select("id").eq("company_id", ctx.companyId).eq("status", "active"),
+  ])
+
+  if (devicesRes.error) {
+    return { error: devicesRes.error.message, data: null }
+  }
+  if (violationsRes.error) {
+    return { error: violationsRes.error.message, data: null }
+  }
+  if (driversRes.error) {
+    return { error: driversRes.error.message, data: null }
   }
 
-  // Get drivers approaching limits
-  const { data: drivers, error: driversError } = await supabase
-    .from("drivers")
-    .select("id")
-    .eq("company_id", ctx.companyId)
-    .eq("status", "active")
-
-  if (driversError) {
-    return { error: driversError.message, data: null }
-  }
+  const devices = devicesRes.data
+  const activeViolations = violationsRes.data
+  const drivers = driversRes.data
 
   const driverIds = (drivers || []).map((d: { id: string }) => d.id)
   const targetDate = calendarDateYmdLocal(new Date())
@@ -237,13 +258,8 @@ export async function getFleetHealth() {
   if (driverIds.length > 0) {
     try {
       const logMap = await fetchLogsByDriverForHos(supabase, ctx.companyId, driverIds, targetDate)
-      for (const id of driverIds) {
-        const buckets = logMap.get(id) || { today: [], week: [] }
-        const computed = computeDailyRemainingFromEldLogs(buckets.today, nowMs, buckets.week)
-        if (computed.remainingDriving < 2 || computed.needsBreak || computed.remainingWeeklyOnDuty < 2) {
-          driversApproachingLimit++
-        }
-      }
+      const hosMap = computeHosMapForDrivers(driverIds, logMap, nowMs)
+      driversApproachingLimit = countApproachingFromHosMap(driverIds, hosMap)
     } catch (e: unknown) {
       return { error: e instanceof Error ? e.message : "Failed to load HOS logs", data: null }
     }
@@ -365,9 +381,10 @@ export async function getPredictiveAlerts() {
   if (driverIds.length > 0) {
     try {
       const logMap = await fetchLogsByDriverForHos(supabase, ctx.companyId, driverIds, targetDate)
+      const hosMap = computeHosMapForDrivers(driverIds, logMap, nowMs)
       for (const driver of drivers || []) {
-        const buckets = logMap.get(driver.id) || { today: [], week: [] }
-        const computed = computeDailyRemainingFromEldLogs(buckets.today, nowMs, buckets.week)
+        const computed = hosMap.get(driver.id)
+        if (!computed) continue
 
         if (computed.remainingDriving < 2 && computed.remainingDriving > 0) {
           alerts.push({
@@ -575,6 +592,9 @@ export async function getFleetHOSSnapshot() {
       return { error: e instanceof Error ? e.message : "Failed to load ELD logs", data: null }
     }
 
+    const nowMs = Date.now()
+    const hosMap = computeHosMapForDrivers(driverIds, logsByDriverHos, nowMs)
+
     const truckMap = new Map<string, string>()
     for (const t of trucksRes.data || []) {
       truckMap.set(t.id, t.truck_number)
@@ -621,7 +641,6 @@ export async function getFleetHOSSnapshot() {
       }
     }
 
-    const nowMs = Date.now()
     const rows: FleetHosSnapshotRow[] = []
 
     for (const d of drivers) {
@@ -631,7 +650,7 @@ export async function getFleetHOSSnapshot() {
       const truckLabel = tid ? truckMap.get(tid) || "—" : "—"
 
       const buckets = logsByDriverHos.get(driverId) || { today: [], week: [] }
-      const computed = computeDailyRemainingFromEldLogs(buckets.today, nowMs, buckets.week)
+      const computed = hosMap.get(driverId)!
       const duty = deriveDutyFromTodayLogs(buckets.today)
       const openCount = openViolationsByDriver.get(driverId) || 0
 
