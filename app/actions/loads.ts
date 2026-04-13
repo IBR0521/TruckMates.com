@@ -42,6 +42,9 @@ const LOAD_DETAIL_SELECT = `
   trip_planning_estimate, created_at, updated_at
 `
 
+const LOAD_LIST_SELECT =
+  "id, shipment_number, origin, destination, status, driver_id, truck_id, load_date, estimated_delivery, created_at, company_name, value, contents, delivery_type, total_delivery_points, weight, weight_kg, invoice_id"
+
 // Helper function to send notifications in background (non-blocking)
 async function sendNotificationsForLoadUpdate(loadData: LoadUpdateNotificationPayload) {
   try {
@@ -92,6 +95,8 @@ async function sendNotificationsForLoadUpdate(loadData: LoadUpdateNotificationPa
 
 export async function getLoads(filters?: {
   status?: string
+  search?: string
+  sortBy?: "created_at" | "shipment_number" | "load_date" | "status"
   limit?: number
   offset?: number
 }) {
@@ -127,7 +132,7 @@ export async function getLoads(filters?: {
     // Build query with pagination
     let query = supabase
       .from("loads")
-      .select("id, shipment_number, origin, destination, status, driver_id, truck_id, load_date, estimated_delivery, created_at, company_name, value", { count: "exact" })
+      .select(LOAD_LIST_SELECT, { count: "exact" })
       .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
@@ -138,6 +143,23 @@ export async function getLoads(filters?: {
     // Apply filters
     if (filters?.status) {
       query = query.eq("status", filters.status)
+    }
+
+    if (filters?.search) {
+      const q = sanitizeString(filters.search).trim()
+      if (q.length > 0) {
+        query = query.or(
+          `shipment_number.ilike.%${q}%,origin.ilike.%${q}%,destination.ilike.%${q}%,contents.ilike.%${q}%`
+        )
+      }
+    }
+
+    if (filters?.sortBy === "shipment_number") {
+      query = query.order("shipment_number", { ascending: true })
+    } else if (filters?.sortBy === "load_date") {
+      query = query.order("load_date", { ascending: false, nullsFirst: false })
+    } else if (filters?.sortBy === "status") {
+      query = query.order("status", { ascending: true })
     }
 
     // Apply pagination (default limit 25 for faster initial loads, max 100)

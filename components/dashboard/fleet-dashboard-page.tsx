@@ -34,6 +34,7 @@ import dynamic from "next/dynamic"
 import { checkEmailServiceConfigured } from "@/app/actions/settings-integration"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { LucideIcon } from "lucide-react"
+import type { DashboardBootstrapResult } from "@/lib/hooks/use-dashboard-page"
 
 type MetricCardProps = {
   title: string
@@ -170,8 +171,17 @@ function TimeAgo({ timestamp }: { timestamp: string | null | undefined }) {
 }
 
 /** Fleet / operations dashboard (financial + fleet metrics). Not used for `driver` role. */
-export default function FleetDashboardPage() {
-  const { data, isLoading, error, isFetching } = useDashboardPageData()
+export default function FleetDashboardPage({
+  initialBootstrap = null,
+  initialSessionUserId = null,
+}: {
+  initialBootstrap?: DashboardBootstrapResult | null
+  initialSessionUserId?: string | null
+}) {
+  const { data, isLoading, error, isFetching } = useDashboardPageData(
+    initialBootstrap,
+    initialSessionUserId
+  )
   const authCompany = data?.authCompany ?? null
   const dashboardData = data?.dashboardData
   const [now, setNow] = useState<Date>(new Date())

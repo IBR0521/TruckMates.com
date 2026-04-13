@@ -11,7 +11,17 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useRealtimeNotifications } from "@/lib/hooks/use-realtime"
-import { formatDate } from "@/lib/format-utils"
+
+function formatNotificationDate(value: string | Date | null | undefined): string {
+  if (!value) return "Unknown date"
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return "Invalid date"
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  })
+}
 
 export function NotificationsCenter() {
   const [open, setOpen] = useState(false)
@@ -152,7 +162,7 @@ export function NotificationsCenter() {
                         </p>
                       )}
                       <p className="text-xs text-muted-foreground mt-1">
-                        {formatDate(notification.created_at)}
+                        {formatNotificationDate(notification.created_at)}
                       </p>
                     </div>
                   </div>

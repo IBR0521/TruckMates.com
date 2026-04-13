@@ -61,6 +61,8 @@ export async function emergencyPurgeDriversKeepOne(confirmPhrase: string) {
 
 export async function getDrivers(filters?: {
   status?: string
+  search?: string
+  sortBy?: "name" | "status" | "license_expiry" | "created_at"
   limit?: number
   offset?: number
 }) {
@@ -197,6 +199,23 @@ export async function getDrivers(filters?: {
     // Apply filters
     if (filters?.status) {
       query = query.eq("status", filters.status)
+    }
+
+    if (filters?.search) {
+      const q = sanitizeString(filters.search).trim()
+      if (q.length > 0) {
+        query = query.or(
+          `name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,license_number.ilike.%${q}%`
+        )
+      }
+    }
+
+    if (filters?.sortBy === "name") {
+      query = query.order("name", { ascending: true })
+    } else if (filters?.sortBy === "status") {
+      query = query.order("status", { ascending: true })
+    } else if (filters?.sortBy === "license_expiry") {
+      query = query.order("license_expiry", { ascending: true, nullsFirst: false })
     }
 
     // Apply pagination (default limit 25 for faster initial loads, max 100)

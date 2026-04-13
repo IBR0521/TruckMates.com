@@ -42,6 +42,7 @@ export default function LoadsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [loadsList, setLoadsList] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const debouncedSearchTerm = useDebounce(searchTerm, 300) // Debounce search for performance
   const [statusFilter, setStatusFilter] = useState("all")
@@ -51,14 +52,20 @@ export default function LoadsPage() {
   const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
   const [generatingInvoiceId, setGeneratingInvoiceId] = useState<string | null>(null)
 
-  const loadLoads = async () => {
-    setIsLoading(true)
+  const loadLoads = useCallback(async () => {
+    if (!hasLoadedOnce) {
+      setIsLoading(true)
+    }
     try {
-      const result = await getLoads()
+      const result = await getLoads({
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        search: debouncedSearchTerm || undefined,
+        sortBy: (sortBy as "created_at" | "shipment_number" | "load_date" | "status"),
+      })
       if (result.error) {
         toast.error(result.error)
         setLoadsList([]) // Set empty array on error
-        setIsLoading(false)
+        setHasLoadedOnce(true)
         return
       }
       if (result.data) {
@@ -71,52 +78,19 @@ export default function LoadsPage() {
       toast.error("Failed to load loads. Please try again.")
       setLoadsList([])
     } finally {
+      setHasLoadedOnce(true)
       setIsLoading(false)
     }
-  }
+  }, [statusFilter, debouncedSearchTerm, sortBy, hasLoadedOnce])
 
   useEffect(() => {
-    loadLoads()
-  }, [])
+    void loadLoads()
+  }, [loadLoads])
 
   // Memoized filter and sort for better performance
   const filteredLoads = useMemo(() => {
-    let filtered = [...loadsList]
-
-    // Apply search filter (using debounced term)
-    if (debouncedSearchTerm) {
-      const searchLower = debouncedSearchTerm.toLowerCase()
-      filtered = filtered.filter(
-        (load) =>
-          load.shipment_number?.toLowerCase().includes(searchLower) ||
-          load.origin?.toLowerCase().includes(searchLower) ||
-          load.destination?.toLowerCase().includes(searchLower) ||
-          load.contents?.toLowerCase().includes(searchLower)
-      )
-    }
-
-    // Apply status filter
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((load) => load.status === statusFilter)
-    }
-
-    // Apply sorting
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case "shipment_number":
-          return (a.shipment_number || "").localeCompare(b.shipment_number || "")
-        case "load_date":
-          return new Date(b.load_date || 0).getTime() - new Date(a.load_date || 0).getTime()
-        case "status":
-          return (a.status || "").localeCompare(b.status || "")
-        case "created_at":
-        default:
-          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-      }
-    })
-
-    return filtered
-  }, [loadsList, debouncedSearchTerm, statusFilter, sortBy])
+    return loadsList
+  }, [loadsList])
 
   const handleExportLoads = () => {
     try {

@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
 import { exportToExcel } from "@/lib/export-utils"
 import { toast } from "sonner"
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useDebounce } from "@/lib/hooks/use-debounce"
 import {
   AlertDialog,
@@ -53,6 +53,7 @@ function DriversPageContent() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [driversList, setDriversList] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const debouncedSearchTerm = useDebounce(searchTerm, 300) // Debounce search for performance
   const [statusFilter, setStatusFilter] = useState("all")
@@ -92,12 +93,18 @@ function DriversPageContent() {
     }
   }
 
-  const loadDrivers = async () => {
-    setIsLoading(true)
+  const loadDrivers = useCallback(async () => {
+    if (!hasLoadedOnce) {
+      setIsLoading(true)
+    }
     try {
       type DriversLoadResult = { data?: any[] | null; error?: string | null; count?: number }
       const result: DriversLoadResult = await Promise.race([
-        getDrivers(),
+        getDrivers({
+          status: statusFilter !== "all" ? statusFilter : undefined,
+          search: debouncedSearchTerm || undefined,
+          sortBy: (sortBy as "name" | "status" | "license_expiry" | "created_at"),
+        }),
         new Promise<DriversLoadResult>((resolve) =>
           setTimeout(() => resolve({ error: "Loading drivers timed out. Please retry." }), 60000)
         ),
@@ -106,6 +113,7 @@ function DriversPageContent() {
         toast.error(result.error)
         setDriversList([])
         setTotalDriverCount(0)
+        setHasLoadedOnce(true)
         return
       }
       if (result.data) {
@@ -122,9 +130,10 @@ function DriversPageContent() {
       setDriversList([])
       setTotalDriverCount(0)
     } finally {
+      setHasLoadedOnce(true)
       setIsLoading(false)
     }
-  }
+  }, [statusFilter, debouncedSearchTerm, sortBy, hasLoadedOnce])
 
   const handleEmergencyPurgeKeepOne = async () => {
     setIsPurging(true)
@@ -146,46 +155,13 @@ function DriversPageContent() {
   }
 
   useEffect(() => {
-    loadDrivers()
-  }, [])
+    void loadDrivers()
+  }, [loadDrivers])
 
-  // Memoized filter and sort for better performance
+  // Data is already filtered/sorted server-side; keep memoized alias for selection UX.
   const filteredDrivers = useMemo(() => {
-    let filtered = [...driversList]
-
-    // Apply search filter (using debounced term)
-    if (debouncedSearchTerm) {
-      const searchLower = debouncedSearchTerm.toLowerCase()
-      filtered = filtered.filter(
-        (driver) =>
-          driver.name?.toLowerCase().includes(searchLower) ||
-          driver.email?.toLowerCase().includes(searchLower) ||
-          driver.phone?.toLowerCase().includes(searchLower) ||
-          driver.license_number?.toLowerCase().includes(searchLower)
-      )
-    }
-
-    // Apply status filter
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((driver) => driver.status === statusFilter)
-    }
-
-    // Apply sorting
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case "name":
-          return (a.name || "").localeCompare(b.name || "")
-        case "status":
-          return (a.status || "").localeCompare(b.status || "")
-        case "license_expiry":
-          return new Date(a.license_expiry || 0).getTime() - new Date(b.license_expiry || 0).getTime()
-        default:
-          return 0
-      }
-    })
-
-    return filtered
-  }, [driversList, debouncedSearchTerm, statusFilter, sortBy])
+    return driversList
+  }, [driversList])
 
   const handleExportDrivers = () => {
     try {

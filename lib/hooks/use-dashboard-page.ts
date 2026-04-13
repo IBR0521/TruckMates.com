@@ -18,7 +18,10 @@ export type DashboardBootstrapResult = {
  * Single request for dashboard home (company + stats or driver snapshot).
  * Query key includes auth user id so switching accounts never shows cached data from another user.
  */
-export function useDashboardPageData() {
+export function useDashboardPageData(
+  initialBootstrap: DashboardBootstrapResult | null = null,
+  initialSessionUserId: string | null = null
+) {
   const supabase = createClient()
 
   const sessionQuery = useQuery({
@@ -29,13 +32,15 @@ export function useDashboardPageData() {
       } = await supabase.auth.getUser()
       return user?.id ?? null
     },
+    enabled: !initialSessionUserId,
     staleTime: 5 * 60 * 1000,
   })
 
-  const sessionUserId = sessionQuery.data ?? null
+  const sessionUserId = initialSessionUserId ?? sessionQuery.data ?? null
 
   const bootstrapQuery = useQuery({
     queryKey: ["dashboard", "bootstrap", sessionUserId],
+    initialData: initialBootstrap ?? undefined,
     queryFn: async () => {
       const r = await getDashboardBootstrap()
       if (r.dashboardError) {
@@ -64,7 +69,8 @@ export function useDashboardPageData() {
     gcTime: 10 * 60 * 1000,
     retry: 1,
     refetchOnWindowFocus: true,
-    refetchOnMount: true,
+    // If server already hydrated initial dashboard payload, avoid immediate duplicate request.
+    refetchOnMount: initialBootstrap ? false : true,
     refetchInterval: 30 * 1000,
     refetchIntervalInBackground: true,
   })
