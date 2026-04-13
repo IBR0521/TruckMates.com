@@ -36,13 +36,15 @@ import { InlineEdit } from "@/components/dashboard/inline-edit"
 import { DefensiveDelete } from "@/components/dashboard/defensive-delete"
 import { AuditTrail } from "@/components/dashboard/audit-trail"
 import { History } from "lucide-react"
+import { useLoadsInitialData } from "@/components/dashboard/initial-list-data-contexts"
 
 export default function LoadsPage() {
   const router = useRouter()
+  const { initialLoads, initialError } = useLoadsInitialData()
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [loadsList, setLoadsList] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
+  const [loadsList, setLoadsList] = useState<any[]>(() => initialLoads || [])
+  const [isLoading, setIsLoading] = useState(() => !initialLoads && !initialError)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(() => !!initialLoads || !!initialError)
   const [searchTerm, setSearchTerm] = useState("")
   const debouncedSearchTerm = useDebounce(searchTerm, 300) // Debounce search for performance
   const [statusFilter, setStatusFilter] = useState("all")
@@ -84,8 +86,12 @@ export default function LoadsPage() {
   }, [statusFilter, debouncedSearchTerm, sortBy, hasLoadedOnce])
 
   useEffect(() => {
+    // First render is already hydrated from server layout for default list params.
+    const isDefaultFilters =
+      statusFilter === "all" && !debouncedSearchTerm && sortBy === "created_at"
+    if (!initialError && hasLoadedOnce && isDefaultFilters) return
     void loadLoads()
-  }, [loadLoads])
+  }, [loadLoads, hasLoadedOnce, statusFilter, debouncedSearchTerm, sortBy, initialError])
 
   // Memoized filter and sort for better performance
   const filteredLoads = useMemo(() => {

@@ -14,6 +14,9 @@ import {
   purgeAllDriversKeepOneForCompany,
 } from "@/lib/drivers/collapse-duplicate-driver-rows"
 
+const DRIVER_LIST_SELECT =
+  "id, name, email, phone, status, license_number, license_expiry, truck_id, created_at"
+
 function invalidateDriverDashboardCaches(companyId: string) {
   cache.delete(cacheKeys.dashboardStats(companyId))
 }
@@ -192,7 +195,7 @@ export async function getDrivers(filters?: {
     // Build query with selective columns and pagination
     let query = supabase
       .from("drivers")
-      .select("id, name, email, phone, status, license_number, license_expiry, truck_id, created_at", { count: "exact" })
+      .select(DRIVER_LIST_SELECT, { count: "exact" })
       .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 

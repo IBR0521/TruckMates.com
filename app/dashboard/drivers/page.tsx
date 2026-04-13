@@ -47,13 +47,15 @@ import { History } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import DriverLeaderboardPage from "./leaderboard/page"
 import DriverAchievementsPage from "./achievements/page"
+import { useDriversInitialData } from "@/components/dashboard/initial-list-data-contexts"
 
 function DriversPageContent() {
   const router = useRouter()
+  const { initialDrivers, initialCount, initialError } = useDriversInitialData()
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [driversList, setDriversList] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
+  const [driversList, setDriversList] = useState<any[]>(() => initialDrivers || [])
+  const [isLoading, setIsLoading] = useState(() => !initialDrivers && !initialError)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(() => !!initialDrivers || !!initialError)
   const [searchTerm, setSearchTerm] = useState("")
   const debouncedSearchTerm = useDebounce(searchTerm, 300) // Debounce search for performance
   const [statusFilter, setStatusFilter] = useState("all")
@@ -62,7 +64,7 @@ function DriversPageContent() {
   const [isBulkMode, setIsBulkMode] = useState(false)
   const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
   const [isImporting, setIsImporting] = useState(false)
-  const [totalDriverCount, setTotalDriverCount] = useState(0)
+  const [totalDriverCount, setTotalDriverCount] = useState(initialCount || 0)
   const [purgePhrase, setPurgePhrase] = useState("")
   const [isPurging, setIsPurging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -155,8 +157,11 @@ function DriversPageContent() {
   }
 
   useEffect(() => {
+    const isDefaultFilters =
+      statusFilter === "all" && !debouncedSearchTerm && sortBy === "name"
+    if (!initialError && hasLoadedOnce && isDefaultFilters) return
     void loadDrivers()
-  }, [loadDrivers])
+  }, [loadDrivers, hasLoadedOnce, statusFilter, debouncedSearchTerm, sortBy, initialError])
 
   // Data is already filtered/sorted server-side; keep memoized alias for selection UX.
   const filteredDrivers = useMemo(() => {

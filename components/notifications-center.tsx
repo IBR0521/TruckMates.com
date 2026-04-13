@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Bell, X, Check, CheckCheck } from "lucide-react"
+import { Inbox, X, Check, CheckCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Popover,
@@ -48,8 +48,10 @@ export function NotificationsCenter() {
         return "🔧"
       case "payment_reminder":
         return "💰"
+      case "morning_digest":
+        return "📰"
       default:
-        return "🔔"
+        return "•"
     }
   }
 
@@ -72,7 +74,7 @@ export function NotificationsCenter() {
   if (!mounted) {
     return (
       <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
-        <Bell className="h-5 w-5" />
+        <Inbox className="h-5 w-5" />
       </Button>
     )
   }
@@ -81,7 +83,7 @@ export function NotificationsCenter() {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
-          <Bell className="h-5 w-5" />
+          <Inbox className="h-5 w-5" />
           {unreadCount > 0 && (
             <Badge
               variant="destructive"
@@ -120,7 +122,7 @@ export function NotificationsCenter() {
         <ScrollArea className="h-[400px]">
           {notifications.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">
-              <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <Inbox className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p>No notifications</p>
             </div>
           ) : (
