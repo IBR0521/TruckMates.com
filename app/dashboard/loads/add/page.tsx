@@ -46,7 +46,12 @@ import { getOrderedDeliveryStopAddresses } from "@/lib/load-routing-from-stops"
 import { LoadDeliveryPointsManager } from "@/components/load-delivery-points-manager"
 import { createLoadDeliveryPoint } from "@/app/actions/load-delivery-points"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
-import { getAddressBookEntries, incrementAddressUsage, type AddressBookEntry } from "@/app/actions/enhanced-address-book"
+import {
+  createAddressBookEntry,
+  getAddressBookEntries,
+  incrementAddressUsage,
+  type AddressBookEntry,
+} from "@/app/actions/enhanced-address-book"
 import { BookOpen } from "lucide-react"
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
@@ -242,13 +247,114 @@ export default function AddLoadPage() {
     setIsSubmitting(true)
 
     try {
+      const normalize = (value: string) => value.trim().toLowerCase()
+      const findExistingAddress = (
+        entries: AddressBookEntry[],
+        candidate: { name: string; address: string; city: string; state: string; zip: string }
+      ) => {
+        return entries.find((entry) => {
+          const entryName = normalize(entry.name || entry.company_name || "")
+          return (
+            entryName === normalize(candidate.name) &&
+            normalize(entry.address_line1 || "") === normalize(candidate.address) &&
+            normalize(entry.city || "") === normalize(candidate.city) &&
+            normalize(entry.state || "") === normalize(candidate.state) &&
+            normalize(entry.zip_code || "") === normalize(candidate.zip)
+          )
+        })
+      }
+
+      let shipperAddressBookId = selectedShipperAddressBookId || undefined
+      let consigneeAddressBookId = selectedConsigneeAddressBookId || undefined
+
+      // Auto-save manual shipper/consignee into address book so they can be reused.
+      if (!shipperAddressBookId) {
+        const shipperCandidate = {
+          name: formData.shipperName,
+          address: formData.shipperAddress,
+          city: formData.shipperCity,
+          state: formData.shipperState,
+          zip: formData.shipperZip,
+        }
+        const hasRequiredShipperFields =
+          !!shipperCandidate.name.trim() &&
+          !!shipperCandidate.address.trim() &&
+          !!shipperCandidate.city.trim() &&
+          !!shipperCandidate.state.trim() &&
+          !!shipperCandidate.zip.trim()
+
+        if (hasRequiredShipperFields) {
+          const existingShipper = findExistingAddress(shipperAddressBookEntries, shipperCandidate)
+          if (existingShipper) {
+            shipperAddressBookId = existingShipper.id
+          } else {
+            const createdShipper = await createAddressBookEntry({
+              name: shipperCandidate.name.trim(),
+              address_line1: shipperCandidate.address.trim(),
+              city: shipperCandidate.city.trim(),
+              state: shipperCandidate.state.trim(),
+              zip_code: shipperCandidate.zip.trim(),
+              contact_name: formData.shipperContact?.trim() || undefined,
+              phone: formData.shipperPhone?.trim() || undefined,
+              category: "shipper",
+              auto_geocode: true,
+            })
+            if (createdShipper.data) {
+              shipperAddressBookId = createdShipper.data.id
+              setShipperAddressBookEntries((prev) => [createdShipper.data as AddressBookEntry, ...prev])
+              setSelectedShipperAddressBookId(createdShipper.data.id)
+            }
+          }
+        }
+      }
+
+      if (!consigneeAddressBookId) {
+        const consigneeCandidate = {
+          name: formData.consigneeName,
+          address: formData.consigneeAddress,
+          city: formData.consigneeCity,
+          state: formData.consigneeState,
+          zip: formData.consigneeZip,
+        }
+        const hasRequiredConsigneeFields =
+          !!consigneeCandidate.name.trim() &&
+          !!consigneeCandidate.address.trim() &&
+          !!consigneeCandidate.city.trim() &&
+          !!consigneeCandidate.state.trim() &&
+          !!consigneeCandidate.zip.trim()
+
+        if (hasRequiredConsigneeFields) {
+          const existingConsignee = findExistingAddress(consigneeAddressBookEntries, consigneeCandidate)
+          if (existingConsignee) {
+            consigneeAddressBookId = existingConsignee.id
+          } else {
+            const createdConsignee = await createAddressBookEntry({
+              name: consigneeCandidate.name.trim(),
+              address_line1: consigneeCandidate.address.trim(),
+              city: consigneeCandidate.city.trim(),
+              state: consigneeCandidate.state.trim(),
+              zip_code: consigneeCandidate.zip.trim(),
+              contact_name: formData.consigneeContact?.trim() || undefined,
+              phone: formData.consigneePhone?.trim() || undefined,
+              category: "receiver",
+              auto_geocode: true,
+            })
+            if (createdConsignee.data) {
+              consigneeAddressBookId = createdConsignee.data.id
+              setConsigneeAddressBookEntries((prev) => [createdConsignee.data as AddressBookEntry, ...prev])
+              setSelectedConsigneeAddressBookId(createdConsignee.data.id)
+            }
+          }
+        }
+      }
+
       const multiStop = deliveryPoints.length > 0
       const payload: any = {
         shipment_number: formData.autoNumbering ? "" : formData.shipmentNumber,
       origin: formData.origin,
         destination: multiStop ? "Multiple Locations" : formData.destination,
-        shipper_address_book_id: selectedShipperAddressBookId || undefined,
-        consignee_address_book_id: selectedConsigneeAddressBookId || undefined,
+        shipper_address_book_id: shipperAddressBookId,
+        consignee_address_book_id: consigneeAddressBookId,
       weight: formData.weight || undefined,
       contents: formData.contents || undefined,
       company_name: formData.companyName || undefined,
@@ -313,11 +419,11 @@ export default function AddLoadPage() {
     }
 
     // Increment address book usage
-    if (selectedShipperAddressBookId) {
-      await incrementAddressUsage(selectedShipperAddressBookId)
+    if (shipperAddressBookId) {
+      await incrementAddressUsage(shipperAddressBookId)
     }
-    if (selectedConsigneeAddressBookId) {
-      await incrementAddressUsage(selectedConsigneeAddressBookId)
+    if (consigneeAddressBookId) {
+      await incrementAddressUsage(consigneeAddressBookId)
     }
 
     router.push(`/dashboard/loads/${result.data?.id || ""}`)

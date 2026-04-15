@@ -5,7 +5,7 @@ import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { ArrowLeft, Download, Send, Mail, MessageSquare, Share2, ChevronDown, Landmark } from "lucide-react"
 import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { use } from "react"
 import { exportToPDF } from "@/lib/export-utils"
@@ -24,6 +24,7 @@ import { normalizeInvoiceLineItems } from "@/lib/invoice-line-items"
 export default function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const aliveRef = useRef(true)
   const [invoice, setInvoice] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showShareMenu, setShowShareMenu] = useState(false)
@@ -33,6 +34,12 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [shareMailPreparing, setShareMailPreparing] = useState(false)
   const [sendingFactoring, setSendingFactoring] = useState(false)
   const [markingFunded, setMarkingFunded] = useState(false)
+
+  useEffect(() => {
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (id === "add" || id === "create") {
@@ -45,7 +52,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
       const result = await getInvoice(id)
       if (result.error) {
         toast.error(result.error || "Failed to load invoice")
-        router.push("/dashboard/accounting/invoices")
+        if (aliveRef.current) router.push("/dashboard/accounting/invoices")
         return
       }
       if (result.data) {

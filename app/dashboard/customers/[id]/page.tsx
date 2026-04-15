@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Phone, Mail, Building2, MapPin, DollarSign, Package, FileText, MessageSquare, Calendar, Globe, Hash } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { use } from "react"
 import { getCustomer, getCustomerLoads, getCustomerInvoices, getCustomerHistory } from "@/app/actions/customers"
@@ -37,6 +37,7 @@ import { CRMSectionHeader } from "@/components/crm/crm-section-header"
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
+  const aliveRef = useRef(true)
   const [customer, setCustomer] = useState<any>(null)
   const [loads, setLoads] = useState<any[]>([])
   const [invoices, setInvoices] = useState<any[]>([])
@@ -52,6 +53,12 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
     sms_notifications: false,
     expires_days: 365,
   })
+
+  useEffect(() => {
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     loadData()
@@ -70,7 +77,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
       if (customerResult.error) {
         toast.error(customerResult.error)
-        router.push("/dashboard/customers")
+        if (aliveRef.current) router.push("/dashboard/customers")
         return
       }
 

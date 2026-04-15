@@ -25,7 +25,7 @@ import {
 import Link from "next/link"
 import { use } from "react"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { getMaintenanceById, updateMaintenanceStatus } from "@/app/actions/maintenance"
 import {
@@ -56,6 +56,7 @@ import { Textarea } from "@/components/ui/textarea"
 export default function MaintenanceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const aliveRef = useRef(true)
   const [maintenance, setMaintenance] = useState<any>(null)
   const [workOrders, setWorkOrders] = useState<any[]>([])
   const [documents, setDocuments] = useState<any[]>([])
@@ -64,6 +65,12 @@ export default function MaintenanceDetailPage({ params }: { params: Promise<{ id
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [uploadDocumentType, setUploadDocumentType] = useState("repair_order")
+
+  useEffect(() => {
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (id === "add") {
@@ -84,7 +91,7 @@ export default function MaintenanceDetailPage({ params }: { params: Promise<{ id
 
       if (maintenanceResult.error) {
         toast.error(maintenanceResult.error)
-        router.push("/dashboard/maintenance")
+        if (aliveRef.current) router.push("/dashboard/maintenance")
         return
       }
 

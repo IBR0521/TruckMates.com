@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -28,6 +28,7 @@ import { Label } from "@/components/ui/label"
 export default function GeofenceDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const aliveRef = useRef(true)
   const geofenceId = params.id as string
   const [geofence, setGeofence] = useState<any>(null)
   const [visits, setVisits] = useState<any[]>([])
@@ -35,6 +36,12 @@ export default function GeofenceDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+
+  useEffect(() => {
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (geofenceId) {
@@ -49,7 +56,7 @@ export default function GeofenceDetailPage() {
     const result = await getGeofence(geofenceId)
     if (result.error) {
       toast.error(result.error)
-      router.push("/dashboard/geofencing")
+      if (aliveRef.current) router.push("/dashboard/geofencing")
     } else {
       setGeofence(result.data)
     }

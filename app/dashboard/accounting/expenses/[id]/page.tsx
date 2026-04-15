@@ -6,7 +6,7 @@ import { ArrowLeft, Download, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { use } from "react"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -22,7 +22,14 @@ import {
 export default function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (id === "add") {
@@ -51,7 +58,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ id: st
 
   const handleDelete = () => {
     toast.success("Expense deleted successfully")
-    setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
       router.push("/dashboard/accounting/expenses")
     }, 500)
   }

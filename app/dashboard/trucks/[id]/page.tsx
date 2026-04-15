@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Fuel, Wrench, User, Truck, Calendar, FileText, Hash, MapPin, Gauge } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { use } from "react"
 import { getTruck } from "@/app/actions/trucks"
@@ -20,9 +20,16 @@ import {
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
+  const aliveRef = useRef(true)
   const [truck, setTruck] = useState<any>(null)
   const [driver, setDriver] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (id === "add") {
@@ -38,7 +45,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       const result = await getTruck(id)
       if (result.error) {
         toast.error(result.error)
-        router.push("/dashboard/trucks")
+        if (aliveRef.current) router.push("/dashboard/trucks")
         return
       }
       setTruck(result.data)

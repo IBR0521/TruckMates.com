@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Phone, Mail, Truck, Calendar, User, FileText, MapPin, CreditCard, GraduationCap } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { use } from "react"
 import { getDriver } from "@/app/actions/drivers"
@@ -20,9 +20,16 @@ import {
 export default function DriverDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
+  const aliveRef = useRef(true)
   const [driver, setDriver] = useState<any>(null)
   const [truck, setTruck] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (id === "add") {
@@ -38,7 +45,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
       const result = await getDriver(id)
       if (result.error) {
         toast.error(result.error)
-        router.push("/dashboard/drivers")
+        if (aliveRef.current) router.push("/dashboard/drivers")
         return
       }
       setDriver(result.data)

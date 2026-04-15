@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -28,6 +28,7 @@ import {
 export default function ELDDeviceDetailsPage() {
   const params = useParams()
   const router = useRouter()
+  const aliveRef = useRef(true)
   const deviceId = params.id as string
 
   const [device, setDevice] = useState<any>(null)
@@ -36,6 +37,12 @@ export default function ELDDeviceDetailsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSyncing, setIsSyncing] = useState(false)
   const [activeTab, setActiveTab] = useState<"overview" | "logs" | "events">("overview")
+
+  useEffect(() => {
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (deviceId) {
@@ -55,7 +62,7 @@ export default function ELDDeviceDetailsPage() {
 
       if (deviceResult.error) {
         toast.error(deviceResult.error)
-        router.push("/dashboard/eld/devices")
+        if (aliveRef.current) router.push("/dashboard/eld/devices")
         return
       }
 

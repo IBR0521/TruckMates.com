@@ -5,7 +5,7 @@ import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { ArrowLeft, FileText, Building2, MapPin, CheckCircle, XCircle, Pen, Download } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { use } from "react"
 import { getBOL } from "@/app/actions/bol"
@@ -24,12 +24,19 @@ import {
 export default function BOLDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const aliveRef = useRef(true)
   const [bol, setBOL] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [signatureDialog, setSignatureDialog] = useState<{
     open: boolean
     type: "shipper" | "driver" | "consignee" | null
   }>({ open: false, type: null })
+
+  useEffect(() => {
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     loadBOL()
@@ -40,7 +47,7 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
     const result = await getBOL(id)
     if (result.error) {
       toast.error(result.error)
-      router.push("/dashboard/bols")
+      if (aliveRef.current) router.push("/dashboard/bols")
       return
     }
     setBOL(result.data)

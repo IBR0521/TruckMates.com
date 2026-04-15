@@ -7,7 +7,7 @@ import { ArrowLeft, CheckCircle, Package, User, Calendar, DollarSign, Truck, Wre
 import Link from "next/link"
 import { use } from "react"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { getWorkOrder, updateWorkOrder, checkAndReserveParts, completeWorkOrder } from "@/app/actions/maintenance-enhanced"
 import { Input } from "@/components/ui/input"
@@ -25,12 +25,19 @@ import {
 export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const aliveRef = useRef(true)
   const [workOrder, setWorkOrder] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false)
   const [actualCost, setActualCost] = useState("")
   const [actualLaborHours, setActualLaborHours] = useState("")
   const [completionNotes, setCompletionNotes] = useState("")
+
+  useEffect(() => {
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     loadWorkOrder()
@@ -41,7 +48,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     const result = await getWorkOrder(id)
     if (result.error) {
       toast.error(result.error)
-      router.push("/dashboard/maintenance/work-orders")
+      if (aliveRef.current) router.push("/dashboard/maintenance/work-orders")
     } else {
       setWorkOrder(result.data)
       if (result.data?.actual_total_cost) {
@@ -84,7 +91,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     } else {
       toast.success("Work order completed successfully")
       setIsCompleteDialogOpen(false)
-      router.push(`/dashboard/maintenance/${result.data?.maintenance_id}`)
+      if (aliveRef.current) router.push(`/dashboard/maintenance/${result.data?.maintenance_id}`)
     }
   }
 

@@ -157,11 +157,10 @@ function DriversPageContent() {
   }
 
   useEffect(() => {
-    const isDefaultFilters =
-      statusFilter === "all" && !debouncedSearchTerm && sortBy === "name"
-    if (!initialError && hasLoadedOnce && isDefaultFilters) return
+    // Always refresh in the background on mount/filter changes so newly created
+    // rows appear even when hydrated from server layout data.
     void loadDrivers()
-  }, [loadDrivers, hasLoadedOnce, statusFilter, debouncedSearchTerm, sortBy, initialError])
+  }, [loadDrivers])
 
   // Data is already filtered/sorted server-side; keep memoized alias for selection UX.
   const filteredDrivers = useMemo(() => {

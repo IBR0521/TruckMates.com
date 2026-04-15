@@ -7,7 +7,7 @@ import { DocumentManager } from "@/components/crm/document-manager"
 import { CommunicationTimeline } from "@/components/crm/communication-timeline"
 import { CRMSectionHeader } from "@/components/crm/crm-section-header"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { use } from "react"
 import { getVendor, getVendorExpenses, getVendorMaintenance } from "@/app/actions/vendors"
@@ -17,11 +17,18 @@ import { Badge } from "@/components/ui/badge"
 export default function VendorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
+  const aliveRef = useRef(true)
   const [vendor, setVendor] = useState<any>(null)
   const [expenses, setExpenses] = useState<any[]>([])
   const [maintenance, setMaintenance] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"overview" | "expenses" | "maintenance" | "documents" | "communications">("overview")
+
+  useEffect(() => {
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     loadData()
@@ -38,7 +45,7 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
 
       if (vendorResult.error) {
         toast.error(vendorResult.error)
-        router.push("/dashboard/vendors")
+        if (aliveRef.current) router.push("/dashboard/vendors")
         return
       }
 

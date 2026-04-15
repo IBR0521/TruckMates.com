@@ -86,12 +86,10 @@ export default function LoadsPage() {
   }, [statusFilter, debouncedSearchTerm, sortBy, hasLoadedOnce])
 
   useEffect(() => {
-    // First render is already hydrated from server layout for default list params.
-    const isDefaultFilters =
-      statusFilter === "all" && !debouncedSearchTerm && sortBy === "created_at"
-    if (!initialError && hasLoadedOnce && isDefaultFilters) return
+    // Always refresh in the background on mount/filter changes so newly created
+    // rows appear even when the page was hydrated from cached server layout data.
     void loadLoads()
-  }, [loadLoads, hasLoadedOnce, statusFilter, debouncedSearchTerm, sortBy, initialError])
+  }, [loadLoads])
 
   // Memoized filter and sort for better performance
   const filteredLoads = useMemo(() => {

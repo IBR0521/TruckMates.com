@@ -7,7 +7,7 @@ import { Edit2, FileCheck, AlertTriangle, CheckCircle, Wrench, ExternalLink } fr
 import Link from "next/link"
 import { use } from "react"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { DetailPageLayout, DetailSection, InfoGrid, InfoField } from "@/components/dashboard/detail-page-layout"
 import { getDVIR } from "@/app/actions/dvir"
@@ -16,10 +16,17 @@ import { createWorkOrdersFromDVIRDefects, getDVIRWorkOrders } from "@/app/action
 export default function DVIRDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const aliveRef = useRef(true)
   const [dvir, setDvir] = useState<any>(null)
   const [workOrders, setWorkOrders] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [creatingWorkOrders, setCreatingWorkOrders] = useState(false)
+
+  useEffect(() => {
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (id === "add") {
@@ -31,7 +38,7 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
       const result = await getDVIR(id)
       if (result.error) {
         toast.error(result.error)
-        router.push("/dashboard/dvir")
+        if (aliveRef.current) router.push("/dashboard/dvir")
       } else if (result.data) {
         setDvir(result.data)
         const wo = await getDVIRWorkOrders(id)
