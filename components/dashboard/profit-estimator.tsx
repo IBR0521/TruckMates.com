@@ -23,32 +23,25 @@ import {
 } from "lucide-react"
 
 export function ProfitEstimator() {
-  const [open, setOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    // Miles
+  const initialFormData = {
     loadedMiles: "",
     deadheadMiles: "",
-    
-    // Charges
     loadedChargeType: "per-mile" as "flat" | "per-mile",
     loadedCharge: "",
     deadheadChargeType: "per-mile" as "flat" | "per-mile",
     deadheadCharge: "",
     additionalCharges: "",
-    
-    // Fuel
     fuelCostPerGallon: "",
     truckMPG: "",
-    
-    // Driver Settlement
     driverPayType: "percentage" as "percentage" | "per-mile" | "hourly",
     driverPay: "",
     driverHours: "",
-    
-    // Other Expenses
     tolls: "",
     otherExpenses: "",
-  })
+  }
+
+  const [open, setOpen] = useState(false)
+  const [formData, setFormData] = useState(initialFormData)
 
   // Calculate profit in real-time
   const calculations = useMemo(() => {
@@ -149,6 +142,9 @@ export function ProfitEstimator() {
     }).format(amount)
   }
 
+  const hasAnyInput = Object.values(formData).some((v) => String(v).trim() !== "")
+  const marginForBar = Math.max(-100, Math.min(100, calculations.profitMargin))
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -165,17 +161,41 @@ export function ProfitEstimator() {
             Profit Estimator
           </DialogTitle>
           <DialogDescription>
-            Estimate potential profits for a load by considering miles, charges, and expenses
+            Estimate load profitability with miles, rates, fuel, and settlement inputs.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 mt-4">
+          <Card className="p-4 border-primary/20 bg-primary/5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Total Miles</p>
+                <p className="text-base font-semibold">{calculations.totalMiles.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Revenue</p>
+                <p className="text-base font-semibold">{formatCurrency(calculations.totalRevenue)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Expenses</p>
+                <p className="text-base font-semibold">{formatCurrency(calculations.totalExpenses)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Estimated Profit</p>
+                <p className={`text-base font-semibold ${calculations.estimatedProfit >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+                  {formatCurrency(calculations.estimatedProfit)}
+                </p>
+              </div>
+            </div>
+          </Card>
+
           {/* Miles Section */}
           <Card className="p-4">
             <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
               <Route className="w-4 h-4 text-blue-500" />
               Miles
             </h3>
+            <p className="text-xs text-muted-foreground mb-3">Enter loaded and deadhead miles for this trip.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Loaded Miles</Label>
@@ -206,6 +226,7 @@ export function ProfitEstimator() {
               <TrendingUp className="w-4 h-4 text-green-500" />
               Charges
             </h3>
+            <p className="text-xs text-muted-foreground mb-3">Set your loaded/deadhead pricing and add any fixed extras.</p>
             <div className="space-y-4">
               {/* Loaded Charges */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -281,6 +302,7 @@ export function ProfitEstimator() {
               <Fuel className="w-4 h-4 text-orange-500" />
               Fuel Cost
             </h3>
+            <p className="text-xs text-muted-foreground mb-3">Fuel estimate = total miles / MPG * fuel cost per gallon.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Fuel Cost per Gallon ($)</Label>
@@ -319,6 +341,7 @@ export function ProfitEstimator() {
               <User className="w-4 h-4 text-purple-500" />
               Driver Settlement
             </h3>
+            <p className="text-xs text-muted-foreground mb-3">Choose how the driver is paid and enter the corresponding value.</p>
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
@@ -368,6 +391,7 @@ export function ProfitEstimator() {
           {/* Other Expenses Section */}
           <Card className="p-4">
             <h3 className="font-semibold text-foreground mb-4">Other Expenses</h3>
+            <p className="text-xs text-muted-foreground mb-3">Add known trip-level costs not captured above.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Tolls ($)</Label>
@@ -393,7 +417,7 @@ export function ProfitEstimator() {
           </Card>
 
           {/* Results Section */}
-          {calculations.totalRevenue > 0 && (
+          {(calculations.totalRevenue > 0 || hasAnyInput) && (
             <Card className="p-6 border-2 border-primary/20 bg-primary/5">
               <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                 <DollarSign className="w-4 h-4" />
@@ -488,6 +512,12 @@ export function ProfitEstimator() {
                       {calculations.profitMargin.toFixed(2)}%
                     </span>
                   </div>
+                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden mb-4">
+                    <div
+                      className={`h-full ${calculations.profitMargin >= 0 ? "bg-emerald-500" : "bg-red-500"}`}
+                      style={{ width: `${Math.abs(marginForBar)}%` }}
+                    />
+                  </div>
 
                   {/* Per-Mile Metrics */}
                   {calculations.totalMiles > 0 && (
@@ -527,22 +557,7 @@ export function ProfitEstimator() {
             <Button
               variant="outline"
               onClick={() => {
-                setFormData({
-                  loadedMiles: "",
-                  deadheadMiles: "",
-                  loadedChargeType: "per-mile",
-                  loadedCharge: "",
-                  deadheadChargeType: "per-mile",
-                  deadheadCharge: "",
-                  additionalCharges: "",
-                  fuelCostPerGallon: "",
-                  truckMPG: "",
-                  driverPayType: "percentage",
-                  driverPay: "",
-                  driverHours: "",
-                  tolls: "",
-                  otherExpenses: "",
-                })
+                setFormData(initialFormData)
               }}
             >
               Reset

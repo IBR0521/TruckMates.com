@@ -26,7 +26,6 @@ const PLANS = [
       "Loads, dispatch, BOLs, invoicing, settlements",
       "IFTA, ELD logs, DVIR, maintenance, reminders",
       "Revenue, P&L, and fuel analytics",
-      "14-day free trial (no credit card)",
       "2 users included",
     ],
     excluded: [
@@ -36,7 +35,7 @@ const PLANS = [
       "Predictive maintenance",
       "Geofencing & route optimizer",
     ],
-    cta: "Start 14-day trial",
+    cta: "Choose plan",
     href: "/register",
     highlighted: false,
   },
@@ -57,10 +56,9 @@ const PLANS = [
       "CRM, detention/on-time reports, factoring integration",
       "API & webhooks",
       "8 users included",
-      "14-day free trial (no credit card)",
     ],
     excluded: [],
-    cta: "Start 14-day trial",
+    cta: "Choose plan",
     href: "/register",
     highlighted: true,
   },
@@ -127,10 +125,10 @@ export default function PricingPage() {
         toast.error(result.error)
         return
       }
-      toast.success("Trial started", {
-        description: "Your 14-day trial is now active.",
+      toast.success("Plan selected", {
+        description: "Complete billing setup to activate your subscription.",
       })
-      router.push("/dashboard")
+      router.push("/billing/activate?step=payment")
     } finally {
       setIsChoosingPlan(null)
     }
@@ -157,7 +155,7 @@ export default function PricingPage() {
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
         {onboarding && (
           <p className="mb-4 text-sm text-primary font-medium">
-            Choose your plan to activate your 14-day free trial.
+            Choose your plan, then complete billing to activate access.
           </p>
         )}
         <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-6">

@@ -9,11 +9,11 @@ import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { use } from "react"
 import { GoogleMapsRoute } from "@/components/google-maps-route"
-import { getLoad } from "@/app/actions/loads"
+import { getLoad, updateLoad } from "@/app/actions/loads"
 import { getRoutes } from "@/app/actions/routes"
 import { getTrucks } from "@/app/actions/trucks"
 import { getLoadDeliveryPoints, getLoadSummary } from "@/app/actions/load-delivery-points"
-import { getInvoices } from "@/app/actions/accounting"
+import { createInvoice, getInvoices } from "@/app/actions/accounting"
 import { autoGenerateInvoiceOnPOD } from "@/app/actions/auto-invoice"
 import { toast } from "sonner"
 import { Building2, FileText, DollarSign, Share2 } from "lucide-react"
@@ -35,6 +35,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { getDrivers } from "@/app/actions/drivers"
 
 export default function LoadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -52,6 +54,14 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   const [portalUrl, setPortalUrl] = useState<string>("")
   const [isCreatingPortal, setIsCreatingPortal] = useState(false)
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false)
+  const [isDispatchDialogOpen, setIsDispatchDialogOpen] = useState(false)
+  const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false)
+  const [isQuickDispatching, setIsQuickDispatching] = useState(false)
+  const [isQuickInvoicing, setIsQuickInvoicing] = useState(false)
+  const [drivers, setDrivers] = useState<any[]>([])
+  const [trucks, setTrucks] = useState<any[]>([])
+  const [selectedDispatchDriverId, setSelectedDispatchDriverId] = useState<string>("")
+  const [selectedDispatchTruckId, setSelectedDispatchTruckId] = useState<string>("")
 
   /** For multi-stop loads, trip planning needs one destination — use last delivery stop. */
   const lastStopRoutingAddress = useMemo(
@@ -334,6 +344,35 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     }
   }, [id])
 
+  useEffect(() => {
+    if (!isDispatchDialogOpen) return
+
+    let active = true
+    void (async () => {
+      try {
+        const [driversResult, trucksResult] = await Promise.all([getDrivers(), getTrucks()])
+        if (!active) return
+
+        const activeDrivers = (driversResult.data || []).filter((d: any) => d.status === "active")
+        const assignableTrucks = (trucksResult.data || []).filter(
+          (t: any) => t.status === "available" || t.status === "in_use"
+        )
+
+        setDrivers(activeDrivers)
+        setTrucks(assignableTrucks)
+        setSelectedDispatchDriverId(load?.driver_id || "")
+        setSelectedDispatchTruckId(load?.truck_id || "")
+      } catch {
+        if (!active) return
+        toast.error("Failed to load drivers/trucks for dispatch.")
+      }
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [isDispatchDialogOpen, load?.driver_id, load?.truck_id])
+
   if (id === "add") {
     return null
   }
@@ -511,6 +550,96 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  async function handleQuickDispatch() {
+    setIsQuickDispatching(true)
+    try {
+      if (!selectedDispatchDriverId || !selectedDispatchTruckId) {
+        toast.error("Please assign both driver and truck before dispatching.")
+        return
+      }
+
+      const assignmentResult = await updateLoad(id, {
+        driver_id: selectedDispatchDriverId,
+        truck_id: selectedDispatchTruckId,
+      })
+      if (assignmentResult.error) {
+        toast.error(assignmentResult.error)
+        return
+      }
+
+      if (load.status === "pending" || load.status === "draft") {
+        const result = await updateLoad(id, { status: "scheduled" })
+        if (result.error) {
+          toast.error(result.error)
+          return
+        }
+        setLoad((prev: any) => ({ ...prev, status: "scheduled" }))
+      }
+
+      setLoad((prev: any) => ({
+        ...prev,
+        driver_id: selectedDispatchDriverId,
+        truck_id: selectedDispatchTruckId,
+      }))
+      toast.success("Load dispatched successfully.")
+      setIsDispatchDialogOpen(false)
+    } catch (error: unknown) {
+      toast.error("Failed to dispatch load: " + errorMessage(error, "Unknown error"))
+    } finally {
+      setIsQuickDispatching(false)
+    }
+  }
+
+  async function handleQuickInvoice() {
+    setIsQuickInvoicing(true)
+    try {
+      const amount = Number(load?.total_rate ?? load?.rate ?? load?.value ?? 0)
+      if (!Number.isFinite(amount) || amount <= 0) {
+        toast.error("Cannot create invoice: load amount is missing.")
+        return
+      }
+
+      const issueDate = new Date()
+      const dueDate = new Date(issueDate)
+      dueDate.setDate(dueDate.getDate() + 30)
+      const customerName =
+        load?.company_name?.trim() ||
+        load?.consignee_name?.trim() ||
+        "Customer"
+
+      const invoiceResult = await createInvoice({
+        customer_name: customerName,
+        load_id: id,
+        amount,
+        issue_date: issueDate.toISOString().split("T")[0]!,
+        due_date: dueDate.toISOString().split("T")[0]!,
+        description: `Invoice for load ${load?.shipment_number || id}`,
+      })
+
+      if (invoiceResult.error || !invoiceResult.data) {
+        toast.error(invoiceResult.error || "Failed to create invoice")
+        return
+      }
+
+      setRelatedInvoice(invoiceResult.data)
+
+      if (load?.status === "pending" || load?.status === "draft") {
+        const statusResult = await updateLoad(id, { status: "scheduled" })
+        if (!statusResult.error) {
+          setLoad((prev: any) => ({ ...prev, status: "scheduled" }))
+        }
+      }
+
+      setIsInvoiceDialogOpen(false)
+      toast.success("Invoice created.")
+      router.push(`/dashboard/accounting/invoices/${invoiceResult.data.id}`)
+    } catch (error: unknown) {
+      toast.error("Failed to create invoice: " + errorMessage(error, "Unknown error"))
+    } finally {
+      setIsQuickInvoicing(false)
+    }
+  }
+
   function handleCopyPortalUrl() {
     if (portalUrl) {
       navigator.clipboard.writeText(portalUrl)
@@ -600,6 +729,16 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                   status={dispatchStatus} 
                   variant={dispatchStatusVariant}
                 />
+                {dispatchStatus === "Undispatched" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 h-8"
+                    onClick={() => setIsDispatchDialogOpen(true)}
+                  >
+                    Dispatch
+                  </Button>
+                )}
                 </div>
               </div>
           </Card>
@@ -611,6 +750,16 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                   status={invoiceStatus} 
                   variant={invoiceStatusVariant}
                 />
+                {!relatedInvoice && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 h-8"
+                    onClick={() => setIsInvoiceDialogOpen(true)}
+                  >
+                    Invoice
+                  </Button>
+                )}
                 </div>
               </div>
           </Card>
@@ -1471,6 +1620,76 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
             <p className="text-xs text-muted-foreground">
               The customer will receive an email with this link. The access expires in 90 days.
             </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDispatchDialogOpen} onOpenChange={setIsDispatchDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Dispatch This Load?</DialogTitle>
+            <DialogDescription>
+              Assign driver and truck, then dispatch. Status will move from pending to scheduled.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Driver</p>
+              <Select value={selectedDispatchDriverId} onValueChange={setSelectedDispatchDriverId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select driver" />
+                </SelectTrigger>
+                <SelectContent>
+                  {drivers.map((driver) => (
+                    <SelectItem key={driver.id} value={driver.id}>
+                      {driver.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Truck</p>
+              <Select value={selectedDispatchTruckId} onValueChange={setSelectedDispatchTruckId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select truck" />
+                </SelectTrigger>
+                <SelectContent>
+                  {trucks.map((truck) => (
+                    <SelectItem key={truck.id} value={truck.id}>
+                      {truck.truck_number} {truck.status ? `(${truck.status})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsDispatchDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleQuickDispatch} disabled={isQuickDispatching}>
+                {isQuickDispatching ? "Dispatching..." : "Confirm Dispatch"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isInvoiceDialogOpen} onOpenChange={setIsInvoiceDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create Invoice?</DialogTitle>
+            <DialogDescription>
+              This creates an invoice from this load. If the load is still pending, status will be moved to scheduled automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsInvoiceDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleQuickInvoice} disabled={isQuickInvoicing}>
+              {isQuickInvoicing ? "Creating..." : "Confirm Invoice"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

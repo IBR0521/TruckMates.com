@@ -489,11 +489,11 @@ export default function LoadsPage() {
                 </div>
               </Card>
             ) : (
-              <div className="grid gap-4">
+              <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
                 {filteredLoads.map((load) => (
                 <Card
                   key={load.id}
-                  className={`border-border p-4 md:p-6 hover:border-primary/50 hover:shadow-md transition ${
+                  className={`border-border p-4 md:p-6 hover:border-primary/50 hover:shadow-md transition h-full ${
                     selectedIds.has(load.id) ? "border-primary bg-primary/5" : ""
                   }`}
                 >

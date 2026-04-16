@@ -66,6 +66,16 @@ async function getCompanySubscriptionAccessInternal(): Promise<CompanySubscripti
     }
   }
 
+  if (!hasPaidSubscription) {
+    return {
+      allowed: false,
+      companyId: ctx.companyId,
+      planName: "free",
+      status: "incomplete",
+      reason: "A paid subscription is required to continue.",
+    }
+  }
+
   if (
     (status === "trialing" && trialExpired && !hasPaidSubscription) ||
     status === "past_due" ||

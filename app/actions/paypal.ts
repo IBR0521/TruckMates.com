@@ -35,7 +35,7 @@ async function getPayPalAccessToken() {
   return data.access_token
 }
 
-// Create PayPal subscription with 7-day free trial
+// Create PayPal subscription (no trial period)
 // NOTE: Platform is currently free - this function returns a friendly message if called
 export async function createPayPalSubscription(planId: string) {
   try {
@@ -126,23 +126,8 @@ export async function createPayPalSubscription(planId: string) {
               interval_unit: "MONTH",
               interval_count: 1,
             },
-            tenure_type: "TRIAL",
-            sequence: 1,
-            total_cycles: 1,
-            pricing_scheme: {
-              fixed_price: {
-                value: "0",
-                currency_code: "USD",
-              },
-            },
-          },
-          {
-            frequency: {
-              interval_unit: "MONTH",
-              interval_count: 1,
-            },
             tenure_type: "REGULAR",
-            sequence: 2,
+            sequence: 1,
             total_cycles: 0, // Infinite
             pricing_scheme: {
               fixed_price: {

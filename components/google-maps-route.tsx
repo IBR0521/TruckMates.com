@@ -205,9 +205,11 @@ export function GoogleMapsRoute({
   // Initialize map and get route
   useEffect(() => {
     if (!mapLoaded || !window.google || !mapRef.current) return
+    let cancelled = false
 
     const initializeMap = async () => {
       try {
+        if (cancelled) return
         setIsLoading(true)
         setError(null)
 
@@ -312,7 +314,12 @@ export function GoogleMapsRoute({
         }
 
         // Initialize map
-        const map = new window.google.maps.Map(mapRef.current, {
+        // Ref can become null while async geocoding is in-flight.
+        if (cancelled || !mapRef.current) {
+          return
+        }
+        const mapElement = mapRef.current
+        const map = new window.google.maps.Map(mapElement, {
           zoom: 7,
           center: originCoords,
           mapTypeId: window.google.maps.MapTypeId.ROADMAP,
@@ -398,6 +405,7 @@ export function GoogleMapsRoute({
         }
 
         directionsService.route(request, (result: any, status: any) => {
+          if (cancelled) return
           if (status === window.google.maps.DirectionsStatus.OK) {
             directionsRenderer.setDirections(result)
 
@@ -475,6 +483,7 @@ Visit: https://console.cloud.google.com/google/maps-apis`
         // No custom markers needed
       } catch (err: unknown) {
         console.error("Map initialization error:", err)
+        if (cancelled) return
         setError(errorMessage(err, "Failed to initialize map"))
         setIsLoading(false)
       }
@@ -483,6 +492,7 @@ Visit: https://console.cloud.google.com/google/maps-apis`
     initializeMap()
 
     return () => {
+      cancelled = true
       // Cleanup markers
       markersRef.current.forEach((marker) => {
         if (marker) marker.setMap(null)

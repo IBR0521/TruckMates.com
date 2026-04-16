@@ -167,7 +167,7 @@ export default function BillingSettingsPage() {
           </p>
           {paymentRequired && (
             <p className="mt-2 text-sm text-destructive">
-              Your trial has ended or billing is past due. Add payment to continue platform access.
+              Billing is required before access can continue. Add payment to activate your subscription.
             </p>
           )}
         </div>

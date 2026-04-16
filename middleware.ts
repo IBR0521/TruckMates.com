@@ -35,10 +35,12 @@ function fetchWithTimeout(
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isBillingRoute = pathname.startsWith('/dashboard/settings/billing')
+  const isBillingActivationRoute = pathname.startsWith('/billing/activate')
   const isDashboardRoute = pathname.startsWith('/dashboard')
 
   const isProtectedRoute =
     isDashboardRoute ||
+    pathname.startsWith('/billing') ||
     pathname.startsWith('/marketplace/dashboard') ||
     pathname.startsWith('/account-setup') ||
     pathname.startsWith('/portal') ||
@@ -114,24 +116,27 @@ export async function middleware(request: NextRequest) {
         const trialExpired = !!trialEnd && trialEnd.getTime() < Date.now()
         const hasPaidSubscription = !!(subscription as any)?.stripe_subscription_id
 
-        if (!subscription || planName.toLowerCase() === 'free') {
+        if ((!subscription || planName.toLowerCase() === 'free' || !hasPaidSubscription) && !isBillingActivationRoute) {
           const url = request.nextUrl.clone()
-          url.pathname = '/pricing'
-          url.searchParams.set('onboarding', '1')
+          url.pathname = '/billing/activate'
+          url.searchParams.set('required', '1')
           return NextResponse.redirect(url)
         }
 
-        if (
+        const isInactive =
           (status === 'trialing' && trialExpired && !hasPaidSubscription) ||
           status === 'past_due' ||
           status === 'canceled' ||
           status === 'unpaid' ||
           status === 'incomplete'
-        ) {
+
+        if (isInactive) {
           const url = request.nextUrl.clone()
-          url.pathname = '/dashboard/settings/billing'
-          url.searchParams.set('payment_required', '1')
-          return NextResponse.redirect(url)
+          if (!isBillingActivationRoute) {
+            url.pathname = '/billing/activate'
+            url.searchParams.set('required', '1')
+            return NextResponse.redirect(url)
+          }
         }
       }
     }

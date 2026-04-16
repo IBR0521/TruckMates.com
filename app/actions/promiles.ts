@@ -20,6 +20,7 @@ import {
 } from "@/lib/promiles/eia-diesel"
 import { EIA_US_DIESEL_DUOAREA } from "@/lib/promiles/padd-state-map"
 import { stripStaleEnvKeyWarnings } from "@/lib/promiles/strip-trip-env-warnings"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 
 export type TripPlanningEstimate = {
   computed_at: string
@@ -69,6 +70,11 @@ export async function getTripPlanningEstimate(input: {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { data: null, error: ctx.error || "Not authenticated" }
+  }
+
+  const gate = await getCurrentCompanyFeatureAccess("route_optimization")
+  if (!gate.allowed) {
+    return { data: null, error: gate.error || "Route optimization is not available on your current plan." }
   }
 
   const warnings: string[] = []
@@ -169,13 +175,6 @@ export async function getTripPlanningEstimate(input: {
   }
 
   const tollUsd = hereTollUsd
-  if (ctx.companyId && tollUsd !== null) {
-    const { assertMonthlyTollRoutingAllowed, recordBillableApiUsage } = await import("@/app/actions/api-usage")
-    const tq = await assertMonthlyTollRoutingAllowed(ctx.companyId)
-    if (tq.allowed) {
-      void recordBillableApiUsage(ctx.companyId, "tollguru", "toll_cost_estimate")
-    }
-  }
   let tollNote: string | undefined
   if (hereKey && tollUsd == null) {
     tollNote =
@@ -217,6 +216,11 @@ export async function saveTripPlanningEstimateOnLoad(loadId: string, estimate: T
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const gate = await getCurrentCompanyFeatureAccess("route_optimization")
+  if (!gate.allowed) {
+    return { error: gate.error || "Route optimization is not available on your current plan.", data: null }
   }
 
   const { error } = await supabase

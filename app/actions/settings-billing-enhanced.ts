@@ -39,14 +39,17 @@ type SubscriptionRow = {
 function mapSubscriptionsToBillingView(row: SubscriptionRow) {
   const planRaw = row.subscription_plans
   const plan = Array.isArray(planRaw) ? planRaw[0] : planRaw
+  const hasPaidSubscription = !!row.stripe_subscription_id
   const isYearly =
+    hasPaidSubscription &&
     !!row.stripe_price_id &&
     !!plan?.stripe_price_id_yearly &&
     row.stripe_price_id === plan.stripe_price_id_yearly
   const billing_cycle = isYearly ? "yearly" : "monthly"
   const planName = (plan?.name || "free").toLowerCase()
+  const effectivePlanName = hasPaidSubscription ? planName : "free"
   const amount =
-    planName === "free"
+    effectivePlanName === "free"
       ? 0
       : isYearly
         ? Number(plan?.price_yearly ?? 0)
@@ -55,18 +58,18 @@ function mapSubscriptionsToBillingView(row: SubscriptionRow) {
   return {
     id: row.id,
     company_id: row.company_id,
-    plan_name: planName,
-    plan_display_name: plan?.display_name ?? "Free",
-    status: row.status,
+    plan_name: effectivePlanName,
+    plan_display_name: effectivePlanName === "free" ? "Free" : (plan?.display_name ?? "Free"),
+    status: hasPaidSubscription ? row.status : "inactive",
     billing_cycle,
     amount,
     currency: "USD",
     currency_symbol: "$",
     start_date: row.current_period_start ?? row.created_at,
-    end_date: row.current_period_end,
+    end_date: hasPaidSubscription ? row.current_period_end : null,
     trial_end_date: row.trial_end,
     cancelled_at: row.canceled_at,
-    auto_renew: !!row.stripe_subscription_id && !row.cancel_at_period_end,
+    auto_renew: hasPaidSubscription && !row.cancel_at_period_end,
     features: plan?.features ?? {},
     max_users: plan?.max_users,
     max_drivers: plan?.max_drivers,

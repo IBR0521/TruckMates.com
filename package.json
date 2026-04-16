@@ -21,7 +21,9 @@
     "dev:open": "npm run dev:platform",
     "lint": "eslint .",
     "start": "next start",
-    "e2e:smoke": "node scripts/truckmates-smoke.mjs"
+    "e2e:smoke": "node scripts/truckmates-smoke.mjs",
+    "eld:generate-test-csv": "node scripts/generate-eld-test-csv.mjs",
+    "eld:generate-fmcsa-output": "node scripts/generate-fmcsa-eld-output.mjs"
   },
   "dependencies": {
     "@here/flexpolyline": "^0.1.0",

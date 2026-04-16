@@ -1,6 +1,8 @@
 import { getLoads } from "@/app/actions/loads"
 import { LoadsInitialDataProvider } from "@/components/dashboard/initial-list-data-contexts"
 
+export const dynamic = "force-dynamic"
+
 export default async function LoadsLayout({
   children,
 }: {

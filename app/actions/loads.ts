@@ -43,7 +43,7 @@ const LOAD_DETAIL_SELECT = `
 `
 
 const LOAD_LIST_SELECT =
-  "id, shipment_number, origin, destination, status, driver_id, truck_id, load_date, estimated_delivery, created_at, company_name, value, contents, delivery_type, total_delivery_points, weight, weight_kg, invoice_id"
+  "id, shipment_number, origin, destination, status, driver_id, truck_id, load_date, estimated_delivery, created_at, company_name, value, contents, delivery_type, total_delivery_points, weight, weight_kg"
 
 // Helper function to send notifications in background (non-blocking)
 async function sendNotificationsForLoadUpdate(loadData: LoadUpdateNotificationPayload) {
@@ -1202,10 +1202,20 @@ export async function updateLoad(
     }
   }
 
-  // Send notifications to company users if load was updated (non-blocking)
-  if (data) {
+  // Send notifications only for meaningful updates (status/origin/destination), not every edit.
+  // This prevents duplicate/noisy "status pending" notifications when only assignment fields changed.
+  const shouldNotifyLoadUpdate =
+    !!updateData.status || !!updateData.origin || !!updateData.destination
+  if (data && shouldNotifyLoadUpdate) {
+    const notificationPayload: LoadUpdateNotificationPayload = {
+      driver_id: data.driver_id,
+      shipment_number: data.shipment_number,
+      status: updateData.status ?? undefined,
+      origin: updateData.origin ?? undefined,
+      destination: updateData.destination ?? undefined,
+    }
     // Don't await - send notifications in background
-    sendNotificationsForLoadUpdate(data).catch((error) => {
+    sendNotificationsForLoadUpdate(notificationPayload).catch((error) => {
       Sentry.captureException(error)
     })
   }

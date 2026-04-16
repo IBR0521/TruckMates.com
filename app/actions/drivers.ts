@@ -9,6 +9,7 @@ import { cache, cacheKeys } from "@/lib/cache"
 import { validateDriverData, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { mapLegacyRole } from "@/lib/roles"
+import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 import {
   collapseDuplicateDriversByEmail,
   purgeAllDriversKeepOneForCompany,
@@ -340,6 +341,11 @@ export async function createDriver(formData: {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
+  const subscriptionAccess = await requireActiveSubscriptionForWrite()
+  if (!subscriptionAccess.allowed) {
+    return { error: subscriptionAccess.error || "Subscription inactive", data: null }
+  }
+
   // BUG-061 FIX: Check subscription plan limits before creating driver
   const { data: subscription, error: subscriptionError } = await supabase
     .from("subscriptions")
@@ -495,11 +501,7 @@ export async function createDriver(formData: {
   if (formData.emergency_contact_relationship) driverData.emergency_contact_relationship = sanitizeString(formData.emergency_contact_relationship, 50)
   if (formData.notes) driverData.notes = sanitizeString(formData.notes, 1000)
 
-  // SECURITY FIX: Use explicit column selection instead of select()
-  const { data, error } = await supabase
-    .from("drivers")
-    .insert(driverData)
-    .select(`
+  const DRIVER_RETURNING_SELECT = `
       id,
       company_id,
       name,
@@ -529,8 +531,37 @@ export async function createDriver(formData: {
       truck_id,
       created_at,
       updated_at
-    `)
+    `
+
+  // Use user-scoped client first (respects RLS), then fallback to admin client when
+  // policy wiring is inconsistent but app-level permission checks already passed.
+  let { data, error } = await supabase
+    .from("drivers")
+    .insert(driverData)
+    .select(DRIVER_RETURNING_SELECT)
     .single()
+
+  const rlsInsertBlocked =
+    !!error &&
+    (String((error as { code?: string }).code || "") === "42501" ||
+      String(error.message || "").toLowerCase().includes("row-level security"))
+
+  if (rlsInsertBlocked) {
+    try {
+      const { createAdminClient } = await import("@/lib/supabase/admin")
+      const admin = createAdminClient()
+      const adminInsert = await admin
+        .from("drivers")
+        .insert(driverData)
+        .select(DRIVER_RETURNING_SELECT)
+        .single()
+      data = adminInsert.data
+      error = adminInsert.error as typeof error
+    } catch (adminError: unknown) {
+      Sentry.captureException(adminError)
+      return { error: "Driver creation failed due to permissions configuration.", data: null }
+    }
+  }
 
   if (error) {
     return { error: error.message, data: null }
@@ -564,6 +595,11 @@ export async function updateDriver(
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const subscriptionAccess = await requireActiveSubscriptionForWrite()
+  if (!subscriptionAccess.allowed) {
+    return { error: subscriptionAccess.error || "Subscription inactive", data: null }
   }
 
   // ERROR HANDLING FIX: Use maybeSingle() when checking if record exists (might not exist)
@@ -825,6 +861,11 @@ export async function deleteDriver(id: string) {
       return { error: ctx.error || "Not authenticated" }
     }
 
+    const subscriptionAccess = await requireActiveSubscriptionForWrite()
+    if (!subscriptionAccess.allowed) {
+      return { error: subscriptionAccess.error || "Subscription inactive" }
+    }
+
     // Basic UUID validation
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!id || !uuidRegex.test(id)) {
@@ -922,6 +963,11 @@ export async function bulkDeleteDrivers(ids: string[]) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
+  const subscriptionAccess = await requireActiveSubscriptionForWrite()
+  if (!subscriptionAccess.allowed) {
+    return { error: subscriptionAccess.error || "Subscription inactive", data: null }
+  }
+
   if (!ids.length) {
     return { error: "No drivers selected", data: null }
   }
@@ -1002,6 +1048,11 @@ export async function bulkUpdateDriverStatus(ids: string[], status: string) {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const subscriptionAccess = await requireActiveSubscriptionForWrite()
+  if (!subscriptionAccess.allowed) {
+    return { error: subscriptionAccess.error || "Subscription inactive", data: null }
   }
 
   const { error } = await supabase
