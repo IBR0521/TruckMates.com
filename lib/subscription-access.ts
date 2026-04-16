@@ -1,6 +1,5 @@
 "use server"
 
-import { cache } from "react"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -14,7 +13,7 @@ export type CompanySubscriptionAccess = {
   reason: string | null
 }
 
-async function getCompanySubscriptionAccessInternal(): Promise<CompanySubscriptionAccess> {
+export async function getCompanySubscriptionAccess(): Promise<CompanySubscriptionAccess> {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return {
@@ -100,8 +99,6 @@ async function getCompanySubscriptionAccessInternal(): Promise<CompanySubscripti
     reason: null,
   }
 }
-
-export const getCompanySubscriptionAccess = cache(getCompanySubscriptionAccessInternal)
 
 export async function requireActiveSubscriptionForWrite(): Promise<{
   allowed: boolean

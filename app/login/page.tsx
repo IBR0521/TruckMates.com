@@ -43,14 +43,21 @@ export default function LoginPage() {
             ? new URLSearchParams(window.location.search).get("next")
             : null
         const safeNext = nextParam && nextParam.startsWith("/") ? nextParam : "/dashboard"
-        
-        // Get company type and redirect accordingly
+
         try {
-          const response = await fetch("/api/get-company-type")
+          const response = await fetch(`/api/auth/post-login-route?next=${encodeURIComponent(safeNext)}`, {
+            method: "GET",
+            cache: "no-store",
+          })
+          if (!response.ok) {
+            router.push(safeNext)
+            return
+          }
           const result = await response.json()
-          
-          // Marketplace is intentionally disabled for now; always send users to dashboard.
-          router.push(safeNext)
+          const target = typeof result?.redirectTo === "string" && result.redirectTo.startsWith("/")
+            ? result.redirectTo
+            : safeNext
+          router.push(target)
         } catch {
           router.push(safeNext)
         }

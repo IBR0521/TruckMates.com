@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-import { errorMessage } from "@/lib/error-message"
 
 import { useState, useEffect } from "react"
 import { Menu, LogOut } from "lucide-react"
@@ -14,8 +13,6 @@ import { NotificationsCenter } from "@/components/notifications-center"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { getCurrentUser } from "@/lib/auth/server"
-import { getSetupStatus } from "@/app/actions/account-setup"
 // AI Widget temporarily disabled - not ready for production
 // const FloatingAIWidget = dynamic(
 //   () => import("@/components/truckmates-ai/floating-widget"),
@@ -85,87 +82,6 @@ export default function DashboardLayoutClient({
 
     return () => window.removeEventListener("resize", resizeHandler)
   }, [mounted]) // V3-005 FIX: Only depend on mounted, not sidebarCollapsed
-
-  // Check if user has a company_id, redirect to account setup if not
-  useEffect(() => {
-    let isMounted = true
-    let hasChecked = false
-    
-    async function checkCompanyAccess() {
-      // Prevent multiple checks
-      if (hasChecked || !isMounted) return
-      
-      try {
-        // Skip check for specific pages that should be accessible
-        if (typeof window !== "undefined") {
-          const pathname = window.location.pathname
-          // Skip check on account setup and other admin pages
-          if (
-            pathname.includes("/account-setup") ||
-            pathname.includes("/dashboard/settings") ||
-            pathname.includes("/register") ||
-            pathname.includes("/login")
-          ) {
-            hasChecked = true
-            return
-          }
-        }
-
-        if (!isMounted) return
-
-        const userResult = await getCurrentUser()
-        if (userResult.data && isMounted) {
-          const user = userResult.data
-          const { mapLegacyRole } = await import("@/lib/roles")
-          const mappedRole = mapLegacyRole((user as { role?: string }).role)
-          // For Super Admin and operations_manager roles, check if setup is complete
-          if (mappedRole === "super_admin" || mappedRole === "operations_manager") {
-            // Check if account setup is complete
-            // CRITICAL FIX: Always fetch fresh data, don't rely on cache
-            const setupResult = await getSetupStatus()
-            
-            // Only redirect if:
-            // 1. We got valid data
-            // 2. Setup is explicitly NOT complete (not just missing/null)
-            // 3. Component is still mounted
-            if (setupResult.data && setupResult.data.setup_complete === false && isMounted) {
-              // Setup not complete - redirect to setup wizard
-              hasChecked = true
-              router.push("/account-setup/manager")
-              return
-            }
-            
-            // If setup is complete or we couldn't determine status, allow access
-            hasChecked = true
-            return
-          }
-          
-          // For other roles, check if they have a company_id
-          if (!user.company_id && isMounted) {
-            hasChecked = true
-            // Employees without company should be invited or join via invitation
-            // Don't redirect them to setup (they can't set up a company)
-            return
-          }
-        }
-        hasChecked = true
-      } catch (error: unknown) {
-        // Only log errors that aren't related to missing configuration
-        const accessErr = errorMessage(error) || String(error)
-        if (!accessErr.includes("Missing Supabase") && !accessErr.includes("configuration")) {
-          console.error("Error checking company access:", error)
-        }
-        hasChecked = true
-      }
-    }
-    
-    if (mounted) {
-      checkCompanyAccess()
-      return () => {
-        isMounted = false
-      }
-    }
-  }, [mounted]) // Removed router from dependencies to prevent re-runs
 
   return (
     <div className="flex h-screen w-full bg-background text-foreground overflow-hidden" data-dashboard-layout>

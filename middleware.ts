@@ -34,8 +34,8 @@ function fetchWithTimeout(
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
-  const isBillingRoute = pathname.startsWith('/dashboard/settings/billing')
   const isBillingActivationRoute = pathname.startsWith('/billing/activate')
+  const isAccountSetupRoute = pathname.startsWith('/account-setup')
   const isDashboardRoute = pathname.startsWith('/dashboard')
 
   const isProtectedRoute =
@@ -88,8 +88,8 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // Enforce subscription onboarding/billing for dashboard access.
-    if (isDashboardRoute && !isBillingRoute) {
+    // Enforce setup + subscription gates.
+    if (isDashboardRoute || isAccountSetupRoute) {
       const { data: profile } = await supabase
         .from('users')
         .select('role, company_id')
@@ -97,7 +97,38 @@ export async function middleware(request: NextRequest) {
         .maybeSingle()
 
       const isManager = ['super_admin', 'operations_manager'].includes(String(profile?.role || ''))
-      if (profile?.company_id && isManager) {
+      if (profile?.company_id) {
+        // Setup flow is manager-only.
+        if (isManager) {
+          const { data: company } = await supabase
+            .from('companies')
+            .select('setup_complete')
+            .eq('id', profile.company_id)
+            .maybeSingle()
+          const setupComplete = Boolean((company as { setup_complete?: boolean } | null)?.setup_complete)
+
+          if (!setupComplete && isDashboardRoute) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/account-setup/manager'
+            return NextResponse.redirect(url)
+          }
+
+          if (setupComplete && isAccountSetupRoute) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/dashboard'
+            return NextResponse.redirect(url)
+          }
+        } else if (isAccountSetupRoute) {
+          // Non-managers should never use manager setup route.
+          const url = request.nextUrl.clone()
+          url.pathname = '/dashboard'
+          return NextResponse.redirect(url)
+        }
+
+        if (!isDashboardRoute) {
+          return response
+        }
+
         const { data: subscription } = await supabase
           .from('subscriptions')
           .select(`
@@ -116,27 +147,17 @@ export async function middleware(request: NextRequest) {
         const trialExpired = !!trialEnd && trialEnd.getTime() < Date.now()
         const hasPaidSubscription = !!(subscription as any)?.stripe_subscription_id
 
-        if ((!subscription || planName.toLowerCase() === 'free' || !hasPaidSubscription) && !isBillingActivationRoute) {
+        const hasSubscriptionAccess =
+          !!subscription &&
+          planName.toLowerCase() !== 'free' &&
+          hasPaidSubscription &&
+          (status === 'active' || (status === 'trialing' && !trialExpired))
+
+        if (!hasSubscriptionAccess && !isBillingActivationRoute) {
           const url = request.nextUrl.clone()
           url.pathname = '/billing/activate'
           url.searchParams.set('required', '1')
           return NextResponse.redirect(url)
-        }
-
-        const isInactive =
-          (status === 'trialing' && trialExpired && !hasPaidSubscription) ||
-          status === 'past_due' ||
-          status === 'canceled' ||
-          status === 'unpaid' ||
-          status === 'incomplete'
-
-        if (isInactive) {
-          const url = request.nextUrl.clone()
-          if (!isBillingActivationRoute) {
-            url.pathname = '/billing/activate'
-            url.searchParams.set('required', '1')
-            return NextResponse.redirect(url)
-          }
         }
       }
     }

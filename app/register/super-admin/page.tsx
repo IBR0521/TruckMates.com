@@ -75,7 +75,8 @@ function SuperAdminRegisterForm() {
         duration: 5000,
       })
       setTimeout(() => {
-        router.push("/account-setup/manager?registered=true")
+        const email = encodeURIComponent(formData.email.trim())
+        router.push(`/register/check-email?email=${email}&next=${encodeURIComponent("/pricing?onboarding=1")}`)
       }, 500)
     } catch (error: unknown) {
       toast.error(errorMessage(error, "An error occurred. Please try again."))

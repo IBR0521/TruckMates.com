@@ -82,7 +82,8 @@ function EmployeeRegisterForm() {
         duration: 5000,
       })
       setTimeout(() => {
-        router.push("/dashboard")
+        const email = encodeURIComponent(formData.email.trim())
+        router.push(`/register/check-email?email=${email}&next=${encodeURIComponent("/dashboard")}`)
       }, 500)
     } catch (error: unknown) {
       toast.error(errorMessage(error, "An error occurred. Please try again."))
