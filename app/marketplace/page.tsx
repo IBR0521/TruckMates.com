@@ -499,6 +499,9 @@ export default function MarketplacePage() {
               <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary">
                 Terms
               </Link>
+              <Link href="/refund-policy" className="text-sm text-muted-foreground hover:text-primary">
+                Refund Policy
+              </Link>
             </div>
           </div>
         </div>

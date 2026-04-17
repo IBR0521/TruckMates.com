@@ -273,6 +273,7 @@ export default function PricingPage() {
             <Link href="/" className="text-sm text-muted-foreground hover:text-primary">Home</Link>
             <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary">Terms</Link>
             <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary">Privacy</Link>
+            <Link href="/refund-policy" className="text-sm text-muted-foreground hover:text-primary">Refund Policy</Link>
           </div>
         </div>
       </footer>

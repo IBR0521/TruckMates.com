@@ -319,6 +319,9 @@ export default function LandingPageBelowFold() {
               <Link href="/terms" className="text-sm text-muted-foreground transition hover:text-foreground">
                 Terms
               </Link>
+              <Link href="/refund-policy" className="text-sm text-muted-foreground transition hover:text-foreground">
+                Refund Policy
+              </Link>
             </div>
           </div>
         </div>
