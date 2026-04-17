@@ -1,11 +1,43 @@
 "use server"
 
-// Plan-based feature gates are not wired here yet — navigation uses RBAC (`lib/feature-permissions`).
-// Billing state lives in `subscriptions` + `subscription_plans`; seat limits are enforced in server actions.
+import { checkViewPermission } from "@/lib/server-permissions"
+import { getCurrentCompanyFeatureAccess, type PlanFeature } from "@/lib/plan-gates"
+import type { FeatureCategory } from "@/lib/feature-permissions"
+
 export const FEATURE_ACCESS = {
   all: ["all"],
 }
 
-export async function checkFeatureAccess(_feature: string) {
+const PREMIUM_FEATURE_BY_SLUG: Record<string, PlanFeature> = {
+  route_optimization: "route_optimization",
+  geofencing: "geofencing",
+  predictive_maintenance: "predictive_maintenance",
+  crm: "crm",
+  api_keys: "api_keys",
+  quickbooks: "quickbooks",
+  driver_scorecards: "driver_scorecards",
+}
+
+/**
+ * Server-side feature access helper used by pages/actions that need explicit checks.
+ * Combines RBAC visibility with plan-based premium feature gates.
+ */
+export async function checkFeatureAccess(feature: string) {
+  const view = await checkViewPermission(feature as FeatureCategory)
+  if (!view.allowed) {
+    return { allowed: false, error: view.error || "Access denied" }
+  }
+
+  const premiumFeature = PREMIUM_FEATURE_BY_SLUG[feature]
+  if (premiumFeature) {
+    const planAccess = await getCurrentCompanyFeatureAccess(premiumFeature)
+    if (!planAccess.allowed) {
+      return {
+        allowed: false,
+        error: planAccess.error || `${feature} is not available on your current plan.`,
+      }
+    }
+  }
+
   return { allowed: true, error: null }
 }

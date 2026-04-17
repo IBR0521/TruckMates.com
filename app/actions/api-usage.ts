@@ -9,6 +9,7 @@ import {
   monthlyLimitForPlan,
   type GoogleUsageCategory,
 } from "@/lib/api-usage-plan-limits"
+import { isDemoCompanyById } from "@/lib/demo-company"
 
 function monthKey(d = new Date()) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`
@@ -187,6 +188,14 @@ export async function assertMonthlyGoogleMapsActionAllowed(
   companyId: string,
   action: string,
 ): Promise<{ allowed: boolean; reason?: string }> {
+  const demoCompany = await isDemoCompanyById(companyId)
+  if (demoCompany) {
+    return {
+      allowed: false,
+      reason: "API access is disabled for demo companies.",
+    }
+  }
+
   const category = mapUsageActionToCategory(action)
   if (!category || category === "toll_routing") return { allowed: true }
 
@@ -208,6 +217,14 @@ export async function assertMonthlyGoogleMapsActionAllowed(
 export async function assertMonthlyTollRoutingAllowed(
   companyId: string,
 ): Promise<{ allowed: boolean; reason?: string }> {
+  const demoCompany = await isDemoCompanyById(companyId)
+  if (demoCompany) {
+    return {
+      allowed: false,
+      reason: "API access is disabled for demo companies.",
+    }
+  }
+
   const category: GoogleUsageCategory = "toll_routing"
   const plan = await activePlanNameForCompany(companyId)
   const limit = monthlyLimitForPlan(plan, category)
@@ -229,6 +246,9 @@ export async function assertMonthlyTollRoutingAllowed(
  */
 export async function recordBillableGoogleMapsUsage(companyId: string, action: string) {
   try {
+    const demoCompany = await isDemoCompanyById(companyId)
+    if (demoCompany) return
+
     const admin = createAdminClient()
     const { error } = await admin.from("api_usage_log").insert({
       company_id: companyId,
@@ -249,6 +269,9 @@ export async function recordBillableGoogleMapsUsage(companyId: string, action: s
 /** Generic usage logger for non-Google providers (e.g. TollGuru). Quota notifications use `mapBillableUsageToCategory`. */
 export async function recordBillableApiUsage(companyId: string, apiName: string, action: string) {
   try {
+    const demoCompany = await isDemoCompanyById(companyId)
+    if (demoCompany) return
+
     const admin = createAdminClient()
     const { error } = await admin.from("api_usage_log").insert({
       company_id: companyId,

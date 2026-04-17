@@ -8,6 +8,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
 import { sendNotification } from "./notifications"
 import { handleDbError } from "@/lib/db-helpers"
+import { mapLegacyRole } from "@/lib/roles"
 import * as Sentry from "@sentry/nextjs"
 
 /**
@@ -432,7 +433,7 @@ export async function createAlert(formData: {
     }
 
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
@@ -809,6 +810,55 @@ export async function processAlertEscalations() {
   }
 }
 
+async function validateAlertMutationAccess(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  alertId: string,
+  companyId: string,
+  userId: string,
+): Promise<{ allowed: boolean; role: string; driverId: string | null; error: string | null }> {
+  const { data: userRow, error: userError } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", userId)
+    .eq("company_id", companyId)
+    .maybeSingle()
+  if (userError || !userRow) {
+    return { allowed: false, role: "driver", driverId: null, error: userError?.message || "User not found" }
+  }
+
+  const role = mapLegacyRole(userRow.role)
+  const elevatedRoles = new Set(["super_admin", "operations_manager"])
+  if (elevatedRoles.has(role)) {
+    return { allowed: true, role, driverId: null, error: null }
+  }
+
+  if (role !== "driver") {
+    return { allowed: false, role, driverId: null, error: "Only managers can acknowledge or resolve company-wide alerts." }
+  }
+
+  const driverId = await resolveDriverIdForSessionUser(supabase, companyId, userId, role)
+  if (!driverId) {
+    return { allowed: false, role, driverId: null, error: "Driver profile not found for your account." }
+  }
+
+  const { data: alertRow, error: alertError } = await supabase
+    .from("alerts")
+    .select("id, driver_id")
+    .eq("id", alertId)
+    .eq("company_id", companyId)
+    .maybeSingle()
+
+  if (alertError || !alertRow) {
+    return { allowed: false, role, driverId, error: alertError?.message || "Alert not found" }
+  }
+
+  if (alertRow.driver_id !== driverId) {
+    return { allowed: false, role, driverId, error: "You can only modify alerts assigned to you." }
+  }
+
+  return { allowed: true, role, driverId, error: null }
+}
+
 /**
  * Acknowledge alert
  */
@@ -823,21 +873,31 @@ export async function acknowledgeAlert(id: string) {
     }
 
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  const userId = ctx.userId
+  if (ctx.error || !ctx.companyId || !userId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
-  const { data, error } = await supabase
+  const access = await validateAlertMutationAccess(supabase, id, ctx.companyId, userId)
+  if (!access.allowed) {
+    return { error: access.error || "Access denied", data: null }
+  }
+
+  let updateQuery = supabase
     .from("alerts")
     .update({
-      status: 'acknowledged',
+      status: "acknowledged",
       acknowledged_by: ctx.userId!,
       acknowledged_at: new Date().toISOString(),
     })
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .select()
-    .single()
+
+  if (access.role === "driver" && access.driverId) {
+    updateQuery = updateQuery.eq("driver_id", access.driverId)
+  }
+
+  const { data, error } = await updateQuery.select().single()
 
   if (error) {
     return { error: error.message, data: null }
@@ -865,21 +925,31 @@ export async function resolveAlert(id: string) {
     }
 
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  const userId = ctx.userId
+  if (ctx.error || !ctx.companyId || !userId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
-  const { data, error } = await supabase
+  const access = await validateAlertMutationAccess(supabase, id, ctx.companyId, userId)
+  if (!access.allowed) {
+    return { error: access.error || "Access denied", data: null }
+  }
+
+  let resolveQuery = supabase
     .from("alerts")
     .update({
-      status: 'resolved',
+      status: "resolved",
       resolved_by: ctx.userId!, // FIXED: Record who resolved the alert
       resolved_at: new Date().toISOString(),
     })
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-    .select()
-    .single()
+
+  if (access.role === "driver" && access.driverId) {
+    resolveQuery = resolveQuery.eq("driver_id", access.driverId)
+  }
+
+  const { data, error } = await resolveQuery.select().single()
 
   if (error) {
     const result = handleDbError(error, null)

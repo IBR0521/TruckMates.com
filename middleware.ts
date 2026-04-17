@@ -1,9 +1,65 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { mapLegacyRole } from '@/lib/roles'
+import { canViewFeature, type FeatureCategory } from '@/lib/feature-permissions'
 
 /** Avoid hanging forever when Supabase is unreachable or misconfigured (browser spinner on /dashboard/*). */
 const SUPABASE_MIDDLEWARE_FETCH_MS = 12_000
+
+const DASHBOARD_ROUTE_FEATURES: Array<{ pattern: RegExp; feature: FeatureCategory }> = [
+  { pattern: /^\/dashboard\/settings\/account(\/|$)/, feature: 'dashboard' },
+  { pattern: /^\/dashboard\/drivers(\/|$)/, feature: 'drivers' },
+  { pattern: /^\/dashboard\/trucks(\/|$)/, feature: 'vehicles' },
+  { pattern: /^\/dashboard\/routes(\/|$)/, feature: 'routes' },
+  { pattern: /^\/dashboard\/geofencing(\/|$)/, feature: 'routes' },
+  { pattern: /^\/dashboard\/loads(\/|$)/, feature: 'loads' },
+  { pattern: /^\/dashboard\/dispatches(\/|$)/, feature: 'dispatch' },
+  { pattern: /^\/dashboard\/fleet-map(\/|$)/, feature: 'fleet_map' },
+  { pattern: /^\/dashboard\/address-book(\/|$)/, feature: 'address_book' },
+  { pattern: /^\/dashboard\/crm(\/|$)/, feature: 'crm' },
+  { pattern: /^\/dashboard\/customers(\/|$)/, feature: 'crm' },
+  { pattern: /^\/dashboard\/vendors(\/|$)/, feature: 'crm' },
+  { pattern: /^\/dashboard\/accounting(\/|$)/, feature: 'accounting' },
+  { pattern: /^\/dashboard\/maintenance(\/|$)/, feature: 'maintenance' },
+  { pattern: /^\/dashboard\/dvir(\/|$)/, feature: 'dvir' },
+  { pattern: /^\/dashboard\/eld(\/|$)/, feature: 'eld' },
+  { pattern: /^\/dashboard\/ifta(\/|$)/, feature: 'ifta' },
+  { pattern: /^\/dashboard\/ai(\/|$)/, feature: 'ai_documents' },
+  { pattern: /^\/dashboard\/reports(\/|$)/, feature: 'reports' },
+  { pattern: /^\/dashboard\/documents(\/|$)/, feature: 'documents' },
+  { pattern: /^\/dashboard\/bols(\/|$)/, feature: 'bol' },
+  { pattern: /^\/dashboard\/alerts(\/|$)/, feature: 'alerts' },
+  { pattern: /^\/dashboard\/notifications(\/|$)/, feature: 'alerts' },
+  { pattern: /^\/dashboard\/reminders(\/|$)/, feature: 'reminders' },
+  { pattern: /^\/dashboard\/settings\/users(\/|$)/, feature: 'employees' },
+  { pattern: /^\/dashboard\/settings(\/|$)/, feature: 'settings' },
+  { pattern: /^\/dashboard\/marketplace(\/|$)/, feature: 'marketplace' },
+  { pattern: /^\/dashboard\/fuel-analytics(\/|$)/, feature: 'fuel_analytics' },
+  { pattern: /^\/dashboard\/all-features(\/|$)/, feature: 'dashboard' },
+]
+
+function featureForDashboardPath(pathname: string): FeatureCategory | null {
+  if (pathname === '/dashboard' || pathname === '/dashboard/') return 'dashboard'
+  for (const route of DASHBOARD_ROUTE_FEATURES) {
+    if (route.pattern.test(pathname)) return route.feature
+  }
+  return null
+}
+
+function hasPlanFeature(planName: string, feature: 'route_optimization' | 'predictive_maintenance' | 'geofencing' | 'crm' | 'api_keys'): boolean {
+  const plan = planName.toLowerCase()
+  if (plan === 'enterprise' || plan === 'professional') return true
+  return false
+}
+
+function requiredPlanFeatureForPath(pathname: string): 'route_optimization' | 'predictive_maintenance' | 'geofencing' | 'crm' | 'api_keys' | null {
+  if (/^\/dashboard\/routes\/optimize(\/|$)/.test(pathname)) return 'route_optimization'
+  if (/^\/dashboard\/maintenance\/predictive(\/|$)/.test(pathname)) return 'predictive_maintenance'
+  if (/^\/dashboard\/geofencing(\/|$)/.test(pathname)) return 'geofencing'
+  if (/^\/dashboard\/crm(\/|$)/.test(pathname)) return 'crm'
+  if (/^\/dashboard\/settings\/api-keys(\/|$)/.test(pathname)) return 'api_keys'
+  return null
+}
 
 function fetchWithTimeout(
   input: RequestInfo | URL,
@@ -96,17 +152,36 @@ export async function middleware(request: NextRequest) {
         .eq('id', user.id)
         .maybeSingle()
 
-      const isManager = ['super_admin', 'operations_manager'].includes(String(profile?.role || ''))
+      const currentRole = mapLegacyRole(profile?.role)
+      const isManager = ['super_admin', 'operations_manager'].includes(String(currentRole || ''))
       if (profile?.company_id) {
+        const { data: company } = await supabase
+          .from('companies')
+          .select('setup_complete, setup_data, name')
+          .eq('id', profile.company_id)
+          .maybeSingle()
+
+        const setupComplete = Boolean((company as { setup_complete?: boolean } | null)?.setup_complete)
+        const companyName = String((company as { name?: string } | null)?.name || '').toLowerCase()
+        const setupData = ((company as { setup_data?: Record<string, unknown> | null } | null)?.setup_data || {}) as Record<string, unknown>
+        const rawDemoFlag = setupData.is_demo
+        const isDemoCompany =
+          rawDemoFlag === true ||
+          String(rawDemoFlag).toLowerCase() === 'true' ||
+          companyName.includes('demo logistics company')
+
+        if (isDemoCompany) {
+          // Demo users should never be blocked by paid subscription gate.
+          if (isBillingActivationRoute) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/dashboard'
+            return NextResponse.redirect(url)
+          }
+          return response
+        }
+
         // Setup flow is manager-only.
         if (isManager) {
-          const { data: company } = await supabase
-            .from('companies')
-            .select('setup_complete')
-            .eq('id', profile.company_id)
-            .maybeSingle()
-          const setupComplete = Boolean((company as { setup_complete?: boolean } | null)?.setup_complete)
-
           if (!setupComplete && isDashboardRoute) {
             const url = request.nextUrl.clone()
             url.pathname = '/account-setup/manager'
@@ -127,6 +202,20 @@ export async function middleware(request: NextRequest) {
 
         if (!isDashboardRoute) {
           return response
+        }
+
+        const requiredFeature = featureForDashboardPath(pathname)
+        if (!requiredFeature) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/dashboard'
+          url.searchParams.set('denied', 'unknown-route')
+          return NextResponse.redirect(url)
+        }
+        if (!canViewFeature(currentRole, requiredFeature)) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/dashboard'
+          url.searchParams.set('denied', requiredFeature)
+          return NextResponse.redirect(url)
         }
 
         const { data: subscription } = await supabase
@@ -152,6 +241,14 @@ export async function middleware(request: NextRequest) {
           planName.toLowerCase() !== 'free' &&
           hasPaidSubscription &&
           (status === 'active' || (status === 'trialing' && !trialExpired))
+
+        const requiredPlanFeature = requiredPlanFeatureForPath(pathname)
+        if (requiredPlanFeature && !hasPlanFeature(planName, requiredPlanFeature)) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/dashboard/settings/billing'
+          url.searchParams.set('upgrade', requiredPlanFeature)
+          return NextResponse.redirect(url)
+        }
 
         if (!hasSubscriptionAccess && !isBillingActivationRoute) {
           const url = request.nextUrl.clone()

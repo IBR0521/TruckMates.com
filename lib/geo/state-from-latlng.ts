@@ -1,10 +1,10 @@
 import { errorMessage } from "@/lib/error-message"
+import { getCachedApiResult, setCachedApiResult } from "@/lib/api-protection"
 
 /**
  * Reverse-geocode lat/lng → US state code using Google Geocoding API.
  * Server-only; uses same pattern as IFTA state crossing (cached per ~100m cell).
  */
-const cache = new Map<string, { state_code: string; timestamp: number }>()
 const TTL_MS = 24 * 60 * 60 * 1000 // 24h
 const PRECISION = 0.05 // ~5km — good enough for state boundaries
 
@@ -18,8 +18,12 @@ export async function getStateCodeFromLatLng(
   apiKey: string
 ): Promise<{ state_code: string | null; error: string | null }> {
   const key = cacheKey(lat, lng)
-  const hit = cache.get(key)
-  if (hit && Date.now() - hit.timestamp < TTL_MS) {
+  const cacheKeyName = `geo:state:${key}`
+  const hit = await getCachedApiResult<{ state_code: string | null; error: string | null }>(
+    cacheKeyName,
+    Math.floor(TTL_MS / 1000),
+  )
+  if (hit?.state_code) {
     return { state_code: hit.state_code, error: null }
   }
 
@@ -37,7 +41,11 @@ export async function getStateCodeFromLatLng(
     for (const component of result.address_components || []) {
       if (component.types?.includes("administrative_area_level_1")) {
         const code = component.short_name as string
-        cache.set(key, { state_code: code, timestamp: Date.now() })
+        await setCachedApiResult(
+          cacheKeyName,
+          { state_code: code, error: null },
+          Math.floor(TTL_MS / 1000),
+        )
         return { state_code: code, error: null }
       }
     }

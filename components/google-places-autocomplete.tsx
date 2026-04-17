@@ -198,6 +198,11 @@ export function GooglePlacesAutocomplete({
             setOpen(false)
             return
           }
+          void recordClientPlacesUsageForSession("autocomplete").then((rec) => {
+            if (!rec.allowed && rec.reason) {
+              toast.error(rec.reason)
+            }
+          })
           setPredictions(res)
           setOpen(true)
         })

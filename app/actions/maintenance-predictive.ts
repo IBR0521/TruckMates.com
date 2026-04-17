@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { checkCreatePermission } from "@/lib/server-permissions"
+import { checkCreatePermission, checkViewPermission } from "@/lib/server-permissions"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 import { createMaintenance } from "./maintenance"
 
@@ -22,6 +22,11 @@ async function ensurePredictiveMaintenanceAccess() {
  * Predict maintenance needs based on truck usage, mileage, and maintenance history
  */
 export async function predictMaintenanceNeeds(truckId?: string) {
+  const viewPermission = await checkViewPermission("maintenance")
+  if (!viewPermission.allowed) {
+    return { error: viewPermission.error || "You don't have permission to view maintenance", data: null }
+  }
+
   const access = await ensurePredictiveMaintenanceAccess()
   if (!access.allowed) {
     return { error: access.error, data: null }

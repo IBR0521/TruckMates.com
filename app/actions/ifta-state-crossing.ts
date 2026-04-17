@@ -4,6 +4,8 @@ import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { isDemoCompanyById } from "@/lib/demo-company"
+import { getCachedApiResult, setCachedApiResult } from "@/lib/api-protection"
 
 /**
  * IFTA State Line Crossing Detection
@@ -14,36 +16,35 @@ import { getCachedAuthContext } from "@/lib/auth/server"
  * Reverse geocode coordinates to get state information
  * Uses Google Maps Geocoding API
  */
-// FIXED: Cache Google Maps API key in module scope to avoid fetching on every location update
-let cachedApiKey: string | null = null
-let apiKeyCacheTime: number = 0
-const API_KEY_CACHE_TTL = 3600000 // 1 hour in milliseconds
-
-// FIXED: Cache geocode results per approximate coordinate to avoid re-geocoding stationary trucks
-const geocodeCache = new Map<string, { data: any; timestamp: number }>()
+// Use shared cache table (api_cache) instead of in-memory map for serverless consistency.
 const GEOCODE_CACHE_TTL = 300000 // 5 minutes in milliseconds
 const GEOCODE_CACHE_PRECISION = 0.001 // ~100 meters
 
-async function reverseGeocodeCoordinates(latitude: number, longitude: number) {
+type ReverseGeocodeResult = {
+  data: {
+    state_code: string
+    state_name: string
+    address: string | null
+  } | null
+  error: string | null
+}
+
+async function reverseGeocodeCoordinates(latitude: number, longitude: number): Promise<ReverseGeocodeResult> {
   try {
-    // Check cache first (for stationary trucks)
-    const cacheKey = `${Math.round(latitude / GEOCODE_CACHE_PRECISION)}_${Math.round(longitude / GEOCODE_CACHE_PRECISION)}`
-    const cached = geocodeCache.get(cacheKey)
-    if (cached && Date.now() - cached.timestamp < GEOCODE_CACHE_TTL) {
-      return cached.data
+    const roundedKey = `${Math.round(latitude / GEOCODE_CACHE_PRECISION)}_${Math.round(longitude / GEOCODE_CACHE_PRECISION)}`
+    const cacheKey = `ifta:reverse-geocode:${roundedKey}`
+    const cached = await getCachedApiResult<ReverseGeocodeResult>(
+      cacheKey,
+      Math.floor(GEOCODE_CACHE_TTL / 1000),
+    )
+    if (cached) {
+      return cached
     }
-    
-    // Get API key (cached in module scope)
-    if (!cachedApiKey || Date.now() - apiKeyCacheTime > API_KEY_CACHE_TTL) {
-      // Get Google Maps API key from environment variable
-      const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || ""
-      if (!GOOGLE_MAPS_API_KEY) {
-        throw new Error("Google Maps API key not configured. Please contact support.")
-      }
-      cachedApiKey = GOOGLE_MAPS_API_KEY
-      apiKeyCacheTime = Date.now()
+
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || ""
+    if (!apiKey) {
+      throw new Error("Google Maps API key not configured. Please contact support.")
     }
-    const apiKey = cachedApiKey
 
     const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}&result_type=administrative_area_level_1`
 
@@ -90,18 +91,9 @@ async function reverseGeocodeCoordinates(latitude: number, longitude: number) {
       },
       error: null,
     }
-    
-    // Cache the result
-    geocodeCache.set(cacheKey, { data: geocodeResult, timestamp: Date.now() })
-    
-    // Clean up old cache entries (keep last 1000)
-    if (geocodeCache.size > 1000) {
-      const entries = Array.from(geocodeCache.entries())
-      entries.sort((a, b) => b[1].timestamp - a[1].timestamp)
-      geocodeCache.clear()
-      entries.slice(0, 1000).forEach(([key, value]) => geocodeCache.set(key, value))
-    }
-    
+
+    await setCachedApiResult(cacheKey, geocodeResult, Math.floor(GEOCODE_CACHE_TTL / 1000))
+
     return geocodeResult
   } catch (error: unknown) {
     Sentry.captureException(error)
@@ -140,6 +132,14 @@ export async function detectStateCrossing(params: {
   }
 
   try {
+    const demoCompany = await isDemoCompanyById(ctx.companyId)
+    if (demoCompany) {
+      return {
+        error: "API access is disabled for demo companies.",
+        data: null,
+      }
+    }
+
     // Reverse geocode to get state information
     const geocodeResult = await reverseGeocodeCoordinates(params.latitude, params.longitude)
 

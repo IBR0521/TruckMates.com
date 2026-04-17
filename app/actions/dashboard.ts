@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getAuthCompany, getCachedAuthContext } from "@/lib/auth/server"
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
+import { canViewFeature, isFeatureMasked } from "@/lib/feature-permissions"
 import { getDriverDashboardSnapshot } from "@/app/actions/driver-dashboard"
 import type { DriverDashboardSnapshot } from "@/lib/types/driver-dashboard"
 import { cacheKeys } from "@/lib/cache"
@@ -42,6 +43,31 @@ type AuthRaceResult =
   | { companyId: null; error: string }
 
 type SupabaseCountHead = { count: number | null }
+
+function applyRoleBasedDashboardVisibility(role: EmployeeRole | null, data: DashboardStats): DashboardStats {
+  if (!role) return data
+
+  const canSeeAccounting = canViewFeature(role, "accounting") && !isFeatureMasked(role, "accounting")
+  if (canSeeAccounting) return data
+
+  const financialActivityKeywords = ["invoice", "settlement", "payment", "revenue", "profit", "expense"]
+  const filteredRecentActivity = (data.recentActivity || []).filter((entry) => {
+    const text = `${entry.action} ${entry.type}`.toLowerCase()
+    return !financialActivityKeywords.some((keyword) => text.includes(keyword))
+  })
+
+  return {
+    ...data,
+    totalRevenue: 0,
+    totalExpenses: 0,
+    netProfit: 0,
+    profitMargin: 0,
+    outstandingInvoices: 0,
+    revenueTrend: [],
+    overdueInvoices: [],
+    recentActivity: filteredRecentActivity,
+  }
+}
 
 /**
  * FAST dashboard stats - optimized for speed with aggressive timeouts
@@ -861,6 +887,7 @@ export async function getDashboardBootstrap(): Promise<{
   }
 
   const stats = await getDashboardStats()
+  const shapedDashboardData = applyRoleBasedDashboardVisibility(userRole, stats.data)
   return {
     authCompany:
       auth.companyId != null
@@ -868,7 +895,7 @@ export async function getDashboardBootstrap(): Promise<{
         : null,
     authError: auth.error ?? null,
     userRole,
-    dashboardData: stats.data,
+    dashboardData: shapedDashboardData,
     driverDashboard: null,
     dashboardError: stats.error,
   }

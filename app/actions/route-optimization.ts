@@ -15,6 +15,7 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
+import { isDemoCompanyById } from "@/lib/demo-company"
 
 /** `public.route_stops` — supabase/route_stops_schema_safe.sql */
 const ROUTE_STOPS_FULL_SELECT =
@@ -237,7 +238,8 @@ export async function optimizeRouteOrder(stops: Array<{
   }
 
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
-  const useAPI = !!apiKey
+  const demoCompany = await isDemoCompanyById(options?.companyId || null)
+  const useAPI = !!apiKey && !demoCompany
 
   // First, get coordinates for all stops that don't have them
   const stopsWithCoords = await Promise.all(
@@ -413,6 +415,17 @@ export async function calculateRouteDistance(
   useAPI: boolean
 }> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
+
+  const ctx = await getCachedAuthContext()
+  const demoCompany = await isDemoCompanyById(ctx.companyId)
+  if (demoCompany) {
+    return {
+      distance: 100,
+      duration: 120,
+      error: "API access is disabled for demo companies. Showing estimated values only.",
+      useAPI: false,
+    }
+  }
 
   if (!apiKey) {
     // Fallback: return estimated values
