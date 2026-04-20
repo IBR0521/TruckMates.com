@@ -11,7 +11,6 @@ export const FEATURE_ACCESS = {
 const PREMIUM_FEATURE_BY_SLUG: Record<string, PlanFeature> = {
   route_optimization: "route_optimization",
   geofencing: "geofencing",
-  predictive_maintenance: "predictive_maintenance",
   crm: "crm",
   api_keys: "api_keys",
   quickbooks: "quickbooks",

@@ -4,18 +4,13 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkCreatePermission, checkViewPermission } from "@/lib/server-permissions"
-import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 import { createMaintenance } from "./maintenance"
 
 async function ensurePredictiveMaintenanceAccess() {
-  const access = await getCurrentCompanyFeatureAccess("predictive_maintenance")
-  if (access.error) {
-    return { allowed: false, error: access.error }
+  return {
+    allowed: false as const,
+    error: "Predictive maintenance is temporarily disabled while AI features are being rebuilt.",
   }
-  if (!access.allowed) {
-    return { allowed: false, error: "Predictive maintenance is available on Fleet and Enterprise plans" }
-  }
-  return { allowed: true as const, error: null as string | null }
 }
 
 /**

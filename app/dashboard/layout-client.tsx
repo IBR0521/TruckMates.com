@@ -13,13 +13,6 @@ import { NotificationsCenter } from "@/components/notifications-center"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-// AI Widget temporarily disabled - not ready for production
-// const FloatingAIWidget = dynamic(
-//   () => import("@/components/truckmates-ai/floating-widget"),
-//   { 
-//     ssr: false
-//   }
-// )
 
 export default function DashboardLayoutClient({
   children,
@@ -152,10 +145,6 @@ export default function DashboardLayoutClient({
 
       {/* Floating Feedback Widget */}
       <FeedbackWidget />
-      
-      {/* Floating AI Widget - Right side */}
-      {/* Temporarily disabled - AI feature not ready for production */}
-      {/* <FloatingAIWidget /> */}
     </div>
   )
 }

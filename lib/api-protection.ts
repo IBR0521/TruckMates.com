@@ -20,7 +20,7 @@ interface ApiUsageResult {
  * Implements per-company rate limiting and usage tracking
  */
 export async function checkApiUsage(
-  apiName: "google_maps" | "openai" | "resend",
+  apiName: "google_maps" | "resend",
   action: string
 ): Promise<ApiUsageResult> {
   const supabase = await createClient()
@@ -46,7 +46,6 @@ export async function checkApiUsage(
   // Different limits for different APIs
   const limits: Record<string, { limit: number; window: number }> = {
     google_maps: { limit: 100, window: 60 }, // 100 calls per minute
-    openai: { limit: 50, window: 60 }, // 50 calls per minute
     resend: { limit: 200, window: 60 }, // 200 emails per minute
   }
 

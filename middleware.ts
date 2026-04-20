@@ -24,7 +24,6 @@ const DASHBOARD_ROUTE_FEATURES: Array<{ pattern: RegExp; feature: FeatureCategor
   { pattern: /^\/dashboard\/dvir(\/|$)/, feature: 'dvir' },
   { pattern: /^\/dashboard\/eld(\/|$)/, feature: 'eld' },
   { pattern: /^\/dashboard\/ifta(\/|$)/, feature: 'ifta' },
-  { pattern: /^\/dashboard\/ai(\/|$)/, feature: 'ai_documents' },
   { pattern: /^\/dashboard\/reports(\/|$)/, feature: 'reports' },
   { pattern: /^\/dashboard\/documents(\/|$)/, feature: 'documents' },
   { pattern: /^\/dashboard\/bols(\/|$)/, feature: 'bol' },
@@ -46,15 +45,14 @@ function featureForDashboardPath(pathname: string): FeatureCategory | null {
   return null
 }
 
-function hasPlanFeature(planName: string, feature: 'route_optimization' | 'predictive_maintenance' | 'geofencing' | 'crm' | 'api_keys'): boolean {
+function hasPlanFeature(planName: string, feature: 'route_optimization' | 'geofencing' | 'crm' | 'api_keys'): boolean {
   const plan = planName.toLowerCase()
   if (plan === 'enterprise' || plan === 'professional') return true
   return false
 }
 
-function requiredPlanFeatureForPath(pathname: string): 'route_optimization' | 'predictive_maintenance' | 'geofencing' | 'crm' | 'api_keys' | null {
+function requiredPlanFeatureForPath(pathname: string): 'route_optimization' | 'geofencing' | 'crm' | 'api_keys' | null {
   if (/^\/dashboard\/routes\/optimize(\/|$)/.test(pathname)) return 'route_optimization'
-  if (/^\/dashboard\/maintenance\/predictive(\/|$)/.test(pathname)) return 'predictive_maintenance'
   if (/^\/dashboard\/geofencing(\/|$)/.test(pathname)) return 'geofencing'
   if (/^\/dashboard\/crm(\/|$)/.test(pathname)) return 'crm'
   if (/^\/dashboard\/settings\/api-keys(\/|$)/.test(pathname)) return 'api_keys'

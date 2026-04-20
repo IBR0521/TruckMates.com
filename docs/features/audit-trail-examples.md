@@ -273,7 +273,7 @@ An audit trail is a chronological record of all activities, changes, and events 
   "timestamp": "2025-01-15T11:02:00Z",
   "changes": {
     "action": "analyzed",
-    "analysis_method": "openai_vision",
+    "analysis_method": "disabled_pending_rebuild",
     "extracted_data": {
       "type": "invoice",
       "vendor": "ABC Parts Supply",

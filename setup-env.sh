@@ -39,10 +39,6 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 # Get from: https://console.cloud.google.com/
 GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
 
-# Google Gemini API (REQUIRED for Document AI Analysis)
-# Get from: https://aistudio.google.com/app/apikey
-GEMINI_API_KEY=your_gemini_api_key_here
-
 # Resend Email Service (REQUIRED for Email Notifications)
 # Get from: https://resend.com/api-keys
 RESEND_API_KEY=re_xxxxxxxxxxxxx

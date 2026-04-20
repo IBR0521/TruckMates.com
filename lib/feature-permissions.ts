@@ -30,7 +30,6 @@ export type FeatureCategory =
   | "bank_accounts"
   | "user_roles"
   | "yard_management"
-  | "ai_documents"
   | "invoicing"
   | "settlements"
   | "factoring"
@@ -129,7 +128,6 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
       "routes", // Only assigned
       "drivers", // Only assigned drivers
       "dispatch",
-      "ai_documents",
       "eld",
       "dvir",
       "documents",

@@ -8,7 +8,6 @@ export type PlanFeature =
   | "route_optimization"
   | "geofencing"
   | "driver_scorecards"
-  | "predictive_maintenance"
   | "crm"
 
 const PLAN_FEATURES: Record<PlanName, Record<PlanFeature, boolean>> = {
@@ -18,7 +17,6 @@ const PLAN_FEATURES: Record<PlanName, Record<PlanFeature, boolean>> = {
     route_optimization: false,
     geofencing: false,
     driver_scorecards: false,
-    predictive_maintenance: false,
     crm: false,
   },
   starter: {
@@ -27,7 +25,6 @@ const PLAN_FEATURES: Record<PlanName, Record<PlanFeature, boolean>> = {
     route_optimization: false,
     geofencing: false,
     driver_scorecards: false,
-    predictive_maintenance: false,
     crm: false,
   },
   professional: {
@@ -36,7 +33,6 @@ const PLAN_FEATURES: Record<PlanName, Record<PlanFeature, boolean>> = {
     route_optimization: true,
     geofencing: true,
     driver_scorecards: true,
-    predictive_maintenance: true,
     crm: true,
   },
   enterprise: {
@@ -45,7 +41,6 @@ const PLAN_FEATURES: Record<PlanName, Record<PlanFeature, boolean>> = {
     route_optimization: true,
     geofencing: true,
     driver_scorecards: true,
-    predictive_maintenance: true,
     crm: true,
   },
 }
