@@ -2,9 +2,9 @@
 
 import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { getELDDevices, getELDDevice } from "./eld"
-import { mapProviderDriverId } from "./eld-driver-mapping"
+import { recordBillableApiUsage } from "./api-usage"
 import type { EldDeviceSyncRow, EldDriverMappingRow, ProviderApiJson } from "@/lib/types/eld-sync"
 import type { PostgrestError } from "@supabase/supabase-js"
 
@@ -45,6 +45,30 @@ function pvNum(obj: ProviderApiJson | null | undefined, ...keys: string[]): numb
   return undefined
 }
 
+function pvMetricNum(obj: ProviderApiJson | null | undefined, ...keys: string[]): number | undefined {
+  for (const key of keys) {
+    const direct = pvNum(obj, key)
+    if (direct !== undefined) return direct
+    const nested = nestedRecord(obj, key)
+    if (!nested) continue
+    const nestedNum = pvNum(nested, "value", "rawValue", "reading")
+    if (nestedNum !== undefined) return nestedNum
+  }
+  return undefined
+}
+
+function pvMetricString(obj: ProviderApiJson | null | undefined, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const direct = pvString(obj, key)
+    if (direct !== undefined) return direct
+    const nested = nestedRecord(obj, key)
+    if (!nested) continue
+    const nestedStr = pvString(nested, "value", "rawValue", "state")
+    if (nestedStr !== undefined) return nestedStr
+  }
+  return undefined
+}
+
 function nestedRecord(obj: ProviderApiJson | null | undefined, key: string): ProviderApiJson | null {
   if (!obj) return null
   const v = obj[key]
@@ -72,7 +96,7 @@ function isDefinedProviderId(id: unknown): id is string | number {
 
 // KeepTruckin API integration
 async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | null) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   
   if (!device.api_key || !device.api_secret) {
     return { error: "API credentials not configured", data: null }
@@ -180,6 +204,128 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
         })
       : eventsAll
 
+    // Sync Safety Events
+    let safetyEventsResponse = await fetch(`${apiBaseUrl}/safety_events?device_id=${encodedDeviceId}`, {
+      headers: {
+        'X-Api-Key': device.api_key,
+        'X-Api-Secret': device.api_secret,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    // Fallback to old domain if new one fails
+    if (!safetyEventsResponse.ok && safetyEventsResponse.status === 404) {
+      safetyEventsResponse = await fetch(`${fallbackUrl}/safety_events?device_id=${encodedDeviceId}`, {
+        headers: {
+          'X-Api-Key': device.api_key,
+          'X-Api-Secret': device.api_secret,
+          'Content-Type': 'application/json'
+        }
+      })
+    }
+
+    if (!safetyEventsResponse.ok) {
+      throw new Error(`Motive/KeepTruckin safety events API error: ${safetyEventsResponse.statusText}`)
+    }
+
+    await recordBillableApiUsage(device.company_id, "motive", "safety_events")
+
+    const safetyEventsData = (await safetyEventsResponse.json()) as {
+      safety_events?: unknown
+      events?: unknown
+      data?: unknown
+    }
+    const safetyEventsAll = asProviderArray(
+      safetyEventsData.safety_events ?? safetyEventsData.events ?? safetyEventsData.data
+    )
+    const safetyEvents = sinceMs
+      ? safetyEventsAll.filter((event) => {
+          const ts = pv(event, "event_time", "datetime", "occurred_at", "timestamp", "time")
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : safetyEventsAll
+
+    // Sync provider DVIRs
+    let dvirsResponse = await fetch(`${apiBaseUrl}/vehicle_inspections?device_id=${encodedDeviceId}`, {
+      headers: {
+        'X-Api-Key': device.api_key,
+        'X-Api-Secret': device.api_secret,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    // Fallback to old domain if new one fails
+    if (!dvirsResponse.ok && dvirsResponse.status === 404) {
+      dvirsResponse = await fetch(`${fallbackUrl}/vehicle_inspections?device_id=${encodedDeviceId}`, {
+        headers: {
+          'X-Api-Key': device.api_key,
+          'X-Api-Secret': device.api_secret,
+          'Content-Type': 'application/json'
+        }
+      })
+    }
+
+    if (!dvirsResponse.ok) {
+      throw new Error(`Motive/KeepTruckin DVIR API error: ${dvirsResponse.statusText}`)
+    }
+
+    await recordBillableApiUsage(device.company_id, "motive", "dvirs")
+
+    const dvirsData = (await dvirsResponse.json()) as {
+      vehicle_inspections?: unknown
+      inspections?: unknown
+      data?: unknown
+    }
+    const dvirsAll = asProviderArray(dvirsData.vehicle_inspections ?? dvirsData.inspections ?? dvirsData.data)
+    const dvirs = sinceMs
+      ? dvirsAll.filter((inspection) => {
+          const ts = pv(inspection, "inspection_time", "performed_at", "updated_at", "created_at", "timestamp")
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : dvirsAll
+
+    // Sync HOS clocks
+    let clocksResponse = await fetch(`${apiBaseUrl}/hos_clocks?device_id=${encodedDeviceId}`, {
+      headers: {
+        'X-Api-Key': device.api_key,
+        'X-Api-Secret': device.api_secret,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    // Fallback to old domain if new one fails
+    if (!clocksResponse.ok && clocksResponse.status === 404) {
+      clocksResponse = await fetch(`${fallbackUrl}/hos_clocks?device_id=${encodedDeviceId}`, {
+        headers: {
+          'X-Api-Key': device.api_key,
+          'X-Api-Secret': device.api_secret,
+          'Content-Type': 'application/json'
+        }
+      })
+    }
+
+    if (!clocksResponse.ok) {
+      throw new Error(`Motive/KeepTruckin HOS clocks API error: ${clocksResponse.statusText}`)
+    }
+
+    await recordBillableApiUsage(device.company_id, "motive", "hos_clocks")
+
+    const clocksData = (await clocksResponse.json()) as {
+      hos_clocks?: unknown
+      clocks?: unknown
+      data?: unknown
+    }
+    const clocksAll = asProviderArray(clocksData.hos_clocks ?? clocksData.clocks ?? clocksData.data)
+    const clocks = sinceMs
+      ? clocksAll.filter((clock) => {
+          const ts = pv(clock, "updated_at", "updatedAt", "time", "timestamp")
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : clocksAll
+
     // Store logs in database
     // OPTIMIZATION: Batch fetch all driver mappings to avoid N+1 queries
     const uniqueProviderDriverIds = [...new Set(
@@ -199,6 +345,57 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
     const driverIdMap = new Map<string, string>()
     mappings?.forEach((m: EldDriverMappingRow) => {
       driverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
+    })
+
+    const uniqueClockProviderDriverIds = [...new Set(
+      clocks.map((clock) => pv(clock, "driver_id", "driverId")).filter(isDefinedProviderId)
+    )]
+
+    const { data: clockMappings } = await supabase
+      .from("eld_driver_mappings")
+      .select("provider_driver_id, internal_driver_id")
+      .eq("eld_device_id", device.id)
+      .eq("provider", "keeptruckin")
+      .eq("is_active", true)
+      .in("provider_driver_id", uniqueClockProviderDriverIds.map(String))
+
+    const clockDriverIdMap = new Map<string, string>()
+    clockMappings?.forEach((m: EldDriverMappingRow) => {
+      clockDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
+    })
+
+    const uniqueSafetyEventDriverIds = [...new Set(
+      safetyEvents.map((event) => pv(event, "driver_id", "driverId")).filter(isDefinedProviderId)
+    )]
+
+    const { data: safetyEventMappings } = await supabase
+      .from("eld_driver_mappings")
+      .select("provider_driver_id, internal_driver_id")
+      .eq("eld_device_id", device.id)
+      .eq("provider", "keeptruckin")
+      .eq("is_active", true)
+      .in("provider_driver_id", uniqueSafetyEventDriverIds.map(String))
+
+    const safetyEventDriverIdMap = new Map<string, string>()
+    safetyEventMappings?.forEach((m: EldDriverMappingRow) => {
+      safetyEventDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
+    })
+
+    const uniqueDvirDriverIds = [...new Set(
+      dvirs.map((inspection) => pv(inspection, "driver_id", "driverId")).filter(isDefinedProviderId)
+    )]
+
+    const { data: dvirMappings } = await supabase
+      .from("eld_driver_mappings")
+      .select("provider_driver_id, internal_driver_id")
+      .eq("eld_device_id", device.id)
+      .eq("provider", "keeptruckin")
+      .eq("is_active", true)
+      .in("provider_driver_id", uniqueDvirDriverIds.map(String))
+
+    const dvirDriverIdMap = new Map<string, string>()
+    dvirMappings?.forEach((m: EldDriverMappingRow) => {
+      dvirDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
     })
     
     // Map provider driver IDs to internal driver IDs
@@ -329,17 +526,166 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
         metadata: event,
       }
     })
+    const safetyEventsToInsert = safetyEvents.map((event) => {
+      const providerDriverId = pv(event, "driver_id", "driverId")
+      const internalDriverId =
+        providerDriverId !== undefined && providerDriverId !== null
+          ? safetyEventDriverIdMap.get(String(providerDriverId)) || null
+          : null
+      const eLoc = nestedRecord(event, "location")
+
+      return {
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: internalDriverId,
+        truck_id: device.truck_id || null,
+        event_type: mapKeepTruckinSafetyEventType(pvString(event, "event_type", "type") ?? ""),
+        severity: pvString(event, "severity") ?? "warning",
+        title: pvString(event, "title", "event_type", "type") ?? "Safety event",
+        description: pvString(event, "description", "message"),
+        event_time: pv(event, "event_time", "datetime", "occurred_at", "timestamp", "time") ?? new Date().toISOString(),
+        location: eLoc
+          ? {
+              lat: pvNum(eLoc, "latitude", "lat"),
+              lng: pvNum(eLoc, "longitude", "lng"),
+              address: pvString(eLoc, "address"),
+            }
+          : null,
+        resolved: false,
+        metadata: {
+          ...event,
+          source: "safety_events",
+        },
+      }
+    })
+    const allEventsToInsert = [...eventsToInsert, ...safetyEventsToInsert]
 
     let eventsError: PostgrestError | null = null
-    if (eventsToInsert.length > 0) {
+    if (allEventsToInsert.length > 0) {
       const { error } = await supabase
         .from("eld_events")
-        .insert(eventsToInsert)
+        .insert(allEventsToInsert)
       eventsError = error
 
       if (eventsError) {
         Sentry.captureException(eventsError)
         return { error: `Failed to sync events: ${eventsError.message}`, data: null }
+      }
+    }
+
+    const clocksToUpsert = clocks.flatMap((clock) => {
+      const providerDriverId = pv(clock, "driver_id", "driverId")
+      const internalDriverId =
+        providerDriverId !== undefined && providerDriverId !== null
+          ? clockDriverIdMap.get(String(providerDriverId)) || null
+          : null
+
+      if (!internalDriverId) return []
+
+      return [{
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: internalDriverId,
+        remaining_drive_ms:
+          pvNum(clock, "remaining_drive_ms", "remainingDriveMs", "drive_remaining_ms") ?? null,
+        remaining_shift_ms:
+          pvNum(clock, "remaining_shift_ms", "remainingShiftMs", "shift_remaining_ms") ?? null,
+        remaining_cycle_ms:
+          pvNum(clock, "remaining_cycle_ms", "remainingCycleMs", "cycle_remaining_ms") ?? null,
+        cycle_type: pvString(clock, "cycle_type", "cycleType", "cycle") ?? null,
+        updated_at:
+          pv(clock, "updated_at", "updatedAt", "time", "timestamp") ?? new Date().toISOString(),
+        raw_data: clock,
+      }]
+    })
+
+    if (clocksToUpsert.length > 0) {
+      const { error: clocksError } = await supabase
+        .from("eld_hos_clocks")
+        .upsert(clocksToUpsert, {
+          onConflict: "eld_device_id,driver_id",
+          ignoreDuplicates: false,
+        })
+
+      if (clocksError) {
+        Sentry.captureException(clocksError)
+        return { error: `Failed to sync HOS clocks: ${clocksError.message}`, data: null }
+      }
+    }
+
+    const dvirsToUpsert = device.truck_id
+      ? dvirs.flatMap((inspection) => {
+          const providerInspectionId = pvString(
+            inspection,
+            "id",
+            "inspection_id",
+            "inspectionId",
+            "uuid"
+          )
+          if (!providerInspectionId) return []
+
+          const providerDriverId = pv(inspection, "driver_id", "driverId")
+          const internalDriverId =
+            providerDriverId !== undefined && providerDriverId !== null
+              ? dvirDriverIdMap.get(String(providerDriverId)) || null
+              : null
+          if (!internalDriverId) return []
+
+          const inspectionTimestamp =
+            pvString(inspection, "inspection_time", "performed_at", "updated_at", "created_at", "timestamp") ??
+            new Date().toISOString()
+          const parsedDate = new Date(inspectionTimestamp)
+          const inspectionDate = Number.isFinite(parsedDate.getTime())
+            ? parsedDate.toISOString().split("T")[0]
+            : new Date().toISOString().split("T")[0]
+          const inspectionTime = Number.isFinite(parsedDate.getTime())
+            ? parsedDate.toISOString().split("T")[1]?.slice(0, 8)
+            : null
+
+          const defectsRaw = asProviderArray(pv(inspection, "defects", "issues", "vehicle_defects"))
+          const defects = defectsRaw.map((defect) => ({
+            component: pvString(defect, "component", "system", "name") ?? "vehicle",
+            description: pvString(defect, "description", "detail", "message") ?? "Reported defect",
+            severity: pvString(defect, "severity", "level") ?? "medium",
+            corrected: pv(defect, "corrected", "resolved") === true,
+          }))
+          const defectsFound = defects.length > 0 || pv(inspection, "defects_found", "has_defects") === true
+          const safeToOperate = pv(inspection, "safe_to_operate", "safeToOperate") !== false
+          const status = deriveDvirStatus(defectsFound, defects)
+
+          return [{
+            company_id: device.company_id,
+            driver_id: internalDriverId,
+            truck_id: device.truck_id,
+            inspection_type: mapProviderInspectionType(pvString(inspection, "inspection_type", "type")),
+            inspection_date: inspectionDate,
+            inspection_time: inspectionTime,
+            location: pvString(inspection, "location", "address"),
+            mileage: pvNum(inspection, "mileage"),
+            odometer_reading: pvNum(inspection, "odometer", "odometer_reading"),
+            status,
+            defects_found: defectsFound,
+            safe_to_operate: safeToOperate,
+            defects: defects.length > 0 ? defects : null,
+            notes: pvString(inspection, "notes", "comment", "description"),
+            corrective_action: pvString(inspection, "corrective_action", "action_taken"),
+            source: "motive",
+            provider_inspection_id: providerInspectionId,
+          }]
+        })
+      : []
+
+    if (dvirsToUpsert.length > 0) {
+      const { error: dvirsError } = await supabase
+        .from("dvir")
+        .upsert(dvirsToUpsert, {
+          onConflict: "company_id,source,provider_inspection_id",
+          ignoreDuplicates: false,
+        })
+
+      if (dvirsError) {
+        Sentry.captureException(dvirsError)
+        return { error: `Failed to sync provider DVIRs: ${dvirsError.message}`, data: null }
       }
     }
 
@@ -353,7 +699,9 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
       data: {
         logs: logsToInsert.length,
         locations: locationsToInsert.length,
-        events: eventsToInsert.length
+        events: allEventsToInsert.length,
+        clocks: clocksToUpsert.length,
+        dvirs: dvirsToUpsert.length
       },
       errors: undefined,
       error: null
@@ -368,7 +716,7 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
 
 // Samsara API integration
 async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   
   if (!device.api_key) {
     return { error: "API key not configured", data: null }
@@ -457,6 +805,109 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
           return ms !== null && ms >= sinceMs
         })
       : eventsAll
+
+    // Sync safety events (harsh braking, hard acceleration, speeding)
+    const safetyEventsResponse = await fetch(`${baseUrl}/v2/fleet/safety/events?vehicleIds=${vehicleId}`, {
+      headers: {
+        'Authorization': `Bearer ${device.api_key}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!safetyEventsResponse.ok) {
+      throw new Error(`Samsara safety events API error: ${safetyEventsResponse.statusText}`)
+    }
+
+    await recordBillableApiUsage(device.company_id, "samsara", "safety_events")
+
+    const safetyEventsData = (await safetyEventsResponse.json()) as { data?: unknown }
+    const safetyEventsAll = asProviderArray(safetyEventsData.data)
+    const safetyEvents = sinceMs
+      ? safetyEventsAll.filter((event) => {
+          const ts = pv(event, "time", "timestamp", "eventTime", "occurredAt")
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : safetyEventsAll
+
+    // Sync provider DVIRs
+    const dvirsUrl = driverIds.length > 0
+      ? `${baseUrl}/v2/fleet/dvirs?driverIds=${driverIds.join(',')}`
+      : `${baseUrl}/v2/fleet/dvirs?vehicleIds=${vehicleId}`
+    const dvirsResponse = await fetch(dvirsUrl, {
+      headers: {
+        'Authorization': `Bearer ${device.api_key}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!dvirsResponse.ok) {
+      throw new Error(`Samsara DVIR API error: ${dvirsResponse.statusText}`)
+    }
+
+    await recordBillableApiUsage(device.company_id, "samsara", "dvirs")
+
+    const dvirsData = (await dvirsResponse.json()) as { data?: unknown }
+    const dvirsAll = asProviderArray(dvirsData.data)
+    const dvirs = sinceMs
+      ? dvirsAll.filter((inspection) => {
+          const ts = pv(inspection, "updatedAt", "time", "timestamp", "inspectionTime")
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : dvirsAll
+
+    // Sync HOS clocks - live remaining hours per driver
+    const clocksUrl = driverIds.length > 0
+      ? `${baseUrl}/v2/fleet/hos/clocks?driverIds=${driverIds.join(',')}`
+      : `${baseUrl}/v2/fleet/hos/clocks?vehicleIds=${vehicleId}`
+
+    const clocksResponse = await fetch(clocksUrl, {
+      headers: {
+        'Authorization': `Bearer ${device.api_key}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!clocksResponse.ok) {
+      throw new Error(`Samsara HOS clocks API error: ${clocksResponse.statusText}`)
+    }
+
+    await recordBillableApiUsage(device.company_id, "samsara", "hos_clocks")
+
+    const clocksData = (await clocksResponse.json()) as { data?: unknown }
+    const clocksAll = asProviderArray(clocksData.data)
+    const clocks = sinceMs
+      ? clocksAll.filter((clock) => {
+          const ts = pv(clock, "updatedAt", "updated_at", "time", "timestamp")
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : clocksAll
+
+    // Sync engine diagnostics and fault codes
+    const vehicleStatsResponse = await fetch(`${baseUrl}/v2/fleet/vehicles/stats?vehicleIds=${vehicleId}`, {
+      headers: {
+        'Authorization': `Bearer ${device.api_key}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!vehicleStatsResponse.ok) {
+      throw new Error(`Samsara vehicle stats API error: ${vehicleStatsResponse.statusText}`)
+    }
+
+    await recordBillableApiUsage(device.company_id, "samsara", "vehicle_stats")
+
+    const vehicleStatsData = (await vehicleStatsResponse.json()) as { data?: unknown }
+    const vehicleStatsAll = asProviderArray(vehicleStatsData.data)
+    const vehicleStats = sinceMs
+      ? vehicleStatsAll.filter((stat) => {
+          const ts = pv(stat, "time", "timestamp", "updatedAt", "reportedAt")
+          const ms = getTimestampMs(ts)
+          return ms !== null && ms >= sinceMs
+        })
+      : vehicleStatsAll
 
     // OPTIMIZATION: Batch fetch all driver mappings to avoid N+1 queries
     const uniqueProviderDriverIds = [...new Set(
@@ -617,6 +1068,57 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
     eventMappings?.forEach((m: EldDriverMappingRow) => {
       eventDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
     })
+
+    const uniqueSafetyEventDriverIds = [...new Set(
+      safetyEvents.map((event) => pv(event, "driverId", "driver_id")).filter(isDefinedProviderId)
+    )]
+
+    const { data: safetyEventMappings } = await supabase
+      .from("eld_driver_mappings")
+      .select("provider_driver_id, internal_driver_id")
+      .eq("eld_device_id", device.id)
+      .eq("provider", "samsara")
+      .eq("is_active", true)
+      .in("provider_driver_id", uniqueSafetyEventDriverIds.map(String))
+
+    const safetyEventDriverIdMap = new Map<string, string>()
+    safetyEventMappings?.forEach((m: EldDriverMappingRow) => {
+      safetyEventDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
+    })
+
+    const uniqueDvirDriverIds = [...new Set(
+      dvirs.map((inspection) => pv(inspection, "driverId", "driver_id")).filter(isDefinedProviderId)
+    )]
+
+    const { data: dvirMappings } = await supabase
+      .from("eld_driver_mappings")
+      .select("provider_driver_id, internal_driver_id")
+      .eq("eld_device_id", device.id)
+      .eq("provider", "samsara")
+      .eq("is_active", true)
+      .in("provider_driver_id", uniqueDvirDriverIds.map(String))
+
+    const dvirDriverIdMap = new Map<string, string>()
+    dvirMappings?.forEach((m: EldDriverMappingRow) => {
+      dvirDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
+    })
+
+    const uniqueClockDriverIds = [...new Set(
+      clocks.map((clock) => pv(clock, "driverId", "driver_id")).filter(isDefinedProviderId)
+    )]
+
+    const { data: clockMappings } = await supabase
+      .from("eld_driver_mappings")
+      .select("provider_driver_id, internal_driver_id")
+      .eq("eld_device_id", device.id)
+      .eq("provider", "samsara")
+      .eq("is_active", true)
+      .in("provider_driver_id", uniqueClockDriverIds.map(String))
+
+    const clockDriverIdMap = new Map<string, string>()
+    clockMappings?.forEach((m: EldDriverMappingRow) => {
+      clockDriverIdMap.set(String(m.provider_driver_id), m.internal_driver_id)
+    })
     
     // Transform and store events
     const eventsToInsert = events.map((event) => {
@@ -649,15 +1151,291 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
         metadata: event,
       }
     })
+    const safetyEventsToInsert = safetyEvents.map((event) => {
+      const providerDriverId = pv(event, "driverId", "driver_id")
+      const internalDriverId =
+        providerDriverId !== undefined && providerDriverId !== null
+          ? safetyEventDriverIdMap.get(String(providerDriverId)) || null
+          : null
 
-    if (eventsToInsert.length > 0) {
+      const eLoc = nestedRecord(event, "location")
+
+      return {
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: internalDriverId,
+        truck_id: device.truck_id || null,
+        event_type: mapSamsaraSafetyEventType(pvString(event, "eventType", "event_type", "type") ?? ""),
+        severity: pvString(event, "severity", "priority") ?? "warning",
+        title: pvString(event, "title", "name", "eventType", "event_type") ?? "Safety event",
+        description: pvString(event, "description", "message", "details"),
+        event_time: pv(event, "time", "timestamp", "eventTime", "occurredAt") ?? new Date().toISOString(),
+        location: eLoc
+          ? {
+              lat: pvNum(eLoc, "latitude", "lat"),
+              lng: pvNum(eLoc, "longitude", "lng"),
+              address: pvString(eLoc, "address", "formattedAddress"),
+            }
+          : null,
+        resolved: false,
+        metadata: {
+          ...event,
+          source: "safety_events",
+        },
+      }
+    })
+    const allEventsToInsert = [...eventsToInsert, ...safetyEventsToInsert]
+
+    if (allEventsToInsert.length > 0) {
       const { error: eventsError } = await supabase
         .from("eld_events")
-        .insert(eventsToInsert)
+        .insert(allEventsToInsert)
 
       if (eventsError) {
         Sentry.captureException(eventsError)
         return { error: `Failed to sync events: ${eventsError.message}`, data: null }
+      }
+    }
+
+    const clocksToUpsert = clocks.flatMap((clock) => {
+      const providerDriverId = pv(clock, "driverId", "driver_id")
+      const internalDriverId =
+        providerDriverId !== undefined && providerDriverId !== null
+          ? clockDriverIdMap.get(String(providerDriverId)) || null
+          : null
+
+      if (!internalDriverId) return []
+
+      return [{
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: internalDriverId,
+        remaining_drive_ms:
+          pvNum(
+            clock,
+            "remainingDriveTimeMs",
+            "remainingDriveMs",
+            "remaining_drive_ms",
+            "driveRemainingMs"
+          ) ?? null,
+        remaining_shift_ms:
+          pvNum(
+            clock,
+            "remainingShiftTimeMs",
+            "remainingShiftMs",
+            "remaining_shift_ms",
+            "shiftRemainingMs"
+          ) ?? null,
+        remaining_cycle_ms:
+          pvNum(
+            clock,
+            "remainingCycleTimeMs",
+            "remainingCycleMs",
+            "remaining_cycle_ms",
+            "cycleRemainingMs"
+          ) ?? null,
+        cycle_type: pvString(clock, "cycleType", "cycle_type", "cycle") ?? null,
+        updated_at:
+          pv(clock, "updatedAt", "updated_at", "time", "timestamp") ?? new Date().toISOString(),
+        raw_data: clock,
+      }]
+    })
+
+    if (clocksToUpsert.length > 0) {
+      const { error: clocksError } = await supabase
+        .from("eld_hos_clocks")
+        .upsert(clocksToUpsert, {
+          onConflict: "eld_device_id,driver_id",
+          ignoreDuplicates: false,
+        })
+
+      if (clocksError) {
+        Sentry.captureException(clocksError)
+        return { error: `Failed to sync HOS clocks: ${clocksError.message}`, data: null }
+      }
+    }
+
+    const samsaraDiagnosticsToInsert = vehicleStats.flatMap((stat) => {
+      const occurredAt = pv(stat, "time", "timestamp", "updatedAt", "reportedAt") ?? new Date().toISOString()
+      const diagnosticsRows: Array<Record<string, unknown>> = []
+
+      const engineState = pvMetricString(stat, "engineState", "engine_state")
+      if (engineState) {
+        diagnosticsRows.push({
+          company_id: device.company_id,
+          eld_device_id: device.id,
+          driver_id: device.driver_id || null,
+          truck_id: device.truck_id || null,
+          diagnostic_type: "engine_stat",
+          metric_name: "engine_state",
+          metric_value_num: null,
+          metric_value_text: engineState,
+          metric_unit: null,
+          fault_code: null,
+          fault_code_category: null,
+          severity: "info",
+          description: "Vehicle engine state",
+          status: engineState,
+          occurred_at: occurredAt,
+          raw_data: stat,
+        })
+      }
+
+      const metricDefs = [
+        { metric_name: "engine_seconds", unit: "seconds", keys: ["obdEngineSeconds", "engineSeconds"] },
+        { metric_name: "odometer_m", unit: "meters", keys: ["obdOdometerMeters", "odometerMeters", "odometer"] },
+        { metric_name: "gps_odometer_m", unit: "meters", keys: ["gpsOdometerMeters"] },
+        { metric_name: "battery_voltage", unit: "volts", keys: ["batteryVoltage", "voltage"] },
+      ]
+
+      for (const metricDef of metricDefs) {
+        const value = pvMetricNum(stat, ...metricDef.keys)
+        if (value === undefined) continue
+        diagnosticsRows.push({
+          company_id: device.company_id,
+          eld_device_id: device.id,
+          driver_id: device.driver_id || null,
+          truck_id: device.truck_id || null,
+          diagnostic_type: "engine_stat",
+          metric_name: metricDef.metric_name,
+          metric_value_num: value,
+          metric_value_text: null,
+          metric_unit: metricDef.unit,
+          fault_code: null,
+          fault_code_category: null,
+          severity: "info",
+          description: `Samsara vehicle stat: ${metricDef.metric_name}`,
+          status: null,
+          occurred_at: occurredAt,
+          raw_data: stat,
+        })
+      }
+
+      const faultCodesRaw = pv(stat, "faultCodes", "activeFaultCodes", "dtcCodes")
+      if (Array.isArray(faultCodesRaw)) {
+        for (const faultCodeItem of faultCodesRaw) {
+          const faultCodeObj =
+            faultCodeItem && typeof faultCodeItem === "object" && !Array.isArray(faultCodeItem)
+              ? (faultCodeItem as ProviderApiJson)
+              : null
+          const faultCode = faultCodeObj
+            ? pvString(faultCodeObj, "code", "id", "faultCode")
+            : typeof faultCodeItem === "string"
+              ? faultCodeItem
+              : undefined
+
+          if (!faultCode) continue
+
+          const faultDescription = faultCodeObj
+            ? pvString(faultCodeObj, "description", "name", "message")
+            : null
+          const faultCategory = determineFaultCodeCategory(faultCode)
+          const faultSeverity = faultCodeObj
+            ? pvString(faultCodeObj, "severity", "level")
+            : "warning"
+
+          diagnosticsRows.push({
+            company_id: device.company_id,
+            eld_device_id: device.id,
+            driver_id: device.driver_id || null,
+            truck_id: device.truck_id || null,
+            diagnostic_type: "fault_code",
+            metric_name: null,
+            metric_value_num: null,
+            metric_value_text: null,
+            metric_unit: null,
+            fault_code: faultCode,
+            fault_code_category: faultCategory,
+            severity: faultSeverity ?? "warning",
+            description: faultDescription,
+            status: "active",
+            occurred_at: occurredAt,
+            raw_data: stat,
+          })
+        }
+      }
+
+      return diagnosticsRows
+    })
+
+    if (samsaraDiagnosticsToInsert.length > 0) {
+      const { error: diagnosticsError } = await supabase
+        .from("eld_diagnostics")
+        .insert(samsaraDiagnosticsToInsert)
+
+      if (diagnosticsError) {
+        Sentry.captureException(diagnosticsError)
+        return { error: `Failed to sync diagnostics: ${diagnosticsError.message}`, data: null }
+      }
+    }
+
+    const dvirsToUpsert = device.truck_id
+      ? dvirs.flatMap((inspection) => {
+          const providerInspectionId = pvString(inspection, "id", "inspectionId", "dvirId")
+          if (!providerInspectionId) return []
+
+          const providerDriverId = pv(inspection, "driverId", "driver_id")
+          const internalDriverId =
+            providerDriverId !== undefined && providerDriverId !== null
+              ? dvirDriverIdMap.get(String(providerDriverId)) || null
+              : null
+          if (!internalDriverId) return []
+
+          const inspectionTimestamp =
+            pvString(inspection, "inspectionTime", "time", "timestamp", "updatedAt") ??
+            new Date().toISOString()
+          const parsedDate = new Date(inspectionTimestamp)
+          const inspectionDate = Number.isFinite(parsedDate.getTime())
+            ? parsedDate.toISOString().split("T")[0]
+            : new Date().toISOString().split("T")[0]
+          const inspectionTime = Number.isFinite(parsedDate.getTime())
+            ? parsedDate.toISOString().split("T")[1]?.slice(0, 8)
+            : null
+
+          const defectsRaw = asProviderArray(pv(inspection, "defects", "issues"))
+          const defects = defectsRaw.map((defect) => ({
+            component: pvString(defect, "component", "name", "category") ?? "vehicle",
+            description: pvString(defect, "description", "comment", "message") ?? "Reported defect",
+            severity: pvString(defect, "severity", "priority") ?? "medium",
+            corrected: pv(defect, "corrected", "resolved") === true,
+          }))
+          const defectsFound = defects.length > 0 || pv(inspection, "defectsFound", "hasDefects") === true
+          const safeToOperate = pv(inspection, "safeToOperate", "safe_to_operate") !== false
+          const status = deriveDvirStatus(defectsFound, defects)
+
+          return [{
+            company_id: device.company_id,
+            driver_id: internalDriverId,
+            truck_id: device.truck_id,
+            inspection_type: mapProviderInspectionType(pvString(inspection, "inspectionType", "inspection_type")),
+            inspection_date: inspectionDate,
+            inspection_time: inspectionTime,
+            location: pvString(inspection, "location", "address", "formattedAddress"),
+            mileage: pvNum(inspection, "mileage"),
+            odometer_reading: pvNum(inspection, "odometer", "odometerReading"),
+            status,
+            defects_found: defectsFound,
+            safe_to_operate: safeToOperate,
+            defects: defects.length > 0 ? defects : null,
+            notes: pvString(inspection, "notes", "comment"),
+            corrective_action: pvString(inspection, "correctiveAction", "corrective_action"),
+            source: "samsara",
+            provider_inspection_id: providerInspectionId,
+          }]
+        })
+      : []
+
+    if (dvirsToUpsert.length > 0) {
+      const { error: dvirsError } = await supabase
+        .from("dvir")
+        .upsert(dvirsToUpsert, {
+          onConflict: "company_id,source,provider_inspection_id",
+          ignoreDuplicates: false,
+        })
+
+      if (dvirsError) {
+        Sentry.captureException(dvirsError)
+        return { error: `Failed to sync provider DVIRs: ${dvirsError.message}`, data: null }
       }
     }
 
@@ -671,7 +1449,10 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
       data: {
         logs: logs.length,
         locations: locations.length,
-        events: events.length
+        events: allEventsToInsert.length,
+        clocks: clocksToUpsert.length,
+        diagnostics: samsaraDiagnosticsToInsert.length,
+        dvirs: dvirsToUpsert.length
       },
       error: null
     }
@@ -685,7 +1466,7 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
 
 // Geotab API integration
 async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   
   if (!device.api_key || !device.api_secret) {
     return { error: "API credentials not configured", data: null }
@@ -1015,6 +1796,94 @@ async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null)
       }
     }
 
+    const geotabStatusDiagnosticsToInsert = locations.map((statusData) => {
+      const diagnostic = nestedRecord(statusData, "diagnostic")
+      const providerDriverId = geotabNestedDriverId(statusData)
+      const internalDriverId = providerDriverId
+        ? geotabLocationDriverIdMap.get(String(providerDriverId)) || null
+        : null
+
+      const rawStatusValue = pv(statusData, "data", "value")
+      const metricValueNum =
+        typeof rawStatusValue === "number" && Number.isFinite(rawStatusValue)
+          ? rawStatusValue
+          : pvNum(statusData, "value")
+      const metricValueText =
+        metricValueNum == null && rawStatusValue !== undefined && rawStatusValue !== null
+          ? String(rawStatusValue)
+          : pvString(statusData, "value")
+
+      return {
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: internalDriverId,
+        truck_id: device.truck_id || null,
+        diagnostic_type: "status_data",
+        metric_name:
+          pvString(diagnostic, "name", "id") ??
+          pvString(statusData, "diagnosticName", "diagnosticId") ??
+          "status_data",
+        metric_value_num: metricValueNum ?? null,
+        metric_value_text: metricValueText ?? null,
+        metric_unit: pvString(statusData, "unit", "units"),
+        fault_code: null,
+        fault_code_category: null,
+        severity: "info",
+        description: pvString(statusData, "description", "name"),
+        status: null,
+        occurred_at: pv(statusData, "dateTime", "date", "time") ?? new Date().toISOString(),
+        raw_data: statusData,
+      }
+    })
+
+    const geotabFaultDiagnosticsToInsert = events.map((faultData) => {
+      const fc = nestedRecord(faultData, "faultCode")
+      const driverObj = nestedRecord(faultData, "driver")
+      const providerDriverId = driverObj ? pv(driverObj, "id") : pv(faultData, "driverId", "driver_id")
+      const internalDriverId =
+        providerDriverId !== undefined && providerDriverId !== null
+          ? geotabDriverIdMap.get(String(providerDriverId)) || null
+          : null
+
+      const faultCode = pv(fc, "code") ?? pv(fc, "id") ?? pv(faultData, "code") ?? null
+      const faultCodeName = pvString(fc, "name") ?? pvString(fc, "code") ?? pvString(faultData, "title") ?? ""
+
+      return {
+        company_id: device.company_id,
+        eld_device_id: device.id,
+        driver_id: internalDriverId,
+        truck_id: device.truck_id || null,
+        diagnostic_type: "fault_code",
+        metric_name: null,
+        metric_value_num: null,
+        metric_value_text: null,
+        metric_unit: null,
+        fault_code: faultCode != null ? String(faultCode) : null,
+        fault_code_category: determineFaultCodeCategory(faultCodeName),
+        severity: pvString(faultData, "severity") ?? "warning",
+        description: pvString(fc, "description") ?? pvString(faultData, "description"),
+        status: "active",
+        occurred_at: pv(faultData, "dateTime", "date", "occurredAt") ?? new Date().toISOString(),
+        raw_data: faultData,
+      }
+    })
+
+    const geotabDiagnosticsToInsert = [
+      ...geotabStatusDiagnosticsToInsert,
+      ...geotabFaultDiagnosticsToInsert,
+    ]
+
+    if (geotabDiagnosticsToInsert.length > 0) {
+      const { error: diagnosticsError } = await supabase
+        .from("eld_diagnostics")
+        .insert(geotabDiagnosticsToInsert)
+
+      if (diagnosticsError) {
+        Sentry.captureException(diagnosticsError)
+        return { error: `Failed to sync diagnostics: ${diagnosticsError.message}`, data: null }
+      }
+    }
+
     // Update device last_sync_at
     await supabase
       .from("eld_devices")
@@ -1025,7 +1894,8 @@ async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null)
       data: {
         logs: logsToInsert.length,
         locations: locationsToInsert.length,
-        events: eventsToInsert.length
+        events: eventsToInsert.length,
+        diagnostics: geotabDiagnosticsToInsert.length
       },
       errors: undefined,
       error: null
@@ -1129,6 +1999,29 @@ function mapKeepTruckinEventType(type: string): string {
   return typeMap[type?.toLowerCase()] || 'other'
 }
 
+function mapKeepTruckinSafetyEventType(type: string): string {
+  const normalized = type?.toLowerCase()
+  if (normalized.includes("speed")) return "speeding"
+  if (normalized.includes("brake")) return "harsh_brake"
+  if (normalized.includes("accel")) return "hard_accel"
+  return "other"
+}
+
+function mapProviderInspectionType(type: string | undefined): string {
+  const normalized = type?.toLowerCase() ?? ""
+  if (normalized.includes("post")) return "post_trip"
+  if (normalized.includes("road")) return "on_road"
+  return "pre_trip"
+}
+
+type DvirDefect = { corrected?: boolean }
+
+function deriveDvirStatus(defectsFound: boolean, defects: DvirDefect[]): string {
+  if (!defectsFound) return "passed"
+  const allCorrected = defects.length > 0 && defects.every((d) => d.corrected === true)
+  return allCorrected ? "defects_corrected" : "failed"
+}
+
 function mapSamsaraStatus(status: string): string {
   const statusMap: Record<string, string> = {
     'driving': 'driving',
@@ -1156,6 +2049,14 @@ function mapSamsaraEventType(type: string): string {
     'deviceMalfunction': 'device_malfunction'
   }
   return typeMap[type?.toLowerCase()] || 'other'
+}
+
+function mapSamsaraSafetyEventType(type: string): string {
+  const normalized = type?.toLowerCase()
+  if (normalized.includes("speed")) return "speeding"
+  if (normalized.includes("brake")) return "harsh_brake"
+  if (normalized.includes("accel")) return "hard_accel"
+  return "other"
 }
 
 function mapGeotabStatus(status: string): string {
