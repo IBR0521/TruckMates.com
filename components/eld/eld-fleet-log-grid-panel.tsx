@@ -197,14 +197,15 @@ export function EldFleetLogGridPanel({ drivers }: { drivers: DriverOption[] }) {
                         </td>
                       </tr>
                     ) : (
-                      gridLogs.map((log) => {
+                      gridLogs.map((log, index) => {
                         const row = log as ProviderLogExtras
                         const notes =
                           row.raw_data && typeof row.raw_data === "object" && "notes" in row.raw_data
                             ? String(row.raw_data.notes || "")
                             : ""
+                        const rowKey = `${log.start_time}-${log.end_time || "open"}-${log.log_type || "unknown"}-${index}`
                         return (
-                        <tr key={log.id} className="border-t border-border">
+                        <tr key={rowKey} className="border-t border-border">
                           <td className="px-3 py-2">{dutyLabel(log.log_type || "off_duty")}</td>
                           <td className="px-3 py-2">{new Date(log.start_time).toLocaleTimeString()}</td>
                           <td className="px-3 py-2">
