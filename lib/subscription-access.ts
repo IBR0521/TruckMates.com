@@ -13,6 +13,31 @@ export type CompanySubscriptionAccess = {
   reason: string | null
 }
 
+async function ensureFreeSubscriptionRow(companyId: string): Promise<void> {
+  const admin = createAdminClient()
+  const { data: existing, error: existingError } = await admin
+    .from("subscriptions")
+    .select("id")
+    .eq("company_id", companyId)
+    .maybeSingle()
+
+  if (existingError || existing) return
+
+  const { data: freePlan } = await admin
+    .from("subscription_plans")
+    .select("id")
+    .eq("name", "free")
+    .maybeSingle()
+
+  if (!freePlan?.id) return
+
+  await admin.from("subscriptions").insert({
+    company_id: companyId,
+    plan_id: freePlan.id,
+    status: "active",
+  })
+}
+
 export async function getCompanySubscriptionAccess(): Promise<CompanySubscriptionAccess> {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -26,7 +51,7 @@ export async function getCompanySubscriptionAccess(): Promise<CompanySubscriptio
   }
 
   const admin = createAdminClient()
-  const { data: subscription, error } = await admin
+  let { data: subscription, error } = await admin
     .from("subscriptions")
     .select(`
       status,
@@ -36,6 +61,22 @@ export async function getCompanySubscriptionAccess(): Promise<CompanySubscriptio
     `)
     .eq("company_id", ctx.companyId)
     .maybeSingle()
+
+  if (!subscription && !error) {
+    await ensureFreeSubscriptionRow(ctx.companyId)
+    const retry = await admin
+      .from("subscriptions")
+      .select(`
+        status,
+        trial_end,
+        stripe_subscription_id,
+        subscription_plans(name)
+      `)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+    subscription = retry.data
+    error = retry.error
+  }
 
   if (error) {
     return {
@@ -53,30 +94,18 @@ export async function getCompanySubscriptionAccess(): Promise<CompanySubscriptio
   const trialEndIso = (subscription as { trial_end?: string | null } | null)?.trial_end
   const trialEndMs = trialEndIso ? new Date(trialEndIso).getTime() : null
   const trialExpired = typeof trialEndMs === "number" && Number.isFinite(trialEndMs) && trialEndMs < Date.now()
-  const hasPaidSubscription = Boolean((subscription as { stripe_subscription_id?: string | null } | null)?.stripe_subscription_id)
-
-  if (!subscription || planName === "free") {
-    return {
-      allowed: false,
-      companyId: ctx.companyId,
-      planName,
-      status,
-      reason: "A paid subscription is required to continue.",
-    }
-  }
-
-  if (!hasPaidSubscription) {
+  if (!subscription) {
     return {
       allowed: false,
       companyId: ctx.companyId,
       planName: "free",
-      status: "incomplete",
-      reason: "A paid subscription is required to continue.",
+      status,
+      reason: "Subscription not initialized. Please try again.",
     }
   }
 
   if (
-    (status === "trialing" && trialExpired && !hasPaidSubscription) ||
+    (status === "trialing" && trialExpired) ||
     status === "past_due" ||
     status === "canceled" ||
     status === "unpaid" ||

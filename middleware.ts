@@ -232,12 +232,9 @@ export async function middleware(request: NextRequest) {
         const status = String((subscription as any)?.status || '')
         const trialEnd = (subscription as any)?.trial_end ? new Date((subscription as any).trial_end) : null
         const trialExpired = !!trialEnd && trialEnd.getTime() < Date.now()
-        const hasPaidSubscription = !!(subscription as any)?.stripe_subscription_id
 
         const hasSubscriptionAccess =
           !!subscription &&
-          planName.toLowerCase() !== 'free' &&
-          hasPaidSubscription &&
           (status === 'active' || (status === 'trialing' && !trialExpired))
 
         const requiredPlanFeature = requiredPlanFeatureForPath(pathname)

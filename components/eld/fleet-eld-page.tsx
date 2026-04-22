@@ -63,7 +63,16 @@ export function FleetEldPage() {
             Logs
           </TabsTrigger>
           <TabsTrigger value="violations" className="shrink-0">
-            Violations
+            <span className="inline-flex items-center gap-1.5">
+              Violations
+              {events.length > 0 && (
+                <span
+                  className="inline-block h-2 w-2 rounded-full bg-red-500"
+                  aria-label={`${events.length} open violations`}
+                  title={`${events.length} open violations`}
+                />
+              )}
+            </span>
           </TabsTrigger>
           <TabsTrigger value="health" className="shrink-0">
             Health

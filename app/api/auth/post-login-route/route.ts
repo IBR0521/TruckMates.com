@@ -61,12 +61,9 @@ export async function GET(request: NextRequest) {
   const status = String((subscription as any)?.status || "")
   const trialEnd = (subscription as any)?.trial_end ? new Date((subscription as any).trial_end) : null
   const trialExpired = !!trialEnd && trialEnd.getTime() < Date.now()
-  const hasPaidSubscription = !!(subscription as any)?.stripe_subscription_id
 
   const hasSubscriptionAccess =
     !!subscription &&
-    planName !== "free" &&
-    hasPaidSubscription &&
     (status === "active" || (status === "trialing" && !trialExpired))
 
   if (!hasSubscriptionAccess) {
