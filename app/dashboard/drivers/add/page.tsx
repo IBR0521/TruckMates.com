@@ -77,7 +77,7 @@ function DatePickerField({
         <Calendar
           mode="single"
           selected={selectedDate}
-          onSelect={(date) => {
+          onSelect={(date: Date | undefined) => {
             onChange({
               target: { name, value: toISODate(date) },
             } as React.ChangeEvent<HTMLInputElement>)
