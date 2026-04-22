@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { errorMessage } from "@/lib/error-message"
-import { MapPin, Navigation, AlertTriangle } from "lucide-react"
+import { MapPin, Navigation, AlertTriangle, Ruler, Clock3 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { getRouteDirections } from "@/app/actions/integrations-google-maps"
@@ -22,6 +22,8 @@ interface GoogleMapsRouteProps {
   weight?: number
   truckHeight?: number
   contents?: string
+  showNavigationButton?: boolean
+  onRouteDataChange?: (routeData: any) => void
 }
 
 const EMPTY_STOPS: NonNullable<GoogleMapsRouteProps["stops"]> = []
@@ -63,7 +65,20 @@ export function GoogleMapsRoute({
   weight,
   truckHeight,
   contents,
+  showNavigationButton = true,
+  onRouteDataChange,
 }: GoogleMapsRouteProps) {
+  const toFriendlyMapError = (raw: string) => {
+    const value = String(raw || "").toLowerCase()
+    if (!origin?.trim() || !destination?.trim()) return "Enter origin and destination to preview this route."
+    if (value.includes("geocode") || value.includes("address") || value.includes("zero_results")) {
+      return "We couldn't locate one of the addresses. Please check origin and destination."
+    }
+    if (value.includes("api") || value.includes("denied") || value.includes("quota")) {
+      return "Route preview is temporarily unavailable. Please try again shortly."
+    }
+    return "Route preview is unavailable right now. Please verify the route inputs and try again."
+  }
   const safeStops = !Array.isArray(stops) || stops.length === 0 ? EMPTY_STOPS : stops
   const stopsSig = useMemo(() => {
     if (!Array.isArray(stops) || stops.length === 0) return "__empty__"
@@ -213,6 +228,35 @@ export function GoogleMapsRoute({
         setIsLoading(true)
         setError(null)
 
+        const mapStyles = [
+          {
+            featureType: "poi",
+            elementType: "labels",
+            stylers: [{ visibility: "off" }],
+          },
+        ]
+
+        if (!origin?.trim() || !destination?.trim()) {
+          const mapElement = mapRef.current
+          if (!mapElement) return
+          const map = new window.google.maps.Map(mapElement, {
+            zoom: 4,
+            center: { lat: 39.8283, lng: -98.5795 },
+            mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+            styles: mapStyles,
+          })
+          mapInstanceRef.current = map
+          setTimeout(() => {
+            if (!mapInstanceRef.current) return
+            window.google.maps.event.trigger(mapInstanceRef.current, "resize")
+            mapInstanceRef.current.setCenter({ lat: 39.8283, lng: -98.5795 })
+          }, 150)
+          setRouteData(null)
+          setError("Enter origin and destination to preview this route.")
+          setIsLoading(false)
+          return
+        }
+
         // Verify Google Maps API is fully loaded
         if (!window.google?.maps?.Geocoder || typeof window.google.maps.Geocoder !== 'function') {
           throw new Error("Google Maps Geocoder API is not available. Please ensure the Google Maps JavaScript API is fully loaded.")
@@ -246,13 +290,13 @@ export function GoogleMapsRoute({
                   if (status === window.google.maps.GeocoderStatus.ERROR) {
                     errorMsg = "Geocoding service error. Please check your API key and try again."
                   } else if (status === window.google.maps.GeocoderStatus.INVALID_REQUEST) {
-                    errorMsg = `Invalid address format: "${origin}". Please provide a complete address.`
+                    errorMsg = "Invalid address format."
                   } else if (status === window.google.maps.GeocoderStatus.OVER_QUERY_LIMIT) {
                     errorMsg = "Geocoding quota exceeded. Please try again later."
                   } else if (status === window.google.maps.GeocoderStatus.REQUEST_DENIED) {
                     errorMsg = "Geocoding API access denied. Please check your API key permissions."
                   } else if (status === window.google.maps.GeocoderStatus.ZERO_RESULTS) {
-                    errorMsg = `Address not found: "${origin}". Please check the address and try again.`
+                    errorMsg = "Address not found."
                   }
                   reject(new Error(errorMsg))
                 }
@@ -263,7 +307,7 @@ export function GoogleMapsRoute({
               lng: originResult[0].geometry.location.lng(),
             }
           } catch (err: unknown) {
-            throw new Error(`Failed to geocode origin "${origin}": ${errorMessage(err, "Unknown error")}`)
+            throw new Error(`Origin geocoding failed: ${errorMessage(err, "Unknown error")}`)
           }
         }
 
@@ -298,7 +342,7 @@ export function GoogleMapsRoute({
                 } else {
                   let errorMsg = `Geocoding failed: ${status}`
                   if (status === window.google.maps.GeocoderStatus.ZERO_RESULTS) {
-                    errorMsg = `Address not found: "${destination}". Please check the address and try again.`
+                    errorMsg = "Address not found."
                   }
                   reject(new Error(errorMsg))
                 }
@@ -309,7 +353,7 @@ export function GoogleMapsRoute({
               lng: destResult[0].geometry.location.lng(),
             }
           } catch (err: unknown) {
-            throw new Error(`Failed to geocode destination "${destination}": ${errorMessage(err, "Unknown error")}`)
+            throw new Error(`Destination geocoding failed: ${errorMessage(err, "Unknown error")}`)
           }
         }
 
@@ -323,16 +367,15 @@ export function GoogleMapsRoute({
           zoom: 7,
           center: originCoords,
           mapTypeId: window.google.maps.MapTypeId.ROADMAP,
-          styles: [
-            {
-              featureType: "poi",
-              elementType: "labels",
-              stylers: [{ visibility: "off" }],
-            },
-          ],
+          styles: mapStyles,
         })
 
         mapInstanceRef.current = map
+        setTimeout(() => {
+          if (!mapInstanceRef.current) return
+          window.google.maps.event.trigger(mapInstanceRef.current, "resize")
+          mapInstanceRef.current.setCenter(originCoords)
+        }, 150)
 
         // Initialize directions service and renderer
         const directionsService = new window.google.maps.DirectionsService()
@@ -448,6 +491,12 @@ export function GoogleMapsRoute({
                 { name: destination, type: "destination" },
               ],
             })
+            onRouteDataChange?.({
+              distance: `${(totalDistance / 1609.34).toFixed(0)} miles`,
+              distance_meters: totalDistance,
+              duration: `${Math.floor(totalDuration / 3600)}h ${Math.floor((totalDuration % 3600) / 60)}m`,
+              duration_seconds: totalDuration,
+            })
 
             // Fit map to show entire route
             // result.routes[0].bounds is already a LatLngBounds object, not an array
@@ -484,7 +533,7 @@ Visit: https://console.cloud.google.com/google/maps-apis`
       } catch (err: unknown) {
         console.error("Map initialization error:", err)
         if (cancelled) return
-        setError(errorMessage(err, "Failed to initialize map"))
+        setError(toFriendlyMapError(errorMessage(err, "Failed to initialize map")))
         setIsLoading(false)
       }
     }
@@ -500,6 +549,18 @@ Visit: https://console.cloud.google.com/google/maps-apis`
       markersRef.current = []
     }
   }, [mapLoaded, origin, destination, originCoordinates, destinationCoordinates, stopsSig])
+
+  // Keep map tiles painted when parent layout changes size.
+  useEffect(() => {
+    if (!mapRef.current || !mapInstanceRef.current || !window.google?.maps?.event) return
+    const container = mapRef.current
+    const observer = new ResizeObserver(() => {
+      if (!mapInstanceRef.current) return
+      window.google.maps.event.trigger(mapInstanceRef.current, "resize")
+    })
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [mapLoaded, origin, destination])
 
   // Calculate restrictions
   const restrictions: string[] = []
@@ -518,6 +579,12 @@ Visit: https://console.cloud.google.com/google/maps-apis`
     <div className="space-y-4">
       {/* Map Container */}
       <div className="relative w-full h-96 rounded-lg border border-border/50 overflow-hidden">
+        {routeData && !isLoading && !error && (
+          <div className="absolute right-3 top-3 z-10 rounded-md border border-border/70 bg-background/80 px-3 py-2 text-xs backdrop-blur">
+            <p className="font-medium text-foreground">{routeData.duration}</p>
+            <p className="text-muted-foreground">{routeData.distance}</p>
+          </div>
+        )}
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-secondary/30 z-10">
             <div className="text-center">
@@ -526,21 +593,16 @@ Visit: https://console.cloud.google.com/google/maps-apis`
             </div>
           </div>
         )}
-        {error && (
+        {error && error === "Enter origin and destination to preview this route." && (
+          <div className="absolute left-3 top-3 z-10 rounded-md border border-border/70 bg-background/80 px-3 py-2 backdrop-blur">
+            <p className="text-xs text-muted-foreground">{error}</p>
+          </div>
+        )}
+        {error && error !== "Enter origin and destination to preview this route." && (
           <div className="absolute inset-0 flex items-center justify-center bg-secondary/30 z-10">
             <div className="text-center p-4 max-w-md">
               <AlertTriangle className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
-              <p className="text-sm text-foreground whitespace-pre-line">{error}</p>
-              {error.includes("Directions API") && (
-                <div className="mt-4 text-xs text-muted-foreground">
-                  <p className="mb-2">Required APIs to enable in Google Cloud Console:</p>
-                  <ul className="list-disc list-inside space-y-1 text-left">
-                    <li>Maps JavaScript API</li>
-                    <li>Directions API</li>
-                    <li>Geocoding API</li>
-                  </ul>
-                </div>
-              )}
+              <p className="text-sm text-foreground">{toFriendlyMapError(error)}</p>
             </div>
           </div>
         )}
@@ -555,47 +617,60 @@ Visit: https://console.cloud.google.com/google/maps-apis`
             <h4 className="font-semibold text-foreground">Truck Route Details</h4>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Distance</p>
-              <p className="text-sm font-medium text-foreground">{routeData.distance}</p>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 mb-4">
+            <div className="rounded-md border border-border/60 bg-background/40 p-3">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+                <Ruler className="h-3.5 w-3.5" />
+                Distance
+              </div>
+              <p className="mt-1 text-sm font-semibold text-foreground">{routeData.distance}</p>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Duration</p>
-              <p className="text-sm font-medium text-foreground">{routeData.duration}</p>
+            <div className="rounded-md border border-border/60 bg-background/40 p-3">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+                <Clock3 className="h-3.5 w-3.5" />
+                Duration
+              </div>
+              <p className="mt-1 text-sm font-semibold text-foreground">{routeData.duration}</p>
             </div>
           </div>
 
           {/* Waypoints */}
           <div className="space-y-2 mb-4">
-            <p className="text-xs font-medium text-muted-foreground">Route Waypoints</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Route Waypoints</p>
             {(routeData.waypoints ?? []).map((waypoint: any, idx: number) => (
-              <div key={idx} className="flex items-center gap-2 text-xs">
-                <div
-                  className={`w-2 h-2 rounded-full ${
-                    waypoint.type === "origin"
-                      ? "bg-green-500"
-                      : waypoint.type === "destination"
-                        ? "bg-red-500"
-                        : "bg-blue-500"
-                  }`}
-                />
-                <span className="text-foreground">{waypoint.name}</span>
+              <div key={idx} className="flex gap-3 text-xs">
+                <div className="flex w-3 flex-col items-center">
+                  <div
+                    className={`mt-1 h-2.5 w-2.5 rounded-full ${
+                      waypoint.type === "origin"
+                        ? "bg-emerald-500"
+                        : waypoint.type === "destination"
+                          ? "bg-red-500"
+                          : "bg-blue-500"
+                    }`}
+                  />
+                  {idx < (routeData.waypoints ?? []).length - 1 && (
+                    <div className="mt-1 h-5 w-px bg-border/70" />
+                  )}
+                </div>
+                <div className="pb-1">
+                  <p className="text-foreground">{waypoint.name}</p>
+                </div>
               </div>
             ))}
           </div>
 
           {/* Restrictions */}
           {restrictions.length > 0 && (
-            <div className="border-t border-border/30 pt-3">
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
               <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
                 <p className="text-xs font-medium text-foreground">Truck Restrictions</p>
               </div>
               <div className="space-y-1">
                 {restrictions.map((restriction, idx) => (
                   <p key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
-                    <span className="text-yellow-500 mt-0.5">•</span>
+                    <span className="text-amber-400 mt-0.5">•</span>
                     {restriction}
                   </p>
                 ))}
@@ -606,18 +681,20 @@ Visit: https://console.cloud.google.com/google/maps-apis`
       )}
 
       {/* Navigation Button */}
-      <Button
-        onClick={() => {
-          const googleMapsUrl = safeStops.length > 0
-            ? `https://www.google.com/maps/dir/${encodeURIComponent(origin)}/${safeStops.map(s => encodeURIComponent(s.address || s.location_name)).join('/')}/${encodeURIComponent(destination)}`
-            : `https://www.google.com/maps/dir/${encodeURIComponent(origin)}/${encodeURIComponent(destination)}`
-          window.open(googleMapsUrl, "_blank")
-        }}
-        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-      >
-        <Navigation className="w-4 h-4 mr-2" />
-        Open in Google Maps {safeStops.length > 0 && `(${safeStops.length} stops)`}
-      </Button>
+      {showNavigationButton && (
+        <Button
+          onClick={() => {
+            const googleMapsUrl = safeStops.length > 0
+              ? `https://www.google.com/maps/dir/${encodeURIComponent(origin)}/${safeStops.map(s => encodeURIComponent(s.address || s.location_name)).join('/')}/${encodeURIComponent(destination)}`
+              : `https://www.google.com/maps/dir/${encodeURIComponent(origin)}/${encodeURIComponent(destination)}`
+            window.open(googleMapsUrl, "_blank")
+          }}
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+        >
+          <Navigation className="w-4 h-4 mr-2" />
+          Open in Google Maps {safeStops.length > 0 && `(${safeStops.length} stops)`}
+        </Button>
+      )}
     </div>
   )
 }

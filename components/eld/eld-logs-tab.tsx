@@ -127,11 +127,6 @@ export function EldLogsTab({ embeddedInEldShell = false }: Props) {
         <div className="mx-auto max-w-7xl space-y-6">
           <EldFleetLogGridPanel drivers={drivers} />
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <HOSCalculator />
-            <DriverScorecard />
-          </div>
-
           <Card className="border-border bg-card p-4">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
               <div>
@@ -293,6 +288,11 @@ export function EldLogsTab({ embeddedInEldShell = false }: Props) {
               ))}
             </div>
           )}
+
+          <div className="space-y-6">
+            <HOSCalculator />
+            <DriverScorecard />
+          </div>
         </div>
       </div>
     </div>

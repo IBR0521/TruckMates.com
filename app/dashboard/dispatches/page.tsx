@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -93,7 +93,12 @@ export default function DispatchesPage() {
   const [loadDetailsLoading, setLoadDetailsLoading] = useState(false)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [showDispatchAssist, setShowDispatchAssist] = useState<string | null>(null)
+  const [loadAssignments, setLoadAssignments] = useState<Record<string, { driverId?: string; truckId?: string }>>({})
+  const [routeAssignments, setRouteAssignments] = useState<Record<string, { driverId?: string; truckId?: string }>>({})
   const hosRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hosSectionRef = useRef<HTMLDivElement | null>(null)
+  const loadsSectionRef = useRef<HTMLDivElement | null>(null)
+  const routesSectionRef = useRef<HTMLDivElement | null>(null)
 
   // Get company ID for real-time filtering
   useEffect(() => {
@@ -374,6 +379,11 @@ export default function DispatchesPage() {
         toast.error(result.error)
       } else {
         toast.success("Load assigned successfully")
+        setLoadAssignments((prev) => {
+          const next = { ...prev }
+          delete next[loadId]
+          return next
+        })
         await loadData()
       }
     } catch (error: unknown) {
@@ -400,6 +410,11 @@ export default function DispatchesPage() {
         toast.error(result.error)
       } else {
         toast.success("Route assigned successfully")
+        setRouteAssignments((prev) => {
+          const next = { ...prev }
+          delete next[routeId]
+          return next
+        })
         await loadData()
       }
     } catch (error: unknown) {
@@ -511,6 +526,57 @@ export default function DispatchesPage() {
     }
   }
 
+  const actionableUnassignedLoads = useMemo(
+    () =>
+      unassignedLoads.filter((load) => !["in_transit", "completed", "delivered"].includes(String(load.status || "").toLowerCase())),
+    [unassignedLoads]
+  )
+
+  const needsAttentionLoads = useMemo(
+    () =>
+      unassignedLoads.filter((load) => ["in_transit"].includes(String(load.status || "").toLowerCase())),
+    [unassignedLoads]
+  )
+
+  const actionableUnassignedRoutes = useMemo(
+    () =>
+      unassignedRoutes.filter((route) => !["in_progress", "completed"].includes(String(route.status || "").toLowerCase())),
+    [unassignedRoutes]
+  )
+
+  const overdueLoadsCount = useMemo(() => {
+    const now = new Date()
+    return actionableUnassignedLoads.filter((load) => {
+      if (!load.load_date) return false
+      const pickupDate = new Date(load.load_date)
+      return pickupDate < now
+    }).length
+  }, [actionableUnassignedLoads])
+
+  const hasActionableBacklog = actionableUnassignedLoads.length > 0 || actionableUnassignedRoutes.length > 0
+  const jumpToSection = (section: "hos" | "loads" | "routes") => {
+    const map = {
+      hos: hosSectionRef,
+      loads: loadsSectionRef,
+      routes: routesSectionRef,
+    }
+    map[section].current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
+  const handleLoadDraftChange = (loadId: string, patch: Partial<{ driverId?: string; truckId?: string }>) => {
+    setLoadAssignments((prev) => ({
+      ...prev,
+      [loadId]: { ...prev[loadId], ...patch },
+    }))
+  }
+
+  const handleRouteDraftChange = (routeId: string, patch: Partial<{ driverId?: string; truckId?: string }>) => {
+    setRouteAssignments((prev) => ({
+      ...prev,
+      [routeId]: { ...prev[routeId], ...patch },
+    }))
+  }
+
   return (
     <Tabs
       value={activeTab}
@@ -519,25 +585,26 @@ export default function DispatchesPage() {
       }
       className="w-full"
     >
-      <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-2">
-        <TabsTrigger value="dispatch">Dispatch Board</TabsTrigger>
-        <TabsTrigger value="check-calls">Check Calls</TabsTrigger>
-      </TabsList>
-
       <TabsContent value="dispatch">
         <div className="w-full">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex items-center justify-between">
-        <div>
+      <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold text-foreground">Dispatch Board</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Assign drivers and vehicles to pending loads and routes
           </p>
         </div>
-        <Button onClick={loadData} variant="outline" disabled={isLoading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <TabsList className="grid w-fit grid-cols-2">
+            <TabsTrigger value="dispatch">Dispatch Board</TabsTrigger>
+            <TabsTrigger value="check-calls">Check Calls</TabsTrigger>
+          </TabsList>
+          <Button onClick={loadData} variant="outline" disabled={isLoading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Content */}
@@ -555,57 +622,121 @@ export default function DispatchesPage() {
             />
           )}
 
-          {/* Gantt Chart Timeline View (Phase 2) */}
-          <DispatchGantt
-            onJobClick={(job) => {
-              if (job.type === "load") {
-                handleLoadClick(job.id)
-              } else {
-                // Handle route click
-                toast.info(`Route: ${job.route_name}`)
-              }
-            }}
-          />
+          {/* Timeline / Date context */}
+          {hasActionableBacklog ? (
+            <Card className="border-border p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-primary" />
+                  <p className="text-sm font-medium text-foreground">Dispatch period</p>
+                </div>
+                <p className="text-sm text-muted-foreground">Today · {format(new Date(), "MMM dd, yyyy")}</p>
+              </div>
+            </Card>
+          ) : (
+            <DispatchGantt
+              hideEmptyState={hasActionableBacklog}
+              onJobClick={(job) => {
+                if (job.type === "load") {
+                  handleLoadClick(job.id)
+                } else {
+                  toast.info(`Route: ${job.route_name}`)
+                }
+              }}
+            />
+          )}
 
-          {/* Summary Cards */}
-          <div className="grid md:grid-cols-3 gap-4">
-            <Card className="border-border p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Unassigned Loads</p>
-                  <p className="text-3xl font-bold text-foreground">
-                    {isLoading ? "..." : unassignedLoads.length}
-                  </p>
-                </div>
-                <Package className="w-10 h-10 text-primary opacity-50" />
-              </div>
-            </Card>
-            <Card className="border-border p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Unassigned Routes</p>
-                  <p className="text-3xl font-bold text-foreground">
-                    {isLoading ? "..." : unassignedRoutes.length}
-                  </p>
-                </div>
-                <Route className="w-10 h-10 text-primary opacity-50" />
-              </div>
-            </Card>
-            <Card className="border-border p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Available Drivers</p>
-                  <p className="text-3xl font-bold text-foreground">
-                    {isLoading ? "..." : drivers.length}
-                  </p>
-                </div>
-                <User className="w-10 h-10 text-primary opacity-50" />
+          {/* Sticky jump navigation */}
+          <div className="sticky top-[72px] z-20">
+            <Card className="border-border/70 bg-card/90 backdrop-blur px-3 py-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="ghost" size="sm" className="h-8" onClick={() => jumpToSection("hos")}>
+                  HOS Status ({driversHOS.length})
+                </Button>
+                <Button variant="ghost" size="sm" className="h-8" onClick={() => jumpToSection("loads")}>
+                  Unassigned Loads ({actionableUnassignedLoads.length})
+                </Button>
+                <Button variant="ghost" size="sm" className="h-8" onClick={() => jumpToSection("routes")}>
+                  Unassigned Routes ({actionableUnassignedRoutes.length})
+                </Button>
               </div>
             </Card>
           </div>
 
+          {/* Summary Cards */}
+          <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <button
+              type="button"
+              onClick={() => jumpToSection("loads")}
+              className="text-left"
+            >
+              <Card className="border-border p-6 hover:border-primary/60 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Unassigned Loads</p>
+                    <p className="text-3xl font-bold text-foreground">
+                      {isLoading ? "..." : actionableUnassignedLoads.length}
+                    </p>
+                  </div>
+                  <Package className="w-10 h-10 text-primary opacity-50" />
+                </div>
+              </Card>
+            </button>
+            <button
+              type="button"
+              onClick={() => jumpToSection("routes")}
+              className="text-left"
+            >
+              <Card className="border-border p-6 hover:border-primary/60 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Unassigned Routes</p>
+                    <p className="text-3xl font-bold text-foreground">
+                      {isLoading ? "..." : actionableUnassignedRoutes.length}
+                    </p>
+                  </div>
+                  <Route className="w-10 h-10 text-primary opacity-50" />
+                </div>
+              </Card>
+            </button>
+            <button
+              type="button"
+              onClick={() => jumpToSection("hos")}
+              className="text-left"
+            >
+              <Card className="border-border p-6 hover:border-primary/60 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Available Drivers</p>
+                    <p className="text-3xl font-bold text-foreground">
+                      {isLoading ? "..." : drivers.length}
+                    </p>
+                  </div>
+                  <User className="w-10 h-10 text-primary opacity-50" />
+                </div>
+              </Card>
+            </button>
+            <button
+              type="button"
+              onClick={() => jumpToSection("loads")}
+              className="text-left"
+            >
+              <Card className="border-border p-6 hover:border-primary/60 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Loads Overdue / Past Pickup</p>
+                    <p className="text-3xl font-bold text-foreground">
+                      {isLoading ? "..." : overdueLoadsCount}
+                    </p>
+                  </div>
+                  <AlertCircle className="w-10 h-10 text-amber-400/80" />
+                </div>
+              </Card>
+            </button>
+          </div>
+
           {/* Real-Time HOS Status Widget */}
-          <Card className="border-border">
+          <Card className="border-border" ref={hosSectionRef}>
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -731,12 +862,12 @@ export default function DispatchesPage() {
           </Card>
 
           {/* Unassigned Loads */}
-          <div>
+          <div ref={loadsSectionRef}>
             <div className="flex items-center gap-3 mb-4">
               <Package className="w-6 h-6 text-primary" />
               <h2 className="text-xl font-bold text-foreground">Unassigned Loads</h2>
               <Badge variant="outline" className="ml-auto">
-                {unassignedLoads.length} pending
+                {actionableUnassignedLoads.length} pending
               </Badge>
             </div>
 
@@ -744,7 +875,7 @@ export default function DispatchesPage() {
               <Card className="border-border p-8">
                 <p className="text-center text-muted-foreground">Loading loads...</p>
               </Card>
-            ) : unassignedLoads.length === 0 ? (
+            ) : actionableUnassignedLoads.length === 0 ? (
               <Card className="border-border p-8">
                 <div className="text-center">
                   <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-4 opacity-50" />
@@ -757,7 +888,7 @@ export default function DispatchesPage() {
               </Card>
             ) : (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {unassignedLoads.map((load) => {
+                {actionableUnassignedLoads.map((load) => {
                   // Sort by urgency_score (highest first) for visual prioritization
                   const urgencyScore = load.urgency_score || 0
                   const statusColor = load.status_color || "#6B7280"
@@ -812,29 +943,31 @@ export default function DispatchesPage() {
 
                     <div className="space-y-3 pt-3 border-t border-border" onClick={(e) => e.stopPropagation()}>
                       <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => handleFindNearbyDrivers(load.id)}
-                        disabled={findingNearby === load.id}
-                      >
-                        <MapPin className="w-4 h-4 mr-2" />
-                        {findingNearby === load.id ? "Finding..." : "Find Nearby Drivers"}
-                      </Button>
-                      <Button
                         variant="default"
                         size="sm"
                         className="w-full"
                         onClick={() => setShowDispatchAssist(load.id)}
+                        title="AI-suggested assignment based on HOS, distance, and performance"
                       >
                         <Sparkles className="w-4 h-4 mr-2" />
                         Dispatch Assist
                       </Button>
+                      <p className="text-[11px] text-muted-foreground -mt-1">
+                        AI-suggested assignment. Need proximity only?{" "}
+                        <button
+                          type="button"
+                          className="text-primary hover:underline"
+                          onClick={() => handleFindNearbyDrivers(load.id)}
+                          disabled={findingNearby === load.id}
+                        >
+                          {findingNearby === load.id ? "Finding nearby..." : "Find nearby drivers"}
+                        </button>
+                      </p>
                       <div>
                         <Label className="text-xs text-muted-foreground mb-1 block">Assign Driver</Label>
                         <Select
-                          value={load.driver_id || undefined}
-                          onValueChange={(value) => handleAssignLoad(load.id, value, load.truck_id)}
+                          value={loadAssignments[load.id]?.driverId}
+                          onValueChange={(value) => handleLoadDraftChange(load.id, { driverId: value })}
                           disabled={assigning === `load-${load.id}`}
                         >
                           <SelectTrigger className="h-9">
@@ -852,8 +985,8 @@ export default function DispatchesPage() {
                       <div>
                         <Label className="text-xs text-muted-foreground mb-1 block">Assign Vehicle</Label>
                         <Select
-                          value={load.truck_id || undefined}
-                          onValueChange={(value) => handleAssignLoad(load.id, load.driver_id, value)}
+                          value={loadAssignments[load.id]?.truckId}
+                          onValueChange={(value) => handleLoadDraftChange(load.id, { truckId: value })}
                           disabled={assigning === `load-${load.id}`}
                         >
                           <SelectTrigger className="h-9">
@@ -868,6 +1001,23 @@ export default function DispatchesPage() {
                           </SelectContent>
                         </Select>
                       </div>
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        disabled={
+                          assigning === `load-${load.id}` ||
+                          (!loadAssignments[load.id]?.driverId && !loadAssignments[load.id]?.truckId)
+                        }
+                        onClick={() =>
+                          handleAssignLoad(
+                            load.id,
+                            loadAssignments[load.id]?.driverId,
+                            loadAssignments[load.id]?.truckId
+                          )
+                        }
+                      >
+                        {assigning === `load-${load.id}` ? "Assigning..." : "Confirm Assignment"}
+                      </Button>
                     </div>
                   </Card>
                   )
@@ -876,13 +1026,45 @@ export default function DispatchesPage() {
             )}
           </div>
 
+          {/* In-transit assignment anomalies */}
+          {needsAttentionLoads.length > 0 && (
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <AlertCircle className="w-6 h-6 text-amber-400" />
+                <h2 className="text-xl font-bold text-foreground">Needs Attention</h2>
+                <Badge variant="outline" className="ml-auto">
+                  {needsAttentionLoads.length} in transit without full assignment
+                </Badge>
+              </div>
+              <Card className="border border-amber-500/40 bg-amber-500/10 p-4 mb-4">
+                <p className="text-sm text-amber-100">
+                  These loads are already in transit but still missing driver or vehicle assignment fields. Review and fix record integrity.
+                </p>
+              </Card>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {needsAttentionLoads.map((load) => (
+                  <Card key={load.id} className="border border-amber-500/40 bg-amber-500/5 p-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-foreground">{load.shipment_number}</h3>
+                      {getStatusBadge(load.status, load.status_color)}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">{load.origin} → {load.destination}</p>
+                    <Button className="w-full mt-3" variant="outline" onClick={() => handleLoadClick(load.id)}>
+                      Review Load
+                    </Button>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Unassigned Routes */}
-          <div>
+          <div ref={routesSectionRef}>
             <div className="flex items-center gap-3 mb-4">
               <Route className="w-6 h-6 text-primary" />
               <h2 className="text-xl font-bold text-foreground">Unassigned Routes</h2>
               <Badge variant="outline" className="ml-auto">
-                {unassignedRoutes.length} pending
+                {actionableUnassignedRoutes.length} pending
               </Badge>
             </div>
 
@@ -890,7 +1072,7 @@ export default function DispatchesPage() {
               <Card className="border-border p-8">
                 <p className="text-center text-muted-foreground">Loading routes...</p>
               </Card>
-            ) : unassignedRoutes.length === 0 ? (
+            ) : actionableUnassignedRoutes.length === 0 ? (
               <Card className="border-border p-8">
                 <div className="text-center">
                   <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-4 opacity-50" />
@@ -903,7 +1085,7 @@ export default function DispatchesPage() {
               </Card>
             ) : (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {unassignedRoutes.map((route) => (
+                {actionableUnassignedRoutes.map((route) => (
                   <Card key={route.id} className="border-border p-4 hover:border-primary/50 transition-colors">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
@@ -911,6 +1093,9 @@ export default function DispatchesPage() {
                           <h3 className="font-semibold text-foreground">{route.name}</h3>
                           {getStatusBadge(route.status)}
                         </div>
+                        <p className="text-[11px] text-muted-foreground mb-1">
+                          Route ID: {String(route.id).slice(0, 8).toUpperCase()}
+                        </p>
                         <div className="space-y-1 text-sm">
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <MapPin className="w-3 h-3" />
@@ -941,8 +1126,8 @@ export default function DispatchesPage() {
                       <div>
                         <Label className="text-xs text-muted-foreground mb-1 block">Assign Driver</Label>
                         <Select
-                          value={route.driver_id || undefined}
-                          onValueChange={(value) => handleAssignRoute(route.id, value, route.truck_id)}
+                          value={routeAssignments[route.id]?.driverId}
+                          onValueChange={(value) => handleRouteDraftChange(route.id, { driverId: value })}
                           disabled={assigning === `route-${route.id}`}
                         >
                           <SelectTrigger className="h-9">
@@ -960,8 +1145,8 @@ export default function DispatchesPage() {
                       <div>
                         <Label className="text-xs text-muted-foreground mb-1 block">Assign Vehicle</Label>
                         <Select
-                          value={route.truck_id || undefined}
-                          onValueChange={(value) => handleAssignRoute(route.id, route.driver_id, value)}
+                          value={routeAssignments[route.id]?.truckId}
+                          onValueChange={(value) => handleRouteDraftChange(route.id, { truckId: value })}
                           disabled={assigning === `route-${route.id}`}
                         >
                           <SelectTrigger className="h-9">
@@ -976,6 +1161,23 @@ export default function DispatchesPage() {
                           </SelectContent>
                         </Select>
                       </div>
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        disabled={
+                          assigning === `route-${route.id}` ||
+                          (!routeAssignments[route.id]?.driverId && !routeAssignments[route.id]?.truckId)
+                        }
+                        onClick={() =>
+                          handleAssignRoute(
+                            route.id,
+                            routeAssignments[route.id]?.driverId,
+                            routeAssignments[route.id]?.truckId
+                          )
+                        }
+                      >
+                        {assigning === `route-${route.id}` ? "Assigning..." : "Confirm Assignment"}
+                      </Button>
                     </div>
                   </Card>
                 ))}

@@ -312,6 +312,21 @@ export function FleetMap({
     }
   }, [center, zoom])
 
+  // Keep Google Map canvas synced with container size changes.
+  useEffect(() => {
+    if (!mapRef.current || !mapInstanceRef.current || !window.google?.maps?.event) return
+
+    const container = mapRef.current
+    const observer = new ResizeObserver(() => {
+      if (!mapInstanceRef.current) return
+      window.google.maps.event.trigger(mapInstanceRef.current, "resize")
+      mapInstanceRef.current.setCenter({ lat: center[0], lng: center[1] })
+    })
+
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [center])
+
   // Update vehicle markers
   const updateMarkers = () => {
     if (!mapInstanceRef.current || !window.google) return
@@ -739,22 +754,18 @@ export function FleetMap({
   }
 
   // Always render the container, even when loading, so the ref can attach
-    return (
-    <div className="h-full w-full rounded-lg relative" style={{ minHeight: "600px" }}>
-      <div
-        ref={setMapRef}
-        className="h-full w-full"
-        style={{ minHeight: "600px" }}
-      />
+  return (
+    <div className="h-full w-full rounded-lg relative">
+      <div ref={setMapRef} className="h-full w-full" />
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-secondary/20 rounded-lg border border-border z-10">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-sm text-muted-foreground">Loading map...</p>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-sm text-muted-foreground">Loading map...</p>
           </div>
         </div>
       )}
-      </div>
+    </div>
   )
 }
 

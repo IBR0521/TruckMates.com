@@ -500,6 +500,9 @@ export async function createDriver(formData: {
   if (formData.emergency_contact_phone) driverData.emergency_contact_phone = sanitizePhone(formData.emergency_contact_phone)
   if (formData.emergency_contact_relationship) driverData.emergency_contact_relationship = sanitizeString(formData.emergency_contact_relationship, 50)
   if (formData.notes) driverData.notes = sanitizeString(formData.notes, 1000)
+  if (formData.custom_fields && typeof formData.custom_fields === "object" && !Array.isArray(formData.custom_fields)) {
+    driverData.custom_fields = formData.custom_fields
+  }
 
   const DRIVER_RETURNING_SELECT = `
       id,

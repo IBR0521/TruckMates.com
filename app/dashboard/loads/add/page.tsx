@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { errorMessage } from "@/lib/error-message"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -32,6 +32,10 @@ import {
   Truck,
   X,
   Plus,
+  Check,
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -54,8 +58,27 @@ import {
 } from "@/app/actions/enhanced-address-book"
 import { BookOpen } from "lucide-react"
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export default function AddLoadPage() {
+  const wizardSteps = [
+    { key: "load-info", label: "Load Info", required: true },
+    { key: "shipper", label: "Shipper", required: true },
+    { key: "consignee", label: "Consignee", required: true },
+    { key: "freight", label: "Freight", required: false },
+    { key: "charges", label: "Charges", required: false },
+    { key: "assignment", label: "Assignment", required: false },
+  ] as const
+
+  type WizardStepKey = (typeof wizardSteps)[number]["key"]
+
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [drivers, setDrivers] = useState<any[]>([])
@@ -72,6 +95,8 @@ export default function AddLoadPage() {
   const [consigneeAddressBookEntries, setConsigneeAddressBookEntries] = useState<AddressBookEntry[]>([])
   const [selectedShipperAddressBookId, setSelectedShipperAddressBookId] = useState<string>("")
   const [selectedConsigneeAddressBookId, setSelectedConsigneeAddressBookId] = useState<string>("")
+  const [activeStep, setActiveStep] = useState<WizardStepKey>("load-info")
+  const [confirmCreateOpen, setConfirmCreateOpen] = useState(false)
 
   const [formData, setFormData] = useState({
     // Load Info
@@ -178,6 +203,62 @@ export default function AddLoadPage() {
     }
   }, [selectedCustomer])
 
+  useEffect(() => {
+    if (!selectedShipperAddressBookId && shipperAddressBookEntries.length > 0 && !formData.shipperName) {
+      const first = shipperAddressBookEntries[0]
+      if (first) {
+        setSelectedShipperAddressBookId(first.id)
+        setFormData((prev) => ({
+          ...prev,
+          shipperName: first.name || first.company_name || "",
+          shipperAddress: first.address_line1 || "",
+          shipperCity: first.city || "",
+          shipperState: first.state || "",
+          shipperZip: first.zip_code || "",
+          shipperContact: first.contact_name || "",
+          shipperPhone: first.phone || "",
+          origin:
+            first.coordinates
+              ? `${first.coordinates.lat}, ${first.coordinates.lng}`
+              : `${first.city}, ${first.state}`.replace(/^,\s*|,\s*$/g, ""),
+        }))
+      }
+    }
+  }, [shipperAddressBookEntries, selectedShipperAddressBookId, formData.shipperName])
+
+  useEffect(() => {
+    if (!selectedConsigneeAddressBookId && consigneeAddressBookEntries.length > 0 && !formData.consigneeName) {
+      const first = consigneeAddressBookEntries[0]
+      if (first) {
+        setSelectedConsigneeAddressBookId(first.id)
+        setFormData((prev) => ({
+          ...prev,
+          consigneeName: first.name || first.company_name || "",
+          consigneeAddress: first.address_line1 || "",
+          consigneeCity: first.city || "",
+          consigneeState: first.state || "",
+          consigneeZip: first.zip_code || "",
+          consigneeContact: first.contact_name || "",
+          consigneePhone: first.phone || "",
+          destination:
+            first.coordinates
+              ? `${first.coordinates.lat}, ${first.coordinates.lng}`
+              : `${first.city}, ${first.state}`.replace(/^,\s*|,\s*$/g, ""),
+        }))
+      }
+    }
+  }, [consigneeAddressBookEntries, selectedConsigneeAddressBookId, formData.consigneeName])
+
+  useEffect(() => {
+    const hauling = Number(formData.haulingFee || 0)
+    const fuel = Number(formData.fuelSurcharge || 0)
+    const accessorial = Number(formData.accessorialCharges || 0)
+    const discount = Number(formData.discount || 0)
+    const total = hauling + fuel + accessorial - discount
+    const nextValue = Number.isFinite(total) ? total.toFixed(2) : ""
+    setFormData((prev) => (prev.totalRate === nextValue ? prev : { ...prev, totalRate: nextValue }))
+  }, [formData.haulingFee, formData.fuelSurcharge, formData.accessorialCharges, formData.discount])
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
@@ -242,8 +323,77 @@ export default function AddLoadPage() {
     }
   }, [formData.origin, formData.destination, deliveryPoints])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const stepErrors = useMemo<Record<WizardStepKey, string[]>>(
+    () => ({
+      "load-info": [
+        ...(formData.autoNumbering || formData.shipmentNumber.trim() ? [] : ["Load number is required"]),
+        ...(formData.customerId ? [] : ["Customer is required"]),
+      ],
+      shipper: [
+        ...(formData.shipperName.trim() ? [] : ["Shipper name is required"]),
+        ...(formData.origin.trim() ? [] : ["Pickup location is required"]),
+      ],
+      consignee: [
+        ...(formData.consigneeName.trim() ? [] : ["Consignee name is required"]),
+        ...(formData.destination.trim() ? [] : ["Drop-off location is required"]),
+      ],
+      freight: [],
+      charges: [],
+      assignment: [],
+    }),
+    [
+      formData.autoNumbering,
+      formData.shipmentNumber,
+      formData.customerId,
+      formData.shipperName,
+      formData.origin,
+      formData.consigneeName,
+      formData.destination,
+    ]
+  )
+
+  const currentStepIndex = wizardSteps.findIndex((step) => step.key === activeStep)
+  const isFinalStep = currentStepIndex === wizardSteps.length - 1
+  const currentStepHasErrors = stepErrors[activeStep].length > 0
+
+  const goToStep = (target: WizardStepKey) => {
+    setActiveStep(target)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const handleNextStep = () => {
+    if (currentStepHasErrors) {
+      toast.error(stepErrors[activeStep][0] || "Please complete required fields before continuing")
+      return
+    }
+    const next = wizardSteps[currentStepIndex + 1]
+    if (next) goToStep(next.key)
+  }
+
+  const handleBackStep = () => {
+    const prev = wizardSteps[currentStepIndex - 1]
+    if (prev) goToStep(prev.key)
+  }
+
+  const handleOpenCreateConfirm = () => {
+    const requiredSteps = wizardSteps.filter((step) => step.required)
+    const firstInvalid = requiredSteps.find((step) => stepErrors[step.key].length > 0)
+    if (firstInvalid) {
+      goToStep(firstInvalid.key)
+      toast.error(stepErrors[firstInvalid.key][0] || "Please complete required fields")
+      return
+    }
+    setConfirmCreateOpen(true)
+  }
+
+  const totalRateNumber = Number(formData.totalRate || 0)
+  const estimatedMilesNumber = Number(formData.estimatedMiles || 0)
+  const ratePerMile =
+    totalRateNumber > 0 && estimatedMilesNumber > 0 ? (totalRateNumber / estimatedMilesNumber).toFixed(2) : null
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    setConfirmCreateOpen(false)
     setIsSubmitting(true)
 
     try {
@@ -442,19 +592,81 @@ export default function AddLoadPage() {
       title="Create Load"
       subtitle="Add a new load to your system"
       backUrl="/dashboard/loads"
-      onSubmit={handleSubmit}
+      onSubmit={(e) => e.preventDefault()}
       isSubmitting={isSubmitting}
       submitLabel="Create Load"
+      showDefaultSubmitBar={false}
+      footerActions={
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-sm text-muted-foreground">
+            Step {currentStepIndex + 1} of {wizardSteps.length}
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard/loads">
+              <Button type="button" variant="outline">
+                Cancel
+              </Button>
+            </Link>
+            {!isFinalStep ? (
+              <>
+                <Button type="button" variant="outline" onClick={handleBackStep} disabled={currentStepIndex === 0}>
+                  <ChevronLeft className="w-4 h-4 mr-2" />
+                  Back
+                </Button>
+                <Button type="button" onClick={handleNextStep}>
+                  Next
+                  <ChevronRight className="w-4 h-4 ml-2" />
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button type="button" variant="outline" onClick={handleBackStep}>
+                  <ChevronLeft className="w-4 h-4 mr-2" />
+                  Back
+                </Button>
+                <Button
+                  type="button"
+                  disabled={isSubmitting}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                  onClick={handleOpenCreateConfirm}
+                >
+                  {isSubmitting ? "Creating..." : "Create Load"}
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      }
     >
-            <Tabs defaultValue="load-info" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-6">
-                <TabsTrigger value="load-info">Load Info</TabsTrigger>
-                <TabsTrigger value="shipper">Shipper</TabsTrigger>
-                <TabsTrigger value="consignee">Consignee</TabsTrigger>
-                <TabsTrigger value="freight">Freight</TabsTrigger>
-                <TabsTrigger value="charges">Charges</TabsTrigger>
-                <TabsTrigger value="assignment">Assignment</TabsTrigger>
-              </TabsList>
+            <Tabs value={activeStep} onValueChange={(value) => goToStep(value as WizardStepKey)} className="space-y-6">
+              <div className="sticky top-[108px] z-20 space-y-3">
+                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${((currentStepIndex + 1) / wizardSteps.length) * 100}%` }}
+                  />
+                </div>
+                <TabsList className="grid w-full grid-cols-6 bg-card/95 backdrop-blur border border-border/60 h-auto py-1">
+                  {wizardSteps.map((step) => {
+                    const hasErrors = stepErrors[step.key].length > 0
+                    const completed = !hasErrors && wizardSteps.findIndex((s) => s.key === step.key) < currentStepIndex
+                    return (
+                      <TabsTrigger key={step.key} value={step.key} className="relative text-xs md:text-sm px-2 py-2">
+                        <span className="inline-flex items-center gap-1.5">
+                          {completed ? (
+                            <Check className="w-3.5 h-3.5 text-green-500" />
+                          ) : hasErrors ? (
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                          ) : (
+                            <span className="w-3.5 h-3.5 rounded-full border border-border/80 inline-block" />
+                          )}
+                          {step.label}
+                        </span>
+                      </TabsTrigger>
+                    )
+                  })}
+                </TabsList>
+              </div>
 
               {/* Load Information Tab */}
               <TabsContent value="load-info" className="space-y-6">
@@ -616,7 +828,7 @@ export default function AddLoadPage() {
                           <SelectValue placeholder="Select shipper from address book (optional)" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">None (Manual Entry)</SelectItem>
+                          <SelectItem value="none">+ Add new shipper manually</SelectItem>
                           {shipperAddressBookEntries.map((entry) => (
                             <SelectItem key={entry.id} value={entry.id}>
                               {entry.name} {entry.company_name ? `(${entry.company_name})` : ""} - {entry.city}, {entry.state}
@@ -629,7 +841,7 @@ export default function AddLoadPage() {
                       <Label>Shipper *</Label>
                       <div className="flex gap-2 mt-1">
                         <Input name="shipperName" value={formData.shipperName} onChange={handleChange} placeholder="Shipper name" />
-                        <Button type="button" variant="outline" size="icon" onClick={() => setShowAddShipper(!showAddShipper)}>
+                        <Button type="button" variant="outline" size="icon" title="Add to address book" onClick={() => setShowAddShipper(!showAddShipper)}>
                           <Plus className="w-4 h-4" />
                         </Button>
                         <Button 
@@ -637,7 +849,7 @@ export default function AddLoadPage() {
                           variant="outline" 
                           size="icon" 
                           onClick={() => window.open("/dashboard/address-book", "_blank")}
-                          title="Open Address Book"
+                          title="Browse address book"
                         >
                           <BookOpen className="w-4 h-4" />
                         </Button>
@@ -774,7 +986,7 @@ export default function AddLoadPage() {
                               <SelectValue placeholder="Select consignee from address book (optional)" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none">None (Manual Entry)</SelectItem>
+                              <SelectItem value="none">+ Add new consignee manually</SelectItem>
                               {consigneeAddressBookEntries.map((entry) => (
                                 <SelectItem key={entry.id} value={entry.id}>
                                   {entry.name} {entry.company_name ? `(${entry.company_name})` : ""} - {entry.city}, {entry.state}
@@ -787,7 +999,7 @@ export default function AddLoadPage() {
                           <Label>Consignee *</Label>
                           <div className="flex gap-2 mt-1">
                             <Input name="consigneeName" value={formData.consigneeName} onChange={handleChange} placeholder="Consignee name" />
-                            <Button type="button" variant="outline" size="icon" onClick={() => setShowAddConsignee(!showAddConsignee)}>
+                            <Button type="button" variant="outline" size="icon" title="Add to address book" onClick={() => setShowAddConsignee(!showAddConsignee)}>
                               <Plus className="w-4 h-4" />
                             </Button>
                             <Button 
@@ -795,7 +1007,7 @@ export default function AddLoadPage() {
                               variant="outline" 
                               size="icon" 
                               onClick={() => window.open("/dashboard/address-book", "_blank")}
-                              title="Open Address Book"
+                              title="Browse address book"
                             >
                               <BookOpen className="w-4 h-4" />
                             </Button>
@@ -887,14 +1099,21 @@ export default function AddLoadPage() {
                           <Textarea name="deliveryInstructions" value={formData.deliveryInstructions} onChange={handleChange} className="mt-1" rows={2} />
                 </div>
                       <div className="md:col-span-2 pt-4 border-t border-border/60">
-                        <Label className="text-base">Delivery points (optional)</Label>
-                        <p className="text-xs text-muted-foreground mb-3">
-                          Add ordered stops for multi-delivery loads. Leave empty for a single drop-off above.
-                        </p>
-                        <LoadDeliveryPointsManager
-                          deliveryPoints={deliveryPoints}
-                          onDeliveryPointsChange={setDeliveryPoints}
-                        />
+                        <Card className="border-dashed border-border/70 bg-muted/15 p-4 overflow-visible">
+                          <Label className="text-base">Delivery points (optional)</Label>
+                          <p className="text-xs text-muted-foreground mt-1 mb-2">
+                            Add ordered stops for multi-delivery loads. Leave empty for a single drop-off above.
+                          </p>
+                          <p className="text-xs text-primary mb-3">
+                            {deliveryPoints.length > 0
+                              ? `${deliveryPoints.length} stop${deliveryPoints.length > 1 ? "s" : ""} added - this will be a multi-stop load`
+                              : "No additional stops yet"}
+                          </p>
+                          <LoadDeliveryPointsManager
+                            deliveryPoints={deliveryPoints}
+                            onDeliveryPointsChange={setDeliveryPoints}
+                          />
+                        </Card>
                       </div>
                   </FormGrid>
                 </FormSection>
@@ -922,42 +1141,67 @@ export default function AddLoadPage() {
                 </div>
                 <div>
                       <Label>Freight Class</Label>
-                      <Input name="freightClass" type="number" value={formData.freightClass} onChange={handleChange} className="mt-1" placeholder="50-500" />
+                      <Select value={formData.freightClass} onValueChange={(v) => handleSelectChange("freightClass", v)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select class" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {["50","55","60","65","70","77.5","85","92.5","100","110","125","150","175","200","250","300","400","500"].map((fc) => (
+                            <SelectItem key={fc} value={fc}>{fc}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                 </div>
-                    <div className="md:col-span-2 space-y-2 rounded-lg border border-border/80 bg-muted/20 p-4">
+                    <div className="md:col-span-2 space-y-2 rounded-md border-l-4 border-blue-500/70 bg-blue-500/5 pl-4 py-3 pr-3">
                       <Label className="text-foreground">Load characteristics</Label>
                       <p className="text-xs text-muted-foreground mb-2">What’s on the truck (commodity / equipment)</p>
                       <div className="flex flex-wrap gap-4">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox checked={formData.isHazardous} onCheckedChange={(c) => setFormData(prev => ({ ...prev, isHazardous: !!c }))} />
-                          <span className="text-sm">HazMat</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox checked={formData.isOversized} onCheckedChange={(c) => setFormData(prev => ({ ...prev, isOversized: !!c }))} />
-                          <span className="text-sm">Oversized</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox checked={formData.isReefer} onCheckedChange={(c) => setFormData(prev => ({ ...prev, isReefer: !!c }))} />
-                          <span className="text-sm">Reefer</span>
-                        </label>
+                        {[
+                          { key: "isHazardous", label: "HazMat", checked: formData.isHazardous },
+                          { key: "isOversized", label: "Oversized", checked: formData.isOversized },
+                          { key: "isReefer", label: "Reefer", checked: formData.isReefer },
+                        ].map((item) => (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() =>
+                              setFormData((prev) => ({ ...prev, [item.key]: !item.checked }))
+                            }
+                            className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                              item.checked
+                                ? "border-blue-500/70 bg-blue-500/15 text-blue-200"
+                                : "border-border/70 bg-background text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
                 </div>
                 </div>
                     <div className="md:col-span-2 space-y-2 rounded-md border-l-4 border-amber-500/70 bg-amber-500/5 pl-4 py-3 pr-3">
                       <Label className="text-foreground">Delivery requirements</Label>
                       <p className="text-xs text-muted-foreground mb-2">What the driver must do at delivery (not freight type)</p>
                       <div className="flex flex-wrap gap-4">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox checked={formData.requiresLiftgate} onCheckedChange={(c) => setFormData(prev => ({ ...prev, requiresLiftgate: !!c }))} />
-                          <span className="text-sm">Liftgate</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox checked={formData.requiresInsideDelivery} onCheckedChange={(c) => setFormData(prev => ({ ...prev, requiresInsideDelivery: !!c }))} />
-                          <span className="text-sm">Inside delivery</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox checked={formData.requiresAppointment} onCheckedChange={(c) => setFormData(prev => ({ ...prev, requiresAppointment: !!c }))} />
-                          <span className="text-sm">Appointment</span>
-                        </label>
+                        {[
+                          { key: "requiresLiftgate", label: "Liftgate", checked: formData.requiresLiftgate },
+                          { key: "requiresInsideDelivery", label: "Inside delivery", checked: formData.requiresInsideDelivery },
+                          { key: "requiresAppointment", label: "Appointment", checked: formData.requiresAppointment },
+                        ].map((item) => (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() =>
+                              setFormData((prev) => ({ ...prev, [item.key]: !item.checked }))
+                            }
+                            className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                              item.checked
+                                ? "border-amber-500/70 bg-amber-500/15 text-amber-100"
+                                : "border-border/70 bg-background text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </FormGrid>
@@ -1004,7 +1248,18 @@ export default function AddLoadPage() {
                 </div>
                 <div>
                       <Label>Total Rate</Label>
-                      <Input name="totalRate" value={formData.totalRate} onChange={handleChange} className="mt-1" placeholder="0.00" readOnly />
+                      <Input
+                        name="totalRate"
+                        value={formData.totalRate}
+                        onChange={handleChange}
+                        className="mt-1 bg-primary/10 border-primary/30 font-semibold"
+                        placeholder="0.00"
+                        readOnly
+                      />
+                      <p className="text-[11px] text-muted-foreground mt-1">Calculated automatically</p>
+                      {ratePerMile && (
+                        <p className="text-xs text-primary mt-1">${ratePerMile} / mile</p>
+                      )}
                 </div>
                   </FormGrid>
                 </FormSection>
@@ -1035,7 +1290,10 @@ export default function AddLoadPage() {
                     </SelectTrigger>
                     <SelectContent>
                           {drivers.map(d => (
-                            <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                            <SelectItem key={d.id} value={d.id}>
+                              {d.name} - {d.hos_status || d.status || "Status unknown"}
+                              {typeof d.remaining_drive_hours === "number" ? ` - ${d.remaining_drive_hours.toFixed(1)}h remaining` : ""}
+                            </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1048,7 +1306,9 @@ export default function AddLoadPage() {
                     </SelectTrigger>
                     <SelectContent>
                           {trucks.map(t => (
-                            <SelectItem key={t.id} value={t.id}>{t.truck_number}</SelectItem>
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.truck_number} - {t.status === "available" ? "Available" : t.status === "in_use" ? "In Use" : t.status || "Unknown"}
+                            </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1077,6 +1337,31 @@ export default function AddLoadPage() {
                 </FormSection>
               </TabsContent>
             </Tabs>
+
+            <Dialog open={confirmCreateOpen} onOpenChange={setConfirmCreateOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Review load before creating</DialogTitle>
+                  <DialogDescription>Confirm key details to avoid dispatch errors.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-2 text-sm">
+                  <p><span className="text-muted-foreground">Customer:</span> {selectedCustomer?.name || selectedCustomer?.company_name || "Not selected"}</p>
+                  <p><span className="text-muted-foreground">Route:</span> {formData.origin || "N/A"} → {formData.destination || "N/A"}</p>
+                  <p><span className="text-muted-foreground">Pickup date:</span> {formData.pickupDate || "Not set"}</p>
+                  <p><span className="text-muted-foreground">Rate:</span> ${formData.totalRate || "0.00"}</p>
+                  <p><span className="text-muted-foreground">Driver:</span> {drivers.find((d) => d.id === formData.driver)?.name || "Unassigned"}</p>
+                  <p><span className="text-muted-foreground">Truck:</span> {trucks.find((t) => t.id === formData.truck)?.truck_number || "Unassigned"}</p>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setConfirmCreateOpen(false)}>
+                    Back
+                  </Button>
+                  <Button type="button" onClick={() => void handleSubmit()} disabled={isSubmitting}>
+                    {isSubmitting ? "Creating..." : "Create Load"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
     </FormPageLayout>
   )

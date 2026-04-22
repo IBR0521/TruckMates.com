@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, MapPin, Truck, Plus, Edit2, Trash2, X } from "lucide-react"
+import { ArrowLeft, MapPin, Truck, Plus, Edit2, Trash2, X, RefreshCw, LocateFixed, Lock, Radar } from "lucide-react"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
@@ -57,6 +57,7 @@ export default function FleetMapPage() {
   const [geofences, setGeofences] = useState<any[]>([])
   const [showGeofences, setShowGeofences] = useState(true)
   const [activeTab, setActiveTab] = useState<"vehicles" | "zones">("vehicles")
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
   const [deleteGeofenceId, setDeleteGeofenceId] = useState<string | null>(null)
   const [showGeofenceDialog, setShowGeofenceDialog] = useState(false)
   const [isCreatingGeofence, setIsCreatingGeofence] = useState(false)
@@ -150,6 +151,9 @@ export default function FleetMapPage() {
         }
         setVehicles(result.data || [])
       }
+      if (activeTab === "vehicles") {
+        setLastUpdatedAt(new Date())
+      }
     } catch (error: unknown) {
       toast.error(errorMessage(error, "Failed to load vehicles"))
     } finally {
@@ -169,6 +173,9 @@ export default function FleetMapPage() {
       setPlanName(String(access.data?.plan_name || "starter"))
       if (!allowed) {
         setGeofences([])
+        if (activeTab === "zones") {
+          setLastUpdatedAt(new Date())
+        }
         return
       }
 
@@ -178,6 +185,9 @@ export default function FleetMapPage() {
         return
       }
       setGeofences(result.data || [])
+      if (activeTab === "zones") {
+        setLastUpdatedAt(new Date())
+      }
     } catch (error: unknown) {
       toast.error(errorMessage(error, "Failed to load geofences"))
     }
@@ -259,6 +269,67 @@ export default function FleetMapPage() {
   // Filter vehicles with and without GPS
   const vehiclesWithLocation = vehicles.filter((v) => v.location)
   const vehiclesWithoutLocation = vehicles.filter((v) => !v.location)
+  const showZonePaywall = activeTab === "zones" && !geofencingAllowed
+  const showVehicleEmptyOverlay = activeTab === "vehicles" && !isLoading && vehiclesWithLocation.length === 0
+  const showZoneEmptyOverlay = activeTab === "zones" && geofencingAllowed && !isLoading && geofences.length === 0
+
+  const handleRefreshActiveView = () => {
+    if (activeTab === "zones") {
+      void loadGeofences()
+      return
+    }
+    void loadFleetData()
+  }
+
+  const handleCenterOnFleet = () => {
+    if (vehiclesWithLocation.length === 0) return
+    const lats = vehiclesWithLocation.map((v) => Number(v.location.latitude))
+    const lngs = vehiclesWithLocation.map((v) => Number(v.location.longitude))
+    const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2
+    const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2
+    setMapCenter([centerLat, centerLng])
+    setZoom(6)
+  }
+
+  const handleDrawingShapeComplete = useCallback(
+    (
+      shape: any,
+      payload?:
+        | { kind: "circle"; center: { lat: number; lng: number }; radius: number }
+        | { kind: "rectangle"; bounds: { north: number; south: number; east: number; west: number } }
+        | { kind: "polygon" }
+    ) => {
+      if (drawnShapeRef.current && drawnShapeRef.current !== shape) {
+        drawnShapeRef.current.setMap(null)
+      }
+      drawnShapeRef.current = shape
+
+      if (payload?.kind === "circle") {
+        setGeofenceFormData((prev) => ({
+          ...prev,
+          center_latitude: payload.center.lat.toString(),
+          center_longitude: payload.center.lng.toString(),
+          radius_meters: payload.radius.toString(),
+          north_bound: "",
+          south_bound: "",
+          east_bound: "",
+          west_bound: "",
+        }))
+      } else if (payload?.kind === "rectangle") {
+        setGeofenceFormData((prev) => ({
+          ...prev,
+          center_latitude: "",
+          center_longitude: "",
+          radius_meters: "",
+          north_bound: payload.bounds.north.toString(),
+          south_bound: payload.bounds.south.toString(),
+          east_bound: payload.bounds.east.toString(),
+          west_bound: payload.bounds.west.toString(),
+        }))
+      }
+    },
+    []
+  )
 
   return (
     <div className="space-y-6 p-6">
@@ -272,7 +343,11 @@ export default function FleetMapPage() {
           </Link>
           <div>
             <h1 className="text-3xl font-bold">Fleet Map & Zones</h1>
-            <p className="text-muted-foreground">Real-time vehicle tracking and geofencing</p>
+            <p className="text-muted-foreground">
+              {geofencingAllowed
+                ? "Real-time vehicle tracking and geofencing"
+                : "Vehicle tracking available. Geofencing unlocks on paid plans."}
+            </p>
           </div>
         </div>
       </div>
@@ -280,28 +355,32 @@ export default function FleetMapPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Panel - Vehicles and Zones List */}
         <div className="space-y-4">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "vehicles" | "zones")} suppressHydrationWarning>
-            <TabsList className="grid w-full grid-cols-2" suppressHydrationWarning>
-              <TabsTrigger value="vehicles" suppressHydrationWarning>Vehicles</TabsTrigger>
-              <TabsTrigger value="zones" suppressHydrationWarning>Zones</TabsTrigger>
-                  </TabsList>
-
-            <TabsContent value="vehicles" className="mt-4" suppressHydrationWarning>
-              <div className="max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
+          <Card className="p-3">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold">
+                {activeTab === "vehicles" ? `Vehicles (${vehicles.length})` : `Zones (${geofences.length})`}
+              </h3>
+              {activeTab === "zones" && (
+                <Button size="sm" disabled={!geofencingAllowed} onClick={() => setShowGeofenceDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Zone
+                </Button>
+              )}
+            </div>
+            <div className="max-h-[calc(100vh-220px)] overflow-y-auto pr-2">
+              {activeTab === "vehicles" ? (
                 <div className="space-y-4">
-                    {vehiclesWithLocation.length > 0 && (
+                  {vehiclesWithLocation.length > 0 && (
                     <div>
-                      <h3 className="text-sm font-semibold mb-2">
-                        With GPS Location ({vehiclesWithLocation.length})
-                      </h3>
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                        Active GPS ({vehiclesWithLocation.length})
+                      </h4>
                       <div className="space-y-2">
                         {vehiclesWithLocation.map((vehicle) => (
                           <Card
                             key={vehicle.id}
                             className={`p-3 cursor-pointer transition-colors ${
-                              selectedVehicle === vehicle.id
-                                ? "border-primary bg-primary/5"
-                                : "hover:bg-secondary/50"
+                              selectedVehicle === vehicle.id ? "border-primary bg-primary/5" : "hover:bg-secondary/50"
                             }`}
                             onClick={() => handleVehicleClick(vehicle.id)}
                           >
@@ -312,142 +391,118 @@ export default function FleetMapPage() {
                               </div>
                               <Badge variant="outline">{vehicle.status || "Active"}</Badge>
                             </div>
-                            {vehicle.driver?.name && (
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {vehicle.driver.name}
-                              </p>
-                            )}
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {vehicle.driver?.name || "No driver"} · {vehicle.location?.speed ? `${Math.round(vehicle.location.speed)} mph` : "Speed N/A"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Last update: {vehicle.location?.timestamp ? new Date(vehicle.location.timestamp).toLocaleTimeString() : "Unknown"}
+                            </p>
                           </Card>
                         ))}
                       </div>
                     </div>
-                    )}
+                  )}
 
-                    {vehiclesWithoutLocation.length > 0 && (
+                  {vehiclesWithoutLocation.length > 0 && (
                     <div>
-                      <h3 className="text-sm font-semibold mb-2">
-                          No GPS Location ({vehiclesWithoutLocation.length})
-                      </h3>
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                        Offline / No GPS ({vehiclesWithoutLocation.length})
+                      </h4>
                       <div className="space-y-2">
                         {vehiclesWithoutLocation.map((vehicle) => (
-                          <Card key={vehicle.id} className="p-3 opacity-60">
+                          <Card key={vehicle.id} className="p-3 opacity-70">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <Truck className="h-4 w-4 text-muted-foreground" />
                                 <span className="font-medium">{vehicle.truck_number}</span>
                               </div>
-                              <Badge variant="secondary">No GPS</Badge>
+                              <Badge variant="secondary">Offline</Badge>
                             </div>
                           </Card>
                         ))}
                       </div>
-                      </div>
-                    )}
+                    </div>
+                  )}
 
                   {vehicles.length === 0 && !isLoading && (
-                    <Card className="p-8 text-center">
-                      <p className="text-muted-foreground">No vehicles found</p>
+                    <Card className="p-5 text-center">
+                      <p className="text-sm font-medium text-foreground mb-1">No vehicles tracked yet</p>
+                      <p className="text-xs text-muted-foreground mb-3">Add trucks and connect GPS/ELD to populate live map.</p>
+                      <Link href="/dashboard/trucks/add">
+                        <Button size="sm">Add Truck</Button>
+                      </Link>
                     </Card>
                   )}
                 </div>
-                  </div>
-                </TabsContent>
-
-            <TabsContent value="zones" className="mt-4" suppressHydrationWarning>
-              {!geofencingAllowed && (
-                <Card className="p-3 mb-3 border-amber-500/40 bg-amber-500/5">
-                  <p className="text-xs text-amber-400">
-                    Geofencing is available on Fleet and Enterprise plans. Your current plan is{" "}
-                    <span className="font-semibold capitalize">{planName}</span>.
-                  </p>
-                </Card>
-              )}
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold">
-                  Geofences ({geofences.length})
-                </h3>
-                <Button size="sm" disabled={!geofencingAllowed} onClick={() => setShowGeofenceDialog(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Zone
-                        </Button>
-                      </div>
-
-              <div className="max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
+              ) : (
                 <div className="space-y-2">
                   {geofences.map((geofence) => (
-                        <Card
-                          key={geofence.id}
+                    <Card
+                      key={geofence.id}
                       className={`p-3 cursor-pointer transition-colors ${
-                            selectedGeofence === geofence.id
-                              ? "border-primary bg-primary/5"
-                              : "hover:bg-secondary/50"
+                        selectedGeofence === geofence.id ? "border-primary bg-primary/5" : "hover:bg-secondary/50"
                       }`}
                       onClick={() => handleGeofenceClick(geofence.id)}
                     >
                       <div className="flex items-start justify-between">
-                            <div className="flex-1">
+                        <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <MapPin className="h-4 w-4 text-muted-foreground" />
                             <span className="font-medium">{geofence.name}</span>
-                            {!geofence.is_active && (
-                              <Badge variant="secondary">Inactive</Badge>
-                            )}
-                              </div>
-                              {geofence.description && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {geofence.description}
-                            </p>
-                          )}
-                    <p className="text-xs text-muted-foreground mt-1">
+                            {!geofence.is_active && <Badge variant="secondary">Inactive</Badge>}
+                          </div>
+                          {geofence.description && <p className="text-sm text-muted-foreground mt-1">{geofence.description}</p>}
+                          <p className="text-xs text-muted-foreground mt-1">
                             {geofence.zone_type === "circle"
-                              ? `Circle - ${geofence.radius_meters}m radius`
-                      : geofence.zone_type === "rectangle"
-                        ? "Rectangle Zone"
-                        : "Polygon"}
+                              ? `Circle - ${geofence.radius_meters}m`
+                              : geofence.zone_type === "rectangle"
+                                ? "Rectangle"
+                                : "Polygon"}
                           </p>
-                              </div>
+                        </div>
                         <div className="flex gap-1">
                           <Link href={`/dashboard/geofencing/${geofence.id}/edit`}>
-                              <Button
-                                variant="ghost"
+                            <Button
+                              variant="ghost"
                               size="icon"
                               disabled={!geofencingAllowed}
                               className="h-8 w-8"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <Edit2 className="h-4 w-4" />
-                              </Button>
+                            </Button>
                           </Link>
-                              <Button
-                                variant="ghost"
+                          <Button
+                            variant="ghost"
                             size="icon"
                             disabled={!geofencingAllowed}
                             className="h-8 w-8 text-destructive hover:text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setDeleteGeofenceId(geofence.id)
-                                }}
-                              >
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setDeleteGeofenceId(geofence.id)
+                            }}
+                          >
                             <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
                   ))}
-                </div>
 
-                {geofences.length === 0 && (
-                  <Card className="p-8 text-center">
-                    <p className="text-muted-foreground mb-4">No geofences found</p>
-                    <Button size="sm" disabled={!geofencingAllowed} onClick={() => setShowGeofenceDialog(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create First Zone
-                    </Button>
-                  </Card>
-                    )}
-                  </div>
-                </TabsContent>
-              </Tabs>
+                  {geofences.length === 0 && (
+                    <Card className="p-5 text-center">
+                      <p className="text-sm font-medium text-foreground mb-1">No zones created yet</p>
+                      <p className="text-xs text-muted-foreground mb-3">Create geofences for entry/exit alerts.</p>
+                      <Button size="sm" disabled={!geofencingAllowed} onClick={() => setShowGeofenceDialog(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create First Zone
+                      </Button>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </div>
+          </Card>
           </div>
 
         {/* Right Panel - Map */}
@@ -456,43 +511,116 @@ export default function FleetMapPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Live Map View</h2>
               <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                    <Checkbox
-                    id="show-zones"
-                      checked={showGeofences}
-                      onCheckedChange={(checked) => setShowGeofences(checked as boolean)}
-                    />
-                  <Label htmlFor="show-zones" className="cursor-pointer">
-                      Show Zones
-                    </Label>
-                  </div>
-                <Button variant="outline" size="sm" onClick={loadFleetData}>
-                    Refresh
-                  </Button>
+                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "vehicles" | "zones")} suppressHydrationWarning>
+                  <TabsList className="grid w-[220px] grid-cols-2" suppressHydrationWarning>
+                    <TabsTrigger value="vehicles" suppressHydrationWarning>Vehicles</TabsTrigger>
+                    <TabsTrigger value="zones" suppressHydrationWarning>Zones</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            </div>
+
+            {!geofencingAllowed && (
+              <div className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-amber-300">
+                    Geofencing requires a paid plan. You are on <span className="font-semibold capitalize">{planName}</span>.
+                  </p>
+                  <Link href="/dashboard/settings/billing">
+                    <Button size="sm" className="h-8">Upgrade Plan</Button>
+                  </Link>
                 </div>
               </div>
+            )}
 
-            <div className="bg-secondary/20 rounded-lg p-4 mb-4">
-                      <p className="text-sm text-muted-foreground">
-                {geofences.length} zones displayed on map
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {vehiclesWithLocation.length} vehicles will appear when GPS tracking is active
-                      </p>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 bg-muted/10 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="show-zones"
+                  checked={showGeofences}
+                  onCheckedChange={(checked) => setShowGeofences(checked)}
+                />
+                <Label htmlFor="show-zones" className="cursor-pointer text-sm">Show Zones</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Last updated {lastUpdatedAt ? lastUpdatedAt.toLocaleTimeString() : "never"}
+                </p>
+                <Button variant="outline" size="sm" onClick={handleRefreshActiveView} className="h-8 border-border/70 bg-transparent">
+                  <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                  Refresh
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-border/70 bg-transparent"
+                  onClick={handleCenterOnFleet}
+                  disabled={vehiclesWithLocation.length === 0}
+                >
+                  <LocateFixed className="mr-2 h-3.5 w-3.5" />
+                  Center on Fleet
+                </Button>
+              </div>
                     </div>
 
-            <div className="h-[600px] bg-secondary/20 rounded-lg border border-border overflow-hidden">
-                  <FleetMap
-                    vehicles={vehiclesWithLocation}
-                    selectedVehicle={selectedVehicle}
+            <div className="relative h-[72vh] min-h-[700px] bg-secondary/20 rounded-lg border border-border overflow-hidden">
+              <div className={`h-full ${showZonePaywall ? "pointer-events-none blur-[1px]" : ""}`}>
+                <FleetMap
+                  vehicles={vehiclesWithLocation}
+                  selectedVehicle={selectedVehicle}
                 onVehicleClick={handleVehicleClick}
-                    center={mapCenter}
-                    zoom={zoom}
-                    geofences={geofences}
-                    showGeofences={showGeofences}
-                    selectedGeofence={selectedGeofence}
+                  center={mapCenter}
+                  zoom={zoom}
+                  geofences={geofences}
+                  showGeofences={showGeofences}
+                  selectedGeofence={selectedGeofence}
                 onGeofenceClick={handleGeofenceClick}
-                  />
+                />
+              </div>
+
+              {showZonePaywall && (
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/55">
+                  <div className="max-w-sm rounded-lg border border-border/70 bg-card/95 p-5 text-center shadow-lg">
+                    <Lock className="mx-auto mb-2 h-5 w-5 text-amber-400" />
+                    <p className="text-sm font-semibold text-foreground">Geofencing is locked on your plan</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Upgrade to Fleet or Enterprise to create zones and alerts.</p>
+                    <Link href="/dashboard/settings/billing" className="mt-3 inline-block">
+                      <Button size="sm">Upgrade Plan</Button>
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {(showVehicleEmptyOverlay || showZoneEmptyOverlay) && !showZonePaywall && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/35">
+                  <div className="max-w-sm rounded-lg border border-border/70 bg-card/95 p-5 text-center">
+                    <Radar className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
+                    {showVehicleEmptyOverlay ? (
+                      <>
+                        <p className="text-sm font-semibold text-foreground">No vehicles tracked yet</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Connect your ELD or GPS provider to start real-time tracking.</p>
+                        <div className="mt-3 flex justify-center gap-2">
+                          <Link href="/dashboard/settings">
+                            <Button size="sm">Connect GPS</Button>
+                          </Link>
+                          <Link href="/dashboard/trucks/add">
+                            <Button size="sm" variant="outline">Add Truck</Button>
+                          </Link>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-semibold text-foreground">No zones created</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Draw your first geofence zone for entry/exit alerts.</p>
+                        <Button size="sm" className="mt-3" onClick={() => setShowGeofenceDialog(true)}>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Draw First Zone
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
               </div>
             </Card>
         </div>
@@ -768,39 +896,11 @@ export default function FleetMapPage() {
                     drawingManagerRef={drawingManagerRef}
                     drawnShapeRef={drawnShapeRef}
                     zoneType={geofenceFormData.zone_type}
-                    onShapeComplete={(
-                      shape: any,
-                      payload?:
-                        | { kind: "circle"; center: { lat: number; lng: number }; radius: number }
-                        | { kind: "rectangle"; bounds: { north: number; south: number; east: number; west: number } }
-                        | { kind: "polygon" }
-                    ) => {
-                      drawnShapeRef.current = shape
-                      if (payload?.kind === "circle") {
-                        setGeofenceFormData({
-                          ...geofenceFormData,
-                          center_latitude: payload.center.lat.toString(),
-                          center_longitude: payload.center.lng.toString(),
-                          radius_meters: payload.radius.toString(),
-                          north_bound: "",
-                          south_bound: "",
-                          east_bound: "",
-                          west_bound: "",
-                        })
-                      } else if (payload?.kind === "rectangle") {
-                        setGeofenceFormData({
-                          ...geofenceFormData,
-                          center_latitude: "",
-                          center_longitude: "",
-                          radius_meters: "",
-                          north_bound: payload.bounds.north.toString(),
-                          south_bound: payload.bounds.south.toString(),
-                          east_bound: payload.bounds.east.toString(),
-                          west_bound: payload.bounds.west.toString(),
-                        })
-                      }
-                    }}
+                    onShapeComplete={handleDrawingShapeComplete}
                   />
+                  <div className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-black/70 px-2 py-1 text-[11px] text-white/90">
+                    Draw directly on the map: choose shape, then click and drag.
+                  </div>
                     </div>
                   </div>
                 </div>
@@ -1117,6 +1217,15 @@ function GeofenceDrawingMap({
   ) => void
 }) {
   const localMapInstanceRef = useRef<any>(null)
+  const applyDrawingMode = (mode: "circle" | "polygon" | "rectangle") => {
+    if (!drawingManagerRef.current || !window.google?.maps?.drawing) return
+    const overlayType = mode === "circle"
+      ? window.google.maps.drawing.OverlayType.CIRCLE
+      : mode === "rectangle"
+        ? window.google.maps.drawing.OverlayType.RECTANGLE
+        : window.google.maps.drawing.OverlayType.POLYGON
+    drawingManagerRef.current.setDrawingMode(overlayType)
+  }
   
   useEffect(() => {
     if (!mapRef.current) return
@@ -1179,6 +1288,7 @@ function GeofenceDrawingMap({
 
       drawingManager.setMap(localMapInstanceRef.current)
       drawingManagerRef.current = drawingManager
+      applyDrawingMode(zoneType)
 
       drawingManager.addListener("circlecomplete", (circle: any) => {
         const center = circle.getCenter()
@@ -1267,6 +1377,10 @@ function GeofenceDrawingMap({
       localMapInstanceRef.current = null
     }
   }, [mapRef, mapInstanceRef, drawingManagerRef, onShapeComplete])
+
+  useEffect(() => {
+    applyDrawingMode(zoneType)
+  }, [zoneType])
 
   return null
 }

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   BarChart3,
   Truck,
@@ -34,6 +34,7 @@ import {
   Sparkles,
 } from "lucide-react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { Logo } from "@/components/logo"
 import { getCurrentUser } from "@/lib/auth/server"
 import { createClient as createBrowserClient } from "@/lib/supabase/client"
@@ -54,6 +55,8 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggle }: SidebarProps) {
+  const pathname = usePathname()
+  const autoExpandedForPath = useRef<string | null>(null)
   const [driversOpen, setDriversOpen] = useState(false)
   const [vehiclesOpen, setVehiclesOpen] = useState(false)
   const [routesOpen, setRoutesOpen] = useState(false)
@@ -86,6 +89,19 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
 
   // Only collapse on desktop - on mobile/tablet always show full sidebar
   const shouldShowCollapsed = isCollapsed && isDesktop
+
+  useEffect(() => {
+    const isCreationPage =
+      pathname === "/dashboard/loads/add" ||
+      pathname === "/dashboard/routes/add" ||
+      pathname === "/dashboard/drivers/add" ||
+      pathname === "/dashboard/trucks/add"
+    if (!isCreationPage) return
+    if (!isDesktop || !isCollapsed) return
+    if (autoExpandedForPath.current === pathname) return
+    autoExpandedForPath.current = pathname
+    onCollapseToggle()
+  }, [pathname, isDesktop, isCollapsed, onCollapseToggle])
 
   // Auto-close dropdowns when sidebar collapses (only on desktop)
   useEffect(() => {

@@ -1,9 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -21,19 +20,90 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { ArrowLeft, User, FileText, Briefcase, Phone } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { User, FileText, Briefcase, Phone, Check, AlertTriangle, ChevronLeft, ChevronRight, CalendarIcon } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { createDriver } from "@/app/actions/drivers"
 import { useRouter } from "next/navigation"
-import { getTrucks } from "@/app/actions/trucks"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
+import { format } from "date-fns"
+import { cn } from "@/lib/utils"
+
+const parseISODate = (value: string) => {
+  if (!value) return undefined
+  const [year, month, day] = value.split("-").map(Number)
+  if (!year || !month || !day) return undefined
+  return new Date(year, month - 1, day)
+}
+
+const toISODate = (date: Date | undefined) => {
+  if (!date) return ""
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+function DatePickerField({
+  name,
+  value,
+  onChange,
+  required,
+  placeholder = "Select date",
+}: {
+  name: string
+  value: string
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  required?: boolean
+  placeholder?: string
+}) {
+  const selectedDate = parseISODate(value)
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn("mt-1 w-full justify-start text-left font-normal", !selectedDate && "text-muted-foreground")}
+        >
+          <CalendarIcon className="mr-2 h-4 w-4" />
+          {selectedDate ? format(selectedDate, "PPP") : placeholder}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={selectedDate}
+          onSelect={(date) => {
+            onChange({
+              target: { name, value: toISODate(date) },
+            } as React.ChangeEvent<HTMLInputElement>)
+          }}
+          captionLayout="dropdown"
+          fromYear={1940}
+          toYear={new Date().getFullYear() + 10}
+          required={required}
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 export default function AddDriverPage() {
+  const wizardSteps = [
+    { key: "personal", label: "Personal", required: true },
+    { key: "license", label: "License", required: true },
+    { key: "employment", label: "Employment", required: false },
+    { key: "emergency", label: "Emergency", required: true },
+  ] as const
+  type WizardStepKey = (typeof wizardSteps)[number]["key"]
+
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [trucks, setTrucks] = useState<any[]>([])
+  const [activeStep, setActiveStep] = useState<WizardStepKey>("personal")
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -50,24 +120,19 @@ export default function AddDriverPage() {
     licenseType: "class_a",
     licenseEndorsements: [] as string[],
     licenseExpiry: "",
+    medicalCertificateExpiry: "",
     status: "active",
     hireDate: "",
-    assignedTruck: "",
     payRateType: "per_mile",
     payRate: "",
     emergencyContactName: "",
     emergencyContactPhone: "",
     emergencyContactRelationship: "",
+    emergencyContact2Name: "",
+    emergencyContact2Phone: "",
+    emergencyContact2Relationship: "",
     notes: "",
   })
-
-  useEffect(() => {
-    async function loadTrucks() {
-      const result = await getTrucks()
-      if (result.data) setTrucks(result.data)
-    }
-    loadTrucks()
-  }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -79,6 +144,12 @@ export default function AddDriverPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const firstInvalid = wizardSteps.find((step) => stepErrors[step.key].length > 0)
+    if (firstInvalid) {
+      goToStep(firstInvalid.key)
+      toast.error(stepErrors[firstInvalid.key][0] || "Please complete required fields")
+      return
+    }
     setIsSubmitting(true)
 
     const result = await createDriver({
@@ -99,12 +170,17 @@ export default function AddDriverPage() {
       license_expiry: formData.licenseExpiry || null,
       status: formData.status,
       hire_date: formData.hireDate || undefined,
-      truck_id: formData.assignedTruck || null,
       pay_rate_type: formData.payRateType || undefined,
       pay_rate: formData.payRate ? Number.parseFloat(formData.payRate) : null,
       emergency_contact_name: formData.emergencyContactName || undefined,
       emergency_contact_phone: formData.emergencyContactPhone || undefined,
       emergency_contact_relationship: formData.emergencyContactRelationship || undefined,
+      custom_fields: {
+        medical_certificate_expiry: formData.medicalCertificateExpiry || null,
+        emergency_contact_2_name: formData.emergencyContact2Name || null,
+        emergency_contact_2_phone: formData.emergencyContact2Phone || null,
+        emergency_contact_2_relationship: formData.emergencyContact2Relationship || null,
+      },
       notes: formData.notes || undefined,
     })
 
@@ -126,6 +202,70 @@ export default function AddDriverPage() {
     "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"
   ]
 
+  const endorsementOptions = [
+    { code: "H", label: "Hazardous Materials" },
+    { code: "N", label: "Tank Vehicle" },
+    { code: "P", label: "Passenger" },
+    { code: "S", label: "School Bus" },
+    { code: "T", label: "Double/Triple Trailers" },
+    { code: "X", label: "Tank + HazMat" },
+    { code: "L", label: "Air Brakes Restriction" },
+    { code: "E", label: "Electric Vehicle" },
+  ]
+
+  const age = useMemo(() => {
+    if (!formData.dateOfBirth) return null
+    const birth = new Date(formData.dateOfBirth)
+    if (Number.isNaN(birth.getTime())) return null
+    const today = new Date()
+    let years = today.getFullYear() - birth.getFullYear()
+    const monthDiff = today.getMonth() - birth.getMonth()
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) years--
+    return years
+  }, [formData.dateOfBirth])
+
+  const stepErrors: Record<WizardStepKey, string[]> = {
+    personal: [
+      ...(formData.name.trim() ? [] : ["Full name is required"]),
+      ...(formData.email.trim() ? [] : ["Email is required"]),
+      ...(formData.phone.trim() ? [] : ["Phone number is required"]),
+      ...((age !== null && age < 21) ? ["Driver must be at least 21 for interstate operations"] : []),
+    ],
+    license: [
+      ...(formData.licenseNumber.trim() ? [] : ["License number is required"]),
+      ...(formData.licenseState.trim() ? [] : ["License state is required"]),
+      ...(formData.licenseExpiry.trim() ? [] : ["License expiry date is required"]),
+      ...(formData.medicalCertificateExpiry.trim() ? [] : ["Medical certificate expiry date is required"]),
+    ],
+    employment: [],
+    emergency: [
+      ...(formData.emergencyContactName.trim() ? [] : ["Emergency contact name is required"]),
+      ...(formData.emergencyContactPhone.trim() ? [] : ["Emergency contact phone is required"]),
+    ],
+  }
+
+  const currentStepIndex = wizardSteps.findIndex((step) => step.key === activeStep)
+  const isFinalStep = currentStepIndex === wizardSteps.length - 1
+
+  const goToStep = (target: WizardStepKey) => {
+    setActiveStep(target)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const handleNextStep = () => {
+    if (stepErrors[activeStep].length > 0) {
+      toast.error(stepErrors[activeStep][0] || "Please complete required fields")
+      return
+    }
+    const next = wizardSteps[currentStepIndex + 1]
+    if (next) goToStep(next.key)
+  }
+
+  const handleBackStep = () => {
+    const prev = wizardSteps[currentStepIndex - 1]
+    if (prev) goToStep(prev.key)
+  }
+
   return (
     <FormPageLayout
       title="Add Driver"
@@ -134,14 +274,62 @@ export default function AddDriverPage() {
       onSubmit={handleSubmit}
       isSubmitting={isSubmitting}
       submitLabel="Create Driver"
+      showDefaultSubmitBar={false}
+      footerActions={
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-sm text-muted-foreground">Step {currentStepIndex + 1} of {wizardSteps.length}</div>
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard/drivers">
+              <Button type="button" variant="outline">Cancel</Button>
+            </Link>
+            <Button type="button" variant="outline" onClick={handleBackStep} disabled={currentStepIndex === 0}>
+              <ChevronLeft className="w-4 h-4 mr-2" />
+              Back
+            </Button>
+            {!isFinalStep ? (
+              <Button type="button" onClick={handleNextStep}>
+                Next
+                <ChevronRight className="w-4 h-4 ml-2" />
+              </Button>
+            ) : (
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Creating..." : "Create Driver"}
+              </Button>
+            )}
+          </div>
+        </div>
+      }
     >
-            <Tabs defaultValue="personal" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="personal">Personal</TabsTrigger>
-                <TabsTrigger value="license">License</TabsTrigger>
-                <TabsTrigger value="employment">Employment</TabsTrigger>
-                <TabsTrigger value="emergency">Emergency</TabsTrigger>
-              </TabsList>
+            <Tabs value={activeStep} onValueChange={(value) => goToStep(value as WizardStepKey)} className="space-y-6">
+              <div className="sticky top-[108px] z-20 space-y-3">
+                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${((currentStepIndex + 1) / wizardSteps.length) * 100}%` }}
+                  />
+                </div>
+                <TabsList className="grid w-full grid-cols-4 bg-card/95 backdrop-blur border border-border/60 h-auto py-1">
+                  {wizardSteps.map((step) => {
+                    const stepIndex = wizardSteps.findIndex((s) => s.key === step.key)
+                    const hasErrors = stepErrors[step.key].length > 0 && stepIndex <= currentStepIndex
+                    const completed = !hasErrors && stepIndex < currentStepIndex
+                    return (
+                      <TabsTrigger key={step.key} value={step.key} className="text-xs md:text-sm py-2">
+                        <span className="inline-flex items-center gap-1.5">
+                          {completed ? (
+                            <Check className="w-3.5 h-3.5 text-green-500" />
+                          ) : hasErrors ? (
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                          ) : (
+                            <span className="w-3.5 h-3.5 rounded-full border border-border/80 inline-block" />
+                          )}
+                          {step.label}
+                        </span>
+                      </TabsTrigger>
+                    )
+                  })}
+                </TabsList>
+              </div>
 
               {/* Personal Information Tab */}
               <TabsContent value="personal" className="space-y-6">
@@ -167,6 +355,7 @@ export default function AddDriverPage() {
                         className="mt-1"
                         placeholder="DRV-001"
                       />
+                      <p className="text-[11px] text-muted-foreground mt-1">Leave blank to auto-generate.</p>
                     </div>
                     <div>
                       <Label>Employee Type</Label>
@@ -206,13 +395,15 @@ export default function AddDriverPage() {
                     </div>
                     <div>
                       <Label>Date of Birth</Label>
-                      <Input
+                      <DatePickerField
                         name="dateOfBirth"
-                        type="date"
                         value={formData.dateOfBirth}
                         onChange={handleChange}
-                        className="mt-1"
+                        placeholder="Select date of birth"
                       />
+                      <p className={`text-[11px] mt-1 ${age !== null && age < 21 ? "text-amber-400" : "text-muted-foreground"}`}>
+                        {age === null ? "Required for compliance checks." : `Age: ${age} years${age < 21 ? " - under 21 interstate warning" : ""}`}
+                      </p>
                     </div>
                     <div className="md:col-span-2">
                       <GooglePlacesAutocomplete
@@ -283,37 +474,50 @@ export default function AddDriverPage() {
                     </div>
                     <div>
                       <Label>License Expiry Date *</Label>
-                      <Input
+                      <DatePickerField
                         name="licenseExpiry"
-                        type="date"
                         value={formData.licenseExpiry}
                         onChange={handleChange}
-                        className="mt-1"
                         required
+                        placeholder="Select license expiry"
+                      />
+                    </div>
+                    <div>
+                      <Label>Medical Certificate Expiry Date *</Label>
+                      <DatePickerField
+                        name="medicalCertificateExpiry"
+                        value={formData.medicalCertificateExpiry}
+                        onChange={handleChange}
+                        required
+                        placeholder="Select medical certificate expiry"
                       />
                     </div>
                     <div className="md:col-span-2">
                       <Label>License Endorsements</Label>
-                      <div className="grid grid-cols-3 md:grid-cols-4 gap-3 mt-2">
-                        {["H", "N", "P", "S", "T", "X", "L", "E"].map(endorsement => (
-                          <label key={endorsement} className="flex items-center gap-2 cursor-pointer">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                        {endorsementOptions.map((endorsement) => (
+                          <label
+                            key={endorsement.code}
+                            className="flex items-center gap-2 cursor-pointer rounded-md border border-border/70 px-3 py-2 hover:bg-muted/20"
+                            title={endorsement.label}
+                          >
                             <Checkbox
-                              checked={formData.licenseEndorsements.includes(endorsement)}
+                              checked={formData.licenseEndorsements.includes(endorsement.code)}
                               onCheckedChange={(checked) => {
                                 if (checked) {
                                   setFormData(prev => ({
                                     ...prev,
-                                    licenseEndorsements: [...prev.licenseEndorsements, endorsement]
+                                    licenseEndorsements: [...prev.licenseEndorsements, endorsement.code]
                                   }))
                                 } else {
                                   setFormData(prev => ({
                                     ...prev,
-                                    licenseEndorsements: prev.licenseEndorsements.filter(e => e !== endorsement)
+                                    licenseEndorsements: prev.licenseEndorsements.filter(e => e !== endorsement.code)
                                   }))
                                 }
                               }}
                             />
-                            <span className="text-sm">{endorsement}</span>
+                            <span className="text-sm">{endorsement.code} - {endorsement.label}</span>
                           </label>
                         ))}
                       </div>
@@ -343,27 +547,12 @@ export default function AddDriverPage() {
                     </div>
                     <div>
                       <Label>Hire Date</Label>
-                      <Input
+                      <DatePickerField
                         name="hireDate"
-                        type="date"
                         value={formData.hireDate}
                         onChange={handleChange}
-                        className="mt-1"
+                        placeholder="Select hire date"
                       />
-                    </div>
-                    <div>
-                      <Label>Assigned Truck</Label>
-                      <Select value={formData.assignedTruck || "none"} onValueChange={(v) => handleSelectChange("assignedTruck", v === "none" ? "" : v)}>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Select truck" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          {trucks.map(t => (
-                            <SelectItem key={t.id} value={t.id}>{t.truck_number} - {t.make} {t.model}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
                     </div>
                     <div>
                       <Label>Pay Rate Type</Label>
@@ -386,8 +575,9 @@ export default function AddDriverPage() {
                         value={formData.payRate}
                         onChange={handleChange}
                         className="mt-1"
-                        placeholder="0.50"
+                        placeholder=""
                       />
+                      <p className="text-[11px] text-muted-foreground mt-1">Industry reference: $0.50-$0.65 per mile (varies by lane/equipment).</p>
                     </div>
                     <div className="md:col-span-2">
                       <Label>Notes</Label>
@@ -407,9 +597,12 @@ export default function AddDriverPage() {
               {/* Emergency Contact Tab */}
               <TabsContent value="emergency" className="space-y-6">
                 <FormSection title="Emergency Contact" icon={<Phone className="w-5 h-5" />}>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Required for DOT compliance and incident response.
+                  </p>
                   <FormGrid cols={2}>
                     <div>
-                      <Label>Contact Name</Label>
+                      <Label>Contact Name *</Label>
                       <Input
                         name="emergencyContactName"
                         value={formData.emergencyContactName}
@@ -419,7 +612,7 @@ export default function AddDriverPage() {
                       />
                     </div>
                     <div>
-                      <Label>Contact Phone</Label>
+                      <Label>Contact Phone *</Label>
                       <Input
                         name="emergencyContactPhone"
                         type="tel"
@@ -437,6 +630,40 @@ export default function AddDriverPage() {
                         onChange={handleChange}
                         className="mt-1"
                         placeholder="Spouse, Parent, etc."
+                      />
+                    </div>
+                    <div className="md:col-span-2 pt-2 border-t border-border/60">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Secondary emergency contact (optional)</p>
+                    </div>
+                    <div>
+                      <Label>Secondary Contact Name</Label>
+                      <Input
+                        name="emergencyContact2Name"
+                        value={formData.emergencyContact2Name}
+                        onChange={handleChange}
+                        className="mt-1"
+                        placeholder="Alex Smith"
+                      />
+                    </div>
+                    <div>
+                      <Label>Secondary Contact Phone</Label>
+                      <Input
+                        name="emergencyContact2Phone"
+                        type="tel"
+                        value={formData.emergencyContact2Phone}
+                        onChange={handleChange}
+                        className="mt-1"
+                        placeholder="+1 (555) 222-3333"
+                      />
+                    </div>
+                    <div>
+                      <Label>Secondary Relationship</Label>
+                      <Input
+                        name="emergencyContact2Relationship"
+                        value={formData.emergencyContact2Relationship}
+                        onChange={handleChange}
+                        className="mt-1"
+                        placeholder="Sibling, Friend, etc."
                       />
                     </div>
                   </FormGrid>

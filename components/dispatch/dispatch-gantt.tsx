@@ -23,6 +23,7 @@ interface DispatchGanttProps {
   endDate?: Date
   driverId?: string
   onJobClick?: (job: TimelineJob) => void
+  hideEmptyState?: boolean
 }
 
 export function DispatchGantt({
@@ -30,6 +31,7 @@ export function DispatchGantt({
   endDate,
   driverId,
   onJobClick,
+  hideEmptyState = false,
 }: DispatchGanttProps) {
   const [timelines, setTimelines] = useState<DriverTimeline[]>([])
   const [loading, setLoading] = useState(true)
@@ -101,6 +103,7 @@ export function DispatchGantt({
   }
 
   if (timelines.length === 0) {
+    if (hideEmptyState) return null
     return (
       <Card className="border-border p-8">
         <div className="text-center">

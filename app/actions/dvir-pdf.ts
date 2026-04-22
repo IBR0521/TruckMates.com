@@ -374,3 +374,146 @@ export async function generateDVIRAuditPDF(filters: any) {
     return { html: "", error: errorMessage(error, "Failed to generate DVIR audit PDF") }
   }
 }
+
+/**
+ * Generate single DVIR PDF HTML for a specific report.
+ */
+export async function generateSingleDVIRPDF(dvirId: string) {
+  const supabase = await createClient()
+
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { html: "", error: ctx.error || "Not authenticated" }
+  }
+
+  try {
+    const { data: dvir, error } = await supabase
+      .from("dvir")
+      .select(`
+        *,
+        drivers:driver_id (id, name),
+        trucks:truck_id (id, truck_number, make, model),
+        certified_by_user:certified_by (id, full_name)
+      `)
+      .eq("id", dvirId)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+
+    if (error || !dvir) {
+      return { html: "", error: error?.message || "DVIR not found" }
+    }
+
+    const defectRows = Array.isArray(dvir.defects) ? dvir.defects : []
+    const shortId = String(dvir.id ?? "").slice(0, 8).toUpperCase() || "UNKNOWN"
+    const formatDate = (date: string | Date) =>
+      new Date(date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    const formatDateTime = (value: string | null | undefined) =>
+      value ? new Date(value).toLocaleString("en-US") : "Not recorded"
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8" />
+        <title>DVIR ${shortId}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; color: #000; font-size: 12px; }
+          .header { border-bottom: 2px solid #111; padding-bottom: 14px; margin-bottom: 16px; }
+          .title { font-size: 22px; font-weight: 700; margin: 0; }
+          .subtitle { color: #444; margin-top: 4px; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin-top: 14px; }
+          .label { font-size: 10px; text-transform: uppercase; color: #555; margin-bottom: 2px; }
+          .value { font-size: 12px; font-weight: 600; color: #111; }
+          .section { margin-top: 18px; border: 1px solid #ddd; padding: 12px; }
+          .section h2 { margin: 0 0 10px; font-size: 14px; }
+          .badge { display: inline-block; padding: 3px 8px; border-radius: 10px; border: 1px solid #bbb; margin-right: 6px; font-size: 10px; font-weight: 700; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+          th, td { border: 1px solid #ddd; padding: 6px; text-align: left; font-size: 11px; }
+          th { background: #f5f5f5; }
+          .footer { margin-top: 20px; color: #555; font-size: 10px; border-top: 1px solid #ddd; padding-top: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1 class="title">Driver Vehicle Inspection Report</h1>
+          <div class="subtitle">DVIR #${escapeHtml(shortId)} · Generated ${escapeHtml(formatDate(new Date()))}</div>
+        </div>
+
+        <div>
+          <span class="badge">${escapeHtml(String(dvir.status || "pending").replaceAll("_", " ").toUpperCase())}</span>
+          <span class="badge">${dvir.safe_to_operate ? "SAFE TO OPERATE" : "UNSAFE"}</span>
+        </div>
+
+        <div class="grid">
+          <div><div class="label">Inspection Type</div><div class="value">${escapeHtml(String(dvir.inspection_type || "N/A").replaceAll("_", " "))}</div></div>
+          <div><div class="label">Inspection Date</div><div class="value">${dvir.inspection_date ? escapeHtml(formatDate(dvir.inspection_date)) : "Not recorded"}</div></div>
+          <div><div class="label">Driver</div><div class="value">${escapeHtml(dvir.drivers?.name || "Not recorded")}</div></div>
+          <div><div class="label">Truck</div><div class="value">${escapeHtml(
+            dvir.trucks
+              ? `${dvir.trucks.truck_number}${dvir.trucks.make && dvir.trucks.model ? ` (${dvir.trucks.make} ${dvir.trucks.model})` : ""}`
+              : "Not recorded"
+          )}</div></div>
+          <div><div class="label">Inspection Time</div><div class="value">${escapeHtml(dvir.inspection_time || "Not recorded")}</div></div>
+          <div><div class="label">Location</div><div class="value">${escapeHtml(dvir.location || "Not recorded")}</div></div>
+          <div><div class="label">Mileage</div><div class="value">${dvir.mileage ? `${Number(dvir.mileage).toLocaleString()} miles` : "Not recorded"}</div></div>
+          <div><div class="label">Odometer</div><div class="value">${dvir.odometer_reading ? Number(dvir.odometer_reading).toLocaleString() : "Not recorded"}</div></div>
+        </div>
+
+        <div class="section">
+          <h2>Defects</h2>
+          ${
+            dvir.defects_found && defectRows.length > 0
+              ? `
+                <table>
+                  <thead>
+                    <tr><th>Component</th><th>Description</th><th>Severity</th><th>Corrected</th></tr>
+                  </thead>
+                  <tbody>
+                    ${defectRows
+                      .map(
+                        (defect: any) => `
+                      <tr>
+                        <td>${escapeHtml(defect.component || "N/A")}</td>
+                        <td>${escapeHtml(defect.description || "N/A")}</td>
+                        <td>${escapeHtml((defect.severity || "minor").toUpperCase())}</td>
+                        <td>${defect.corrected ? "Yes" : "No"}</td>
+                      </tr>
+                    `
+                      )
+                      .join("")}
+                  </tbody>
+                </table>
+              `
+              : `<div>No defects recorded.</div>`
+          }
+        </div>
+
+        <div class="section">
+          <h2>Signatures & Certification</h2>
+          <div class="grid">
+            <div><div class="label">Driver Signed At</div><div class="value">${escapeHtml(formatDateTime(dvir.driver_signature_date))}</div></div>
+            <div><div class="label">Certified By</div><div class="value">${escapeHtml(dvir.certified_by_user?.full_name || "Not certified")}</div></div>
+            <div><div class="label">Certified At</div><div class="value">${escapeHtml(formatDateTime(dvir.certified_date))}</div></div>
+            <div><div class="label">Driver Signature</div><div class="value">${dvir.driver_signature ? "On file" : "Not recorded"}</div></div>
+          </div>
+        </div>
+
+        ${
+          dvir.notes
+            ? `<div class="section"><h2>Notes</h2><div>${escapeHtml(dvir.notes)}</div></div>`
+            : ""
+        }
+
+        <div class="footer">
+          <p>Generated by TruckMates for compliance and audit documentation.</p>
+        </div>
+      </body>
+      </html>
+    `
+
+    return { html, error: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { html: "", error: errorMessage(error, "Failed to generate DVIR report HTML") }
+  }
+}

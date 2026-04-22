@@ -13,8 +13,8 @@ import {
 import { Separator } from "@/components/ui/separator"
 
 interface DetailPageLayoutProps {
-  title: string
-  subtitle?: string
+  title: React.ReactNode
+  subtitle?: React.ReactNode
   backUrl: string
   editUrl?: string
   actions?: React.ReactNode
@@ -34,11 +34,11 @@ export function DetailPageLayout({
   return (
     <div className="w-full bg-background">
       {/* Professional Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur sticky top-0 z-10">
+      <div className="border-b border-border/70 bg-card/60 backdrop-blur sticky top-0 z-10">
         <div className="px-4 md:px-8 py-4 md:py-6">
           <div className="flex items-center gap-3 mb-4">
             <Link href={backUrl}>
-              <Button variant="ghost" size="sm" className="h-9">
+              <Button variant="ghost" size="sm" className="h-9 text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back
               </Button>
@@ -57,7 +57,7 @@ export function DetailPageLayout({
             <div className="flex items-center gap-2 flex-wrap">
               {editUrl && (
                 <Link href={editUrl}>
-                  <Button variant="outline" size="sm" className="h-9">
+                  <Button variant="outline" size="sm" className="h-9 border-border/70 bg-transparent">
                     <Edit2 className="w-4 h-4 mr-2" />
                     Edit
                   </Button>

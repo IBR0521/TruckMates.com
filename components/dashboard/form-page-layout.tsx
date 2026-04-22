@@ -15,6 +15,8 @@ interface FormPageLayoutProps {
   isSubmitting?: boolean
   submitLabel?: string
   actions?: React.ReactNode
+  showDefaultSubmitBar?: boolean
+  footerActions?: React.ReactNode
 }
 
 export function FormPageLayout({
@@ -26,6 +28,8 @@ export function FormPageLayout({
   isSubmitting = false,
   submitLabel = "Save",
   actions,
+  showDefaultSubmitBar = true,
+  footerActions,
 }: FormPageLayoutProps) {
   return (
     <div className="w-full bg-background">
@@ -65,22 +69,26 @@ export function FormPageLayout({
           {onSubmit ? (
             <form onSubmit={onSubmit} className="space-y-6">
               {children}
-              {/* Submit Button at Bottom - Added padding to avoid feedback button */}
-              <div className="flex items-center justify-end gap-3 pt-6 pb-20 sm:pb-6 border-t border-border">
-                <Link href={backUrl}>
-                  <Button type="button" variant="outline">
-                    Cancel
+              {showDefaultSubmitBar && (
+                <div className="flex items-center justify-end gap-3 pt-6 pb-20 sm:pb-6 border-t border-border">
+                  <Link href={backUrl}>
+                    <Button type="button" variant="outline">
+                      Cancel
+                    </Button>
+                  </Link>
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {isSubmitting ? "Saving..." : submitLabel}
                   </Button>
-                </Link>
-                <Button 
-                  type="submit" 
-                  disabled={isSubmitting}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSubmitting ? "Saving..." : submitLabel}
-                </Button>
-              </div>
+                </div>
+              )}
+              {footerActions && (
+                <div className="pt-6 pb-20 sm:pb-6 border-t border-border">{footerActions}</div>
+              )}
             </form>
           ) : (
             children

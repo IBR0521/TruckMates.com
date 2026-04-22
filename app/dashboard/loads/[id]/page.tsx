@@ -3,7 +3,23 @@
 import { Button } from "@/components/ui/button"
 import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
-import { ArrowLeft, MapPin, Package, Truck, Calendar, Edit2, Route, AlertCircle, Calculator, FileSpreadsheet } from "lucide-react"
+import {
+  MapPin,
+  Package,
+  Truck,
+  Calendar,
+  Route,
+  Calculator,
+  FileSpreadsheet,
+  Building2,
+  FileText,
+  DollarSign,
+  Share2,
+  ArrowRight,
+  Edit2,
+  FilePenLine,
+  CircleAlert
+} from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
@@ -16,7 +32,6 @@ import { getLoadDeliveryPoints, getLoadSummary } from "@/app/actions/load-delive
 import { createInvoice, getInvoices } from "@/app/actions/accounting"
 import { autoGenerateInvoiceOnPOD } from "@/app/actions/auto-invoice"
 import { toast } from "sonner"
-import { Building2, FileText, DollarSign, Share2 } from "lucide-react"
 import {
   DetailPageLayout,
   DetailSection,
@@ -454,6 +469,21 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  const getStatusStripClasses = (variant: "success" | "default" | "warning" | "danger" | "info") => {
+    switch (variant) {
+      case "success":
+        return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+      case "warning":
+        return "border-amber-500/30 bg-amber-500/10 text-amber-300"
+      case "danger":
+        return "border-red-500/30 bg-red-500/10 text-red-300"
+      case "info":
+        return "border-blue-500/30 bg-blue-500/10 text-blue-300"
+      default:
+        return "border-zinc-500/40 bg-zinc-500/10 text-zinc-300"
+    }
+  }
+
   if (!load) {
   return (
       <DetailPageLayout
@@ -649,12 +679,63 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <DetailPageLayout
-      title={load.shipment_number || "Load Details"}
-      subtitle={load.origin && load.destination ? `${load.origin} → ${load.destination}` : undefined}
+      title={<span className="text-3xl font-bold tracking-tight">{load.shipment_number || "Load Details"}</span>}
+      subtitle={
+        load.origin && load.destination ? (
+          <span className="inline-flex items-center gap-2 text-sm md:text-base">
+            <span>{load.origin}</span>
+            <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            <span>{load.destination}</span>
+          </span>
+        ) : undefined
+      }
       backUrl="/dashboard/loads"
-      editUrl={`/dashboard/loads/${id}/edit`}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center rounded-md border border-border/70 bg-muted/20 p-1">
+            <Link href={`/dashboard/loads/${id}/edit`}>
+              <Button variant="ghost" size="sm" className="h-8 px-3">
+                <Edit2 className="mr-2 h-4 w-4" />
+                Edit
+              </Button>
+            </Link>
+            {relatedInvoice?.id ? (
+              <Link href={`/dashboard/accounting/invoices/${relatedInvoice.id}`}>
+                <Button variant="ghost" size="sm" className="h-8 px-3">
+                  <FileText className="mr-2 h-4 w-4" />
+                  View Invoice
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-3"
+                onClick={() => setIsInvoiceDialogOpen(true)}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                View Invoice
+              </Button>
+            )}
+            <Link href={`/dashboard/bols/create?loadId=${id}`}>
+              <Button variant="ghost" size="sm" className="h-8 px-3">
+                <FilePenLine className="mr-2 h-4 w-4" />
+                Create BOL
+              </Button>
+            </Link>
+          </div>
+          {load.customer_id ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 border-border/70 bg-transparent"
+              onClick={handleShareTrackingLink}
+              disabled={isCreatingPortal}
+            >
+              <Share2 className="w-4 h-4 mr-2" />
+              {isCreatingPortal ? "Creating..." : "Share Tracking Link"}
+            </Button>
+          ) : null}
           {canGenerateInvoice ? (
             <Button
               size="sm"
@@ -665,32 +746,47 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
               <FileText className="w-4 h-4 mr-2" />
               {isGeneratingInvoice ? "Generating..." : "Generate Invoice"}
             </Button>
-          ) : relatedInvoice?.id ? (
-            <Link href={`/dashboard/accounting/invoices/${relatedInvoice.id}`}>
-              <Button variant="outline" size="sm" className="h-9">
-                <FileText className="w-4 h-4 mr-2" />
-                View Invoice
-              </Button>
-            </Link>
           ) : null}
-          <Link href={`/dashboard/bols/create?loadId=${id}`}>
-            <Button variant="outline" size="sm" className="h-9">
-              <FileText className="w-4 h-4 mr-2" />
-              Create BOL
-            </Button>
-          </Link>
-          {load.customer_id ? (
+        </div>
+      }
+      headerActions={
+        <div className="flex w-full flex-wrap items-center gap-2 text-xs sm:text-sm">
+          <span className="font-medium text-muted-foreground">Dispatch:</span>
+          <span
+            className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${getStatusStripClasses(
+              dispatchStatusVariant,
+            )}`}
+          >
+            {dispatchStatus}
+          </span>
+          <span className="text-muted-foreground/80">·</span>
+          <span className="font-medium text-muted-foreground">Invoice:</span>
+          <span
+            className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${getStatusStripClasses(
+              invoiceStatusVariant,
+            )}`}
+          >
+            {invoiceStatus}
+          </span>
+          <span className="text-muted-foreground/80">·</span>
+          <span className="font-medium text-muted-foreground">Load:</span>
+          <span
+            className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${getStatusStripClasses(
+              getStatusVariant(load.status),
+            )}`}
+          >
+            {load.status?.replace("_", " ") || "Unknown"}
+          </span>
+          {dispatchStatus === "Undispatched" && (
             <Button
-              variant="outline"
               size="sm"
-              className="h-9"
-              onClick={handleShareTrackingLink}
-              disabled={isCreatingPortal}
+              variant="outline"
+              className="ml-auto h-8 border-border/70"
+              onClick={() => setIsDispatchDialogOpen(true)}
             >
-              <Share2 className="w-4 h-4 mr-2" />
-              {isCreatingPortal ? "Creating..." : "Share Tracking Link"}
+              Dispatch
             </Button>
-          ) : null}
+          )}
         </div>
       }
     >
@@ -719,122 +815,64 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         </Card>
 
-        {/* Status Indicators - TruckLogics Style */}
-        <div className="grid md:grid-cols-3 gap-4">
-          <Card className="p-4 border-2">
-            <div className="flex items-center justify-between">
-                <div>
-                <p className="text-sm text-muted-foreground mb-1">Dispatch Status</p>
-                <StatusBadge 
-                  status={dispatchStatus} 
-                  variant={dispatchStatusVariant}
-                />
-                {dispatchStatus === "Undispatched" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-2 h-8"
-                    onClick={() => setIsDispatchDialogOpen(true)}
-                  >
-                    Dispatch
-                  </Button>
-                )}
-                </div>
-              </div>
-          </Card>
-          <Card className="p-4 border-2">
-            <div className="flex items-center justify-between">
-                <div>
-                <p className="text-sm text-muted-foreground mb-1">Invoice Status</p>
-                <StatusBadge 
-                  status={invoiceStatus} 
-                  variant={invoiceStatusVariant}
-                />
-                {!relatedInvoice && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-2 h-8"
-                    onClick={() => setIsInvoiceDialogOpen(true)}
-                  >
-                    Invoice
-                  </Button>
-                )}
-                </div>
-              </div>
-          </Card>
-          <Card className="p-4 border-2">
-            <div className="flex items-center justify-between">
-                  <div>
-                <p className="text-sm text-muted-foreground mb-1">Load Status</p>
-                <StatusBadge 
-                  status={load.status?.replace("_", " ") || "Unknown"} 
-                  variant={getStatusVariant(load.status)}
-                />
-                  </div>
-                </div>
-          </Card>
-        </div>
-
         {/* Load Overview - Always Visible */}
         <DetailSection
           title="Load Overview"
           icon={<Package className="w-5 h-5" />}
           description="Basic load information and status"
+          className="border-border/70 bg-card/80"
         >
-            <InfoGrid cols={2}>
-              <InfoField
-                label="Shipment Number"
-                value={load.shipment_number || "—"}
-              />
-              <InfoField
-                label="Status"
-                value={
-                  <StatusBadge
-                    status={load.status?.replace("_", " ") || "Unknown"}
-                    variant={getStatusVariant(load.status)}
-                  />
-                }
-              />
-              <InfoField
-                label="Origin"
-                value={load.origin || "—"}
-                icon={<MapPin className="w-4 h-4" />}
-              />
-              <InfoField
-                label="Destination"
-                value={load.destination || "—"}
-                icon={<MapPin className="w-4 h-4" />}
-              />
-              {load.company_name && (
-                <InfoField
-                  label="Company"
-                  value={load.company_name}
-                  icon={<Building2 className="w-4 h-4" />}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-zinc-500">Shipment Number</p>
+              <p className="mt-1 text-base text-white">{load.shipment_number || "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-zinc-500">Status</p>
+              <div className="mt-1">
+                <StatusBadge
+                  status={load.status?.replace("_", " ") || "Unknown"}
+                  variant={getStatusVariant(load.status)}
                 />
-              )}
-              {load.delivery_type && (
-                <InfoField
-                  label="Delivery Type"
-                  value={load.delivery_type === "multi" ? "Multiple Deliveries" : "Single Delivery"}
-                />
-              )}
-              {load.load_date && (
-                <InfoField
-                  label="Load Date"
-                  value={formatDate(load.load_date)}
-                  icon={<Calendar className="w-4 h-4" />}
-                />
-              )}
-              {load.estimated_delivery && (
-                <InfoField
-                  label="Estimated Delivery"
-                  value={formatDate(load.estimated_delivery)}
-                  icon={<Calendar className="w-4 h-4" />}
-                />
-              )}
-            </InfoGrid>
-          </DetailSection>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-zinc-500">Origin</p>
+              <p className="mt-1 text-base text-white">{load.origin || "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-zinc-500">Destination</p>
+              <p className="mt-1 text-base text-white">{load.destination || "—"}</p>
+            </div>
+            {load.company_name && (
+              <div>
+                <p className="text-xs uppercase tracking-wider text-zinc-500">Company</p>
+                <p className="mt-1 text-base text-white">{load.company_name}</p>
+              </div>
+            )}
+            {load.delivery_type && (
+              <div>
+                <p className="text-xs uppercase tracking-wider text-zinc-500">Delivery Type</p>
+                <p className="mt-1 text-base text-white">
+                  {load.delivery_type === "multi" ? "Multiple Deliveries" : "Single Delivery"}
+                </p>
+              </div>
+            )}
+            {load.load_date && (
+              <div>
+                <p className="text-xs uppercase tracking-wider text-zinc-500">Load Date</p>
+                <p className="mt-1 text-base text-white">{formatDate(load.load_date)}</p>
+              </div>
+            )}
+            {load.estimated_delivery && (
+              <div>
+                <p className="text-xs uppercase tracking-wider text-zinc-500">Estimated Delivery</p>
+                <p className="mt-1 text-base text-white">{formatDate(load.estimated_delivery)}</p>
+              </div>
+            )}
+          </div>
+        </DetailSection>
+        <div className="border-t border-border/60" />
 
           <div id="trip-planning-promiles">
             <LoadTripPlanningEstimate
@@ -1159,68 +1197,71 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           <DetailSection
             title="Cargo Details"
             icon={<Package className="w-5 h-5" />}
+            className="border-border/70 bg-card/80"
           >
             <div className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Weight</p>
-                  <p className="text-lg text-foreground font-bold">{load.weight || (load.weight_kg ? `${(load.weight_kg / 1000).toFixed(1)} tons` : "N/A")}</p>
-                  {load.weight_kg && (
-                    <p className="text-xs text-muted-foreground mt-1">{load.weight_kg.toLocaleString()} kg</p>
-                  )}
+                  <p className="text-xs uppercase tracking-wider text-zinc-500">Weight</p>
+                  <p className="mt-1 text-base text-white">
+                    {load.weight || (load.weight_kg ? `${(load.weight_kg / 1000).toFixed(1)} tons` : "N/A")}
+                    {load.weight_kg ? ` (${load.weight_kg.toLocaleString()} kg)` : ""}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Contents</p>
-                  <p className="text-lg text-foreground font-bold">{load.contents || "N/A"}</p>
+                  <p className="text-xs uppercase tracking-wider text-zinc-500">Contents</p>
+                  <p className="mt-1 text-base text-white">{load.contents || "N/A"}</p>
                 </div>
                 {load.pieces && (
                   <div>
-                    <p className="text-sm text-muted-foreground mb-2">Pieces</p>
-                    <p className="text-foreground font-medium">{load.pieces}</p>
+                    <p className="text-xs uppercase tracking-wider text-zinc-500">Pieces</p>
+                    <p className="mt-1 text-base text-white">{load.pieces}</p>
                   </div>
                 )}
                 {load.pallets && (
                   <div>
-                    <p className="text-sm text-muted-foreground mb-2">Pallets</p>
-                    <p className="text-foreground font-medium">{load.pallets}</p>
+                    <p className="text-xs uppercase tracking-wider text-zinc-500">Pallets</p>
+                    <p className="mt-1 text-base text-white">{load.pallets}</p>
                   </div>
                 )}
                 {load.boxes && (
                   <div>
-                    <p className="text-sm text-muted-foreground mb-2">Boxes</p>
-                    <p className="text-foreground font-medium">{load.boxes}</p>
+                    <p className="text-xs uppercase tracking-wider text-zinc-500">Boxes</p>
+                    <p className="mt-1 text-base text-white">{load.boxes}</p>
                   </div>
                 )}
                 {(load.length || load.width || load.height) && (
                   <div>
-                    <p className="text-sm text-muted-foreground mb-2">Dimensions</p>
-                    <p className="text-foreground font-medium">
+                    <p className="text-xs uppercase tracking-wider text-zinc-500">Dimensions</p>
+                    <p className="mt-1 text-base text-white">
                       {[load.length, load.width, load.height].filter(Boolean).join(" × ")} ft
                     </p>
                   </div>
                 )}
                 {load.temperature && (
                   <div>
-                    <p className="text-sm text-muted-foreground mb-2">Temperature</p>
-                    <p className="text-foreground font-medium">{load.temperature}°F</p>
+                    <p className="text-xs uppercase tracking-wider text-zinc-500">Temperature</p>
+                    <p className="mt-1 text-base text-white">{load.temperature}°F</p>
                   </div>
                 )}
                 {load.value && (
                   <div>
-                    <p className="text-sm text-muted-foreground mb-2">Shipment Value</p>
-                    <p className="text-lg text-foreground font-bold">${typeof load.value === 'number' ? load.value.toLocaleString('en-US') : parseFloat(load.value || '0').toLocaleString('en-US')}</p>
+                    <p className="text-xs uppercase tracking-wider text-zinc-500">Shipment Value</p>
+                    <p className="mt-1 text-2xl font-semibold text-emerald-400">
+                      ${typeof load.value === 'number' ? load.value.toLocaleString('en-US') : parseFloat(load.value || '0').toLocaleString('en-US')}
+                    </p>
                   </div>
                 )}
                 {load.carrier_type && (
                   <div>
-                    <p className="text-sm text-muted-foreground mb-2">Carrier Type</p>
-                    <p className="text-lg text-foreground font-bold">{load.carrier_type}</p>
+                    <p className="text-xs uppercase tracking-wider text-zinc-500">Carrier Type</p>
+                    <p className="mt-1 text-base text-white">{load.carrier_type}</p>
                   </div>
                 )}
                 {load.load_type && (
                   <div>
-                    <p className="text-sm text-muted-foreground mb-2">Load Type</p>
-                    <p className="text-foreground font-medium capitalize">{load.load_type}</p>
+                    <p className="text-xs uppercase tracking-wider text-zinc-500">Load Type</p>
+                    <p className="mt-1 text-base capitalize text-white">{load.load_type}</p>
                   </div>
                 )}
               </div>
@@ -1291,7 +1332,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                     <p className="text-sm text-muted-foreground mb-2">Related Invoice</p>
                     {relatedInvoice.id && typeof relatedInvoice.id === 'string' && relatedInvoice.id.trim() !== '' ? (
                       <Link href={`/dashboard/accounting/invoices/${relatedInvoice.id}`}>
-                        <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                        <Button variant="outline" size="sm" className="h-8 rounded-md border-border/70 bg-transparent">
                           <FileText className="w-4 h-4 mr-2" />
                           View Invoice {relatedInvoice.invoice_number}
                         </Button>
@@ -1410,48 +1451,81 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           <DetailSection
             title="Assignment"
             icon={<Truck className="w-5 h-5" />}
+            className="border-border/70 bg-card/80"
           >
-            <div className="space-y-4">
-              {load.driver_id ? (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Driver</p>
-                  <p className="text-foreground font-medium">Assigned (ID: {load.driver_id ? load.driver_id.substring(0, 8) : 'N/A'}...)</p>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Driver</p>
-                  <p className="text-foreground font-medium text-muted-foreground">Not assigned</p>
-                </div>
-              )}
-              {truck ? (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Vehicle</p>
-                  <p className="text-foreground font-medium">{truck.truck_number} - {truck.make} {truck.model}</p>
-                  {truck.status && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Status: <span className={`${
-                        truck.status === "available" ? "text-green-400" :
-                        truck.status === "in_use" ? "text-blue-400" :
-                        truck.status === "maintenance" ? "text-yellow-400" :
-                        "text-gray-400"
-                      }`}>{truck.status}</span>
-                    </p>
-                  )}
-                  {truck.fuel_level !== null && (
-                    <p className="text-xs text-muted-foreground mt-1">Fuel Level: {truck.fuel_level}%</p>
-                  )}
-                </div>
-              ) : load.truck_id ? (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Vehicle</p>
-                  <p className="text-foreground font-medium">Assigned (ID: {load.truck_id ? load.truck_id.substring(0, 8) : 'N/A'}...)</p>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Vehicle</p>
-                  <p className="text-foreground font-medium text-muted-foreground">Not assigned</p>
-                </div>
-              )}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                <p className="text-xs uppercase tracking-wider text-zinc-500">Driver</p>
+                {load.driver_id ? (
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+                      {(load.driver_name || "DR")
+                        .split(" ")
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((part: string) => part[0]?.toUpperCase())
+                        .join("") || "DR"}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{load.driver_name || "Assigned Driver"}</p>
+                      <p className="text-xs text-muted-foreground">ID: {load.driver_id.substring(0, 8)}...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-md border border-dashed border-border/70 px-3 py-2 text-sm text-muted-foreground">
+                    Unassigned
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                <p className="text-xs uppercase tracking-wider text-zinc-500">Vehicle</p>
+                {truck ? (
+                  <div className="mt-3 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Truck className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-sm font-medium text-foreground">
+                        {truck.truck_number} - {truck.make} {truck.model}
+                      </p>
+                    </div>
+                    {truck.status && (
+                      <span
+                        className={`inline-flex rounded-md border px-2 py-1 text-xs font-medium ${
+                          truck.status === "available"
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                            : truck.status === "in_use"
+                              ? "border-blue-500/30 bg-blue-500/10 text-blue-300"
+                              : truck.status === "maintenance"
+                                ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                                : "border-zinc-500/30 bg-zinc-500/10 text-zinc-300"
+                        }`}
+                      >
+                        {truck.status.replace("_", " ")}
+                      </span>
+                    )}
+                    {typeof truck.fuel_level === "number" && (
+                      <div>
+                        <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+                          <span>Fuel level</span>
+                          <span>{truck.fuel_level}%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-background/70">
+                          <div
+                            className="h-2 rounded-full bg-blue-500"
+                            style={{ width: `${Math.max(0, Math.min(100, truck.fuel_level))}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : load.truck_id ? (
+                  <p className="mt-3 text-sm text-foreground">Assigned (ID: {load.truck_id.substring(0, 8)}...)</p>
+                ) : (
+                  <div className="mt-3 rounded-md border border-dashed border-border/70 px-3 py-2 text-sm text-muted-foreground">
+                    Unassigned
+                  </div>
+                )}
+              </div>
             </div>
           </DetailSection>
 
@@ -1537,7 +1611,8 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           ) : (
           <DetailSection
             title="No Matching Route Found"
-            icon={<AlertCircle className="w-5 h-5" />}
+            icon={<CircleAlert className="w-5 h-5 text-zinc-500" />}
+            className="border-border/70 bg-card/80"
           >
             <div className="space-y-4">
               <p className="text-muted-foreground">
@@ -1550,12 +1625,12 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
               </p>
               <div className="flex gap-3">
                 <Link href="/dashboard/routes/add">
-                  <Button variant="outline">
+                  <Button variant="outline" className="border-border/70 bg-transparent">
                     Create New Route
                   </Button>
                 </Link>
                 <Link href="/dashboard/routes">
-                  <Button variant="outline">
+                  <Button variant="outline" className="border-border/70 bg-transparent">
                     View All Routes
                   </Button>
                 </Link>

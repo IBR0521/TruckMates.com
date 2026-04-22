@@ -5,6 +5,7 @@ import { errorMessage } from "@/lib/error-message"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import {
   Dialog,
@@ -38,7 +39,8 @@ import {
   Trash2, 
   RefreshCw,
   Search,
-  Truck
+  Truck,
+  Cpu
 } from "lucide-react"
 import { 
   getELDDevices, 
@@ -51,7 +53,6 @@ import { toast } from "sonner"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import {
-  EldDeviceSyncStatus,
   getDeviceLastSyncAt,
   getEldSyncVisual,
 } from "@/components/eld/eld-device-sync-status"
@@ -220,6 +221,23 @@ export default function ELDDevicesPage() {
     device.provider?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  function providerLabel(provider?: string | null) {
+    const p = (provider || "").toLowerCase()
+    if (p === "keeptruckin") return "Motive"
+    if (p === "samsara") return "Samsara"
+    if (p === "geotab") return "Geotab"
+    return provider || "Other"
+  }
+
+  function syncLine(sync: ReturnType<typeof getEldSyncVisual>) {
+    if (sync.urgency === "fresh") return { text: `Last synced ${sync.detail.split(" · ")[0]}`, cls: "text-emerald-500" }
+    if (sync.urgency === "warn") return { text: `Last synced ${sync.detail.split(" · ")[0]}`, cls: "text-amber-500" }
+    if (sync.urgency === "never" || sync.urgency === "stale" || sync.urgency === "invalid") {
+      return { text: sync.urgency === "never" ? "Never synced" : sync.title, cls: "text-red-500" }
+    }
+    return { text: sync.title, cls: "text-muted-foreground" }
+  }
+
   if (isLoading) {
     return (
       <div className="w-full">
@@ -266,8 +284,7 @@ export default function ELDDevicesPage() {
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">Sync health:</span> green = last sync under 15 min, amber =
-            15 min–2 h, red = over 2 h or never. Cards use a colored left edge plus the sync panel below.
+            Sync health edge: green under 15 min, amber 15 min–2 h, red over 2 h or never synced.
           </p>
 
           {/* Devices Grid */}
@@ -276,60 +293,56 @@ export default function ELDDevicesPage() {
               const lastSync = getDeviceLastSyncAt(device)
               const sync = getEldSyncVisual(lastSync)
               return (
-              <Card
-                key={device.id}
-                className={cn("overflow-hidden border-border bg-card p-6 border-l-4", sync.cardBorderCls)}
-              >
-                <div className="mb-4 flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-lg bg-primary/10 p-2">
-                      <Shield className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground">{device.device_name}</h3>
-                      <p className="text-xs text-muted-foreground">{device.device_serial_number}</p>
-                    </div>
+              <Card key={device.id} className={cn("overflow-hidden border-l-4 border-border bg-card p-5", sync.cardBorderCls)}>
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-lg font-semibold text-foreground">{device.device_name}</h3>
+                    <p className="truncate text-xs text-muted-foreground">{device.device_serial_number}</p>
                   </div>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    device.status === "active" ? "bg-green-500/20 text-green-400" :
-                    device.status === "inactive" ? "bg-gray-500/20 text-gray-400" :
-                    "bg-yellow-500/20 text-yellow-400"
-                  }`}>
-                    {device.status}
-                  </span>
+                  <div className="flex flex-col items-end gap-2">
+                    <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
+                      <Cpu className="mr-1 h-3.5 w-3.5" />
+                      {providerLabel(device.provider)}
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className={
+                        device.status === "active"
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
+                          : "border-slate-500/30 bg-slate-500/10 text-slate-500"
+                      }
+                    >
+                      {device.status}
+                    </Badge>
+                  </div>
                 </div>
 
-                <div className="space-y-2 text-sm mb-4">
-                  {device.manufacturer && (
-                    <p className="text-muted-foreground">
-                      <span className="font-medium">Manufacturer:</span> {device.manufacturer}
-                    </p>
-                  )}
-                  {device.trucks && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Truck className="w-4 h-4" />
-                      <span>{device.trucks.truck_number}</span>
-                    </div>
-                  )}
-                  <EldDeviceSyncStatus lastSyncAt={lastSync} />
+                <div className="mb-4 space-y-2 text-sm">
+                  <p className={cn("text-xs font-medium", syncLine(sync).cls)}>{syncLine(sync).text}</p>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Truck className="h-4 w-4" />
+                    <span>Truck {device.trucks?.truck_number || "Unassigned"}</span>
+                  </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => handleSync(device.id)}
-                    className="flex-1"
+                    className="justify-start"
                   >
-                    <RefreshCw className="w-3 h-3 mr-1" />
+                    <RefreshCw className="mr-1 h-3.5 w-3.5" />
                     Sync
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => openEditDialog(device)}
+                    className="justify-start"
                   >
-                    <Edit2 className="w-3 h-3" />
+                    <Edit2 className="mr-1 h-3.5 w-3.5" />
+                    Edit
                   </Button>
                   <Button
                     variant="outline"
@@ -338,8 +351,10 @@ export default function ELDDevicesPage() {
                       setSelectedDevice(device)
                       setShowDeleteDialog(true)
                     }}
+                    className="justify-start"
                   >
-                    <Trash2 className="w-3 h-3" />
+                    <Trash2 className="mr-1 h-3.5 w-3.5" />
+                    Delete
                   </Button>
                 </div>
               </Card>

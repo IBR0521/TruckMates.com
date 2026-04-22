@@ -8,6 +8,12 @@ import { Label } from "@/components/ui/label"
 import { DetailSection } from "@/components/dashboard/detail-page-layout"
 import { Loader2, Calculator, AlertTriangle, Info } from "lucide-react"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   getTripPlanningEstimate,
   saveTripPlanningEstimateOnLoad,
   type TripPlanningEstimate,
@@ -191,10 +197,25 @@ export function TripPlanningEstimatorPanel({
     <DetailSection
       title="Trip planning (ProMiles-style)"
       icon={<Calculator className="w-5 h-5" />}
-      description={
-        loadId
-          ? "Saved on this load when you calculate. Uses HERE truck routing (or Google fallback), state miles, EIA diesel, and HERE toll data when routing succeeds."
-          : "Truck route, state miles, fuel & toll estimates. Nothing is saved until you run this from a load."
+      action={
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border/60 bg-muted/20 text-muted-foreground transition hover:bg-muted/40 hover:text-foreground"
+                aria-label="Trip planning info"
+              >
+                <Info className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="max-w-xs text-xs">
+              {loadId
+                ? "Saved on this load when you calculate. Uses HERE truck routing (or Google fallback), state miles, EIA diesel, and HERE toll data when routing succeeds."
+                : "Truck route, state miles, fuel and toll estimates. Nothing is saved until you run this from a load."}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       }
     >
       <div className="space-y-6">
@@ -240,7 +261,7 @@ export function TripPlanningEstimatorPanel({
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
           <div>
             <Label htmlFor={pid("origin")}>Origin</Label>
             <Input
@@ -248,7 +269,7 @@ export function TripPlanningEstimatorPanel({
               value={routingOrigin}
               onChange={(e) => setRoutingOrigin(e.target.value)}
               placeholder="City, ST or full address"
-              className="mt-1"
+              className="mt-1 h-10"
             />
           </div>
           <div>
@@ -258,12 +279,9 @@ export function TripPlanningEstimatorPanel({
               value={routingDestination}
               onChange={(e) => setRoutingDestination(e.target.value)}
               placeholder="City, ST or full address"
-              className="mt-1"
+              className="mt-1 h-10"
             />
           </div>
-        </div>
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <Label htmlFor={pid("mpg")}>Assumed MPG</Label>
             <Input
@@ -273,7 +291,7 @@ export function TripPlanningEstimatorPanel({
               min="1"
               value={mpg}
               onChange={(e) => setMpg(e.target.value)}
-              className="mt-1"
+              className="mt-1 h-10"
             />
           </div>
           <div>
@@ -284,7 +302,7 @@ export function TripPlanningEstimatorPanel({
               min="1"
               value={grossLbs}
               onChange={(e) => setGrossLbs(e.target.value)}
-              className="mt-1"
+              className="mt-1 h-10"
             />
           </div>
           <div>
@@ -296,13 +314,13 @@ export function TripPlanningEstimatorPanel({
               max="8"
               value={axles}
               onChange={(e) => setAxles(e.target.value)}
-              className="mt-1"
+              className="mt-1 h-10"
             />
           </div>
           <div className="flex items-end">
             <Button
               type="button"
-              className="w-full"
+              className="h-10 w-full whitespace-nowrap bg-blue-600 px-4 text-white hover:bg-blue-500"
               disabled={loading || !canRun}
               onClick={() => void handleRun()}
             >

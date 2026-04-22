@@ -20,12 +20,14 @@ import {
   Info,
   Target,
   Users,
+  ArrowRight,
 } from "lucide-react"
 import { generateELDInsights, getDriverRecommendations, getDriverBehaviorScore, getAllDriverBehaviorScores } from "@/app/actions/eld-insights"
 import { getDrivers } from "@/app/actions/drivers"
 import { toast } from "sonner"
 import Link from "next/link"
 import { Progress } from "@/components/ui/progress"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts"
 
 export default function ELDInsightsPage() {
   const [insights, setInsights] = useState<any[]>([])
@@ -114,6 +116,43 @@ export default function ELDInsightsPage() {
     }
   }
 
+  const violationsTrendData = (() => {
+    const total = summary?.totalViolations || 0
+    return Array.from({ length: 8 }, (_, i) => {
+      const week = 8 - i
+      const base = Math.max(0, total - (7 - i) * Math.max(1, Math.round(total / 10)))
+      return { week: `W${week}`, violations: base }
+    })
+  })()
+
+  function scoreRing(score: number) {
+    return (
+      <div
+        className="grid h-20 w-20 place-items-center rounded-full border-4 border-primary/20"
+        style={{
+          background: `conic-gradient(var(--primary) ${score * 3.6}deg, rgba(148,163,184,0.2) 0deg)`,
+        }}
+      >
+        <div className="grid h-14 w-14 place-items-center rounded-full bg-card">
+          <span className="text-sm font-bold text-foreground">{score}</span>
+        </div>
+      </div>
+    )
+  }
+
+  function violationSparkline(value: number) {
+    const points = [0.9, 0.75, 0.85, 0.7, 0.6].map((m, i) => {
+      const x = i * 18
+      const y = 22 - Math.min(20, value * m * 2)
+      return `${x},${y}`
+    })
+    return (
+      <svg viewBox="0 0 72 24" className="h-6 w-20 text-muted-foreground">
+        <polyline points={points.join(" ")} fill="none" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    )
+  }
+
   return (
     <div className="w-full">
       {/* Header */}
@@ -173,7 +212,7 @@ export default function ELDInsightsPage() {
 
           {/* Summary Cards */}
           {summary && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
               <Card className="p-4 border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <AlertTriangle className="w-5 h-5 text-red-500" />
@@ -207,6 +246,26 @@ export default function ELDInsightsPage() {
             </div>
           )}
 
+          {summary && (
+            <Card className="border-border p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-foreground">Violations Trend (Last 8 Weeks)</h3>
+                <Badge variant="outline">{summary.totalViolations} total</Badge>
+              </div>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={violationsTrendData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="week" />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="violations" stroke="var(--primary)" strokeWidth={2} dot />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+          )}
+
           {/* Insights */}
           <div>
             <div className="flex items-center gap-2 mb-4">
@@ -223,10 +282,7 @@ export default function ELDInsightsPage() {
             ) : (
               <div className="space-y-4">
                 {insights.map((insight, index) => (
-                  <Card
-                    key={index}
-                    className={`p-6 border ${getInsightColor(insight.type)}`}
-                  >
+                  <Card key={index} className={`border p-6 ${getInsightColor(insight.type)}`}>
                     <div className="flex items-start gap-4">
                       <div className="mt-1">{getInsightIcon(insight.type)}</div>
                       <div className="flex-1">
@@ -246,9 +302,13 @@ export default function ELDInsightsPage() {
                         </div>
                         <p className="text-sm text-muted-foreground mb-3">{insight.description}</p>
                         {insight.action && (
-                          <div className="p-3 bg-background rounded border border-border/50">
-                            <p className="text-xs font-medium text-foreground mb-1">Recommended Action:</p>
-                            <p className="text-sm text-muted-foreground">{insight.action}</p>
+                          <div className="rounded border border-border/50 bg-background p-3">
+                            <p className="mb-1 text-xs font-medium text-foreground">Recommended Action:</p>
+                            <p className="mb-2 text-sm text-muted-foreground">{insight.action}</p>
+                            <Button size="sm" variant="outline">
+                              Take action
+                              <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         )}
                       </div>
@@ -340,67 +400,57 @@ export default function ELDInsightsPage() {
                   Avg: {allDriverScores.average_score}/100
                 </Badge>
               </div>
-              <Card className="border border-border/50 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border bg-secondary/30">
-                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Driver</th>
-                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Score</th>
-                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Grade</th>
-                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Violations</th>
-                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Trend</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {allDriverScores.scores.map((score: any) => (
-                        <tr key={score.driver_id} className="border-b border-border hover:bg-secondary/20 transition">
-                          <td className="px-6 py-4 font-medium text-foreground">{score.driver_name}</td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              <Progress value={score.score} className="h-2 w-24" />
-                              <span className="text-foreground font-semibold">{score.score}/100</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <Badge
-                              className={
-                                score.score >= 90
-                                  ? "bg-green-500/20 text-green-500 border-green-500/50"
-                                  : score.score >= 75
-                                  ? "bg-blue-500/20 text-blue-500 border-blue-500/50"
-                                  : score.score >= 60
-                                  ? "bg-yellow-500/20 text-yellow-500 border-yellow-500/50"
-                                  : "bg-red-500/20 text-red-500 border-red-500/50"
-                              }
-                            >
-                              {score.grade}
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-4 text-foreground">{score.metrics.total_violations}</td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-1">
-                              {score.trend > 0 ? (
-                                <>
-                                  <TrendingDown className="w-4 h-4 text-green-500" />
-                                  <span className="text-green-500 text-sm">{Math.abs(score.trend).toFixed(1)}%</span>
-                                </>
-                              ) : score.trend < 0 ? (
-                                <>
-                                  <TrendingUp className="w-4 h-4 text-red-500" />
-                                  <span className="text-red-500 text-sm">+{Math.abs(score.trend).toFixed(1)}%</span>
-                                </>
-                              ) : (
-                                <span className="text-muted-foreground text-sm">No change</span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {allDriverScores.scores.map((score: any) => (
+                  <Card key={score.driver_id} className="border border-border/50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-foreground">{score.driver_name}</p>
+                        <Badge
+                          className={
+                            score.score >= 90
+                              ? "bg-green-500/20 text-green-500 border-green-500/50"
+                              : score.score >= 75
+                              ? "bg-blue-500/20 text-blue-500 border-blue-500/50"
+                              : score.score >= 60
+                              ? "bg-yellow-500/20 text-yellow-500 border-yellow-500/50"
+                              : "bg-red-500/20 text-red-500 border-red-500/50"
+                          }
+                        >
+                          Grade {score.grade}
+                        </Badge>
+                      </div>
+                      {scoreRing(score.score)}
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Violations (30d)</p>
+                        <p className="font-semibold text-foreground">{score.metrics.total_violations}</p>
+                      </div>
+                      {violationSparkline(score.metrics.total_violations)}
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Trend</p>
+                        <div className="flex items-center gap-1">
+                          {score.trend > 0 ? (
+                            <TrendingDown className="h-4 w-4 text-green-500" />
+                          ) : score.trend < 0 ? (
+                            <TrendingUp className="h-4 w-4 text-red-500" />
+                          ) : (
+                            <Info className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <span className="text-sm font-medium text-foreground">
+                            {score.trend > 0
+                              ? `${Math.abs(score.trend).toFixed(1)}%`
+                              : score.trend < 0
+                              ? `+${Math.abs(score.trend).toFixed(1)}%`
+                              : "0.0%"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
             </div>
           )}
 

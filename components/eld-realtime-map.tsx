@@ -133,12 +133,16 @@ export function ELDRealtimeMap() {
           </div>
         ) : locations.length === 0 ? (
           <div className="absolute inset-0 flex items-center justify-center p-6">
-            <div className="text-center max-w-md">
-              <Truck className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
-              <p className="text-foreground font-medium mb-1">No location data</p>
+            <div className="max-w-md rounded-xl border border-border bg-card/80 p-6 text-center shadow-sm backdrop-blur">
+              <Truck className="mx-auto mb-2 h-12 w-12 text-muted-foreground" />
+              <p className="mb-1 font-medium text-foreground">No GPS telemetry yet</p>
               <p className="text-sm text-muted-foreground">
-                GPS positions come from hardware ELD integrations or telematics. Duty-only (web) logging does not populate this map. Connect a hardware ELD or enable GPS on driver devices to see trucks here.
+                This map only renders hardware/device location pings.
               </p>
+              <div className="mt-4 space-y-1 text-left text-xs text-muted-foreground">
+                <p>• Why this happens: devices are offline, not assigned, or haven&apos;t synced locations yet.</p>
+                <p>• What to do: assign devices to trucks, verify provider API credentials, and run a device sync.</p>
+              </div>
             </div>
           </div>
         ) : (
