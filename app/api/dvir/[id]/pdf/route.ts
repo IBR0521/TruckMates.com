@@ -43,7 +43,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
           chromiumArgs = (chromium as any).args
         }
       } catch {
-        puppeteer = await import(/* webpackIgnore: true */ "puppeteer").catch(() => null)
+        // Ignore and return HTML fallback below when chromium runtime isn't available.
       }
 
       if (!puppeteer) {
