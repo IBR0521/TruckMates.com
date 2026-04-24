@@ -44,8 +44,6 @@ export async function createCustomerPortalAccess(formData: {
     }
 
     const supabase = await createClient()
-    const nowIso = new Date().toISOString()
-    const nowIso = new Date().toISOString()
 
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) {
@@ -299,6 +297,7 @@ export async function getPortalAccessByToken(token: string) {
     }
 
     const supabase = await createClient()
+    const nowIso = new Date().toISOString()
 
     // V3-007 FIX: Replace select(*) with explicit columns
     const { data, error } = await supabase
