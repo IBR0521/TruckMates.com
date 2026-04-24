@@ -20,7 +20,7 @@
     "expo-secure-store": "~14.2.3",
     "expo-status-bar": "^2.0.1",
     "react": "19.0.0",
-    "react-native": "0.79.2"
+    "react-native": "0.85.2"
   },
   "devDependencies": {
     "@babel/core": "^7.27.1",
