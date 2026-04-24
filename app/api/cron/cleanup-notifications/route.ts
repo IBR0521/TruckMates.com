@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { cleanupReadNotifications } from "@/app/actions/notifications"
 import { createAdminClient } from "@/lib/supabase/admin"
 
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
 
     if (auditError) {
       return NextResponse.json(
-        { error: auditError.message, success: false },
+        { error: sanitizeError(auditError, { fallback: "Failed to clean up audit logs" }), success: false },
         { status: 500 }
       )
     }

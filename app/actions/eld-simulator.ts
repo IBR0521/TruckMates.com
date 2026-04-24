@@ -58,6 +58,10 @@ export async function createFakeELDDevice(config: {
   truck_id?: string
   company_id?: string
 }) {
+  if (process.env.NODE_ENV === "production") {
+    return { error: "Not available", data: null }
+  }
+
   const access = await ensureSimulatorAccess()
   if (!access.allowed || !access.companyId) {
     return { error: access.error || "Access denied", data: null }
@@ -101,6 +105,10 @@ export async function createFakeELDDevice(config: {
  * BUG-069 FIX: Must not be accessible in production
  */
 export async function simulateLocationUpdate(config: SimulatorConfig) {
+  if (process.env.NODE_ENV === "production") {
+    return { error: "Not available", data: null }
+  }
+
   const access = await ensureSimulatorAccess()
   if (!access.allowed || !access.companyId) {
     return { error: access.error || "Access denied", data: null }
@@ -182,6 +190,10 @@ export async function simulateHOSLog(config: {
   log_type: "driving" | "on_duty" | "off_duty" | "sleeper_berth"
   duration_minutes?: number
 }) {
+  if (process.env.NODE_ENV === "production") {
+    return { error: "Not available", data: null }
+  }
+
   const access = await ensureSimulatorAccess()
   if (!access.allowed || !access.companyId) {
     return { error: access.error || "Access denied", data: null }

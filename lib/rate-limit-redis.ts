@@ -22,6 +22,15 @@ interface RateLimitResult {
 let redis: any = null
 let Ratelimit: any = null
 
+if (
+  process.env.NODE_ENV === "production" &&
+  (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN)
+) {
+  throw new Error(
+    "UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required in production for rate limiting.",
+  )
+}
+
 try {
   // Dynamic import to prevent build errors if package isn't installed
   const upstashRedis = require("@upstash/redis")

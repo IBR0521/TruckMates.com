@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
       .limit(50)
 
     if (settlementsError) {
-      return NextResponse.json({ error: settlementsError.message }, { status: 500 })
+      return NextResponse.json({ error: sanitizeError(settlementsError, { fallback: "Failed to load settlements" }) }, { status: 500 })
     }
 
     return NextResponse.json({

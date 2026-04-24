@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getMobileAuthContext } from "@/lib/auth/mobile"
 import { ensureDriverIdForUser } from "@/lib/eld/ensure-driver"
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
     if (insertError) {
       console.error("Error inserting logs:", insertError)
       return NextResponse.json(
-        { error: insertError.message },
+        { error: sanitizeError(insertError, { fallback: "Failed to sync logs" }) },
         { status: 500 }
       )
     }

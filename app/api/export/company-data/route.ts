@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { mapLegacyRole } from "@/lib/roles"
+import { sanitizeError } from "@/lib/error-message"
 
 export const dynamic = "force-dynamic"
 
@@ -35,7 +36,7 @@ async function fetchWithCompanyId(
     if (error.code === "42P01" || error.message?.includes("does not exist")) {
       return { table, rows: [], error: null }
     }
-    return { table, rows: [], error: error.message }
+    return { table, rows: [], error: sanitizeError(error, { fallback: "Failed to read table data" }) }
   }
   return { table, rows: (data as unknown[]) ?? [], error: null }
 }
@@ -59,7 +60,10 @@ export async function GET() {
       .maybeSingle()
 
     if (profileError) {
-      return NextResponse.json({ error: profileError.message }, { status: 500 })
+      return NextResponse.json(
+        { error: sanitizeError(profileError, { fallback: "Failed to load user profile" }) },
+        { status: 500 },
+      )
     }
     if (!profile?.company_id) {
       return NextResponse.json({ error: "No company associated with this account" }, { status: 403 })
@@ -84,7 +88,7 @@ export async function GET() {
 
       const { data: company, error: companyErr } = await admin.from("companies").select("*").eq("id", companyId).maybeSingle()
       if (companyErr && !companyErr.message?.includes("does not exist")) {
-        payload.company_error = companyErr.message
+        payload.company_error = sanitizeError(companyErr, { fallback: "Failed to load company data" })
       } else {
         payload.company = company
       }
@@ -96,7 +100,7 @@ export async function GET() {
         .limit(ROW_LIMIT)
 
       if (usersErr) {
-        payload.users_error = usersErr.message
+        payload.users_error = sanitizeError(usersErr, { fallback: "Failed to load users data" })
       } else {
         payload.company_users = roster ?? []
       }
@@ -161,7 +165,7 @@ export async function GET() {
       },
     })
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : "Export failed"
+    const message = sanitizeError(e, { fallback: "Export failed" })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

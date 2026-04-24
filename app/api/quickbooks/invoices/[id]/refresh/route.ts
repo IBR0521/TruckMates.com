@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getQuickBooksConnection, qbFetch } from "@/lib/quickbooks/client"
@@ -39,7 +39,10 @@ export async function POST(request: NextRequest, ctxRoute: { params: Promise<{ i
       .single()
 
     if (invoiceError || !invoice) {
-      return NextResponse.json({ error: invoiceError?.message || "Invoice not found" }, { status: 404 })
+      return NextResponse.json(
+        { error: invoiceError ? sanitizeError(invoiceError, { fallback: "Invoice not found" }) : "Invoice not found" },
+        { status: 404 },
+      )
     }
 
     if (!invoice.quickbooks_id) {

@@ -16,6 +16,39 @@ export function errorMessage(error: unknown, fallback = "An unexpected error occ
   return fallback
 }
 
+type SanitizedErrorOptions = {
+  fallback?: string
+  maxLength?: number
+}
+
+/**
+ * Sanitizes low-level errors before sending to clients.
+ * Strips SQL/schema internals and normalizes to stable user-safe text.
+ */
+export function sanitizeError(error: unknown, options: SanitizedErrorOptions = {}): string {
+  const fallback = options.fallback ?? "Operation failed"
+  const maxLength = options.maxLength ?? 160
+  const raw = errorMessage(error, fallback).trim()
+  const lower = raw.toLowerCase()
+
+  if (
+    lower.includes("relation ") ||
+    lower.includes("column ") ||
+    lower.includes("schema ") ||
+    lower.includes("constraint ") ||
+    lower.includes("sqlstate") ||
+    lower.includes("postgres")
+  ) {
+    return databaseErrorMessage(error, fallback)
+  }
+
+  if (raw.length > maxLength) {
+    return fallback
+  }
+
+  return raw
+}
+
 /**
  * Convert low-level database/provider errors into safe, user-facing messages.
  * Prevents leaking table/column/constraint names to clients.

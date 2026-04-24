@@ -29,36 +29,41 @@ function buildConnectSrc(): string {
     return "connect-src 'self' http: https: ws: wss:"
   }
 
-  const sources = new Set<string>(["'self'"])
+  try {
+    const sources = new Set<string>(["'self'"])
 
-  const supabaseOrigin = originFromUrl(process.env.NEXT_PUBLIC_SUPABASE_URL)
-  if (supabaseOrigin) {
-    sources.add(supabaseOrigin)
-    if (supabaseOrigin.startsWith('https://')) {
-      sources.add(supabaseOrigin.replace('https://', 'wss://'))
+    const supabaseOrigin = originFromUrl(process.env.NEXT_PUBLIC_SUPABASE_URL)
+    if (supabaseOrigin) {
+      sources.add(supabaseOrigin)
+      if (supabaseOrigin.startsWith('https://')) {
+        sources.add(supabaseOrigin.replace('https://', 'wss://'))
+      }
     }
+
+    const sentryDsnOrigin = originFromUrl(process.env.NEXT_PUBLIC_SENTRY_DSN)
+    if (sentryDsnOrigin) {
+      sources.add(sentryDsnOrigin)
+    }
+
+    // Browser-side integrations used by maps, billing, and analytics SDKs.
+    sources.add('https://maps.googleapis.com')
+    sources.add('https://*.googleapis.com')
+    sources.add('https://*.gstatic.com')
+    sources.add('https://api.stripe.com')
+    sources.add('https://js.stripe.com')
+    sources.add('https://r.stripe.com')
+    sources.add('https://m.stripe.network')
+
+    // Explicitly include approved external providers.
+    sources.add('https://api.resend.com')
+    sources.add('https://*.hereapi.com')
+    sources.add('https://api.twilio.com')
+
+    return `connect-src ${Array.from(sources).join(' ')}`
+  } catch {
+    // Fail closed in production if dynamic connect-src construction fails.
+    return "connect-src 'none'"
   }
-
-  const sentryDsnOrigin = originFromUrl(process.env.NEXT_PUBLIC_SENTRY_DSN)
-  if (sentryDsnOrigin) {
-    sources.add(sentryDsnOrigin)
-  }
-
-  // Browser-side integrations used by maps, billing, and analytics SDKs.
-  sources.add('https://maps.googleapis.com')
-  sources.add('https://*.googleapis.com')
-  sources.add('https://*.gstatic.com')
-  sources.add('https://api.stripe.com')
-  sources.add('https://js.stripe.com')
-  sources.add('https://r.stripe.com')
-  sources.add('https://m.stripe.network')
-
-  // Explicitly include approved external providers.
-  sources.add('https://api.resend.com')
-  sources.add('https://*.hereapi.com')
-  sources.add('https://api.twilio.com')
-
-  return `connect-src ${Array.from(sources).join(' ')}`
 }
 
 function buildCsp(nonce: string): string {

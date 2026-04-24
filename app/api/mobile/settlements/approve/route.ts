@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 })
+      return NextResponse.json({ error: sanitizeError(updateError, { fallback: "Failed to approve settlement" }) }, { status: 500 })
     }
 
     // Send notification to company (optional) - with opt-in check

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getMobileAuthContext } from "@/lib/auth/mobile"
 
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
     if (insertError) {
       console.error("Error inserting events:", insertError)
       return NextResponse.json(
-        { error: insertError.message },
+        { error: sanitizeError(insertError, { fallback: "Failed to sync events" }) },
         { status: 500 }
       )
     }

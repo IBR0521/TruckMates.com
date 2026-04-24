@@ -2,7 +2,6 @@
 
 import { useEffect, useState, Suspense } from "react"
 import { errorMessage as formatCaughtError } from "@/lib/error-message"
-import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { Loader2 } from "lucide-react"
 import { createDemoAndSignIn } from "@/app/actions/demo-simple"
@@ -14,7 +13,6 @@ const Logo = dynamic(() => import("@/components/logo").then(mod => ({ default: m
 })
 
 function DemoSetupContent() {
-  const router = useRouter()
   const [status, setStatus] = useState<"loading" | "error">("loading")
   const [errorMessage, setErrorMessage] = useState("")
   const [mounted, setMounted] = useState(false)
@@ -43,43 +41,7 @@ function DemoSetupContent() {
           return
         }
 
-        // Sign in on client side to establish session
-        const { createClient } = await import("@/lib/supabase/client")
-        const supabase = createClient()
-        
-        // Use the exact credentials returned by server action to avoid env mismatches.
-        const demoEmail = ("demoEmail" in result && result.demoEmail) || process.env.NEXT_PUBLIC_DEMO_EMAIL || "demo@truckmates.com"
-        const demoPassword = ("demoPassword" in result && result.demoPassword) || process.env.NEXT_PUBLIC_DEMO_PASSWORD || "demo123456"
-        
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-          email: demoEmail,
-          password: demoPassword,
-        })
-
-        if (signInError || !signInData.user) {
-          setErrorMessage(`Failed to sign in: ${signInError?.message || "Unknown error"}. Please try again.`)
-          setStatus("error")
-          return
-        }
-
-        // Verify session is established - wait for it
-        let sessionEstablished = false
-        for (let i = 0; i < 5; i++) {
-          const { data: { session } } = await supabase.auth.getSession()
-          if (session && session.user) {
-            sessionEstablished = true
-            break
-          }
-          await new Promise(resolve => setTimeout(resolve, 500))
-        }
-
-        if (!sessionEstablished) {
-          setErrorMessage("Session not established. Please try again.")
-          setStatus("error")
-          return
-        }
-
-        // Use window.location for full page reload to ensure session is recognized
+        // Session is now created server-side in createDemoAndSignIn.
         window.location.href = "/dashboard"
       } catch (error: unknown) {
         console.error("Demo setup error:", error)
@@ -89,7 +51,7 @@ function DemoSetupContent() {
     }
 
     handleDemo()
-  }, [router, mounted])
+  }, [mounted])
 
   if (status === "error") {
     const isProduction = typeof window !== 'undefined' && 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createAdminClient } from "@/lib/supabase/admin"
 
 /** Delete expired rows from api_cache (Google/EIA/HERE response cache). Vercel Cron + CRON_SECRET. */
@@ -23,7 +23,10 @@ export async function GET(request: Request) {
     const { data: deleted, error } = await admin.from("api_cache").delete().lt("expires_at", now).select("id")
 
     if (error) {
-      return NextResponse.json({ error: error.message, success: false }, { status: 500 })
+      return NextResponse.json(
+        { error: sanitizeError(error, { fallback: "Failed to clean API cache" }), success: false },
+        { status: 500 },
+      )
     }
 
     return NextResponse.json({

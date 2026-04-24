@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { updateRouteETA } from "@/app/actions/realtime-eta"
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     if (userDataError) {
       return NextResponse.json(
-        { error: userDataError.message || "Failed to verify user company" },
+        { error: sanitizeError(userDataError, { fallback: "Failed to verify user company" }) },
         { status: 500 }
       )
     }
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     if (routeDataError) {
       return NextResponse.json(
-        { error: routeDataError.message || "Failed to verify route ownership" },
+        { error: sanitizeError(routeDataError, { fallback: "Failed to verify route ownership" }) },
         { status: 500 }
       )
     }

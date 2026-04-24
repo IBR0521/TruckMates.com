@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { sanitizeError } from "@/lib/error-message"
 
 export async function GET(request: NextRequest) {
   try {
@@ -68,9 +69,7 @@ export async function GET(request: NextRequest) {
         resourceId
       })
       return NextResponse.json({ 
-        error: error.message,
-        code: error.code,
-        details: error.details 
+        error: sanitizeError(error, { fallback: "Failed to load audit logs" })
       }, { status: 500 })
     }
 

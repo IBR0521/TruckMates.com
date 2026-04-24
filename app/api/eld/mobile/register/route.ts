@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getMobileAuthContext } from "@/lib/auth/mobile"
 
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error("Error registering ELD device:", error)
       return NextResponse.json(
-        { error: error.message },
+        { error: sanitizeError(error, { fallback: "Failed to register ELD device" }) },
         { status: 500 }
       )
     }

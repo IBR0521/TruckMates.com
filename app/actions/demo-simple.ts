@@ -1,7 +1,9 @@
 "use server"
 
 import { createClient } from "@supabase/supabase-js"
+import { randomBytes } from "crypto"
 import { errorMessage } from "@/lib/error-message"
+import { createClient as createServerClient } from "@/lib/supabase/server"
 import * as Sentry from "@sentry/nextjs"
 
 // BUG-068 FIX: Use environment variables instead of hardcoded credentials
@@ -9,14 +11,12 @@ import * as Sentry from "@sentry/nextjs"
 const DEMO_EMAIL = process.env.DEMO_EMAIL || "demo@truckmates.com"
 const DEMO_COMPANY_NAME = process.env.DEMO_COMPANY_NAME || "Demo Logistics Company"
 
-// Helper: use DEMO_PASSWORD if set; otherwise a public default so demo is open during free trial.
+// Use a server-only password. If DEMO_PASSWORD is not configured, generate an ephemeral password
+// per setup run and apply it with admin APIs before server-side sign-in.
 function getDemoPassword(): string {
-  const password = process.env.DEMO_PASSWORD
-  if (password) {
-    return password
-  }
-  // Default so anyone can try the demo without configuring env (platform is free for 3 months).
-  return "demo123456"
+  const configuredPassword = process.env.DEMO_PASSWORD
+  if (configuredPassword) return configuredPassword
+  return `demo_${randomBytes(24).toString("hex")}`
 }
 
 // Use a loose type here to avoid tight coupling to Supabase client generics
@@ -90,6 +90,7 @@ export async function createDemoAndSignIn() {
       
       // Update user metadata and FORCE email confirmation
       await adminClient.auth.admin.updateUserById(userId, {
+        password: demoPassword,
         email_confirm: true, // Force confirm email - no confirmation needed
         user_metadata: {
           is_demo: true,
@@ -240,8 +241,6 @@ export async function createDemoAndSignIn() {
               success: true, 
               userId, 
               companyId,
-              demoEmail,
-              demoPassword,
               warning: errorMsg.includes('timed out') 
                 ? "Demo company created successfully, but data population timed out. You can continue using the platform."
                 : "Demo company created successfully, but data population function is missing. Please run supabase/populate_demo_data_function.sql in Supabase SQL Editor."
@@ -257,8 +256,6 @@ export async function createDemoAndSignIn() {
             success: true,
             userId, 
             companyId,
-            demoEmail,
-            demoPassword,
             warning: `Demo company created successfully, but data population had an issue: ${errorMsg}`
           }
         }
@@ -315,8 +312,6 @@ export async function createDemoAndSignIn() {
             success: true,
             userId, 
             companyId,
-            demoEmail,
-            demoPassword,
             warning: errorMsg.includes('timed out')
               ? "Demo company created successfully, but data population timed out. You can continue using the platform."
               : "Demo company created successfully, but data population function is missing. Please run supabase/populate_demo_data_function.sql in Supabase SQL Editor."
@@ -332,8 +327,6 @@ export async function createDemoAndSignIn() {
           success: true,
           userId, 
           companyId,
-          demoEmail,
-          demoPassword,
           warning: `Demo company created successfully, but data population had an issue: ${errorMsg}`
         }
       }
@@ -344,8 +337,18 @@ export async function createDemoAndSignIn() {
       await markDemoCompanySetupComplete(adminClient, companyId)
     }
 
-    // Client will handle sign-in
-    return { success: true, userId, companyId, demoEmail, demoPassword }
+    // Perform sign-in server-side to avoid exposing any demo password to the browser.
+    const serverSupabase = await createServerClient()
+    const { data: signInData, error: signInError } = await serverSupabase.auth.signInWithPassword({
+      email: demoEmail,
+      password: demoPassword,
+    })
+
+    if (signInError || !signInData.user) {
+      return { error: `Failed to sign in demo user: ${signInError?.message || "Unknown error"}` }
+    }
+
+    return { success: true, userId, companyId }
   } catch (error: unknown) {
     // Log the full error for debugging
     Sentry.captureException(error)
