@@ -18,7 +18,7 @@
     "expo-device": "^7.1.0",
     "expo-location": "^18.1.0",
     "expo-secure-store": "~14.2.3",
-    "expo-status-bar": "^2.0.1",
+    "expo-status-bar": "^55.0.5",
     "react": "19.0.0",
     "react-native": "0.79.2"
   },
