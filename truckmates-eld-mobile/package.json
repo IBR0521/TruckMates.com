@@ -19,7 +19,7 @@
     "expo-location": "^18.1.0",
     "expo-secure-store": "~14.2.3",
     "expo-status-bar": "^2.0.1",
-    "react": "19.0.0",
+    "react": "19.2.5",
     "react-native": "0.79.2"
   },
   "devDependencies": {
