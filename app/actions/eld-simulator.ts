@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { mapLegacyRole } from "@/lib/roles"
 
 /**
  * Fake ELD Device Simulator
@@ -20,6 +21,34 @@ interface SimulatorConfig {
   destination?: { lat: number; lng: number }
 }
 
+async function ensureSimulatorAccess() {
+  if (process.env.NODE_ENV === "production") {
+    return { allowed: false, error: "ELD Simulator is not available in production", companyId: null as string | null }
+  }
+
+  const supabase = await createClient()
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { allowed: false, error: ctx.error || "Not authenticated", companyId: null as string | null }
+  }
+
+  const { data: userData, error: userDataError } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", ctx.userId)
+    .maybeSingle()
+
+  if (userDataError) {
+    return { allowed: false, error: "Failed to verify simulator permissions", companyId: null as string | null }
+  }
+
+  if (mapLegacyRole(userData?.role) !== "super_admin") {
+    return { allowed: false, error: "Only super admins can use the ELD Simulator", companyId: null as string | null }
+  }
+
+  return { allowed: true, error: null as string | null, companyId: ctx.companyId }
+}
+
 /**
  * Create a fake ELD device for testing
  * BUG-069 FIX: Must not be accessible in production - violates FMCSA ELD compliance
@@ -29,33 +58,12 @@ export async function createFakeELDDevice(config: {
   truck_id?: string
   company_id?: string
 }) {
-  // BUG-069 FIX: Block in production
-  if (process.env.NODE_ENV === "production") {
-    return { error: "ELD Simulator is not available in production", data: null }
+  const access = await ensureSimulatorAccess()
+  if (!access.allowed || !access.companyId) {
+    return { error: access.error || "Access denied", data: null }
   }
-
   const supabase = await createClient()
-  const ctx = await getCachedAuthContext()
-  const { companyId, error: authError } = ctx
-  
-  if (authError || !companyId) {
-    return { error: authError || "Not authenticated", data: null }
-  }
-
-  // BUG-069 FIX: Require super_admin role
-  const { data: userData, error: userDataError } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", ctx.userId || "")
-    .maybeSingle()
-
-  if (userDataError) {
-    return { error: userDataError.message, data: null }
-  }
-
-  if (userData?.role !== "super_admin") {
-    return { error: "Only super admins can use the ELD Simulator", data: null }
-  }
+  const companyId = access.companyId
 
   // EXT-004 FIX: Never allow callers to override company_id - always use authenticated user's company
   // This prevents cross-company device injection attacks
@@ -93,17 +101,12 @@ export async function createFakeELDDevice(config: {
  * BUG-069 FIX: Must not be accessible in production
  */
 export async function simulateLocationUpdate(config: SimulatorConfig) {
-  // BUG-069 FIX: Block in production
-  if (process.env.NODE_ENV === "production") {
-    return { error: "ELD Simulator is not available in production", data: null }
+  const access = await ensureSimulatorAccess()
+  if (!access.allowed || !access.companyId) {
+    return { error: access.error || "Access denied", data: null }
   }
-
   const supabase = await createClient()
-  const { companyId } = await getCachedAuthContext()
-  
-  if (!companyId) {
-    return { error: "Not authenticated", data: null }
-  }
+  const companyId = access.companyId
 
   // Get current location or generate new one
   const { data: lastLocation, error: lastLocationError } = await supabase
@@ -179,17 +182,12 @@ export async function simulateHOSLog(config: {
   log_type: "driving" | "on_duty" | "off_duty" | "sleeper_berth"
   duration_minutes?: number
 }) {
-  // BUG-069 FIX: Block in production
-  if (process.env.NODE_ENV === "production") {
-    return { error: "ELD Simulator is not available in production", data: null }
+  const access = await ensureSimulatorAccess()
+  if (!access.allowed || !access.companyId) {
+    return { error: access.error || "Access denied", data: null }
   }
-
   const supabase = await createClient()
-  const { companyId } = await getCachedAuthContext()
-  
-  if (!companyId) {
-    return { error: "Not authenticated", data: null }
-  }
+  const companyId = access.companyId
 
   const now = new Date()
   const startTime = new Date(now.getTime() - (config.duration_minutes || 60) * 60 * 1000)
@@ -236,17 +234,12 @@ export async function simulateELDEvent(config: {
   title?: string
   description?: string
 }) {
-  // BUG-069 FIX: Block in production
-  if (process.env.NODE_ENV === "production") {
-    return { error: "ELD Simulator is not available in production", data: null }
+  const access = await ensureSimulatorAccess()
+  if (!access.allowed || !access.companyId) {
+    return { error: access.error || "Access denied", data: null }
   }
-
   const supabase = await createClient()
-  const { companyId } = await getCachedAuthContext()
-  
-  if (!companyId) {
-    return { error: "Not authenticated", data: null }
-  }
+  const companyId = access.companyId
 
   const eventTitles: Record<string, string> = {
     hos_violation: "HOS Violation Detected",

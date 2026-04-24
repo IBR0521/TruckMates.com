@@ -1,0 +1,54 @@
+name: Security Audit
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  schedule:
+    - cron: "0 6 * * *"
+
+jobs:
+  root-audit:
+    name: Root npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit dependencies (high/critical)
+        run: npm audit --audit-level=high
+
+  mobile-audit:
+    name: Mobile npm audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: truckmates-eld-mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: truckmates-eld-mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit dependencies (high/critical)
+        run: npm audit --audit-level=high

@@ -108,24 +108,7 @@ const nextConfig = {
       ]
     }
 
-    const csp = [
-      "default-src 'self'",
-      "base-uri 'self'",
-      "frame-ancestors 'none'",
-      "object-src 'none'",
-      "img-src 'self' data: blob: https:",
-      "font-src 'self' data: https:",
-      // HMR / dev proxies / Supabase realtime / Maps tiles & APIs
-      "connect-src 'self' http: https: ws: wss:",
-      "worker-src 'self' blob:",
-      // Next.js + Google Maps (root script + dynamic chunks from googleapis/gstatic)
-      "script-src 'self' 'unsafe-inline' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com",
-      "style-src 'self' 'unsafe-inline' https:",
-      "form-action 'self'",
-    ].join("; ")
-
     const securityHeaders = [
-      { key: "Content-Security-Policy", value: csp },
       { key: "X-Frame-Options", value: "DENY" },
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

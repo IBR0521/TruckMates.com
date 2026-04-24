@@ -5,6 +5,7 @@ import { Analytics } from "@vercel/analytics/next"
 import { ClientProviders } from "@/components/providers/client-providers"
 import { GoogleMapsRootScript } from "@/components/google-maps-root-script"
 import { ErrorBoundary } from "@/app/error-boundary"
+import "@/lib/env-validation"
 import "./globals.css"
 
 // Load fonts - must be const at module scope

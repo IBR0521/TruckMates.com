@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+import { validateFileMagicBytes } from "@/lib/file-signature"
 
 function unknownErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
@@ -133,6 +134,32 @@ export async function uploadMaintenanceDocument(
   }
 
   try {
+    const ALLOWED_MIME_TYPES = [
+      "application/pdf",
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+    ] as const
+
+    if (!file.type || !ALLOWED_MIME_TYPES.includes(file.type.toLowerCase() as (typeof ALLOWED_MIME_TYPES)[number])) {
+      return {
+        error: `File type not allowed. Allowed types: PDF, JPEG, PNG, WebP, GIF. Received: ${file.type || "unknown"}`,
+        data: null,
+      }
+    }
+
+    const magicValidation = await validateFileMagicBytes(file, ALLOWED_MIME_TYPES)
+    if (!magicValidation.valid) {
+      return {
+        error:
+          `File content does not match declared type. Declared: ${magicValidation.normalizedDeclaredType || "unknown"}, ` +
+          `detected: ${magicValidation.detectedType || "unknown"}.`,
+        data: null,
+      }
+    }
+
     // Get maintenance to verify access and get truck_id
     const { data: maintenance, error: maintenanceError } = await supabase
       .from("maintenance")

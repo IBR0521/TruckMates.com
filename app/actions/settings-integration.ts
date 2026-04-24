@@ -233,10 +233,7 @@ export async function checkEmailServiceConfigured() {
     .maybeSingle() // Use maybeSingle to handle case where record doesn't exist
 
   // Check environment variable (platform-wide key)
-  const hasPlatformKey = !!(
-    process.env.RESEND_API_KEY || 
-    process.env.NEXT_PUBLIC_RESEND_API_KEY
-  )
+  const hasPlatformKey = !!process.env.RESEND_API_KEY
 
   // If integration record exists and resend_enabled is true, email is configured
   // We auto-create integration records with resend_enabled=true for all new companies

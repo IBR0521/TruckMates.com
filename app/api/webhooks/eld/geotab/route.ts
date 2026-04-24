@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       .update(rawBody)
       .digest("hex")
 
-    if (signature !== expectedSignature) {
+    if (signature.length !== expectedSignature.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
       console.error("[Geotab Webhook] Invalid signature")
       return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
     }

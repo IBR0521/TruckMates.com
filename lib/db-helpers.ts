@@ -1,3 +1,5 @@
+import { databaseErrorMessage } from "@/lib/error-message"
+
 /**
  * Helper function to check if a database error is due to a missing table
  */
@@ -19,7 +21,7 @@ export function handleDbError<T>(error: any, defaultValue: T): { data: T; error:
     console.warn(`[DB] Table missing: ${error.message}. Please run the SQL schema.`)
     return { data: defaultValue, error: null }
   }
-  return { data: null, error: error.message || "Database error" }
+  return { data: null, error: databaseErrorMessage(error, "Database operation failed") }
 }
 
 

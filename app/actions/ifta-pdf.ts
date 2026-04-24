@@ -427,15 +427,10 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
 
     // FIXED: Generate actual PDF using Puppeteer instead of returning HTML
     // Note: Puppeteer is optional - if not installed, we return HTML
-    // BUG FIX: Use Function constructor to prevent Turbopack from resolving at build time
     try {
-      // Use Function constructor to create a dynamic import that Turbopack won't resolve at build time
-      // This makes puppeteer truly optional - if not installed, we gracefully fall back to HTML
       let puppeteerModule: any = null
       try {
-        // Dynamic import using Function to prevent build-time resolution
-        const dynamicImport = new Function('specifier', 'return import(specifier)')
-        const puppeteer = await dynamicImport('puppeteer')
+        const puppeteer = await import("puppeteer")
         puppeteerModule = puppeteer.default || puppeteer
       } catch (importError) {
         Sentry.captureMessage(

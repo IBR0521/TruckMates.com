@@ -23,7 +23,6 @@ const TABLES_BY_COMPANY_ID = [
   "vendors",
   "bols",
   "alerts",
-  "invitation_codes",
 ] as const
 
 async function fetchWithCompanyId(

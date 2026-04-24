@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation"
+import { notFound } from "next/navigation"
 
 /**
  * BUG-069: ELD Simulator must not be accessible in production.
@@ -10,7 +10,7 @@ export default function ELDSimulatorLayout({
   children: React.ReactNode
 }) {
   if (process.env.NODE_ENV === "production") {
-    redirect("/dashboard/eld")
+    notFound()
   }
   return <>{children}</>
 }

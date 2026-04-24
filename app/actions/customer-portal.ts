@@ -44,6 +44,7 @@ export async function createCustomerPortalAccess(formData: {
     }
 
     const supabase = await createClient()
+    const nowIso = new Date().toISOString()
 
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) {
@@ -324,6 +325,7 @@ export async function getPortalAccessByToken(token: string) {
       `)
       .eq("access_token", token)
       .eq("is_active", true)
+      .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
       .maybeSingle()
 
     if (error) {

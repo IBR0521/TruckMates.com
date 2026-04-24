@@ -47,9 +47,9 @@ function DemoSetupContent() {
         const { createClient } = await import("@/lib/supabase/client")
         const supabase = createClient()
         
-        // BUG-068 FIX: Use environment variables instead of hardcoded credentials
-        const demoEmail = process.env.NEXT_PUBLIC_DEMO_EMAIL || "demo@truckmates.com"
-        const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD || "demo123456"
+        // Use the exact credentials returned by server action to avoid env mismatches.
+        const demoEmail = ("demoEmail" in result && result.demoEmail) || process.env.NEXT_PUBLIC_DEMO_EMAIL || "demo@truckmates.com"
+        const demoPassword = ("demoPassword" in result && result.demoPassword) || process.env.NEXT_PUBLIC_DEMO_PASSWORD || "demo123456"
         
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email: demoEmail,

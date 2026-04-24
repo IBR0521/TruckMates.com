@@ -5,15 +5,8 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft, Sparkles } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
-import { useRouter } from "next/navigation"
 
 export default function DemoPage() {
-  const router = useRouter()
-  
-  const handleDemo = () => {
-    router.push(`/demo/setup`)
-  }
-
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
       <Link
@@ -36,11 +29,13 @@ export default function DemoPage() {
           </p>
 
           <Button
-            onClick={handleDemo}
+            asChild
             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-6 text-lg font-semibold"
           >
-            <Sparkles className="w-5 h-5 mr-2" />
-            View All Features
+            <Link href="/demo/setup">
+              <Sparkles className="w-5 h-5 mr-2" />
+              View All Features
+            </Link>
           </Button>
           <p className="text-center text-sm text-muted-foreground mt-4">
             You'll be logged in as a demo manager with full access to all platform features

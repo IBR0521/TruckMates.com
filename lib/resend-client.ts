@@ -2,11 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import * as Sentry from "@sentry/nextjs"
 
 function platformResendApiKey(): string | undefined {
-  return (
-    process.env.RESEND_API_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_RESEND_API_KEY?.trim() ||
-    undefined
-  )
+  return process.env.RESEND_API_KEY?.trim() || undefined
 }
 
 /**

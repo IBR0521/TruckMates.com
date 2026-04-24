@@ -436,7 +436,7 @@ export async function inviteUser(data: {
         .maybeSingle()
 
       const companyKey = integrations?.resend_api_key?.trim()
-      const envKey = process.env.RESEND_API_KEY || process.env.NEXT_PUBLIC_RESEND_API_KEY
+      const envKey = process.env.RESEND_API_KEY
       // Prefer env key first so a stale company key can't block sends.
       const candidateKeys = [envKey, companyKey].filter((k): k is string => Boolean(k))
       if (candidateKeys.length === 0) return { resendClients: [], fromEmail: null }

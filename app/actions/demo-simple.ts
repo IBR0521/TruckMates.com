@@ -68,6 +68,7 @@ export async function createDemoAndSignIn() {
     }
     
     const demoPassword = getDemoPassword()
+    const demoEmail = DEMO_EMAIL
 
     // Create admin client with service role key
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
@@ -239,6 +240,8 @@ export async function createDemoAndSignIn() {
               success: true, 
               userId, 
               companyId,
+              demoEmail,
+              demoPassword,
               warning: errorMsg.includes('timed out') 
                 ? "Demo company created successfully, but data population timed out. You can continue using the platform."
                 : "Demo company created successfully, but data population function is missing. Please run supabase/populate_demo_data_function.sql in Supabase SQL Editor."
@@ -254,6 +257,8 @@ export async function createDemoAndSignIn() {
             success: true,
             userId, 
             companyId,
+            demoEmail,
+            demoPassword,
             warning: `Demo company created successfully, but data population had an issue: ${errorMsg}`
           }
         }
@@ -310,6 +315,8 @@ export async function createDemoAndSignIn() {
             success: true,
             userId, 
             companyId,
+            demoEmail,
+            demoPassword,
             warning: errorMsg.includes('timed out')
               ? "Demo company created successfully, but data population timed out. You can continue using the platform."
               : "Demo company created successfully, but data population function is missing. Please run supabase/populate_demo_data_function.sql in Supabase SQL Editor."
@@ -325,6 +332,8 @@ export async function createDemoAndSignIn() {
           success: true,
           userId, 
           companyId,
+          demoEmail,
+          demoPassword,
           warning: `Demo company created successfully, but data population had an issue: ${errorMsg}`
         }
       }
@@ -336,7 +345,7 @@ export async function createDemoAndSignIn() {
     }
 
     // Client will handle sign-in
-    return { success: true, userId, companyId }
+    return { success: true, userId, companyId, demoEmail, demoPassword }
   } catch (error: unknown) {
     // Log the full error for debugging
     Sentry.captureException(error)

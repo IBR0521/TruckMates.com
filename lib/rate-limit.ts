@@ -124,6 +124,12 @@ export async function rateLimit(
 export function getClientIP(request: Request | { headers: Headers }): string {
   const headers = request.headers instanceof Headers ? request.headers : new Headers(Object.entries(request.headers as Record<string, string>))
   
+  // On Vercel, this reflects the real client IP determined by the edge.
+  const vercelForwarded = headers.get("x-vercel-forwarded-for")
+  if (vercelForwarded) {
+    return vercelForwarded.split(",")[0].trim()
+  }
+
   // Check various headers for IP
   const forwarded = headers.get("x-forwarded-for")
   if (forwarded) {

@@ -27,17 +27,16 @@ export async function deleteMyOwnAccount(confirmation: string): Promise<{ succes
 
     const admin = createAdminClient()
 
-    const { data: deleted, error: delErr } = await admin
+    const { data: profile, error: profileErr } = await admin
       .from("users")
-      .delete()
-      .eq("id", ctx.userId)
       .select("id")
+      .eq("id", ctx.userId)
       .maybeSingle()
 
-    if (delErr) {
-      return { success: false, error: delErr.message || "Failed to remove profile" }
+    if (profileErr) {
+      return { success: false, error: profileErr.message || "Failed to load profile" }
     }
-    if (!deleted) {
+    if (!profile) {
       return { success: false, error: "No profile row found for this account." }
     }
 
@@ -45,6 +44,15 @@ export async function deleteMyOwnAccount(confirmation: string): Promise<{ succes
     if (authErr) {
       Sentry.captureException(authErr)
       return { success: false, error: authErr.message || "Failed to delete auth user" }
+    }
+
+    const { error: delErr } = await admin
+      .from("users")
+      .delete()
+      .eq("id", ctx.userId)
+
+    if (delErr) {
+      return { success: false, error: delErr.message || "Failed to remove profile" }
     }
 
     return { success: true, error: null }

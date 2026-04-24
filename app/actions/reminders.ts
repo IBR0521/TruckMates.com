@@ -534,9 +534,25 @@ export async function updateReminder(
       }
     }
 
+    const updateData: Record<string, unknown> = {}
+    if (formData.title !== undefined) updateData.title = formData.title
+    if (formData.description !== undefined) updateData.description = formData.description
+    if (formData.reminder_type !== undefined) updateData.reminder_type = formData.reminder_type
+    if (formData.due_date !== undefined) updateData.due_date = formData.due_date
+    if (formData.due_time !== undefined) updateData.due_time = formData.due_time
+    if (formData.reminder_date !== undefined) updateData.reminder_date = formData.reminder_date
+    if (formData.reminder_time !== undefined) updateData.reminder_time = formData.reminder_time
+    if (formData.is_recurring !== undefined) updateData.is_recurring = formData.is_recurring
+    if (formData.recurrence_pattern !== undefined) updateData.recurrence_pattern = formData.recurrence_pattern
+    if (formData.recurrence_interval !== undefined) updateData.recurrence_interval = formData.recurrence_interval
+
+    if (Object.keys(updateData).length === 0) {
+      return { error: "No valid fields provided for update", data: null }
+    }
+
     const { data, error } = await supabase
       .from("reminders")
-      .update(formData)
+      .update(updateData)
       .eq("id", id)
       .eq("company_id", ctx.companyId)
       .select()

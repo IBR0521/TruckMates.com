@@ -6,6 +6,91 @@ import { canViewFeature, type FeatureCategory } from '@/lib/feature-permissions'
 /** Avoid hanging forever when Supabase is unreachable or misconfigured (browser spinner on /dashboard/*). */
 const SUPABASE_MIDDLEWARE_FETCH_MS = 12_000
 
+function generateCspNonce(): string {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  let binary = ''
+  for (const b of bytes) binary += String.fromCharCode(b)
+  return btoa(binary)
+}
+
+function originFromUrl(value: string | undefined): string | null {
+  if (!value) return null
+  try {
+    return new URL(value).origin
+  } catch {
+    return null
+  }
+}
+
+function buildConnectSrc(): string {
+  // Keep development flexible for local HMR and local service endpoints.
+  if (process.env.NODE_ENV !== 'production') {
+    return "connect-src 'self' http: https: ws: wss:"
+  }
+
+  const sources = new Set<string>(["'self'"])
+
+  const supabaseOrigin = originFromUrl(process.env.NEXT_PUBLIC_SUPABASE_URL)
+  if (supabaseOrigin) {
+    sources.add(supabaseOrigin)
+    if (supabaseOrigin.startsWith('https://')) {
+      sources.add(supabaseOrigin.replace('https://', 'wss://'))
+    }
+  }
+
+  const sentryDsnOrigin = originFromUrl(process.env.NEXT_PUBLIC_SENTRY_DSN)
+  if (sentryDsnOrigin) {
+    sources.add(sentryDsnOrigin)
+  }
+
+  // Browser-side integrations used by maps, billing, and analytics SDKs.
+  sources.add('https://maps.googleapis.com')
+  sources.add('https://*.googleapis.com')
+  sources.add('https://*.gstatic.com')
+  sources.add('https://api.stripe.com')
+  sources.add('https://js.stripe.com')
+  sources.add('https://r.stripe.com')
+  sources.add('https://m.stripe.network')
+
+  // Explicitly include approved external providers.
+  sources.add('https://api.resend.com')
+  sources.add('https://*.hereapi.com')
+  sources.add('https://api.twilio.com')
+
+  return `connect-src ${Array.from(sources).join(' ')}`
+}
+
+function buildCsp(nonce: string): string {
+  const isProduction = process.env.NODE_ENV === 'production'
+  const scriptSrc = isProduction
+    ? `script-src 'self' 'nonce-${nonce}' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com`
+    : `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com`
+
+  return [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data: https:",
+    buildConnectSrc(),
+    "worker-src 'self' blob:",
+    scriptSrc,
+    `style-src 'self' 'nonce-${nonce}' https:`,
+    "form-action 'self'",
+  ].join('; ')
+}
+
+function applySecurityHeaders(response: NextResponse, nonce: string) {
+  response.headers.set('Content-Security-Policy', buildCsp(nonce))
+  response.headers.set('X-Frame-Options', 'DENY')
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)')
+  response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
+}
+
 const DASHBOARD_ROUTE_FEATURES: Array<{ pattern: RegExp; feature: FeatureCategory }> = [
   { pattern: /^\/dashboard\/settings\/account(\/|$)/, feature: 'dashboard' },
   { pattern: /^\/dashboard\/drivers(\/|$)/, feature: 'drivers' },
@@ -87,6 +172,15 @@ function fetchWithTimeout(
 }
 
 export async function middleware(request: NextRequest) {
+  const requestHeaders = new Headers(request.headers)
+  const nonce = generateCspNonce()
+  requestHeaders.set('x-nonce', nonce)
+
+  let response = NextResponse.next({
+    request: { headers: requestHeaders },
+  })
+  applySecurityHeaders(response, nonce)
+
   const pathname = request.nextUrl.pathname
   const isBillingActivationRoute = pathname.startsWith('/billing/activate')
   const isAccountSetupRoute = pathname.startsWith('/account-setup')
@@ -103,7 +197,7 @@ export async function middleware(request: NextRequest) {
   // Skip Supabase for public routes so marketing/login pages are not blocked by
   // session refresh / getUser network latency (or hangs when offline / misconfigured).
   if (!isProtectedRoute) {
-    return NextResponse.next({ request })
+    return response
   }
 
   try {
@@ -113,8 +207,6 @@ export async function middleware(request: NextRequest) {
     if (!supabaseUrl || !supabaseAnonKey) {
       return NextResponse.next({ request })
     }
-
-    let response = NextResponse.next({ request })
 
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       global: { fetch: fetchWithTimeout },

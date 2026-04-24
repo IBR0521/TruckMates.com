@@ -7,6 +7,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
 import { mapLegacyRole } from "@/lib/roles"
 import { checkViewPermission, checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
+import { validateFileMagicBytes } from "@/lib/file-signature"
 import * as Sentry from "@sentry/nextjs"
 
 /**
@@ -393,6 +394,16 @@ export async function uploadDocument(
       return { 
         error: `File type not allowed. Allowed types: PDF, JPEG, PNG, WebP, GIF. Received: ${file.type || 'unknown'}`, 
         data: null 
+      }
+    }
+
+    const magicValidation = await validateFileMagicBytes(file, ALLOWED_MIME_TYPES)
+    if (!magicValidation.valid) {
+      return {
+        error:
+          `File content does not match declared type. Declared: ${magicValidation.normalizedDeclaredType || "unknown"}, ` +
+          `detected: ${magicValidation.detectedType || "unknown"}.`,
+        data: null,
       }
     }
 

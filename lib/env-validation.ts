@@ -6,6 +6,7 @@
 
 interface EnvConfig {
   required: string[]
+  requiredInProduction?: string[]
   optional: string[]
   defaults?: Record<string, string>
 }
@@ -15,12 +16,14 @@ const envConfig: EnvConfig = {
     'NEXT_PUBLIC_SUPABASE_URL',
     'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   ],
+  requiredInProduction: [
+    'UPSTASH_REDIS_REST_URL',
+    'UPSTASH_REDIS_REST_TOKEN',
+  ],
   optional: [
     'NEXT_PUBLIC_SENTRY_DSN',
     'SENTRY_ORG',
     'SENTRY_PROJECT',
-    'UPSTASH_REDIS_REST_URL',
-    'UPSTASH_REDIS_REST_TOKEN',
     'STRIPE_SECRET_KEY',
     'STRIPE_PUBLISHABLE_KEY',
     'STRIPE_WEBHOOK_SECRET',
@@ -48,21 +51,20 @@ export function validateEnv(): { valid: boolean; errors: string[]; warnings: str
     }
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    for (const key of envConfig.requiredInProduction ?? []) {
+      if (!process.env[key]) {
+        errors.push(`Missing required production environment variable: ${key}`)
+      }
+    }
+  }
+
   // Check optional but recommended variables
   const recommended = ['NEXT_PUBLIC_SENTRY_DSN', 'RESEND_API_KEY']
   for (const key of recommended) {
     if (!process.env[key] && process.env.NODE_ENV === 'production') {
       warnings.push(`Recommended environment variable not set: ${key}`)
     }
-  }
-
-  if (
-    process.env.NODE_ENV === 'production' &&
-    (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN)
-  ) {
-    warnings.push(
-      'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN should both be set in production so rate limiting uses Redis instead of in-memory (see .env.example and lib/rate-limit.ts).',
-    )
   }
 
   if (process.env.NODE_ENV === 'production' && !process.env.CRON_SECRET) {

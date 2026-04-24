@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { mapLegacyRole } from "@/lib/roles"
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,6 +21,20 @@ export async function GET(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    if (profileError) {
+      return NextResponse.json({ error: "Failed to verify authorization" }, { status: 500 })
+    }
+
+    if (mapLegacyRole(profile?.role) !== "super_admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     const dependencies: Array<{

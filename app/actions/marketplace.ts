@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { databaseErrorMessage, errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
@@ -94,7 +94,7 @@ export async function getMarketplaceLoads(filters?: {
 
     if (error) {
       Sentry.captureException(error)
-      return { data: null, error: error.message, count: 0 }
+      return { data: null, error: databaseErrorMessage(error, "Failed to load marketplace loads"), count: 0 }
     }
 
     return { data: data || [], error: null, count: count || 0 }
@@ -128,7 +128,7 @@ export async function getMarketplaceLoad(id: string) {
 
     if (error) {
       Sentry.captureException(error)
-      return { data: null, error: error.message }
+      return { data: null, error: databaseErrorMessage(error, "Failed to load marketplace load") }
     }
 
     if (!data) {
@@ -193,7 +193,7 @@ export async function postLoadToMarketplace(formData: {
     .maybeSingle()
 
   if (companyTypeError) {
-    return { data: null, error: companyTypeError.message }
+    return { data: null, error: databaseErrorMessage(companyTypeError, "Failed to verify company type") }
   }
 
   // Check if company can post loads (broker or both)
@@ -240,7 +240,7 @@ export async function postLoadToMarketplace(formData: {
 
   if (error) {
     Sentry.captureException(error)
-    return { data: null, error: error.message }
+    return { data: null, error: databaseErrorMessage(error, "Failed to post load to marketplace") }
   }
 
   // Auto-create loads for matching carriers
@@ -275,7 +275,7 @@ export async function acceptMarketplaceLoad(marketplaceLoadId: string) {
     .maybeSingle()
 
   if (companyTypeError) {
-    return { data: null, error: companyTypeError.message }
+    return { data: null, error: databaseErrorMessage(companyTypeError, "Failed to verify company type") }
   }
 
   // Check if company can accept loads (carrier or both)
@@ -515,7 +515,7 @@ export async function getBrokerMarketplaceLoads() {
 
   if (error) {
     Sentry.captureException(error)
-    return { data: null, error: error.message }
+    return { data: null, error: databaseErrorMessage(error, "Failed to load broker marketplace loads") }
   }
 
   return { data: data || [], error: null }
@@ -539,7 +539,7 @@ export async function getMarketplaceSubscription() {
 
   if (error) {
     // Only "not found" should trigger auto-create; other errors should fail.
-    return { data: null, error: error.message }
+    return { data: null, error: databaseErrorMessage(error, "Failed to load marketplace subscription") }
   }
 
   if (!data) {
@@ -555,7 +555,7 @@ export async function getMarketplaceSubscription() {
 
     if (createError) {
       Sentry.captureException(createError)
-      return { data: null, error: createError.message }
+      return { data: null, error: databaseErrorMessage(createError, "Failed to create marketplace subscription") }
     }
 
     return { data: newSubscription, error: null }
@@ -585,16 +585,32 @@ export async function updateMarketplaceSubscription(formData: {
     return { data: null, error: ctx.error || "Not authenticated" }
   }
 
+  const updateData: Record<string, unknown> = {}
+  if (formData.origin_filter !== undefined) updateData.origin_filter = formData.origin_filter
+  if (formData.destination_filter !== undefined) updateData.destination_filter = formData.destination_filter
+  if (formData.min_rate !== undefined) updateData.min_rate = formData.min_rate
+  if (formData.max_rate !== undefined) updateData.max_rate = formData.max_rate
+  if (formData.equipment_types !== undefined) updateData.equipment_types = formData.equipment_types
+  if (formData.auto_accept !== undefined) updateData.auto_accept = formData.auto_accept
+  if (formData.auto_accept_min_rate !== undefined) updateData.auto_accept_min_rate = formData.auto_accept_min_rate
+  if (formData.email_notifications !== undefined) updateData.email_notifications = formData.email_notifications
+  if (formData.sms_notifications !== undefined) updateData.sms_notifications = formData.sms_notifications
+  if (formData.is_active !== undefined) updateData.is_active = formData.is_active
+
+  if (Object.keys(updateData).length === 0) {
+    return { data: null, error: "No valid fields provided for update" }
+  }
+
   const { data, error } = await supabase
     .from("marketplace_subscriptions")
-    .update(formData)
+    .update(updateData)
     .eq("carrier_company_id", ctx.companyId)
     .select()
     .single()
 
   if (error) {
     Sentry.captureException(error)
-    return { data: null, error: error.message }
+    return { data: null, error: databaseErrorMessage(error, "Failed to update marketplace subscription") }
   }
 
   revalidatePath("/dashboard/marketplace/settings")
@@ -737,7 +753,7 @@ export async function rateBroker(formData: {
       .maybeSingle()
     
     if (loadError) {
-      return { data: null, error: loadError.message }
+      return { data: null, error: databaseErrorMessage(loadError, "Failed to validate load for rating") }
     }
     
     if (!load || (load.customer_id !== formData.broker_company_id && load.company_id !== ctx.companyId)) {
@@ -751,7 +767,7 @@ export async function rateBroker(formData: {
       .maybeSingle()
     
     if (marketplaceLoadError) {
-      return { data: null, error: marketplaceLoadError.message }
+      return { data: null, error: databaseErrorMessage(marketplaceLoadError, "Failed to validate marketplace load for rating") }
     }
     
     if (!marketplaceLoad || 
@@ -780,7 +796,7 @@ export async function rateBroker(formData: {
 
   if (error) {
     Sentry.captureException(error)
-    return { data: null, error: error.message }
+    return { data: null, error: databaseErrorMessage(error, "Failed to submit broker rating") }
   }
 
   revalidatePath("/dashboard/marketplace")
@@ -827,7 +843,7 @@ export async function rateCarrier(formData: {
       .maybeSingle()
     
     if (loadError) {
-      return { data: null, error: loadError.message }
+      return { data: null, error: databaseErrorMessage(loadError, "Failed to validate load for rating") }
     }
     
     if (!load || (load.customer_id !== ctx.companyId && load.company_id !== formData.carrier_company_id)) {
@@ -841,7 +857,7 @@ export async function rateCarrier(formData: {
       .maybeSingle()
     
     if (marketplaceLoadError) {
-      return { data: null, error: marketplaceLoadError.message }
+      return { data: null, error: databaseErrorMessage(marketplaceLoadError, "Failed to validate marketplace load for rating") }
     }
     
     if (!marketplaceLoad || 
@@ -870,7 +886,7 @@ export async function rateCarrier(formData: {
 
   if (error) {
     Sentry.captureException(error)
-    return { data: null, error: error.message }
+    return { data: null, error: databaseErrorMessage(error, "Failed to submit carrier rating") }
   }
 
   revalidatePath("/dashboard/marketplace")

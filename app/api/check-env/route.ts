@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from "@/lib/supabase/server"
+import { mapLegacyRole } from "@/lib/roles"
 
 /**
  * Diagnostic endpoint to check if environment variables are loaded
@@ -17,6 +18,21 @@ export async function GET() {
       { status: 401 }
     )
   }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    return NextResponse.json({ error: "Failed to verify authorization" }, { status: 500 })
+  }
+
+  if (mapLegacyRole(profile?.role) !== "super_admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
   // Check environment variables (without exposing sensitive values)
   const hasUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL
   const hasAnonKey = !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
