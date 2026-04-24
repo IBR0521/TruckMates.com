@@ -430,7 +430,7 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
     try {
       let puppeteerModule: any = null
       try {
-        const puppeteer = await import("puppeteer")
+        const puppeteer = await import("puppeteer-core")
         puppeteerModule = puppeteer.default || puppeteer
       } catch (importError) {
         Sentry.captureMessage(
