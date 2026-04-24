@@ -45,6 +45,7 @@ export async function createCustomerPortalAccess(formData: {
 
     const supabase = await createClient()
     const nowIso = new Date().toISOString()
+    const nowIso = new Date().toISOString()
 
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) {
