@@ -40,7 +40,7 @@ function scrubValue(value: unknown): unknown {
   return clone
 }
 
-export function scrubSentryEvent<T extends Record<string, unknown> | null | undefined>(event: T): T {
+export function scrubSentryEvent<T>(event: T): T {
   if (!event || !isPlainObject(event)) return event
   return scrubValue(event) as T
 }
