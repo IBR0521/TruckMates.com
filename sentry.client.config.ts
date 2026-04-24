@@ -30,7 +30,7 @@ Sentry.init({
   ],
 
   // Filter out non-critical errors
-  beforeSend(event, hint) {
+  beforeSend(event: Sentry.ErrorEvent, hint: Sentry.EventHint): Sentry.ErrorEvent | null {
     // Don't send errors in development unless explicitly enabled
     if (process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_SENTRY_DEBUG) {
       return null
@@ -49,7 +49,7 @@ Sentry.init({
       }
     }
 
-    return scrubSentryEvent(event)
+    return scrubSentryEvent(event) as Sentry.ErrorEvent
   },
 })
 
