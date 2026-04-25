@@ -539,6 +539,8 @@ export async function createAlert(formData: {
     }
 
     const notificationType = getNotificationType(formData.event_type)
+    const smsNotificationType =
+      notificationType === "reminder_due" ? "payment_reminder" : notificationType
     const adminForNotifications = createAdminClient()
 
     // Send notifications
@@ -569,7 +571,7 @@ export async function createAlert(formData: {
       if (sendSMS && alertRule.send_sms) {
         const { sendSMSNotification } = await import("./sms")
         // FIXED: Use correct notification type instead of hardcoded "load_update"
-        await sendSMSNotification(userId, notificationType, {
+        await sendSMSNotification(userId, smsNotificationType, {
           title: formData.title,
           message: formData.message,
           shipmentNumber: formData.metadata?.shipment_number,
