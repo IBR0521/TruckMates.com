@@ -6,9 +6,17 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission, checkCreatePermission } from "@/lib/server-permissions"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export interface DetentionRecord {
   id: string
@@ -57,7 +65,7 @@ export async function getActiveDetentions() {
     })
 
     if (error) {
-      return { error: error.message || "Failed to get active detentions", data: null }
+      return { error: safeDbError(error) || "Failed to get active detentions", data: null }
     }
 
     if (!activeDetentions || activeDetentions.length === 0) {
@@ -179,7 +187,7 @@ export async function getDetentionRecords(filters?: {
     const { data: detentions, error, count } = await query
 
     if (error) {
-      return { error: error.message, data: null, count: 0 }
+      return { error: safeDbError(error), data: null, count: 0 }
     }
 
     return { data: detentions || [], error: null, count: count || 0 }
@@ -345,7 +353,7 @@ export async function finalizeDetention(zoneVisitId: string) {
     })
 
     if (error) {
-      return { error: error.message || "Failed to finalize detention", data: null }
+      return { error: safeDbError(error) || "Failed to finalize detention", data: null }
     }
 
     return { data: { detention_id: detentionId }, error: null }
@@ -398,7 +406,7 @@ export async function addDetentionToInvoice(detentionId: string, invoiceId: stri
     })
 
     if (error) {
-      return { error: error.message || "Failed to add detention to invoice", data: null }
+      return { error: safeDbError(error) || "Failed to add detention to invoice", data: null }
     }
 
     return { data: { success }, error: null }
@@ -510,7 +518,7 @@ export async function updateGeofenceDetentionSettings(
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data, error: null }
@@ -573,7 +581,7 @@ export async function getDetentionAnalytics(filters?: {
     const { data: detentions, error } = await query
 
     if (error) {
-      return { error: error.message || "Failed to get detention analytics", data: null }
+      return { error: safeDbError(error) || "Failed to get detention analytics", data: null }
     }
 
     // Aggregate by customer

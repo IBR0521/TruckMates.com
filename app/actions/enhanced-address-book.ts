@@ -10,12 +10,19 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { geocodeAddress } from "./integrations-google-maps"
 import { analyzeDocument } from "./document-analysis"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export type AddressBookCategory = 
   | "shipper" 
@@ -233,7 +240,7 @@ export async function createAddressBookEntry(
       .single()
 
     if (error) {
-      return { data: null, error: error.message }
+      return { data: null, error: safeDbError(error) }
     }
 
     // Convert PostGIS geography to lat/lng for response
@@ -350,7 +357,7 @@ export async function getAddressBookEntries(filters?: {
     const { data, error } = await query
 
     if (error) {
-      return { data: [], error: error.message }
+      return { data: [], error: safeDbError(error) }
     }
 
     // OPTIMIZED: Batch extract coordinates for all entries in a single RPC call
@@ -432,7 +439,7 @@ export async function findNearbyAddresses(
     })
 
     if (error) {
-      return { data: null, error: error.message }
+      return { data: null, error: safeDbError(error) }
     }
 
     // Coordinates are already extracted in the RPC function - no additional queries needed
@@ -862,7 +869,7 @@ export async function updateAddressBookEntry(
       .single()
 
     if (error) {
-      return { data: null, error: error.message }
+      return { data: null, error: safeDbError(error) }
     }
 
     // Convert coordinates for response
@@ -929,7 +936,7 @@ export async function deleteAddressBookEntry(
       .eq("company_id", ctx.companyId)
 
     if (error) {
-      return { error: error.message }
+      return { error: safeDbError(error) }
     }
 
     return { error: null }
@@ -967,7 +974,7 @@ export async function incrementAddressUsage(entryId: string): Promise<{ error: s
     })
 
     if (error) {
-      return { error: error.message }
+      return { error: safeDbError(error) }
     }
 
     return { error: null }

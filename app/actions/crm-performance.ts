@@ -6,10 +6,17 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export interface CustomerPerformanceMetrics {
   customer_id: string
@@ -130,7 +137,7 @@ export async function getCustomerPerformanceMetrics(filters?: {
         )
         return { data: [], error: null }
       }
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Apply client-side filters that can't be done in SQL view
@@ -207,7 +214,7 @@ export async function getCustomerPerformance(customerId: string): Promise<{
         )
         return { data: null, error: null }
       }
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: data as CustomerPerformanceMetrics, error: null }
@@ -277,7 +284,7 @@ export async function getVendorPerformanceMetrics(filters?: {
         )
         return { data: [], error: null }
       }
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Apply client-side filters
@@ -342,7 +349,7 @@ export async function getVendorPerformance(vendorId: string): Promise<{
         )
         return { data: null, error: null }
       }
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: data as VendorPerformanceMetrics, error: null }
@@ -616,7 +623,7 @@ export async function getInactiveCustomers(days = 30): Promise<{
       if (error.message?.includes("does not exist") || error.code === "42P01" || error.message?.includes("schema cache")) {
         return { data: [], error: null }
       }
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     const now = new Date().getTime()

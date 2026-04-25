@@ -6,9 +6,17 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /** `public.driver_badges` — supabase/gamification.sql */
 const DRIVER_BADGES_SELECT =
@@ -92,7 +100,7 @@ export async function calculateDriverPerformanceScore(
     })
 
     if (error) {
-      return { error: error.message || "Failed to calculate performance score", data: null }
+      return { error: safeDbError(error) || "Failed to calculate performance score", data: null }
     }
 
     return { data: { score_id: scoreId }, error: null }
@@ -148,7 +156,7 @@ export async function getDriverLeaderboard(
       .limit(limit)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: scores || [], error: null }
@@ -181,7 +189,7 @@ export async function getDriverBadges(driverId: string) {
       .order("earned_date", { ascending: false })
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: badges || [], error: null }
@@ -217,7 +225,7 @@ export async function checkAndAwardBadges(
     })
 
     if (error) {
-      return { error: error.message || "Failed to check badges", data: null }
+      return { error: safeDbError(error) || "Failed to check badges", data: null }
     }
 
     return { data: { badges_awarded: badgesAwarded || 0 }, error: null }
@@ -272,7 +280,7 @@ export async function getDriverPerformanceScore(
       .single()
 
     if (error && error.code !== "PGRST116") {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: score || null, error: null }

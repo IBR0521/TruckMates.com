@@ -1,9 +1,17 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 // Get all stops for a route
 export async function getRouteStops(routeId: string) {
@@ -27,7 +35,7 @@ export async function getRouteStops(routeId: string) {
       if (error.code === "42P01" || error.message.includes("does not exist")) {
         return { data: [], error: null } // Table doesn't exist yet
       }
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: stops || [], error: null }
@@ -59,7 +67,7 @@ export async function getRouteStopCounts(routeIds: string[]) {
       if (error.code === "42P01" || error.message.includes("does not exist")) {
         return { data: {}, error: null }
       }
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     const counts: Record<string, number> = {}
@@ -170,7 +178,7 @@ export async function createRouteStop(routeId: string, stopData: {
       if (error.code === "23505") {
         return { error: "Stop number already exists for this route", data: null }
       }
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath(`/dashboard/routes/${routeId}`)
@@ -267,7 +275,7 @@ export async function updateRouteStop(stopId: string, stopData: {
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath(`/dashboard/routes/${stop.route_id}`)
@@ -307,7 +315,7 @@ export async function deleteRouteStop(stopId: string) {
       .eq("company_id", ctx.companyId)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath(`/dashboard/routes/${stop.route_id}`)
@@ -338,7 +346,7 @@ export async function reorderRouteStops(routeId: string, stopIds: string[]) {
         .eq("company_id", ctx.companyId)
 
       if (error) {
-        return { error: error.message, data: null }
+        return { error: safeDbError(error), data: null }
       }
     }
 
