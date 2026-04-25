@@ -484,7 +484,7 @@ export default function CompliancePage() {
             <div className="grid md:grid-cols-4 gap-4">
               <Card className="p-4"><p className="text-sm text-muted-foreground">Total</p><p className="text-2xl font-bold">{totals.total}</p></Card>
               <Card className="p-4"><p className="text-sm text-muted-foreground">Active</p><p className="text-2xl font-bold text-green-500">{totals.active}</p></Card>
-              <Card className="p-4"><p className="text-sm text-muted-foreground">Expiring (<=60d)</p><p className="text-2xl font-bold text-amber-500">{totals.expiringSoon}</p></Card>
+              <Card className="p-4"><p className="text-sm text-muted-foreground">Expiring (&lt;=60d)</p><p className="text-2xl font-bold text-amber-500">{totals.expiringSoon}</p></Card>
               <Card className="p-4"><p className="text-sm text-muted-foreground">Expired</p><p className="text-2xl font-bold text-red-500">{totals.expired}</p></Card>
             </div>
 
