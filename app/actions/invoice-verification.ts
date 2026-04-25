@@ -1,10 +1,17 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Invoice Three-Way Matching
@@ -31,7 +38,7 @@ export async function verifyInvoiceMatch(invoiceId: string) {
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     if (!data || data.length === 0) {
@@ -91,7 +98,7 @@ export async function getInvoiceVerification(invoiceId: string) {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     if (!data) {
@@ -142,7 +149,7 @@ export async function getInvoicesRequiringReview() {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: data || [], error: null }
@@ -180,7 +187,7 @@ export async function approveInvoiceManually(invoiceId: string, reason?: string)
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Update verification record

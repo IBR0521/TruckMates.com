@@ -7,9 +7,16 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /** `public.eta_updates` — supabase/realtime_eta.sql */
 const ETA_UPDATES_SELECT =
@@ -62,7 +69,7 @@ export async function createRouteLinestring(routeId: string) {
     })
 
     if (error) {
-      return { error: error.message || "Failed to create route LINESTRING", data: null }
+      return { error: safeDbError(error) || "Failed to create route LINESTRING", data: null }
     }
 
     return { data: { success }, error: null }
@@ -95,7 +102,7 @@ export async function calculateRealtimeETA(
     })
 
     if (error) {
-      return { error: error.message || "Failed to calculate ETA", data: null }
+      return { error: safeDbError(error) || "Failed to calculate ETA", data: null }
     }
 
     if (!eta || eta.length === 0) {
@@ -206,7 +213,7 @@ export async function updateRouteETA(routeId: string) {
     })
 
     if (error) {
-      return { error: error.message || "Failed to update route ETA", data: null }
+      return { error: safeDbError(error) || "Failed to update route ETA", data: null }
     }
 
     return { data: { update_id: updateId }, error: null }
@@ -235,7 +242,7 @@ export async function getRouteETA(routeId: string) {
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Get latest ETA update
@@ -289,7 +296,7 @@ export async function getETAHistory(
       .limit(limit)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: updates || [], error: null }

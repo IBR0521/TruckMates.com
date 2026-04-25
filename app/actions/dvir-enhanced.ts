@@ -8,12 +8,19 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { mapLegacyRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission } from "@/lib/server-permissions"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Check if pre-trip DVIR is required for a truck
@@ -49,7 +56,7 @@ export async function checkPreTripDVIRRequired(
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: { required: data || false }, error: null }
@@ -93,7 +100,7 @@ export async function getDVIRsForAudit(filters?: {
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: data || [], error: null }
@@ -142,7 +149,7 @@ export async function createWorkOrdersFromDVIRDefects(
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/dvir")
@@ -259,7 +266,7 @@ export async function getTrucksWithUnresolvedDVIRDefects(sinceDays = 2): Promise
       .gte("inspection_date", sinceStr)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     const rank = (s: string) => {

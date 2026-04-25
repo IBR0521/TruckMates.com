@@ -5,6 +5,14 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import crypto from "crypto"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Generate a secure API key
@@ -55,7 +63,7 @@ export async function getAPIKeys() {
     .order("created_at", { ascending: false })
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data: keys, error: null }
@@ -113,7 +121,7 @@ export async function createAPIKey(formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   // Return the full key only once (for display)
@@ -167,7 +175,7 @@ export async function revokeAPIKey(id: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message }
+    return { error: safeDbError(error) }
   }
 
   revalidatePath("/dashboard/settings/api-keys")
@@ -238,7 +246,7 @@ export async function updateAPIKey(
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/settings/api-keys")
@@ -277,7 +285,7 @@ export async function getAPIKeyUsage(apiKeyId: string, days: number = 7) {
     .limit(1000)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data: usage, error: null }

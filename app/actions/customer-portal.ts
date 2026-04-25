@@ -1,13 +1,20 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import crypto from "crypto"
 import { handleDbError } from "@/lib/db-helpers"
 import { getResendClientForCompany } from "@/lib/resend-client"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 async function getResendClient() {
   const ctx = await getCachedAuthContext()
@@ -137,7 +144,7 @@ export async function createCustomerPortalAccess(formData: {
     }
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Send email notification if enabled and customer has email
@@ -418,7 +425,7 @@ export async function getCustomerPortalLoads(token: string) {
     const { data: loads, error } = await query.order("created_at", { ascending: false }).limit(1000)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: loads || [], error: null }
@@ -582,7 +589,7 @@ export async function getCustomerPortalDocuments(token: string, loadId?: string)
   const { data, error } = await query.order("created_at", { ascending: false })
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data: data || [], error: null }
@@ -633,7 +640,7 @@ export async function getCustomerPortalInvoices(token: string) {
     const { data, error } = await query.order("created_at", { ascending: false }).limit(1000)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: data || [], error: null }
@@ -718,7 +725,7 @@ export async function revokeCustomerPortalAccess(customerId: string) {
       .eq("company_id", ctx.companyId)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/settings/customer-portal")
