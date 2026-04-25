@@ -32,6 +32,17 @@ const styles = StyleSheet.create({
   footer: { marginTop: 12, fontSize: 9, color: "#6b7280" },
 })
 
+async function toPdfBytes(value: unknown): Promise<Uint8Array> {
+  if (value instanceof Uint8Array) return value
+  if (value instanceof ArrayBuffer) return new Uint8Array(value)
+  if (value instanceof Blob) return new Uint8Array(await value.arrayBuffer())
+  if (value && typeof value === "object" && "getReader" in value) {
+    const buffer = await new Response(value as ReadableStream).arrayBuffer()
+    return new Uint8Array(buffer)
+  }
+  throw new Error("Unsupported PDF output type")
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value || 0)
 }
@@ -186,7 +197,7 @@ export async function getContractor1099Summary(taxYear: number): Promise<{
 }
 
 async function generate1099PdfBuffer(driverId: string, taxYear: number): Promise<{
-  pdfBuffer: Buffer | null
+  pdfBuffer: Uint8Array | null
   filename: string
   error: string | null
 }> {
@@ -257,7 +268,8 @@ async function generate1099PdfBuffer(driverId: string, taxYear: number): Promise
       nonemployeeComp: annualTotal,
     })
 
-    const pdfBuffer = await pdf(doc).toBuffer()
+    const pdfOutput = await pdf(doc).toBuffer()
+    const pdfBuffer = await toPdfBytes(pdfOutput)
     const safeName = String(driver.name || "driver").trim().replace(/[^a-zA-Z0-9-_]+/g, "-")
     const filename = `1099-NEC-${safeName}-${taxYear}.pdf`
     return { pdfBuffer, filename, error: null }
@@ -339,7 +351,7 @@ export async function send1099ToDriver(driverId: string, taxYear: number): Promi
       subject: `${companyName} - Your ${taxYear} Form 1099-NEC`,
       text: `Hello ${driver.name || "Driver"},\n\nAttached is your Form 1099-NEC draft for tax year ${taxYear}.\n\nPlease review and contact payroll if any correction is needed.`,
       html: `<p>Hello ${driver.name || "Driver"},</p><p>Attached is your Form 1099-NEC draft for tax year ${taxYear}.</p><p>Please review and contact payroll if any correction is needed.</p>`,
-      attachments: [{ filename: generated.filename, content: generated.pdfBuffer }],
+      attachments: [{ filename: generated.filename, content: Buffer.from(generated.pdfBuffer) }],
     })
 
     if (emailResult.error) {
