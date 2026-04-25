@@ -3,6 +3,14 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export async function getBillingInfo() {
   const supabase = await createClient()
@@ -20,7 +28,7 @@ export async function getBillingInfo() {
     .single()
 
   if (error && error.code !== "PGRST116") {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   // Return defaults if no billing info exists
@@ -102,7 +110,7 @@ export async function updateBillingInfo(billing: {
       .eq("company_id", result.company_id)
 
     if (error) {
-      return { error: error.message, success: false }
+      return { error: safeDbError(error), success: false }
     }
   } else {
     // Create new
@@ -114,7 +122,7 @@ export async function updateBillingInfo(billing: {
       })
 
     if (error) {
-      return { error: error.message, success: false }
+      return { error: safeDbError(error), success: false }
     }
   }
 

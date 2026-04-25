@@ -2,6 +2,14 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export interface Accessorial {
   id?: string
@@ -37,7 +45,7 @@ export async function getAccessorials(): Promise<{ data: Accessorial[] | null; e
     .order("name", { ascending: true })
 
   if (error) {
-    return { error: error.message || "Failed to fetch accessorials", data: null }
+    return { error: safeDbError(error) || "Failed to fetch accessorials", data: null }
   }
 
   return { data: data || [], error: null }
@@ -98,7 +106,7 @@ export async function createAccessorial(accessorial: Omit<Accessorial, "id">): P
     if (error.code === "23505") {
       return { error: "An accessorial with this name already exists", data: null }
     }
-    return { error: error.message || "Failed to create accessorial", data: null }
+    return { error: safeDbError(error) || "Failed to create accessorial", data: null }
   }
 
   return { data, error: null }
@@ -165,7 +173,7 @@ export async function updateAccessorial(id: string, accessorial: Partial<Accesso
     if (error.code === "23505") {
       return { error: "An accessorial with this name already exists", data: null }
     }
-    return { error: error.message || "Failed to update accessorial", data: null }
+    return { error: safeDbError(error) || "Failed to update accessorial", data: null }
   }
 
   return { data, error: null }
@@ -217,7 +225,7 @@ export async function deleteAccessorial(id: string): Promise<{ error: string | n
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message || "Failed to delete accessorial" }
+    return { error: safeDbError(error) || "Failed to delete accessorial" }
   }
 
   return { error: null }

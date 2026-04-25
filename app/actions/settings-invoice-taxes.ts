@@ -2,6 +2,14 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export interface InvoiceTax {
   id?: string
@@ -37,7 +45,7 @@ export async function getInvoiceTaxes(): Promise<{ data: InvoiceTax[] | null; er
     .order("name", { ascending: true })
 
   if (error) {
-    return { error: error.message || "Failed to fetch invoice taxes", data: null }
+    return { error: safeDbError(error) || "Failed to fetch invoice taxes", data: null }
   }
 
   // Parse JSONB fields
@@ -114,7 +122,7 @@ export async function createInvoiceTax(tax: Omit<InvoiceTax, "id">): Promise<{ d
     if (error.code === "23505") {
       return { error: "A tax with this name already exists", data: null }
     }
-    return { error: error.message || "Failed to create invoice tax", data: null }
+    return { error: safeDbError(error) || "Failed to create invoice tax", data: null }
   }
 
   return { data: { ...data, state_codes: data.state_codes || [], customer_ids: data.customer_ids || [] }, error: null }
@@ -195,7 +203,7 @@ export async function updateInvoiceTax(id: string, tax: Partial<InvoiceTax>): Pr
     if (error.code === "23505") {
       return { error: "A tax with this name already exists", data: null }
     }
-    return { error: error.message || "Failed to update invoice tax", data: null }
+    return { error: safeDbError(error) || "Failed to update invoice tax", data: null }
   }
 
   return { data: { ...data, state_codes: data.state_codes || [], customer_ids: data.customer_ids || [] }, error: null }
@@ -236,7 +244,7 @@ export async function deleteInvoiceTax(id: string): Promise<{ error: string | nu
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message || "Failed to delete invoice tax" }
+    return { error: safeDbError(error) || "Failed to delete invoice tax" }
   }
 
   return { error: null }

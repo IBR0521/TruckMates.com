@@ -3,6 +3,14 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Saved Filter Presets
@@ -42,7 +50,7 @@ export async function getFilterPresets(page: string) {
     if (error.code === "42P01" || error.message.includes("does not exist")) {
       return { data: [], error: null }
     }
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data: data || [], error: null }
@@ -87,7 +95,7 @@ export async function saveFilterPreset(preset: FilterPreset) {
     if (error.code === "42P01" || error.message.includes("does not exist")) {
       return { error: "Filter presets table does not exist. Please run the SQL schema.", data: null }
     }
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath(`/dashboard/${preset.page}`)
@@ -130,7 +138,7 @@ export async function updateFilterPreset(id: string, preset: Partial<FilterPrese
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath(`/dashboard/${preset.page || ""}`)
@@ -163,7 +171,7 @@ export async function deleteFilterPreset(id: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   if (preset) {
@@ -196,7 +204,7 @@ export async function getDefaultFilterPreset(page: string) {
     if (error.code === "42P01") {
       return { data: null, error: null } // No default preset or table doesn't exist
     }
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data, error: null }

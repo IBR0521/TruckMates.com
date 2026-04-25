@@ -1,10 +1,18 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission, checkDeletePermission, checkEditPermission } from "@/lib/server-permissions"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export type TripSheetStateMileRow = { state_code: string; miles_driven: number }
 export type TripSheetFuelRow = {
@@ -136,7 +144,7 @@ export async function listTripSheets(filters?: { from?: string; to?: string; tru
   if (filters?.truck_id) q = q.eq("truck_id", filters.truck_id)
 
   const { data, error } = await q
-  if (error) return { data: null, error: error.message }
+  if (error) return { data: null, error: safeDbError(error) }
   return { data: data || [], error: null }
 }
 
@@ -297,7 +305,7 @@ export async function deleteTripSheet(id: string) {
   }
 
   const { error } = await supabase.from("trip_sheets").delete().eq("id", id).eq("company_id", ctx.companyId)
-  if (error) return { error: error.message }
+  if (error) return { error: safeDbError(error) }
   revalidatePath("/dashboard/ifta/trip-sheet")
   return { error: null }
 }
