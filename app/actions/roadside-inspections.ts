@@ -17,7 +17,9 @@ const INSPECTION_SELECT = `
 
 function parseViolations(input: unknown): string[] {
   if (Array.isArray(input)) {
-    return input.map((v) => sanitizeString(String(v), 300)).filter(Boolean)
+    return input
+      .map((v: unknown) => sanitizeString(String(v), 300))
+      .filter((value: string) => value.length > 0)
   }
   return []
 }

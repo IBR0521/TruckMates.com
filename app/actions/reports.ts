@@ -798,8 +798,13 @@ export async function sendARAgingBucketReminders(bucket: ARAgingBucketKey) {
     const today = now.toISOString().slice(0, 10)
 
     const inserts = invoiceRows
-      .filter((inv) => !existingInvoiceIds.has(inv.id))
-      .map((inv) => ({
+      .filter((inv: { id: string }) => !existingInvoiceIds.has(inv.id))
+      .map((inv: {
+        id: string
+        invoice_number: string
+        customer_name: string
+        days_outstanding: number
+      }) => ({
         company_id: ctx.companyId,
         title: `AR follow-up: Invoice ${inv.invoice_number} (${inv.days_outstanding} days outstanding)`,
         description: `Customer ${inv.customer_name} has an invoice outstanding for ${inv.days_outstanding} days. Send payment follow-up.`,
