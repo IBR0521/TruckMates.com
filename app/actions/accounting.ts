@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
@@ -9,6 +9,11 @@ import { validatePricingData, validateNonNegativeNumber, sanitizeString, validat
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 import { mapLegacyRole } from "@/lib/roles"
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
 
 export async function getInvoices(filters?: {
   load_id?: string
@@ -48,7 +53,7 @@ export async function getInvoices(filters?: {
     const { data: invoices, error, count } = await query
 
     if (error) {
-      return { error: error.message, data: null, count: 0 }
+      return { error: safeDbError(error), data: null, count: 0 }
     }
 
     return { data: invoices || [], error: null, count: count || 0 }
@@ -138,7 +143,7 @@ export async function getExpenses(filters?: {
     const { data: expenses, error, count } = await query
 
     if (error) {
-      return { error: error.message, data: null, count: 0 }
+      return { error: safeDbError(error), data: null, count: 0 }
     }
 
     return { data: expenses || [], error: null, count: count || 0 }
@@ -248,7 +253,7 @@ export async function markSettlementPaid(id: string, paymentMethod?: string) {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
     if (!data) {
       return { error: "Settlement is already paid or not found", data: null }
@@ -511,7 +516,7 @@ export async function deleteInvoice(id: string) {
     .eq("id", id)
     .eq("company_id", ctx.companyId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: safeDbError(error) }
 
   revalidatePath("/dashboard/accounting/invoices")
     return { error: null }
@@ -543,7 +548,7 @@ export async function deleteExpense(id: string) {
     .eq("id", id)
     .eq("company_id", ctx.companyId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: safeDbError(error) }
 
   revalidatePath("/dashboard/accounting/expenses")
   return { error: null }
@@ -575,7 +580,7 @@ export async function deleteSettlement(id: string) {
     .eq("id", id)
     .eq("company_id", ctx.companyId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: safeDbError(error) }
 
   revalidatePath("/dashboard/accounting/settlements")
   return { error: null }
@@ -1027,7 +1032,7 @@ export async function createExpense(formData: {
     .maybeSingle()
 
   if (error) {
-    return { error: error.message, data: null, totalFuelExpense: 0 }
+    return { error: safeDbError(error), data: null, totalFuelExpense: 0 }
   }
 
   // Auto-update fuel level if this is a fuel expense with truck_id and fuel_level_after
@@ -1148,7 +1153,7 @@ export async function getDriverFuelExpensesForPeriod(driverId: string, periodSta
     .order("date", { ascending: true })
 
   if (error) {
-    return { error: error.message, data: null, totalFuelExpense: 0 }
+    return { error: safeDbError(error), data: null, totalFuelExpense: 0 }
   }
 
   const totalFuelExpense = expenses?.reduce((sum: number, exp: any) => sum + (Number(exp.amount) || 0), 0) || 0

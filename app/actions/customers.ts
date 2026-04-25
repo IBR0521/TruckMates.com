@@ -1,12 +1,17 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone, validateRequiredString, stateNameToCode } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
 
 // Explicit selection lists to reduce `select("*")` over-fetching.
 // Note: `customers`, `contacts`, and `contact_history` are not represented in `lib/supabase/types.ts`,
@@ -86,7 +91,7 @@ export async function getCustomers(filters?: {
     const { data, error, count } = await query
 
     if (error) {
-      return { error: error.message, data: null, count: 0 }
+      return { error: safeDbError(error), data: null, count: 0 }
     }
 
     return { data: data || [], error: null, count: count || 0 }
@@ -114,7 +119,7 @@ export async function getCustomer(id: string) {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     if (!data) {
@@ -293,7 +298,7 @@ export async function createCustomer(formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/customers")
@@ -403,7 +408,7 @@ export async function updateCustomer(
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   // Create audit log entries (batched)
@@ -472,7 +477,7 @@ export async function deleteCustomer(id: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message }
+    return { error: safeDbError(error) }
   }
 
   revalidatePath("/dashboard/customers")
@@ -539,7 +544,7 @@ export async function getCustomerLoads(customerId: string) {
   )
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data, error: null }
@@ -605,7 +610,7 @@ export async function getCustomerInvoices(customerId: string) {
   )
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data, error: null }
@@ -628,7 +633,7 @@ export async function getCustomerContacts(customerId: string) {
     .order("created_at", { ascending: false })
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data, error: null }
@@ -650,7 +655,7 @@ export async function getCustomerHistory(customerId: string) {
     .order("occurred_at", { ascending: false })
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data, error: null }

@@ -1,12 +1,17 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateTruckData, sanitizeString } from "@/lib/validation"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import * as Sentry from "@sentry/nextjs"
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
 
 /** Full row: `public.trucks` in supabase/schema.sql + supabase/trucks_schema_extended.sql */
 const TRUCK_FULL_SELECT = `
@@ -49,7 +54,7 @@ export async function getTrucks(filters?: {
     const { data: trucks, error, count } = await query
 
     if (error) {
-      return { error: error.message, data: null, count: 0 }
+      return { error: safeDbError(error), data: null, count: 0 }
     }
 
     return { data: trucks || [], error: null, count: count || 0 }
@@ -76,7 +81,7 @@ export async function getTruck(id: string) {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     if (!truck) {
@@ -302,7 +307,7 @@ export async function createTruck(formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/trucks")
@@ -410,7 +415,7 @@ export async function updateTruck(
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   // Auto-schedule maintenance if mileage was updated
@@ -528,7 +533,7 @@ export async function deleteTruck(id: string) {
       .eq("company_id", ctx.companyId)
 
     if (error) {
-      return { error: error.message }
+      return { error: safeDbError(error) }
     }
 
     revalidatePath("/dashboard/trucks")
@@ -604,7 +609,7 @@ export async function bulkDeleteTrucks(ids: string[]) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/trucks")
@@ -637,7 +642,7 @@ export async function bulkUpdateTruckStatus(ids: string[], status: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/trucks")

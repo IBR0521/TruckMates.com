@@ -1,7 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -9,6 +9,11 @@ import { validateRequiredString, sanitizeString } from "@/lib/validation"
 import { sendNotification } from "./notifications"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
 
 const ROUTE_DETAIL_SELECT =
   "id, company_id, name, origin, destination, distance, estimated_time, priority, status, driver_id, truck_id, waypoints, estimated_arrival, depot_name, depot_address, pre_route_time_minutes, post_route_time_minutes, route_start_time, route_departure_time, route_complete_time, route_type, scenario, notes, special_instructions, estimated_fuel_cost, estimated_toll_cost, total_estimated_cost, origin_coordinates, destination_coordinates, traffic_distance_meters, traffic_duration_minutes, created_at, updated_at"
@@ -96,7 +101,7 @@ export async function getRoutes(filters?: {
     const { data: routes, error, count } = await query
 
     if (error) {
-      return { error: error.message, data: null, count: 0 }
+      return { error: safeDbError(error), data: null, count: 0 }
     }
 
     return { data: routes || [], error: null, count: count || 0 }
@@ -127,7 +132,7 @@ export async function getLoadsByRouteIds(routeIds: string[]) {
       .in("route_id", routeIds)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     const byRoute: Record<string, Array<{ id: string; shipment_number: string | null; status: string | null }>> = {}
@@ -167,7 +172,7 @@ export async function getRoute(id: string) {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     if (!route) {
@@ -319,7 +324,7 @@ export async function createRoute(formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/routes")
@@ -429,7 +434,7 @@ export async function updateRoute(
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   // Send notifications to company users if route was updated (non-blocking)
@@ -505,7 +510,7 @@ export async function deleteRoute(id: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message }
+    return { error: safeDbError(error) }
   }
 
   revalidatePath("/dashboard/routes")
@@ -557,7 +562,7 @@ export async function bulkDeleteRoutes(ids: string[]) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/routes")
@@ -590,7 +595,7 @@ export async function bulkUpdateRouteStatus(ids: string[], status: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/routes")

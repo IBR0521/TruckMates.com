@@ -1,7 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -11,6 +11,13 @@ import { checkViewPermission, checkCreatePermission, checkEditPermission, checkD
 import { mapLegacyRole } from "@/lib/roles"
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 import {
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
   collapseDuplicateDriversByEmail,
   purgeAllDriversKeepOneForCompany,
 } from "@/lib/drivers/collapse-duplicate-driver-rows"
@@ -230,7 +237,7 @@ export async function getDrivers(filters?: {
     const { data: drivers, error, count } = await query
 
     if (error) {
-      return { error: error.message, data: null, count: 0 }
+      return { error: safeDbError(error), data: null, count: 0 }
     }
 
     return { data: drivers || [], error: null, count: count || 0 }
@@ -289,7 +296,7 @@ export async function getDriver(id: string) {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     if (!driver) {
@@ -567,7 +574,7 @@ export async function createDriver(formData: {
   }
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/drivers")
@@ -764,7 +771,7 @@ export async function updateDriver(
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   // Fetch truck data separately if truck_id exists (since there's no FK relationship)
@@ -937,7 +944,7 @@ export async function deleteDriver(id: string) {
       .eq("company_id", ctx.companyId)
 
     if (error) {
-      return { error: error.message }
+      return { error: safeDbError(error) }
     }
     if (count === 0) {
       return { error: "Could not delete driver" }
@@ -1024,7 +1031,7 @@ export async function bulkDeleteDrivers(ids: string[]) {
     const chunk = validIds.slice(i, i + DELETE_CHUNK)
     const { error } = await admin.from("drivers").delete().in("id", chunk).eq("company_id", ctx.companyId)
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
   }
 
@@ -1065,7 +1072,7 @@ export async function bulkUpdateDriverStatus(ids: string[], status: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/drivers")

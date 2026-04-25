@@ -1,11 +1,16 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateRequiredString, validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
 import * as Sentry from "@sentry/nextjs"
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
 
 /** `public.vendors` — supabase/crm_schema_complete.sql */
 const VENDOR_FULL_SELECT = `
@@ -77,7 +82,7 @@ export async function getVendors(filters?: {
     const { data, error, count } = await query
 
     if (error) {
-      return { error: error.message, data: null, count: 0 }
+      return { error: safeDbError(error), data: null, count: 0 }
     }
 
     return { data: data || [], error: null, count: count || 0 }
@@ -105,7 +110,7 @@ export async function getVendor(id: string) {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     if (!data) {
@@ -251,7 +256,7 @@ export async function createVendor(formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/vendors")
@@ -354,7 +359,7 @@ export async function updateVendor(
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   // Create audit log entries
@@ -413,7 +418,7 @@ export async function deleteVendor(id: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message }
+    return { error: safeDbError(error) }
   }
 
   revalidatePath("/dashboard/vendors")
@@ -453,7 +458,7 @@ export async function getVendorExpenses(vendorId: string) {
     .order("date", { ascending: false })
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data, error: null }
@@ -492,7 +497,7 @@ export async function getVendorMaintenance(vendorId: string) {
     .order("scheduled_date", { ascending: false })
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data, error: null }
