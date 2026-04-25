@@ -31,6 +31,17 @@ function formatCurrency(value: unknown): string {
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+async function toPdfBytes(value: unknown): Promise<Uint8Array> {
+  if (value instanceof Uint8Array) return value
+  if (value instanceof ArrayBuffer) return new Uint8Array(value)
+  if (value instanceof Blob) return new Uint8Array(await value.arrayBuffer())
+  if (value && typeof value === "object" && "getReader" in value) {
+    const buffer = await new Response(value as ReadableStream).arrayBuffer()
+    return new Uint8Array(buffer)
+  }
+  throw new Error("Unsupported PDF output type")
+}
+
 function buildRateConfDoc(payload: {
   rateConfNumber: string
   issuedDate: string
@@ -189,9 +200,10 @@ export async function generateRateConfirmation(loadId: string): Promise<{
       carrierName: company?.name || "Carrier",
     })
 
-    const pdfBuffer = await pdf(doc).toBuffer()
+    const pdfOutput = await pdf(doc).toBuffer()
+    const pdfBytes = await toPdfBytes(pdfOutput)
     const filePath = `rate-confirmations/${ctx.companyId}/${loadId}-${Date.now()}.pdf`
-    const { error: uploadError } = await supabase.storage.from("documents").upload(filePath, pdfBuffer, {
+    const { error: uploadError } = await supabase.storage.from("documents").upload(filePath, pdfBytes, {
       contentType: "application/pdf",
       upsert: false,
     })
@@ -205,7 +217,7 @@ export async function generateRateConfirmation(loadId: string): Promise<{
         name: `${rateConfNumber}.pdf`,
         type: "rate_confirmation",
         file_url: filePath,
-        file_size: pdfBuffer.length,
+        file_size: pdfBytes.byteLength,
         upload_date: new Date().toISOString().slice(0, 10),
       })
       .select("id")
