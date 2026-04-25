@@ -6,6 +6,15 @@ import { revalidatePath } from "next/cache"
 import { getCompanySettings } from "./number-formats"
 import { getResendClient } from "./invoice-email"
 import { buildInvoicePacketAttachments, buildInvoicePacketEmailContent } from "@/lib/invoice-packet-build"
+import { sanitizeError } from "@/lib/error-message"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 type Attachment = { filename: string; content: Buffer }
 
@@ -216,7 +225,7 @@ export async function markInvoiceFactoringFunded(invoiceId: string) {
     .eq("id", invoiceId)
     .eq("company_id", ctx.companyId)
 
-  if (error) return { error: error.message, data: null }
+  if (error) return { error: safeDbError(error), data: null }
 
   revalidatePath("/dashboard/accounting/invoices")
   revalidatePath(`/dashboard/accounting/invoices/${invoiceId}`)

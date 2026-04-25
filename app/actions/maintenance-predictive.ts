@@ -5,6 +5,15 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkCreatePermission, checkViewPermission } from "@/lib/server-permissions"
 import { createMaintenance } from "./maintenance"
+import { sanitizeError } from "@/lib/error-message"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 async function ensurePredictiveMaintenanceAccess() {
   return {
@@ -54,7 +63,7 @@ export async function predictMaintenanceNeeds(truckId?: string) {
   const { data: trucks, error } = await query
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   if (!trucks || trucks.length === 0) {

@@ -5,6 +5,15 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { getCompanySettings } from "./number-formats"
 import { checkCreatePermission, checkViewPermission } from "@/lib/server-permissions"
+import { sanitizeError } from "@/lib/error-message"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Auto-attach documents to loads based on settings
@@ -143,7 +152,7 @@ export async function updateDocumentTemplates(templates: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/settings/documents")

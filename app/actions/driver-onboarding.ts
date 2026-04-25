@@ -6,6 +6,7 @@ import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 import * as Sentry from "@sentry/nextjs"
+import { sanitizeError } from "@/lib/error-message"
 
 
 function safeDbError(error: unknown, fallback = "Database operation failed"): string {

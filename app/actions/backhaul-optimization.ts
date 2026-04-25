@@ -6,9 +6,16 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export interface BackhaulOpportunity {
   load_id: string
@@ -53,7 +60,7 @@ export async function findBackhaulOpportunities(
     })
 
     if (error) {
-      return { error: error.message || "Failed to find backhaul opportunities", data: null }
+      return { error: safeDbError(error) || "Failed to find backhaul opportunities", data: null }
     }
 
     return { data: opportunities || [], error: null }

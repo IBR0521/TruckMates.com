@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
+import { sanitizeError } from "@/lib/error-message"
 
 
 function safeDbError(error: unknown, fallback = "Database operation failed"): string {

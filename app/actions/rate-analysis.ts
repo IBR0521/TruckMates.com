@@ -7,10 +7,17 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { geocodeAddress } from "./integrations-google-maps"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export interface MarketRateSuggestion {
   average_rate: number
@@ -260,7 +267,7 @@ async function getInternalRateSuggestion(
       .limit(100)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     if (!historicalLoads || historicalLoads.length === 0) {

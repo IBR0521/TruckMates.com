@@ -1,10 +1,17 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /** Matches `public.reminders` in supabase/trucklogics_features_schema.sql */
 const REMINDERS_SELECT = `
@@ -43,7 +50,7 @@ export async function autoCreateMaintenanceReminders(): Promise<{
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: { created: data || 0 }, error: null }

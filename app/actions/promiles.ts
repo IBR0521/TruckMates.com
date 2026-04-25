@@ -21,6 +21,15 @@ import {
 import { EIA_US_DIESEL_DUOAREA } from "@/lib/promiles/padd-state-map"
 import { stripStaleEnvKeyWarnings } from "@/lib/promiles/strip-trip-env-warnings"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
+import { sanitizeError } from "@/lib/error-message"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export type TripPlanningEstimate = {
   computed_at: string
@@ -234,7 +243,7 @@ export async function saveTripPlanningEstimateOnLoad(loadId: string, estimate: T
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
   revalidatePath(`/dashboard/loads/${loadId}`)
   revalidatePath("/dashboard/loads")

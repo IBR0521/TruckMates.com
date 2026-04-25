@@ -1,9 +1,17 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Get on-time delivery analytics by customer
@@ -66,7 +74,7 @@ export async function getOnTimeDeliveryAnalytics(filters?: {
     const { data: loads, error } = await query
 
     if (error) {
-      return { error: error.message || "Failed to get on-time delivery analytics", data: null }
+      return { error: safeDbError(error) || "Failed to get on-time delivery analytics", data: null }
     }
 
     // Aggregate by customer

@@ -6,11 +6,19 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission } from "@/lib/server-permissions"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export interface CommunicationLog {
   id: string
@@ -175,7 +183,7 @@ export async function getCommunicationTimeline(filters: {
     const { data, error } = await query
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Format the response

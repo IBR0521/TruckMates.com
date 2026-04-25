@@ -2,11 +2,18 @@
 
 import * as Sentry from "@sentry/nextjs"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { fetchLatestUsDieselPrice } from "@/lib/promiles/eia-diesel"
 import { EIA_US_DIESEL_DUOAREA } from "@/lib/promiles/padd-state-map"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 const DEFAULT_FSC_BASE_PRICE = 1.2
 const DEFAULT_FSC_MPG = 6.5
@@ -47,7 +54,7 @@ export async function syncCurrentDieselPrice(): Promise<{
       },
       { onConflict: "source,series_id,effective_date" },
     )
-    if (error) return { data: null, error: error.message }
+    if (error) return { data: null, error: safeDbError(error) }
 
     return { data: { effective_date: effectiveDate, price_per_gallon: fetched.price }, error: null }
   } catch (error: unknown) {

@@ -1,7 +1,15 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export async function testSupabaseConnection() {
   try {
@@ -16,7 +24,7 @@ export async function testSupabaseConnection() {
     if (error) {
       return {
         success: false,
-        error: error.message,
+        error: safeDbError(error),
         details: "Database query failed. Check your Supabase configuration."
       }
     }

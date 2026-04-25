@@ -1,11 +1,18 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 import { revalidatePath } from "next/cache"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 // Helper to get company ID (uses cached auth)
 async function getCompanyId() {
@@ -346,7 +353,7 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
     // LOW FIX: Sort by period_end (pay period) instead of created_at for proper chronological display
     const { data: settlements, error } = await settlementsQuery.order("period_end", { ascending: false })
 
-    if (error) return { error: error.message, data: null }
+    if (error) return { error: safeDbError(error), data: null }
 
     // Get driver details
     const { data: drivers } = await supabase

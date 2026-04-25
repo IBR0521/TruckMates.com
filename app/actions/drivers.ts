@@ -11,16 +11,14 @@ import { checkViewPermission, checkCreatePermission, checkEditPermission, checkD
 import { mapLegacyRole } from "@/lib/roles"
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 import {
-
+  collapseDuplicateDriversByEmail,
+  purgeAllDriversKeepOneForCompany,
+} from "@/lib/drivers/collapse-duplicate-driver-rows"
 
 function safeDbError(error: unknown, fallback = "Database operation failed"): string {
   Sentry.captureException(error)
   return sanitizeError(error, { fallback })
 }
-
-  collapseDuplicateDriversByEmail,
-  purgeAllDriversKeepOneForCompany,
-} from "@/lib/drivers/collapse-duplicate-driver-rows"
 
 const DRIVER_LIST_SELECT =
   "id, name, email, phone, status, license_number, license_expiry, truck_id, created_at"

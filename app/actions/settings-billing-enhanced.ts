@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { monthlyLimitForPlan } from "@/lib/api-usage-plan-limits"
+import { sanitizeError } from "@/lib/error-message"
 
 
 function safeDbError(error: unknown, fallback = "Database operation failed"): string {

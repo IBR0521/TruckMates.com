@@ -12,6 +12,7 @@ import {
 import { mapLegacyRole } from "@/lib/roles"
 import { getDrivers } from "@/app/actions/drivers"
 import * as Sentry from "@sentry/nextjs"
+import { sanitizeError } from "@/lib/error-message"
 
 
 function safeDbError(error: unknown, fallback = "Database operation failed"): string {

@@ -2,6 +2,15 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { sanitizeError } from "@/lib/error-message"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Get the company type for the current user
@@ -21,7 +30,7 @@ export async function getCompanyType() {
     .single()
 
   if (error) {
-    return { data: null, error: error.message }
+    return { data: null, error: safeDbError(error) }
   }
 
   return { data: company?.company_type || null, error: null }

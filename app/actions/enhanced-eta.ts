@@ -6,11 +6,18 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getRouteDirections } from "./integrations-google-maps"
 import { decodePolyline } from "@/lib/polyline-utils"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export interface EnhancedETA {
   estimated_arrival: string
@@ -131,7 +138,7 @@ export async function calculateEnhancedETA(
     })
 
     if (error) {
-      return { error: error.message || "Failed to calculate enhanced ETA", data: null }
+      return { error: safeDbError(error) || "Failed to calculate enhanced ETA", data: null }
     }
 
     if (!eta || eta.length === 0) {
