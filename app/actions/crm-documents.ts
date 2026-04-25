@@ -6,13 +6,20 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 import { validateFileMagicBytes } from "@/lib/file-signature"
 import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export interface CRMDocument {
   id: string
@@ -223,7 +230,7 @@ export async function getCRMDocuments(filters?: {
         Sentry.captureMessage("[CRM Documents] Table crm_documents does not exist. Please run the SQL migration.", "warning")
         return { data: [], error: null }
       }
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Format the response
@@ -443,7 +450,7 @@ export async function markExpirationAlertSent(
       .eq("company_id", ctx.companyId)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: true, error: null }

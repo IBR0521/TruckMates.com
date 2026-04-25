@@ -1,9 +1,16 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * V3-003 FIX: Remove fake EIN generation - EINs are issued by the IRS, not generated randomly
@@ -90,7 +97,7 @@ export async function getEINNumbers(): Promise<{ data: any[] | null; error: stri
     .order("created_at", { ascending: false })
 
   if (error) {
-    return { error: error.message || "Failed to fetch EIN numbers", data: null }
+    return { error: safeDbError(error) || "Failed to fetch EIN numbers", data: null }
   }
 
   return { data: data || [], error: null }
@@ -142,7 +149,7 @@ export async function deleteEINNumber(einId: string): Promise<{ error: string | 
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message || "Failed to delete EIN number" }
+    return { error: safeDbError(error) || "Failed to delete EIN number" }
   }
 
   return { error: null }

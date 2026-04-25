@@ -1,11 +1,18 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
 import { mapLegacyRole } from "@/lib/roles"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /** `public.notifications` — supabase/notifications_table.sql */
 const NOTIFICATIONS_LIST_SELECT =
@@ -216,7 +223,7 @@ export async function markNotificationAsRead(notificationId: string, notificatio
         .eq("user_id", ctx.userId ?? "")
 
       if (error) {
-        return { error: error.message, data: null }
+        return { error: safeDbError(error), data: null }
       }
     } else if (notificationType === "alert") {
       const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
@@ -260,7 +267,7 @@ export async function markNotificationAsRead(notificationId: string, notificatio
         .eq("company_id", ctx.companyId)
 
       if (error) {
-        return { error: error.message, data: null }
+        return { error: safeDbError(error), data: null }
       }
     }
 

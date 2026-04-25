@@ -6,9 +6,16 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export interface MatchingTruck {
   truck_id: string
@@ -64,7 +71,7 @@ export async function findMatchingTrucksForLoad(
     })
 
     if (error) {
-      return { error: error.message || "Failed to find matching trucks", data: null }
+      return { error: safeDbError(error) || "Failed to find matching trucks", data: null }
     }
 
     return { data: matches || [], error: null }
@@ -95,7 +102,7 @@ export async function findMatchingLoadsForTruck(
     })
 
     if (error) {
-      return { error: error.message || "Failed to find matching loads", data: null }
+      return { error: safeDbError(error) || "Failed to find matching loads", data: null }
     }
 
     return { data: matches || [], error: null }

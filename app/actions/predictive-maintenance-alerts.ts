@@ -6,10 +6,17 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { sendSMSNotification } from "./sms"
 import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Check and send maintenance alerts for a truck
@@ -50,7 +57,7 @@ export async function checkAndSendMaintenanceAlerts(
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Get pending alerts that need SMS
@@ -177,7 +184,7 @@ export async function getMaintenanceAlertHistory(filters?: {
     const { data: alerts, error } = await query
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: alerts || [], error: null }

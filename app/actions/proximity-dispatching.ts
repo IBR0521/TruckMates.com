@@ -6,10 +6,17 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { geocodeAddress } from "./integrations-google-maps"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export interface NearbyDriver {
   driver_id: string
@@ -116,7 +123,7 @@ export async function findNearbyDriversForLoad(
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message || "Failed to find nearby drivers", data: null }
+      return { error: safeDbError(error) || "Failed to find nearby drivers", data: null }
     }
 
     return { data: drivers || [], error: null }
@@ -158,7 +165,7 @@ export async function findNearbyDriversByCoordinates(
     })
 
     if (error) {
-      return { error: error.message || "Failed to find nearby drivers", data: null }
+      return { error: safeDbError(error) || "Failed to find nearby drivers", data: null }
     }
 
     return { data: drivers || [], error: null }
