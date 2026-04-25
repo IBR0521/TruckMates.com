@@ -204,8 +204,8 @@ export async function getDriverRoadsideInspectionStats(driverId: string) {
     if (error) return { error: "Failed to load driver inspection stats", data: null }
 
     const totalInspections = (data || []).length
-    const oosCount = (data || []).filter((r) => Boolean(r.out_of_service)).length
-    const violationCount = (data || []).reduce((sum, r) => {
+    const oosCount = (data || []).filter((r: { out_of_service?: boolean | null }) => Boolean(r.out_of_service)).length
+    const violationCount = (data || []).reduce((sum: number, r: { violations?: unknown }) => {
       const count = Array.isArray(r.violations) ? r.violations.length : 0
       return sum + count
     }, 0)
