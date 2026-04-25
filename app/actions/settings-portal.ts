@@ -3,6 +3,14 @@
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export async function getPortalSettings() {
   const supabase = await createClient()
@@ -20,7 +28,7 @@ export async function getPortalSettings() {
     .maybeSingle()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   // Return defaults if no settings exist
@@ -134,7 +142,7 @@ export async function updatePortalSettings(settings: {
       .eq("company_id", result.company_id)
 
     if (error) {
-      return { error: error.message, success: false }
+      return { error: safeDbError(error), success: false }
     }
   } else {
     // Create new
@@ -146,7 +154,7 @@ export async function updatePortalSettings(settings: {
       })
 
     if (error) {
-      return { error: error.message, success: false }
+      return { error: safeDbError(error), success: false }
     }
   }
 

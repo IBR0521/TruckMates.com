@@ -1,13 +1,20 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { getELDMileageData } from "./eld"
 import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 import { STATE_FUEL_TAX_RATES, getFuelTaxRate } from "@/lib/fuel-tax-rates"
 import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 const IFTA_REPORT_SELECT =
   "id, company_id, quarter, year, period, total_miles, fuel_purchased, tax_owed, status, filed_date, state_breakdown, truck_ids, include_eld, created_at, updated_at"
@@ -28,7 +35,7 @@ export async function getIFTAReports() {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: reports, error: null }
@@ -58,7 +65,7 @@ export async function deleteIFTAReport(id: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message }
+    return { error: safeDbError(error) }
   }
 
   revalidatePath("/dashboard/ifta")
@@ -402,7 +409,7 @@ Options:
   const { data, error } = await supabase.from("ifta_reports").insert(insertPayload).select().single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/ifta")

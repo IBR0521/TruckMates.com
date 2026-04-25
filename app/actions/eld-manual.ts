@@ -5,6 +5,14 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
@@ -75,7 +83,7 @@ export async function createELDLog(formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/eld/logs")
@@ -127,7 +135,7 @@ export async function createELDLocation(formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/eld")
@@ -192,7 +200,7 @@ export async function createELDEvent(formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/eld/violations")

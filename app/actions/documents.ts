@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
@@ -9,6 +9,13 @@ import { mapLegacyRole } from "@/lib/roles"
 import { checkViewPermission, checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 import { validateFileMagicBytes } from "@/lib/file-signature"
 import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Documents:
@@ -82,7 +89,7 @@ export async function getDocuments(filters?: {
   const { data: documents, error, count } = await listQuery.range(offset, offset + limit - 1)
 
   if (error) {
-    return { error: error.message, data: null, count: 0 }
+    return { error: safeDbError(error), data: null, count: 0 }
   }
 
   return { data: documents || [], error: null, count: count || 0 }
@@ -170,7 +177,7 @@ export async function deleteDocument(id: string) {
     .delete()
     .eq("id", id)
     .eq("company_id", ctx.companyId)
-  if (error) return { error: error.message }
+  if (error) return { error: safeDbError(error) }
   
   revalidatePath("/dashboard/documents")
   return { error: null }
@@ -270,7 +277,7 @@ export async function deleteDocuments(ids: string[]) {
     .in("id", ids)
     .eq("company_id", ctx.companyId)
   
-  if (error) return { error: error.message }
+  if (error) return { error: safeDbError(error) }
   
   revalidatePath("/dashboard/documents")
   return { error: null, deletedCount: documents.length }

@@ -2,6 +2,14 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Map provider driver ID to internal driver ID
@@ -99,7 +107,7 @@ export async function createDriverMapping(data: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data: mapping, error: null }
@@ -127,7 +135,7 @@ export async function getDriverMappings(eldDeviceId: string) {
     .order("created_at", { ascending: false })
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data: mappings || [], error: null }
@@ -161,7 +169,7 @@ export async function deleteDriverMapping(mappingId: string) {
     .eq("id", mappingId)
 
   if (error) {
-    return { error: error.message, success: false }
+    return { error: safeDbError(error), success: false }
   }
 
   return { success: true, error: null }

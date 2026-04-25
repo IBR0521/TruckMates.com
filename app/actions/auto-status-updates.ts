@@ -6,8 +6,16 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Auto-update load status from geofence entry/exit
@@ -34,7 +42,7 @@ export async function autoUpdateLoadStatusFromGeofence(
       if (error.message.includes('No active load found') || error.message.includes('not found')) {
         return { data: { updated: false, reason: 'no_active_load' }, error: null }
       }
-      return { error: error.message || "Failed to update load status", data: null }
+      return { error: safeDbError(error) || "Failed to update load status", data: null }
     }
 
     return { data: { history_id: historyId, updated: historyId !== null }, error: null }
@@ -66,7 +74,7 @@ export async function getLoadStatusHistory(loadId: string) {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: history || [], error: null }
@@ -114,7 +122,7 @@ export async function updateGeofenceStatusMapping(
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data, error: null }

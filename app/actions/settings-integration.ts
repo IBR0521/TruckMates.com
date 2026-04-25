@@ -1,11 +1,18 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export async function getIntegrationSettings() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
@@ -48,7 +55,7 @@ export async function getIntegrationSettings() {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // CRITICAL FIX: Check platform environment variables first
@@ -184,7 +191,7 @@ export async function updateIntegrationSettings(settings: {
       .eq("company_id", ctx.companyId)
 
     if (error) {
-      return { error: error.message, success: false }
+      return { error: safeDbError(error), success: false }
     }
   } else {
     // Create new
@@ -196,7 +203,7 @@ export async function updateIntegrationSettings(settings: {
       })
 
     if (error) {
-      return { error: error.message, success: false }
+      return { error: safeDbError(error), success: false }
     }
   }
 

@@ -3,6 +3,14 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export type ExternalBrokerProvider = "dat" | "truckstop" | "123loadboard"
 
@@ -86,7 +94,7 @@ export async function getExternalBrokerIntegrations(): Promise<{
     )
     .eq("company_id", ctx.companyId)
 
-  if (error) return { data: null, error: error.message }
+  if (error) return { data: null, error: safeDbError(error) }
   return { data: (data || []) as IntegrationRow[], error: null }
 }
 
@@ -138,7 +146,7 @@ export async function upsertExternalBrokerIntegration(
     .select()
     .single()
 
-  if (error) return { data: null, error: error.message }
+  if (error) return { data: null, error: safeDbError(error) }
 
   revalidatePath("/dashboard/settings/loadboards")
   revalidatePath("/dashboard/settings/integration")
@@ -164,7 +172,7 @@ export async function testTruckstopConnection(opts?: { environment?: "prod" | "i
     .eq("provider", "truckstop")
     .maybeSingle()
 
-  if (error) return { ok: false, error: error.message }
+  if (error) return { ok: false, error: safeDbError(error) }
 
   if (!integration?.truckstop_api_key || !integration?.truckstop_api_secret || !integration?.truckstop_username || !integration?.truckstop_password) {
     return { ok: false, error: "Missing Truckstop credentials (client id/secret + username/password)" }

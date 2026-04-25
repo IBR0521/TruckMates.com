@@ -11,6 +11,14 @@ import {
 } from "@/lib/hos/compute-daily-remaining"
 import { mapLegacyRole } from "@/lib/roles"
 import { getDrivers } from "@/app/actions/drivers"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /** `public.eld_logs` — supabase/eld_schema.sql */
 const ELD_LOGS_SELECT =
@@ -80,7 +88,7 @@ export async function calculateRemainingHOS(driverId: string, date?: string) {
   const { data: logsAll, error } = await query
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   const todayLogs = (logsAll || []).filter((l: { log_date?: string }) => l.log_date === targetDate) as EldLogLike[]
@@ -336,7 +344,7 @@ export async function getRealtimeLocations() {
     .limit(1000) // V3-007: Limit to prevent OOM
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   // Get most recent location per device
@@ -728,7 +736,7 @@ export async function getViolationRepeatOffendersLast30Days() {
       .not("driver_id", "is", null)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     const counts = new Map<string, number>()
