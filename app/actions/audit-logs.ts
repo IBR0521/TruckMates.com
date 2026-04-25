@@ -144,7 +144,7 @@ export async function getAuditLogFilterOptions(): Promise<{
         const label = isNonEmptyString(labelCandidate) ? labelCandidate : id
         return { id, label }
       })
-      .filter((u) => isNonEmptyString(u.id))
+      .filter((u: { id: string; label: string }) => isNonEmptyString(u.id))
 
     return { data: { actions, resourceTypes, users: userRows }, error: null }
   } catch (error: unknown) {
