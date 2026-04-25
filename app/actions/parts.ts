@@ -1,10 +1,17 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /** Matches `parts` in supabase/parts_inventory_schema.sql */
 const PARTS_SELECT = `
@@ -53,7 +60,7 @@ export async function getParts(filters?: {
     const { data, error } = await query
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data, error: null }
@@ -81,7 +88,7 @@ export async function getPart(id: string) {
     .maybeSingle()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
     if (!data) {
@@ -154,7 +161,7 @@ export async function createPart(formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/maintenance/parts")
@@ -246,7 +253,7 @@ export async function updatePart(
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/maintenance/parts")
@@ -268,7 +275,7 @@ export async function deletePart(id: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/maintenance/parts")
@@ -399,7 +406,7 @@ export async function createPartOrder(formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/maintenance/parts")
@@ -469,7 +476,7 @@ export async function updatePartOrderStatus(
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/maintenance/parts")
@@ -493,7 +500,7 @@ export async function getPartsNeedingReorder() {
     .limit(200)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data, error: null }

@@ -1,13 +1,20 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import * as Sentry from "@sentry/nextjs"
 import { generateBOLPDFFile } from "./bol-pdf"
 import { getResendClient } from "./invoice-email"
 import { escapeHtml } from "@/lib/html-escape"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 // Get all BOLs
 export async function getBOLs(filters?: {
@@ -54,7 +61,7 @@ export async function getBOLs(filters?: {
     const { data, error } = await query
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data, error: null }
@@ -89,7 +96,7 @@ export async function getBOL(id: string) {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     if (!data) {
@@ -352,7 +359,7 @@ export async function createBOL(formData: {
     .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/bols")
@@ -464,7 +471,7 @@ export async function updateBOLSignature(
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Auto-store PDF if BOL is completed (has consignee signature)
@@ -543,7 +550,7 @@ export async function updateBOLPOD(
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Auto-store PDF if BOL is completed (has consignee signature)
@@ -623,7 +630,7 @@ export async function getBOLTemplates() {
     .limit(100)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data, error: null }
@@ -676,7 +683,7 @@ export async function createBOLTemplate(formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/bols/templates")
@@ -703,7 +710,7 @@ export async function updateBOLStatus(bolId: string, status: "draft" | "sent" | 
       .select("id, status")
       .single()
 
-    if (error) return { error: error.message, data: null }
+    if (error) return { error: safeDbError(error), data: null }
     revalidatePath("/dashboard/bols")
     revalidatePath(`/dashboard/bols/${bolId}`)
     return { data, error: null }
@@ -842,7 +849,7 @@ export async function updateBOLTemplate(id: string, formData: { name: string; de
       .eq("company_id", ctx.companyId)
       .select()
       .single()
-    if (error) return { error: error.message, data: null }
+    if (error) return { error: safeDbError(error), data: null }
     revalidatePath("/dashboard/bols/templates")
     return { data, error: null }
   } catch (error: unknown) {
@@ -860,7 +867,7 @@ export async function deleteBOLTemplate(id: string) {
     }
 
     const { error } = await supabase.from("bol_templates").delete().eq("id", id).eq("company_id", ctx.companyId)
-    if (error) return { error: error.message, data: null }
+    if (error) return { error: safeDbError(error), data: null }
     revalidatePath("/dashboard/bols/templates")
     return { data: { deleted: true }, error: null }
   } catch (error: unknown) {

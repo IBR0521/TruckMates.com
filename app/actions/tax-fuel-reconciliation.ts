@@ -4,9 +4,17 @@ import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { sanitizeError } from "@/lib/error-message"
 
 // EXT-009 FIX: Import fuel tax rates from shared source to prevent inconsistencies
 import { STATE_FUEL_TAX_RATES, getFuelTaxRate } from "@/lib/fuel-tax-rates"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 const FUEL_PURCHASE_SELECT =
   "id, company_id, truck_id, driver_id, purchase_date, state, city, station_name, gallons, price_per_gallon, total_cost, odometer_reading, receipt_number, receipt_url, notes, created_at, updated_at"
@@ -57,7 +65,7 @@ export async function getFuelPurchases(filters?: {
   const { data, error, count } = await query
 
   if (error) {
-    return { error: error.message, data: null, count: 0 }
+    return { error: safeDbError(error), data: null, count: 0 }
   }
 
   return { data: data || [], error: null, count: count || 0 }
@@ -114,7 +122,7 @@ export async function createFuelPurchase(formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/accounting/tax-fuel")
@@ -191,7 +199,7 @@ export async function updateFuelPurchase(
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/accounting/tax-fuel")
@@ -214,7 +222,7 @@ export async function deleteFuelPurchase(id: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/accounting/tax-fuel")
@@ -254,7 +262,7 @@ export async function getIFTAReports(filters?: {
   const { data, error } = await query
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data: data || [], error: null }
@@ -526,7 +534,7 @@ export async function updateIFTAReportStatus(
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/accounting/tax-fuel")
@@ -549,7 +557,7 @@ export async function deleteIFTAReport(id: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/accounting/tax-fuel")

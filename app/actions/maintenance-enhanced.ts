@@ -14,6 +14,14 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { validateFileMagicBytes } from "@/lib/file-signature"
+import { sanitizeError } from "@/lib/error-message"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 function unknownErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
@@ -60,7 +68,7 @@ export async function analyzeFaultCodeAndCreateMaintenance(eventId: string) {
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/maintenance")
@@ -98,7 +106,7 @@ export async function batchAnalyzePendingFaultCodes(limit: number = 100) {
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/maintenance")
@@ -254,7 +262,7 @@ export async function getMaintenanceDocuments(maintenanceId: string) {
       .order("uploaded_at", { ascending: false })
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: documents || [], error: null }
@@ -388,7 +396,7 @@ export async function createWorkOrderFromMaintenance(maintenanceId: string) {
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/maintenance")
@@ -451,7 +459,7 @@ export async function getWorkOrder(workOrderId: string) {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
     if (!workOrder) {
       return { error: "Work order not found", data: null }
@@ -522,7 +530,7 @@ export async function getWorkOrders(filters?: {
     const { data: workOrders, error } = await query
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: workOrders || [], error: null }
@@ -583,7 +591,7 @@ export async function updateWorkOrder(
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/maintenance")
@@ -632,7 +640,7 @@ export async function checkAndReserveParts(workOrderId: string) {
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/maintenance")
@@ -694,7 +702,7 @@ export async function completeWorkOrder(
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/maintenance")
@@ -727,7 +735,7 @@ export async function getFaultCodeRules() {
       .limit(200)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: rules || [], error: null }
@@ -791,7 +799,7 @@ export async function upsertFaultCodeRule(rule: {
         .single()
 
       if (error) {
-        return { error: error.message, data: null }
+        return { error: safeDbError(error), data: null }
       }
 
       return { data: updatedRule, error: null }
@@ -804,7 +812,7 @@ export async function upsertFaultCodeRule(rule: {
         .single()
 
       if (error) {
-        return { error: error.message, data: null }
+        return { error: safeDbError(error), data: null }
       }
 
       return { data: newRule, error: null }
@@ -840,7 +848,7 @@ export async function deleteFaultCodeRule(ruleId: string) {
       .eq("company_id", ctx.companyId)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/maintenance/fault-code-rules")
@@ -868,7 +876,7 @@ export async function checkLowStockForMaintenanceParts() {
     })
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: data || [], error: null }
@@ -907,7 +915,7 @@ export async function autoCreatePartOrdersForLowStock(reorderMultiplier: number 
     })
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/maintenance")

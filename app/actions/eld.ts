@@ -1,13 +1,20 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { ensureDriverIdForUser } from "@/lib/eld/ensure-driver"
 import { resolveTruckIdForDriver } from "@/lib/eld/resolve-driver-truck"
 import { mapLegacyRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /** Drivers: same provisioning as dashboard/mobile (`ensureDriverIdForUser`). Others: DB lookup only. */
 async function resolveDriverIdForELD(
@@ -91,7 +98,7 @@ export async function getELDDevices() {
     const { data: devices, error } = await query
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: devices, error: null }
@@ -129,7 +136,7 @@ export async function getELDDevice(id: string) {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     if (!device) {
@@ -218,7 +225,7 @@ export async function createELDDevice(formData: {
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/eld")
@@ -290,7 +297,7 @@ export async function updateELDDevice(
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/eld")
@@ -331,7 +338,7 @@ export async function deleteELDDevice(id: string) {
       .eq("company_id", ctx.companyId)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/eld")
@@ -428,7 +435,7 @@ export async function getELDLogs(filters?: {
   const { data: logs, error, count } = await query.range(offset, offset + limit - 1)
 
   if (error) {
-    return { error: error.message, data: null, count: 0 }
+    return { error: safeDbError(error), data: null, count: 0 }
   }
 
   return { data: logs || [], error: null, count: count || 0 }
@@ -528,7 +535,7 @@ export async function getELDEvents(filters?: {
   const { data: events, error, count } = await query.range(offset, offset + limit - 1)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data: events || [], error: null, count: count || 0 }
@@ -581,7 +588,7 @@ export async function getELDMileageData(filters: {
     .limit(10000) // V3-007: Limit to 10k records to prevent OOM
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   // Aggregate mileage by truck
@@ -623,7 +630,7 @@ export async function resolveELDEvent(eventId: string) {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/eld")
