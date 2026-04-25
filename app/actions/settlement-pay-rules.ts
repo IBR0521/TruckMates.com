@@ -1,10 +1,17 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Settlement Pay Rules Engine
@@ -140,7 +147,7 @@ export async function upsertDriverPayRule(rule: DriverPayRule) {
 
     // If RPC succeeded
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/accounting/settlements")
@@ -171,7 +178,7 @@ export async function getActivePayRule(driverId: string, date?: string) {
     })
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: data && data.length > 0 ? data[0] : null, error: null }
@@ -201,7 +208,7 @@ export async function getDriverPayRules(driverId: string) {
       .limit(100) // V3-007 FIX: Add LIMIT to prevent unbounded queries
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: data || [], error: null }
@@ -422,7 +429,7 @@ export async function deletePayRule(ruleId: string) {
       .eq("company_id", ctx.companyId)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/accounting/settlements")

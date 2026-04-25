@@ -3,6 +3,14 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { mapLegacyRole } from "@/lib/roles"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Fake ELD Device Simulator
@@ -94,7 +102,7 @@ export async function createFakeELDDevice(config: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data: device, error: null }
@@ -173,7 +181,7 @@ export async function simulateLocationUpdate(config: SimulatorConfig) {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data, error: null }
@@ -227,7 +235,7 @@ export async function simulateHOSLog(config: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data, error: null }
@@ -293,7 +301,7 @@ export async function simulateELDEvent(config: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data, error: null }

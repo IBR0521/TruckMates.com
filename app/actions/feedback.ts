@@ -1,13 +1,20 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { sanitizeString } from "@/lib/validation"
 import { escapeHtml } from "@/lib/html-escape"
 import * as Sentry from "@sentry/nextjs"
 import { getResendClientForCompany } from "@/lib/resend-client"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 async function getResendClient() {
   const ctx = await getCachedAuthContext()
@@ -165,7 +172,7 @@ export async function getFeedback(filters?: {
     const { data: feedback, error, count } = await query
 
     if (error) {
-      return { error: error.message, data: null, count: 0 }
+      return { error: safeDbError(error), data: null, count: 0 }
     }
 
     return { data: feedback || [], error: null, count: count || 0 }
@@ -191,7 +198,7 @@ export async function getFeedbackItem(id: string) {
     .maybeSingle()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
   if (!feedbackItem) {
     return { error: "Feedback not found or access denied", data: null }
@@ -289,7 +296,7 @@ export async function createFeedback(formData: {
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Send email notification (non-blocking)
@@ -384,7 +391,7 @@ export async function updateFeedback(id: string, formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/feedback")

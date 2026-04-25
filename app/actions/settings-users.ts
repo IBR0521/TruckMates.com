@@ -1,13 +1,20 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
@@ -59,7 +66,7 @@ export async function getCompanyUsers() {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Map to include status (active by default)
@@ -270,7 +277,7 @@ export async function removeUser(userId: string) {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, success: false }
+      return { error: safeDbError(error), success: false }
     }
     if (!deleted) {
       return { error: "Could not remove user. No matching row was deleted.", success: false }
@@ -810,7 +817,7 @@ export async function getPendingInvitations() {
     .order("created_at", { ascending: false })
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data: invitations || [], error: null }
@@ -846,7 +853,7 @@ export async function cancelInvitation(invitationId: string) {
     .select("id")
 
   if (error) {
-    return { error: error.message, success: false }
+    return { error: safeDbError(error), success: false }
   }
 
   if (!deletedRows || deletedRows.length === 0) {

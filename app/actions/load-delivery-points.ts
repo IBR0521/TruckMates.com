@@ -1,9 +1,17 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
+import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 // Get all delivery points for a load
 export async function getLoadDeliveryPoints(loadId: string) {
@@ -27,7 +35,7 @@ export async function getLoadDeliveryPoints(loadId: string) {
       if (error.code === "42P01" || error.message.includes("does not exist")) {
         return { data: [], error: null } // Table doesn't exist yet
       }
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: deliveryPoints || [], error: null }
@@ -135,7 +143,7 @@ export async function createLoadDeliveryPoint(loadId: string, deliveryPointData:
       if (error.code === "23505") {
         return { error: "Delivery number already exists for this load", data: null }
       }
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Update load's total_delivery_points
@@ -251,7 +259,7 @@ export async function updateLoadDeliveryPoint(deliveryPointId: string, deliveryP
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath(`/dashboard/loads/${deliveryPoint.load_id}`)
@@ -291,7 +299,7 @@ export async function deleteLoadDeliveryPoint(deliveryPointId: string) {
       .eq("company_id", ctx.companyId)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Update load's total_delivery_points
