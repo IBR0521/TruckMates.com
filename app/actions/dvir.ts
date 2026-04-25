@@ -1,7 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -9,6 +9,13 @@ import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-ses
 import { mapLegacyRole } from "@/lib/roles"
 import { validateRequiredString, validateNonNegativeNumber, validateDate, sanitizeString } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * DVIR visibility & mutations:
@@ -109,7 +116,7 @@ export async function getDVIRs(filters?: {
     const { data: dvirs, error, count } = await query
 
     if (error) {
-      return { error: error.message, data: null, count: 0 }
+      return { error: safeDbError(error), data: null, count: 0 }
     }
 
     return { data: dvirs || [], error: null, count: count || 0 }
@@ -149,7 +156,7 @@ export async function getDVIR(id: string) {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     if (!dvir) {
@@ -321,7 +328,7 @@ export async function createDVIR(formData: {
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/dvir")
@@ -486,7 +493,7 @@ export async function updateDVIR(id: string, formData: {
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/dvir")
@@ -561,7 +568,7 @@ export async function deleteDVIR(id: string) {
       .eq("company_id", ctx.companyId)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/dvir")

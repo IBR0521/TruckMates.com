@@ -1,11 +1,18 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkEditPermission } from "@/lib/server-permissions"
 import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Get unassigned loads (loads without driver/truck, plus pending/draft backlog)
@@ -50,7 +57,7 @@ export async function getUnassignedLoads() {
       .limit(500) // Reasonable limit for dispatch board
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Additional filter for pending/draft status loads that might already have assignments
@@ -103,7 +110,7 @@ export async function getUnassignedRoutes() {
       .limit(500) // Reasonable limit for dispatch board
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Additional filter for pending status routes that might have assignments
@@ -220,7 +227,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   // Send SMS notification to driver if assigned (non-blocking)
@@ -378,7 +385,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   // Send SMS notification to driver if assigned (non-blocking)

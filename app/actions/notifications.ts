@@ -1,7 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -9,6 +9,13 @@ import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-ses
 import { createAdminClient } from "@/lib/supabase/admin"
 import { mapLegacyRole } from "@/lib/roles"
 import { getResendClientForCompany } from "@/lib/resend-client"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 type NotificationType =
   | "route_update"
@@ -45,7 +52,7 @@ export async function getNotificationPreferences() {
       .maybeSingle()
 
     if (error && error.code !== "PGRST116") { // PGRST116 = no rows returned
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // If no preferences exist, return defaults
@@ -98,7 +105,7 @@ export async function updateNotificationPreferences(preferences: {
     })
 
   if (error) {
-    return { error: error.message, success: false }
+    return { error: safeDbError(error), success: false }
   }
 
   revalidatePath("/dashboard/settings")
@@ -757,7 +764,7 @@ export async function deleteNotification(notificationId: string, notificationTyp
         .eq("user_id", ctx.userId)
 
       if (error) {
-        return { error: error.message, data: null }
+        return { error: safeDbError(error), data: null }
       }
     } else if (notificationType === "alert") {
       const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
@@ -798,7 +805,7 @@ export async function deleteNotification(notificationId: string, notificationTyp
         .eq("company_id", ctx.companyId)
 
       if (error) {
-        return { error: error.message, data: null }
+        return { error: safeDbError(error), data: null }
       }
     } else {
       return { error: "Invalid notification type", data: null }

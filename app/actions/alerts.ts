@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
@@ -10,6 +10,13 @@ import { sendNotification } from "./notifications"
 import { handleDbError } from "@/lib/db-helpers"
 import { mapLegacyRole } from "@/lib/roles"
 import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /**
  * Get alert rules
@@ -104,7 +111,7 @@ export async function createAlertRule(formData: {
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/settings/alerts")
@@ -197,7 +204,7 @@ export async function updateAlertRule(
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/settings/alerts")
@@ -252,7 +259,7 @@ export async function deleteAlertRule(ruleId: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/settings/alerts")
@@ -908,7 +915,7 @@ export async function acknowledgeAlert(id: string) {
   const { data, error } = await updateQuery.select().single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/alerts")

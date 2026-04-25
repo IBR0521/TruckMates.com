@@ -1,12 +1,19 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { sanitizeString, validateRequiredString, validateDate, validatePositiveNumber } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 export async function getMaintenance(filters?: {
   status?: string
@@ -41,7 +48,7 @@ export async function getMaintenance(filters?: {
     const { data: maintenance, error, count } = await query
 
     if (error) {
-      return { error: error.message, data: null, count: 0 }
+      return { error: safeDbError(error), data: null, count: 0 }
     }
 
     return { data: maintenance || [], error: null, count: count || 0 }
@@ -164,7 +171,7 @@ export async function createMaintenance(formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
     revalidatePath("/dashboard/maintenance")
@@ -222,7 +229,7 @@ export async function getMaintenanceById(id: string) {
     .maybeSingle()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
   if (!maintenance) {
     return { error: "Maintenance record not found", data: null }
@@ -277,7 +284,7 @@ export async function updateMaintenanceStatus(
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/maintenance")
@@ -306,7 +313,7 @@ export async function deleteMaintenance(id: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message }
+    return { error: safeDbError(error) }
   }
 
   revalidatePath("/dashboard/maintenance")
