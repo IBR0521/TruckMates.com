@@ -5,6 +5,7 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
+import { revalidatePath } from "next/cache"
 
 // Helper to get company ID (uses cached auth)
 async function getCompanyId() {
@@ -555,6 +556,257 @@ export async function getMonthlyRevenueTrend(months = 6) {
     Sentry.captureException(error)
     const message = error instanceof Error ? errorMessage(error) : "Failed to fetch revenue trend"
     return { error: message, data: [] }
+  }
+}
+
+type ARAgingBucketKey = "0-30" | "31-60" | "61-90" | "90+"
+
+type ARAgingInvoiceRow = {
+  id: string
+  invoice_number: string
+  customer_name: string
+  due_date: string
+  amount: number
+  paid_amount: number
+  outstanding_amount: number
+  days_outstanding: number
+  bucket: ARAgingBucketKey
+}
+
+type ARAgingBucket = {
+  key: ARAgingBucketKey
+  label: string
+  total_outstanding: number
+  invoice_count: number
+  customers: Array<{
+    customer_name: string
+    total_outstanding: number
+    invoice_count: number
+    invoices: ARAgingInvoiceRow[]
+  }>
+  invoices: ARAgingInvoiceRow[]
+}
+
+function getAgingBucket(daysOutstanding: number): ARAgingBucketKey {
+  if (daysOutstanding <= 30) return "0-30"
+  if (daysOutstanding <= 60) return "31-60"
+  if (daysOutstanding <= 90) return "61-90"
+  return "90+"
+}
+
+function getBucketFilterRange(bucket: ARAgingBucketKey) {
+  switch (bucket) {
+    case "0-30":
+      return { min: 0, max: 30 }
+    case "31-60":
+      return { min: 31, max: 60 }
+    case "61-90":
+      return { min: 61, max: 90 }
+    case "90+":
+      return { min: 91, max: Number.MAX_SAFE_INTEGER }
+  }
+}
+
+export async function getARAgingReport() {
+  try {
+    const permissionCheck = await checkViewPermission("reports")
+    if (!permissionCheck.allowed) {
+      return { error: permissionCheck.error || "You don't have permission to view reports", data: null }
+    }
+
+    const companyId = await getCompanyId()
+    if (!companyId) return { error: "Not authenticated", data: null }
+
+    const supabase = await createClient()
+    const { data: invoices, error } = await supabase
+      .from("invoices")
+      .select("id, invoice_number, customer_name, due_date, amount, paid_amount, status")
+      .eq("company_id", companyId)
+      .not("status", "eq", "paid")
+      .not("status", "eq", "cancelled")
+      .order("due_date", { ascending: true })
+      .limit(10000)
+
+    if (error) {
+      return { error: "Failed to load AR aging data", data: null }
+    }
+
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
+
+    const bucketTemplate: Record<ARAgingBucketKey, ARAgingBucket> = {
+      "0-30": { key: "0-30", label: "0-30 days", total_outstanding: 0, invoice_count: 0, customers: [], invoices: [] },
+      "31-60": { key: "31-60", label: "31-60 days", total_outstanding: 0, invoice_count: 0, customers: [], invoices: [] },
+      "61-90": { key: "61-90", label: "61-90 days", total_outstanding: 0, invoice_count: 0, customers: [], invoices: [] },
+      "90+": { key: "90+", label: "90+ days", total_outstanding: 0, invoice_count: 0, customers: [], invoices: [] },
+    }
+
+    for (const inv of invoices || []) {
+      const due = inv.due_date ? new Date(inv.due_date) : null
+      if (!due || Number.isNaN(due.getTime())) continue
+
+      const amount = Number(inv.amount || 0)
+      const paid = Number((inv as { paid_amount?: number | string | null }).paid_amount || 0)
+      const outstanding = Math.max(amount - paid, 0)
+      if (outstanding <= 0) continue
+
+      due.setHours(0, 0, 0, 0)
+      const msDiff = now.getTime() - due.getTime()
+      const daysOutstanding = msDiff > 0 ? Math.floor(msDiff / (1000 * 60 * 60 * 24)) : 0
+      const bucketKey = getAgingBucket(daysOutstanding)
+
+      bucketTemplate[bucketKey].invoices.push({
+        id: inv.id,
+        invoice_number: inv.invoice_number || inv.id,
+        customer_name: inv.customer_name || "Unknown Customer",
+        due_date: inv.due_date,
+        amount,
+        paid_amount: paid,
+        outstanding_amount: outstanding,
+        days_outstanding: daysOutstanding,
+        bucket: bucketKey,
+      })
+    }
+
+    const buckets: ARAgingBucket[] = (["0-30", "31-60", "61-90", "90+"] as const).map((key) => {
+      const bucket = bucketTemplate[key]
+      const customerMap = new Map<string, ARAgingBucket["customers"][number]>()
+
+      for (const invoice of bucket.invoices) {
+        const existing = customerMap.get(invoice.customer_name)
+        if (existing) {
+          existing.total_outstanding += invoice.outstanding_amount
+          existing.invoice_count += 1
+          existing.invoices.push(invoice)
+        } else {
+          customerMap.set(invoice.customer_name, {
+            customer_name: invoice.customer_name,
+            total_outstanding: invoice.outstanding_amount,
+            invoice_count: 1,
+            invoices: [invoice],
+          })
+        }
+      }
+
+      const customers = Array.from(customerMap.values()).sort((a, b) => b.total_outstanding - a.total_outstanding)
+      const totalOutstanding = bucket.invoices.reduce((sum, inv) => sum + inv.outstanding_amount, 0)
+
+      return {
+        ...bucket,
+        customers,
+        total_outstanding: totalOutstanding,
+        invoice_count: bucket.invoices.length,
+      }
+    })
+
+    const totals = {
+      total_outstanding: buckets.reduce((sum, b) => sum + b.total_outstanding, 0),
+      total_invoices: buckets.reduce((sum, b) => sum + b.invoice_count, 0),
+    }
+
+    return { data: { buckets, totals }, error: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: errorMessage(error, "Failed to build AR aging report"), data: null }
+  }
+}
+
+export async function sendARAgingBucketReminders(bucket: ARAgingBucketKey) {
+  try {
+    const permissionCheck = await checkViewPermission("reports")
+    if (!permissionCheck.allowed) {
+      return { error: permissionCheck.error || "You don't have permission to send reminders", data: null }
+    }
+
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
+
+    const supabase = await createClient()
+    const { data: invoices, error } = await supabase
+      .from("invoices")
+      .select("id, invoice_number, customer_name, due_date, amount, paid_amount, status")
+      .eq("company_id", ctx.companyId)
+      .not("status", "eq", "paid")
+      .not("status", "eq", "cancelled")
+      .limit(10000)
+
+    if (error) {
+      return { error: "Failed to load invoices for reminders", data: null }
+    }
+
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
+    const { min, max } = getBucketFilterRange(bucket)
+
+    const invoiceRows = (invoices || []).flatMap((inv) => {
+      const due = inv.due_date ? new Date(inv.due_date) : null
+      if (!due || Number.isNaN(due.getTime())) return []
+
+      due.setHours(0, 0, 0, 0)
+      const daysOutstanding = Math.max(Math.floor((now.getTime() - due.getTime()) / (1000 * 60 * 60 * 24)), 0)
+      if (daysOutstanding < min || daysOutstanding > max) return []
+
+      const amount = Number(inv.amount || 0)
+      const paid = Number((inv as { paid_amount?: number | string | null }).paid_amount || 0)
+      const outstanding = Math.max(amount - paid, 0)
+      if (outstanding <= 0) return []
+
+      return [
+        {
+          id: inv.id,
+          invoice_number: inv.invoice_number || inv.id,
+          customer_name: inv.customer_name || "Unknown Customer",
+          due_date: inv.due_date,
+          days_outstanding: daysOutstanding,
+        },
+      ]
+    })
+
+    if (invoiceRows.length === 0) {
+      return { data: { created: 0 }, error: null }
+    }
+
+    const invoiceIds = invoiceRows.map((r) => r.id)
+    const { data: existingReminders } = await supabase
+      .from("reminders")
+      .select("invoice_id")
+      .eq("company_id", ctx.companyId)
+      .eq("status", "pending")
+      .eq("reminder_type", "invoice_due")
+      .in("invoice_id", invoiceIds)
+
+    const existingInvoiceIds = new Set((existingReminders || []).map((r) => r.invoice_id).filter(Boolean))
+    const today = now.toISOString().slice(0, 10)
+
+    const inserts = invoiceRows
+      .filter((inv) => !existingInvoiceIds.has(inv.id))
+      .map((inv) => ({
+        company_id: ctx.companyId,
+        title: `AR follow-up: Invoice ${inv.invoice_number} (${inv.days_outstanding} days outstanding)`,
+        description: `Customer ${inv.customer_name} has an invoice outstanding for ${inv.days_outstanding} days. Send payment follow-up.`,
+        reminder_type: "invoice_due",
+        due_date: today,
+        reminder_date: today,
+        invoice_id: inv.id,
+        send_email: true,
+        send_sms: false,
+        status: "pending",
+      }))
+
+    if (inserts.length > 0) {
+      const { error: insertError } = await supabase.from("reminders").insert(inserts)
+      if (insertError) {
+        return { error: "Failed to create reminders", data: null }
+      }
+    }
+
+    revalidatePath("/dashboard/reminders")
+    return { data: { created: inserts.length }, error: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: errorMessage(error, "Failed to send AR reminders"), data: null }
   }
 }
 

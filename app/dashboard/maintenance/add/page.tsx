@@ -27,16 +27,20 @@ import { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { getTrucks } from "@/app/actions/trucks"
+import { getTrailers } from "@/app/actions/trailers"
 import { getVendors } from "@/app/actions/vendors"
 import { createMaintenance } from "@/app/actions/maintenance"
 
 export default function AddMaintenancePage() {
   const router = useRouter()
   const [trucks, setTrucks] = useState<any[]>([])
+  const [trailers, setTrailers] = useState<any[]>([])
   const [vendors, setVendors] = useState<any[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
+    asset_type: "truck",
     truck_id: "",
+    trailer_id: "",
     service_type: "Oil Change",
     scheduled_date: "",
     current_mileage: "",
@@ -48,11 +52,13 @@ export default function AddMaintenancePage() {
 
   useEffect(() => {
     async function loadData() {
-      const [trucksResult, vendorsResult] = await Promise.all([
+      const [trucksResult, trailersResult, vendorsResult] = await Promise.all([
         getTrucks(),
+        getTrailers(),
         getVendors(),
       ])
       if (trucksResult.data) setTrucks(trucksResult.data)
+      if (trailersResult.data) setTrailers(trailersResult.data)
       if (vendorsResult.data) setVendors(vendorsResult.data)
     }
     loadData()
@@ -62,14 +68,16 @@ export default function AddMaintenancePage() {
     e.preventDefault()
     setIsSubmitting(true)
     
-    if (!formData.truck_id || !formData.service_type || !formData.scheduled_date) {
+    const selectedAssetId = formData.asset_type === "trailer" ? formData.trailer_id : formData.truck_id
+    if (!selectedAssetId || !formData.service_type || !formData.scheduled_date) {
       toast.error("Please fill in all required fields")
       setIsSubmitting(false)
       return
     }
 
     const result = await createMaintenance({
-      truck_id: formData.truck_id,
+      truck_id: formData.asset_type === "truck" ? formData.truck_id : undefined,
+      trailer_id: formData.asset_type === "trailer" ? formData.trailer_id : undefined,
       service_type: formData.service_type,
       scheduled_date: formData.scheduled_date,
       current_mileage: formData.current_mileage ? Number(formData.current_mileage) : undefined,
@@ -110,21 +118,48 @@ export default function AddMaintenancePage() {
           <FormSection title="Service Details" icon={<Wrench className="w-5 h-5" />}>
             <FormGrid cols={2}>
               <div>
-                <Label htmlFor="truck_id">Truck *</Label>
+                <Label htmlFor="asset_type">Asset Type *</Label>
                 <Select
-                  value={formData.truck_id}
-                  onValueChange={(value) => setFormData({ ...formData, truck_id: value })}
+                  value={formData.asset_type}
+                  onValueChange={(value) => setFormData({ ...formData, asset_type: value, truck_id: "", trailer_id: "" })}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="truck">Truck</SelectItem>
+                    <SelectItem value="trailer">Trailer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="asset_id">{formData.asset_type === "trailer" ? "Trailer" : "Truck"} *</Label>
+                <Select
+                  value={formData.asset_type === "trailer" ? formData.trailer_id : formData.truck_id}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      truck_id: formData.asset_type === "truck" ? value : "",
+                      trailer_id: formData.asset_type === "trailer" ? value : "",
+                    })
+                  }
                   required
                 >
                   <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Select truck" />
+                    <SelectValue placeholder={`Select ${formData.asset_type}`} />
                   </SelectTrigger>
                   <SelectContent>
-                    {trucks.map((truck) => (
-                      <SelectItem key={truck.id} value={truck.id}>
-                        {truck.truck_number} {truck.make && truck.model ? `(${truck.make} ${truck.model})` : ""}
-                      </SelectItem>
-                    ))}
+                    {formData.asset_type === "truck"
+                      ? trucks.map((truck) => (
+                          <SelectItem key={truck.id} value={truck.id}>
+                            {truck.truck_number} {truck.make && truck.model ? `(${truck.make} ${truck.model})` : ""}
+                          </SelectItem>
+                        ))
+                      : trailers.map((trailer) => (
+                          <SelectItem key={trailer.id} value={trailer.id}>
+                            {trailer.trailer_number} {trailer.trailer_type ? `(${trailer.trailer_type})` : ""}
+                          </SelectItem>
+                        ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -139,12 +174,27 @@ export default function AddMaintenancePage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Oil Change">Oil Change</SelectItem>
-                    <SelectItem value="Tire Replacement">Tire Replacement</SelectItem>
-                    <SelectItem value="Brake Inspection">Brake Inspection</SelectItem>
-                    <SelectItem value="Engine Service">Engine Service</SelectItem>
-                    <SelectItem value="Transmission Service">Transmission Service</SelectItem>
-                    <SelectItem value="Annual Inspection">Annual Inspection</SelectItem>
+                    {formData.asset_type === "truck" ? (
+                      <>
+                        <SelectItem value="Oil Change">Oil Change</SelectItem>
+                        <SelectItem value="Tire Replacement">Tire Replacement</SelectItem>
+                        <SelectItem value="Brake Inspection">Brake Inspection</SelectItem>
+                        <SelectItem value="Engine Service">Engine Service</SelectItem>
+                        <SelectItem value="Transmission Service">Transmission Service</SelectItem>
+                        <SelectItem value="Annual Inspection">Annual Inspection</SelectItem>
+                      </>
+                    ) : (
+                      <>
+                        <SelectItem value="DOT Inspection">DOT Inspection</SelectItem>
+                        <SelectItem value="Brake Adjustment">Brake Adjustment</SelectItem>
+                        <SelectItem value="Tire Rotation">Tire Rotation</SelectItem>
+                        <SelectItem value="Landing Gear Lubrication">Landing Gear Lubrication</SelectItem>
+                        <SelectItem value="Kingpin Inspection">Kingpin Inspection</SelectItem>
+                        <SelectItem value="Lighting Inspection">Lighting Inspection</SelectItem>
+                        <SelectItem value="Roof Door Seal Check">Roof/Door Seal Check</SelectItem>
+                        <SelectItem value="Reefer Unit Service">Reefer Unit Service</SelectItem>
+                      </>
+                    )}
                     <SelectItem value="Other">Other</SelectItem>
                   </SelectContent>
                 </Select>
@@ -153,7 +203,9 @@ export default function AddMaintenancePage() {
 
             <FormGrid cols={2}>
               <div>
-                <Label htmlFor="current_mileage">Current Mileage *</Label>
+                <Label htmlFor="current_mileage">
+                  {formData.asset_type === "trailer" ? "Optional Mileage (from hooked truck)" : "Current Mileage *"}
+                </Label>
                 <Input
                   id="current_mileage"
                   type="number"
@@ -161,7 +213,7 @@ export default function AddMaintenancePage() {
                   onChange={(e) => setFormData({ ...formData, current_mileage: e.target.value })}
                   placeholder="0"
                   className="mt-2"
-                  required
+                  required={formData.asset_type === "truck"}
                 />
               </div>
               <div>

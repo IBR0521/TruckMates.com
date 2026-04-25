@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getDrivers } from "@/app/actions/drivers"
 import { deletePayRule, getActivePayRule, getDriverPayRules, upsertDriverPayRule, type DriverPayRule } from "@/app/actions/settlement-pay-rules"
+import { getCompanySettings, updateCompanySettings } from "@/app/actions/number-formats"
 import { getCurrentUser } from "@/lib/auth/server"
 import { mapLegacyRole } from "@/lib/roles"
 
@@ -20,7 +21,9 @@ export default function PayRulesPage() {
   const [history, setHistory] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isSavingPerDiem, setIsSavingPerDiem] = useState(false)
   const [isManager, setIsManager] = useState(false)
+  const [perDiemRate, setPerDiemRate] = useState<number>(69)
   const [form, setForm] = useState<DriverPayRule>({
     driver_id: "",
     pay_type: "per_mile",
@@ -52,6 +55,13 @@ export default function PayRulesPage() {
     if (!userResult.error && userResult.data) {
       const mapped = mapLegacyRole(userResult.data.role)
       setIsManager(mapped === "super_admin" || mapped === "operations_manager")
+    }
+    const settingsResult = await getCompanySettings()
+    if (!settingsResult.error && settingsResult.data?.per_diem_rate !== undefined && settingsResult.data?.per_diem_rate !== null) {
+      const rate = Number(settingsResult.data.per_diem_rate)
+      if (Number.isFinite(rate) && rate >= 0) {
+        setPerDiemRate(rate)
+      }
     }
     setIsLoading(false)
   }
@@ -123,6 +133,18 @@ export default function PayRulesPage() {
     }
   }
 
+  const handleSavePerDiemRate = async () => {
+    if (!isManager) return toast.error("Only managers can update per-diem settings")
+    setIsSavingPerDiem(true)
+    const result = await updateCompanySettings({ per_diem_rate: perDiemRate })
+    if (result.error) {
+      toast.error(result.error)
+    } else {
+      toast.success("Per-diem rate updated")
+    }
+    setIsSavingPerDiem(false)
+  }
+
   if (isLoading) {
     return (
       <div className="w-full p-8">
@@ -146,6 +168,29 @@ export default function PayRulesPage() {
 
       <div className="p-4 md:p-8">
         <div className="max-w-5xl mx-auto space-y-6">
+          <Card className="border-border p-6">
+            <h3 className="font-semibold text-foreground mb-3">Per-Diem Default</h3>
+            <div className="grid md:grid-cols-[1fr_auto] gap-3 items-end">
+              <div>
+                <Label className="mb-2 block">Per-Diem Rate (USD per night)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={perDiemRate}
+                  onChange={(e) => setPerDiemRate(Number(e.target.value || 0))}
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Default IRS transportation worker rate is $69/night.
+                </p>
+              </div>
+              <Button onClick={handleSavePerDiemRate} disabled={!isManager || isSavingPerDiem}>
+                <Save className="w-4 h-4 mr-2" />
+                {isSavingPerDiem ? "Saving..." : "Save Rate"}
+              </Button>
+            </div>
+          </Card>
+
           <Card className="border-border p-6">
             <Label className="mb-2 block">Driver</Label>
             <Select value={selectedDriverId} onValueChange={loadDriverRules}>

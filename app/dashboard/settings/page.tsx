@@ -20,7 +20,8 @@ import {
   Globe,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  History
 } from "lucide-react"
 import { toast } from "sonner"
 import { useEffect, useState } from "react"
@@ -407,6 +408,26 @@ export default function SettingsPage() {
                 <Button>
                   <DollarSign className="w-4 h-4 mr-2" />
                   Manage Pay Rules
+                </Button>
+              </Link>
+            </Card>
+          )}
+
+          {isManager && (
+            <Card className="border-border p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <History className="w-5 h-5 text-primary" />
+                  <h2 className="text-xl font-bold text-foreground">Audit Trail</h2>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Review all sensitive changes (who changed what and when) for accountability and security monitoring.
+              </p>
+              <Link href="/dashboard/settings/audit-logs">
+                <Button variant="outline">
+                  <History className="w-4 h-4 mr-2" />
+                  Open Audit Logs
                 </Button>
               </Link>
             </Card>

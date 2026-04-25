@@ -356,9 +356,9 @@ export async function getAlerts(filters?: {
       driver: ["hos_violation", "hos_alert", "dvir_required", "check_call", "load_assigned", "route_update", "geofence_entry", "geofence_exit", "geofence_dwell"],
       dispatcher: ["load_status_change", "driver_late", "check_call_missed", "delivery_window", "route_update", "geofence_entry", "geofence_exit", "geofence_dwell"],
       manager: ["*"], // Managers/admins/owners see all alerts
-      fleet_manager: ["maintenance_due", "maintenance_overdue", "insurance_expiration", "license_renewal", "dvir_required"],
+      fleet_manager: ["maintenance_due", "maintenance_overdue", "insurance_expiration", "license_renewal", "dvir_required", "ucr_expiry", "irp_expiry", "mcs150_expiry", "operating_authority_expiry"],
       maintenance_manager: ["maintenance_due", "maintenance_overdue", "dvir_required", "fault_code_detected"],
-      safety_manager: ["hos_violation", "dvir_required", "insurance_expiration", "license_renewal"],
+      safety_manager: ["hos_violation", "dvir_required", "insurance_expiration", "license_renewal", "ucr_expiry", "irp_expiry", "mcs150_expiry", "operating_authority_expiry"],
     }
     
     const allowedEventTypes = roleEventTypes[effectiveRole] || roleEventTypes.driver
@@ -499,7 +499,7 @@ export async function createAlert(formData: {
           super_admin: ["*"],
           operations_manager: ["*"],
           admin: ["*"],
-          fleet_manager: ["maintenance_due", "maintenance_overdue", "insurance_expiration"],
+          fleet_manager: ["maintenance_due", "maintenance_overdue", "insurance_expiration", "ucr_expiry", "irp_expiry", "mcs150_expiry", "operating_authority_expiry"],
           maintenance_manager: ["maintenance_due", "maintenance_overdue", "dvir_required"],
         }
         
@@ -521,9 +521,12 @@ export async function createAlert(formData: {
 
     // FIXED: Map event_type to appropriate notification type
     // This ensures correct email/SMS templates are used
-    const getNotificationType = (eventType: string): "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" => {
+    const getNotificationType = (eventType: string): "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "reminder_due" => {
       if (eventType.includes("maintenance") || eventType.includes("service")) {
         return "maintenance_alert"
+      }
+      if (eventType.includes("expiry")) {
+        return "reminder_due"
       }
       if (eventType.includes("payment") || eventType.includes("settlement")) {
         return "payment_reminder"
@@ -752,9 +755,12 @@ export async function processAlertEscalations() {
         // Use same notification type mapping as createAlert
         const getNotificationType = (
           eventType: string,
-        ): "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" => {
+        ): "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "reminder_due" => {
           if (eventType.includes("maintenance") || eventType.includes("service")) {
             return "maintenance_alert"
+          }
+          if (eventType.includes("expiry")) {
+            return "reminder_due"
           }
           if (eventType.includes("payment") || eventType.includes("settlement")) {
             return "payment_reminder"

@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation"
 import { use } from "react"
 import { getDriver } from "@/app/actions/drivers"
 import { getTruck } from "@/app/actions/trucks"
+import { getDriverRoadsideInspectionStats } from "@/app/actions/roadside-inspections"
 import { toast } from "sonner"
 import { 
   DetailPageLayout, 
@@ -38,6 +39,11 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
   const [driver, setDriver] = useState<any>(null)
   const [truck, setTruck] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [inspectionStats, setInspectionStats] = useState<{
+    total_inspections: number
+    oos_rate: number
+    violation_count: number
+  } | null>(null)
 
   useEffect(() => {
     return () => {
@@ -70,6 +76,11 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
         if (truckResult.data) {
           setTruck(truckResult.data)
         }
+      }
+
+      const statsResult = await getDriverRoadsideInspectionStats(id)
+      if (statsResult.data) {
+        setInspectionStats(statsResult.data)
       }
     } catch (error: unknown) {
       toast.error("Failed to load driver details")
@@ -368,6 +379,17 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
             </div>
           </DetailSection>
         )}
+
+        <DetailSection title="CSA Inspection Awareness" icon={<ClipboardList className="w-5 h-5" />} className="border-border/70 bg-card/80">
+          <div className="grid gap-3 md:grid-cols-3">
+            {denseField("Total Inspections", inspectionStats?.total_inspections ?? 0)}
+            {denseField("OOS Rate", `${(inspectionStats?.oos_rate ?? 0).toFixed(1)}%`)}
+            {denseField("Total Violations", inspectionStats?.violation_count ?? 0)}
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Roadside inspection trends feed CSA score awareness. Track details in Compliance → Roadside.
+          </p>
+        </DetailSection>
       </div>
     </DetailPageLayout>
   )

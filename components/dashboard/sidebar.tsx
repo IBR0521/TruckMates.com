@@ -95,7 +95,8 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
       pathname === "/dashboard/loads/add" ||
       pathname === "/dashboard/routes/add" ||
       pathname === "/dashboard/drivers/add" ||
-      pathname === "/dashboard/trucks/add"
+      pathname === "/dashboard/trucks/add" ||
+      pathname === "/dashboard/trailers/add"
     if (!isCreationPage) return
     if (!isDesktop || !isCollapsed) return
     if (autoExpandedForPath.current === pathname) return
@@ -322,8 +323,12 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
                   isCollapsed={shouldShowCollapsed}
                 >
                   <NavItem href="/dashboard/trucks" label="Vehicle List" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/trailers" label="Trailer List" isSubitem isCollapsed={shouldShowCollapsed} />
                   {userRole && canCreateFeature(userRole, "vehicles") && (
-                    <NavItem href="/dashboard/trucks/add" label="Add Vehicle" isSubitem isCollapsed={shouldShowCollapsed} />
+                    <>
+                      <NavItem href="/dashboard/trucks/add" label="Add Vehicle" isSubitem isCollapsed={shouldShowCollapsed} />
+                      <NavItem href="/dashboard/trailers/add" label="Add Trailer" isSubitem isCollapsed={shouldShowCollapsed} />
+                    </>
                   )}
                 </DropdownItem>
               )}
@@ -343,6 +348,9 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               )}
               {userRole && canViewFeature(userRole, "ifta") && (
                 <NavItem href="/dashboard/ifta" icon={Receipt} label="IFTA" isCollapsed={shouldShowCollapsed} />
+              )}
+              {userRole && canViewFeature(userRole, "ifta") && (
+                <NavItem href="/dashboard/compliance" icon={Shield} label="Compliance" isCollapsed={shouldShowCollapsed} />
               )}
               {userRole && canViewFeature(userRole, "accounting") && (
                 <DropdownItem
@@ -432,7 +440,9 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               <NavItem href="/dashboard/settings/load" label="Load" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/dispatch" label="Dispatch" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/business" label="Business" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/year-end" label="Year-End" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/alerts" label="Alerts" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/audit-logs" label="Audit Logs" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/webhooks" label="Webhooks" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/api-keys" label="API Keys" isSubitem isCollapsed={shouldShowCollapsed} />
             </DropdownItem>

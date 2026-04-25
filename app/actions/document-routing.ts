@@ -11,7 +11,7 @@ import { checkEditPermission, checkViewPermission } from "@/lib/server-permissio
  */
 export async function linkDocumentToRecord(
   documentId: string,
-  recordType: "driver" | "vehicle" | "load" | "route" | "invoice" | "expense" | "maintenance",
+  recordType: "driver" | "vehicle" | "trailer" | "load" | "route" | "invoice" | "expense" | "maintenance",
   recordId: string
 ): Promise<{ success: boolean; error: string | null }> {
   // FIXED: Add RBAC check - linking documents requires edit permission
@@ -68,6 +68,15 @@ export async function linkDocumentToRecord(
           .eq("company_id", ctx.companyId)
           .maybeSingle()
         recordBelongsToCompany = !!loadCheck
+        break
+      case "trailer":
+        const { data: trailerCheck } = await supabase
+          .from("trailers")
+          .select("id")
+          .eq("id", recordId)
+          .eq("company_id", ctx.companyId)
+          .maybeSingle()
+        recordBelongsToCompany = !!trailerCheck
         break
       case "route":
         const { data: routeCheck } = await supabase
@@ -135,6 +144,12 @@ export async function linkDocumentToRecord(
           updateData.type = "bol" // Default for load documents
         }
         break
+      case "trailer":
+        updateData.trailer_id = recordId
+        if (!document.type || document.type === "other") {
+          updateData.type = "registration"
+        }
+        break
       case "route":
         // FIXED: Set route_id foreign key (migration: supabase/add_documents_foreign_keys.sql)
         updateData.route_id = recordId
@@ -159,12 +174,14 @@ export async function linkDocumentToRecord(
         // FIXED: Maintenance lookup with company_id filter
         const { data: maintenanceRecord } = await supabase
           .from("maintenance")
-          .select("truck_id")
+          .select("truck_id, trailer_id")
           .eq("id", recordId)
           .eq("company_id", ctx.companyId) // FIXED: Add company_id filter
           .maybeSingle()
         if (maintenanceRecord?.truck_id) {
           updateData.truck_id = maintenanceRecord.truck_id
+        } else if (maintenanceRecord?.trailer_id) {
+          updateData.trailer_id = maintenanceRecord.trailer_id
         }
         break
     }
@@ -191,7 +208,7 @@ export async function linkDocumentToRecord(
  * Get list of records for manual routing
  */
 export async function getRecordsForRouting(
-  recordType: "driver" | "vehicle" | "load" | "route" | "invoice" | "expense" | "maintenance"
+  recordType: "driver" | "vehicle" | "trailer" | "load" | "route" | "invoice" | "expense" | "maintenance"
 ): Promise<{ data: Array<{ id: string; name: string; [key: string]: any }> | null; error: string | null }> {
   // FIXED: Add RBAC check
   const permissionCheck = await checkViewPermission("documents")
@@ -231,6 +248,13 @@ export async function getRecordsForRouting(
           .eq("company_id", ctx.companyId)
           .order("created_at", { ascending: false })
           .limit(50)
+        break
+      case "trailer":
+        query = supabase
+          .from("trailers")
+          .select("id, trailer_number, trailer_type, year")
+          .eq("company_id", ctx.companyId)
+          .order("trailer_number", { ascending: true })
         break
       case "route":
         query = supabase
@@ -288,6 +312,9 @@ export async function getRecordsForRouting(
           break
         case "load":
           name = `${record.shipment_number || "Unknown"} - ${record.origin || ""} → ${record.destination || ""}`
+          break
+        case "trailer":
+          name = `${record.trailer_number || "Unknown"}${record.trailer_type ? ` - ${record.trailer_type}` : ""}`
           break
         case "route":
           name = `${record.name || "Unknown"} - ${record.origin || ""} → ${record.destination || ""}`

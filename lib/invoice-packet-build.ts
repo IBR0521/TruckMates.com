@@ -128,6 +128,14 @@ export async function buildInvoicePacketAttachments(
     }
 
     if (includeRate) {
+      // Ensure a rate confirmation exists for factoring packets when requested.
+      try {
+        const { generateRateConfirmation } = await import("@/app/actions/rate-confirmation")
+        await generateRateConfirmation(loadId)
+      } catch {
+        // Best-effort generation; attachment resolution below still proceeds.
+      }
+
       const { data: docs } = await supabase
         .from("documents")
         .select("id, name, type, file_url, mime_type")

@@ -188,10 +188,17 @@ export default function SettlementDetailPage({ params }: { params: Promise<{ id:
               <p className="text-3xl font-bold text-foreground">{formatMoney(settlement.gross_pay)}</p>
             </Card>
             <Card className="border-border p-6">
+              <p className="text-muted-foreground text-sm mb-2">Per-Diem (Non-Taxable)</p>
+              <p className="text-3xl font-bold text-blue-400">{formatMoney(settlement.per_diem_amount)}</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                {Number(settlement.per_diem_eligible_nights || 0)} nights x {formatMoney(settlement.per_diem_rate_used || 0)}/night
+              </p>
+            </Card>
+            <Card className="border-border p-6">
               <p className="text-muted-foreground text-sm mb-2">Total Deductions</p>
               <p className="text-3xl font-bold text-red-400">{formatMoney(settlement.total_deductions)}</p>
             </Card>
-            <Card className="border-border p-6 bg-green-500/10 border-green-500/30">
+            <Card className="border-border p-6 bg-green-500/10 border-green-500/30 md:col-span-3">
               <p className="text-muted-foreground text-sm mb-2">Net Pay</p>
               <p className="text-3xl font-bold text-green-400">{formatMoney(settlement.net_pay)}</p>
             </Card>

@@ -41,6 +41,7 @@ import {
   quickAssignLoad,
   quickAssignRoute,
 } from "@/app/actions/dispatches"
+import { publishLoad, duplicateLoad } from "@/app/actions/loads"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { findNearbyDriversForLoad, type NearbyDriver } from "@/app/actions/proximity-dispatching"
@@ -170,7 +171,7 @@ export default function DispatchesPage() {
           })
           // Remove if no longer unassigned
           return updated.filter(
-            (load) => !load.driver_id || !load.truck_id || load.status === "pending"
+            (load) => !load.driver_id || !load.truck_id || ["pending", "draft"].includes(String(load.status || "").toLowerCase()),
           )
         })
         
@@ -197,7 +198,7 @@ export default function DispatchesPage() {
       },
       onInsert: (payload) => {
         // Add new unassigned load
-        if (!payload.driver_id || !payload.truck_id || payload.status === "pending") {
+        if (!payload.driver_id || !payload.truck_id || ["pending", "draft"].includes(String(payload.status || "").toLowerCase())) {
           setUnassignedLoads((prev) => {
             // Check if load already exists to avoid duplicates
             if (prev.some(load => load.id === payload.id)) {
@@ -474,6 +475,7 @@ export default function DispatchesPage() {
   function getStatusBadge(status: string, statusColor?: string) {
     // Use status_color from database if available, otherwise fallback to default colors
     const defaultColors: Record<string, string> = {
+      draft: "bg-slate-500/20 text-slate-300 border-slate-500/30",
       pending: "bg-amber-500/20 text-amber-400 border-amber-500/30", // Changed from yellow to amber
       scheduled: "bg-blue-500/20 text-blue-400 border-blue-500/30",
       in_progress: "bg-green-500/20 text-green-400 border-green-500/30",
@@ -528,8 +530,15 @@ export default function DispatchesPage() {
 
   const actionableUnassignedLoads = useMemo(
     () =>
-      unassignedLoads.filter((load) => !["in_transit", "completed", "delivered"].includes(String(load.status || "").toLowerCase())),
+      unassignedLoads.filter(
+        (load) => !["draft", "in_transit", "completed", "delivered"].includes(String(load.status || "").toLowerCase()),
+      ),
     [unassignedLoads]
+  )
+
+  const draftLoads = useMemo(
+    () => unassignedLoads.filter((load) => String(load.status || "").toLowerCase() === "draft"),
+    [unassignedLoads],
   )
 
   const needsAttentionLoads = useMemo(
@@ -575,6 +584,36 @@ export default function DispatchesPage() {
       ...prev,
       [routeId]: { ...prev[routeId], ...patch },
     }))
+  }
+
+  async function handlePublishDraft(loadId: string) {
+    setAssigning(`publish-${loadId}`)
+    try {
+      const result = await publishLoad(loadId)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success("Draft published to pending")
+      await loadData()
+    } finally {
+      setAssigning(null)
+    }
+  }
+
+  async function handleDuplicateLoad(loadId: string) {
+    setAssigning(`duplicate-${loadId}`)
+    try {
+      const result = await duplicateLoad(loadId)
+      if (result.error || !result.data?.id) {
+        toast.error(result.error || "Failed to duplicate load")
+        return
+      }
+      toast.success("Load duplicated into new draft")
+      router.push(`/dashboard/loads/${result.data.id}/edit`)
+    } finally {
+      setAssigning(null)
+    }
   }
 
   return (
@@ -863,11 +902,50 @@ export default function DispatchesPage() {
 
           {/* Unassigned Loads */}
           <div ref={loadsSectionRef}>
+            {draftLoads.length > 0 && (
+              <div className="mb-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <BookOpen className="w-6 h-6 text-primary" />
+                  <h2 className="text-xl font-bold text-foreground">Draft Loads</h2>
+                  <Badge variant="outline" className="ml-auto">
+                    {draftLoads.length} drafts
+                  </Badge>
+                </div>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {draftLoads.map((load) => (
+                    <Card key={load.id} className="border-border p-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold text-foreground">{load.shipment_number}</h3>
+                        {getStatusBadge(load.status, load.status_color)}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-2">{load.origin} → {load.destination}</p>
+                      <div className="grid grid-cols-2 gap-2 mt-4">
+                        <Button
+                          size="sm"
+                          onClick={() => handlePublishDraft(load.id)}
+                          disabled={assigning === `publish-${load.id}`}
+                        >
+                          {assigning === `publish-${load.id}` ? "Publishing..." : "Publish Load"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDuplicateLoad(load.id)}
+                          disabled={assigning === `duplicate-${load.id}`}
+                        >
+                          Duplicate
+                        </Button>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-3 mb-4">
               <Package className="w-6 h-6 text-primary" />
               <h2 className="text-xl font-bold text-foreground">Unassigned Loads</h2>
               <Badge variant="outline" className="ml-auto">
-                {actionableUnassignedLoads.length} pending
+                {actionableUnassignedLoads.length} actionable
               </Badge>
             </div>
 

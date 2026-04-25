@@ -101,7 +101,7 @@ export default function MaintenancePage() {
 
   const handleExport = () => {
     try {
-      const exportData = maintenanceRecords.map(({ id, company_id, truck_id, created_at, updated_at, ...rest }) => rest)
+      const exportData = maintenanceRecords.map(({ id, company_id, truck_id, trailer_id, created_at, updated_at, ...rest }) => rest)
       exportToExcel(exportData, "maintenance")
       toast.success("Maintenance records exported successfully")
     } catch (error) {
@@ -139,7 +139,7 @@ export default function MaintenancePage() {
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Maintenance Schedule</h1>
-          <p className="text-muted-foreground text-sm mt-1">Track and schedule vehicle maintenance</p>
+          <p className="text-muted-foreground text-sm mt-1">Track and schedule truck and trailer maintenance</p>
         </div>
         <div className="flex items-center gap-3">
           <Button
@@ -216,7 +216,7 @@ export default function MaintenancePage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border bg-secondary/30">
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Truck</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Asset</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Service Type</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Scheduled Date</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Mileage</th>
@@ -229,7 +229,9 @@ export default function MaintenancePage() {
                   <tbody>
                     {filteredMaintenance.map((record) => (
                       <tr key={record.id} className="border-b border-border hover:bg-secondary/20 transition">
-                        <td className="px-6 py-4 text-foreground font-medium">{record.truck_id || "N/A"}</td>
+                        <td className="px-6 py-4 text-foreground font-medium">
+                          {record.truck_id ? `Truck: ${record.truck_id}` : record.trailer_id ? `Trailer: ${record.trailer_id}` : "N/A"}
+                        </td>
                         <td className="px-6 py-4 text-foreground">{record.service_type || "N/A"}</td>
                         <td className="px-6 py-4 text-foreground">{record.scheduled_date ? new Date(record.scheduled_date).toLocaleDateString() : "N/A"}</td>
                         <td className="px-6 py-4 text-foreground">{record.mileage ? `${record.mileage.toLocaleString()} mi` : "N/A"}</td>

@@ -162,7 +162,7 @@ export async function getSettlements() {
   const { data: settlements, error } = await supabase
     .from("settlements")
     .select(`
-      id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, net_pay, status, paid_date, payment_method, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at,
+      id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at,
       drivers:driver_id (
         id,
         name
@@ -195,7 +195,7 @@ export async function getSettlement(id: string) {
     const { data: settlement, error } = await supabase
       .from("settlements")
       .select(`
-        id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, net_pay, status, paid_date, payment_method, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at,
+        id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at,
         drivers:driver_id (
           id,
           name
@@ -1082,7 +1082,7 @@ export async function getDriverLoadsForPeriod(driverId: string, periodStart: str
     // Get loads with load_date in period
     const { data: loadsWithDate, error: errorWithDate } = await supabase
       .from("loads")
-      .select("id, shipment_number, value, status, actual_delivery, load_date, created_at")
+      .select("id, shipment_number, value, status, actual_delivery, estimated_delivery, load_date, created_at")
       .eq("company_id", ctx.companyId)
       .eq("driver_id", driverId)
       .not("load_date", "is", null)
@@ -1094,7 +1094,7 @@ export async function getDriverLoadsForPeriod(driverId: string, periodStart: str
     // Only include loads where created_at is in period AND load_date is still null
     const { data: loadsWithoutDate, error: errorWithoutDate } = await supabase
       .from("loads")
-      .select("id, shipment_number, value, status, actual_delivery, load_date, created_at")
+      .select("id, shipment_number, value, status, actual_delivery, estimated_delivery, load_date, created_at")
       .eq("company_id", ctx.companyId)
       .eq("driver_id", driverId)
       .is("load_date", null)
@@ -1160,6 +1160,23 @@ export async function getDriverFuelExpensesForPeriod(driverId: string, periodSta
   }
 }
 
+function calculatePerDiemEligibleNights(loads: Array<any>): number {
+  return loads.reduce((total, load) => {
+    const pickupRaw = load?.load_date || load?.pickup_date || load?.created_at
+    const deliveryRaw = load?.actual_delivery || load?.estimated_delivery || pickupRaw
+    if (!pickupRaw || !deliveryRaw) return total
+
+    const pickupDate = new Date(pickupRaw)
+    const deliveryDate = new Date(deliveryRaw)
+    if (Number.isNaN(pickupDate.getTime()) || Number.isNaN(deliveryDate.getTime())) return total
+    if (deliveryDate <= pickupDate) return total
+
+    const dayMs = 24 * 60 * 60 * 1000
+    const nights = Math.ceil((deliveryDate.getTime() - pickupDate.getTime()) / dayMs)
+    return total + Math.max(0, nights)
+  }, 0)
+}
+
 // Create settlement with automatic calculations
 export async function createSettlement(formData: {
   driver_id: string
@@ -1212,6 +1229,13 @@ export async function createSettlement(formData: {
 
   const loads = loadsResult.data || []
 
+  const { getCompanySettings } = await import("./number-formats")
+  const companySettingsResult = await getCompanySettings()
+  const configuredPerDiemRate = Number(companySettingsResult.data?.per_diem_rate ?? 69)
+  const perDiemRate = Number.isFinite(configuredPerDiemRate) && configuredPerDiemRate >= 0 ? configuredPerDiemRate : 69
+  const perDiemEligibleNights = calculatePerDiemEligibleNights(loads)
+  const perDiemAmount = perDiemEligibleNights * perDiemRate
+
   // Calculate gross pay using pay rules engine if not provided
   let grossPay = formData.gross_pay || 0
   let calculationDetails: any = {}
@@ -1261,6 +1285,8 @@ export async function createSettlement(formData: {
         totalMiles,
         periodStart: formData.period_start,
         periodEnd: formData.period_end,
+        perDiemEligibleNights,
+        perDiemRate,
       })
 
       if (payCalculation.data && !payCalculation.error) {
@@ -1274,6 +1300,16 @@ export async function createSettlement(formData: {
           base_pay: grossPay,
           method: "fallback_load_value_sum",
           note: "Pay rule not found, using load value sum",
+          per_diem_eligible_nights: perDiemEligibleNights,
+          per_diem_rate: perDiemRate,
+          per_diem_amount: perDiemAmount,
+          non_taxable_pay: perDiemAmount,
+          line_items: perDiemAmount > 0 ? [{
+            type: "per_diem",
+            description: `Per-diem (${perDiemEligibleNights} nights x $${perDiemRate.toFixed(2)})`,
+            amount: perDiemAmount,
+            taxable: false,
+          }] : [],
         }
       }
     } catch (error) {
@@ -1284,6 +1320,16 @@ export async function createSettlement(formData: {
         base_pay: grossPay,
         method: "fallback_load_value_sum",
         note: "Pay rules engine unavailable, using load value sum",
+        per_diem_eligible_nights: perDiemEligibleNights,
+        per_diem_rate: perDiemRate,
+        per_diem_amount: perDiemAmount,
+        non_taxable_pay: perDiemAmount,
+        line_items: perDiemAmount > 0 ? [{
+          type: "per_diem",
+          description: `Per-diem (${perDiemEligibleNights} nights x $${perDiemRate.toFixed(2)})`,
+          amount: perDiemAmount,
+          taxable: false,
+        }] : [],
       }
     }
   }
@@ -1323,7 +1369,7 @@ export async function createSettlement(formData: {
   const advanceDeduction = formData.advance_deduction || 0
   const otherDeductions = formData.other_deductions || 0
   const totalDeductions = fuelDeduction + advanceDeduction + otherDeductions
-  const netPay = grossPay - totalDeductions
+  const netPay = grossPay + perDiemAmount - totalDeductions
 
   // Prepare loads data for JSONB
   const loadsData = loads.map((load: any) => ({
@@ -1346,6 +1392,9 @@ export async function createSettlement(formData: {
       advance_deduction: advanceDeduction,
       other_deductions: otherDeductions,
       total_deductions: totalDeductions,
+      per_diem_eligible_nights: perDiemEligibleNights,
+      per_diem_rate_used: perDiemRate,
+      per_diem_amount: perDiemAmount,
       net_pay: netPay,
       status: "pending",
       payment_method: formData.payment_method || null,
@@ -1354,7 +1403,7 @@ export async function createSettlement(formData: {
       calculation_details: calculationDetails,
     })
     // V3-007 FIX: Replace implicit select() with explicit columns
-    .select("id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, net_pay, status, paid_date, payment_method, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at")
+    .select("id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at")
     .single()
 
   if (error || !data) {

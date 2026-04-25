@@ -42,6 +42,23 @@ export interface DriverPayRule {
   notes?: string
 }
 
+export type SettlementLineItemType =
+  | "mileage"
+  | "hourly"
+  | "percentage"
+  | "flat"
+  | "hybrid"
+  | "bonus"
+  | "deduction"
+  | "per_diem"
+
+export interface SettlementLineItem {
+  type: SettlementLineItemType
+  description: string
+  amount: number
+  taxable: boolean
+}
+
 /**
  * Create or update a driver pay rule
  */
@@ -209,6 +226,8 @@ export async function calculateGrossPayFromRule(params: {
   totalMiles?: number
   periodStart: string
   periodEnd: string
+  perDiemEligibleNights?: number
+  perDiemRate?: number
 }) {
   const supabase = await createClient()
 
@@ -231,6 +250,8 @@ export async function calculateGrossPayFromRule(params: {
     deductions: [],
     deduction_total: 0,
     minimum_guarantee_applied: false,
+    line_items: [] as SettlementLineItem[],
+    non_taxable_pay: 0,
   }
 
   // Calculate base pay
@@ -240,17 +261,35 @@ export async function calculateGrossPayFromRule(params: {
     calculationDetails.base_pay = grossPay
     calculationDetails.miles_used = miles
     calculationDetails.rate_per_mile = payRule.base_rate_per_mile
+    calculationDetails.line_items.push({
+      type: "mileage",
+      description: "Mileage pay",
+      amount: grossPay,
+      taxable: true,
+    })
   } else if (payRule.pay_type === "percentage" && payRule.base_percentage) {
     const totalLoadValue = params.loads.reduce((sum, load) => sum + (load.value || 0), 0)
     grossPay = totalLoadValue * (Number(payRule.base_percentage) / 100)
     calculationDetails.base_pay = grossPay
     calculationDetails.total_load_value = totalLoadValue
     calculationDetails.percentage = payRule.base_percentage
+    calculationDetails.line_items.push({
+      type: "percentage",
+      description: "Percentage pay",
+      amount: grossPay,
+      taxable: true,
+    })
   } else if (payRule.pay_type === "flat" && payRule.base_flat_rate) {
     grossPay = params.loads.length * Number(payRule.base_flat_rate)
     calculationDetails.base_pay = grossPay
     calculationDetails.loads_count = params.loads.length
     calculationDetails.flat_rate = payRule.base_flat_rate
+    calculationDetails.line_items.push({
+      type: "flat",
+      description: "Flat per-load pay",
+      amount: grossPay,
+      taxable: true,
+    })
   } else if (payRule.pay_type === "hybrid") {
     // Hybrid: combine per_mile and percentage
     if (payRule.base_rate_per_mile) {
@@ -265,6 +304,12 @@ export async function calculateGrossPayFromRule(params: {
       calculationDetails.percentage_pay = percentagePay
     }
     calculationDetails.base_pay = grossPay
+    calculationDetails.line_items.push({
+      type: "hybrid",
+      description: "Hybrid base pay",
+      amount: grossPay,
+      taxable: true,
+    })
   }
 
   // Apply bonuses
@@ -307,6 +352,12 @@ export async function calculateGrossPayFromRule(params: {
           description: bonus.description,
           amount: bonusAmount,
         })
+        calculationDetails.line_items.push({
+          type: "bonus",
+          description: bonus.description || bonus.type,
+          amount: bonusAmount,
+          taxable: true,
+        })
         calculationDetails.bonus_total += bonusAmount
       }
     }
@@ -317,6 +368,22 @@ export async function calculateGrossPayFromRule(params: {
     grossPay = Number(payRule.minimum_pay_guarantee)
     calculationDetails.minimum_guarantee_applied = true
     calculationDetails.minimum_guarantee_amount = payRule.minimum_pay_guarantee
+  }
+
+  const perDiemEligibleNights = Math.max(0, Math.floor(Number(params.perDiemEligibleNights || 0)))
+  const perDiemRate = Math.max(0, Number(params.perDiemRate || 0))
+  const perDiemAmount = perDiemEligibleNights * perDiemRate
+  if (perDiemAmount > 0) {
+    calculationDetails.per_diem_eligible_nights = perDiemEligibleNights
+    calculationDetails.per_diem_rate = perDiemRate
+    calculationDetails.per_diem_amount = perDiemAmount
+    calculationDetails.non_taxable_pay = perDiemAmount
+    calculationDetails.line_items.push({
+      type: "per_diem",
+      description: `Per-diem (${perDiemEligibleNights} nights x $${perDiemRate.toFixed(2)})`,
+      amount: perDiemAmount,
+      taxable: false,
+    })
   }
 
   return {

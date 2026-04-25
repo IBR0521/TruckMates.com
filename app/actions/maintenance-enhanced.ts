@@ -160,10 +160,10 @@ export async function uploadMaintenanceDocument(
       }
     }
 
-    // Get maintenance to verify access and get truck_id
+    // Get maintenance to verify access and get linked asset
     const { data: maintenance, error: maintenanceError } = await supabase
       .from("maintenance")
-      .select("id, truck_id, company_id")
+      .select("id, truck_id, trailer_id, company_id")
       .eq("id", maintenanceId)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
@@ -205,6 +205,7 @@ export async function uploadMaintenanceDocument(
         company_id: ctx.companyId,
         maintenance_id: maintenanceId,
         truck_id: maintenance.truck_id,
+        trailer_id: maintenance.trailer_id,
         document_type: documentType,
         name: file.name,
         description: description || null,
@@ -428,6 +429,11 @@ export async function getWorkOrder(workOrderId: string) {
           make,
           model
         ),
+        trailer:trailer_id (
+          id,
+          trailer_number,
+          trailer_type
+        ),
         assigned_user:assigned_to (
           id,
           name,
@@ -464,6 +470,7 @@ export async function getWorkOrder(workOrderId: string) {
 export async function getWorkOrders(filters?: {
   maintenance_id?: string
   truck_id?: string
+  trailer_id?: string
   status?: string
   assigned_to?: string
 }) {
@@ -487,6 +494,10 @@ export async function getWorkOrders(filters?: {
         truck:truck_id (
           id,
           truck_number
+        ),
+        trailer:trailer_id (
+          id,
+          trailer_number
         )
       `)
       .eq("company_id", ctx.companyId)
@@ -497,6 +508,9 @@ export async function getWorkOrders(filters?: {
     }
     if (filters?.truck_id) {
       query = query.eq("truck_id", filters.truck_id)
+    }
+    if (filters?.trailer_id) {
+      query = query.eq("trailer_id", filters.trailer_id)
     }
     if (filters?.status) {
       query = query.eq("status", filters.status)

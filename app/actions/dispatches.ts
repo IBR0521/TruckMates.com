@@ -8,7 +8,7 @@ import { checkEditPermission } from "@/lib/server-permissions"
 import * as Sentry from "@sentry/nextjs"
 
 /**
- * Get unassigned loads (loads without driver or truck assigned, or with pending status)
+ * Get unassigned loads (loads without driver/truck, plus pending/draft backlog)
  */
 export async function getUnassignedLoads() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
@@ -53,9 +53,9 @@ export async function getUnassignedLoads() {
       return { error: error.message, data: null }
     }
 
-    // Additional filter for pending status loads that might have assignments
+    // Additional filter for pending/draft status loads that might already have assignments
     const unassignedLoads = loads?.filter((load: any) => 
-      !load.driver_id || !load.truck_id || load.status === "pending"
+      !load.driver_id || !load.truck_id || ["pending", "draft"].includes(String(load.status || "").toLowerCase())
     ) || []
 
     return { data: unassignedLoads, error: null }

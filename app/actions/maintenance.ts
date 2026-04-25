@@ -23,7 +23,7 @@ export async function getMaintenance(filters?: {
     let query = supabase
       .from("maintenance")
       .select(
-        "id, company_id, truck_id, service_type, scheduled_date, completed_date, status, priority, estimated_cost, actual_cost, vendor, mileage, created_at",
+        "id, company_id, truck_id, trailer_id, service_type, scheduled_date, completed_date, status, priority, estimated_cost, actual_cost, vendor, mileage, created_at",
         { count: "exact" },
       )
       .eq("company_id", ctx.companyId)
@@ -52,7 +52,8 @@ export async function getMaintenance(filters?: {
 }
 
 export async function createMaintenance(formData: {
-  truck_id: string
+  truck_id?: string
+  trailer_id?: string
   service_type: string
   scheduled_date: string
   current_mileage?: number
@@ -75,21 +76,46 @@ export async function createMaintenance(formData: {
     return { error: permissionCheck.error || "You don't have permission to create maintenance records", data: null }
   }
 
-  // Validate truck_id ownership
-  const { data: truck, error: truckError } = await supabase
-    .from("trucks")
-    .select("id")
-    .eq("id", formData.truck_id)
-    .eq("company_id", ctx.companyId)
-    .maybeSingle()
+  if (!formData.truck_id && !formData.trailer_id) {
+    return { error: "Truck or trailer is required", data: null }
+  }
+  if (formData.truck_id && formData.trailer_id) {
+    return { error: "Maintenance can target either a truck or trailer, not both", data: null }
+  }
 
-  if (truckError || !truck) {
-    return { error: "Truck not found or does not belong to your company", data: null }
+  // Validate asset ownership
+  if (formData.truck_id) {
+    const { data: truck, error: truckError } = await supabase
+      .from("trucks")
+      .select("id")
+      .eq("id", formData.truck_id)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+
+    if (truckError || !truck) {
+      return { error: "Truck not found or does not belong to your company", data: null }
+    }
+  }
+
+  if (formData.trailer_id) {
+    const { data: trailer, error: trailerError } = await supabase
+      .from("trailers")
+      .select("id")
+      .eq("id", formData.trailer_id)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+
+    if (trailerError || !trailer) {
+      return { error: "Trailer not found or does not belong to your company", data: null }
+    }
   }
 
   // Validate and sanitize input
-  if (!validateRequiredString(formData.truck_id, 1, 100)) {
-    return { error: "Truck ID is required", data: null }
+  if (formData.truck_id && !validateRequiredString(formData.truck_id, 1, 100)) {
+    return { error: "Truck ID is invalid", data: null }
+  }
+  if (formData.trailer_id && !validateRequiredString(formData.trailer_id, 1, 100)) {
+    return { error: "Trailer ID is invalid", data: null }
   }
 
   if (!validateRequiredString(formData.service_type, 1, 100)) {
@@ -123,7 +149,8 @@ export async function createMaintenance(formData: {
     .from("maintenance")
     .insert({
       company_id: ctx.companyId,
-      truck_id: sanitizeString(formData.truck_id, 100),
+      truck_id: formData.truck_id ? sanitizeString(formData.truck_id, 100) : null,
+      trailer_id: formData.trailer_id ? sanitizeString(formData.trailer_id, 100) : null,
       service_type: sanitizedServiceType,
       scheduled_date: formData.scheduled_date,
       mileage: formData.current_mileage ? Number(formData.current_mileage) : null,
@@ -147,7 +174,8 @@ export async function createMaintenance(formData: {
       const { triggerWebhook } = await import("./webhooks")
       await triggerWebhook(ctx.companyId, "maintenance.scheduled", {
         maintenance_id: data.id,
-      truck_id: formData.truck_id,
+      truck_id: formData.truck_id || null,
+      trailer_id: formData.trailer_id || null,
       service_type: formData.service_type,
       scheduled_date: formData.scheduled_date,
     })
@@ -181,6 +209,12 @@ export async function getMaintenanceById(id: string) {
         model,
         year,
         mileage
+      ),
+      trailer:trailer_id (
+        id,
+        trailer_number,
+        trailer_type,
+        year
       )
     `)
     .eq("id", id)

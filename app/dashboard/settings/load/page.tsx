@@ -53,6 +53,8 @@ export default function LoadSettingsPage() {
     fuel_surcharge_method: "percentage", // 'none', 'flat-fee', 'percentage', 'per-mile'
     fuel_surcharge_flat_amount: 0,
     fuel_surcharge_per_mile: 0,
+    fsc_base_price: 1.2,
+    fsc_mpg_assumed: 6.5,
     
     // Units
     weight_unit: "lbs", // 'lbs' or 'kg'
@@ -157,6 +159,8 @@ export default function LoadSettingsPage() {
           fuel_surcharge_method: result.data.fuel_surcharge_method || "percentage",
           fuel_surcharge_flat_amount: result.data.fuel_surcharge_flat_amount || 0,
           fuel_surcharge_per_mile: result.data.fuel_surcharge_per_mile || 0,
+          fsc_base_price: result.data.fsc_base_price || 1.2,
+          fsc_mpg_assumed: result.data.fsc_mpg_assumed || 6.5,
           weight_unit: result.data.weight_unit || "lbs",
           distance_unit: result.data.distance_unit || "miles",
           temperature_unit: result.data.temperature_unit || "fahrenheit",
@@ -525,6 +529,33 @@ export default function LoadSettingsPage() {
                   />
                 </div>
               )}
+
+              <Separator />
+              <div>
+                <Label htmlFor="fsc_base_price">DOE Auto FSC Base Price ($/gal)</Label>
+                <Input
+                  id="fsc_base_price"
+                  type="number"
+                  step="0.01"
+                  value={settings.fsc_base_price}
+                  onChange={(e) => setSettings({ ...settings, fsc_base_price: parseFloat(e.target.value) || 1.2 })}
+                  className="mt-2"
+                  min="0"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Default is $1.20/gal (industry baseline threshold).</p>
+              </div>
+              <div>
+                <Label htmlFor="fsc_mpg_assumed">DOE Auto FSC MPG Assumption</Label>
+                <Input
+                  id="fsc_mpg_assumed"
+                  type="number"
+                  step="0.1"
+                  value={settings.fsc_mpg_assumed}
+                  onChange={(e) => setSettings({ ...settings, fsc_mpg_assumed: parseFloat(e.target.value) || 6.5 })}
+                  className="mt-2"
+                  min="0.1"
+                />
+              </div>
             </div>
           </Card>
 

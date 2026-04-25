@@ -29,6 +29,7 @@ import { useRouter } from "next/navigation"
 import { getLoad, updateLoad } from "@/app/actions/loads"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
+import { getTrailers } from "@/app/actions/trailers"
 import { getRoutes } from "@/app/actions/routes"
 import { LoadDeliveryPointsManager } from "@/components/load-delivery-points-manager"
 import { getLoadDeliveryPoints, createLoadDeliveryPoint, updateLoadDeliveryPoint, deleteLoadDeliveryPoint } from "@/app/actions/load-delivery-points"
@@ -41,6 +42,7 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [drivers, setDrivers] = useState<any[]>([])
   const [trucks, setTrucks] = useState<any[]>([])
+  const [trailers, setTrailers] = useState<any[]>([])
   const [routes, setRoutes] = useState<any[]>([])
   const [deliveryPoints, setDeliveryPoints] = useState<any[]>([])
   const [formData, setFormData] = useState({
@@ -88,6 +90,7 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
     status: "pending",
     driver: "",
     truck: "",
+    trailer: "",
     route: "",
     
     // Pricing
@@ -112,15 +115,17 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
 
   useEffect(() => {
     async function loadData() {
-      const [loadResult, driversResult, trucksResult, routesResult] = await Promise.all([
+      const [loadResult, driversResult, trucksResult, trailersResult, routesResult] = await Promise.all([
         getLoad(id),
         getDrivers(),
         getTrucks(),
+        getTrailers(),
         getRoutes(),
       ])
       
       if (driversResult.data) setDrivers(driversResult.data)
       if (trucksResult.data) setTrucks(trucksResult.data)
+      if (trailersResult.data) setTrailers(trailersResult.data)
       if (routesResult.data) setRoutes(routesResult.data)
       
       if (loadResult.data) {
@@ -169,6 +174,7 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
           status: load.status || "pending",
           driver: load.driver_id || "",
           truck: load.truck_id || "",
+          trailer: load.trailer_id || "",
           route: load.route_id || "",
           rate: load.rate ? load.rate.toString() : "",
           rateType: load.rate_type || "per-mile",
@@ -233,6 +239,7 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
       status: formData.status,
       driver_id: formData.driver || undefined,
       truck_id: formData.truck || undefined,
+      trailer_id: formData.trailer || undefined,
       route_id: formData.route || null,
       load_date: formData.pickupDate || null,
       estimated_delivery: formData.estimatedDelivery || null,
@@ -403,6 +410,7 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="confirmed">Confirmed</SelectItem>
                     <SelectItem value="scheduled">Scheduled</SelectItem>
                     <SelectItem value="in_transit">In Transit</SelectItem>
                     <SelectItem value="delivered">Delivered</SelectItem>
@@ -1030,6 +1038,22 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                     {trucks.map((truck) => (
                       <SelectItem key={truck.id} value={truck.id}>
                         {truck.truck_number} - {truck.make} {truck.model}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="trailer">Assigned Trailer</Label>
+                <Select value={formData.trailer || "none"} onValueChange={(value) => handleSelectChange("trailer", value === "none" ? "" : value)}>
+                  <SelectTrigger className="mt-1 w-full">
+                    <SelectValue placeholder="Select a trailer (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {trailers.map((trailer) => (
+                      <SelectItem key={trailer.id} value={trailer.id}>
+                        {trailer.trailer_number} {trailer.trailer_type ? `- ${trailer.trailer_type}` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>

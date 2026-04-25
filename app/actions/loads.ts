@@ -25,7 +25,7 @@ type LoadUpdateNotificationPayload = {
 const LOAD_DETAIL_SELECT = `
   id, company_id, shipment_number, origin, destination, status,
   load_date, estimated_delivery, actual_delivery,
-  driver_id, truck_id, route_id, customer_id,
+  driver_id, truck_id, trailer_id, route_id, customer_id,
   weight, weight_kg, contents, value, carrier_type, coordinates,
   delivery_type, company_name, customer_reference, requires_split_delivery, total_delivery_points,
   load_type, rate, rate_type, fuel_surcharge, accessorial_charges, discount, advance, total_rate,
@@ -43,7 +43,7 @@ const LOAD_DETAIL_SELECT = `
 `
 
 const LOAD_LIST_SELECT =
-  "id, shipment_number, origin, destination, status, driver_id, truck_id, load_date, estimated_delivery, created_at, company_name, value, contents, delivery_type, total_delivery_points, weight, weight_kg"
+  "id, shipment_number, origin, destination, status, driver_id, truck_id, trailer_id, load_date, estimated_delivery, created_at, company_name, value, contents, delivery_type, total_delivery_points, weight, weight_kg"
 
 // Helper function to send notifications in background (non-blocking)
 async function sendNotificationsForLoadUpdate(loadData: LoadUpdateNotificationPayload) {
@@ -176,7 +176,7 @@ export async function getLoads(filters?: {
         return { data: [], error: null, count: 0 } // Return empty array instead of error
       }
       Sentry.captureException(error)
-      return { error: error.message, data: null, count: 0 }
+      return { error: "Failed to load loads", data: null, count: 0 }
     }
 
     return { data: loads || [], error: null, count: count || 0 }
@@ -209,7 +209,7 @@ export async function getLoad(id: string) {
         return { error: "Loads table does not exist", data: null }
       }
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: "Failed to load details", data: null }
     }
 
     if (!load) {
@@ -250,6 +250,7 @@ export async function createLoad(formData: {
   status?: string
   driver_id?: string
   truck_id?: string
+  trailer_id?: string
   route_id?: string | null
   load_date?: string | null
   estimated_delivery?: string | null
@@ -412,6 +413,24 @@ export async function createLoad(formData: {
     }
   }
 
+  // Validate trailer assignment if provided
+  if (formData.trailer_id) {
+    const { data: trailer, error: trailerError } = await supabase
+      .from("trailers")
+      .select("id, status, company_id")
+      .eq("id", formData.trailer_id)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+
+    if (trailerError || !trailer) {
+      return { error: "Invalid trailer selected", data: null }
+    }
+
+    if (trailer.status !== "available" && trailer.status !== "in_use") {
+      return { error: "Cannot assign trailer with status: " + trailer.status, data: null }
+    }
+  }
+
   // Validate customer if provided
   if (formData.customer_id) {
     const { data: customer, error: customerError } = await supabase
@@ -566,6 +585,7 @@ export async function createLoad(formData: {
   // Auto-assign driver/truck if enabled and not provided
   let finalDriverId = formData.driver_id
   let finalTruckId = formData.truck_id
+  const finalTrailerId = formData.trailer_id
   
   if ((settings.auto_assign_driver || settings.auto_assign_truck) && formData.origin && formData.destination) {
     try {
@@ -656,6 +676,7 @@ export async function createLoad(formData: {
   // Use auto-assigned driver/truck if available
   if (finalDriverId) loadData.driver_id = finalDriverId
   if (finalTruckId) loadData.truck_id = finalTruckId
+  if (finalTrailerId) loadData.trailer_id = finalTrailerId
 
   // Add optional fields with validation and sanitization
   if (formData.weight) loadData.weight = sanitizeString(formData.weight, 50)
@@ -673,6 +694,7 @@ export async function createLoad(formData: {
   // Driver/truck already set from auto-assignment above, only override if explicitly provided
   if (formData.driver_id) loadData.driver_id = formData.driver_id
   if (formData.truck_id) loadData.truck_id = formData.truck_id
+  if (formData.trailer_id) loadData.trailer_id = formData.trailer_id
   if (routeId) loadData.route_id = routeId
   if (formData.load_date) loadData.load_date = formData.load_date
   if (formData.estimated_delivery) loadData.estimated_delivery = formData.estimated_delivery
@@ -892,6 +914,7 @@ export async function updateLoad(
     status?: string
     driver_id?: string
     truck_id?: string
+    trailer_id?: string
     route_id?: string | null
     load_date?: string | null
     estimated_delivery?: string | null
@@ -931,6 +954,8 @@ export async function updateLoad(
 
   const wasDelivered = currentLoad?.status === "delivered"
   const willBeDelivered = formData.status === "delivered"
+  const wasConfirmed = currentLoad?.status === "confirmed"
+  const willBeConfirmed = formData.status === "confirmed"
 
   // DAT-002 FIX: Validate status transitions to prevent invalid state changes
   // Define allowed transitions - delivered loads cannot revert to pending
@@ -978,6 +1003,7 @@ export async function updateLoad(
   updateField("status", formData.status)
   updateField("driver_id", formData.driver_id || null)
   updateField("truck_id", formData.truck_id || null)
+  updateField("trailer_id", formData.trailer_id || null)
   updateField("route_id", formData.route_id || null)
   updateField("load_date", formData.load_date || null)
   updateField("estimated_delivery", formData.estimated_delivery || null)
@@ -1102,7 +1128,8 @@ export async function updateLoad(
     .single()
 
   if (error || !data) {
-    return { error: error.message, data: null }
+    if (error) Sentry.captureException(error)
+    return { error: "Failed to update load", data: null }
   }
 
   // Auto-generate invoice when load status changes to "delivered"
@@ -1116,7 +1143,7 @@ export async function updateLoad(
 
     if (existingInvoiceError) {
       Sentry.captureException(existingInvoiceError)
-      return { error: existingInvoiceError.message || "Failed to validate existing invoice", data: null }
+      return { error: "Failed to validate existing invoice", data: null }
     }
 
     if (!existingInvoice && data.value) {
@@ -1199,6 +1226,19 @@ export async function updateLoad(
           }
         }
       }
+    }
+  }
+
+  // Auto-generate rate confirmation when load status changes to confirmed
+  if (data && !wasConfirmed && willBeConfirmed) {
+    try {
+      const { generateRateConfirmation } = await import("./rate-confirmation")
+      const rateConfResult = await generateRateConfirmation(id)
+      if (rateConfResult.error) {
+        Sentry.captureMessage(`[RATE-CONFIRMATION] ${rateConfResult.error}`, "warning")
+      }
+    } catch (rateConfError) {
+      Sentry.captureException(rateConfError)
     }
   }
 
@@ -1326,7 +1366,8 @@ export async function deleteLoad(id: string) {
     .maybeSingle()
 
   if (loadError) {
-    return { error: loadError.message || "Failed to fetch load details" }
+    Sentry.captureException(loadError)
+    return { error: "Failed to fetch load details" }
   }
 
   if (!loadToDelete) {
@@ -1355,7 +1396,8 @@ export async function deleteLoad(id: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message }
+    Sentry.captureException(error)
+    return { error: "Failed to delete load" }
   }
 
   revalidatePath("/dashboard/loads")
@@ -1412,7 +1454,8 @@ export async function bulkDeleteLoads(ids: string[]) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message, data: null }
+    Sentry.captureException(error)
+    return { error: "Failed to delete loads", data: null }
   }
 
   revalidatePath("/dashboard/loads")
@@ -1446,7 +1489,8 @@ export async function bulkUpdateLoadStatus(ids: string[], status: string) {
     .eq("company_id", ctx.companyId)
 
   if (fetchError) {
-    return { error: fetchError.message || "Failed to fetch loads for bulk update", data: null }
+    Sentry.captureException(fetchError)
+    return { error: "Failed to fetch loads for bulk update", data: null }
   }
 
   if (!currentLoads || currentLoads.length === 0) {
@@ -1479,11 +1523,38 @@ export async function bulkUpdateLoadStatus(ids: string[], status: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message, data: null }
+    Sentry.captureException(error)
+    return { error: "Failed to update load status", data: null }
   }
 
   revalidatePath("/dashboard/loads")
   return { data: { updated: ids.length }, error: null }
+}
+
+export async function publishLoad(id: string) {
+  const supabase = await createClient()
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const { data: currentLoad, error: loadError } = await supabase
+    .from("loads")
+    .select("id, status, shipment_number")
+    .eq("id", id)
+    .eq("company_id", ctx.companyId)
+    .maybeSingle()
+
+  if (loadError || !currentLoad) {
+    return { error: "Load not found", data: null }
+  }
+
+  if (String(currentLoad.status || "").toLowerCase() !== "draft") {
+    return { error: "Only draft loads can be published", data: null }
+  }
+
+  // Reuse updateLoad so normal status change notifications/alerts fire.
+  return updateLoad(id, { status: "pending" })
 }
 
 // Duplicate/clone load for workflow optimization
@@ -1518,57 +1589,25 @@ export async function duplicateLoad(id: string) {
     return { error: numberResult.error || "Failed to generate load number", data: null }
   }
 
-  // Create duplicate with new shipment number and reset status
-  // Explicitly set required fields to avoid RLS issues
-  // Only include columns that exist in the base schema
+  // Copy all known editable fields from original into a new draft.
   const duplicateData: any = {
-    company_id: ctx.companyId, // Explicitly set company_id
+    ...originalLoad,
+    company_id: ctx.companyId,
     shipment_number: numberResult.data,
-    origin: originalLoad.origin || "",
-    destination: originalLoad.destination || "",
-    weight: originalLoad.weight || null,
-    weight_kg: originalLoad.weight_kg || null,
-    contents: originalLoad.contents || null,
-    value: originalLoad.value || null,
-    carrier_type: originalLoad.carrier_type || null,
-    status: "draft", // Reset to draft
+    status: "draft",
     load_date: null,
     estimated_delivery: null,
     actual_delivery: null,
     driver_id: null,
     truck_id: null,
+    trailer_id: null,
     route_id: null,
-    coordinates: originalLoad.coordinates || null,
   }
 
-  // Conditionally add optional columns only if they exist in originalLoad
-  // These columns may not exist in all database schemas
-  if (originalLoad.delivery_type !== undefined) {
-    duplicateData.delivery_type = originalLoad.delivery_type || "single"
-  }
-  if (originalLoad.company_name !== undefined) {
-    duplicateData.company_name = originalLoad.company_name || null
-  }
-  if (originalLoad.customer_reference !== undefined) {
-    duplicateData.customer_reference = originalLoad.customer_reference || null
-  }
-  if (originalLoad.requires_split_delivery !== undefined) {
-    duplicateData.requires_split_delivery = originalLoad.requires_split_delivery || false
-  }
-  if (originalLoad.total_delivery_points !== undefined) {
-    duplicateData.total_delivery_points = originalLoad.total_delivery_points || null
-  }
-  if (originalLoad.customer_id !== undefined) {
-    duplicateData.customer_id = originalLoad.customer_id || null
-  }
-  // Only include bol_number if it exists in the original load (column may not exist in schema)
-  if (originalLoad.bol_number !== undefined && originalLoad.hasOwnProperty('bol_number')) {
-    duplicateData.bol_number = originalLoad.bol_number || null
-  }
-  // Only include load_type if it exists in the original load (column may not exist in schema)
-  if (originalLoad.load_type !== undefined && originalLoad.hasOwnProperty('load_type')) {
-    duplicateData.load_type = originalLoad.load_type || null
-  }
+  delete duplicateData.id
+  delete duplicateData.created_at
+  delete duplicateData.updated_at
+  delete duplicateData.trip_planning_estimate
 
   // SECURITY: Generate new tracking token for duplicate load
   const crypto = await import("crypto")

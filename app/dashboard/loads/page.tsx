@@ -337,6 +337,9 @@ export default function LoadsPage() {
                   <DropdownMenuItem onClick={() => handleBulkStatusUpdate("pending")}>
                     Pending
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("confirmed")}>
+                    Confirmed
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleBulkStatusUpdate("scheduled")}>
                     Scheduled
                   </DropdownMenuItem>
@@ -438,6 +441,7 @@ export default function LoadsPage() {
                     <SelectItem value="all">All Statuses</SelectItem>
                     <SelectItem value="draft">Draft</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="confirmed">Confirmed</SelectItem>
                     <SelectItem value="scheduled">Scheduled</SelectItem>
                     <SelectItem value="in_transit">In Transit</SelectItem>
                     <SelectItem value="delivered">Delivered</SelectItem>
@@ -522,6 +526,7 @@ export default function LoadsPage() {
                         options={[
                           { value: "draft", label: "Draft" },
                           { value: "pending", label: "Pending" },
+                          { value: "confirmed", label: "Confirmed" },
                           { value: "scheduled", label: "Scheduled" },
                           { value: "in_transit", label: "In Transit" },
                           { value: "delivered", label: "Delivered" },

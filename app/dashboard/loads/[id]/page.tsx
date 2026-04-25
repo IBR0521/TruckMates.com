@@ -31,6 +31,8 @@ import { getTrucks } from "@/app/actions/trucks"
 import { getLoadDeliveryPoints, getLoadSummary } from "@/app/actions/load-delivery-points"
 import { createInvoice, getInvoices } from "@/app/actions/accounting"
 import { autoGenerateInvoiceOnPOD } from "@/app/actions/auto-invoice"
+import { getDocuments, getDocumentUrl } from "@/app/actions/documents"
+import { generateRateConfirmation } from "@/app/actions/rate-confirmation"
 import { toast } from "sonner"
 import {
   DetailPageLayout,
@@ -77,6 +79,8 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   const [trucks, setTrucks] = useState<any[]>([])
   const [selectedDispatchDriverId, setSelectedDispatchDriverId] = useState<string>("")
   const [selectedDispatchTruckId, setSelectedDispatchTruckId] = useState<string>("")
+  const [loadDocuments, setLoadDocuments] = useState<any[]>([])
+  const [isGeneratingRateConf, setIsGeneratingRateConf] = useState(false)
 
   /** For multi-stop loads, trip planning needs one destination — use last delivery stop. */
   const lastStopRoutingAddress = useMemo(
@@ -97,6 +101,21 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
       router.replace("/dashboard/loads/add")
     }
   }, [id, router])
+
+  useEffect(() => {
+    let mounted = true
+    async function loadRelatedDocuments() {
+      if (!id || id === "add") return
+      const docs = await getDocuments({ load_id: id, limit: 50 })
+      if (mounted && docs.data) {
+        setLoadDocuments(docs.data)
+      }
+    }
+    void loadRelatedDocuments()
+    return () => {
+      mounted = false
+    }
+  }, [id])
 
   useEffect(() => {
     let isMounted = true
@@ -460,6 +479,8 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         return "success"
       case "in_transit":
         return "info"
+      case "confirmed":
+        return "info"
       case "pending":
         return "warning"
       case "cancelled":
@@ -597,7 +618,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         return
       }
 
-      if (load.status === "pending" || load.status === "draft") {
+      if (load.status === "pending" || load.status === "draft" || load.status === "confirmed") {
         const result = await updateLoad(id, { status: "scheduled" })
         if (result.error) {
           toast.error(result.error)
@@ -653,7 +674,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
 
       setRelatedInvoice(invoiceResult.data)
 
-      if (load?.status === "pending" || load?.status === "draft") {
+      if (load?.status === "pending" || load?.status === "draft" || load?.status === "confirmed") {
         const statusResult = await updateLoad(id, { status: "scheduled" })
         if (!statusResult.error) {
           setLoad((prev: any) => ({ ...prev, status: "scheduled" }))
@@ -675,6 +696,20 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
       navigator.clipboard.writeText(portalUrl)
       toast.success("Portal URL copied to clipboard!")
     }
+  }
+
+  async function handleGenerateRateConfirmation() {
+    if (!id || id === "add") return
+    setIsGeneratingRateConf(true)
+    const result = await generateRateConfirmation(id)
+    setIsGeneratingRateConf(false)
+    if (result.error) {
+      toast.error(result.error)
+      return
+    }
+    toast.success("Rate confirmation generated")
+    const docs = await getDocuments({ load_id: id, limit: 50 })
+    if (docs.data) setLoadDocuments(docs.data)
   }
 
   return (
@@ -1422,6 +1457,44 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
             </div>
           </DetailSection>
           )}
+
+          <DetailSection title="Load Documents" icon={<FileText className="w-5 h-5" />}>
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" onClick={handleGenerateRateConfirmation} disabled={isGeneratingRateConf}>
+                  {isGeneratingRateConf ? "Generating..." : "Generate Rate Confirmation"}
+                </Button>
+              </div>
+              {loadDocuments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No documents linked to this load yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {loadDocuments.map((doc) => (
+                    <div key={doc.id} className="flex items-center justify-between rounded border border-border/60 px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium">{doc.name}</p>
+                        <p className="text-xs text-muted-foreground">{doc.type || "other"}</p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          const urlResult = await getDocumentUrl(doc.id)
+                          if (urlResult.error || !urlResult.data?.url) {
+                            toast.error(urlResult.error || "Failed to open document")
+                            return
+                          }
+                          window.open(urlResult.data.url, "_blank", "noopener,noreferrer")
+                        }}
+                      >
+                        Open
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </DetailSection>
 
           {/* Notes */}
           {(load.notes || load.internal_notes) && (

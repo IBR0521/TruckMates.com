@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createSettlement, getDriverLoadsForPeriod, getDriverFuelExpensesForPeriod } from "@/app/actions/accounting"
 import { getDrivers } from "@/app/actions/drivers"
+import { getCompanySettings } from "@/app/actions/number-formats"
 import {
   Select,
   SelectContent,
@@ -28,6 +29,8 @@ export default function CreateSettlementPage() {
   const [selectedLoads, setSelectedLoads] = useState<any[]>([])
   const [fuelExpenses, setFuelExpenses] = useState<any[]>([])
   const [selectedDriver, setSelectedDriver] = useState<any>(null)
+  const [perDiemRate, setPerDiemRate] = useState<number>(69)
+  const [perDiemEligibleNights, setPerDiemEligibleNights] = useState<number>(0)
   const [formData, setFormData] = useState({
     driver_id: "",
     periodStart: "",
@@ -42,9 +45,15 @@ export default function CreateSettlementPage() {
 
   useEffect(() => {
     async function loadDrivers() {
-      const result = await getDrivers()
-      if (result.data) {
-        setDrivers(result.data)
+      const [driverResult, settingsResult] = await Promise.all([getDrivers(), getCompanySettings()])
+      if (driverResult.data) {
+        setDrivers(driverResult.data)
+      }
+      if (settingsResult.data?.per_diem_rate !== undefined && settingsResult.data?.per_diem_rate !== null) {
+        const rate = Number(settingsResult.data.per_diem_rate)
+        if (Number.isFinite(rate) && rate >= 0) {
+          setPerDiemRate(rate)
+        }
       }
     }
     loadDrivers()
@@ -74,6 +83,17 @@ export default function CreateSettlementPage() {
 
       const loads = loadsResult.data || []
       setSelectedLoads(loads)
+      const calculatedNights = loads.reduce((sum: number, load: any) => {
+        const pickupRaw = load?.load_date || load?.pickup_date || load?.created_at
+        const deliveryRaw = load?.actual_delivery || load?.estimated_delivery || pickupRaw
+        if (!pickupRaw || !deliveryRaw) return sum
+        const pickupDate = new Date(pickupRaw)
+        const deliveryDate = new Date(deliveryRaw)
+        if (Number.isNaN(pickupDate.getTime()) || Number.isNaN(deliveryDate.getTime()) || deliveryDate <= pickupDate) return sum
+        const nights = Math.ceil((deliveryDate.getTime() - pickupDate.getTime()) / (24 * 60 * 60 * 1000))
+        return sum + Math.max(0, nights)
+      }, 0)
+      setPerDiemEligibleNights(calculatedNights)
 
       // Get driver's fuel expenses
       const fuelResult = await getDriverFuelExpensesForPeriod(
@@ -164,7 +184,8 @@ export default function CreateSettlementPage() {
     const fuel = Number.parseFloat(formData.fuelDeduction) || 0
     const advance = Number.parseFloat(formData.advanceDeduction) || 0
     const other = Number.parseFloat(formData.otherDeductions) || 0
-    return (gross - fuel - advance - other).toFixed(2)
+    const perDiem = perDiemEligibleNights * perDiemRate
+    return (gross + perDiem - fuel - advance - other).toFixed(2)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -426,6 +447,15 @@ export default function CreateSettlementPage() {
                 </div>
 
                 <div className="pt-4 border-t border-border">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm text-muted-foreground">Per-Diem (non-taxable)</span>
+                    <span className="text-sm font-semibold text-blue-400">
+                      ${(perDiemEligibleNights * perDiemRate).toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    {perDiemEligibleNights} nights x ${perDiemRate.toFixed(2)}/night (auto-calculated from pickup to delivery dates)
+                  </p>
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-semibold text-foreground">Net Pay:</span>
                     <span className="text-2xl font-bold text-green-400">${calculateNetPay()}</span>

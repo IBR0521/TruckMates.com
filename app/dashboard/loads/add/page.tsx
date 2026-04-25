@@ -43,9 +43,12 @@ import { createLoad } from "@/app/actions/loads"
 import { useRouter } from "next/navigation"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
+import { getTrailers } from "@/app/actions/trailers"
 import { getRoutes } from "@/app/actions/routes"
 import { getCustomers, createCustomer } from "@/app/actions/customers"
 import { getTripPlanningEstimate } from "@/app/actions/promiles"
+import { getCurrentDieselPrice } from "@/app/actions/fuel-surcharge"
+import { getCompanySettings } from "@/app/actions/number-formats"
 import { getOrderedDeliveryStopAddresses } from "@/lib/load-routing-from-stops"
 import { LoadDeliveryPointsManager } from "@/components/load-delivery-points-manager"
 import { createLoadDeliveryPoint } from "@/app/actions/load-delivery-points"
@@ -83,6 +86,7 @@ export default function AddLoadPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [drivers, setDrivers] = useState<any[]>([])
   const [trucks, setTrucks] = useState<any[]>([])
+  const [trailers, setTrailers] = useState<any[]>([])
   const [routes, setRoutes] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
   const [deliveryPoints, setDeliveryPoints] = useState<any[]>([])
@@ -97,6 +101,12 @@ export default function AddLoadPage() {
   const [selectedConsigneeAddressBookId, setSelectedConsigneeAddressBookId] = useState<string>("")
   const [activeStep, setActiveStep] = useState<WizardStepKey>("load-info")
   const [confirmCreateOpen, setConfirmCreateOpen] = useState(false)
+  const [fuelSurchargeMode, setFuelSurchargeMode] = useState<"manual_percent" | "auto_doe">("manual_percent")
+  const [manualFuelPercent, setManualFuelPercent] = useState("0")
+  const [dieselPricePerGallon, setDieselPricePerGallon] = useState<number | null>(null)
+  const [dieselEffectiveDate, setDieselEffectiveDate] = useState<string>("")
+  const [fscBasePrice, setFscBasePrice] = useState(1.2)
+  const [fscMpgAssumed, setFscMpgAssumed] = useState(6.5)
 
   const [formData, setFormData] = useState({
     // Load Info
@@ -159,6 +169,7 @@ export default function AddLoadPage() {
     status: "pending",
     driver: "",
     truck: "",
+    trailer: "",
     route: "",
     
     // Special Requirements
@@ -175,20 +186,32 @@ export default function AddLoadPage() {
 
   useEffect(() => {
     async function loadData() {
-      const [driversResult, trucksResult, routesResult, customersResult, shipperAddressBookResult, consigneeAddressBookResult] = await Promise.all([
+      const [driversResult, trucksResult, trailersResult, routesResult, customersResult, shipperAddressBookResult, consigneeAddressBookResult, settingsResult, dieselResult] = await Promise.all([
         getDrivers(),
         getTrucks(),
+        getTrailers(),
         getRoutes(),
         getCustomers(),
         getAddressBookEntries({ category: "shipper", is_active: true }),
         getAddressBookEntries({ category: "receiver", is_active: true }),
+        getCompanySettings(),
+        getCurrentDieselPrice(),
       ])
       if (driversResult.data) setDrivers(driversResult.data)
       if (trucksResult.data) setTrucks(trucksResult.data)
+      if (trailersResult.data) setTrailers(trailersResult.data)
       if (routesResult.data) setRoutes(routesResult.data)
       if (customersResult.data) setCustomers(customersResult.data)
       if (shipperAddressBookResult.data) setShipperAddressBookEntries(shipperAddressBookResult.data)
       if (consigneeAddressBookResult.data) setConsigneeAddressBookEntries(consigneeAddressBookResult.data)
+      if (settingsResult.data) {
+        setFscBasePrice(Number(settingsResult.data.fsc_base_price || 1.2))
+        setFscMpgAssumed(Number(settingsResult.data.fsc_mpg_assumed || 6.5))
+      }
+      if (dieselResult.data) {
+        setDieselPricePerGallon(Number(dieselResult.data.price_per_gallon || 0))
+        setDieselEffectiveDate(dieselResult.data.effective_date || "")
+      }
     }
     loadData()
   }, [])
@@ -251,13 +274,42 @@ export default function AddLoadPage() {
 
   useEffect(() => {
     const hauling = Number(formData.haulingFee || 0)
-    const fuel = Number(formData.fuelSurcharge || 0)
+    const miles = Number(formData.estimatedMiles || 0)
+    const diesel = Number(dieselPricePerGallon || 0)
+
+    let fuel = Number(formData.fuelSurcharge || 0)
+    if (fuelSurchargeMode === "manual_percent") {
+      const pct = Number(manualFuelPercent || 0)
+      fuel = hauling > 0 && pct > 0 ? (hauling * pct) / 100 : 0
+    } else {
+      const base = fscBasePrice > 0 ? fscBasePrice : 1.2
+      const mpg = fscMpgAssumed > 0 ? fscMpgAssumed : 6.5
+      const perMile = Math.max(diesel - base, 0) / mpg
+      fuel = miles > 0 ? miles * perMile : 0
+    }
+
+    const nextFuel = Number.isFinite(fuel) ? fuel.toFixed(2) : ""
     const accessorial = Number(formData.accessorialCharges || 0)
     const discount = Number(formData.discount || 0)
-    const total = hauling + fuel + accessorial - discount
-    const nextValue = Number.isFinite(total) ? total.toFixed(2) : ""
-    setFormData((prev) => (prev.totalRate === nextValue ? prev : { ...prev, totalRate: nextValue }))
-  }, [formData.haulingFee, formData.fuelSurcharge, formData.accessorialCharges, formData.discount])
+    const total = hauling + Number(nextFuel || 0) + accessorial - discount
+    const nextTotal = Number.isFinite(total) ? total.toFixed(2) : ""
+
+    setFormData((prev) => {
+      if (prev.fuelSurcharge === nextFuel && prev.totalRate === nextTotal) return prev
+      return { ...prev, fuelSurcharge: nextFuel, totalRate: nextTotal }
+    })
+  }, [
+    formData.haulingFee,
+    formData.estimatedMiles,
+    formData.fuelSurcharge,
+    formData.accessorialCharges,
+    formData.discount,
+    fuelSurchargeMode,
+    manualFuelPercent,
+    dieselPricePerGallon,
+    fscBasePrice,
+    fscMpgAssumed,
+  ])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -391,7 +443,7 @@ export default function AddLoadPage() {
   const ratePerMile =
     totalRateNumber > 0 && estimatedMilesNumber > 0 ? (totalRateNumber / estimatedMilesNumber).toFixed(2) : null
 
-  const handleSubmit = async (e?: React.FormEvent) => {
+  const handleSubmit = async (e?: React.FormEvent, submitAsStatus?: "draft" | "pending" | "confirmed" | "scheduled" | "in_transit") => {
     e?.preventDefault()
     setConfirmCreateOpen(false)
     setIsSubmitting(true)
@@ -499,6 +551,7 @@ export default function AddLoadPage() {
       }
 
       const multiStop = deliveryPoints.length > 0
+      const effectiveStatus = submitAsStatus || formData.status
       const payload: any = {
         shipment_number: formData.autoNumbering ? "" : formData.shipmentNumber,
       origin: formData.origin,
@@ -544,8 +597,9 @@ export default function AddLoadPage() {
       estimated_miles: formData.estimatedMiles ? parseInt(formData.estimatedMiles) : undefined,
         driver_id: formData.driver || undefined,
         truck_id: formData.truck || undefined,
+        trailer_id: formData.trailer || undefined,
         route_id: formData.route || undefined,
-        status: formData.status,
+        status: effectiveStatus,
       notes: formData.notes || undefined,
         load_date: formData.pickupDate || undefined,
         estimated_delivery: formData.estimatedDelivery || undefined,
@@ -553,20 +607,24 @@ export default function AddLoadPage() {
 
       const result = await createLoad(payload)
 
-    if (result.error) {
+      if (result.error) {
         toast.error(result.error)
-      setIsSubmitting(false)
-      return
-    }
+        setIsSubmitting(false)
+        return
+      }
 
-    if (deliveryPoints.length > 0 && result.data?.id) {
+      if (deliveryPoints.length > 0 && result.data?.id) {
         for (const point of deliveryPoints) {
           await createLoadDeliveryPoint(result.data.id, point)
         }
-        toast.success(`Load created with ${deliveryPoints.length} delivery points`)
-    } else {
-        toast.success("Load created successfully")
-    }
+        toast.success(
+          effectiveStatus === "draft"
+            ? `Draft saved with ${deliveryPoints.length} delivery points`
+            : `Load created with ${deliveryPoints.length} delivery points`,
+        )
+      } else {
+        toast.success(effectiveStatus === "draft" ? "Draft load saved" : "Load created successfully")
+      }
 
     // Increment address book usage
     if (shipperAddressBookId) {
@@ -576,7 +634,7 @@ export default function AddLoadPage() {
       await incrementAddressUsage(consigneeAddressBookId)
     }
 
-    router.push(`/dashboard/loads/${result.data?.id || ""}`)
+      router.push(`/dashboard/loads/${result.data?.id || ""}`)
     } catch (error: unknown) {
       toast.error(errorMessage(error, "Failed to create load"))
       setIsSubmitting(false)
@@ -623,6 +681,14 @@ export default function AddLoadPage() {
                 <Button type="button" variant="outline" onClick={handleBackStep}>
                   <ChevronLeft className="w-4 h-4 mr-2" />
                   Back
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isSubmitting}
+                  onClick={(e) => void handleSubmit(e, "draft")}
+                >
+                  {isSubmitting ? "Saving..." : "Save as Draft"}
                 </Button>
                 <Button
                   type="button"
@@ -1234,9 +1300,46 @@ export default function AddLoadPage() {
                       <Label>Hauling Fee</Label>
                       <Input name="haulingFee" value={formData.haulingFee} onChange={handleChange} className="mt-1" placeholder="0.00" />
                 </div>
-                <div>
+                <div className="space-y-2">
                       <Label>Fuel Surcharge</Label>
-                      <Input name="fuelSurcharge" value={formData.fuelSurcharge} onChange={handleChange} className="mt-1" placeholder="0.00" />
+                      <Select
+                        value={fuelSurchargeMode}
+                        onValueChange={(v: "manual_percent" | "auto_doe") => setFuelSurchargeMode(v)}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="manual_percent">Manual %</SelectItem>
+                          <SelectItem value="auto_doe">Auto (DOE index)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {fuelSurchargeMode === "manual_percent" ? (
+                        <Input
+                          value={manualFuelPercent}
+                          onChange={(e) => setManualFuelPercent(e.target.value)}
+                          className="mt-1"
+                          placeholder="0.00"
+                          type="number"
+                          step="0.01"
+                        />
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          {dieselPricePerGallon == null
+                            ? "DOE diesel price not synced yet. Fuel surcharge stays at $0.00."
+                            : `DOE $${dieselPricePerGallon.toFixed(3)}/gal${
+                                dieselEffectiveDate ? ` (${dieselEffectiveDate})` : ""
+                              } • Base $${fscBasePrice.toFixed(2)} • MPG ${fscMpgAssumed.toFixed(1)}`}
+                        </p>
+                      )}
+                      <Input
+                        name="fuelSurcharge"
+                        value={formData.fuelSurcharge}
+                        onChange={handleChange}
+                        className="mt-1 bg-muted/40"
+                        placeholder="0.00"
+                        readOnly
+                      />
                 </div>
                 <div>
                       <Label>Accessorial Charges</Label>
@@ -1277,6 +1380,7 @@ export default function AddLoadPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="confirmed">Confirmed</SelectItem>
                       <SelectItem value="scheduled">Scheduled</SelectItem>
                       <SelectItem value="in_transit">In Transit</SelectItem>
                     </SelectContent>
@@ -1308,6 +1412,21 @@ export default function AddLoadPage() {
                           {trucks.map(t => (
                             <SelectItem key={t.id} value={t.id}>
                               {t.truck_number} - {t.status === "available" ? "Available" : t.status === "in_use" ? "In Use" : t.status || "Unknown"}
+                            </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                      <Label>Trailer</Label>
+                      <Select value={formData.trailer} onValueChange={(v) => handleSelectChange("trailer", v)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select trailer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                          {trailers.map(t => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.trailer_number} - {t.status === "available" ? "Available" : t.status === "in_use" ? "In Use" : t.status || "Unknown"}
                             </SelectItem>
                       ))}
                     </SelectContent>
@@ -1351,6 +1470,7 @@ export default function AddLoadPage() {
                   <p><span className="text-muted-foreground">Rate:</span> ${formData.totalRate || "0.00"}</p>
                   <p><span className="text-muted-foreground">Driver:</span> {drivers.find((d) => d.id === formData.driver)?.name || "Unassigned"}</p>
                   <p><span className="text-muted-foreground">Truck:</span> {trucks.find((t) => t.id === formData.truck)?.truck_number || "Unassigned"}</p>
+                  <p><span className="text-muted-foreground">Trailer:</span> {trailers.find((t) => t.id === formData.trailer)?.trailer_number || "Unassigned"}</p>
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setConfirmCreateOpen(false)}>

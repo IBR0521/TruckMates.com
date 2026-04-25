@@ -35,6 +35,7 @@ function driverCanAccessDocumentRow(args: {
 export async function getDocuments(filters?: {
   limit?: number
   offset?: number
+  load_id?: string
 }) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
@@ -60,7 +61,7 @@ export async function getDocuments(filters?: {
 
   let listQuery = supabase
     .from("documents")
-    .select("id, name, type, file_url, file_size, upload_date, expiry_date, company_id, truck_id, driver_id", { count: "exact" })
+    .select("id, name, type, file_url, file_size, upload_date, expiry_date, company_id, truck_id, trailer_id, driver_id", { count: "exact" })
     .eq("company_id", ctx.companyId)
     .order("upload_date", { ascending: false })
 
@@ -72,6 +73,10 @@ export async function getDocuments(filters?: {
     } else {
       listQuery = listQuery.like("file_url", `${ctx.userId}/%`)
     }
+  }
+
+  if (filters?.load_id) {
+    listQuery = listQuery.eq("load_id", filters.load_id)
   }
 
   const { data: documents, error, count } = await listQuery.range(offset, offset + limit - 1)
@@ -362,6 +367,7 @@ export async function uploadDocument(
     name?: string
     type?: string
     expiry_date?: string
+    trailer_id?: string
   }
 ) {
   // FIXED: Add RBAC check
@@ -435,6 +441,7 @@ export async function uploadDocument(
         file_size: file.size,
         upload_date: new Date().toISOString().split("T")[0],
         expiry_date: metadata?.expiry_date || null,
+        trailer_id: metadata?.trailer_id || null,
         ...(role === "driver" && myDriverId ? { driver_id: myDriverId } : {}),
       })
       .select()

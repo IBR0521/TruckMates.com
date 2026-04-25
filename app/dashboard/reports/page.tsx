@@ -12,6 +12,7 @@ import OnTimeDeliveryPage from "./on-time-delivery/page"
 import YearEndTaxReportPage from "./year-end/page"
 import FuelEfficiencyReportPage from "./fuel-efficiency/page"
 import FuelAnalyticsPage from "../fuel-analytics/page"
+import ARAgingPage from "./ar-aging/page"
 
 const VALID_TABS = [
   "analytics",
@@ -22,6 +23,7 @@ const VALID_TABS = [
   "fuel",
   "on-time-delivery",
   "year-end",
+  "ar-aging",
 ] as const
 
 type ReportsTab = (typeof VALID_TABS)[number]
@@ -65,6 +67,9 @@ export default function ReportsPage() {
           <TabsTrigger className="shrink-0 flex-none px-3" value="year-end">
             Year-End Tax
           </TabsTrigger>
+          <TabsTrigger className="shrink-0 flex-none px-3" value="ar-aging">
+            AR Aging
+          </TabsTrigger>
         </TabsList>
       </div>
 
@@ -95,6 +100,9 @@ export default function ReportsPage() {
       </TabsContent>
       <TabsContent value="year-end">
         <YearEndTaxReportPage />
+      </TabsContent>
+      <TabsContent value="ar-aging">
+        <ARAgingPage />
       </TabsContent>
     </Tabs>
   )

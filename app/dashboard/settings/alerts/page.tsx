@@ -272,6 +272,10 @@ function AlertsTabContent() {
                     <SelectItem value="delivery_window">Delivery Window Approaching</SelectItem>
                     <SelectItem value="hos_violation">HOS Violation</SelectItem>
                     <SelectItem value="maintenance_due">Maintenance Due</SelectItem>
+                    <SelectItem value="ucr_expiry">UCR Expiry</SelectItem>
+                    <SelectItem value="irp_expiry">IRP Expiry</SelectItem>
+                    <SelectItem value="mcs150_expiry">MCS-150 Expiry</SelectItem>
+                    <SelectItem value="operating_authority_expiry">Operating Authority Expiry</SelectItem>
                     <SelectItem value="custom">Custom Event</SelectItem>
                   </SelectContent>
                 </Select>

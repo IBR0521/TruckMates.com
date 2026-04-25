@@ -1,6 +1,7 @@
 export const ALL_LOAD_STATUSES = [
   "draft",
   "pending",
+  "confirmed",
   "scheduled",
   "in_transit",
   "delivered",
@@ -12,8 +13,9 @@ export type LoadStatus = (typeof ALL_LOAD_STATUSES)[number]
 
 export const LOAD_STATUS_TRANSITIONS: Record<LoadStatus, LoadStatus[]> = {
   draft: ["pending", "scheduled", "cancelled"],
-  pending: ["draft", "scheduled", "cancelled"],
-  scheduled: ["in_transit", "pending", "draft", "cancelled"],
+  pending: ["draft", "confirmed", "scheduled", "cancelled"],
+  confirmed: ["scheduled", "cancelled", "pending"],
+  scheduled: ["in_transit", "confirmed", "pending", "draft", "cancelled"],
   in_transit: ["delivered", "scheduled", "cancelled"],
   delivered: ["completed", "cancelled"],
   completed: [],

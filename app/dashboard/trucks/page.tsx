@@ -25,6 +25,7 @@ import { InlineEdit } from "@/components/dashboard/inline-edit"
 import { DefensiveDelete } from "@/components/dashboard/defensive-delete"
 import { AuditTrail } from "@/components/dashboard/audit-trail"
 import { History } from "lucide-react"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function TrucksPage() {
   const router = useRouter()
@@ -188,6 +189,12 @@ export default function TrucksPage() {
       {/* Content */}
       <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
+          <Tabs value="trucks" className="mb-4">
+            <TabsList>
+              <TabsTrigger value="trucks">Trucks</TabsTrigger>
+              <TabsTrigger value="trailers" asChild><Link href="/dashboard/trailers">Trailers</Link></TabsTrigger>
+            </TabsList>
+          </Tabs>
           {/* Search and Filters */}
           {!isLoading && trucksList.length > 0 && (
             <Card className="border-border/50 p-4 mb-6">

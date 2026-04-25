@@ -381,6 +381,12 @@ export async function generateSettlementPDF(settlementId: string): Promise<{
               <span>Gross Pay:</span>
               <span class="text-bold">${formatCurrency(Number(settlement.gross_pay) || 0)}</span>
             </div>
+            ${Number(settlement.per_diem_amount) > 0 ? `
+            <div class="summary-row">
+              <span>Per-Diem (Non-Taxable)${Number(settlement.per_diem_eligible_nights) > 0 ? ` - ${Number(settlement.per_diem_eligible_nights)} nights` : ""}:</span>
+              <span class="text-bold">${formatCurrency(Number(settlement.per_diem_amount) || 0)}</span>
+            </div>
+            ` : ""}
             <div class="summary-row">
               <span>Fuel Deduction:</span>
               <span>${formatCurrency(Number(settlement.fuel_deduction) || 0)}</span>

@@ -1,7 +1,7 @@
-import { notFound } from "next/navigation"
+import { redirect } from "next/navigation"
 
 export default function LoadboardIntegrationsPage() {
-  // Intentionally hidden until the product is ready for paying users.
-  notFound()
+  // Keep route stable but avoid Next.js notFound overlay in dev.
+  redirect("/dashboard/settings")
 }
 
