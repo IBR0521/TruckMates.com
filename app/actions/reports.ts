@@ -740,7 +740,14 @@ export async function sendARAgingBucketReminders(bucket: ARAgingBucketKey) {
     now.setHours(0, 0, 0, 0)
     const { min, max } = getBucketFilterRange(bucket)
 
-    const invoiceRows = (invoices || []).flatMap((inv) => {
+    const invoiceRows = (invoices || []).flatMap((inv: {
+      id: string
+      invoice_number?: string | null
+      customer_name?: string | null
+      due_date?: string | null
+      amount?: number | string | null
+      paid_amount?: number | string | null
+    }) => {
       const due = inv.due_date ? new Date(inv.due_date) : null
       if (!due || Number.isNaN(due.getTime())) return []
 
