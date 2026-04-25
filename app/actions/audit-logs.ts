@@ -137,10 +137,14 @@ export async function getAuditLogFilterOptions(): Promise<{
 
     const actions = [...new Set((logs || []).map((l: any) => l.action).filter(isNonEmptyString))].sort()
     const resourceTypes = [...new Set((logs || []).map((l: any) => l.resource_type).filter(isNonEmptyString))].sort()
-    const userRows = (users || []).map((u: any) => ({
-      id: u.id,
-      label: u.name || u.full_name || u.email || u.id,
-    }))
+    const userRows: Array<{ id: string; label: string }> = (users || [])
+      .map((u: any) => {
+        const id = isNonEmptyString(u?.id) ? u.id : ""
+        const labelCandidate = u?.name ?? u?.full_name ?? u?.email ?? id
+        const label = isNonEmptyString(labelCandidate) ? labelCandidate : id
+        return { id, label }
+      })
+      .filter((u) => isNonEmptyString(u.id))
 
     return { data: { actions, resourceTypes, users: userRows }, error: null }
   } catch (error: unknown) {
