@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { use, useRouter } from "next/navigation"
+import { use, useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { getTrailer, updateTrailer } from "@/app/actions/trailers"
 import { uploadDocument } from "@/app/actions/documents"
