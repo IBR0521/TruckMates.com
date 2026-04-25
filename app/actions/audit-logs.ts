@@ -6,6 +6,10 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 import { errorMessage } from "@/lib/error-message"
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0
+}
+
 export type AuditLogRow = {
   id: string
   created_at: string
@@ -131,8 +135,8 @@ export async function getAuditLogFilterOptions(): Promise<{
         .limit(200),
     ])
 
-    const actions = [...new Set((logs || []).map((l: any) => l.action).filter(Boolean))].sort()
-    const resourceTypes = [...new Set((logs || []).map((l: any) => l.resource_type).filter(Boolean))].sort()
+    const actions = [...new Set((logs || []).map((l: any) => l.action).filter(isNonEmptyString))].sort()
+    const resourceTypes = [...new Set((logs || []).map((l: any) => l.resource_type).filter(isNonEmptyString))].sort()
     const userRows = (users || []).map((u: any) => ({
       id: u.id,
       label: u.name || u.full_name || u.email || u.id,
