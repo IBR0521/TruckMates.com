@@ -740,7 +740,13 @@ export async function sendARAgingBucketReminders(bucket: ARAgingBucketKey) {
     now.setHours(0, 0, 0, 0)
     const { min, max } = getBucketFilterRange(bucket)
 
-    const invoiceRows = (invoices || []).flatMap((inv: {
+    const invoiceRows: Array<{
+      id: string
+      invoice_number: string
+      customer_name: string
+      due_date: string
+      days_outstanding: number
+    }> = (invoices || []).flatMap((inv: {
       id: string
       invoice_number?: string | null
       customer_name?: string | null
@@ -775,7 +781,7 @@ export async function sendARAgingBucketReminders(bucket: ARAgingBucketKey) {
       return { data: { created: 0 }, error: null }
     }
 
-    const invoiceIds = invoiceRows.map((r) => r.id)
+    const invoiceIds = invoiceRows.map((r: { id: string }) => r.id)
     const { data: existingReminders } = await supabase
       .from("reminders")
       .select("invoice_id")
@@ -784,7 +790,11 @@ export async function sendARAgingBucketReminders(bucket: ARAgingBucketKey) {
       .eq("reminder_type", "invoice_due")
       .in("invoice_id", invoiceIds)
 
-    const existingInvoiceIds = new Set((existingReminders || []).map((r) => r.invoice_id).filter(Boolean))
+    const existingInvoiceIds = new Set(
+      (existingReminders || [])
+        .map((r: { invoice_id?: string | null }) => r.invoice_id)
+        .filter((id: string | null | undefined): id is string => typeof id === "string" && id.length > 0),
+    )
     const today = now.toISOString().slice(0, 10)
 
     const inserts = invoiceRows
