@@ -1,11 +1,18 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import crypto from "crypto"
 import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /** Matches `webhooks` in supabase/webhooks_schema.sql */
 const WEBHOOK_SELECT = "id, company_id, url, events, secret, active, description, created_at, updated_at"
@@ -51,7 +58,7 @@ export async function getWebhooks() {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data, error: null }
@@ -80,7 +87,7 @@ export async function getWebhook(id: string) {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     if (!data) {
@@ -181,7 +188,7 @@ export async function createWebhook(formData: {
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/settings/webhooks")
@@ -267,7 +274,7 @@ export async function updateWebhook(
     .single()
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/settings/webhooks")
@@ -290,7 +297,7 @@ export async function deleteWebhook(id: string) {
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   revalidatePath("/dashboard/settings/webhooks")
@@ -514,7 +521,7 @@ export async function getWebhookDeliveries(webhookId: string, limit: number = 50
     .limit(limit)
 
   if (error) {
-    return { error: error.message, data: null }
+    return { error: safeDbError(error), data: null }
   }
 
   return { data, error: null }

@@ -1,12 +1,19 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
@@ -76,7 +83,7 @@ export async function getIFTATaxRates(filters?: {
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: data as IFTATaxRate[], error: null }
@@ -158,7 +165,7 @@ export async function getIFTATaxRatesForQuarter(
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     // Convert array to state_code -> rate mapping
@@ -229,7 +236,7 @@ export async function upsertIFTATaxRate(formData: {
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/accounting/ifta/tax-rates")
@@ -291,7 +298,7 @@ export async function bulkUpdateIFTATaxRates(
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/accounting/ifta/tax-rates")
@@ -329,7 +336,7 @@ export async function deleteIFTATaxRate(id: string): Promise<{
 
     if (error) {
       Sentry.captureException(error)
-      return { error: error.message }
+      return { error: safeDbError(error) }
     }
 
     revalidatePath("/dashboard/accounting/ifta/tax-rates")

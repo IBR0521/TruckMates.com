@@ -6,6 +6,13 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { monthlyLimitForPlan } from "@/lib/api-usage-plan-limits"
 
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
+
 type PlanRow = {
   id?: string
   name?: string
@@ -157,7 +164,7 @@ export async function getSubscription(): Promise<{ data: any | null; error: stri
     .maybeSingle()
 
   if (error && error.code !== "PGRST116") {
-    return { error: error.message || "Failed to fetch subscription", data: null }
+    return { error: safeDbError(error) || "Failed to fetch subscription", data: null }
   }
 
   if (!data) {
@@ -166,7 +173,7 @@ export async function getSubscription(): Promise<{ data: any | null; error: stri
     data = second.data as SubscriptionRow | null
     error = second.error
     if (error && error.code !== "PGRST116") {
-      return { error: error.message || "Failed to fetch subscription", data: null }
+      return { error: safeDbError(error) || "Failed to fetch subscription", data: null }
     }
   }
 
@@ -284,7 +291,7 @@ export async function getPaymentHistory(): Promise<{ data: any[] | null; error: 
     .limit(50)
 
   if (error) {
-    return { error: error.message || "Failed to fetch payment history", data: null }
+    return { error: safeDbError(error) || "Failed to fetch payment history", data: null }
   }
 
   return { data: data || [], error: null }
@@ -309,7 +316,7 @@ export async function getPaymentMethods(): Promise<{ data: any[] | null; error: 
     .order("created_at", { ascending: false })
 
   if (error) {
-    return { error: error.message || "Failed to fetch payment methods", data: null }
+    return { error: safeDbError(error) || "Failed to fetch payment methods", data: null }
   }
 
   return { data: data || [], error: null }
@@ -423,7 +430,7 @@ export async function savePaymentMethod(paymentMethod: {
       .single()
 
     if (error) {
-      return { error: error.message || "Failed to update payment method", data: null }
+      return { error: safeDbError(error) || "Failed to update payment method", data: null }
     }
 
     return { data, error: null }
@@ -450,7 +457,7 @@ export async function savePaymentMethod(paymentMethod: {
       .single()
 
     if (error) {
-      return { error: error.message || "Failed to create payment method", data: null }
+      return { error: safeDbError(error) || "Failed to create payment method", data: null }
     }
 
     // If this should be default, use RPC to atomically set it
@@ -556,7 +563,7 @@ export async function deletePaymentMethod(id: string): Promise<{ error: string |
     .eq("company_id", ctx.companyId)
 
   if (error) {
-    return { error: error.message || "Failed to delete payment method" }
+    return { error: safeDbError(error) || "Failed to delete payment method" }
   }
 
   return { error: null }

@@ -1,13 +1,20 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage } from "@/lib/error-message"
+import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { validateRequiredString, sanitizeString } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 import * as Sentry from "@sentry/nextjs"
+
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
 
 /** `public.geofences` — geofencing_schema.sql + PostGIS columns from postgis_migration.sql */
 const GEOFENCE_FULL_SELECT =
@@ -179,7 +186,7 @@ export async function getGeofences(filters?: {
     const { data: geofences, error } = await query
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     return { data: geofences || [], error: null }
@@ -212,7 +219,7 @@ export async function getGeofence(id: string) {
       .maybeSingle()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
     if (!geofence) {
       return { error: "Geofence not found", data: null }
@@ -335,7 +342,7 @@ export async function createGeofence(formData: {
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/geofencing")
@@ -447,7 +454,7 @@ export async function updateGeofence(id: string, formData: Partial<{
       .single()
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/geofencing")
@@ -495,7 +502,7 @@ export async function deleteGeofence(id: string) {
       .eq("company_id", ctx.companyId)
 
     if (error) {
-      return { error: error.message, data: null }
+      return { error: safeDbError(error), data: null }
     }
 
     revalidatePath("/dashboard/geofencing")
@@ -822,7 +829,7 @@ export async function getZoneVisits(filters?: {
     const { data: visits, error, count } = await query
 
     if (error) {
-      return { error: error.message, data: null, count: 0 }
+      return { error: safeDbError(error), data: null, count: 0 }
     }
 
     return { data: visits || [], error: null, count: count || 0 }
@@ -877,7 +884,7 @@ export async function getGeofenceStates(filters?: {
     query = query.range(offset, offset + limit - 1)
 
     const { data, error, count } = await query
-    if (error) return { error: error.message, data: null, count: 0 }
+    if (error) return { error: safeDbError(error), data: null, count: 0 }
 
     return { data: data || [], error: null, count: count || 0 }
   } catch (error: unknown) {

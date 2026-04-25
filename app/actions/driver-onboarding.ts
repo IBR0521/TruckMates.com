@@ -7,6 +7,13 @@ import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 import * as Sentry from "@sentry/nextjs"
 
+
+function safeDbError(error: unknown, fallback = "Database operation failed"): string {
+  Sentry.captureException(error)
+  return sanitizeError(error, { fallback })
+}
+
+
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
 /** Matches `public.driver_onboarding` in supabase/driver_onboarding_schema.sql */
@@ -96,7 +103,7 @@ export async function initializeDriverOnboarding(driverId: string) {
 
   if (error) {
     Sentry.captureException(error)
-    return { data: null, error: error.message }
+    return { data: null, error: safeDbError(error) }
   }
 
   revalidatePath("/dashboard/drivers")
@@ -141,7 +148,7 @@ export async function getDriverOnboarding(driverId: string) {
 
   if (error) {
     Sentry.captureException(error)
-    return { data: null, error: error.message }
+    return { data: null, error: safeDbError(error) }
   }
 
   if (!data) {
@@ -190,7 +197,7 @@ export async function updateOnboardingStep(driverId: string, step: number) {
 
   if (error) {
     Sentry.captureException(error)
-    return { data: null, error: error.message }
+    return { data: null, error: safeDbError(error) }
   }
 
   revalidatePath("/dashboard/drivers")
@@ -317,7 +324,7 @@ export async function markDocumentUploaded(driverId: string, documentType: strin
 
   if (error) {
     Sentry.captureException(error)
-    return { data: null, error: error.message }
+    return { data: null, error: safeDbError(error) }
   }
 
   revalidatePath("/dashboard/drivers")
@@ -396,7 +403,7 @@ export async function completeDriverOnboarding(driverId: string) {
 
   if (error) {
     Sentry.captureException(error)
-    return { data: null, error: error.message }
+    return { data: null, error: safeDbError(error) }
   }
 
   // Update driver status to active (if not already)
@@ -450,7 +457,7 @@ export async function getAllDriverOnboarding(filters?: {
 
   if (error) {
     Sentry.captureException(error)
-    return { data: null, error: error.message }
+    return { data: null, error: safeDbError(error) }
   }
 
   return { data: data || [], error: null }
