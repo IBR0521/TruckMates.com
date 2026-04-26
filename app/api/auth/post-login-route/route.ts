@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
+const TEMP_DISABLE_PAYMENT_GATE = true
+
 function isSafeRelativePath(path: string | null): path is string {
   return !!path && path.startsWith("/") && !path.startsWith("//")
 }
@@ -45,29 +47,29 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const { data: subscription } = await supabase
-    .from("subscriptions")
-    .select(`
-      status,
-      trial_end,
-      stripe_subscription_id,
-      subscription_plans(name)
-    `)
-    .eq("company_id", companyId)
-    .maybeSingle()
+  if (!TEMP_DISABLE_PAYMENT_GATE) {
+    const { data: subscription } = await supabase
+      .from("subscriptions")
+      .select(`
+        status,
+        trial_end,
+        stripe_subscription_id,
+        subscription_plans(name)
+      `)
+      .eq("company_id", companyId)
+      .maybeSingle()
 
-  const planRaw = (subscription as any)?.subscription_plans
-  const planName = String((Array.isArray(planRaw) ? planRaw[0]?.name : planRaw?.name) || "free").toLowerCase()
-  const status = String((subscription as any)?.status || "")
-  const trialEnd = (subscription as any)?.trial_end ? new Date((subscription as any).trial_end) : null
-  const trialExpired = !!trialEnd && trialEnd.getTime() < Date.now()
+    const status = String((subscription as any)?.status || "")
+    const trialEnd = (subscription as any)?.trial_end ? new Date((subscription as any).trial_end) : null
+    const trialExpired = !!trialEnd && trialEnd.getTime() < Date.now()
 
-  const hasSubscriptionAccess =
-    !!subscription &&
-    (status === "active" || (status === "trialing" && !trialExpired))
+    const hasSubscriptionAccess =
+      !!subscription &&
+      (status === "active" || (status === "trialing" && !trialExpired))
 
-  if (!hasSubscriptionAccess) {
-    return NextResponse.json({ redirectTo: "/billing/activate?required=1" })
+    if (!hasSubscriptionAccess) {
+      return NextResponse.json({ redirectTo: "/billing/activate?required=1" })
+    }
   }
 
   return NextResponse.json({ redirectTo: safeNext })

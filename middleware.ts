@@ -5,6 +5,7 @@ import { canViewFeature, type FeatureCategory } from '@/lib/feature-permissions'
 
 /** Avoid hanging forever when Supabase is unreachable or misconfigured (browser spinner on /dashboard/*). */
 const SUPABASE_MIDDLEWARE_FETCH_MS = 12_000
+const TEMP_DISABLE_PAYMENT_GATE = true
 
 function generateCspNonce(): string {
   const bytes = new Uint8Array(16)
@@ -313,40 +314,42 @@ export async function middleware(request: NextRequest) {
           return NextResponse.redirect(url)
         }
 
-        const { data: subscription } = await supabase
-          .from('subscriptions')
-          .select(`
-            status,
-            trial_end,
-            stripe_subscription_id,
-            subscription_plans(name)
-          `)
-          .eq('company_id', profile.company_id)
-          .maybeSingle()
+        if (!TEMP_DISABLE_PAYMENT_GATE) {
+          const { data: subscription } = await supabase
+            .from('subscriptions')
+            .select(`
+              status,
+              trial_end,
+              stripe_subscription_id,
+              subscription_plans(name)
+            `)
+            .eq('company_id', profile.company_id)
+            .maybeSingle()
 
-        const planRaw = (subscription as any)?.subscription_plans
-        const planName = (Array.isArray(planRaw) ? planRaw[0]?.name : planRaw?.name || 'free') as string
-        const status = String((subscription as any)?.status || '')
-        const trialEnd = (subscription as any)?.trial_end ? new Date((subscription as any).trial_end) : null
-        const trialExpired = !!trialEnd && trialEnd.getTime() < Date.now()
+          const planRaw = (subscription as any)?.subscription_plans
+          const planName = (Array.isArray(planRaw) ? planRaw[0]?.name : planRaw?.name || 'free') as string
+          const status = String((subscription as any)?.status || '')
+          const trialEnd = (subscription as any)?.trial_end ? new Date((subscription as any).trial_end) : null
+          const trialExpired = !!trialEnd && trialEnd.getTime() < Date.now()
 
-        const hasSubscriptionAccess =
-          !!subscription &&
-          (status === 'active' || (status === 'trialing' && !trialExpired))
+          const hasSubscriptionAccess =
+            !!subscription &&
+            (status === 'active' || (status === 'trialing' && !trialExpired))
 
-        const requiredPlanFeature = requiredPlanFeatureForPath(pathname)
-        if (requiredPlanFeature && !hasPlanFeature(planName, requiredPlanFeature)) {
-          const url = request.nextUrl.clone()
-          url.pathname = '/dashboard/settings/billing'
-          url.searchParams.set('upgrade', requiredPlanFeature)
-          return NextResponse.redirect(url)
-        }
+          const requiredPlanFeature = requiredPlanFeatureForPath(pathname)
+          if (requiredPlanFeature && !hasPlanFeature(planName, requiredPlanFeature)) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/dashboard/settings/billing'
+            url.searchParams.set('upgrade', requiredPlanFeature)
+            return NextResponse.redirect(url)
+          }
 
-        if (!hasSubscriptionAccess && !isBillingActivationRoute) {
-          const url = request.nextUrl.clone()
-          url.pathname = '/billing/activate'
-          url.searchParams.set('required', '1')
-          return NextResponse.redirect(url)
+          if (!hasSubscriptionAccess && !isBillingActivationRoute) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/billing/activate'
+            url.searchParams.set('required', '1')
+            return NextResponse.redirect(url)
+          }
         }
       }
     }

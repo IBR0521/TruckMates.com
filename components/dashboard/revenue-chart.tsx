@@ -160,7 +160,11 @@ export function RevenueChart({ data: initialData }: RevenueChartProps) {
                 borderRadius: "8px",
                 boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
               }}
-              formatter={(value: number) => [`$${value.toLocaleString()}`, "Revenue"]}
+              formatter={(value) => {
+                const numericValue = typeof value === "number" ? value : Number(value)
+                if (!Number.isFinite(numericValue)) return [String(value), "Revenue"]
+                return [`$${numericValue.toLocaleString()}`, "Revenue"]
+              }}
               labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
             />
             <Area 

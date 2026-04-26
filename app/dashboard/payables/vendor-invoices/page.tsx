@@ -96,6 +96,9 @@ export default function VendorInvoicesPage() {
             <p className="text-muted-foreground text-sm mt-1">Track payables owed to vendors and mark bills paid.</p>
           </div>
           <div className="flex gap-2">
+            <Link href="/dashboard/payables/reconcile">
+              <Button variant="outline">Reconcile</Button>
+            </Link>
             <Link href="/dashboard/payables/ap-aging">
               <Button variant="outline">AP Aging</Button>
             </Link>

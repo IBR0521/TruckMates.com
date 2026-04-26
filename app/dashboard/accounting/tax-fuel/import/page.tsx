@@ -15,13 +15,14 @@ import { Label } from "@/components/ui/label"
 import { Upload, FileText, CheckCircle, XCircle, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
-import { importFuelCardData } from "@/app/actions/fuel-card-import"
+import { importFuelCardData, syncFuelCardTransactions } from "@/app/actions/fuel-card-import"
 import type { FuelCardImportResult } from "@/app/actions/fuel-card-import"
 
 export default function FuelCardImportPage() {
-  const [selectedProvider, setSelectedProvider] = useState<"comdata" | "wex" | "pfleet" | "auto">("auto")
+  const [selectedProvider, setSelectedProvider] = useState<"comdata" | "wex" | "pfleet" | "efs" | "auto">("auto")
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [isSyncingLive, setIsSyncingLive] = useState(false)
   const [importResult, setImportResult] = useState<FuelCardImportResult | null>(null)
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -33,6 +34,21 @@ export default function FuelCardImportPage() {
         toast.error("Please select a CSV file")
       }
     }
+  }
+
+  const handleLiveSync = async () => {
+    if (!["comdata", "wex", "efs"].includes(selectedProvider)) {
+      toast.error("Select Comdata, WEX, or EFS to run live API sync")
+      return
+    }
+    setIsSyncingLive(true)
+    const result = await syncFuelCardTransactions(selectedProvider as "comdata" | "wex" | "efs")
+    setIsSyncingLive(false)
+    if (result.error) {
+      toast.error(result.error)
+      return
+    }
+    toast.success(`Live sync complete: ${result.data?.inserted || 0} transaction(s) imported`)
   }
 
   const handleImport = async () => {
@@ -115,7 +131,7 @@ export default function FuelCardImportPage() {
                 <Select
                   value={selectedProvider}
                   onValueChange={(value) =>
-                    setSelectedProvider(value as "comdata" | "wex" | "pfleet" | "auto")
+                    setSelectedProvider(value as "comdata" | "wex" | "pfleet" | "efs" | "auto")
                   }
                 >
                   <SelectTrigger id="provider">
@@ -125,6 +141,7 @@ export default function FuelCardImportPage() {
                     <SelectItem value="auto">Auto-Detect</SelectItem>
                     <SelectItem value="comdata">Comdata</SelectItem>
                     <SelectItem value="wex">Wex</SelectItem>
+                    <SelectItem value="efs">EFS</SelectItem>
                     <SelectItem value="pfleet">P-Fleet</SelectItem>
                   </SelectContent>
                 </Select>
@@ -162,6 +179,14 @@ export default function FuelCardImportPage() {
                 className="w-full"
               >
                 {isUploading ? "Importing..." : "Import Fuel Data"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleLiveSync}
+                disabled={isSyncingLive}
+                className="w-full"
+              >
+                {isSyncingLive ? "Syncing Live API..." : "Sync Live Fuel Card API"}
               </Button>
             </div>
           </Card>

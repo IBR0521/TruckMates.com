@@ -42,6 +42,19 @@ export async function getIntegrationSettings() {
         quickbooks_gl_account_mappings,
         stripe_enabled,
         stripe_api_key,
+        comdata_enabled,
+        comdata_api_base_url,
+        comdata_api_key,
+        comdata_api_secret,
+        wex_enabled,
+        wex_api_base_url,
+        wex_api_key,
+        wex_api_secret,
+        efs_enabled,
+        efs_api_base_url,
+        efs_api_key,
+        efs_api_secret,
+        fuel_card_last_synced_at,
         paypal_enabled,
         paypal_client_id,
         google_maps_enabled,
@@ -75,6 +88,9 @@ export async function getIntegrationSettings() {
           quickbooks_enabled: false,
           quickbooks_company_id: "",
           stripe_enabled: false,
+          comdata_enabled: false,
+          wex_enabled: false,
+          efs_enabled: false,
           paypal_enabled: false,
           google_maps_enabled: true, // platform-wide default
           resend_enabled: true, // platform-wide default
@@ -101,6 +117,13 @@ export async function getIntegrationSettings() {
       quickbooks_enabled: !!data.quickbooks_enabled,
       quickbooks_company_id: data.quickbooks_company_id || "",
       stripe_enabled: !!data.stripe_enabled,
+      comdata_enabled: !!(data as any).comdata_enabled,
+      wex_enabled: !!(data as any).wex_enabled,
+      efs_enabled: !!(data as any).efs_enabled,
+      has_comdata_credentials: !!((data as any).comdata_api_key && (data as any).comdata_api_secret),
+      has_wex_credentials: !!((data as any).wex_api_key && (data as any).wex_api_secret),
+      has_efs_credentials: !!((data as any).efs_api_key && (data as any).efs_api_secret),
+      fuel_card_last_synced_at: (data as any).fuel_card_last_synced_at || null,
       paypal_enabled: !!data.paypal_enabled,
       google_maps_enabled: data.google_maps_enabled !== false,
       resend_enabled: data.resend_enabled !== false,
@@ -137,6 +160,19 @@ export async function updateIntegrationSettings(settings: {
   quickbooks_gl_account_mappings?: Record<string, string>
   stripe_enabled?: boolean
   stripe_api_key?: string
+  comdata_enabled?: boolean
+  comdata_api_base_url?: string
+  comdata_api_key?: string
+  comdata_api_secret?: string
+  wex_enabled?: boolean
+  wex_api_base_url?: string
+  wex_api_key?: string
+  wex_api_secret?: string
+  efs_enabled?: boolean
+  efs_api_base_url?: string
+  efs_api_key?: string
+  efs_api_secret?: string
+  fuel_card_last_synced_at?: string
   paypal_enabled?: boolean
   paypal_client_id?: string
   google_maps_enabled?: boolean
@@ -183,6 +219,19 @@ export async function updateIntegrationSettings(settings: {
     updateData.quickbooks_gl_account_mappings = settings.quickbooks_gl_account_mappings
   if (settings.stripe_enabled !== undefined) updateData.stripe_enabled = settings.stripe_enabled
   if (settings.stripe_api_key !== undefined) updateData.stripe_api_key = settings.stripe_api_key
+  if (settings.comdata_enabled !== undefined) updateData.comdata_enabled = settings.comdata_enabled
+  if (settings.comdata_api_base_url !== undefined) updateData.comdata_api_base_url = settings.comdata_api_base_url
+  if (settings.comdata_api_key !== undefined) updateData.comdata_api_key = settings.comdata_api_key
+  if (settings.comdata_api_secret !== undefined) updateData.comdata_api_secret = settings.comdata_api_secret
+  if (settings.wex_enabled !== undefined) updateData.wex_enabled = settings.wex_enabled
+  if (settings.wex_api_base_url !== undefined) updateData.wex_api_base_url = settings.wex_api_base_url
+  if (settings.wex_api_key !== undefined) updateData.wex_api_key = settings.wex_api_key
+  if (settings.wex_api_secret !== undefined) updateData.wex_api_secret = settings.wex_api_secret
+  if (settings.efs_enabled !== undefined) updateData.efs_enabled = settings.efs_enabled
+  if (settings.efs_api_base_url !== undefined) updateData.efs_api_base_url = settings.efs_api_base_url
+  if (settings.efs_api_key !== undefined) updateData.efs_api_key = settings.efs_api_key
+  if (settings.efs_api_secret !== undefined) updateData.efs_api_secret = settings.efs_api_secret
+  if (settings.fuel_card_last_synced_at !== undefined) updateData.fuel_card_last_synced_at = settings.fuel_card_last_synced_at
   if (settings.paypal_enabled !== undefined) updateData.paypal_enabled = settings.paypal_enabled
   if (settings.paypal_client_id !== undefined) updateData.paypal_client_id = settings.paypal_client_id
   if (settings.google_maps_enabled !== undefined) updateData.google_maps_enabled = settings.google_maps_enabled
