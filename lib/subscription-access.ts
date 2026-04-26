@@ -3,6 +3,8 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+const TEMP_DISABLE_PAYMENT_GATE = true
+
 type SubscriptionStatus = "active" | "trialing" | "past_due" | "canceled" | "unpaid" | "incomplete" | "unknown"
 
 export type CompanySubscriptionAccess = {
@@ -47,6 +49,16 @@ export async function getCompanySubscriptionAccess(): Promise<CompanySubscriptio
       planName: "free",
       status: "unknown",
       reason: ctx.error || "Not authenticated",
+    }
+  }
+
+  if (TEMP_DISABLE_PAYMENT_GATE) {
+    return {
+      allowed: true,
+      companyId: ctx.companyId,
+      planName: "enterprise",
+      status: "active",
+      reason: null,
     }
   }
 
