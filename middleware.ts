@@ -69,9 +69,15 @@ function buildConnectSrc(): string {
 
 function buildCsp(nonce: string): string {
   const isProduction = process.env.NODE_ENV === 'production'
+  // NOTE: During login/bootstrap we must allow inline runtime chunks rendered by Next.js.
+  // Using both nonce + unsafe-inline can cause unsafe-inline to be ignored by browsers.
   const scriptSrc = isProduction
-    ? `script-src 'self' 'unsafe-inline' 'nonce-${nonce}' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com`
-    : `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com`
+    ? `script-src 'self' 'unsafe-inline' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com`
+
+  const styleSrc = isProduction
+    ? `style-src 'self' 'unsafe-inline' https:`
+    : `style-src 'self' 'unsafe-inline' https:`
 
   return [
     "default-src 'self'",
@@ -83,7 +89,9 @@ function buildCsp(nonce: string): string {
     buildConnectSrc(),
     "worker-src 'self' blob:",
     scriptSrc,
-    `style-src 'self' 'unsafe-inline' 'nonce-${nonce}' https:`,
+    "script-src-attr 'unsafe-inline'",
+    "style-src-attr 'unsafe-inline'",
+    styleSrc,
     "form-action 'self'",
   ].join('; ')
 }
