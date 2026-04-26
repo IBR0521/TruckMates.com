@@ -70,7 +70,7 @@ function buildConnectSrc(): string {
 function buildCsp(nonce: string): string {
   const isProduction = process.env.NODE_ENV === 'production'
   const scriptSrc = isProduction
-    ? `script-src 'self' 'nonce-${nonce}' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com`
+    ? `script-src 'self' 'unsafe-inline' 'nonce-${nonce}' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com`
     : `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com`
 
   return [
@@ -83,7 +83,7 @@ function buildCsp(nonce: string): string {
     buildConnectSrc(),
     "worker-src 'self' blob:",
     scriptSrc,
-    `style-src 'self' 'nonce-${nonce}' https:`,
+    `style-src 'self' 'unsafe-inline' 'nonce-${nonce}' https:`,
     "form-action 'self'",
   ].join('; ')
 }
