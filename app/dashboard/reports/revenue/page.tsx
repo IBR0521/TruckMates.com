@@ -9,8 +9,11 @@ import { useState, useEffect } from "react"
 import { getRevenueReport, getMonthlyRevenueTrend } from "@/app/actions/reports"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useSearchParams } from "next/navigation"
 
 export default function RevenuePage() {
+  const searchParams = useSearchParams()
+  const terminalId = searchParams.get("terminal") || "all"
   const [selectedPeriod, setSelectedPeriod] = useState("This Month")
   const [loading, setLoading] = useState(true)
   const [startDate, setStartDate] = useState("")
@@ -26,7 +29,7 @@ export default function RevenuePage() {
 
   useEffect(() => {
     loadReportData()
-  }, [selectedPeriod, startDate, endDate])
+  }, [selectedPeriod, startDate, endDate, terminalId])
 
   const getDateRange = () => {
     const now = new Date()
@@ -56,7 +59,7 @@ export default function RevenuePage() {
     setLoading(true)
     try {
       const { start, end } = getDateRange()
-      const result = await getRevenueReport(start || undefined, end || undefined)
+      const result = await getRevenueReport(start || undefined, end || undefined, terminalId === "all" ? undefined : terminalId)
       
       if (result.error) {
         toast.error(result.error)
@@ -66,7 +69,7 @@ export default function RevenuePage() {
       }
 
       // Load trend data
-      const trendResult = await getMonthlyRevenueTrend(6)
+      const trendResult = await getMonthlyRevenueTrend(6, terminalId === "all" ? undefined : terminalId)
       if (trendResult.error) {
         console.error("Error loading trend data:", trendResult.error)
         toast.error(`Failed to load revenue trend: ${trendResult.error}`)

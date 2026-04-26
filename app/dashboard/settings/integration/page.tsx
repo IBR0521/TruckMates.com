@@ -13,6 +13,7 @@ import { toast } from "sonner"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { getIntegrationSettings } from "@/app/actions/settings-integration"
+import { getGLAccounts } from "@/app/actions/gl-accounts"
 import { useSearchParams } from "next/navigation"
 
 export default function IntegrationSettingsPage() {
@@ -34,14 +35,16 @@ export default function IntegrationSettingsPage() {
     quickbooks_synced_at: null as string | null,
     quickbooks_default_income_account_id: "" as string,
     quickbooks_default_item_id: "" as string,
+    quickbooks_gl_account_mappings: {} as Record<string, string>,
     quickbooks_allowed: false,
   })
+  const [glAccounts, setGlAccounts] = useState<Array<{ id: string; code: string; name: string; type: string }>>([])
 
   useEffect(() => {
     async function loadSettings() {
       setIsLoading(true)
       try {
-        const result = await getIntegrationSettings()
+        const [result, glResult] = await Promise.all([getIntegrationSettings(), getGLAccounts()])
         if (result.error) {
           toast.error(result.error)
         } else if (result.data) {
@@ -62,8 +65,12 @@ export default function IntegrationSettingsPage() {
             quickbooks_default_income_account_id:
               (result.data as any).quickbooks_default_income_account_id || "",
             quickbooks_default_item_id: (result.data as any).quickbooks_default_item_id || "",
+            quickbooks_gl_account_mappings: (result.data as any).quickbooks_gl_account_mappings || {},
             quickbooks_allowed: !!(result.data as any).quickbooks_allowed,
           })
+        }
+        if (!glResult.error && glResult.data) {
+          setGlAccounts(glResult.data)
         }
       } catch (error) {
         toast.error("Failed to load integration settings")
@@ -141,6 +148,7 @@ export default function IntegrationSettingsPage() {
         body: JSON.stringify({
           quickbooks_default_income_account_id: integrations.quickbooks_default_income_account_id || null,
           quickbooks_default_item_id: integrations.quickbooks_default_item_id || null,
+          quickbooks_gl_account_mappings: integrations.quickbooks_gl_account_mappings || {},
         }),
       })
       const json = await res.json().catch(() => ({}))
@@ -392,6 +400,41 @@ export default function IntegrationSettingsPage() {
                       <Button variant="outline" size="sm" onClick={saveQuickBooksMapping}>
                         Save QuickBooks mapping
                       </Button>
+                    </div>
+                  </div>
+                )}
+                {integrations.has_quickbooks_connection && (
+                  <div className="mt-4 border rounded-md p-3">
+                    <p className="text-xs font-medium text-foreground mb-2">GL Code to QuickBooks Account ID Mapping</p>
+                    <p className="text-[11px] text-muted-foreground mb-3">
+                      Map each GL code to a QuickBooks Account ID so expense/AP sync lands in the right account.
+                    </p>
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {glAccounts.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No GL accounts found yet.</p>
+                      ) : (
+                        glAccounts.map((acc) => (
+                          <div key={acc.id} className="grid grid-cols-1 md:grid-cols-[1.1fr_1fr] gap-2 items-center">
+                            <div className="text-xs text-muted-foreground">
+                              <span className="font-medium text-foreground">{acc.code}</span> - {acc.name}
+                            </div>
+                            <input
+                              className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+                              value={integrations.quickbooks_gl_account_mappings?.[acc.code] || ""}
+                              onChange={(e) =>
+                                setIntegrations((prev) => ({
+                                  ...prev,
+                                  quickbooks_gl_account_mappings: {
+                                    ...(prev.quickbooks_gl_account_mappings || {}),
+                                    [acc.code]: e.target.value,
+                                  },
+                                }))
+                              }
+                              placeholder="QuickBooks Account ID"
+                            />
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 )}

@@ -12,6 +12,7 @@ import { toast } from "sonner"
 import { createExpense } from "@/app/actions/accounting"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
+import { getGLAccounts } from "@/app/actions/gl-accounts"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -34,6 +35,7 @@ export default function AddExpensePage() {
   const router = useRouter()
   const [drivers, setDrivers] = useState<any[]>([])
   const [trucks, setTrucks] = useState<any[]>([])
+  const [glAccounts, setGlAccounts] = useState<Array<{ id: string; code: string; name: string }>>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split("T")[0],
@@ -45,6 +47,7 @@ export default function AddExpensePage() {
     truck_id: "",
     mileage: "",
     payment_method: "",
+    gl_code: "",
     has_receipt: false,
     fuel_level_after: "", // New field for fuel level after fill
     gallons: "", // Gallons purchased
@@ -53,15 +56,19 @@ export default function AddExpensePage() {
 
   useEffect(() => {
     async function loadData() {
-      const [driversResult, trucksResult] = await Promise.all([
+      const [driversResult, trucksResult, glResult] = await Promise.all([
         getDrivers(),
         getTrucks(),
+        getGLAccounts("expense"),
       ])
       if (driversResult.data) {
         setDrivers(driversResult.data)
       }
       if (trucksResult.data) {
         setTrucks(trucksResult.data)
+      }
+      if (glResult.data) {
+        setGlAccounts(glResult.data)
       }
     }
     loadData()
@@ -116,6 +123,7 @@ export default function AddExpensePage() {
       truck_id: formData.truck_id || undefined,
       mileage: formData.mileage ? Number.parseInt(formData.mileage) : undefined,
       payment_method: formData.payment_method || undefined,
+      gl_code: formData.gl_code || undefined,
       has_receipt: formData.has_receipt,
       fuel_level_after: formData.fuel_level_after ? Number.parseInt(formData.fuel_level_after) : undefined,
     })
@@ -219,6 +227,25 @@ export default function AddExpensePage() {
                   className="bg-background border-border"
                 />
               </div>
+            <div>
+              <Label>GL Account</Label>
+              <Select
+                value={formData.gl_code || "none"}
+                onValueChange={(value) => setFormData({ ...formData, gl_code: value === "none" ? "" : value })}
+              >
+                <SelectTrigger className="bg-background border-border">
+                  <SelectValue placeholder="Select GL account (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {glAccounts.map((acc) => (
+                    <SelectItem key={acc.id} value={acc.code}>
+                      {acc.code} - {acc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </FormGrid>
         </FormSection>
         </TabsContent>

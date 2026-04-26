@@ -141,6 +141,13 @@ export async function checkAndFixDemoCompanyLink() {
         }
       }
 
+      try {
+        const { ensureDefaultGLAccounts } = await import("./gl-accounts")
+        await ensureDefaultGLAccounts(String(newCompanyId))
+      } catch (error) {
+        Sentry.captureException(error)
+      }
+
       revalidatePath("/dashboard")
       return { 
         success: true, 

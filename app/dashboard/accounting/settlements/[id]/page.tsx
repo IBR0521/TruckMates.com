@@ -13,6 +13,7 @@ import { approveSettlementAsDriver, getSettlement, markSettlementPaid } from "@/
 import { errorMessage } from "@/lib/error-message"
 import { getCurrentUser } from "@/lib/auth/server"
 import { mapLegacyRole } from "@/lib/roles"
+import { createDriverStripeOnboardingLink } from "@/app/actions/settlement-ach"
 
 type SettlementLoad = {
   id?: string
@@ -100,6 +101,15 @@ export default function SettlementDetailPage({ params }: { params: Promise<{ id:
     setIsApproving(false)
   }
 
+  const handleConnectBank = async () => {
+    const result = await createDriverStripeOnboardingLink()
+    if (result.error || !result.data?.url) {
+      toast.error(result.error || "Failed to launch Stripe onboarding")
+      return
+    }
+    window.open(result.data.url, "_blank", "noopener,noreferrer")
+  }
+
   if (id === "create") {
     return null
   }
@@ -164,6 +174,11 @@ export default function SettlementDetailPage({ params }: { params: Promise<{ id:
               <Button onClick={handleMarkPaid} disabled={isPaying} className="bg-green-600 hover:bg-green-700 text-white">
                 <CheckCircle2 className="w-4 h-4 mr-2" />
                 {isPaying ? "Marking..." : "Mark as Paid"}
+              </Button>
+            )}
+            {isDriverUser && (
+              <Button onClick={handleConnectBank} variant="outline">
+                Connect Bank (Stripe)
               </Button>
             )}
             {isDriverUser && !isDriverApproved && status !== "cancelled" && (
@@ -236,6 +251,14 @@ export default function SettlementDetailPage({ params }: { params: Promise<{ id:
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Payment Method</p>
                   <p className="text-foreground">{settlement.payment_method || "Not specified"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Payment Reference</p>
+                  <p className="text-foreground">{settlement.payment_reference || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Expected Arrival</p>
+                  <p className="text-foreground">{settlement.payment_eta ? new Date(settlement.payment_eta).toLocaleDateString() : "N/A"}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Driver Approval</p>

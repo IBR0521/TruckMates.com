@@ -47,6 +47,7 @@ import { History } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import DriverLeaderboardPage from "./leaderboard/page"
 import DriverAchievementsPage from "./achievements/page"
+import DriverApplicantsPage from "./applicants/page"
 import { useDriversInitialData } from "@/components/dashboard/initial-list-data-contexts"
 
 function DriversPageContent() {
@@ -863,7 +864,7 @@ export default function DriversPage() {
   const searchParams = useSearchParams()
 
   const topTabParam = (searchParams.get("tab") || "drivers").toLowerCase()
-  const topTab = topTabParam === "performance" ? "performance" : "drivers"
+  const topTab = topTabParam === "performance" ? "performance" : topTabParam === "applicants" ? "applicants" : "drivers"
 
   const performanceTabParam = (searchParams.get("performanceTab") || "leaderboard").toLowerCase()
   const performanceTab = performanceTabParam === "achievements" ? "achievements" : "leaderboard"
@@ -874,7 +875,9 @@ export default function DriversPage() {
         value={topTab}
         onValueChange={(value) => {
           const nextTopTab = value === "performance" ? "performance" : "drivers"
-          if (nextTopTab === "drivers") {
+          if (value === "applicants") {
+            router.push("/dashboard/drivers?tab=applicants")
+          } else if (nextTopTab === "drivers") {
             router.push("/dashboard/drivers?tab=drivers")
           } else {
             router.push(`/dashboard/drivers?tab=performance&performanceTab=${encodeURIComponent(performanceTab)}`)
@@ -882,13 +885,17 @@ export default function DriversPage() {
         }}
         className="w-full"
       >
-        <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-2">
+        <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-3">
           <TabsTrigger value="drivers">Drivers</TabsTrigger>
+          <TabsTrigger value="applicants">Applicants</TabsTrigger>
           <TabsTrigger value="performance">Performance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="drivers">
           <DriversPageContent />
+        </TabsContent>
+        <TabsContent value="applicants">
+          <DriverApplicantsPage />
         </TabsContent>
 
         <TabsContent value="performance">

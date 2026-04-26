@@ -23,6 +23,7 @@ const TRUCK_FULL_SELECT = `
 
 export async function getTrucks(filters?: {
   status?: string
+  terminal_id?: string
   limit?: number
   offset?: number
 }) {
@@ -37,13 +38,16 @@ export async function getTrucks(filters?: {
     // Build query with selective columns and pagination
     let query = supabase
       .from("trucks")
-      .select("id, truck_number, make, model, year, status, current_driver_id, mileage, fuel_level, created_at", { count: "exact" })
+      .select("id, truck_number, make, model, year, status, current_driver_id, terminal_id, mileage, fuel_level, created_at", { count: "exact" })
       .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
     // Apply filters
     if (filters?.status) {
       query = query.eq("status", filters.status)
+    }
+    if (filters?.terminal_id) {
+      query = query.eq("terminal_id", filters.terminal_id)
     }
 
     // Apply pagination (default limit 25 for faster initial loads, max 100)
@@ -120,6 +124,7 @@ export async function createTruck(formData: {
   cost?: number
   color?: string
   documents?: any[]
+  terminal_id?: string | null
   [key: string]: any
 }) {
   // Check permission
@@ -272,6 +277,7 @@ export async function createTruck(formData: {
   if (formData.vin) truckData.vin = sanitizeString(formData.vin, 17).toUpperCase()
   if (formData.license_plate) truckData.license_plate = sanitizeString(formData.license_plate, 20).toUpperCase()
   if (formData.current_driver_id) truckData.current_driver_id = formData.current_driver_id
+  if (formData.terminal_id) truckData.terminal_id = formData.terminal_id
   if (formData.current_location) truckData.current_location = sanitizeString(formData.current_location, 200)
   if (formData.fuel_level !== undefined && formData.fuel_level !== null) {
     const fuel = typeof formData.fuel_level === 'string' ? parseFloat(formData.fuel_level) : formData.fuel_level

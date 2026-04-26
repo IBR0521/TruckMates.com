@@ -21,7 +21,7 @@ async function getCompanyId() {
 }
 
 // Revenue Report
-export async function getRevenueReport(startDate?: string, endDate?: string) {
+export async function getRevenueReport(startDate?: string, endDate?: string, terminalId?: string) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     // FIXED: Add RBAC check - only authorized roles can view financial reports
@@ -61,6 +61,9 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
       .from("loads")
       .select("id, shipment_number, customer_id, total_rate, value, created_at")
       .eq("company_id", companyId)
+    if (terminalId) {
+      loadQuery = loadQuery.eq("terminal_id", terminalId)
+    }
 
     if (startDate) {
       loadQuery = loadQuery.gte("created_at", startDate)
@@ -97,8 +100,10 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
     // FIXED: Track which loads have invoices to prevent double-counting
     const loadIdsWithInvoices = new Set<string>()
     
+    const allowedLoadIds = new Set((loads || []).map((l: any) => String(l.id)))
     // Process invoices
     invoices?.forEach((invoice: { customer_name: string | null; amount: number | string | null; load_id: string | null; [key: string]: any }) => {
+      if (terminalId && invoice.load_id && !allowedLoadIds.has(String(invoice.load_id))) return
       const customer = invoice.customer_name || "Unknown Customer"
       if (!revenueByCustomer[customer]) {
         revenueByCustomer[customer] = {
@@ -169,7 +174,7 @@ export async function getRevenueReport(startDate?: string, endDate?: string) {
 }
 
 // Profit & Loss Report
-export async function getProfitLossReport(startDate?: string, endDate?: string) {
+export async function getProfitLossReport(startDate?: string, endDate?: string, terminalId?: string) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
     // FIXED: Add RBAC check - only authorized roles can view financial reports
@@ -204,8 +209,11 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
     // Also get revenue from loads
     let loadQuery = supabase
       .from("loads")
-      .select("total_rate, value, created_at")
+      .select("id, total_rate, value, created_at")
       .eq("company_id", companyId)
+    if (terminalId) {
+      loadQuery = loadQuery.eq("terminal_id", terminalId)
+    }
 
     if (startDate) {
       loadQuery = loadQuery.gte("created_at", startDate)
@@ -237,15 +245,19 @@ export async function getProfitLossReport(startDate?: string, endDate?: string) 
     // FIXED: Track which loads have invoices to prevent double-counting
     const loadIdsWithInvoices = new Set<string>()
     
+    const allowedLoadIds = new Set((loads || []).map((l: any) => String(l.id)))
     // Process invoices and track their load_ids
     invoices?.forEach((invoice: { load_id: string | null; [key: string]: any }) => {
+      if (terminalId && invoice.load_id && !allowedLoadIds.has(String(invoice.load_id))) return
       if (invoice.load_id) {
         loadIdsWithInvoices.add(invoice.load_id)
       }
     })
     
     // Calculate totals - combine invoices and loads (only loads without invoices)
-    let totalRevenue = invoices?.reduce((sum: number, inv: { amount: number | string | null; [key: string]: any }) => sum + (Number(inv.amount) || 0), 0) || 0
+    let totalRevenue = (invoices || [])
+      .filter((inv: any) => !terminalId || !inv.load_id || allowedLoadIds.has(String(inv.load_id)))
+      .reduce((sum: number, inv: { amount: number | string | null; [key: string]: any }) => sum + (Number(inv.amount) || 0), 0)
     
     // FIXED: Only add revenue from loads that don't have invoices
     if (loads) {
@@ -459,7 +471,7 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
 }
 
 // Get monthly revenue trend
-export async function getMonthlyRevenueTrend(months = 6) {
+export async function getMonthlyRevenueTrend(months = 6, terminalId?: string) {
   try {
     // RBAC: only allow users with reports permission
     const permissionCheck = await checkViewPermission("reports")
@@ -488,13 +500,17 @@ export async function getMonthlyRevenueTrend(months = 6) {
       .order("created_at", { ascending: true })
 
     // Loads (fallback revenue source)
-    const { data: loads } = await supabase
+    let loadsQuery = supabase
       .from("loads")
       .select("id, created_at, value, total_rate")
       .eq("company_id", companyId)
       .gte("created_at", startDate.toISOString())
       .lte("created_at", endDate.toISOString())
       .limit(10000)
+    if (terminalId) {
+      loadsQuery = loadsQuery.eq("terminal_id", terminalId)
+    }
+    const { data: loads } = await loadsQuery
 
     const monthlyData: Record<string, number> = {}
 
@@ -503,7 +519,9 @@ export async function getMonthlyRevenueTrend(months = 6) {
       `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
 
     // Process invoices first
+    const allowedLoadIds = new Set((loads || []).map((l: any) => String(l.id)))
     invoices?.forEach((invoice: any) => {
+      if (terminalId && invoice.load_id && !allowedLoadIds.has(String(invoice.load_id))) return
       let date: Date | null = null
       if (invoice.issue_date) {
         date = new Date(invoice.issue_date)
@@ -614,7 +632,7 @@ function getBucketFilterRange(bucket: ARAgingBucketKey) {
   }
 }
 
-export async function getARAgingReport() {
+export async function getARAgingReport(terminalId?: string) {
   try {
     const permissionCheck = await checkViewPermission("reports")
     if (!permissionCheck.allowed) {
@@ -627,12 +645,22 @@ export async function getARAgingReport() {
     const supabase = await createClient()
     const { data: invoices, error } = await supabase
       .from("invoices")
-      .select("id, invoice_number, customer_name, due_date, amount, paid_amount, status")
+      .select("id, invoice_number, customer_name, due_date, amount, paid_amount, status, load_id")
       .eq("company_id", companyId)
       .not("status", "eq", "paid")
       .not("status", "eq", "cancelled")
       .order("due_date", { ascending: true })
       .limit(10000)
+    let allowedLoadIds: Set<string> | null = null
+    if (terminalId) {
+      const { data: scopedLoads } = await supabase
+        .from("loads")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("terminal_id", terminalId)
+        .limit(10000)
+      allowedLoadIds = new Set((scopedLoads || []).map((l: any) => String(l.id)))
+    }
 
     if (error) {
       return { error: "Failed to load AR aging data", data: null }
@@ -649,6 +677,7 @@ export async function getARAgingReport() {
     }
 
     for (const inv of invoices || []) {
+      if (allowedLoadIds && inv.load_id && !allowedLoadIds.has(String(inv.load_id))) continue
       const due = inv.due_date ? new Date(inv.due_date) : null
       if (!due || Number.isNaN(due.getTime())) continue
 

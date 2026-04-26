@@ -29,11 +29,14 @@ import {
   Info,
   Sparkles,
   BookOpen,
+  List,
+  LayoutGrid,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import CheckCallsPage from "./check-calls/page"
 import {
   getUnassignedLoads,
@@ -41,6 +44,7 @@ import {
   quickAssignLoad,
   quickAssignRoute,
 } from "@/app/actions/dispatches"
+import { DispatchPlanningBoard } from "@/components/dispatch/dispatch-planning-board"
 import { publishLoad, duplicateLoad } from "@/app/actions/loads"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
@@ -67,6 +71,7 @@ import {
 } from "@/components/ui/sheet"
 import { createClient } from "@/lib/supabase/client"
 import { useRealtimeSubscription } from "@/lib/hooks/use-realtime"
+import { getTerminals } from "@/app/actions/terminals"
 
 export default function DispatchesPage() {
   const router = useRouter()
@@ -94,8 +99,11 @@ export default function DispatchesPage() {
   const [loadDetailsLoading, setLoadDetailsLoading] = useState(false)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [showDispatchAssist, setShowDispatchAssist] = useState<string | null>(null)
+  const [dispatchView, setDispatchView] = useState<"list" | "board">("list")
   const [loadAssignments, setLoadAssignments] = useState<Record<string, { driverId?: string; truckId?: string }>>({})
   const [routeAssignments, setRouteAssignments] = useState<Record<string, { driverId?: string; truckId?: string }>>({})
+  const [terminals, setTerminals] = useState<Array<{ id: string; name: string }>>([])
+  const [terminalFilter, setTerminalFilter] = useState<string>("all")
   const hosRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hosSectionRef = useRef<HTMLDivElement | null>(null)
   const loadsSectionRef = useRef<HTMLDivElement | null>(null)
@@ -241,16 +249,18 @@ export default function DispatchesPage() {
     setIsLoading(true)
     try {
       const [loadsResult, routesResult, driversResult, trucksResult] = await Promise.all([
-        getUnassignedLoads(),
+        getUnassignedLoads(terminalFilter === "all" ? undefined : terminalFilter),
         getUnassignedRoutes(),
-        getDrivers(),
-        getTrucks(),
+        getDrivers({ terminal_id: terminalFilter === "all" ? undefined : terminalFilter }),
+        getTrucks({ limit: 100, terminal_id: terminalFilter === "all" ? undefined : terminalFilter }),
       ])
 
       if (loadsResult.data) setUnassignedLoads(loadsResult.data)
       if (routesResult.data) setUnassignedRoutes(routesResult.data)
       if (driversResult.data) setDrivers(driversResult.data.filter((d: any) => d.status === "active"))
       if (trucksResult.data) setTrucks(trucksResult.data.filter((t: any) => t.status === "available" || t.status === "in_use"))
+      const terminalsResult = await getTerminals()
+      if (terminalsResult.data) setTerminals(terminalsResult.data)
     } catch (error: unknown) {
       toast.error("Failed to load dispatch data")
       console.error(error)
@@ -258,6 +268,10 @@ export default function DispatchesPage() {
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    void loadData()
+  }, [terminalFilter])
 
   async function loadHOSData() {
     setHosLoading(true)
@@ -541,6 +555,24 @@ export default function DispatchesPage() {
     [unassignedLoads],
   )
 
+  const planningSidebarLoads = useMemo(() => {
+    const out: any[] = []
+    const seen = new Set<string>()
+    for (const l of draftLoads) {
+      if (l?.id && !seen.has(l.id)) {
+        seen.add(l.id)
+        out.push(l)
+      }
+    }
+    for (const l of actionableUnassignedLoads) {
+      if (l?.id && !seen.has(l.id)) {
+        seen.add(l.id)
+        out.push(l)
+      }
+    }
+    return out
+  }, [draftLoads, actionableUnassignedLoads])
+
   const needsAttentionLoads = useMemo(
     () =>
       unassignedLoads.filter((load) => ["in_transit"].includes(String(load.status || "").toLowerCase())),
@@ -635,10 +667,44 @@ export default function DispatchesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="w-[200px]">
+            <Select value={terminalFilter} onValueChange={setTerminalFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by terminal" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Terminals</SelectItem>
+                {terminals.map((terminal) => (
+                  <SelectItem key={terminal.id} value={terminal.id}>
+                    {terminal.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <TabsList className="grid w-fit grid-cols-2">
             <TabsTrigger value="dispatch">Dispatch Board</TabsTrigger>
             <TabsTrigger value="check-calls">Check Calls</TabsTrigger>
           </TabsList>
+          <ToggleGroup
+            type="single"
+            value={dispatchView}
+            onValueChange={(v) => {
+              setDispatchView(v === "board" ? "board" : "list")
+            }}
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+          >
+            <ToggleGroupItem value="list" aria-label="List view" className="gap-1 px-2 sm:px-3">
+              <List className="h-4 w-4" />
+              <span className="hidden sm:inline">List</span>
+            </ToggleGroupItem>
+            <ToggleGroupItem value="board" aria-label="Board view" className="gap-1 px-2 sm:px-3">
+              <LayoutGrid className="h-4 w-4" />
+              <span className="hidden sm:inline">Board</span>
+            </ToggleGroupItem>
+          </ToggleGroup>
           <Button onClick={loadData} variant="outline" disabled={isLoading}>
             <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
             Refresh
@@ -648,6 +714,18 @@ export default function DispatchesPage() {
 
       {/* Content */}
       <div className="p-4 md:p-8">
+        {dispatchView === "board" ? (
+          <DispatchPlanningBoard
+            trucks={trucks}
+            sidebarLoads={planningSidebarLoads}
+            drivers={drivers}
+            companyId={companyId}
+            terminalId={terminalFilter === "all" ? undefined : terminalFilter}
+            onRefresh={() => void loadData()}
+            onLoadClick={(id) => void handleLoadClick(id)}
+            beforeAssignTruck={(truckId) => void maybeWarnPreTripMissing(truckId)}
+          />
+        ) : (
         <div className="max-w-7xl mx-auto space-y-8">
           {/* Dispatch Assist Modal (Phase 3) */}
           {showDispatchAssist && (
@@ -1263,6 +1341,7 @@ export default function DispatchesPage() {
             )}
           </div>
         </div>
+        )}
       </div>
 
       {/* Nearby Drivers Modal */}

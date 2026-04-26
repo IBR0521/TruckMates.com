@@ -25,7 +25,7 @@ type LoadUpdateNotificationPayload = {
 const LOAD_DETAIL_SELECT = `
   id, company_id, shipment_number, origin, destination, status,
   load_date, estimated_delivery, actual_delivery,
-  driver_id, truck_id, trailer_id, route_id, customer_id,
+  driver_id, truck_id, trailer_id, route_id, customer_id, terminal_id,
   weight, weight_kg, contents, value, carrier_type, coordinates,
   delivery_type, company_name, customer_reference, requires_split_delivery, total_delivery_points,
   load_type, rate, rate_type, fuel_surcharge, accessorial_charges, discount, advance, total_rate,
@@ -43,7 +43,7 @@ const LOAD_DETAIL_SELECT = `
 `
 
 const LOAD_LIST_SELECT =
-  "id, shipment_number, origin, destination, status, driver_id, truck_id, trailer_id, load_date, estimated_delivery, created_at, company_name, value, contents, delivery_type, total_delivery_points, weight, weight_kg"
+  "id, shipment_number, origin, destination, status, driver_id, truck_id, trailer_id, terminal_id, load_date, estimated_delivery, created_at, company_name, value, contents, delivery_type, total_delivery_points, weight, weight_kg"
 
 // Helper function to send notifications in background (non-blocking)
 async function sendNotificationsForLoadUpdate(loadData: LoadUpdateNotificationPayload) {
@@ -95,6 +95,7 @@ async function sendNotificationsForLoadUpdate(loadData: LoadUpdateNotificationPa
 
 export async function getLoads(filters?: {
   status?: string
+  terminal_id?: string
   search?: string
   sortBy?: "created_at" | "shipment_number" | "load_date" | "status"
   limit?: number
@@ -143,6 +144,9 @@ export async function getLoads(filters?: {
     // Apply filters
     if (filters?.status) {
       query = query.eq("status", filters.status)
+    }
+    if (filters?.terminal_id) {
+      query = query.eq("terminal_id", filters.terminal_id)
     }
 
     if (filters?.search) {
@@ -251,6 +255,7 @@ export async function createLoad(formData: {
   driver_id?: string
   truck_id?: string
   trailer_id?: string
+  terminal_id?: string | null
   route_id?: string | null
   load_date?: string | null
   estimated_delivery?: string | null
@@ -695,6 +700,7 @@ export async function createLoad(formData: {
   if (formData.driver_id) loadData.driver_id = formData.driver_id
   if (formData.truck_id) loadData.truck_id = formData.truck_id
   if (formData.trailer_id) loadData.trailer_id = formData.trailer_id
+  if (formData.terminal_id) loadData.terminal_id = formData.terminal_id
   if (routeId) loadData.route_id = routeId
   if (formData.load_date) loadData.load_date = formData.load_date
   if (formData.estimated_delivery) loadData.estimated_delivery = formData.estimated_delivery

@@ -26,6 +26,8 @@
     "eld:generate-fmcsa-output": "node scripts/generate-fmcsa-eld-output.mjs"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/utilities": "^3.2.2",
     "@here/flexpolyline": "^0.1.0",
     "@hookform/resolvers": "^3.10.0",
     "@paypal/react-paypal-js": "^8.9.2",

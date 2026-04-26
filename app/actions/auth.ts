@@ -147,6 +147,15 @@ export async function registerSuperAdmin(data: {
       // Don't fail registration if this fails
     }
 
+    // Step 4b: Seed default trucking chart of accounts for the new company
+    try {
+      const { ensureDefaultGLAccounts } = await import("./gl-accounts")
+      await ensureDefaultGLAccounts(companyId)
+    } catch (error) {
+      Sentry.captureException(error)
+      // Non-blocking: registration should still complete
+    }
+
     // Step 5: Return success without fetching company (avoid Date serialization issues)
     // The RPC function already created everything, we just need to return success
     const result = {

@@ -13,6 +13,8 @@ export async function POST(request: NextRequest) {
           : undefined,
       quickbooks_default_item_id:
         body?.quickbooks_default_item_id !== undefined ? body.quickbooks_default_item_id : undefined,
+      quickbooks_gl_account_mappings:
+        body?.quickbooks_gl_account_mappings !== undefined ? body.quickbooks_gl_account_mappings : undefined,
     } as any)
 
     if (!result?.success) {

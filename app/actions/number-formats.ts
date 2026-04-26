@@ -22,6 +22,7 @@ const COMPANY_SETTINGS_SELECT = `
   auto_attach_bol_to_load, auto_email_bol_to_customer, document_retention_days, bol_auto_generate,
   odometer_validation_enabled, max_odometer_increase_per_day, odometer_auto_sync_from_eld,
   owner_name, dba_name, ein_number, business_type,
+  dot_number,
   load_charge_type, miles_calculation_method, fuel_surcharge_method, fuel_surcharge_flat_amount, fuel_surcharge_per_mile,
   fsc_base_price, fsc_mpg_assumed, per_diem_rate,
   check_call_notify_customer, check_call_notify_broker, check_call_notify_on_trip_start, check_call_notify_at_shipper,
@@ -154,6 +155,7 @@ export async function updateCompanySettings(settings: {
   dba_name?: string
   ein_number?: string
   business_type?: string
+  dot_number?: string
   // Load Settings
   load_charge_type?: string
   miles_calculation_method?: string
@@ -205,7 +207,7 @@ export async function updateCompanySettings(settings: {
     'require_check_call_at_delivery', 'auto_attach_bol_to_load', 'auto_email_bol_to_customer',
     'document_retention_days', 'bol_auto_generate', 'odometer_validation_enabled',
     'max_odometer_increase_per_day', 'odometer_auto_sync_from_eld', 'owner_name', 'dba_name',
-    'ein_number', 'business_type', 'load_charge_type', 'miles_calculation_method',
+    'ein_number', 'business_type', 'dot_number', 'load_charge_type', 'miles_calculation_method',
     'fuel_surcharge_method', 'fuel_surcharge_flat_amount', 'fuel_surcharge_per_mile', 'fsc_base_price', 'fsc_mpg_assumed', 'per_diem_rate',
     'check_call_notify_customer', 'check_call_notify_broker', 'check_call_notify_on_trip_start',
     'check_call_notify_at_shipper', 'check_call_notify_pickup_completed', 'check_call_notify_enroute',

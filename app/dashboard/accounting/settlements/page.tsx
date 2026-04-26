@@ -10,6 +10,7 @@ import Link from "next/link"
 import { useState, useEffect, useMemo } from "react"
 import { approveSettlementAsDriver, getSettlements, deleteSettlement, markSettlementPaid } from "@/app/actions/accounting"
 import { getDrivers } from "@/app/actions/drivers"
+import { createDriverStripeOnboardingLink } from "@/app/actions/settlement-ach"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -103,6 +104,15 @@ export default function SettlementsPage() {
     setPayingId(null)
   }
 
+  const handleConnectBank = async () => {
+    const result = await createDriverStripeOnboardingLink()
+    if (result.error || !result.data?.url) {
+      toast.error(result.error || "Failed to start bank onboarding")
+      return
+    }
+    window.open(result.data.url, "_blank", "noopener,noreferrer")
+  }
+
   const handleExport = () => {
     try {
       const exportData = filteredSettlements.map(({ id, company_id, driver_id, loads, created_at, updated_at, ...rest }) => rest)
@@ -133,6 +143,16 @@ export default function SettlementsPage() {
           <p className="text-muted-foreground text-sm mt-1">Manage driver payments and settlements</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          {isDriverUser && (
+            <Button
+              onClick={handleConnectBank}
+              variant="outline"
+              size="sm"
+              className="border-border/50 bg-transparent hover:bg-secondary/50 text-foreground flex-1 sm:flex-initial"
+            >
+              Connect Bank
+            </Button>
+          )}
           <Button
             onClick={handleExport}
             variant="outline"

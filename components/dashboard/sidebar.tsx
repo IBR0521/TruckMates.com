@@ -62,6 +62,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
   const [routesOpen, setRoutesOpen] = useState(false)
   const [loadsOpen, setLoadsOpen] = useState(false)
   const [accountingOpen, setAccountingOpen] = useState(false)
+  const [payablesOpen, setPayablesOpen] = useState(false)
   const [maintenanceOpen, setMaintenanceOpen] = useState(false)
   const [reportsOpen, setReportsOpen] = useState(false)
   const [crmOpen, setCrmOpen] = useState(false)
@@ -112,6 +113,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
       setRoutesOpen(false)
       setLoadsOpen(false)
       setAccountingOpen(false)
+      setPayablesOpen(false)
       setMaintenanceOpen(false)
       setReportsOpen(false)
       setCrmOpen(false)
@@ -365,6 +367,19 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
                   <NavItem href="/dashboard/accounting/expenses" label="Expenses" isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem href="/dashboard/accounting/settlements" label="Settlements" isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem href="/dashboard/accounting/tax-fuel" label="Tax & Fuel" isSubitem isCollapsed={shouldShowCollapsed} />
+                </DropdownItem>
+              )}
+              {userRole && canViewFeature(userRole, "accounting") && (
+                <DropdownItem
+                  icon={Receipt}
+                  label="Payables"
+                  href="/dashboard/payables/vendor-invoices"
+                  isOpen={payablesOpen}
+                  onToggle={() => setPayablesOpen(!payablesOpen)}
+                  isCollapsed={shouldShowCollapsed}
+                >
+                  <NavItem href="/dashboard/payables/vendor-invoices" label="Vendor Invoices" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/payables/ap-aging" label="AP Aging" isSubitem isCollapsed={shouldShowCollapsed} />
                 </DropdownItem>
               )}
 

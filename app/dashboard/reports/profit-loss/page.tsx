@@ -9,8 +9,11 @@ import { useState, useEffect } from "react"
 import { getProfitLossReport } from "@/app/actions/reports"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useSearchParams } from "next/navigation"
 
 export default function ProfitLossPage() {
+  const searchParams = useSearchParams()
+  const terminalId = searchParams.get("terminal") || "all"
   const [selectedPeriod, setSelectedPeriod] = useState("This Month")
   const [loading, setLoading] = useState(true)
   const [startDate, setStartDate] = useState("")
@@ -31,7 +34,7 @@ export default function ProfitLossPage() {
 
   useEffect(() => {
     loadReportData()
-  }, [selectedPeriod, startDate, endDate])
+  }, [selectedPeriod, startDate, endDate, terminalId])
 
   const getDateRange = (period?: string) => {
     const periodToUse = period || selectedPeriod
@@ -89,7 +92,7 @@ export default function ProfitLossPage() {
     setLoading(true)
     try {
       const { start, end } = getDateRange()
-      const result = await getProfitLossReport(start || undefined, end || undefined)
+      const result = await getProfitLossReport(start || undefined, end || undefined, terminalId === "all" ? undefined : terminalId)
 
       if (result.error) {
         toast.error(result.error)
@@ -101,7 +104,7 @@ export default function ProfitLossPage() {
       // Load previous period for comparison
       const prevRange = getPreviousPeriodRange()
       if (prevRange.start && prevRange.end) {
-        const prevResult = await getProfitLossReport(prevRange.start, prevRange.end)
+        const prevResult = await getProfitLossReport(prevRange.start, prevRange.end, terminalId === "all" ? undefined : terminalId)
         if (prevResult.data) {
           setPreviousPeriodData(prevResult.data)
         }

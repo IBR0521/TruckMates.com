@@ -245,6 +245,14 @@ export async function completeSetup() {
     // These use platform-wide API keys and work automatically for all users
     await enablePlatformIntegrations(company_id)
 
+    // Ensure default chart of accounts exists after setup completion.
+    try {
+      const { ensureDefaultGLAccounts } = await import("./gl-accounts")
+      await ensureDefaultGLAccounts(company_id)
+    } catch (error) {
+      Sentry.captureException(error)
+    }
+
     // CRITICAL FIX: Force revalidation of all paths and clear Next.js cache
     revalidatePath("/dashboard")
     revalidatePath("/account-setup/manager")

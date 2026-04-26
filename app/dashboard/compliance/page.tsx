@@ -48,8 +48,9 @@ import {
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { Download } from "lucide-react"
+import { getCSAScoreHistory } from "@/app/actions/csa-scores"
 
-const VALID_TABS = ["registrations", "roadside", "incidents", "ifta", "eld"] as const
+const VALID_TABS = ["registrations", "roadside", "incidents", "ifta", "eld", "csa"] as const
 type ComplianceTab = (typeof VALID_TABS)[number]
 
 type ComplianceRegistration = {
@@ -112,6 +113,8 @@ export default function CompliancePage() {
   const [incidentDeleteId, setIncidentDeleteId] = useState<string | null>(null)
   const [incidentDialogOpen, setIncidentDialogOpen] = useState(false)
   const [exportingRegister, setExportingRegister] = useState(false)
+  const [csaLoading, setCsaLoading] = useState(true)
+  const [csaRows, setCsaRows] = useState<any[]>([])
   const [incidentForm, setIncidentForm] = useState({
     incident_date: "",
     location: "",
@@ -158,7 +161,20 @@ export default function CompliancePage() {
     void loadRoadsideInspections()
     void loadIncidents()
     void loadDriverTruckOptions()
+    void loadCsaScores()
   }, [])
+
+  async function loadCsaScores() {
+    setCsaLoading(true)
+    const result = await getCSAScoreHistory(18)
+    if (result.error) {
+      toast.error(result.error)
+      setCsaRows([])
+    } else {
+      setCsaRows(result.data || [])
+    }
+    setCsaLoading(false)
+  }
 
   async function loadDriverTruckOptions() {
     const [driversResult, trucksResult] = await Promise.all([getDrivers({ limit: 200 }), getTrucks({ limit: 200 })])
@@ -477,6 +493,7 @@ export default function CompliancePage() {
           <TabsTrigger value="incidents">Incidents</TabsTrigger>
           <TabsTrigger value="ifta">IFTA</TabsTrigger>
           <TabsTrigger value="eld">ELD</TabsTrigger>
+          <TabsTrigger value="csa">CSA Scores</TabsTrigger>
         </TabsList>
 
         <TabsContent value="registrations">
@@ -689,6 +706,66 @@ export default function CompliancePage() {
               <Link href="/dashboard/eld"><Button><Shield className="w-4 h-4 mr-2" />Open ELD</Button></Link>
             </Card>
           </div>
+        </TabsContent>
+        <TabsContent value="csa">
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold">CSA BASIC Trend</h3>
+                <p className="text-sm text-muted-foreground">Monthly FMCSA SMS snapshot by USDOT from public data feed.</p>
+              </div>
+              <Button variant="outline" onClick={() => void loadCsaScores()} disabled={csaLoading}>
+                Refresh
+              </Button>
+            </div>
+            {csaLoading ? (
+              <p className="text-sm text-muted-foreground">Loading CSA scores...</p>
+            ) : csaRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No CSA scores found yet. Add your USDOT number in Business Settings and wait for monthly sync.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40">
+                      <tr className="text-left">
+                        <th className="px-3 py-2">Month</th>
+                        <th className="px-3 py-2">Unsafe</th>
+                        <th className="px-3 py-2">HOS</th>
+                        <th className="px-3 py-2">Driver Fitness</th>
+                        <th className="px-3 py-2">Controlled</th>
+                        <th className="px-3 py-2">Vehicle Maint.</th>
+                        <th className="px-3 py-2">HazMat</th>
+                        <th className="px-3 py-2">Crash</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {csaRows.map((row) => (
+                        <tr key={row.id} className="border-t">
+                          <td className="px-3 py-2">{new Date(row.snapshot_month).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</td>
+                          {([
+                            row.unsafe_driving,
+                            row.hours_of_service,
+                            row.driver_fitness,
+                            row.controlled_substances,
+                            row.vehicle_maintenance,
+                            row.hazardous_materials,
+                            row.crash_indicator,
+                          ] as Array<number | null>).map((v, i) => (
+                            <td key={i} className={`px-3 py-2 font-medium ${Number(v) >= 65 ? "text-red-400" : "text-foreground"}`}>
+                              {v == null ? "-" : `${Number(v).toFixed(1)}%`}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-muted-foreground">Any category at or above 65% is highlighted and triggers compliance alerting.</p>
+              </div>
+            )}
+          </Card>
         </TabsContent>
       </Tabs>
 

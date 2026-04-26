@@ -126,7 +126,7 @@ export async function getExpenses(filters?: {
     // Build query with selective columns and pagination
     let query = supabase
       .from("expenses")
-      .select("id, category, description, amount, date, driver_id, truck_id, vendor, payment_method, created_at", { count: "exact" })
+      .select("id, category, description, amount, date, driver_id, truck_id, vendor, gl_code, payment_method, created_at", { count: "exact" })
       .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
@@ -167,7 +167,7 @@ export async function getSettlements() {
   const { data: settlements, error } = await supabase
     .from("settlements")
     .select(`
-      id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at,
+      id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, payment_reference, payment_eta, stripe_transfer_id, stripe_payout_id, gl_code, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at,
       drivers:driver_id (
         id,
         name
@@ -200,7 +200,7 @@ export async function getSettlement(id: string) {
     const { data: settlement, error } = await supabase
       .from("settlements")
       .select(`
-        id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at,
+        id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, payment_reference, payment_eta, stripe_transfer_id, stripe_payout_id, gl_code, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at,
         drivers:driver_id (
           id,
           name
@@ -235,12 +235,42 @@ export async function markSettlementPaid(id: string, paymentMethod?: string) {
       return { error: permissionCheck.error || "You don't have permission to update settlements", data: null }
     }
 
+    const { data: settlementRow, error: settlementErr } = await supabase
+      .from("settlements")
+      .select("id, driver_id, net_pay, status, payment_method")
+      .eq("id", id)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+    if (settlementErr || !settlementRow) {
+      return { error: "Settlement not found", data: null }
+    }
+    if (settlementRow.status === "paid") {
+      return { error: "Settlement is already paid or not found", data: null }
+    }
+
+    const effectiveMethod = sanitizeString(paymentMethod || settlementRow.payment_method || "", 50).toLowerCase()
     const updateData: Record<string, any> = {
       status: "paid",
       paid_date: new Date().toISOString(),
     }
-    if (paymentMethod) {
-      updateData.payment_method = sanitizeString(paymentMethod, 50)
+    if (effectiveMethod) {
+      updateData.payment_method = effectiveMethod
+    }
+
+    if (effectiveMethod === "ach_stripe") {
+      const { executeSettlementAchTransfer } = await import("./settlement-ach")
+      const ach = await executeSettlementAchTransfer({
+        settlementId: id,
+        driverId: settlementRow.driver_id,
+        amount: Number(settlementRow.net_pay || 0),
+      })
+      if (ach.error || !ach.data) {
+        return { error: ach.error || "ACH transfer failed", data: null }
+      }
+      updateData.payment_reference = ach.data.paymentReference
+      updateData.payment_eta = ach.data.eta || null
+      updateData.stripe_transfer_id = ach.data.transferId
+      updateData.stripe_payout_id = ach.data.payoutId
     }
 
     const { data, error } = await supabase
@@ -248,8 +278,7 @@ export async function markSettlementPaid(id: string, paymentMethod?: string) {
       .update(updateData)
       .eq("id", id)
       .eq("company_id", ctx.companyId)
-      .neq("status", "paid")
-      .select("id, status, paid_date, payment_method")
+      .select("id, status, paid_date, payment_method, payment_reference, payment_eta, stripe_transfer_id, stripe_payout_id")
       .maybeSingle()
 
     if (error) {
@@ -851,6 +880,7 @@ export async function createExpense(formData: {
   fuel_level_after?: number
   gallons?: number
   price_per_gallon?: number
+  gl_code?: string
 }) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
@@ -1024,11 +1054,12 @@ export async function createExpense(formData: {
         const val = typeof formData.price_per_gallon === 'string' ? parseFloat(formData.price_per_gallon) : formData.price_per_gallon
         return (isNaN(val) || !isFinite(val)) ? null : val
       })() : null,
+      gl_code: formData.gl_code ? sanitizeString(formData.gl_code, 40) : null,
       route_id: linkedRouteId,
       load_id: linkedLoadId,
     })
     // V3-007 FIX: Replace implicit select() with explicit columns
-    .select("id, company_id, category, description, amount, date, vendor, driver_id, truck_id, mileage, payment_method, receipt_url, has_receipt, route_id, load_id, fuel_level_after, gallons, price_per_gallon, created_at, updated_at")
+    .select("id, company_id, category, description, amount, date, vendor, gl_code, driver_id, truck_id, mileage, payment_method, receipt_url, has_receipt, route_id, load_id, fuel_level_after, gallons, price_per_gallon, created_at, updated_at")
     .maybeSingle()
 
   if (error) {
@@ -1192,6 +1223,7 @@ export async function createSettlement(formData: {
   advance_deduction?: number
   other_deductions?: number
   payment_method?: string
+  gl_code?: string
   notes?: string
 }) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
@@ -1403,12 +1435,13 @@ export async function createSettlement(formData: {
       net_pay: netPay,
       status: "pending",
       payment_method: formData.payment_method || null,
+      gl_code: formData.gl_code ? sanitizeString(formData.gl_code, 40) : null,
       loads: loadsData,
       pay_rule_id: payRuleId,
       calculation_details: calculationDetails,
     })
     // V3-007 FIX: Replace implicit select() with explicit columns
-    .select("id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at")
+    .select("id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, payment_reference, payment_eta, stripe_transfer_id, stripe_payout_id, gl_code, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at")
     .single()
 
   if (error || !data) {

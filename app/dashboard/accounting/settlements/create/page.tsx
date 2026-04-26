@@ -13,6 +13,7 @@ import { toast } from "sonner"
 import { createSettlement, getDriverLoadsForPeriod, getDriverFuelExpensesForPeriod } from "@/app/actions/accounting"
 import { getDrivers } from "@/app/actions/drivers"
 import { getCompanySettings } from "@/app/actions/number-formats"
+import { getGLAccounts } from "@/app/actions/gl-accounts"
 import {
   Select,
   SelectContent,
@@ -29,6 +30,7 @@ export default function CreateSettlementPage() {
   const [selectedLoads, setSelectedLoads] = useState<any[]>([])
   const [fuelExpenses, setFuelExpenses] = useState<any[]>([])
   const [selectedDriver, setSelectedDriver] = useState<any>(null)
+  const [glAccounts, setGlAccounts] = useState<Array<{ id: string; code: string; name: string }>>([])
   const [perDiemRate, setPerDiemRate] = useState<number>(69)
   const [perDiemEligibleNights, setPerDiemEligibleNights] = useState<number>(0)
   const [formData, setFormData] = useState({
@@ -40,12 +42,13 @@ export default function CreateSettlementPage() {
     advanceDeduction: "",
     otherDeductions: "",
     payment_method: "",
+    gl_code: "",
     notes: "",
   })
 
   useEffect(() => {
     async function loadDrivers() {
-      const [driverResult, settingsResult] = await Promise.all([getDrivers(), getCompanySettings()])
+      const [driverResult, settingsResult, glResult] = await Promise.all([getDrivers(), getCompanySettings(), getGLAccounts("expense")])
       if (driverResult.data) {
         setDrivers(driverResult.data)
       }
@@ -54,6 +57,9 @@ export default function CreateSettlementPage() {
         if (Number.isFinite(rate) && rate >= 0) {
           setPerDiemRate(rate)
         }
+      }
+      if (glResult.data) {
+        setGlAccounts(glResult.data)
       }
     }
     loadDrivers()
@@ -208,6 +214,7 @@ export default function CreateSettlementPage() {
       advance_deduction: advanceDeduction,
       other_deductions: otherDeductions,
       payment_method: formData.payment_method || undefined,
+      gl_code: formData.gl_code || undefined,
     })
 
     setIsLoading(false)
@@ -474,11 +481,32 @@ export default function CreateSettlementPage() {
                   <SelectValue placeholder="Select payment method" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="ach_stripe">ACH (Stripe Connect)</SelectItem>
                   <SelectItem value="check">Check</SelectItem>
                   <SelectItem value="direct_deposit">Direct Deposit</SelectItem>
                   <SelectItem value="wire_transfer">Wire Transfer</SelectItem>
                   <SelectItem value="cash">Cash</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">GL Account</label>
+              <Select
+                value={formData.gl_code || "none"}
+                onValueChange={(value) => setFormData({ ...formData, gl_code: value === "none" ? "" : value })}
+              >
+                <SelectTrigger className="bg-background border-border">
+                  <SelectValue placeholder="Select GL account (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {glAccounts.map((acc) => (
+                    <SelectItem key={acc.id} value={acc.code}>
+                      {acc.code} - {acc.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

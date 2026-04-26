@@ -39,6 +39,7 @@ export async function getIntegrationSettings() {
         quickbooks_synced_at,
         quickbooks_default_income_account_id,
         quickbooks_default_item_id,
+        quickbooks_gl_account_mappings,
         stripe_enabled,
         stripe_api_key,
         paypal_enabled,
@@ -78,6 +79,9 @@ export async function getIntegrationSettings() {
           google_maps_enabled: true, // platform-wide default
           resend_enabled: true, // platform-wide default
           resend_from_email: "",
+          quickbooks_default_income_account_id: "",
+          quickbooks_default_item_id: "",
+          quickbooks_gl_account_mappings: {},
           has_quickbooks_credentials: false,
           has_stripe_api_key: false,
           has_paypal_client_id: false,
@@ -107,6 +111,7 @@ export async function getIntegrationSettings() {
       quickbooks_synced_at: data.quickbooks_synced_at || null,
       quickbooks_default_income_account_id: data.quickbooks_default_income_account_id || "",
       quickbooks_default_item_id: data.quickbooks_default_item_id || "",
+      quickbooks_gl_account_mappings: (data as any).quickbooks_gl_account_mappings || {},
       has_stripe_api_key: !!data.stripe_api_key,
       has_paypal_client_id: !!data.paypal_client_id,
       // Platform keys take priority - if they exist, service is configured
@@ -129,6 +134,7 @@ export async function updateIntegrationSettings(settings: {
   quickbooks_company_id?: string
   quickbooks_default_income_account_id?: string
   quickbooks_default_item_id?: string
+  quickbooks_gl_account_mappings?: Record<string, string>
   stripe_enabled?: boolean
   stripe_api_key?: string
   paypal_enabled?: boolean
@@ -173,6 +179,8 @@ export async function updateIntegrationSettings(settings: {
     updateData.quickbooks_default_income_account_id = settings.quickbooks_default_income_account_id
   if (settings.quickbooks_default_item_id !== undefined)
     updateData.quickbooks_default_item_id = settings.quickbooks_default_item_id
+  if (settings.quickbooks_gl_account_mappings !== undefined)
+    updateData.quickbooks_gl_account_mappings = settings.quickbooks_gl_account_mappings
   if (settings.stripe_enabled !== undefined) updateData.stripe_enabled = settings.stripe_enabled
   if (settings.stripe_api_key !== undefined) updateData.stripe_api_key = settings.stripe_api_key
   if (settings.paypal_enabled !== undefined) updateData.paypal_enabled = settings.paypal_enabled

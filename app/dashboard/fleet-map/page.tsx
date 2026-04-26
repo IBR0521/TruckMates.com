@@ -44,6 +44,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { getPlanFeatureAccessStatus } from "@/app/actions/plan-feature-access"
+import { getTerminals } from "@/app/actions/terminals"
 
 export default function FleetMapPage() {
   const [vehicles, setVehicles] = useState<any[]>([])
@@ -63,6 +64,8 @@ export default function FleetMapPage() {
   const [isCreatingGeofence, setIsCreatingGeofence] = useState(false)
   const [trucks, setTrucks] = useState<any[]>([])
   const [routes, setRoutes] = useState<any[]>([])
+  const [terminals, setTerminals] = useState<Array<{ id: string; name: string }>>([])
+  const [terminalFilter, setTerminalFilter] = useState<string>("all")
   const [geofenceFormData, setGeofenceFormData] = useState({
     name: "",
     description: "",
@@ -96,13 +99,23 @@ export default function FleetMapPage() {
     loadGeofences()
     loadTrucks()
     loadRoutes()
+    loadTerminals()
   }, [])
 
+  useEffect(() => {
+    void loadFleetData()
+  }, [terminalFilter])
+
   const loadTrucks = async () => {
-    const result = await getTrucks()
+    const result = await getTrucks({ terminal_id: terminalFilter === "all" ? undefined : terminalFilter })
     if (result.data) {
       setTrucks(result.data)
     }
+  }
+
+  const loadTerminals = async () => {
+    const result = await getTerminals()
+    if (result.data) setTerminals(result.data)
   }
 
   const loadRoutes = async () => {
@@ -121,7 +134,10 @@ export default function FleetMapPage() {
         const result = await getVehiclesInViewport(90, -90, 180, -180)
         if (result.data) {
           // Transform to Vehicle format with location data
-          const vehiclesWithLocation = result.data.map((loc: any) => ({
+          const rows = terminalFilter === "all"
+            ? result.data
+            : result.data.filter((loc: any) => loc.trucks?.terminal_id === terminalFilter)
+          const vehiclesWithLocation = rows.map((loc: any) => ({
             id: loc.truck_id,
             truck_number: loc.trucks?.truck_number || "Unknown",
             status: loc.trucks?.status,
@@ -137,14 +153,14 @@ export default function FleetMapPage() {
           setVehicles(vehiclesWithLocation)
         } else if (result.error) {
           // Fallback to trucks if map-optimization fails
-          const trucksResult = await getTrucks()
+          const trucksResult = await getTrucks({ terminal_id: terminalFilter === "all" ? undefined : terminalFilter })
           if (trucksResult.data) {
             setVehicles(trucksResult.data || [])
           }
         }
       } catch (error) {
         // Fallback to trucks if getVehiclesInViewport doesn't exist
-        const result = await getTrucks()
+        const result = await getTrucks({ terminal_id: terminalFilter === "all" ? undefined : terminalFilter })
         if (result.error) {
           toast.error(result.error)
           return
@@ -349,6 +365,21 @@ export default function FleetMapPage() {
                 : "Vehicle tracking available. Geofencing unlocks on paid plans."}
             </p>
           </div>
+        </div>
+        <div className="w-[220px]">
+          <Select value={terminalFilter} onValueChange={setTerminalFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="Terminal filter" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Terminals</SelectItem>
+              {terminals.map((terminal) => (
+                <SelectItem key={terminal.id} value={terminal.id}>
+                  {terminal.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

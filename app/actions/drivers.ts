@@ -21,7 +21,7 @@ function safeDbError(error: unknown, fallback = "Database operation failed"): st
 }
 
 const DRIVER_LIST_SELECT =
-  "id, name, email, phone, status, license_number, license_expiry, truck_id, created_at"
+  "id, name, email, phone, status, license_number, license_expiry, truck_id, terminal_id, created_at"
 
 function invalidateDriverDashboardCaches(companyId: string) {
   cache.delete(cacheKeys.dashboardStats(companyId))
@@ -71,6 +71,7 @@ export async function emergencyPurgeDriversKeepOne(confirmPhrase: string) {
 export async function getDrivers(filters?: {
   status?: string
   search?: string
+  terminal_id?: string
   sortBy?: "name" | "status" | "license_expiry" | "created_at"
   limit?: number
   offset?: number
@@ -209,6 +210,9 @@ export async function getDrivers(filters?: {
     if (filters?.status) {
       query = query.eq("status", filters.status)
     }
+    if (filters?.terminal_id) {
+      query = query.eq("terminal_id", filters.terminal_id)
+    }
 
     if (filters?.search) {
       const q = sanitizeString(filters.search).trim()
@@ -332,6 +336,7 @@ export async function createDriver(formData: {
   license_expiry?: string | null
   status?: string
   truck_id?: string | null
+  terminal_id?: string | null
   [key: string]: any // Allow additional fields
 }) {
   // Check permission
@@ -479,6 +484,7 @@ export async function createDriver(formData: {
     name: sanitizeString(formData.name, 100),
     status: formData.status || "active",
   }
+  if (formData.terminal_id) driverData.terminal_id = formData.terminal_id
 
   // Add optional fields with validation and sanitization
   if (formData.email) driverData.email = sanitizeEmail(formData.email)

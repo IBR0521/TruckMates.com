@@ -54,6 +54,7 @@ export async function getVehiclesInViewport(
         trucks:truck_id (
           id,
           truck_number,
+          terminal_id,
           make,
           model,
           status,
