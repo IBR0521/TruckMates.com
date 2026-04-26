@@ -549,19 +549,27 @@ function DropdownItem({ icon: Icon, label, href, isOpen, onToggle, children, isC
 
   return (
     <div>
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition font-medium"
-        aria-expanded={isOpen}
-        aria-haspopup="true"
-        aria-label={`${label} menu`}
-      >
-        <div className="flex items-center gap-3">
+      <div className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition font-medium">
+        <Link
+          href={href}
+          prefetch={false}
+          className="flex items-center gap-3 flex-1 min-w-0"
+          aria-label={label}
+        >
           <Icon className="w-5 h-5" aria-hidden="true" />
-          <span>{label}</span>
-        </div>
-        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} aria-hidden="true" />
-      </button>
+          <span className="truncate">{label}</span>
+        </Link>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="ml-2 inline-flex items-center justify-center rounded p-1 hover:bg-sidebar-accent/80"
+          aria-expanded={isOpen}
+          aria-haspopup="true"
+          aria-label={`${label} menu`}
+        >
+          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+        </button>
+      </div>
 
       {isOpen && (
         <div className="ml-6 mt-2 space-y-1 border-l border-sidebar-border pl-4" role="menu">

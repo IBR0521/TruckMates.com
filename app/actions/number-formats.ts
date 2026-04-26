@@ -28,6 +28,7 @@ const COMPANY_SETTINGS_SELECT = `
   check_call_notify_customer, check_call_notify_broker, check_call_notify_on_trip_start, check_call_notify_at_shipper,
   check_call_notify_pickup_completed, check_call_notify_enroute, check_call_notify_at_consignee, check_call_notify_dropoff_completed,
   factoring_company_name, factoring_submission_email, factoring_include_bol, factoring_include_rate_conf, factoring_include_pod, factoring_email_template, factoring_auto_submit,
+  triumphpay_enabled, triumphpay_api_base_url, triumphpay_api_key, triumphpay_api_secret,
   created_at, updated_at
 `
 
@@ -115,6 +116,8 @@ export async function getCompanySettings() {
     delete filteredSettings.ein_number
     delete filteredSettings.owner_name
     delete filteredSettings.dba_name
+    delete filteredSettings.triumphpay_api_key
+    delete filteredSettings.triumphpay_api_secret
     return { data: filteredSettings, error: null }
   }
 
@@ -182,6 +185,10 @@ export async function updateCompanySettings(settings: {
   factoring_include_pod?: boolean
   factoring_email_template?: string | null
   factoring_auto_submit?: boolean
+  triumphpay_enabled?: boolean
+  triumphpay_api_base_url?: string | null
+  triumphpay_api_key?: string | null
+  triumphpay_api_secret?: string | null
   // HIGH FIX 3: Removed [key: string]: any to prevent arbitrary column injection
 }) {
   const supabase = await createClient()
@@ -214,6 +221,7 @@ export async function updateCompanySettings(settings: {
     'check_call_notify_at_consignee', 'check_call_notify_dropoff_completed',
     'factoring_company_name', 'factoring_submission_email', 'factoring_include_bol', 'factoring_include_rate_conf',
     'factoring_include_pod', 'factoring_email_template', 'factoring_auto_submit',
+    'triumphpay_enabled', 'triumphpay_api_base_url', 'triumphpay_api_key', 'triumphpay_api_secret',
   ]
   
   for (const field of allowedFields) {

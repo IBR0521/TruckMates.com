@@ -12,6 +12,8 @@ import {
   Route,
   ClipboardList,
 } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -19,6 +21,11 @@ import { use } from "react"
 import { getDriver } from "@/app/actions/drivers"
 import { getTruck } from "@/app/actions/trucks"
 import { getDriverRoadsideInspectionStats } from "@/app/actions/roadside-inspections"
+import {
+  createLeaseAgreement,
+  getActiveLeaseAgreement,
+  getLeasePaymentHistory,
+} from "@/app/actions/lease-agreements"
 import { toast } from "sonner"
 import { 
   DetailPageLayout, 
@@ -44,6 +51,16 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
     oos_rate: number
     violation_count: number
   } | null>(null)
+  const [activeLease, setActiveLease] = useState<any>(null)
+  const [leasePayments, setLeasePayments] = useState<any[]>([])
+  const [creatingLease, setCreatingLease] = useState(false)
+  const [leaseForm, setLeaseForm] = useState({
+    lease_type: "lease-to-own",
+    total_amount: "",
+    weekly_payment: "",
+    start_date: "",
+    end_date: "",
+  })
 
   useEffect(() => {
     return () => {
@@ -82,6 +99,12 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
       if (statsResult.data) {
         setInspectionStats(statsResult.data)
       }
+      const [leaseResult, paymentsResult] = await Promise.all([
+        getActiveLeaseAgreement(id),
+        getLeasePaymentHistory(id),
+      ])
+      if (leaseResult.data) setActiveLease(leaseResult.data)
+      if (paymentsResult.data) setLeasePayments(paymentsResult.data)
     } catch (error: unknown) {
       toast.error("Failed to load driver details")
     } finally {
@@ -209,6 +232,35 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
       <div className="mt-0.5 text-sm font-medium text-foreground">{value || "—"}</div>
     </div>
   )
+
+  async function handleCreateLeaseAgreement() {
+    setCreatingLease(true)
+    const result = await createLeaseAgreement({
+      driver_id: id,
+      truck_id: driver?.truck_id || undefined,
+      lease_type: leaseForm.lease_type as "lease-to-own" | "straight_lease",
+      total_amount: Number(leaseForm.total_amount || 0),
+      weekly_payment: Number(leaseForm.weekly_payment || 0),
+      start_date: leaseForm.start_date,
+      end_date: leaseForm.end_date || undefined,
+    })
+    setCreatingLease(false)
+    if (result.error) return toast.error(result.error)
+    toast.success("Lease agreement created")
+    setLeaseForm({
+      lease_type: "lease-to-own",
+      total_amount: "",
+      weekly_payment: "",
+      start_date: "",
+      end_date: "",
+    })
+    const [leaseResult, paymentsResult] = await Promise.all([
+      getActiveLeaseAgreement(id),
+      getLeasePaymentHistory(id),
+    ])
+    if (leaseResult.data) setActiveLease(leaseResult.data)
+    if (paymentsResult.data) setLeasePayments(paymentsResult.data)
+  }
 
   return (
     <DetailPageLayout
@@ -389,6 +441,71 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
           <p className="mt-3 text-xs text-muted-foreground">
             Roadside inspection trends feed CSA score awareness. Track details in Compliance → Roadside.
           </p>
+        </DetailSection>
+
+        <DetailSection title="Lease Management" icon={<FileText className="w-5 h-5" />} className="border-border/70 bg-card/80">
+          {activeLease ? (
+            <div className="space-y-3">
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                {denseField("Lease Type", activeLease.lease_type || "—")}
+                {denseField("Total Amount", `$${Number(activeLease.total_amount || 0).toLocaleString()}`)}
+                {denseField("Weekly Payment", `$${Number(activeLease.weekly_payment || 0).toLocaleString()}`)}
+                {denseField("Remaining Balance", `$${Number(activeLease.remaining_balance || 0).toLocaleString()}`)}
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wider text-zinc-500 mb-2">Payment History</p>
+                {leasePayments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No lease payments posted yet.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {leasePayments.slice(0, 8).map((p) => (
+                      <div key={p.id} className="flex items-center justify-between rounded border border-border/50 px-2 py-1 text-xs">
+                        <span>{p.payment_date || "N/A"}</span>
+                        <span>-${Number(p.amount || 0).toFixed(2)}</span>
+                        <span>Balance: ${Number(p.remaining_balance_after || 0).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">No active lease agreement found for this driver.</p>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <Label>Lease Type</Label>
+                  <select
+                    className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    value={leaseForm.lease_type}
+                    onChange={(e) => setLeaseForm((prev) => ({ ...prev, lease_type: e.target.value }))}
+                  >
+                    <option value="lease-to-own">Lease-to-own</option>
+                    <option value="straight_lease">Straight lease</option>
+                  </select>
+                </div>
+                <div>
+                  <Label>Total Amount</Label>
+                  <Input value={leaseForm.total_amount} onChange={(e) => setLeaseForm((prev) => ({ ...prev, total_amount: e.target.value }))} />
+                </div>
+                <div>
+                  <Label>Weekly Payment</Label>
+                  <Input value={leaseForm.weekly_payment} onChange={(e) => setLeaseForm((prev) => ({ ...prev, weekly_payment: e.target.value }))} />
+                </div>
+                <div>
+                  <Label>Start Date</Label>
+                  <Input type="date" value={leaseForm.start_date} onChange={(e) => setLeaseForm((prev) => ({ ...prev, start_date: e.target.value }))} />
+                </div>
+                <div>
+                  <Label>End Date (optional)</Label>
+                  <Input type="date" value={leaseForm.end_date} onChange={(e) => setLeaseForm((prev) => ({ ...prev, end_date: e.target.value }))} />
+                </div>
+              </div>
+              <Button size="sm" onClick={handleCreateLeaseAgreement} disabled={creatingLease}>
+                {creatingLease ? "Saving..." : "Create Lease Agreement"}
+              </Button>
+            </div>
+          )}
         </DetailSection>
       </div>
     </DetailPageLayout>

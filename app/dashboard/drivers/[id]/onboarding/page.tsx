@@ -77,7 +77,7 @@ export default function DriverOnboardingPage({ params }: { params: Promise<{ id:
       name: "License & Certifications",
       icon: Shield,
       description: "CDL license and medical card",
-      required: ["license", "medical_card"],
+      required: ["license", "medical_card", "hazmat_endorsement"],
     },
     {
       number: 3,

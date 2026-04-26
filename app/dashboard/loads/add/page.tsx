@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { errorMessage } from "@/lib/error-message"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -47,7 +47,8 @@ import { getTrailers } from "@/app/actions/trailers"
 import { getRoutes } from "@/app/actions/routes"
 import { getCustomers, createCustomer } from "@/app/actions/customers"
 import { getTripPlanningEstimate } from "@/app/actions/promiles"
-import { getCurrentDieselPrice } from "@/app/actions/fuel-surcharge"
+import { getCurrentDieselPrice, syncCurrentDieselPrice } from "@/app/actions/fuel-surcharge"
+import { calculateMileage } from "@/app/actions/load-mileage"
 import { getCompanySettings } from "@/app/actions/number-formats"
 import { getOrderedDeliveryStopAddresses } from "@/lib/load-routing-from-stops"
 import { LoadDeliveryPointsManager } from "@/components/load-delivery-points-manager"
@@ -105,8 +106,10 @@ export default function AddLoadPage() {
   const [manualFuelPercent, setManualFuelPercent] = useState("0")
   const [dieselPricePerGallon, setDieselPricePerGallon] = useState<number | null>(null)
   const [dieselEffectiveDate, setDieselEffectiveDate] = useState<string>("")
+  const [dieselStatusNote, setDieselStatusNote] = useState<string>("")
   const [fscBasePrice, setFscBasePrice] = useState(1.2)
   const [fscMpgAssumed, setFscMpgAssumed] = useState(6.5)
+  const milesRequestSeq = useRef(0)
 
   const [formData, setFormData] = useState({
     // Load Info
@@ -148,9 +151,18 @@ export default function AddLoadPage() {
     contents: "",
     weight: "",
     pieces: "",
+    pieceCount: "",
     pallets: "",
     freightClass: "",
+    nmfcCode: "",
+    cubeFt: "",
     isHazardous: false,
+    unNumber: "",
+    hazardClass: "",
+    packingGroup: "",
+    properShippingName: "",
+    placardRequired: false,
+    emergencyContact: "",
     isOversized: false,
     isReefer: false,
     
@@ -211,6 +223,17 @@ export default function AddLoadPage() {
       if (dieselResult.data) {
         setDieselPricePerGallon(Number(dieselResult.data.price_per_gallon || 0))
         setDieselEffectiveDate(dieselResult.data.effective_date || "")
+        setDieselStatusNote("")
+      } else {
+        // Auto-attempt sync so Auto (DOE index) can work without manual pre-sync.
+        const sync = await syncCurrentDieselPrice()
+        if (sync.data) {
+          setDieselPricePerGallon(Number(sync.data.price_per_gallon || 0))
+          setDieselEffectiveDate(sync.data.effective_date || "")
+          setDieselStatusNote("")
+        } else {
+          setDieselStatusNote(sync.error || dieselResult.error || "DOE diesel price not synced yet")
+        }
       }
     }
     loadData()
@@ -321,7 +344,17 @@ export default function AddLoadPage() {
 
   /** Auto-fill miles from trip planning when pickup + drop (or multi-stop chain) are set */
   useEffect(() => {
+    const requestId = ++milesRequestSeq.current
     let cancelled = false
+    const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+      return await Promise.race([
+        promise,
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("Mileage calculation timeout")), timeoutMs)
+        }),
+      ])
+    }
+
     const run = async () => {
       const origin = formData.origin?.trim()
       if (!origin) return
@@ -331,14 +364,29 @@ export default function AddLoadPage() {
 
       setIsCalculatingMiles(true)
       try {
+        const targetDestination = stops.length > 0 ? stops[stops.length - 1] : formData.destination!.trim()
+        if (!targetDestination) return
+
+        // Fast path: Distance Matrix-based mileage for responsive UI.
+        const quickMileage = await withTimeout(calculateMileage(origin, targetDestination), 7000).catch(() => null)
+        if (!cancelled && milesRequestSeq.current === requestId && quickMileage?.miles != null) {
+          setFormData((prev) => ({
+            ...prev,
+            estimatedMiles: String(Math.round(quickMileage.miles || 0)),
+            milesMethod: "trip_planning",
+          }))
+          return
+        }
+
+        // Fallback path: richer ProMiles estimate if quick method timed out/failed.
         if (stops.length > 0) {
           const finalStop = stops[stops.length - 1]
           if (!finalStop) return
-          const res = await getTripPlanningEstimate({
+          const res = await withTimeout(getTripPlanningEstimate({
             origin,
             destination: finalStop,
             mpg: 6.5,
-          })
+          }), 12000)
           if (cancelled || res.error || !res.data) return
           const milesLeg = res.data.distance_miles
           setFormData((prev) => ({
@@ -349,11 +397,11 @@ export default function AddLoadPage() {
           return
         }
 
-        const res = await getTripPlanningEstimate({
+        const res = await withTimeout(getTripPlanningEstimate({
           origin,
           destination: formData.destination!.trim(),
           mpg: 6.5,
-        })
+        }), 12000)
         if (cancelled || res.error || !res.data) return
         const milesSingle = res.data.distance_miles
         setFormData((prev) => ({
@@ -364,7 +412,7 @@ export default function AddLoadPage() {
       } catch {
         /* ignore */
       } finally {
-        if (!cancelled) setIsCalculatingMiles(false)
+        if (!cancelled && milesRequestSeq.current === requestId) setIsCalculatingMiles(false)
       }
     }
 
@@ -584,8 +632,18 @@ export default function AddLoadPage() {
         pickup_instructions: formData.pickupInstructions || undefined,
       delivery_instructions: formData.deliveryInstructions || undefined,
       pieces: formData.pieces ? parseInt(formData.pieces) : undefined,
+      piece_count: formData.pieceCount ? parseInt(formData.pieceCount) : (formData.pieces ? parseInt(formData.pieces) : undefined),
       pallets: formData.pallets ? parseInt(formData.pallets) : undefined,
+      cube_ft: formData.cubeFt ? parseFloat(formData.cubeFt) : undefined,
+      nmfc_code: formData.nmfcCode || undefined,
+      freight_class: formData.freightClass || undefined,
       is_hazardous: formData.isHazardous,
+      un_number: formData.unNumber || undefined,
+      hazard_class: formData.hazardClass || undefined,
+      packing_group: formData.packingGroup || undefined,
+      proper_shipping_name: formData.properShippingName || undefined,
+      placard_required: formData.placardRequired,
+      emergency_contact: formData.emergencyContact || undefined,
       is_oversized: formData.isOversized,
       requires_liftgate: formData.requiresLiftgate,
       requires_inside_delivery: formData.requiresInsideDelivery,
@@ -1206,6 +1264,10 @@ export default function AddLoadPage() {
                       <Input name="pallets" type="number" value={formData.pallets} onChange={handleChange} className="mt-1" />
                 </div>
                 <div>
+                      <Label>Piece Count</Label>
+                      <Input name="pieceCount" type="number" value={formData.pieceCount} onChange={handleChange} className="mt-1" />
+                </div>
+                <div>
                       <Label>Freight Class</Label>
                       <Select value={formData.freightClass} onValueChange={(v) => handleSelectChange("freightClass", v)}>
                         <SelectTrigger className="mt-1">
@@ -1217,6 +1279,14 @@ export default function AddLoadPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                </div>
+                <div>
+                      <Label>NMFC Code</Label>
+                      <Input name="nmfcCode" value={formData.nmfcCode} onChange={handleChange} className="mt-1" placeholder="e.g. 156600" />
+                </div>
+                <div>
+                      <Label>Cube (ft3)</Label>
+                      <Input name="cubeFt" type="number" value={formData.cubeFt} onChange={handleChange} className="mt-1" />
                 </div>
                     <div className="md:col-span-2 space-y-2 rounded-md border-l-4 border-blue-500/70 bg-blue-500/5 pl-4 py-3 pr-3">
                       <Label className="text-foreground">Load characteristics</Label>
@@ -1244,6 +1314,52 @@ export default function AddLoadPage() {
                         ))}
                 </div>
                 </div>
+                    {formData.isHazardous && (
+                      <div className="md:col-span-2 rounded-md border border-red-500/40 bg-red-500/5 p-4">
+                        <p className="text-sm font-medium text-red-200 mb-3">HAZMAT details (required for compliance)</p>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <Label>UN Number</Label>
+                            <Input name="unNumber" value={formData.unNumber} onChange={handleChange} className="mt-1" placeholder="UN1203" />
+                          </div>
+                          <div>
+                            <Label>Hazard Class</Label>
+                            <Input name="hazardClass" value={formData.hazardClass} onChange={handleChange} className="mt-1" placeholder="3" />
+                          </div>
+                          <div>
+                            <Label>Packing Group</Label>
+                            <Input name="packingGroup" value={formData.packingGroup} onChange={handleChange} className="mt-1" placeholder="II" />
+                          </div>
+                          <div>
+                            <Label>Emergency Contact</Label>
+                            <Input name="emergencyContact" value={formData.emergencyContact} onChange={handleChange} className="mt-1" placeholder="+1..." />
+                          </div>
+                          <div className="md:col-span-2">
+                            <Label>Proper Shipping Name</Label>
+                            <Input
+                              name="properShippingName"
+                              value={formData.properShippingName}
+                              onChange={handleChange}
+                              className="mt-1"
+                              placeholder="Gasoline"
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <button
+                              type="button"
+                              onClick={() => setFormData((prev) => ({ ...prev, placardRequired: !prev.placardRequired }))}
+                              className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                                formData.placardRequired
+                                  ? "border-red-500/70 bg-red-500/15 text-red-200"
+                                  : "border-border/70 bg-background text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              Placard Required
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div className="md:col-span-2 space-y-2 rounded-md border-l-4 border-amber-500/70 bg-amber-500/5 pl-4 py-3 pr-3">
                       <Label className="text-foreground">Delivery requirements</Label>
                       <p className="text-xs text-muted-foreground mb-2">What the driver must do at delivery (not freight type)</p>
@@ -1326,7 +1442,7 @@ export default function AddLoadPage() {
                       ) : (
                         <p className="text-xs text-muted-foreground">
                           {dieselPricePerGallon == null
-                            ? "DOE diesel price not synced yet. Fuel surcharge stays at $0.00."
+                            ? `${dieselStatusNote || "DOE diesel price not synced yet"}. Fuel surcharge stays at $0.00.`
                             : `DOE $${dieselPricePerGallon.toFixed(3)}/gal${
                                 dieselEffectiveDate ? ` (${dieselEffectiveDate})` : ""
                               } • Base $${fscBasePrice.toFixed(2)} • MPG ${fscMpgAssumed.toFixed(1)}`}

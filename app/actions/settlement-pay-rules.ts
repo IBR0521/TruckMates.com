@@ -58,6 +58,7 @@ export type SettlementLineItemType =
   | "bonus"
   | "deduction"
   | "per_diem"
+  | "lease_deduction"
 
 export interface SettlementLineItem {
   type: SettlementLineItemType

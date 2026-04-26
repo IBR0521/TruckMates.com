@@ -33,6 +33,7 @@ import { createInvoice, getInvoices } from "@/app/actions/accounting"
 import { autoGenerateInvoiceOnPOD } from "@/app/actions/auto-invoice"
 import { getDocuments, getDocumentUrl } from "@/app/actions/documents"
 import { generateRateConfirmation } from "@/app/actions/rate-confirmation"
+import { generateHazmatShippingPaper } from "@/app/actions/hazmat-shipping-paper"
 import { toast } from "sonner"
 import {
   DetailPageLayout,
@@ -53,7 +54,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { getDrivers } from "@/app/actions/drivers"
+import { createPermit, getPermits, uploadPermitDocument } from "@/app/actions/permits"
 
 export default function LoadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -81,6 +85,21 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   const [selectedDispatchTruckId, setSelectedDispatchTruckId] = useState<string>("")
   const [loadDocuments, setLoadDocuments] = useState<any[]>([])
   const [isGeneratingRateConf, setIsGeneratingRateConf] = useState(false)
+  const [isGeneratingHazmatPaper, setIsGeneratingHazmatPaper] = useState(false)
+  const [permits, setPermits] = useState<any[]>([])
+  const [isCreatingPermit, setIsCreatingPermit] = useState(false)
+  const [permitForm, setPermitForm] = useState({
+    permit_number: "",
+    issuing_state: "",
+    permit_type: "oversize",
+    issued_date: "",
+    expiry_date: "",
+    max_weight: "",
+    max_height: "",
+    max_width: "",
+    max_length: "",
+    route_restriction: "",
+  })
 
   /** For multi-stop loads, trip planning needs one destination — use last delivery stop. */
   const lastStopRoutingAddress = useMemo(
@@ -107,8 +126,12 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     async function loadRelatedDocuments() {
       if (!id || id === "add") return
       const docs = await getDocuments({ load_id: id, limit: 50 })
+      const permitResult = await getPermits({ load_id: id })
       if (mounted && docs.data) {
         setLoadDocuments(docs.data)
+      }
+      if (mounted && permitResult.data) {
+        setPermits(permitResult.data)
       }
     }
     void loadRelatedDocuments()
@@ -712,6 +735,73 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     if (docs.data) setLoadDocuments(docs.data)
   }
 
+  async function handleGenerateHazmatShippingPaper() {
+    if (!id || id === "add") return
+    setIsGeneratingHazmatPaper(true)
+    const result = await generateHazmatShippingPaper(id)
+    setIsGeneratingHazmatPaper(false)
+    if (result.error) {
+      toast.error(result.error)
+      return
+    }
+    toast.success("HAZMAT shipping paper generated")
+    const docs = await getDocuments({ load_id: id, limit: 50 })
+    if (docs.data) setLoadDocuments(docs.data)
+  }
+
+  async function handleCreatePermit() {
+    if (!id || id === "add") return
+    setIsCreatingPermit(true)
+    const result = await createPermit({
+      permit_number: permitForm.permit_number,
+      issuing_state: permitForm.issuing_state,
+      permit_type: permitForm.permit_type,
+      issued_date: permitForm.issued_date || undefined,
+      expiry_date: permitForm.expiry_date || undefined,
+      max_weight: permitForm.max_weight ? Number(permitForm.max_weight) : undefined,
+      max_height: permitForm.max_height ? Number(permitForm.max_height) : undefined,
+      max_width: permitForm.max_width ? Number(permitForm.max_width) : undefined,
+      max_length: permitForm.max_length ? Number(permitForm.max_length) : undefined,
+      route_restriction: permitForm.route_restriction || undefined,
+      load_id: id,
+      truck_id: load?.truck_id || undefined,
+    })
+    setIsCreatingPermit(false)
+    if (result.error) {
+      toast.error(result.error)
+      return
+    }
+    toast.success("Permit created")
+    setPermitForm({
+      permit_number: "",
+      issuing_state: "",
+      permit_type: "oversize",
+      issued_date: "",
+      expiry_date: "",
+      max_weight: "",
+      max_height: "",
+      max_width: "",
+      max_length: "",
+      route_restriction: "",
+    })
+    const permitResult = await getPermits({ load_id: id })
+    if (permitResult.data) setPermits(permitResult.data)
+  }
+
+  async function handleUploadPermitFile(permitId: string, file: File) {
+    const result = await uploadPermitDocument(permitId, file)
+    if (result.error) {
+      toast.error(result.error)
+      return
+    }
+    toast.success("Permit attachment uploaded")
+    if (!id || id === "add") return
+    const docs = await getDocuments({ load_id: id, limit: 50 })
+    if (docs.data) setLoadDocuments(docs.data)
+    const permitResult = await getPermits({ load_id: id })
+    if (permitResult.data) setPermits(permitResult.data)
+  }
+
   return (
     <DetailPageLayout
       title={<span className="text-3xl font-bold tracking-tight">{load.shipment_number || "Load Details"}</span>}
@@ -1253,6 +1343,12 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                     <p className="mt-1 text-base text-white">{load.pieces}</p>
                   </div>
                 )}
+                {load.piece_count && (
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-zinc-500">Piece Count</p>
+                    <p className="mt-1 text-base text-white">{load.piece_count}</p>
+                  </div>
+                )}
                 {load.pallets && (
                   <div>
                     <p className="text-xs uppercase tracking-wider text-zinc-500">Pallets</p>
@@ -1299,6 +1395,24 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                     <p className="mt-1 text-base capitalize text-white">{load.load_type}</p>
                   </div>
                 )}
+                {load.freight_class && (
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-zinc-500">Freight Class</p>
+                    <p className="mt-1 text-base text-white">{load.freight_class}</p>
+                  </div>
+                )}
+                {load.nmfc_code && (
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-zinc-500">NMFC Code</p>
+                    <p className="mt-1 text-base text-white">{load.nmfc_code}</p>
+                  </div>
+                )}
+                {load.cube_ft && (
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-zinc-500">Cube</p>
+                    <p className="mt-1 text-base text-white">{load.cube_ft} ft3</p>
+                  </div>
+                )}
               </div>
               
               {/* Load Type Flags */}
@@ -1326,6 +1440,27 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                         Tanker
                       </span>
                     )}
+                  </div>
+                </div>
+              )}
+              {load.requires_permit && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-sm text-amber-300 font-medium">Permit required before dispatch</p>
+                  {load.permit_requirement_reason ? (
+                    <p className="text-xs text-muted-foreground mt-1">{load.permit_requirement_reason}</p>
+                  ) : null}
+                </div>
+              )}
+              {load.is_hazardous && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-sm text-muted-foreground mb-2">HAZMAT Details</p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <p className="text-sm"><span className="text-muted-foreground">UN Number:</span> {load.un_number || "N/A"}</p>
+                    <p className="text-sm"><span className="text-muted-foreground">Hazard Class:</span> {load.hazard_class || "N/A"}</p>
+                    <p className="text-sm"><span className="text-muted-foreground">Packing Group:</span> {load.packing_group || "N/A"}</p>
+                    <p className="text-sm"><span className="text-muted-foreground">Placard Required:</span> {load.placard_required ? "Yes" : "No"}</p>
+                    <p className="text-sm md:col-span-2"><span className="text-muted-foreground">Proper Shipping Name:</span> {load.proper_shipping_name || "N/A"}</p>
+                    <p className="text-sm md:col-span-2"><span className="text-muted-foreground">Emergency Contact:</span> {load.emergency_contact || "N/A"}</p>
                   </div>
                 </div>
               )}
@@ -1458,12 +1593,134 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           </DetailSection>
           )}
 
+          <DetailSection title="Permits" icon={<CircleAlert className="w-5 h-5" />}>
+            <div className="space-y-4">
+              {load.requires_permit ? (
+                <p className="text-sm text-amber-300">
+                  This load is flagged as oversize/overweight and requires a valid permit attachment before dispatch.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">No permit requirement currently detected from load dimensions/weight.</p>
+              )}
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <div>
+                  <Label>Permit Number</Label>
+                  <Input
+                    value={permitForm.permit_number}
+                    onChange={(e) => setPermitForm((p) => ({ ...p, permit_number: e.target.value }))}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Issuing State</Label>
+                  <Input
+                    value={permitForm.issuing_state}
+                    onChange={(e) => setPermitForm((p) => ({ ...p, issuing_state: e.target.value.toUpperCase() }))}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Permit Type</Label>
+                  <Input
+                    value={permitForm.permit_type}
+                    onChange={(e) => setPermitForm((p) => ({ ...p, permit_type: e.target.value }))}
+                    className="mt-1"
+                    placeholder="oversize / overweight"
+                  />
+                </div>
+                <div>
+                  <Label>Issued Date</Label>
+                  <Input type="date" value={permitForm.issued_date} onChange={(e) => setPermitForm((p) => ({ ...p, issued_date: e.target.value }))} className="mt-1" />
+                </div>
+                <div>
+                  <Label>Expiry Date</Label>
+                  <Input type="date" value={permitForm.expiry_date} onChange={(e) => setPermitForm((p) => ({ ...p, expiry_date: e.target.value }))} className="mt-1" />
+                </div>
+                <div>
+                  <Label>Max Weight (lbs)</Label>
+                  <Input value={permitForm.max_weight} onChange={(e) => setPermitForm((p) => ({ ...p, max_weight: e.target.value }))} className="mt-1" />
+                </div>
+                <div>
+                  <Label>Max Height (ft)</Label>
+                  <Input value={permitForm.max_height} onChange={(e) => setPermitForm((p) => ({ ...p, max_height: e.target.value }))} className="mt-1" />
+                </div>
+                <div>
+                  <Label>Max Width (ft)</Label>
+                  <Input value={permitForm.max_width} onChange={(e) => setPermitForm((p) => ({ ...p, max_width: e.target.value }))} className="mt-1" />
+                </div>
+                <div>
+                  <Label>Max Length (ft)</Label>
+                  <Input value={permitForm.max_length} onChange={(e) => setPermitForm((p) => ({ ...p, max_length: e.target.value }))} className="mt-1" />
+                </div>
+                <div className="md:col-span-3">
+                  <Label>Route Restriction</Label>
+                  <Input
+                    value={permitForm.route_restriction}
+                    onChange={(e) => setPermitForm((p) => ({ ...p, route_restriction: e.target.value }))}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <Button size="sm" onClick={handleCreatePermit} disabled={isCreatingPermit}>
+                {isCreatingPermit ? "Saving..." : "Add Permit"}
+              </Button>
+
+              {permits.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No permits linked to this load.</p>
+              ) : (
+                <div className="space-y-2">
+                  {permits.map((permit) => (
+                    <div key={permit.id} className="rounded border border-border/60 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium">
+                            {permit.permit_number} ({permit.issuing_state}) - {permit.permit_type}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Expires: {permit.expiry_date || "N/A"} {permit.document_id ? "• Attachment added" : "• No attachment"}
+                          </p>
+                        </div>
+                        <label className="inline-flex">
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept=".pdf,.png,.jpg,.jpeg,.webp"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) void handleUploadPermitFile(permit.id, file)
+                            }}
+                          />
+                          <span className="cursor-pointer rounded-md border px-3 py-1.5 text-xs">Upload Attachment</span>
+                        </label>
+                      </div>
+                      {permit.route_restriction ? (
+                        <p className="text-xs text-muted-foreground mt-2">Route restriction: {permit.route_restriction}</p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </DetailSection>
+
           <DetailSection title="Load Documents" icon={<FileText className="w-5 h-5" />}>
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 <Button type="button" size="sm" onClick={handleGenerateRateConfirmation} disabled={isGeneratingRateConf}>
                   {isGeneratingRateConf ? "Generating..." : "Generate Rate Confirmation"}
                 </Button>
+                {load?.is_hazardous ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleGenerateHazmatShippingPaper}
+                    disabled={isGeneratingHazmatPaper}
+                  >
+                    {isGeneratingHazmatPaper ? "Generating..." : "Generate HAZMAT Shipping Paper"}
+                  </Button>
+                ) : null}
               </div>
               {loadDocuments.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No documents linked to this load yet.</p>

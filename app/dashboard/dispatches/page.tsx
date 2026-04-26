@@ -667,6 +667,9 @@ export default function DispatchesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/dashboard/dispatches/ltl">
+            <Button variant="outline" size="sm">LTL Consolidation</Button>
+          </Link>
           <div className="w-[200px]">
             <Select value={terminalFilter} onValueChange={setTerminalFilter}>
               <SelectTrigger>

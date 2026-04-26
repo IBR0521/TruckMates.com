@@ -25,7 +25,7 @@ type LoadUpdateNotificationPayload = {
 const LOAD_DETAIL_SELECT = `
   id, company_id, shipment_number, origin, destination, status,
   load_date, estimated_delivery, actual_delivery,
-  driver_id, truck_id, trailer_id, route_id, customer_id, terminal_id,
+  driver_id, truck_id, trailer_id, route_id, customer_id, terminal_id, shipment_id,
   weight, weight_kg, contents, value, carrier_type, coordinates,
   delivery_type, company_name, customer_reference, requires_split_delivery, total_delivery_points,
   load_type, rate, rate_type, fuel_surcharge, accessorial_charges, discount, advance, total_rate,
@@ -36,14 +36,54 @@ const LOAD_DETAIL_SELECT = `
   consignee_contact_name, consignee_contact_phone, consignee_contact_email,
   pickup_time, pickup_time_window_start, pickup_time_window_end, pickup_instructions,
   delivery_time, delivery_time_window_start, delivery_time_window_end, delivery_instructions,
-  pieces, pallets, boxes, length, width, height, temperature, is_hazardous, is_oversized,
+  pieces, pallets, boxes, piece_count, length, width, height, cube_ft, temperature, is_hazardous, is_oversized,
+  nmfc_code, freight_class,
+  requires_permit, permit_requirement_reason,
+  un_number, hazard_class, packing_group, proper_shipping_name, placard_required, emergency_contact,
   requires_liftgate, requires_inside_delivery, requires_appointment, appointment_time,
   special_instructions, notes, internal_notes, bol_number,
   trip_planning_estimate, created_at, updated_at
 `
 
 const LOAD_LIST_SELECT =
-  "id, shipment_number, origin, destination, status, driver_id, truck_id, trailer_id, terminal_id, load_date, estimated_delivery, created_at, company_name, value, contents, delivery_type, total_delivery_points, weight, weight_kg"
+  "id, shipment_number, origin, destination, status, driver_id, truck_id, trailer_id, terminal_id, shipment_id, load_date, estimated_delivery, created_at, company_name, value, contents, delivery_type, total_delivery_points, weight, weight_kg, nmfc_code, freight_class, piece_count, cube_ft"
+
+function driverHasHazmatEndorsement(endorsements: unknown): boolean {
+  if (!endorsements) return false
+  const normalized = String(endorsements)
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+  return normalized.includes("h") || normalized.includes("hazmat") || normalized.includes("haz mat")
+}
+
+function computePermitRequirement(input: {
+  weight_kg?: unknown
+  weight?: unknown
+  length?: unknown
+  width?: unknown
+  height?: unknown
+  is_oversized?: unknown
+}): { required: boolean; reason: string | null } {
+  const weightKg = Number(input.weight_kg || 0)
+  const parsedWeightLbs = Number(String(input.weight || "").replace(/[^0-9.]/g, ""))
+  const weightLbs = weightKg > 0 ? weightKg * 2.20462 : 0
+  const effectiveWeightLbs = weightLbs > 0 ? weightLbs : parsedWeightLbs
+  const lengthFt = Number(input.length || 0)
+  const widthFt = Number(input.width || 0)
+  const heightFt = Number(input.height || 0)
+  const oversized = Boolean(input.is_oversized)
+
+  const reasons: string[] = []
+  if (effectiveWeightLbs > 80000) reasons.push(`weight ${effectiveWeightLbs.toFixed(0)} lbs > 80,000 lbs`)
+  if (lengthFt > 53) reasons.push(`length ${lengthFt} ft > 53 ft`)
+  if (widthFt > 8.5) reasons.push(`width ${widthFt} ft > 8.5 ft`)
+  if (heightFt > 13.5) reasons.push(`height ${heightFt} ft > 13.5 ft`)
+  if (oversized) reasons.push("load is marked oversized")
+
+  if (reasons.length === 0) return { required: false, reason: null }
+  return { required: true, reason: reasons.join("; ") }
+}
 
 // Helper function to send notifications in background (non-blocking)
 async function sendNotificationsForLoadUpdate(loadData: LoadUpdateNotificationPayload) {
@@ -256,6 +296,7 @@ export async function createLoad(formData: {
   truck_id?: string
   trailer_id?: string
   terminal_id?: string | null
+  shipment_id?: string | null
   route_id?: string | null
   load_date?: string | null
   estimated_delivery?: string | null
@@ -295,13 +336,23 @@ export async function createLoad(formData: {
   delivery_instructions?: string
   // Enhanced freight details
   pieces?: number
+  piece_count?: number
   pallets?: number
   boxes?: number
   length?: number
   width?: number
   height?: number
+  cube_ft?: number
+  nmfc_code?: string
+  freight_class?: string
   temperature?: number
   is_hazardous?: boolean
+  un_number?: string
+  hazard_class?: string
+  packing_group?: string
+  proper_shipping_name?: string
+  placard_required?: boolean
+  emergency_contact?: string
   is_oversized?: boolean
   special_instructions?: string
   // Special requirements
@@ -386,7 +437,7 @@ export async function createLoad(formData: {
   if (formData.driver_id) {
     const { data: driver, error: driverError } = await supabase
       .from("drivers")
-      .select("id, status, company_id")
+      .select("id, status, company_id, license_endorsements")
       .eq("id", formData.driver_id)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
@@ -397,6 +448,10 @@ export async function createLoad(formData: {
 
     if (driver.status !== "active") {
       return { error: "Cannot assign inactive driver to load", data: null }
+    }
+
+    if (formData.is_hazardous && !driverHasHazmatEndorsement(driver.license_endorsements)) {
+      return { error: "Assigned driver does not have required HAZMAT endorsement (H)", data: null }
     }
   }
 
@@ -576,6 +631,11 @@ export async function createLoad(formData: {
   const finalLoadType = formData.load_type || settings.default_load_type || "ftl"
   const finalCarrierType = formData.carrier_type || settings.default_carrier_type || "dry-van"
   const finalStatus = formData.status || settings.default_status || "pending"
+  if (formData.is_hazardous) {
+    if (!formData.un_number || !formData.hazard_class || !formData.proper_shipping_name) {
+      return { error: "HAZMAT loads require UN number, hazard class, and proper shipping name", data: null }
+    }
+  }
   
   // Apply default pricing if not provided
   let finalRate = formData.rate
@@ -679,7 +739,20 @@ export async function createLoad(formData: {
   }
   
   // Use auto-assigned driver/truck if available
-  if (finalDriverId) loadData.driver_id = finalDriverId
+  if (finalDriverId) {
+    if (formData.is_hazardous) {
+      const { data: hazmatDriver } = await supabase
+        .from("drivers")
+        .select("id, license_endorsements")
+        .eq("id", finalDriverId)
+        .eq("company_id", ctx.companyId)
+        .maybeSingle()
+      if (!hazmatDriver || !driverHasHazmatEndorsement(hazmatDriver.license_endorsements)) {
+        return { error: "Assigned driver does not have required HAZMAT endorsement (H)", data: null }
+      }
+    }
+    loadData.driver_id = finalDriverId
+  }
   if (finalTruckId) loadData.truck_id = finalTruckId
   if (finalTrailerId) loadData.trailer_id = finalTrailerId
 
@@ -701,6 +774,7 @@ export async function createLoad(formData: {
   if (formData.truck_id) loadData.truck_id = formData.truck_id
   if (formData.trailer_id) loadData.trailer_id = formData.trailer_id
   if (formData.terminal_id) loadData.terminal_id = formData.terminal_id
+  if (formData.shipment_id) loadData.shipment_id = formData.shipment_id
   if (routeId) loadData.route_id = routeId
   if (formData.load_date) loadData.load_date = formData.load_date
   if (formData.estimated_delivery) loadData.estimated_delivery = formData.estimated_delivery
@@ -755,11 +829,16 @@ export async function createLoad(formData: {
   
   // Enhanced freight details
   if (formData.pieces !== undefined && formData.pieces !== null) loadData.pieces = formData.pieces
+  if (formData.piece_count !== undefined && formData.piece_count !== null) loadData.piece_count = formData.piece_count
+  else if (formData.pieces !== undefined && formData.pieces !== null) loadData.piece_count = formData.pieces
   if (formData.pallets !== undefined && formData.pallets !== null) loadData.pallets = formData.pallets
   if (formData.boxes !== undefined && formData.boxes !== null) loadData.boxes = formData.boxes
   if (formData.length !== undefined && formData.length !== null) loadData.length = formData.length
   if (formData.width !== undefined && formData.width !== null) loadData.width = formData.width
   if (formData.height !== undefined && formData.height !== null) loadData.height = formData.height
+  if (formData.cube_ft !== undefined && formData.cube_ft !== null) loadData.cube_ft = formData.cube_ft
+  if (formData.nmfc_code) loadData.nmfc_code = sanitizeString(formData.nmfc_code, 30)
+  if (formData.freight_class) loadData.freight_class = sanitizeString(formData.freight_class, 20)
   // Temperature: DB is numeric; accept range strings like "35-40" and store first number to avoid "invalid input syntax for type numeric"
   if (formData.temperature !== undefined && formData.temperature !== null) {
     const t = formData.temperature
@@ -770,6 +849,12 @@ export async function createLoad(formData: {
     }
   }
   if (formData.is_hazardous !== undefined) loadData.is_hazardous = formData.is_hazardous
+  if (formData.un_number) loadData.un_number = sanitizeString(formData.un_number, 20)
+  if (formData.hazard_class) loadData.hazard_class = sanitizeString(formData.hazard_class, 20)
+  if (formData.packing_group) loadData.packing_group = sanitizeString(formData.packing_group, 20)
+  if (formData.proper_shipping_name) loadData.proper_shipping_name = sanitizeString(formData.proper_shipping_name, 200)
+  if (formData.placard_required !== undefined) loadData.placard_required = formData.placard_required
+  if (formData.emergency_contact) loadData.emergency_contact = sanitizeString(formData.emergency_contact, 120)
   if (formData.is_oversized !== undefined) loadData.is_oversized = formData.is_oversized
   if (formData.special_instructions) loadData.special_instructions = formData.special_instructions
   
@@ -806,6 +891,17 @@ export async function createLoad(formData: {
   // Marketplace fields
   if (formData.source) loadData.source = formData.source
   if (formData.marketplace_load_id) loadData.marketplace_load_id = formData.marketplace_load_id
+
+  const permitRequirement = computePermitRequirement({
+    weight_kg: loadData.weight_kg ?? formData.weight_kg,
+    weight: loadData.weight ?? formData.weight,
+    length: loadData.length ?? formData.length,
+    width: loadData.width ?? formData.width,
+    height: loadData.height ?? formData.height,
+    is_oversized: loadData.is_oversized ?? formData.is_oversized,
+  })
+  loadData.requires_permit = permitRequirement.required
+  loadData.permit_requirement_reason = permitRequirement.reason
 
   // Address Book Integration
   if (formData.shipper_address_book_id) loadData.shipper_address_book_id = formData.shipper_address_book_id
@@ -921,6 +1017,7 @@ export async function updateLoad(
     driver_id?: string
     truck_id?: string
     trailer_id?: string
+    shipment_id?: string
     route_id?: string | null
     load_date?: string | null
     estimated_delivery?: string | null
@@ -930,6 +1027,8 @@ export async function updateLoad(
     customer_reference?: string
     requires_split_delivery?: boolean
     total_delivery_points?: number
+    requires_permit?: boolean
+    permit_requirement_reason?: string | null
     [key: string]: any
   }
 ) {
@@ -1010,6 +1109,7 @@ export async function updateLoad(
   updateField("driver_id", formData.driver_id || null)
   updateField("truck_id", formData.truck_id || null)
   updateField("trailer_id", formData.trailer_id || null)
+  updateField("shipment_id", formData.shipment_id || null)
   updateField("route_id", formData.route_id || null)
   updateField("load_date", formData.load_date || null)
   updateField("estimated_delivery", formData.estimated_delivery || null)
@@ -1055,11 +1155,15 @@ export async function updateLoad(
   
   // Enhanced freight details
   updateField("pieces", formData.pieces ?? null)
+  updateField("piece_count", formData.piece_count ?? (formData.pieces ?? null))
   updateField("pallets", formData.pallets ?? null)
   updateField("boxes", formData.boxes || null)
   updateField("length", formData.length || null)
   updateField("width", formData.width || null)
   updateField("height", formData.height || null)
+  updateField("cube_ft", formData.cube_ft ?? null)
+  updateField("nmfc_code", formData.nmfc_code ?? null)
+  updateField("freight_class", formData.freight_class ?? null)
   // Coerce temperature range strings (e.g. "35-40") to first number for numeric column
   ;(() => {
     const t = formData.temperature
@@ -1071,7 +1175,15 @@ export async function updateLoad(
     updateField("temperature", !isNaN(num) ? num : null)
   })()
   updateField("is_hazardous", formData.is_hazardous)
+  updateField("un_number", formData.un_number)
+  updateField("hazard_class", formData.hazard_class)
+  updateField("packing_group", formData.packing_group)
+  updateField("proper_shipping_name", formData.proper_shipping_name)
+  updateField("placard_required", formData.placard_required)
+  updateField("emergency_contact", formData.emergency_contact)
   updateField("is_oversized", formData.is_oversized)
+  updateField("requires_permit", formData.requires_permit)
+  updateField("permit_requirement_reason", formData.permit_requirement_reason)
   updateField("special_instructions", formData.special_instructions)
   
   // Special requirements
@@ -1113,6 +1225,67 @@ export async function updateLoad(
   if (updateData.special_instructions) updateData.special_instructions = sanitizeString(updateData.special_instructions, 1000)
   if (updateData.pickup_instructions) updateData.pickup_instructions = sanitizeString(updateData.pickup_instructions, 1000)
   if (updateData.delivery_instructions) updateData.delivery_instructions = sanitizeString(updateData.delivery_instructions, 1000)
+  if (updateData.nmfc_code) updateData.nmfc_code = sanitizeString(updateData.nmfc_code, 30)
+  if (updateData.freight_class) updateData.freight_class = sanitizeString(updateData.freight_class, 20)
+  if (updateData.permit_requirement_reason) {
+    updateData.permit_requirement_reason = sanitizeString(updateData.permit_requirement_reason, 500)
+  }
+  if (updateData.un_number) updateData.un_number = sanitizeString(updateData.un_number, 20)
+  if (updateData.hazard_class) updateData.hazard_class = sanitizeString(updateData.hazard_class, 20)
+  if (updateData.packing_group) updateData.packing_group = sanitizeString(updateData.packing_group, 20)
+  if (updateData.proper_shipping_name) updateData.proper_shipping_name = sanitizeString(updateData.proper_shipping_name, 200)
+  if (updateData.emergency_contact) updateData.emergency_contact = sanitizeString(updateData.emergency_contact, 120)
+
+  const nextHazardous =
+    typeof updateData.is_hazardous === "boolean" ? updateData.is_hazardous : Boolean(currentLoad.is_hazardous)
+  const nextDriverId = updateData.driver_id !== undefined ? updateData.driver_id : currentLoad.driver_id
+  if (nextHazardous) {
+    const unNumber = updateData.un_number ?? currentLoad.un_number
+    const hazardClass = updateData.hazard_class ?? currentLoad.hazard_class
+    const properName = updateData.proper_shipping_name ?? currentLoad.proper_shipping_name
+    if (!unNumber || !hazardClass || !properName) {
+      return { error: "HAZMAT loads require UN number, hazard class, and proper shipping name", data: null }
+    }
+    if (nextDriverId) {
+      const { data: hazmatDriver } = await supabase
+        .from("drivers")
+        .select("id, license_endorsements")
+        .eq("id", nextDriverId)
+        .eq("company_id", ctx.companyId)
+        .maybeSingle()
+      if (!hazmatDriver || !driverHasHazmatEndorsement(hazmatDriver.license_endorsements)) {
+        return { error: "Assigned driver does not have required HAZMAT endorsement (H)", data: null }
+      }
+    }
+  }
+
+  const computedPermit = computePermitRequirement({
+    weight_kg: updateData.weight_kg ?? currentLoad.weight_kg,
+    weight: updateData.weight ?? currentLoad.weight,
+    length: updateData.length ?? currentLoad.length,
+    width: updateData.width ?? currentLoad.width,
+    height: updateData.height ?? currentLoad.height,
+    is_oversized: updateData.is_oversized ?? currentLoad.is_oversized,
+  })
+  updateData.requires_permit = computedPermit.required
+  updateData.permit_requirement_reason = computedPermit.reason
+
+  const nextStatus = String(updateData.status ?? currentLoad.status ?? "").toLowerCase()
+  if (computedPermit.required && ["scheduled", "in_transit"].includes(nextStatus)) {
+    const today = new Date().toISOString().split("T")[0]
+    const { data: permits } = await supabase
+      .from("permits")
+      .select("id, expiry_date, document_id")
+      .eq("company_id", ctx.companyId)
+      .eq("load_id", id)
+    const validPermit = (permits || []).some((permit: any) => {
+      const notExpired = !permit.expiry_date || permit.expiry_date >= today
+      return Boolean(permit.document_id) && notExpired
+    })
+    if (!validPermit) {
+      return { error: "Permit attachment is required before dispatching this load.", data: null }
+    }
+  }
 
   // If no changes, return early
   if (Object.keys(updateData).length === 0) {

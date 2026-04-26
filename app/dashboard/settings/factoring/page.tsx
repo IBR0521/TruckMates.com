@@ -23,6 +23,10 @@ export default function FactoringSettingsPage() {
     factoring_include_pod: true,
     factoring_email_template: "",
     factoring_auto_submit: false,
+    triumphpay_enabled: false,
+    triumphpay_api_base_url: "",
+    triumphpay_api_key: "",
+    triumphpay_api_secret: "",
   })
 
   useEffect(() => {
@@ -47,6 +51,10 @@ export default function FactoringSettingsPage() {
           factoring_include_pod: (s as any).factoring_include_pod !== false,
           factoring_email_template: (s as any).factoring_email_template || "",
           factoring_auto_submit: Boolean((s as any).factoring_auto_submit),
+          triumphpay_enabled: Boolean((s as any).triumphpay_enabled),
+          triumphpay_api_base_url: (s as any).triumphpay_api_base_url || "",
+          triumphpay_api_key: (s as any).triumphpay_api_key || "",
+          triumphpay_api_secret: (s as any).triumphpay_api_secret || "",
         })
       }
     } finally {
@@ -65,6 +73,10 @@ export default function FactoringSettingsPage() {
         factoring_include_pod: form.factoring_include_pod,
         factoring_email_template: form.factoring_email_template.trim() || null,
         factoring_auto_submit: form.factoring_auto_submit,
+        triumphpay_enabled: form.triumphpay_enabled,
+        triumphpay_api_base_url: form.triumphpay_api_base_url.trim() || null,
+        triumphpay_api_key: form.triumphpay_api_key.trim() || null,
+        triumphpay_api_secret: form.triumphpay_api_secret.trim() || null,
       })
       if (r.error) {
         toast.error(r.error)
@@ -174,16 +186,59 @@ Thank you,
 
         <div className="flex items-center justify-between rounded-lg border border-border p-4">
           <div>
-            <p className="font-medium text-foreground">Auto-submit on POD</p>
+            <p className="font-medium text-foreground">Auto-submit on invoice generation</p>
             <p className="text-sm text-muted-foreground">
-              When POD creates an invoice automatically, email the factoring packet immediately (if submission email is
-              set).
+              Automatically submit factoring packet to TriumphPay when a new invoice is created and API integration is enabled.
             </p>
           </div>
           <Switch
             checked={form.factoring_auto_submit}
             onCheckedChange={(v) => setForm((f) => ({ ...f, factoring_auto_submit: v }))}
           />
+        </div>
+
+        <div className="space-y-4 rounded-lg border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium text-foreground">TriumphPay API Integration</p>
+              <p className="text-sm text-muted-foreground">
+                Submit factoring packets directly to TriumphPay and sync funding status back to invoices.
+              </p>
+            </div>
+            <Switch
+              checked={form.triumphpay_enabled}
+              onCheckedChange={(v) => setForm((f) => ({ ...f, triumphpay_enabled: v }))}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="tp-base-url">API Base URL</Label>
+            <Input
+              id="tp-base-url"
+              placeholder="https://api.triumphpay.com/v1"
+              value={form.triumphpay_api_base_url}
+              onChange={(e) => setForm((f) => ({ ...f, triumphpay_api_base_url: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="tp-api-key">API Key</Label>
+            <Input
+              id="tp-api-key"
+              placeholder="TriumphPay API key"
+              value={form.triumphpay_api_key}
+              onChange={(e) => setForm((f) => ({ ...f, triumphpay_api_key: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="tp-api-secret">API Secret</Label>
+            <Input
+              id="tp-api-secret"
+              type="password"
+              placeholder="TriumphPay API secret"
+              value={form.triumphpay_api_secret}
+              onChange={(e) => setForm((f) => ({ ...f, triumphpay_api_secret: e.target.value }))}
+            />
+          </div>
         </div>
 
         <Button onClick={() => void handleSave()} disabled={isSaving} className="w-full sm:w-auto">

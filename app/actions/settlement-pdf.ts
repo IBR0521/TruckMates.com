@@ -395,10 +395,22 @@ export async function generateSettlementPDF(settlementId: string): Promise<{
               <span>Advance Deduction:</span>
               <span>${formatCurrency(Number(settlement.advance_deduction) || 0)}</span>
             </div>
+            ${Number(settlement.lease_deduction) > 0 ? `
+            <div class="summary-row">
+              <span>Lease Deduction:</span>
+              <span>${formatCurrency(Number(settlement.lease_deduction) || 0)}</span>
+            </div>
+            ` : ""}
             ${Number(settlement.other_deductions) > 0 ? `
             <div class="summary-row">
               <span>Other Deductions:</span>
               <span>${formatCurrency(Number(settlement.other_deductions) || 0)}</span>
+            </div>
+            ` : ""}
+            ${Number(settlement?.calculation_details?.lease_remaining_balance) >= 0 ? `
+            <div class="summary-row">
+              <span>Lease Remaining Balance:</span>
+              <span>${formatCurrency(Number(settlement.calculation_details.lease_remaining_balance) || 0)}</span>
             </div>
             ` : ""}
             <div class="summary-row">

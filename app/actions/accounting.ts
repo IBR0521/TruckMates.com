@@ -33,7 +33,7 @@ export async function getInvoices(filters?: {
     // Build query with selective columns and pagination
     let query = supabase
       .from("invoices")
-      .select("id, invoice_number, customer_name, amount, status, issue_date, due_date, load_id, factoring_status, factoring_submitted_at, factoring_funded_at, created_at", { count: "exact" })
+      .select("id, invoice_number, customer_name, amount, status, issue_date, due_date, load_id, factoring_provider, factoring_status, factoring_external_id, factoring_reference_number, factoring_status_reason, factoring_submitted_at, factoring_last_checked_at, factoring_funded_at, factoring_funded_amount, created_at", { count: "exact" })
       .eq("company_id", ctx.companyId)
       .order("created_at", { ascending: false })
 
@@ -79,7 +79,7 @@ export async function getInvoice(id: string) {
       .from("invoices")
       .select(`
         id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, stripe_invoice_id, stripe_payment_intent_id, quickbooks_id, quickbooks_synced_at,
-        factoring_status, factoring_submitted_at, factoring_funded_at,
+        factoring_provider, factoring_status, factoring_external_id, factoring_reference_number, factoring_status_reason, factoring_submitted_at, factoring_last_checked_at, factoring_funded_at, factoring_funded_amount,
         created_at, updated_at,
         companies:company_id ( name ),
         loads:load_id (
@@ -167,7 +167,7 @@ export async function getSettlements() {
   const { data: settlements, error } = await supabase
     .from("settlements")
     .select(`
-      id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, payment_reference, payment_eta, stripe_transfer_id, stripe_payout_id, gl_code, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at,
+      id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, lease_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, payment_reference, payment_eta, stripe_transfer_id, stripe_payout_id, gl_code, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at,
       drivers:driver_id (
         id,
         name
@@ -200,7 +200,7 @@ export async function getSettlement(id: string) {
     const { data: settlement, error } = await supabase
       .from("settlements")
       .select(`
-        id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, payment_reference, payment_eta, stripe_transfer_id, stripe_payout_id, gl_code, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at,
+        id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, lease_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, payment_reference, payment_eta, stripe_transfer_id, stripe_payout_id, gl_code, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at,
         drivers:driver_id (
           id,
           name
@@ -801,11 +801,11 @@ export async function createInvoice(formData: {
     }
   }
 
-  // Auto-submit to factoring company (if enabled)
+  // Auto-submit to factoring company API (if enabled/configured)
   if (data?.id) {
     try {
-      const { maybeAutoSubmitFactoringOnInvoiceCreated } = await import("./factoring-email")
-      await maybeAutoSubmitFactoringOnInvoiceCreated(data.id).catch((err) =>
+      const { maybeAutoSubmitFactoringApiOnInvoiceCreated } = await import("./factoring-api")
+      await maybeAutoSubmitFactoringApiOnInvoiceCreated(data.id).catch((err) =>
         Sentry.captureException(err),
       )
     } catch (e) {
@@ -1405,7 +1405,40 @@ export async function createSettlement(formData: {
 
   const advanceDeduction = formData.advance_deduction || 0
   const otherDeductions = formData.other_deductions || 0
-  const totalDeductions = fuelDeduction + advanceDeduction + otherDeductions
+  let leaseDeduction = 0
+  let leaseContext: { leaseId: string; remainingAfter: number } | null = null
+
+  // Auto lease deduction from active agreement
+  try {
+    const { data: activeLease } = await supabase
+      .from("lease_agreements")
+      .select("id, weekly_payment, remaining_balance, is_active, start_date, end_date")
+      .eq("company_id", ctx.companyId)
+      .eq("driver_id", formData.driver_id)
+      .eq("is_active", true)
+      .order("start_date", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const today = new Date().toISOString().split("T")[0]
+    const validLease =
+      !!activeLease &&
+      activeLease.start_date <= today &&
+      (!activeLease.end_date || activeLease.end_date >= today)
+
+    if (validLease && activeLease) {
+      const weeklyPayment = Number(activeLease.weekly_payment || 0)
+      const remaining = Number(activeLease.remaining_balance || 0)
+      if (weeklyPayment > 0 && remaining > 0) {
+        leaseDeduction = Math.min(weeklyPayment, remaining)
+        leaseContext = { leaseId: activeLease.id, remainingAfter: Math.max(0, remaining - leaseDeduction) }
+      }
+    }
+  } catch (error) {
+    Sentry.captureException(error)
+  }
+
+  const totalDeductions = fuelDeduction + advanceDeduction + otherDeductions + leaseDeduction
   const netPay = grossPay + perDiemAmount - totalDeductions
 
   // Prepare loads data for JSONB
@@ -1417,6 +1450,23 @@ export async function createSettlement(formData: {
   }))
 
   // Create settlement
+  if (!calculationDetails || typeof calculationDetails !== "object") {
+    calculationDetails = {}
+  }
+  if (!Array.isArray(calculationDetails.line_items)) {
+    calculationDetails.line_items = []
+  }
+  if (leaseDeduction > 0) {
+    calculationDetails.line_items.push({
+      type: "lease_deduction",
+      description: "Lease payment deduction",
+      amount: -leaseDeduction,
+      taxable: false,
+    })
+    calculationDetails.lease_deduction = leaseDeduction
+    calculationDetails.lease_remaining_balance = leaseContext?.remainingAfter ?? null
+  }
+
   const { data, error } = await supabase
     .from("settlements")
     .insert({
@@ -1427,6 +1477,7 @@ export async function createSettlement(formData: {
       gross_pay: grossPay,
       fuel_deduction: fuelDeduction,
       advance_deduction: advanceDeduction,
+      lease_deduction: leaseDeduction,
       other_deductions: otherDeductions,
       total_deductions: totalDeductions,
       per_diem_eligible_nights: perDiemEligibleNights,
@@ -1441,11 +1492,41 @@ export async function createSettlement(formData: {
       calculation_details: calculationDetails,
     })
     // V3-007 FIX: Replace implicit select() with explicit columns
-    .select("id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, payment_reference, payment_eta, stripe_transfer_id, stripe_payout_id, gl_code, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at")
+    .select("id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, lease_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, payment_reference, payment_eta, stripe_transfer_id, stripe_payout_id, gl_code, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at")
     .single()
 
   if (error || !data) {
     return { error: error?.message || "Settlement not created", data: null }
+  }
+
+  // Post settlement side effects: payment history + remaining balance update
+  if (leaseDeduction > 0 && leaseContext?.leaseId) {
+    try {
+      await supabase.from("lease_payments").insert({
+        company_id: ctx.companyId,
+        lease_agreement_id: leaseContext.leaseId,
+        settlement_id: data.id,
+        payment_date: formData.period_end,
+        amount: leaseDeduction,
+        remaining_balance_after: leaseContext.remainingAfter,
+      })
+
+      const leasePatch: Record<string, any> = {
+        remaining_balance: leaseContext.remainingAfter,
+        updated_at: new Date().toISOString(),
+      }
+      if (leaseContext.remainingAfter <= 0) {
+        leasePatch.is_active = false
+      }
+
+      await supabase
+        .from("lease_agreements")
+        .update(leasePatch)
+        .eq("id", leaseContext.leaseId)
+        .eq("company_id", ctx.companyId)
+    } catch (error) {
+      Sentry.captureException(error)
+    }
   }
 
   // Generate PDF automatically (non-blocking)

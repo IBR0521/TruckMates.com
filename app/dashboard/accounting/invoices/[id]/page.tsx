@@ -12,7 +12,8 @@ import { exportToPDF } from "@/lib/export-utils"
 import { toast } from "sonner"
 import { getInvoice } from "@/app/actions/accounting"
 import { sendInvoiceEmail } from "@/app/actions/invoice-email"
-import { sendInvoiceToFactoring, markInvoiceFactoringFunded } from "@/app/actions/factoring-email"
+import { markInvoiceFactoringFunded } from "@/app/actions/factoring-email"
+import { submitInvoiceToTriumphPay, syncInvoiceFactoringStatus } from "@/app/actions/factoring-api"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -319,14 +320,12 @@ PDF and supporting documents are not attached here. Use TruckMates → Invoice �
   const handleSendToFactoring = async () => {
     try {
       setSendingFactoring(true)
-      const res = await sendInvoiceToFactoring(id)
+      const res = await submitInvoiceToTriumphPay(id)
       if (res.error) {
         toast.error(res.error)
         return
       }
-      toast.success(
-        `Sent to factoring${res.data?.attachmentCount != null ? ` (${res.data.attachmentCount} files)` : ""}`,
-      )
+      toast.success("Submitted to TriumphPay")
       const refreshed = await getInvoice(id)
       if (!refreshed.error && refreshed.data) setInvoice(refreshed.data)
     } catch (e: unknown) {
@@ -351,6 +350,24 @@ PDF and supporting documents are not attached here. Use TruckMates → Invoice �
       toast.error(e instanceof Error ? errorMessage(e) : "Failed to update")
     } finally {
       setMarkingFunded(false)
+    }
+  }
+
+  const handleRefreshFactoringStatus = async () => {
+    try {
+      setIsRefreshingPayment(true)
+      const res = await syncInvoiceFactoringStatus(id)
+      if (res.error) {
+        toast.error(res.error)
+        return
+      }
+      toast.success(`Factoring status: ${res.data?.status || "updated"}`)
+      const refreshed = await getInvoice(id)
+      if (!refreshed.error && refreshed.data) setInvoice(refreshed.data)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? errorMessage(e) : "Failed to refresh status")
+    } finally {
+      setIsRefreshingPayment(false)
     }
   }
 
@@ -403,6 +420,12 @@ PDF and supporting documents are not attached here. Use TruckMates → Invoice �
                     · Funded {new Date(invoice.factoring_funded_at).toLocaleString()}
                   </span>
                 )}
+                {invoice.factoring_status_reason && (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {invoice.factoring_status_reason}
+                  </span>
+                )}
               </p>
             )}
           </div>
@@ -444,13 +467,16 @@ PDF and supporting documents are not attached here. Use TruckMates → Invoice �
               <DropdownMenuTrigger asChild>
                 <Button variant="default" className="bg-primary hover:bg-primary/90" disabled={sendingFactoring}>
                   <Landmark className="w-4 h-4 mr-2" />
-                  {sendingFactoring ? "Sending…" : "Send to factoring"}
+                  {sendingFactoring ? "Submitting…" : "Submit to TriumphPay"}
                   <ChevronDown className="w-4 h-4 ml-1 opacity-80" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[220px]">
                 <DropdownMenuItem onClick={() => void handleSendToFactoring()}>
-                  Send packet to factoring email
+                  Submit packet to factoring API
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void handleRefreshFactoringStatus()} disabled={isRefreshingPayment}>
+                  {isRefreshingPayment ? "Refreshing…" : "Refresh funding status"}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => void handleMarkFactoringFunded()}

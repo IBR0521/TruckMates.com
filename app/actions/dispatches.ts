@@ -152,7 +152,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
   // Get current load to check status and company
   const { data: currentLoad, error: loadError } = await supabase
     .from("loads")
-    .select("status, company_id")
+    .select("status, company_id, requires_permit")
     .eq("id", loadId)
     .eq("company_id", ctx.companyId)
     .maybeSingle()
@@ -214,6 +214,27 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
   
   // Update status to scheduled if both driver and truck are assigned and status is pending
   if (driverId && truckId && currentLoad?.status === "pending") {
+    if (currentLoad.requires_permit) {
+      const today = new Date().toISOString().split("T")[0]
+      const { data: permits, error: permitError } = await supabase
+        .from("permits")
+        .select("id, expiry_date, document_id")
+        .eq("company_id", ctx.companyId)
+        .eq("load_id", loadId)
+      if (permitError) {
+        return { error: safeDbError(permitError), data: null }
+      }
+      const validPermit = (permits || []).some((permit: any) => {
+        const notExpired = !permit.expiry_date || permit.expiry_date >= today
+        return Boolean(permit.document_id) && notExpired
+      })
+      if (!validPermit) {
+        return {
+          error: "This load requires an oversize/overweight permit attachment before dispatch.",
+          data: null,
+        }
+      }
+    }
     updateData.status = "scheduled"
   }
 
