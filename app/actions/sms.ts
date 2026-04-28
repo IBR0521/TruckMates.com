@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
+import { rateLimitRedis } from "@/lib/rate-limit-redis"
 
 // Get Twilio client (returns null if not configured)
 async function getTwilioClient() {
@@ -42,6 +43,14 @@ async function getTwilioClient() {
 
 // Send SMS notification
 export async function sendSMS(phoneNumber: string, message: string) {
+  const globalRateLimit = await rateLimitRedis(`sms:send:${phoneNumber.trim()}`, { limit: 20, window: 60 })
+  if (!globalRateLimit.success) {
+    return {
+      sent: false,
+      error: "Too many SMS attempts. Please retry in a minute.",
+    }
+  }
+
   const twilio = await getTwilioClient()
 
   if (!twilio) {
@@ -243,7 +252,7 @@ export async function sendSMSToDriver(
   // EXT-005: Verify driver belongs to user's company before accessing phone number
   const { data: driver } = await supabase
     .from("drivers")
-    .select("phone")
+    .select("id, company_id, name, phone, user_id")
     .eq("id", driverId)
     .eq("company_id", ctx.companyId) // CRITICAL: Company ownership check
     .maybeSingle()
@@ -252,7 +261,92 @@ export async function sendSMSToDriver(
     return { sent: false, error: "Driver phone number not found or access denied" }
   }
 
-  return await sendSMS(driver.phone, message)
+  const driverRateLimit = await rateLimitRedis(`sms:driver:${ctx.companyId}:${driverId}`, { limit: 12, window: 60 })
+  if (!driverRateLimit.success) {
+    return { sent: false, error: "Too many SMS attempts for this driver. Please retry shortly." }
+  }
+
+  const sendResult = await sendSMS(driver.phone, message)
+
+  // Write outbound SMS to the driver's chat thread so it appears in unified timeline.
+  if (sendResult.sent && ctx.userId && driver?.id) {
+    try {
+      const { data: companyUsers } = await supabase
+        .from("users")
+        .select("id, role")
+        .eq("company_id", ctx.companyId)
+        .limit(1000)
+
+      const dispatchUserIds = (companyUsers || [])
+        .filter((u: any) => {
+          const role = String(u?.role || "")
+          return ["super_admin", "operations_manager", "dispatcher", "safety_compliance"].includes(role)
+        })
+        .map((u: any) => String(u.id))
+
+      const participants = Array.from(
+        new Set([ctx.userId, ...(driver.user_id ? [String(driver.user_id)] : []), ...dispatchUserIds]),
+      )
+
+      let { data: thread } = await supabase
+        .from("chat_threads")
+        .select("id, unread_count")
+        .eq("company_id", ctx.companyId)
+        .eq("driver_id", driver.id)
+        .eq("thread_type", "driver")
+        .maybeSingle()
+
+      if (!thread?.id) {
+        const created = await supabase
+          .from("chat_threads")
+          .insert({
+            company_id: ctx.companyId,
+            driver_id: driver.id,
+            thread_type: "driver",
+            title: `Driver SMS - ${driver.name || driver.phone}`,
+            participants,
+            unread_count: {},
+          })
+          .select("id, unread_count")
+          .single()
+        thread = created.data || null
+      }
+
+      if (thread?.id) {
+        const unreadCount =
+          thread.unread_count && typeof thread.unread_count === "object" ? { ...thread.unread_count } : {}
+        for (const uid of participants) {
+          if (uid === ctx.userId) continue
+          const current = Number((unreadCount as any)[uid] || 0)
+          ;(unreadCount as any)[uid] = current + 1
+        }
+
+        await supabase.from("chat_messages").insert({
+          thread_id: thread.id,
+          company_id: ctx.companyId,
+          sender_id: ctx.userId,
+          message,
+          message_type: "sms_outbound",
+          attachments: [],
+          is_read: false,
+          read_by: [],
+        })
+
+        await supabase
+          .from("chat_threads")
+          .update({
+            last_message_at: new Date().toISOString(),
+            last_message_by: ctx.userId,
+            unread_count: unreadCount,
+          })
+          .eq("id", thread.id)
+      }
+    } catch (e) {
+      Sentry.captureException(e)
+    }
+  }
+
+  return sendResult
 }
 
 // Check SMS configuration

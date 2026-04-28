@@ -10,6 +10,7 @@ import { optimizeMultiStopRoute, getRouteSuggestions } from "@/app/actions/route
 import { getRoutes } from "@/app/actions/routes"
 import { getLoads } from "@/app/actions/loads"
 import { Badge } from "@/components/ui/badge"
+import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 export default function RouteOptimizationPage() {
   const [routes, setRoutes] = useState<any[]>([])
@@ -19,6 +20,7 @@ export default function RouteOptimizationPage() {
   const [optimizationResult, setOptimizationResult] = useState<any>(null)
   const [suggestions, setSuggestions] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -51,6 +53,9 @@ export default function RouteOptimizationPage() {
     const result = await optimizeMultiStopRoute(selectedRoute)
 
     if (result.error) {
+      if ((result as any)?.upgrade?.required) {
+        setShowUpgradeModal(true)
+      }
       toast.error(result.error)
       setIsOptimizing(false)
       return
@@ -76,6 +81,9 @@ export default function RouteOptimizationPage() {
     const result = await getRouteSuggestions(pendingLoadIds)
 
     if (result.error) {
+      if ((result as any)?.upgrade?.required) {
+        setShowUpgradeModal(true)
+      }
       toast.error(result.error)
       return
     }
@@ -257,6 +265,7 @@ export default function RouteOptimizationPage() {
           </Card>
         </div>
       </div>
+      <UpgradeModal open={showUpgradeModal} onOpenChange={setShowUpgradeModal} feature="route_optimization" />
     </div>
   )
 }

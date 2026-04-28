@@ -146,6 +146,25 @@ export default function CustomerPortalLoadPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
+            {load.requested_via_portal && (
+              <Card className="p-6">
+                <h2 className="text-lg font-semibold mb-2">Request Review</h2>
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="outline">
+                    {String(load.portal_request_status || "pending").toUpperCase()}
+                  </Badge>
+                  {load.requested_equipment_type ? (
+                    <Badge variant="secondary">{load.requested_equipment_type}</Badge>
+                  ) : null}
+                </div>
+                {load.portal_request_message ? (
+                  <p className="text-sm text-muted-foreground">{load.portal_request_message}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Your request is awaiting dispatcher review.</p>
+                )}
+              </Card>
+            )}
+
             {/* Load Information */}
             <Card className="p-6">
               <h2 className="text-lg font-semibold mb-4">Load Information</h2>

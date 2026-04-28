@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache"
 import crypto from "crypto"
 import { handleDbError } from "@/lib/db-helpers"
 import { getResendClientForCompany } from "@/lib/resend-client"
+import { sendNotification } from "./notifications"
 
 
 function safeDbError(error: unknown, fallback = "Database operation failed"): string {
@@ -150,13 +151,32 @@ export async function createCustomerPortalAccess(formData: {
     // Send email notification if enabled and customer has email
     if (formData.email_notifications !== false && customer.email) {
       try {
-        await sendPortalAccessEmail({
+        const emailSend = await sendPortalAccessEmail({
           customerEmail: customer.email,
           customerName: customer.name || customer.company_name || "Customer",
           portalUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://truckmates.com"}/portal/${accessToken}`,
           companyName: ctx.companyId ? (await supabase.from("companies").select("name").eq("id", ctx.companyId).maybeSingle()).data?.name || "TruckMates" : "TruckMates",
           expiresAt: expiresAt,
         })
+        if (emailSend.sent) {
+          await supabase.from("contact_history").insert({
+            company_id: ctx.companyId,
+            customer_id: formData.customer_id,
+            type: "email",
+            subject: `Your ${(await supabase.from("companies").select("name").eq("id", ctx.companyId).maybeSingle()).data?.name || "TruckMates"} Customer Portal Access`,
+            message: `Portal access email sent to ${customer.email}.`,
+            direction: "outbound",
+            user_id: ctx.userId ?? null,
+            occurred_at: new Date().toISOString(),
+            external_id: emailSend.messageId || null,
+            source: "email",
+            metadata: {
+              email_kind: "customer_portal_access",
+              to: customer.email,
+              portal_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://truckmates.com"}/portal/${accessToken}`,
+            },
+          })
+        }
       } catch (emailError) {
         Sentry.captureException(emailError)
       }
@@ -392,6 +412,11 @@ export async function getCustomerPortalLoads(token: string) {
     .from("loads")
     .select(`
       id,
+      customer_id,
+      requested_via_portal,
+      portal_request_status,
+      portal_request_message,
+      requested_equipment_type,
       shipment_number,
       origin,
       destination,
@@ -464,6 +489,12 @@ export async function getCustomerPortalLoad(token: string, loadId: string) {
     .from("loads")
     .select(`
       id,
+      customer_id,
+      driver_id,
+      requested_via_portal,
+      portal_request_status,
+      portal_request_message,
+      requested_equipment_type,
       shipment_number,
       origin,
       destination,
@@ -529,6 +560,261 @@ export async function getCustomerPortalLoad(token: string, loadId: string) {
       },
       error: null,
     }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
+    return { error: message, data: null }
+  }
+}
+
+/**
+ * Submit a new load request from customer portal
+ */
+export async function submitCustomerPortalLoadRequest(
+  token: string,
+  input: {
+    origin: string
+    destination: string
+    equipment_type: string
+    weight?: number | null
+    pickup_date: string
+    special_instructions?: string
+  },
+) {
+  try {
+    if (!token || typeof token !== "string" || token.trim().length === 0) {
+      return { error: "Invalid access token", data: null }
+    }
+
+    const origin = (input.origin || "").trim()
+    const destination = (input.destination || "").trim()
+    const equipmentType = (input.equipment_type || "").trim()
+    const pickupDate = (input.pickup_date || "").trim()
+    const specialInstructions = (input.special_instructions || "").trim()
+    const numericWeight = input.weight == null ? null : Number(input.weight)
+
+    if (!origin || !destination || !equipmentType || !pickupDate) {
+      return { error: "Origin, destination, equipment type, and pickup date are required", data: null }
+    }
+
+    const portalResult = await getPortalAccessByToken(token)
+    if (portalResult.error || !portalResult.data) return { error: portalResult.error || "Invalid access", data: null }
+    const portalAccess = portalResult.data
+
+    if (!portalAccess.can_submit_loads) {
+      return { error: "Load submission is not enabled for this portal", data: null }
+    }
+    if (!portalAccess.customer_id || !portalAccess.company_id) {
+      return { error: "Portal access is missing customer context", data: null }
+    }
+
+    const supabase = await createClient()
+    const shipmentNumber = `REQ-${Date.now().toString().slice(-8)}`
+
+    const { data: createdLoad, error: createError } = await supabase
+      .from("loads")
+      .insert({
+        company_id: portalAccess.company_id,
+        customer_id: portalAccess.customer_id,
+        shipment_number: shipmentNumber,
+        origin,
+        destination,
+        status: "draft",
+        load_date: pickupDate,
+        weight: numericWeight != null && !Number.isNaN(numericWeight) ? String(numericWeight) : null,
+        special_instructions: specialInstructions || null,
+        requested_via_portal: true,
+        portal_request_status: "pending",
+        portal_request_message: "Submitted by shipper. Awaiting dispatcher review.",
+        requested_equipment_type: equipmentType,
+      })
+      .select("id, shipment_number, origin, destination, status, load_date, requested_equipment_type, portal_request_status, portal_request_message, special_instructions")
+      .single()
+
+    if (createError || !createdLoad) {
+      return { error: safeDbError(createError, "Failed to submit load request"), data: null }
+    }
+
+    // Notify dispatch roles in-app
+    const { data: dispatchUsers } = await supabase
+      .from("users")
+      .select("id")
+      .eq("company_id", portalAccess.company_id)
+      .in("role", ["dispatcher", "operations_manager", "super_admin"])
+
+    await Promise.all(
+      (dispatchUsers || []).map(async (user: { id: string }) =>
+        sendNotification(user.id, "load_update", {
+          shipmentNumber: createdLoad.shipment_number,
+          status: "portal_request_submitted",
+          origin: createdLoad.origin,
+          destination: createdLoad.destination,
+        }),
+      ),
+    )
+
+    try {
+      const { sendPushToCompanyRoles } = await import("./push-notifications")
+      await sendPushToCompanyRoles(
+        portalAccess.company_id,
+        ["super_admin", "operations_manager", "dispatcher"],
+        {
+          title: "New shipper load request",
+          body: `${createdLoad.origin} -> ${createdLoad.destination} (${equipmentType})`,
+          data: {
+            type: "portal_load_request",
+            loadId: String(createdLoad.id),
+            link: `/dashboard/loads/${createdLoad.id}`,
+          },
+        },
+      )
+    } catch (error) {
+      Sentry.captureException(error)
+    }
+
+    revalidatePath(`/portal/${token}`)
+    revalidatePath(`/portal/${token}/loads/${createdLoad.id}`)
+    revalidatePath("/dashboard/loads")
+    revalidatePath(`/dashboard/loads/${createdLoad.id}`)
+
+    return { data: createdLoad, error: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
+    return { error: message, data: null }
+  }
+}
+
+/**
+ * Dispatcher review for shipper-submitted load requests
+ */
+export async function reviewPortalLoadRequest(input: {
+  load_id: string
+  decision: "accepted" | "rejected"
+  message?: string
+  quoted_rate?: number | null
+}) {
+  try {
+    if (!input.load_id || !input.decision) {
+      return { error: "Load and decision are required", data: null }
+    }
+
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
+
+    const { getUserRole } = await import("@/lib/server-permissions")
+    const role = await getUserRole()
+    const allowedRoles = ["super_admin", "operations_manager", "dispatcher"]
+    if (!role || !allowedRoles.includes(role)) {
+      return { error: "Only dispatch roles can review portal requests", data: null }
+    }
+
+    const supabase = await createClient()
+    const { data: load, error: loadError } = await supabase
+      .from("loads")
+      .select("id, company_id, shipment_number, status, requested_via_portal, portal_request_status, customer_id, customers:customer_id(name, company_name, email)")
+      .eq("id", input.load_id)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+
+    if (loadError || !load) {
+      return { error: "Load not found", data: null }
+    }
+    if (!load.requested_via_portal) {
+      return { error: "This load was not submitted via customer portal", data: null }
+    }
+
+    const message = (input.message || "").trim()
+    if (input.decision === "rejected" && message.length < 3) {
+      return { error: "Please include a short rejection message", data: null }
+    }
+
+    const updateData: Record<string, unknown> = {
+      portal_request_status: input.decision,
+      portal_request_message:
+        message || (input.decision === "accepted" ? "Accepted by dispatcher." : "Rejected by dispatcher."),
+    }
+    if (input.decision === "accepted") {
+      updateData.status = "confirmed"
+    }
+    if (input.quoted_rate !== undefined && input.quoted_rate !== null && !Number.isNaN(Number(input.quoted_rate))) {
+      updateData.rate = Number(input.quoted_rate)
+    }
+
+    const { data: updated, error: updateError } = await supabase
+      .from("loads")
+      .update(updateData)
+      .eq("id", input.load_id)
+      .eq("company_id", ctx.companyId)
+      .select("id, shipment_number, status, portal_request_status, portal_request_message, rate")
+      .single()
+
+    if (updateError || !updated) {
+      return { error: safeDbError(updateError, "Failed to review portal request"), data: null }
+    }
+
+    const customerEmail = (load as any)?.customers?.email as string | undefined
+    if (customerEmail) {
+      try {
+        const resend = await getResendClient()
+        if (resend) {
+          const subject =
+            input.decision === "accepted"
+              ? `Load Request Accepted (${updated.shipment_number || "Request"})`
+              : `Load Request Rejected (${updated.shipment_number || "Request"})`
+          const body = `
+            <p>Your load request <strong>${escapeHtml(updated.shipment_number || "request")}</strong> was ${escapeHtml(
+              input.decision,
+            )}.</p>
+            <p>${escapeHtml(String(updateData.portal_request_message || ""))}</p>
+          `
+          await resend.emails.send({
+            from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
+            to: customerEmail,
+            subject,
+            html: body,
+          })
+          await supabase.from("contact_history").insert({
+            company_id: ctx.companyId,
+            customer_id: load.customer_id,
+            type: "email",
+            subject,
+            message: String(updateData.portal_request_message || ""),
+            direction: "outbound",
+            load_id: input.load_id,
+            user_id: ctx.userId ?? null,
+            occurred_at: new Date().toISOString(),
+            source: "email",
+            metadata: {
+              email_kind: "portal_request_review",
+              to: customerEmail,
+              decision: input.decision,
+            },
+          })
+        }
+      } catch (error) {
+        Sentry.captureException(error)
+      }
+    }
+
+    revalidatePath("/dashboard/loads")
+    revalidatePath(`/dashboard/loads/${input.load_id}`)
+    const { data: portalAccess } = await supabase
+      .from("customer_portal_access")
+      .select("access_token")
+      .eq("company_id", ctx.companyId)
+      .eq("customer_id", load.customer_id)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle()
+    if (portalAccess?.access_token) {
+      revalidatePath(`/portal/${portalAccess.access_token}`)
+      revalidatePath(`/portal/${portalAccess.access_token}/loads/${input.load_id}`)
+    }
+
+    return { data: updated, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
     const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"

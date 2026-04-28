@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { format } from "date-fns"
+import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 export default function DriverAchievementsPage() {
   const router = useRouter()
@@ -46,6 +47,7 @@ export default function DriverAchievementsPage() {
   const [planName, setPlanName] = useState("starter")
   const [selectedDriverId, setSelectedDriverId] = useState<string>("all")
   const [isLoading, setIsLoading] = useState(true)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   useEffect(() => {
     loadDrivers()
@@ -171,6 +173,9 @@ export default function DriverAchievementsPage() {
                 Driver scorecards are available on Fleet and Enterprise plans. Your current plan is{" "}
                 <span className="font-semibold capitalize">{planName}</span>.
               </p>
+              <Button className="mt-3" size="sm" onClick={() => setShowUpgradeModal(true)}>
+                Upgrade now
+              </Button>
             </Card>
           )}
           {/* Driver Selector */}
@@ -351,6 +356,7 @@ export default function DriverAchievementsPage() {
           )}
         </div>
       </div>
+      <UpgradeModal open={showUpgradeModal} onOpenChange={setShowUpgradeModal} feature="driver_scorecards" />
     </div>
   )
 }

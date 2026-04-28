@@ -15,6 +15,7 @@ import Link from "next/link"
 import { getIntegrationSettings } from "@/app/actions/settings-integration"
 import { getGLAccounts } from "@/app/actions/gl-accounts"
 import { useSearchParams } from "next/navigation"
+import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 export default function IntegrationSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -39,6 +40,12 @@ export default function IntegrationSettingsPage() {
     quickbooks_allowed: false,
   })
   const [glAccounts, setGlAccounts] = useState<Array<{ id: string; code: string; name: string; type: string }>>([])
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+
+  function isQuickBooksUpgradeError(message: string | undefined) {
+    const text = String(message || "").toLowerCase()
+    return text.includes("available on fleet and enterprise plans") || text.includes("upgrade_required")
+  }
 
   useEffect(() => {
     async function loadSettings() {
@@ -85,7 +92,13 @@ export default function IntegrationSettingsPage() {
     const ok = searchParams.get("quickbooks_success")
     const err = searchParams.get("quickbooks_error")
     if (ok) toast.success("QuickBooks connected")
-    if (err) toast.error(`QuickBooks error: ${err}`)
+    if (err) {
+      if (isQuickBooksUpgradeError(err)) {
+        setShowUpgradeModal(true)
+      } else {
+        toast.error(`QuickBooks error: ${err}`)
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
@@ -107,6 +120,10 @@ export default function IntegrationSettingsPage() {
         }))
       }
     } catch (e: unknown) {
+      if (isQuickBooksUpgradeError(errorMessage(e))) {
+        setShowUpgradeModal(true)
+        return
+      }
       toast.error(errorMessage(e, "Failed to disconnect"))
     }
   }
@@ -118,6 +135,10 @@ export default function IntegrationSettingsPage() {
       if (!res.ok) throw new Error(json?.error || "Test failed")
       toast.success(`QuickBooks connected: ${json?.companyInfo?.CompanyName || "OK"}`)
     } catch (e: unknown) {
+      if (isQuickBooksUpgradeError(errorMessage(e))) {
+        setShowUpgradeModal(true)
+        return
+      }
       toast.error(errorMessage(e, "QuickBooks test failed"))
     }
   }
@@ -136,6 +157,10 @@ export default function IntegrationSettingsPage() {
         }))
       }
     } catch (e: unknown) {
+      if (isQuickBooksUpgradeError(errorMessage(e))) {
+        setShowUpgradeModal(true)
+        return
+      }
       toast.error(errorMessage(e, "QuickBooks sync failed"))
     }
   }
@@ -163,6 +188,7 @@ export default function IntegrationSettingsPage() {
 
 
   return (
+    <>
     <div className="w-full p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
@@ -344,11 +370,16 @@ export default function IntegrationSettingsPage() {
                           Disconnect
                         </Button>
                       </>
-                    ) : (
-                      <Button asChild size="sm" disabled={!integrations.quickbooks_allowed}>
-                        <Link href="/api/quickbooks/connect">Connect</Link>
-                      </Button>
-                    )}
+                    ) : integrations.quickbooks_allowed ? (
+                        <Button asChild size="sm">
+                          <Link href="/api/quickbooks/connect">Connect</Link>
+                        </Button>
+                      ) : (
+                        <Button size="sm" onClick={() => setShowUpgradeModal(true)}>
+                          Upgrade to Connect
+                        </Button>
+                      )
+                    }
                   </div>
                 </div>
                 {!integrations.quickbooks_allowed && (
@@ -511,6 +542,8 @@ export default function IntegrationSettingsPage() {
         )}
       </div>
     </div>
+    <UpgradeModal open={showUpgradeModal} onOpenChange={setShowUpgradeModal} feature="quickbooks" />
+    </>
   )
 }
 

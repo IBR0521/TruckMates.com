@@ -216,6 +216,36 @@ export async function sendInvoiceEmail(
       }
     }
 
+    // Record email send into CRM contact_history so it appears in unified communications.
+    const customerId = invoice.loads?.customers?.id ? String(invoice.loads.customers.id) : null
+    if (customerId) {
+      try {
+        await supabase.from("contact_history").insert({
+          company_id: ctx.companyId,
+          customer_id: customerId,
+          type: "email",
+          subject,
+          message: bodyText,
+          direction: "outbound",
+          load_id: invoice.load_id || null,
+          invoice_id: invoiceId,
+          user_id: ctx.userId ?? null,
+          occurred_at: new Date().toISOString(),
+          attachments: null,
+          external_id: emailResult.data?.id || null,
+          source: "email",
+          metadata: {
+            to: customerEmail,
+            cc: ccEmails,
+            bcc: bccEmails,
+            resend_id: emailResult.data?.id || null,
+          },
+        })
+      } catch (logError) {
+        Sentry.captureException(logError)
+      }
+    }
+
     // Update invoice status to "sent"
     // V3-001 FIX: Add company_id filter to prevent IDOR
     await supabase

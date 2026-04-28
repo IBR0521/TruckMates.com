@@ -13,6 +13,7 @@ import { useState, useEffect } from "react"
 import { getTrucks } from "@/app/actions/trucks"
 import { createIFTAReport } from "@/app/actions/ifta"
 import { toast } from "sonner"
+import { FirstHoverTooltip } from "@/components/help/first-hover-tooltip"
 
 export default function GenerateIFTAPage() {
   const router = useRouter()
@@ -114,7 +115,13 @@ export default function GenerateIFTAPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Quarter *</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Quarter *
+                  <FirstHoverTooltip
+                    tooltipKey="ifta-quarter"
+                    text="IFTA is filed quarterly. Choose the reporting quarter that contains the trips and fuel purchases."
+                  />
+                </label>
                 <select
                   required
                   value={formData.quarter}

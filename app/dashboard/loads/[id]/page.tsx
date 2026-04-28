@@ -45,7 +45,7 @@ import {
 import { LoadTripPlanningEstimate } from "@/components/load-trip-planning-estimate"
 import type { TripPlanningEstimate } from "@/app/actions/promiles"
 import { getLastStopRoutingAddress, getOrderedDeliveryStopAddresses } from "@/lib/load-routing-from-stops"
-import { createCustomerPortalAccess } from "@/app/actions/customer-portal"
+import { createCustomerPortalAccess, reviewPortalLoadRequest } from "@/app/actions/customer-portal"
 import {
   Dialog,
   DialogContent,
@@ -58,6 +58,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { getDrivers } from "@/app/actions/drivers"
 import { createPermit, getPermits, uploadPermitDocument } from "@/app/actions/permits"
+import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 export default function LoadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -86,8 +87,12 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   const [loadDocuments, setLoadDocuments] = useState<any[]>([])
   const [isGeneratingRateConf, setIsGeneratingRateConf] = useState(false)
   const [isGeneratingHazmatPaper, setIsGeneratingHazmatPaper] = useState(false)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [permits, setPermits] = useState<any[]>([])
   const [isCreatingPermit, setIsCreatingPermit] = useState(false)
+  const [portalReviewMessage, setPortalReviewMessage] = useState("")
+  const [portalQuotedRate, setPortalQuotedRate] = useState("")
+  const [isSubmittingPortalReview, setIsSubmittingPortalReview] = useState(false)
   const [permitForm, setPermitForm] = useState({
     permit_number: "",
     issuing_state: "",
@@ -741,6 +746,9 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     const result = await generateHazmatShippingPaper(id)
     setIsGeneratingHazmatPaper(false)
     if (result.error) {
+      if ((result as any)?.upgrade?.required) {
+        setShowUpgradeModal(true)
+      }
       toast.error(result.error)
       return
     }
@@ -802,7 +810,39 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     if (permitResult.data) setPermits(permitResult.data)
   }
 
+  async function handlePortalRequestReview(decision: "accepted" | "rejected") {
+    if (!id || id === "add") return
+    if (isSubmittingPortalReview) return
+    if (decision === "rejected" && portalReviewMessage.trim().length < 3) {
+      toast.error("Please include a short rejection message")
+      return
+    }
+
+    setIsSubmittingPortalReview(true)
+    try {
+      const result = await reviewPortalLoadRequest({
+        load_id: id,
+        decision,
+        message: portalReviewMessage,
+        quoted_rate: portalQuotedRate.trim() ? Number(portalQuotedRate) : null,
+      })
+      if (result.error || !result.data) {
+        toast.error(result.error || "Failed to update request")
+        return
+      }
+      setLoad((prev: any) => ({ ...prev, ...result.data }))
+      toast.success(decision === "accepted" ? "Load request accepted" : "Load request rejected")
+      setPortalReviewMessage("")
+      setPortalQuotedRate("")
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Failed to review request"))
+    } finally {
+      setIsSubmittingPortalReview(false)
+    }
+  }
+
   return (
+    <>
     <DetailPageLayout
       title={<span className="text-3xl font-bold tracking-tight">{load.shipment_number || "Load Details"}</span>}
       subtitle={
@@ -916,6 +956,71 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
       }
     >
       <div className="space-y-6">
+        {load.requested_via_portal && (
+          <Card className="border border-border/80 bg-card p-4 md:p-5">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-foreground">Shipper Request Review</h3>
+                <StatusBadge
+                  status={`Request ${String(load.portal_request_status || "pending")}`}
+                  variant={
+                    String(load.portal_request_status || "pending") === "accepted"
+                      ? "success"
+                      : String(load.portal_request_status || "pending") === "rejected"
+                        ? "danger"
+                        : "warning"
+                  }
+                />
+              </div>
+              {load.requested_equipment_type ? (
+                <p className="text-sm text-muted-foreground">Requested equipment: {load.requested_equipment_type}</p>
+              ) : null}
+              {load.portal_request_message ? (
+                <p className="text-sm text-muted-foreground">{load.portal_request_message}</p>
+              ) : null}
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="portal-rate">Quoted Rate (optional)</Label>
+                  <Input
+                    id="portal-rate"
+                    type="number"
+                    step="0.01"
+                    value={portalQuotedRate}
+                    onChange={(e) => setPortalQuotedRate(e.target.value)}
+                    placeholder="2500.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="portal-review-message">Message to customer</Label>
+                  <Input
+                    id="portal-review-message"
+                    value={portalReviewMessage}
+                    onChange={(e) => setPortalReviewMessage(e.target.value)}
+                    placeholder="Add acceptance/rejection note"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => handlePortalRequestReview("accepted")}
+                  disabled={isSubmittingPortalReview}
+                >
+                  Accept and Confirm
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handlePortalRequestReview("rejected")}
+                  disabled={isSubmittingPortalReview}
+                >
+                  Reject with Message
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Single strip: route estimate on this load vs manual IFTA elsewhere */}
         <Card className="border border-border/80 bg-card p-4 md:p-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1991,6 +2096,11 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                   coordinates: point.coordinates as { lat: number; lng: number } | undefined,
                   stop_type: point.delivery_type || "delivery",
                 })) : []}
+                recommendedFuelStops={
+                  Array.isArray(load.trip_planning_estimate?.fuel?.optimizer?.recommendations)
+                    ? load.trip_planning_estimate.fuel.optimizer.recommendations
+                    : []
+                }
               />
           </DetailSection>
           )}
@@ -2099,5 +2209,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         </DialogContent>
       </Dialog>
     </DetailPageLayout>
+    <UpgradeModal open={showUpgradeModal} onOpenChange={setShowUpgradeModal} feature="hazmat" />
+    </>
   )
 }

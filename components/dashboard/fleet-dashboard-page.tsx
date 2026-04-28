@@ -188,11 +188,16 @@ export default function FleetDashboardPage({
 
   const [emailServiceStatus, setEmailServiceStatus] = useState<{ configured: boolean; isManager: boolean } | null>(null)
   const [dismissedEmailBanner, setDismissedEmailBanner] = useState(false)
+  const [showTourResetBanner, setShowTourResetBanner] = useState(false)
 
   useEffect(() => {
     try {
       if (typeof window !== "undefined" && localStorage.getItem("dashboard-dismiss-email-banner") === "1") {
         setDismissedEmailBanner(true)
+      }
+      if (typeof window !== "undefined" && localStorage.getItem("dashboard-tour-reset-banner") === "1") {
+        setShowTourResetBanner(true)
+        localStorage.removeItem("dashboard-tour-reset-banner")
       }
     } catch {
       /* ignore */
@@ -454,6 +459,30 @@ export default function FleetDashboardPage({
                       Dismiss
                     </Button>
                   </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {showTourResetBanner && (
+            <Alert className="border-primary/40 bg-primary/10">
+              <AlertCircle className="h-4 w-4 text-primary" />
+              <AlertDescription>
+                <div className="flex items-start justify-between gap-4 w-full">
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground mb-1">Onboarding tour reset successful</p>
+                    <p className="text-sm text-muted-foreground">
+                      The guided tour is enabled again and will launch for this session.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowTourResetBanner(false)}
+                    className="text-muted-foreground hover:bg-primary/20"
+                  >
+                    Dismiss
+                  </Button>
                 </div>
               </AlertDescription>
             </Alert>

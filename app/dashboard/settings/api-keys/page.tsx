@@ -36,6 +36,7 @@ import {
   updateAPIKey,
 } from "@/app/actions/enterprise-api-keys"
 import { format } from "date-fns"
+import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 export default function APIKeysPage() {
   const [keys, setKeys] = useState<any[]>([])
@@ -46,6 +47,7 @@ export default function APIKeysPage() {
   const [newKeyName, setNewKeyName] = useState("")
   const [newKey, setNewKey] = useState<string | null>(null)
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   useEffect(() => {
     loadKeys()
@@ -78,6 +80,7 @@ export default function APIKeysPage() {
 
   async function handleCreateKey() {
     if (!apiKeysAllowed) {
+      setShowUpgradeModal(true)
       toast.error("API keys are available on Fleet and Enterprise plans.")
       return
     }
@@ -89,6 +92,7 @@ export default function APIKeysPage() {
     try {
       const result = await createAPIKey({ name: newKeyName })
       if (result.error) {
+        if ((result as any)?.upgrade?.required) setShowUpgradeModal(true)
         toast.error(result.error)
       } else {
         setNewKey(result.data?.key || null)
@@ -104,12 +108,14 @@ export default function APIKeysPage() {
 
   async function handleRevokeKey(id: string) {
     if (!apiKeysAllowed) {
+      setShowUpgradeModal(true)
       toast.error("API keys are available on Fleet and Enterprise plans.")
       return
     }
     try {
       const result = await revokeAPIKey(id)
       if (result.error) {
+        if ((result as any)?.upgrade?.required) setShowUpgradeModal(true)
         toast.error(result.error)
       } else {
         await loadKeys()
@@ -122,12 +128,14 @@ export default function APIKeysPage() {
 
   async function handleToggleActive(id: string, currentStatus: boolean) {
     if (!apiKeysAllowed) {
+      setShowUpgradeModal(true)
       toast.error("API keys are available on Fleet and Enterprise plans.")
       return
     }
     try {
       const result = await updateAPIKey(id, { is_active: !currentStatus })
       if (result.error) {
+        if ((result as any)?.upgrade?.required) setShowUpgradeModal(true)
         toast.error(result.error)
       } else {
         await loadKeys()
@@ -156,6 +164,7 @@ export default function APIKeysPage() {
   }
 
   return (
+    <>
     <div className="w-full">
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
         <div className="flex items-center justify-between">
@@ -208,6 +217,9 @@ export default function APIKeysPage() {
               API keys are available on Fleet and Enterprise plans. Your current plan is{" "}
               <span className="font-semibold capitalize">{planName}</span>.
             </p>
+            <Button className="mt-3" size="sm" onClick={() => setShowUpgradeModal(true)}>
+              Upgrade now
+            </Button>
           </Card>
         </div>
       )}
@@ -346,6 +358,8 @@ export default function APIKeysPage() {
         )}
       </div>
     </div>
+    <UpgradeModal open={showUpgradeModal} onOpenChange={setShowUpgradeModal} feature="api_keys" />
+    </>
   )
 }
 

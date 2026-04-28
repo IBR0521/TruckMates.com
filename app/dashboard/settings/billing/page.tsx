@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 export default function BillingSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -75,6 +76,24 @@ export default function BillingSettingsPage() {
   })
   const searchParams = useSearchParams()
   const paymentRequired = searchParams.get("payment_required") === "1"
+  const requestedUpgrade = searchParams.get("upgrade")
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [upgradeFeature, setUpgradeFeature] = useState<
+    "route_optimization" | "geofencing" | "crm" | "api_keys" | null
+  >(null)
+
+  useEffect(() => {
+    if (!requestedUpgrade) return
+    if (
+      requestedUpgrade === "route_optimization" ||
+      requestedUpgrade === "geofencing" ||
+      requestedUpgrade === "crm" ||
+      requestedUpgrade === "api_keys"
+    ) {
+      setUpgradeFeature(requestedUpgrade)
+      setShowUpgradeModal(true)
+    }
+  }, [requestedUpgrade])
 
   useEffect(() => {
     async function loadSettings() {
@@ -155,6 +174,7 @@ export default function BillingSettingsPage() {
   }
 
   return (
+    <>
     <div className="w-full p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
@@ -630,6 +650,10 @@ export default function BillingSettingsPage() {
         </DialogContent>
       </Dialog>
     </div>
+    {upgradeFeature && (
+      <UpgradeModal open={showUpgradeModal} onOpenChange={setShowUpgradeModal} feature={upgradeFeature} />
+    )}
+    </>
   )
 }
 

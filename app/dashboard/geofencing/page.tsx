@@ -21,6 +21,7 @@ import {
 import { getGeofences, deleteGeofence } from "@/app/actions/geofencing"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getPlanFeatureAccessStatus } from "@/app/actions/plan-feature-access"
+import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 export default function GeofencingPage() {
   const [geofences, setGeofences] = useState<any[]>([])
@@ -31,6 +32,7 @@ export default function GeofencingPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   useEffect(() => {
     loadGeofences()
@@ -115,7 +117,7 @@ export default function GeofencingPage() {
               </Button>
             </Link>
           ) : (
-            <Button disabled>
+            <Button onClick={() => setShowUpgradeModal(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Create Zone
             </Button>
@@ -154,6 +156,9 @@ export default function GeofencingPage() {
               Geofencing is available on Fleet and Enterprise plans. Your current plan is{" "}
               <span className="font-semibold capitalize">{planName}</span>.
             </p>
+            <Button className="mt-3" size="sm" onClick={() => setShowUpgradeModal(true)}>
+              Upgrade now
+            </Button>
           </Card>
         )}
         {isLoading ? (
@@ -173,7 +178,7 @@ export default function GeofencingPage() {
                 </Button>
               </Link>
             ) : (
-              <Button disabled>
+              <Button onClick={() => setShowUpgradeModal(true)}>
                 <Plus className="w-4 h-4 mr-2" />
                 Create Zone
               </Button>
@@ -260,6 +265,7 @@ export default function GeofencingPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <UpgradeModal open={showUpgradeModal} onOpenChange={setShowUpgradeModal} feature="geofencing" />
     </div>
   )
 }

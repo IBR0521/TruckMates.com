@@ -23,6 +23,30 @@ function plainTwimlResponse(message = "OK") {
 export async function POST(request: Request) {
   try {
     const form = await request.formData()
+    const twilioSig = request.headers.get("x-twilio-signature") || ""
+    const twilioToken = process.env.TWILIO_AUTH_TOKEN || ""
+    if (!twilioToken || !twilioSig) {
+      return NextResponse.json({ error: "Unauthorized webhook request" }, { status: 403 })
+    }
+
+    const forwardedProto = request.headers.get("x-forwarded-proto")
+    const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host")
+    const fullUrl = forwardedHost
+      ? `${forwardedProto || "https"}://${forwardedHost}${new URL(request.url).pathname}`
+      : request.url
+    const params: Record<string, string> = {}
+    for (const [key, value] of form.entries()) {
+      params[key] = String(value)
+    }
+
+    const twilioModule = await import("twilio").catch(() => null)
+    const isValid = twilioModule?.validateRequest
+      ? twilioModule.validateRequest(twilioToken, twilioSig, fullUrl, params)
+      : false
+    if (!isValid) {
+      return NextResponse.json({ error: "Invalid Twilio signature" }, { status: 403 })
+    }
+
     const from = normalizePhone(String(form.get("From") || ""))
     const body = String(form.get("Body") || "").trim()
     const messageSid = String(form.get("MessageSid") || "")
@@ -35,18 +59,9 @@ export async function POST(request: Request) {
 
     let { data: driver } = await supabase
       .from("drivers")
-      .select("id, user_id, company_id, name, phone")
-      .eq("phone", from)
+      .select("id, user_id, company_id, name, phone, normalized_phone")
+      .eq("normalized_phone", from)
       .maybeSingle()
-
-    if (!driver?.id) {
-      const { data: candidates } = await supabase
-        .from("drivers")
-        .select("id, user_id, company_id, name, phone")
-        .not("phone", "is", null)
-        .limit(5000)
-      driver = (candidates || []).find((d: any) => normalizePhone(String(d.phone || "")) === from) || null
-    }
 
     if (!driver?.id || !driver?.company_id) {
       Sentry.captureMessage(`[Twilio Inbound] driver not found for ${from}`, "info")
@@ -60,7 +75,7 @@ export async function POST(request: Request) {
         .from("users")
         .select("id")
         .eq("company_id", driver.company_id)
-        .eq("phone", from)
+        .or(`phone.eq.${from},phone.eq.${String(form.get("From") || "").trim()}`)
         .maybeSingle()
       senderUserId = userByPhone?.id ? String(userByPhone.id) : null
     }

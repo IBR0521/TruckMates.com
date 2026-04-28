@@ -9,11 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner"
 import { getCompany, updateCompany } from "@/app/actions/company"
 import { getCompanySettings, updateCompanySettings } from "@/app/actions/number-formats"
+import { resetOnboardingTour } from "@/app/actions/onboarding-tour"
 import { Settings as SettingsIcon, Save } from "lucide-react"
 
 export default function GeneralSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isResettingTour, setIsResettingTour] = useState(false)
   const [companyData, setCompanyData] = useState({
     name: "",
     email: "",
@@ -100,6 +102,28 @@ export default function GeneralSettingsPage() {
     }
   }
 
+  async function handleReplayTour() {
+    setIsResettingTour(true)
+    try {
+      const result = await resetOnboardingTour()
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success("Onboarding tour reset. Reloading dashboard...")
+      try {
+        localStorage.setItem("dashboard-tour-reset-banner", "1")
+      } catch {
+        // ignore storage failures
+      }
+      window.location.href = "/dashboard"
+    } catch {
+      toast.error("Failed to reset onboarding tour")
+    } finally {
+      setIsResettingTour(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="w-full">
@@ -173,6 +197,19 @@ export default function GeneralSettingsPage() {
                 />
               </div>
             </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <SettingsIcon className="w-5 h-5 text-primary" />
+              <h2 className="text-xl font-semibold">Help & Onboarding</h2>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Need a refresher? Replay the first-login product tour (truck → driver → load → invoice).
+            </p>
+            <Button onClick={handleReplayTour} disabled={isResettingTour} variant="outline">
+              {isResettingTour ? "Resetting..." : "Replay Onboarding Tour"}
+            </Button>
           </Card>
 
           {/* Regional Settings */}

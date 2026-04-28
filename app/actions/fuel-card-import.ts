@@ -357,7 +357,119 @@ type NormalizedFuelTxn = {
   raw_payload: any
 }
 
-function normalizeLiveTxns(payload: any): NormalizedFuelTxn[] {
+function getProviderRows(payload: any): any[] {
+  return Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.transactions)
+      ? payload.transactions
+      : Array.isArray(payload?.data)
+        ? payload.data
+        : []
+}
+
+function normalizeComdataTxns(payload: any): NormalizedFuelTxn[] {
+  const rawRows = getProviderRows(payload)
+  return rawRows
+    .map((row: any, idx: number) => {
+      const transactionDate = String(row.transaction_date || row.date || row.purchase_date || "").slice(0, 10)
+      const total = Number(row.total_amount ?? row.total ?? row.amount ?? 0)
+      const gallons = Number(row.gallons ?? row.qty ?? row.quantity ?? 0)
+      if (!transactionDate || !Number.isFinite(total) || total <= 0 || !Number.isFinite(gallons) || gallons <= 0) return null
+      return {
+        external_transaction_id: String(row.id || row.transaction_id || row.reference || `txn-${idx}`),
+        transaction_date: transactionDate,
+        posted_date: row.posted_date ? String(row.posted_date).slice(0, 10) : null,
+        truck_number: row.truck_number || row.unit_number || null,
+        driver_external_id: row.driver_id || row.employee_id || null,
+        card_number_last4: row.card_last4 || row.card_number_last4 || null,
+        merchant_name: row.merchant_name || row.location || null,
+        merchant_city: row.merchant_city || row.city || null,
+        merchant_state: row.merchant_state || row.state || null,
+        gallons,
+        price_per_gallon: Number.isFinite(Number(row.price_per_gallon ?? row.ppg))
+          ? Number(row.price_per_gallon ?? row.ppg)
+          : Number.isFinite(total / gallons)
+            ? total / gallons
+            : null,
+        total_amount: total,
+        odometer: Number.isFinite(Number(row.odometer)) ? Number(row.odometer) : null,
+        raw_payload: row,
+      } as NormalizedFuelTxn
+    })
+    .filter(Boolean) as NormalizedFuelTxn[]
+}
+
+function normalizeWexTxns(payload: any): NormalizedFuelTxn[] {
+  const rawRows = getProviderRows(payload)
+  return rawRows
+    .map((row: any, idx: number) => {
+      const transactionDate = String(row.transactionDate || row.date || row.purchaseDate || "").slice(0, 10)
+      const total = Number(row.totalAmount ?? row.amount ?? 0)
+      const gallons = Number(row.fuelQty ?? row.gallons ?? 0)
+      if (!transactionDate || !Number.isFinite(total) || total <= 0 || !Number.isFinite(gallons) || gallons <= 0) return null
+      return {
+        external_transaction_id: String(row.transactionId || row.id || `txn-${idx}`),
+        transaction_date: transactionDate,
+        posted_date: row.postedDate ? String(row.postedDate).slice(0, 10) : null,
+        truck_number: row.unitNumber || row.truckNumber || null,
+        driver_external_id: row.driverId || null,
+        card_number_last4: row.cardLast4 || null,
+        merchant_name: row.merchantName || row.merchant || null,
+        merchant_city: row.city || row.merchantCity || null,
+        merchant_state: row.state || row.merchantState || null,
+        gallons,
+        price_per_gallon: Number.isFinite(Number(row.pricePerGallon))
+          ? Number(row.pricePerGallon)
+          : Number.isFinite(total / gallons)
+            ? total / gallons
+            : null,
+        total_amount: total,
+        odometer: Number.isFinite(Number(row.odometer)) ? Number(row.odometer) : null,
+        raw_payload: row,
+      } as NormalizedFuelTxn
+    })
+    .filter(Boolean) as NormalizedFuelTxn[]
+}
+
+function normalizeEfsTxns(payload: any): NormalizedFuelTxn[] {
+  const rawRows = getProviderRows(payload)
+  return rawRows
+    .map((row: any, idx: number) => {
+      const transactionDate = String(row.txn_date || row.transaction_date || row.date || "").slice(0, 10)
+      const total = Number(row.net_amount ?? row.total_amount ?? row.amount ?? 0)
+      const gallons = Number(row.gallons ?? row.quantity ?? row.qty ?? 0)
+      if (!transactionDate || !Number.isFinite(total) || total <= 0 || !Number.isFinite(gallons) || gallons <= 0) return null
+      return {
+        external_transaction_id: String(row.transaction_id || row.id || row.reference_number || `txn-${idx}`),
+        transaction_date: transactionDate,
+        posted_date: row.posted_date ? String(row.posted_date).slice(0, 10) : null,
+        truck_number: row.truck_id || row.unit_number || null,
+        driver_external_id: row.driver_id || null,
+        card_number_last4: row.card_last4 || row.card_suffix || null,
+        merchant_name: row.merchant_name || row.location_name || null,
+        merchant_city: row.city || null,
+        merchant_state: row.state || null,
+        gallons,
+        price_per_gallon: Number.isFinite(Number(row.price_per_gallon))
+          ? Number(row.price_per_gallon)
+          : Number.isFinite(total / gallons)
+            ? total / gallons
+            : null,
+        total_amount: total,
+        odometer: Number.isFinite(Number(row.odometer)) ? Number(row.odometer) : null,
+        raw_payload: row,
+      } as NormalizedFuelTxn
+    })
+    .filter(Boolean) as NormalizedFuelTxn[]
+}
+
+function normalizeLiveTxns(payload: any, provider: LiveFuelProvider): NormalizedFuelTxn[] {
+  if (provider === "comdata") return normalizeComdataTxns(payload)
+  if (provider === "wex") return normalizeWexTxns(payload)
+  return normalizeEfsTxns(payload)
+}
+
+function normalizeLiveTxnsLegacy(payload: any): NormalizedFuelTxn[] {
   const rawRows = Array.isArray(payload)
     ? payload
     : Array.isArray(payload?.transactions)
@@ -465,8 +577,9 @@ export async function syncFuelCardTransactions(provider: LiveFuelProvider, fromD
     }
 
     const raw = await response.json().catch(() => ({}))
-    const txns = normalizeLiveTxns(raw)
-    if (txns.length === 0) return { data: { inserted: 0, skipped: 0 }, error: null }
+    const txns = normalizeLiveTxns(raw, provider)
+    const normalizedTxns = txns.length > 0 ? txns : normalizeLiveTxnsLegacy(raw)
+    if (normalizedTxns.length === 0) return { data: { inserted: 0, skipped: 0 }, error: null }
 
     const { data: trucks } = await supabase
       .from("trucks")
@@ -478,7 +591,7 @@ export async function syncFuelCardTransactions(provider: LiveFuelProvider, fromD
       if (t.truck_number) truckMap.set(String(t.truck_number).toLowerCase(), String(t.id))
     })
 
-    const transactionRows = txns.map((t) => ({
+    const transactionRows = normalizedTxns.map((t) => ({
       company_id: cfg.data.companyId,
       provider,
       external_transaction_id: t.external_transaction_id,
@@ -534,7 +647,7 @@ export async function syncFuelCardTransactions(provider: LiveFuelProvider, fromD
       .eq("company_id", cfg.data.companyId)
 
     revalidatePath("/dashboard/accounting/tax-fuel")
-    return { data: { inserted: txns.length, skipped: 0 }, error: null }
+    return { data: { inserted: normalizedTxns.length, skipped: 0 }, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
     return { error: errorMessage(error, "Failed to sync live fuel card transactions"), data: null }

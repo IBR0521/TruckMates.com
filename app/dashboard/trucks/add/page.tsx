@@ -26,8 +26,10 @@ import { useRouter } from "next/navigation"
 import { getDrivers } from "@/app/actions/drivers"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { Slider } from "@/components/ui/slider"
+import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 export default function AddVehiclePage() {
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const wizardSteps = [
     { key: "basic", label: "Basic Info" },
     { key: "specs", label: "Specifications" },
@@ -263,6 +265,9 @@ export default function AddVehiclePage() {
     setIsSubmitting(false)
 
     if (result.error) {
+      if ((result as any)?.upgrade?.required) {
+        setShowUpgradeModal(true)
+      }
       toast.error(result.error)
     } else {
       toast.success("Vehicle added successfully")
@@ -271,6 +276,7 @@ export default function AddVehiclePage() {
   }
 
   return (
+    <>
     <FormPageLayout
       title="Add Vehicle"
       subtitle="Add a new vehicle to your fleet"
@@ -787,5 +793,7 @@ export default function AddVehiclePage() {
               </TabsContent>
             </Tabs>
     </FormPageLayout>
+    <UpgradeModal open={showUpgradeModal} onOpenChange={setShowUpgradeModal} feature="vehicles_limit" />
+    </>
   )
 }

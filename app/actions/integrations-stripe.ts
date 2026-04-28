@@ -149,6 +149,25 @@ export async function confirmInvoicePayment(invoiceId: string, paymentIntentId: 
       return { error: updateError.message, data: null }
     }
 
+    try {
+      const { sendPushToCompanyRoles } = await import("./push-notifications")
+      await sendPushToCompanyRoles(
+        ctx.companyId,
+        ["super_admin", "operations_manager", "financial_controller"],
+        {
+          title: "Invoice payment received",
+          body: `Invoice ${invoiceId} was paid via Stripe`,
+          data: {
+            type: "invoice_paid",
+            invoiceId: String(invoiceId),
+            link: `/dashboard/accounting/invoices/${invoiceId}`,
+          },
+        },
+      )
+    } catch (pushError) {
+      Sentry.captureException(pushError)
+    }
+
     revalidatePath("/dashboard/accounting/invoices")
     return { data: { success: true, payment_intent: paymentIntent }, error: null }
   } catch (error: unknown) {
@@ -363,6 +382,25 @@ export async function capturePayPalPayment(invoiceId: string, orderId: string) {
         })
         .eq("id", invoiceId)
         .eq("company_id", ctx.companyId)
+
+      try {
+        const { sendPushToCompanyRoles } = await import("./push-notifications")
+        await sendPushToCompanyRoles(
+          ctx.companyId,
+          ["super_admin", "operations_manager", "financial_controller"],
+          {
+            title: "Invoice payment received",
+            body: `Invoice ${invoiceId} was paid via PayPal`,
+            data: {
+              type: "invoice_paid",
+              invoiceId: String(invoiceId),
+              link: `/dashboard/accounting/invoices/${invoiceId}`,
+            },
+          },
+        )
+      } catch (pushError) {
+        Sentry.captureException(pushError)
+      }
 
       revalidatePath("/dashboard/accounting/invoices")
       return { data: { success: true, capture }, error: null }

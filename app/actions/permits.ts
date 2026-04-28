@@ -13,6 +13,78 @@ function safeDbError(error: unknown, fallback = "Database operation failed"): st
   return sanitizeError(error, { fallback })
 }
 
+type PermitLimitRule = {
+  maxWeight: number
+  maxWidthIn: number
+  maxHeightFt: number
+  maxLengthFt: number
+}
+
+const DEFAULT_PERMIT_LIMIT: PermitLimitRule = {
+  maxWeight: 80000,
+  maxWidthIn: 102, // 8'6"
+  maxHeightFt: 13.5,
+  maxLengthFt: 53,
+}
+
+const STATE_PERMIT_LIMITS: Record<string, Partial<PermitLimitRule>> = {
+  AK: { maxWeight: 80000, maxHeightFt: 15 },
+  AL: { maxWeight: 80000 },
+  CA: { maxWeight: 80000, maxLengthFt: 65 },
+  FL: { maxWeight: 80000 },
+  NY: { maxWeight: 80000, maxWidthIn: 102 },
+  TX: { maxWeight: 80000 },
+}
+
+function normalizeState(state: string) {
+  return state.trim().toUpperCase()
+}
+
+export async function checkPermitFeasibility(input: {
+  route_states: string[]
+  weight_lbs?: number | null
+  width_in?: number | null
+  height_ft?: number | null
+  length_ft?: number | null
+}) {
+  const permission = await checkViewPermission("documents")
+  if (!permission.allowed) return { error: permission.error || "Not allowed", data: null }
+
+  const states = Array.from(new Set((input.route_states || []).map(normalizeState).filter(Boolean)))
+  const weight = Number(input.weight_lbs || 0)
+  const width = Number(input.width_in || 0)
+  const height = Number(input.height_ft || 0)
+  const length = Number(input.length_ft || 0)
+
+  const checks = states.map((state) => {
+    const limit: PermitLimitRule = { ...DEFAULT_PERMIT_LIMIT, ...(STATE_PERMIT_LIMITS[state] || {}) }
+    const triggers: string[] = []
+    if (weight > 0 && weight > limit.maxWeight) triggers.push(`weight ${weight.toLocaleString()} > ${limit.maxWeight.toLocaleString()} lbs`)
+    if (width > 0 && width > limit.maxWidthIn) triggers.push(`width ${width}" > ${limit.maxWidthIn}"`)
+    if (height > 0 && height > limit.maxHeightFt) triggers.push(`height ${height}' > ${limit.maxHeightFt}'`)
+    if (length > 0 && length > limit.maxLengthFt) triggers.push(`length ${length}' > ${limit.maxLengthFt}'`)
+    return {
+      state,
+      permit_required: triggers.length > 0,
+      triggers,
+      limits: limit,
+    }
+  })
+
+  const permitRequiredStates = checks.filter((x) => x.permit_required).map((x) => x.state)
+  return {
+    error: null,
+    data: {
+      permit_required: permitRequiredStates.length > 0,
+      permit_required_states: permitRequiredStates,
+      checks,
+      summary: permitRequiredStates.length
+        ? `Permit likely required in: ${permitRequiredStates.join(", ")}`
+        : "No likely permit requirement detected for entered route and dimensions.",
+    },
+  }
+}
+
 export async function getPermits(filters?: { load_id?: string; truck_id?: string }) {
   const permission = await checkViewPermission("documents")
   if (!permission.allowed) return { error: permission.error || "Not allowed", data: null }

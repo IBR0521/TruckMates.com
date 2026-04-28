@@ -53,6 +53,7 @@ export async function getAPIKeys() {
     return {
       error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue.",
       data: null,
+      upgrade: { required: true, feature: "api_keys" },
     }
   }
 
@@ -91,6 +92,7 @@ export async function createAPIKey(formData: {
     return {
       error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue.",
       data: null,
+      upgrade: { required: true, feature: "api_keys" },
     }
   }
 
@@ -147,7 +149,10 @@ export async function revokeAPIKey(id: string) {
   }
   const gate = await getCurrentCompanyFeatureAccess("api_keys")
   if (!gate.allowed) {
-    return { error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue." }
+    return {
+      error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue.",
+      upgrade: { required: true, feature: "api_keys" },
+    }
   }
 
   const { getUserRole } = await import("@/lib/server-permissions")
@@ -207,6 +212,7 @@ export async function updateAPIKey(
     return {
       error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue.",
       data: null,
+      upgrade: { required: true, feature: "api_keys" },
     }
   }
 

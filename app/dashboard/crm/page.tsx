@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
+import { UpgradeModal } from "@/components/billing/upgrade-modal"
 import {
   getCustomerPerformanceMetrics,
   getVendorPerformanceMetrics,
@@ -54,6 +55,7 @@ export default function CRMDashboardPage() {
   const [recentCommunications, setRecentCommunications] = useState<any[]>([])
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false)
   const [isSubmittingQuickLog, setIsSubmittingQuickLog] = useState(false)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [quickLog, setQuickLog] = useState({
     customer_id: "",
     customer_name: "",
@@ -191,6 +193,7 @@ export default function CRMDashboardPage() {
 
   async function handleQuickLogSubmit() {
     if (!crmAllowed) {
+      setShowUpgradeModal(true)
       toast.error("CRM is available on Fleet and Enterprise plans.")
       return
     }
@@ -270,6 +273,9 @@ export default function CRMDashboardPage() {
             CRM is available on Fleet and Enterprise plans. Your current plan is{" "}
             <span className="font-semibold capitalize">{planName}</span>.
           </p>
+            <Button className="mt-3" size="sm" onClick={() => setShowUpgradeModal(true)}>
+              Upgrade now
+            </Button>
         </Card>
       )}
 
@@ -643,6 +649,7 @@ export default function CRMDashboardPage() {
           </div>
         </DialogContent>
       </Dialog>
+    <UpgradeModal open={showUpgradeModal} onOpenChange={setShowUpgradeModal} feature="crm" />
     </div>
   )
 }

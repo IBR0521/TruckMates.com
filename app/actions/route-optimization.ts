@@ -487,6 +487,7 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
   tollCost?: number
   totalCost?: number
   error?: string
+  upgrade?: { required: boolean; feature: "route_optimization" }
 }> {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
@@ -499,6 +500,10 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
     return {
       optimized: false,
       error: "Route optimization is available on Fleet and Enterprise plans. Please upgrade to continue.",
+      upgrade: {
+        required: true,
+        feature: "route_optimization",
+      },
     }
   }
 
@@ -594,11 +599,23 @@ export async function getRouteSuggestions(loadIds: string[]): Promise<{
     efficiency: number
   }>
   error?: string
+  upgrade?: { required: boolean; feature: "route_optimization" }
 }> {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { suggestions: [], error: ctx.error || "Not authenticated" }
+  }
+  const gate = await getCurrentCompanyFeatureAccess("route_optimization")
+  if (!gate.allowed) {
+    return {
+      suggestions: [],
+      error: "Route optimization is available on Fleet and Enterprise plans. Please upgrade to continue.",
+      upgrade: {
+        required: true,
+        feature: "route_optimization",
+      },
+    }
   }
 
   // Get loads data

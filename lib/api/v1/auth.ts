@@ -1,6 +1,7 @@
 import crypto from "crypto"
 import { NextRequest } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { getClientIP, rateLimitRedis } from "@/lib/rate-limit-redis"
 
 export type ApiKeyAuthResult =
   | {
@@ -93,4 +94,24 @@ export async function recordApiUsage(args: {
   } catch {
     // Non-blocking
   }
+}
+
+export async function enforceApiRateLimit(
+  request: NextRequest,
+  bucket: string,
+  limit = 120,
+  windowSeconds = 60,
+) {
+  const ip = getClientIP(request)
+  const identifier = `api:v1:${bucket}:${ip}`
+  const result = await rateLimitRedis(identifier, { limit, window: windowSeconds })
+  if (!result.success) {
+    return {
+      allowed: false as const,
+      status: 429,
+      error: "Too many API requests. Please retry shortly.",
+      reset: result.reset,
+    }
+  }
+  return { allowed: true as const, reset: result.reset }
 }

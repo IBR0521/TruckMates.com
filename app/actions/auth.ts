@@ -4,6 +4,15 @@ import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import type { EmployeeRole } from "@/lib/roles"
 import * as Sentry from "@sentry/nextjs"
+import { headers } from "next/headers"
+import { rateLimitRedis } from "@/lib/rate-limit-redis"
+
+async function enforceAuthRateLimit(bucket: string, identifier: string, limit: number, windowSeconds: number) {
+  const hdrs = await headers()
+  const ip = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
+  const rl = await rateLimitRedis(`${bucket}:${identifier}:${ip}`, { limit, window: windowSeconds })
+  return rl.success
+}
 
 /**
  * Check if company name is available
@@ -47,6 +56,10 @@ export async function registerSuperAdmin(data: {
   companyType?: 'broker' | 'carrier' | 'both' | null
 }) {
   try {
+    const allowed = await enforceAuthRateLimit("auth:signup:owner", data.email.toLowerCase().trim(), 8, 60)
+    if (!allowed) {
+      return { data: null, error: "Too many signup attempts. Please wait and try again." }
+    }
     const supabase = await createClient()
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
 
@@ -206,6 +219,10 @@ export async function registerEmployee(data: {
   invitationCode?: string
 }) {
   try {
+    const allowed = await enforceAuthRateLimit("auth:signup:employee", data.email.toLowerCase().trim(), 10, 60)
+    if (!allowed) {
+      return { data: null, error: "Too many signup attempts. Please wait and try again." }
+    }
     const supabase = await createClient()
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
 

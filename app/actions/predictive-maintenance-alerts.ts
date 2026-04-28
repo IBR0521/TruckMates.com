@@ -118,6 +118,18 @@ export async function checkAndSendMaintenanceAlerts(
         if (smsResult.sent) {
           alertsSent++
         }
+        if (manager?.id) {
+          const { sendPushToUser } = await import("./push-notifications")
+          await sendPushToUser(manager.id, {
+            title: `Maintenance alert: ${truck?.truck_number || "Truck"}`,
+            body: `${alert.service_type} due in ${alert.miles_remaining} miles`,
+            data: {
+              type: "maintenance_alert",
+              truckId: String(truckId),
+              link: `/dashboard/maintenance`,
+            },
+          })
+        }
       } catch (smsError: unknown) {
         Sentry.captureException(smsError)
         await supabase

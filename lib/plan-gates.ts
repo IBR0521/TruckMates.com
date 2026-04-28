@@ -5,6 +5,8 @@ export type PlanName = "free" | "starter" | "professional" | "enterprise"
 export type PlanFeature =
   | "quickbooks"
   | "api_keys"
+  | "edi"
+  | "hazmat"
   | "route_optimization"
   | "geofencing"
   | "driver_scorecards"
@@ -14,6 +16,8 @@ const PLAN_FEATURES: Record<PlanName, Record<PlanFeature, boolean>> = {
   free: {
     quickbooks: false,
     api_keys: false,
+    edi: false,
+    hazmat: false,
     route_optimization: false,
     geofencing: false,
     driver_scorecards: false,
@@ -22,6 +26,8 @@ const PLAN_FEATURES: Record<PlanName, Record<PlanFeature, boolean>> = {
   starter: {
     quickbooks: false,
     api_keys: false,
+    edi: false,
+    hazmat: false,
     route_optimization: false,
     geofencing: false,
     driver_scorecards: false,
@@ -30,6 +36,8 @@ const PLAN_FEATURES: Record<PlanName, Record<PlanFeature, boolean>> = {
   professional: {
     quickbooks: true,
     api_keys: true,
+    edi: true,
+    hazmat: true,
     route_optimization: true,
     geofencing: true,
     driver_scorecards: true,
@@ -38,6 +46,8 @@ const PLAN_FEATURES: Record<PlanName, Record<PlanFeature, boolean>> = {
   enterprise: {
     quickbooks: true,
     api_keys: true,
+    edi: true,
+    hazmat: true,
     route_optimization: true,
     geofencing: true,
     driver_scorecards: true,
@@ -101,6 +111,30 @@ export async function getCurrentCompanyFeatureAccess(feature: PlanFeature): Prom
     allowed: isFeatureAllowedForPlan(plan.planName, feature),
     planName: plan.planName,
     companyId: plan.companyId,
+    error: null,
+  }
+}
+
+export async function getCompanyFeatureAccessByCompanyId(
+  companyId: string,
+  feature: PlanFeature,
+): Promise<{ allowed: boolean; planName: PlanName; error: string | null }> {
+  const { createAdminClient } = await import("@/lib/supabase/admin")
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from("subscriptions")
+    .select("subscription_plans(name)")
+    .eq("company_id", companyId)
+    .in("status", ["active", "trialing"])
+    .maybeSingle()
+
+  if (error) return { allowed: false, planName: "free", error: error.message || "Failed to read subscription" }
+
+  const raw = (data as { subscription_plans?: { name?: string } | Array<{ name?: string }> } | null)?.subscription_plans
+  const planName = normalizePlanName(Array.isArray(raw) ? raw[0]?.name : raw?.name)
+  return {
+    allowed: isFeatureAllowedForPlan(planName, feature),
+    planName,
     error: null,
   }
 }

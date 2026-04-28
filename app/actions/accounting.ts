@@ -412,6 +412,13 @@ export async function updateInvoice(
     }
 
     // Build update data
+    const { data: existingInvoice } = await supabase
+      .from("invoices")
+      .select("id, status, invoice_number, amount")
+      .eq("id", id)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+
     const updateData: any = {}
     if (formData.status !== undefined) updateData.status = formData.status
     if (formData.amount !== undefined) updateData.amount = formData.amount
@@ -435,6 +442,29 @@ export async function updateInvoice(
 
     revalidatePath("/dashboard/accounting/invoices")
     revalidatePath(`/dashboard/accounting/invoices/${id}`)
+    if (
+      String(existingInvoice?.status || "").toLowerCase() !== "paid" &&
+      String(updateData.status || "").toLowerCase() === "paid"
+    ) {
+      try {
+        const { sendPushToCompanyRoles } = await import("./push-notifications")
+        await sendPushToCompanyRoles(
+          ctx.companyId,
+          ["super_admin", "operations_manager", "financial_controller"],
+          {
+            title: "Invoice payment received",
+            body: `${data.invoice_number || "Invoice"} was marked paid for $${Number(data.amount || 0).toFixed(2)}`,
+            data: {
+              type: "invoice_paid",
+              invoiceId: String(id),
+              link: `/dashboard/accounting/invoices/${id}`,
+            },
+          },
+        )
+      } catch (error) {
+        Sentry.captureException(error)
+      }
+    }
     return { data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
@@ -1196,19 +1226,23 @@ export async function getDriverFuelExpensesForPeriod(driverId: string, periodSta
   }
 }
 
+function calculateCalendarNightsBetween(pickupRaw: string, deliveryRaw: string): number {
+  const pickup = new Date(pickupRaw)
+  const delivery = new Date(deliveryRaw)
+  if (Number.isNaN(pickup.getTime()) || Number.isNaN(delivery.getTime()) || delivery <= pickup) return 0
+  const start = new Date(Date.UTC(pickup.getUTCFullYear(), pickup.getUTCMonth(), pickup.getUTCDate()))
+  const end = new Date(Date.UTC(delivery.getUTCFullYear(), delivery.getUTCMonth(), delivery.getUTCDate()))
+  const dayMs = 24 * 60 * 60 * 1000
+  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / dayMs))
+}
+
 function calculatePerDiemEligibleNights(loads: Array<any>): number {
   return loads.reduce((total, load) => {
     const pickupRaw = load?.load_date || load?.pickup_date || load?.created_at
     const deliveryRaw = load?.actual_delivery || load?.estimated_delivery || pickupRaw
     if (!pickupRaw || !deliveryRaw) return total
 
-    const pickupDate = new Date(pickupRaw)
-    const deliveryDate = new Date(deliveryRaw)
-    if (Number.isNaN(pickupDate.getTime()) || Number.isNaN(deliveryDate.getTime())) return total
-    if (deliveryDate <= pickupDate) return total
-
-    const dayMs = 24 * 60 * 60 * 1000
-    const nights = Math.ceil((deliveryDate.getTime() - pickupDate.getTime()) / dayMs)
+    const nights = calculateCalendarNightsBetween(String(pickupRaw), String(deliveryRaw))
     return total + Math.max(0, nights)
   }, 0)
 }

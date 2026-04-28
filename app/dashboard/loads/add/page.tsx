@@ -53,6 +53,7 @@ import { getCompanySettings } from "@/app/actions/number-formats"
 import { getOrderedDeliveryStopAddresses } from "@/lib/load-routing-from-stops"
 import { LoadDeliveryPointsManager } from "@/components/load-delivery-points-manager"
 import { createLoadDeliveryPoint } from "@/app/actions/load-delivery-points"
+import { checkPermitFeasibility } from "@/app/actions/permits"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import {
   createAddressBookEntry,
@@ -107,6 +108,7 @@ export default function AddLoadPage() {
   const [dieselPricePerGallon, setDieselPricePerGallon] = useState<number | null>(null)
   const [dieselEffectiveDate, setDieselEffectiveDate] = useState<string>("")
   const [dieselStatusNote, setDieselStatusNote] = useState<string>("")
+  const [permitFeasibility, setPermitFeasibility] = useState<{ summary: string; permit_required_states: string[] } | null>(null)
   const [fscBasePrice, setFscBasePrice] = useState(1.2)
   const [fscMpgAssumed, setFscMpgAssumed] = useState(6.5)
   const milesRequestSeq = useRef(0)
@@ -156,6 +158,9 @@ export default function AddLoadPage() {
     freightClass: "",
     nmfcCode: "",
     cubeFt: "",
+    widthIn: "",
+    heightFt: "",
+    lengthFt: "",
     isHazardous: false,
     unNumber: "",
     hazardClass: "",
@@ -248,6 +253,67 @@ export default function AddLoadPage() {
       }))
     }
   }, [selectedCustomer])
+
+  useEffect(() => {
+    if (!formData.customerId) {
+      if (selectedCustomer) setSelectedCustomer(null)
+      return
+    }
+    if (selectedCustomer?.id === formData.customerId) return
+    const matched = customers.find((c) => c.id === formData.customerId) || null
+    if (matched) setSelectedCustomer(matched)
+  }, [customers, formData.customerId, selectedCustomer])
+
+  useEffect(() => {
+    let cancelled = false
+    async function evaluatePermitFeasibility() {
+      if (!formData.isOversized) {
+        setPermitFeasibility(null)
+        return
+      }
+
+      const routeStates = Array.from(
+        new Set(
+          [
+            formData.shipperState,
+            formData.consigneeState,
+            ...deliveryPoints.map((point: any) => point?.state || point?.delivery_state || ""),
+          ]
+            .map((x) => String(x || "").trim().toUpperCase())
+            .filter(Boolean),
+        ),
+      )
+
+      if (!routeStates.length) return
+      const result = await checkPermitFeasibility({
+        route_states: routeStates,
+        weight_lbs: formData.weight ? Number(formData.weight) : undefined,
+        width_in: formData.widthIn ? Number(formData.widthIn) : undefined,
+        height_ft: formData.heightFt ? Number(formData.heightFt) : undefined,
+        length_ft: formData.lengthFt ? Number(formData.lengthFt) : undefined,
+      })
+
+      if (!cancelled && result.data) {
+        setPermitFeasibility({
+          summary: result.data.summary,
+          permit_required_states: result.data.permit_required_states,
+        })
+      }
+    }
+    evaluatePermitFeasibility()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    deliveryPoints,
+    formData.consigneeState,
+    formData.heightFt,
+    formData.isOversized,
+    formData.lengthFt,
+    formData.shipperState,
+    formData.weight,
+    formData.widthIn,
+  ])
 
   useEffect(() => {
     if (!selectedShipperAddressBookId && shipperAddressBookEntries.length > 0 && !formData.shipperName) {
@@ -612,7 +678,7 @@ export default function AddLoadPage() {
         customer_reference: formData.reference || undefined,
         delivery_type: multiStop ? "multi" : "single",
       load_type: formData.loadType,
-      customer_id: formData.customerId || undefined,
+        customer_id: formData.customerId || selectedCustomer?.id || undefined,
       shipper_name: formData.shipperName || undefined,
       shipper_address: formData.shipperAddress || undefined,
       shipper_city: formData.shipperCity || undefined,
@@ -893,7 +959,7 @@ export default function AddLoadPage() {
                                 return
                               }
                               if (result.data) {
-                                setCustomers([...customers, result.data])
+                                setCustomers((prev) => [...prev, result.data])
                                 setSelectedCustomer(result.data)
                                 setFormData(prev => ({ ...prev, customerId: result.data.id, companyName: result.data.name || result.data.company_name || "" }))
                                 setNewCustomer({ name: "", email: "", phone: "", address: "", city: "", state: "", zip: "" })
@@ -1256,6 +1322,18 @@ export default function AddLoadPage() {
                       <Input name="weight" value={formData.weight} onChange={handleChange} className="mt-1" placeholder="lbs" />
                 </div>
                 <div>
+                      <Label>Width (in)</Label>
+                      <Input name="widthIn" type="number" value={formData.widthIn} onChange={handleChange} className="mt-1" placeholder='102' />
+                </div>
+                <div>
+                      <Label>Height (ft)</Label>
+                      <Input name="heightFt" type="number" value={formData.heightFt} onChange={handleChange} className="mt-1" placeholder='13.5' />
+                </div>
+                <div>
+                      <Label>Length (ft)</Label>
+                      <Input name="lengthFt" type="number" value={formData.lengthFt} onChange={handleChange} className="mt-1" placeholder='53' />
+                </div>
+                <div>
                       <Label>Pieces</Label>
                       <Input name="pieces" type="number" value={formData.pieces} onChange={handleChange} className="mt-1" />
                 </div>
@@ -1358,6 +1436,17 @@ export default function AddLoadPage() {
                             </button>
                           </div>
                         </div>
+                      </div>
+                    )}
+                    {formData.isOversized && permitFeasibility && (
+                      <div className="md:col-span-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-4">
+                        <p className="text-sm font-medium text-amber-100">Permit feasibility pre-check</p>
+                        <p className="text-xs text-amber-100/80 mt-1">{permitFeasibility.summary}</p>
+                        {permitFeasibility.permit_required_states.length > 0 && (
+                          <p className="text-xs text-amber-100/80 mt-2">
+                            Confirm permits are secured for: {permitFeasibility.permit_required_states.join(", ")}
+                          </p>
+                        )}
                       </div>
                     )}
                     <div className="md:col-span-2 space-y-2 rounded-md border-l-4 border-amber-500/70 bg-amber-500/5 pl-4 py-3 pr-3">

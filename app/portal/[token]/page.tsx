@@ -5,8 +5,16 @@ import { useParams, useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Package, MapPin, Calendar, Truck, User, FileText, ArrowRight, CheckCircle2, XCircle, Clock } from "lucide-react"
-import { getPortalAccessByToken, getCustomerPortalLoads, getCustomerPortalInvoices } from "@/app/actions/customer-portal"
+import {
+  getPortalAccessByToken,
+  getCustomerPortalLoads,
+  getCustomerPortalInvoices,
+  submitCustomerPortalLoadRequest,
+} from "@/app/actions/customer-portal"
 import { toast } from "sonner"
 import Link from "next/link"
 
@@ -18,6 +26,15 @@ export default function CustomerPortalPage() {
   const [portalAccess, setPortalAccess] = useState<any>(null)
   const [loads, setLoads] = useState<any[]>([])
   const [invoices, setInvoices] = useState<any[]>([])
+  const [submittingRequest, setSubmittingRequest] = useState(false)
+  const [requestForm, setRequestForm] = useState({
+    origin: "",
+    destination: "",
+    equipment_type: "",
+    weight: "",
+    pickup_date: "",
+    special_instructions: "",
+  })
   const [activeTab, setActiveTab] = useState<"loads" | "invoices">("loads")
 
   useEffect(() => {
@@ -81,6 +98,42 @@ export default function CustomerPortalPage() {
       month: "short",
       day: "numeric",
     })
+  }
+
+  const handleSubmitLoadRequest = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (submittingRequest) return
+
+    setSubmittingRequest(true)
+    try {
+      const result = await submitCustomerPortalLoadRequest(token, {
+        origin: requestForm.origin,
+        destination: requestForm.destination,
+        equipment_type: requestForm.equipment_type,
+        weight: requestForm.weight.trim() ? Number(requestForm.weight) : null,
+        pickup_date: requestForm.pickup_date,
+        special_instructions: requestForm.special_instructions,
+      })
+      if (result.error || !result.data) {
+        toast.error(result.error || "Failed to submit load request")
+        return
+      }
+      toast.success("Load request submitted to dispatcher")
+      setLoads((prev) => [result.data, ...prev])
+      setRequestForm({
+        origin: "",
+        destination: "",
+        equipment_type: "",
+        weight: "",
+        pickup_date: "",
+        special_instructions: "",
+      })
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to submit load request")
+    } finally {
+      setSubmittingRequest(false)
+    }
   }
 
   if (isLoading) {
@@ -165,6 +218,81 @@ export default function CustomerPortalPage() {
         {/* Loads Tab */}
         {activeTab === "loads" && (
           <div className="space-y-4">
+            {portalAccess?.can_submit_loads && (
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold mb-4">Request a New Load</h3>
+                <form onSubmit={handleSubmitLoadRequest} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="origin">Origin</Label>
+                      <Input
+                        id="origin"
+                        value={requestForm.origin}
+                        onChange={(e) => setRequestForm((prev) => ({ ...prev, origin: e.target.value }))}
+                        placeholder="City, State"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="destination">Destination</Label>
+                      <Input
+                        id="destination"
+                        value={requestForm.destination}
+                        onChange={(e) => setRequestForm((prev) => ({ ...prev, destination: e.target.value }))}
+                        placeholder="City, State"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="equipment_type">Equipment Type</Label>
+                      <Input
+                        id="equipment_type"
+                        value={requestForm.equipment_type}
+                        onChange={(e) => setRequestForm((prev) => ({ ...prev, equipment_type: e.target.value }))}
+                        placeholder="Dry Van, Reefer, Flatbed..."
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="weight">Weight (lbs)</Label>
+                      <Input
+                        id="weight"
+                        type="number"
+                        min="0"
+                        value={requestForm.weight}
+                        onChange={(e) => setRequestForm((prev) => ({ ...prev, weight: e.target.value }))}
+                        placeholder="42000"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="pickup_date">Pickup Date</Label>
+                      <Input
+                        id="pickup_date"
+                        type="date"
+                        value={requestForm.pickup_date}
+                        onChange={(e) => setRequestForm((prev) => ({ ...prev, pickup_date: e.target.value }))}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="special_instructions">Special Instructions</Label>
+                    <Textarea
+                      id="special_instructions"
+                      value={requestForm.special_instructions}
+                      onChange={(e) => setRequestForm((prev) => ({ ...prev, special_instructions: e.target.value }))}
+                      placeholder="Any notes for pickup, delivery, handling, or appointments..."
+                      rows={3}
+                    />
+                  </div>
+                  <Button type="submit" disabled={submittingRequest}>
+                    {submittingRequest ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Submit Load Request
+                  </Button>
+                </form>
+              </Card>
+            )}
+
             {loads.length === 0 ? (
               <Card className="p-8 text-center">
                 <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
@@ -190,6 +318,16 @@ export default function CustomerPortalPage() {
                           {load.status?.replace("_", " ").toUpperCase() || "UNKNOWN"}
                         </Badge>
                       </div>
+                      {load.requested_via_portal && (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">
+                            Request: {String(load.portal_request_status || "pending").toUpperCase()}
+                          </Badge>
+                          {load.requested_equipment_type ? (
+                            <Badge variant="secondary">{load.requested_equipment_type}</Badge>
+                          ) : null}
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="flex items-start gap-2">

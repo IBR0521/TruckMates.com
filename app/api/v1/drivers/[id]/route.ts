@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { authenticateApiKey, recordApiUsage } from "@/lib/api/v1/auth"
+import { authenticateApiKey, enforceApiRateLimit, recordApiUsage } from "@/lib/api/v1/auth"
 
 const patchDriverSchema = z
   .object({
@@ -13,10 +13,22 @@ const patchDriverSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, "No fields to update")
 
+function toNormalizedPhone(raw: string | null | undefined) {
+  const value = String(raw || "").trim()
+  if (!value) return null
+  if (value.startsWith("+")) return value.replace(/\s/g, "")
+  const digits = value.replace(/\D/g, "")
+  if (digits.length === 10) return `+1${digits}`
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`
+  return digits ? `+${digits}` : null
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const startedAt = Date.now()
   const auth = await authenticateApiKey(request, "read")
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const rl = await enforceApiRateLimit(request, "drivers:id:get")
+  if (!rl.allowed) return NextResponse.json({ error: rl.error }, { status: rl.status })
   const { id } = await params
 
   const supabase = createAdminClient()
@@ -47,15 +59,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const startedAt = Date.now()
   const auth = await authenticateApiKey(request, "write")
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const rl = await enforceApiRateLimit(request, "drivers:id:patch", 60, 60)
+  if (!rl.allowed) return NextResponse.json({ error: rl.error }, { status: rl.status })
   const { id } = await params
   const body = await request.json().catch(() => ({}))
   const parsed = patchDriverSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "Invalid payload" }, { status: 400 })
 
   const supabase = createAdminClient()
+  const updatePayload: Record<string, unknown> = { ...parsed.data }
+  if ("phone" in parsed.data) {
+    updatePayload.normalized_phone = toNormalizedPhone(parsed.data.phone ?? null)
+  }
   const { data, error } = await supabase
     .from("drivers")
-    .update(parsed.data)
+    .update(updatePayload)
     .eq("id", id)
     .eq("company_id", auth.companyId)
     .select("id, name, email, phone, status, truck_id, updated_at")

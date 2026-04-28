@@ -14,6 +14,11 @@ import { decodeGoogleEncodedPolyline } from "@/lib/promiles/polyline-google"
 import { getHereTruckRoute } from "@/lib/promiles/here-truck-route"
 import { estimateStateMilesFromLatLngPath } from "@/lib/promiles/state-mileage"
 import {
+  fetchTruckStopsAlongRoute,
+  scoreFuelStops,
+  type FuelStopRecommendation,
+} from "@/lib/promiles/fuel-optimizer"
+import {
   buildDieselPricesForStates,
   estimateFuelCostUsd,
   fetchLatestUsDieselPrice,
@@ -51,6 +56,12 @@ export type TripPlanningEstimate = {
     estimated_cost_usd: number | null
     diesel_note?: string
     price_by_state?: Record<string, { pricePerGallon: number; seriesId: string }>
+    optimizer?: {
+      gallons_needed: number
+      fuel_cost_per_mile: number
+      recommendations: FuelStopRecommendation[]
+      scoring_formula: "(price_per_gallon * gallons_needed) + (miles_out_of_route * fuel_cost_per_mile)"
+    }
   }
   tolls: {
     estimated_usd: number | null
@@ -71,6 +82,7 @@ export async function getTripPlanningEstimate(input: {
   destination: string
   /** Assumed fuel economy for cost estimate (defaults 6.5) */
   mpg?: number
+  gallonsNeeded?: number
   truck?: {
     grossWeightLbs?: number
     axleCount?: number
@@ -162,8 +174,12 @@ export async function getTripPlanningEstimate(input: {
 
   let dieselNote: string | undefined
   let priceByState: TripPlanningEstimate["fuel"]["price_by_state"]
+  let optimizerRecommendations: FuelStopRecommendation[] = []
   let fuelCost: number | null = null
   let estimated_gallons = distance_miles > 0 ? Math.round((distance_miles / mpg) * 10) / 10 : 0
+  const gallonsNeededForOptimizer =
+    input.gallonsNeeded && input.gallonsNeeded > 0 ? Math.round(input.gallonsNeeded * 10) / 10 : estimated_gallons
+  let usAvgDieselPrice: number | null = null
 
   if (eiaKey && stateEst.rows.length > 0) {
     const built = await buildDieselPricesForStates(eiaKey, stateEst.rows)
@@ -171,16 +187,50 @@ export async function getTripPlanningEstimate(input: {
       warnings.push(`EIA diesel pricing: ${built.error}`)
       const us = await fetchLatestUsDieselPrice(eiaKey)
       if (us.price != null) {
+        usAvgDieselPrice = us.price
         fuelCost = Math.round(((distance_miles / mpg) * us.price) * 100) / 100
         dieselNote = `US weekly average diesel $${us.price}/gal (EIA v2 ${EIA_US_DIESEL_DUOAREA} / EPD2D)`
       }
     } else {
       priceByState = built.byState
+      if (eiaKey) {
+        const us = await fetchLatestUsDieselPrice(eiaKey)
+        usAvgDieselPrice = us.price ?? null
+      }
       fuelCost = estimateFuelCostUsd({ stateMiles: stateEst.rows, priceByState: built.byState, mpg })
       dieselNote = "EIA weekly retail diesel by PADD region (planning estimate)"
     }
   } else {
     warnings.push("EIA_API_KEY not set — fuel cost not estimated from government averages.")
+  }
+
+  if (hereKey && path.length >= 2 && priceByState && Object.keys(priceByState).length > 0) {
+    const truckStops = await fetchTruckStopsAlongRoute({
+      hereApiKey: hereKey,
+      path,
+      samplePoints: 8,
+      perSampleLimit: 5,
+    })
+    if (truckStops.error) {
+      warnings.push(`Fuel optimizer truck stop discovery failed: ${truckStops.error}`)
+    } else if (truckStops.data.length > 0) {
+      const fallbackPrice =
+        usAvgDieselPrice ||
+        Object.values(priceByState)[0]?.pricePerGallon ||
+        3.5
+      const fuelCostPerMile = Math.round(((fallbackPrice > 0 ? fallbackPrice : 3.5) / mpg) * 1000) / 1000
+      optimizerRecommendations = scoreFuelStops({
+        path,
+        candidates: truckStops.data,
+        priceByState: { ...priceByState, US: { pricePerGallon: fallbackPrice } },
+        gallonsNeeded: gallonsNeededForOptimizer,
+        fuelCostPerMile,
+        maxOutOfRouteMiles: 24,
+        topN: 3,
+      })
+    } else {
+      warnings.push("Fuel optimizer did not find truck stops along this corridor.")
+    }
   }
 
   const tollUsd = hereTollUsd
@@ -206,6 +256,15 @@ export async function getTripPlanningEstimate(input: {
       estimated_cost_usd: fuelCost,
       diesel_note: dieselNote,
       price_by_state: priceByState,
+      optimizer: {
+        gallons_needed: gallonsNeededForOptimizer,
+        fuel_cost_per_mile: Math.round(
+          (((usAvgDieselPrice || Object.values(priceByState || {})[0]?.pricePerGallon || 3.5) / mpg) * 1000),
+        ) / 1000,
+        recommendations: optimizerRecommendations,
+        scoring_formula:
+          "(price_per_gallon * gallons_needed) + (miles_out_of_route * fuel_cost_per_mile)",
+      },
     },
     tolls: {
       estimated_usd: tollUsd,

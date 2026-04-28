@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "shepherd.js/dist/css/shepherd.css";
 
 /* Font fallback to ensure text renders correctly */
 body {

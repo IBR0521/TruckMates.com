@@ -95,15 +95,17 @@ export async function sendInvoiceToFactoring(invoiceId: string) {
   const companyName = company?.name || "Company"
   let loadNumber = "—"
   let loadCustomer: string | null = null
+  let loadCustomerId: string | null = null
   if (invoice.load_id) {
     const { data: loadRow } = await supabase
       .from("loads")
-      .select("shipment_number, company_name")
+      .select("shipment_number, company_name, customer_id")
       .eq("id", invoice.load_id)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
     if (loadRow?.shipment_number) loadNumber = loadRow.shipment_number
     loadCustomer = loadRow?.company_name || null
+    loadCustomerId = loadRow?.customer_id || null
   }
   const customerName = invoice.customer_name || loadCustomer || "Customer"
   const amountStr = `$${Number(invoice.amount || 0).toFixed(2)}`
@@ -180,6 +182,32 @@ export async function sendInvoiceToFactoring(invoiceId: string) {
     return {
       error: `Failed to send: ${emailResult.error.message || "Unknown error"}`,
       data: null,
+    }
+  }
+
+  if (loadCustomerId) {
+    try {
+      await supabase.from("contact_history").insert({
+        company_id: ctx.companyId,
+        customer_id: loadCustomerId,
+        type: "email",
+        subject,
+        message: bodyText,
+        direction: "outbound",
+        load_id: invoice.load_id || null,
+        invoice_id: invoiceId,
+        user_id: ctx.userId ?? null,
+        occurred_at: new Date().toISOString(),
+        external_id: emailResult.data?.id || null,
+        source: "email",
+        metadata: {
+          email_kind: "factoring_invoice_packet",
+          to: submissionEmail,
+          resend_id: emailResult.data?.id || null,
+        },
+      })
+    } catch (logError) {
+      Sentry.captureException(logError)
     }
   }
 

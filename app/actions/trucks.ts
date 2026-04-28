@@ -165,7 +165,11 @@ export async function createTruck(formData: {
     if (currentTruckCount !== null && currentTruckCount >= subscription.subscription_plans.max_vehicles) {
       return {
         error: `Vehicle limit reached. Your plan allows ${subscription.subscription_plans.max_vehicles} vehicles. Please upgrade your subscription to add more vehicles.`,
-        data: null
+        data: null,
+        upgrade: {
+          required: true,
+          feature: "vehicles_limit",
+        },
       }
     }
   }

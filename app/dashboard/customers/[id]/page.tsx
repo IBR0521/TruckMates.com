@@ -33,6 +33,7 @@ import { ExternalLink, Copy, Link as LinkIcon, X } from "lucide-react"
 import { DocumentManager } from "@/components/crm/document-manager"
 import { CommunicationTimeline } from "@/components/crm/communication-timeline"
 import { CRMSectionHeader } from "@/components/crm/crm-section-header"
+import { UnifiedCommunicationsThread } from "@/components/communications/unified-communications-thread"
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -833,9 +834,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
         {/* Communications Tab */}
         {activeTab === "communications" && (
-          <Card className="p-6">
-            <CommunicationTimeline customerId={id} />
-          </Card>
+          <div className="space-y-6">
+            <Card className="p-6">
+              <UnifiedCommunicationsThread customerId={id} title="Customer unified thread" />
+            </Card>
+            <Card className="p-6">
+              <CommunicationTimeline customerId={id} />
+            </Card>
+          </div>
         )}
       </div>
     </DetailPageLayout>

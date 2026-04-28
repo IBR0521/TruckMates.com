@@ -31,6 +31,7 @@ import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/fo
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
+import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 const parseISODate = (value: string) => {
   if (!value) return undefined
@@ -93,6 +94,7 @@ function DatePickerField({
 }
 
 export default function AddDriverPage() {
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const wizardSteps = [
     { key: "personal", label: "Personal", required: true },
     { key: "license", label: "License", required: true },
@@ -187,6 +189,9 @@ export default function AddDriverPage() {
     setIsSubmitting(false)
 
     if (result.error) {
+      if ((result as any)?.upgrade?.required) {
+        setShowUpgradeModal(true)
+      }
       toast.error(result.error)
     } else {
       toast.success("Driver added successfully")
@@ -267,6 +272,7 @@ export default function AddDriverPage() {
   }
 
   return (
+    <>
     <FormPageLayout
       title="Add Driver"
       subtitle="Add a new driver to your team"
@@ -671,5 +677,7 @@ export default function AddDriverPage() {
               </TabsContent>
             </Tabs>
     </FormPageLayout>
+    <UpgradeModal open={showUpgradeModal} onOpenChange={setShowUpgradeModal} feature="drivers_limit" />
+    </>
   )
 }

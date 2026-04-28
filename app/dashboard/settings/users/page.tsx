@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { ROLES, mapLegacyRole, type EmployeeRole } from "@/lib/roles"
+import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 const SIX_ROLES: EmployeeRole[] = ["super_admin", "operations_manager", "dispatcher", "safety_compliance", "financial_controller", "driver"]
 
@@ -74,6 +75,7 @@ export default function UsersSettingsPage() {
   }>>([])
   const [inviteLinkToCopy, setInviteLinkToCopy] = useState<string | null>(null)
   const [inviteEmailError, setInviteEmailError] = useState<string | null>(null)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   useEffect(() => {
     async function loadUsers() {
@@ -189,6 +191,9 @@ export default function UsersSettingsPage() {
       })
 
       if (result.error) {
+        if ((result as any)?.upgrade?.required) {
+          setShowUpgradeModal(true)
+        }
         toast.error(result.error)
       } else {
         if (result.data?.emailSent) {
@@ -234,6 +239,7 @@ export default function UsersSettingsPage() {
   }
 
   return (
+    <>
     <div className="w-full p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         <div>
@@ -571,6 +577,8 @@ export default function UsersSettingsPage() {
         </Dialog>
       </div>
     </div>
+    <UpgradeModal open={showUpgradeModal} onOpenChange={setShowUpgradeModal} feature="users_limit" />
+    </>
   )
 }
 

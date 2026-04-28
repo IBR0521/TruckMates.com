@@ -401,7 +401,11 @@ export async function inviteUser(data: {
     if (currentUserCount !== null && currentUserCount >= subscription.subscription_plans.max_users) {
       return {
         error: `User limit reached. Your plan allows ${subscription.subscription_plans.max_users} users. Please upgrade your subscription to invite more users.`,
-        data: null
+        data: null,
+        upgrade: {
+          required: true,
+          feature: "users_limit",
+        },
       }
     }
   }

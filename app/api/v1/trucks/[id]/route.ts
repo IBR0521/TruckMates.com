@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { authenticateApiKey, recordApiUsage } from "@/lib/api/v1/auth"
+import { authenticateApiKey, enforceApiRateLimit, recordApiUsage } from "@/lib/api/v1/auth"
 
 const patchTruckSchema = z
   .object({
@@ -20,6 +20,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const startedAt = Date.now()
   const auth = await authenticateApiKey(request, "read")
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const rl = await enforceApiRateLimit(request, "trucks:id:get")
+  if (!rl.allowed) return NextResponse.json({ error: rl.error }, { status: rl.status })
   const { id } = await params
   const supabase = createAdminClient()
   const { data, error } = await supabase
@@ -49,6 +51,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const startedAt = Date.now()
   const auth = await authenticateApiKey(request, "write")
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const rl = await enforceApiRateLimit(request, "trucks:id:patch", 60, 60)
+  if (!rl.allowed) return NextResponse.json({ error: rl.error }, { status: rl.status })
   const { id } = await params
   const body = await request.json().catch(() => ({}))
   const parsed = patchTruckSchema.safeParse(body)

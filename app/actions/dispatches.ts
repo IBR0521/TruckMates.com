@@ -16,7 +16,7 @@ function safeDbError(error: unknown, fallback = "Database operation failed"): st
 
 
 /**
- * Get unassigned loads (loads without driver/truck, plus pending/draft backlog)
+ * Get unassigned loads (loads without driver/truck, excluding drafts)
  */
 export async function getUnassignedLoads(terminalId?: string) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
@@ -69,7 +69,8 @@ export async function getUnassignedLoads(terminalId?: string) {
     // Additional filter for pending/draft status loads that might already have assignments
     const scopedLoads = terminalId ? (loads || []).filter((l: any) => l.terminal_id === terminalId) : (loads || [])
     const unassignedLoads = scopedLoads.filter((load: any) => 
-      !load.driver_id || !load.truck_id || ["pending", "draft"].includes(String(load.status || "").toLowerCase())
+      String(load.status || "").toLowerCase() !== "draft" &&
+      (!load.driver_id || !load.truck_id || String(load.status || "").toLowerCase() === "pending")
     )
 
     return { data: unassignedLoads, error: null }
@@ -152,7 +153,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
   // Get current load to check status and company
   const { data: currentLoad, error: loadError } = await supabase
     .from("loads")
-    .select("status, company_id, requires_permit")
+    .select("status, company_id, requires_permit, load_date, estimated_delivery")
     .eq("id", loadId)
     .eq("company_id", ctx.companyId)
     .maybeSingle()
@@ -205,6 +206,34 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
     
     if (!truck) {
       return { error: "Invalid truck or truck does not belong to your company", data: null }
+    }
+  }
+
+  if (truckId && currentLoad?.load_date) {
+    const incomingStart = new Date(currentLoad.load_date)
+    const incomingEnd = new Date(currentLoad.estimated_delivery || currentLoad.load_date)
+    if (!Number.isNaN(incomingStart.getTime()) && !Number.isNaN(incomingEnd.getTime()) && incomingEnd > incomingStart) {
+      const { data: overlaps, error: overlapError } = await supabase
+        .from("loads")
+        .select("id, shipment_number, load_date, estimated_delivery")
+        .eq("company_id", ctx.companyId)
+        .eq("truck_id", truckId)
+        .neq("id", loadId)
+        .in("status", ["pending", "scheduled", "in_transit"])
+      if (overlapError) return { error: safeDbError(overlapError), data: null }
+
+      const conflict = (overlaps || []).find((row: any) => {
+        const rowStart = new Date(row.load_date || row.estimated_delivery)
+        const rowEnd = new Date(row.estimated_delivery || row.load_date)
+        if (Number.isNaN(rowStart.getTime()) || Number.isNaN(rowEnd.getTime())) return false
+        return rowStart < incomingEnd && rowEnd > incomingStart
+      })
+      if (conflict) {
+        return {
+          error: `Truck already has overlapping load ${conflict.shipment_number || conflict.id} in the same date range.`,
+          data: null,
+        }
+      }
     }
   }
 
@@ -269,6 +298,28 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
       )
     } catch (error) {
       // Silently fail - don't block assignment
+      Sentry.captureException(error)
+    }
+    try {
+      const { data: driverUser } = await supabase
+        .from("drivers")
+        .select("user_id")
+        .eq("id", driverId)
+        .eq("company_id", ctx.companyId)
+        .maybeSingle()
+      if ((driverUser as any)?.user_id) {
+        const { sendPushToUser } = await import("./push-notifications")
+        await sendPushToUser((driverUser as any).user_id, {
+          title: "New load assigned",
+          body: `${data.shipment_number || "Load"}: ${data.origin || "Origin"} -> ${data.destination || "Destination"}`,
+          data: {
+            type: "dispatch_assigned",
+            loadId: String(loadId),
+            link: `/dashboard/loads/${loadId}`,
+          },
+        })
+      }
+    } catch (error) {
       Sentry.captureException(error)
     }
   }

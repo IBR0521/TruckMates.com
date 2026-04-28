@@ -20,6 +20,16 @@ function safeDbError(error: unknown, fallback = "Database operation failed"): st
   return sanitizeError(error, { fallback })
 }
 
+function toNormalizedPhone(raw: string | null | undefined): string | null {
+  const value = String(raw || "").trim()
+  if (!value) return null
+  if (value.startsWith("+")) return value.replace(/\s/g, "")
+  const digits = value.replace(/\D/g, "")
+  if (digits.length === 10) return `+1${digits}`
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`
+  return digits ? `+${digits}` : null
+}
+
 const DRIVER_LIST_SELECT =
   "id, name, email, phone, status, license_number, license_expiry, truck_id, terminal_id, created_at"
 
@@ -382,7 +392,11 @@ export async function createDriver(formData: {
     if (currentDriverCount !== null && currentDriverCount >= subscription.subscription_plans.max_drivers) {
       return {
         error: `Driver limit reached. Your plan allows ${subscription.subscription_plans.max_drivers} drivers. Please upgrade your subscription to add more drivers.`,
-        data: null
+        data: null,
+        upgrade: {
+          required: true,
+          feature: "drivers_limit",
+        },
       }
     }
   }
@@ -489,6 +503,7 @@ export async function createDriver(formData: {
   // Add optional fields with validation and sanitization
   if (formData.email) driverData.email = sanitizeEmail(formData.email)
   if (formData.phone) driverData.phone = sanitizePhone(formData.phone)
+  if (formData.phone) driverData.normalized_phone = toNormalizedPhone(sanitizePhone(formData.phone))
   if (formData.license_number) driverData.license_number = sanitizeString(formData.license_number, 20).toUpperCase()
   if (formData.license_expiry) driverData.license_expiry = formData.license_expiry
   if (formData.truck_id) driverData.truck_id = formData.truck_id
@@ -712,6 +727,7 @@ export async function updateDriver(
   if (updateData.name) updateData.name = sanitizeString(updateData.name, 100)
   if (updateData.email) updateData.email = sanitizeEmail(updateData.email)
   if (updateData.phone) updateData.phone = sanitizePhone(updateData.phone)
+  if (updateData.phone) updateData.normalized_phone = toNormalizedPhone(updateData.phone)
   if (updateData.license_number) updateData.license_number = sanitizeString(updateData.license_number, 20).toUpperCase()
   if (updateData.driver_id) updateData.driver_id = sanitizeString(updateData.driver_id, 50)
   if (updateData.address) updateData.address = sanitizeString(updateData.address, 200)

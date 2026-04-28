@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
+import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 
 const styles = StyleSheet.create({
   page: { padding: 24, fontSize: 10, fontFamily: "Helvetica", color: "#111827" },
@@ -55,6 +56,17 @@ export async function generateHazmatShippingPaper(loadId: string): Promise<{
     const supabase = await createClient()
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) return { data: null, error: ctx.error || "Not authenticated" }
+    const gate = await getCurrentCompanyFeatureAccess("hazmat")
+    if (!gate.allowed) {
+      return {
+        data: null,
+        error: "HAZMAT workflows are available on Fleet and Enterprise plans. Please upgrade to continue.",
+        upgrade: {
+          required: true,
+          feature: "hazmat",
+        },
+      } as any
+    }
 
     const { data: load, error: loadError } = await supabase
       .from("loads")

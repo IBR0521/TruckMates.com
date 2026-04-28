@@ -38,6 +38,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { UnifiedCommunicationsThread } from "@/components/communications/unified-communications-thread"
 
 export default function DriverDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -335,6 +336,14 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
       }
     >
       <div className="space-y-4">
+        <DetailSection
+          title="Unified Communications"
+          icon={<MessageSquare className="w-5 h-5" />}
+          className="border-border/70 bg-card/80"
+        >
+          <UnifiedCommunicationsThread driverId={id} title="Driver unified thread" />
+        </DetailSection>
+
         <DetailSection title="Profile Information" icon={<User className="w-5 h-5" />} className="border-border/70 bg-card/80">
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {denseField("Full Name", driver.name || "—")}

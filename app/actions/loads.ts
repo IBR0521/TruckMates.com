@@ -42,11 +42,12 @@ const LOAD_DETAIL_SELECT = `
   un_number, hazard_class, packing_group, proper_shipping_name, placard_required, emergency_contact,
   requires_liftgate, requires_inside_delivery, requires_appointment, appointment_time,
   special_instructions, notes, internal_notes, bol_number,
+  requested_via_portal, portal_request_status, portal_request_message, requested_equipment_type,
   trip_planning_estimate, created_at, updated_at
 `
 
 const LOAD_LIST_SELECT =
-  "id, shipment_number, origin, destination, status, driver_id, truck_id, trailer_id, terminal_id, shipment_id, load_date, estimated_delivery, created_at, company_name, value, contents, delivery_type, total_delivery_points, weight, weight_kg, nmfc_code, freight_class, piece_count, cube_ft"
+  "id, shipment_number, origin, destination, status, driver_id, truck_id, trailer_id, terminal_id, shipment_id, load_date, estimated_delivery, created_at, company_name, value, contents, delivery_type, total_delivery_points, weight, weight_kg, nmfc_code, freight_class, piece_count, cube_ft, requested_via_portal, portal_request_status, portal_request_message, requested_equipment_type"
 
 function driverHasHazmatEndorsement(endorsements: unknown): boolean {
   if (!endorsements) return false
@@ -355,6 +356,10 @@ export async function createLoad(formData: {
   emergency_contact?: string
   is_oversized?: boolean
   special_instructions?: string
+  requested_via_portal?: boolean
+  portal_request_status?: "pending" | "accepted" | "rejected" | null
+  portal_request_message?: string | null
+  requested_equipment_type?: string | null
   // Special requirements
   requires_liftgate?: boolean
   requires_inside_delivery?: boolean
@@ -857,6 +862,10 @@ export async function createLoad(formData: {
   if (formData.emergency_contact) loadData.emergency_contact = sanitizeString(formData.emergency_contact, 120)
   if (formData.is_oversized !== undefined) loadData.is_oversized = formData.is_oversized
   if (formData.special_instructions) loadData.special_instructions = formData.special_instructions
+  if (formData.requested_via_portal !== undefined) loadData.requested_via_portal = formData.requested_via_portal
+  if (formData.portal_request_status !== undefined) loadData.portal_request_status = formData.portal_request_status
+  if (formData.portal_request_message !== undefined) loadData.portal_request_message = formData.portal_request_message
+  if (formData.requested_equipment_type !== undefined) loadData.requested_equipment_type = formData.requested_equipment_type
   
   // Special requirements
   if (formData.requires_liftgate !== undefined) loadData.requires_liftgate = formData.requires_liftgate
@@ -1185,6 +1194,10 @@ export async function updateLoad(
   updateField("requires_permit", formData.requires_permit)
   updateField("permit_requirement_reason", formData.permit_requirement_reason)
   updateField("special_instructions", formData.special_instructions)
+  updateField("requested_via_portal", formData.requested_via_portal)
+  updateField("portal_request_status", formData.portal_request_status)
+  updateField("portal_request_message", formData.portal_request_message)
+  updateField("requested_equipment_type", formData.requested_equipment_type)
   
   // Special requirements
   updateField("requires_liftgate", formData.requires_liftgate)
@@ -1235,6 +1248,8 @@ export async function updateLoad(
   if (updateData.packing_group) updateData.packing_group = sanitizeString(updateData.packing_group, 20)
   if (updateData.proper_shipping_name) updateData.proper_shipping_name = sanitizeString(updateData.proper_shipping_name, 200)
   if (updateData.emergency_contact) updateData.emergency_contact = sanitizeString(updateData.emergency_contact, 120)
+  if (updateData.portal_request_message) updateData.portal_request_message = sanitizeString(updateData.portal_request_message, 1000)
+  if (updateData.requested_equipment_type) updateData.requested_equipment_type = sanitizeString(updateData.requested_equipment_type, 60)
 
   const nextHazardous =
     typeof updateData.is_hazardous === "boolean" ? updateData.is_hazardous : Boolean(currentLoad.is_hazardous)

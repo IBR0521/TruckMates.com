@@ -16,6 +16,7 @@ import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/fo
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { createDVIR } from "@/app/actions/dvir"
+import { FirstHoverTooltip } from "@/components/help/first-hover-tooltip"
 
 export default function AddDVIRPage() {
   const router = useRouter()
@@ -193,7 +194,13 @@ export default function AddDVIRPage() {
               </Select>
             </div>
             <div>
-              <Label>Inspection Type *</Label>
+              <Label>
+                Inspection Type *
+                <FirstHoverTooltip
+                  tooltipKey="dvir-inspection-type"
+                  text="Pre-trip is completed before driving, post-trip after driving. This supports FMCSA DVIR compliance records."
+                />
+              </Label>
               <Select
                 value={formData.inspection_type}
                 onValueChange={(value) => setFormData({ ...formData, inspection_type: value })}

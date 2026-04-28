@@ -24,6 +24,15 @@ interface GoogleMapsRouteProps {
   contents?: string
   showNavigationButton?: boolean
   onRouteDataChange?: (routeData: any) => void
+  recommendedFuelStops?: Array<{
+    id: string
+    rank: number
+    name: string
+    address: string
+    lat: number
+    lng: number
+    scoreUsd: number
+  }>
 }
 
 const EMPTY_STOPS: NonNullable<GoogleMapsRouteProps["stops"]> = []
@@ -67,6 +76,7 @@ export function GoogleMapsRoute({
   contents,
   showNavigationButton = true,
   onRouteDataChange,
+  recommendedFuelStops,
 }: GoogleMapsRouteProps) {
   const toFriendlyMapError = (raw: string) => {
     const value = String(raw || "").toLowerCase()
@@ -92,6 +102,18 @@ export function GoogleMapsRoute({
       })),
     )
   }, [stops])
+  const fuelStopsSig = useMemo(() => {
+    if (!recommendedFuelStops?.length) return "__none__"
+    return JSON.stringify(
+      recommendedFuelStops.map((s) => ({
+        id: s.id,
+        rank: s.rank,
+        lat: s.lat,
+        lng: s.lng,
+        scoreUsd: s.scoreUsd,
+      })),
+    )
+  }, [recommendedFuelStops])
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const directionsServiceRef = useRef<any>(null)
@@ -504,6 +526,40 @@ export function GoogleMapsRoute({
               map.fitBounds(result.routes[0].bounds)
             }
 
+            if (recommendedFuelStops?.length) {
+              for (const stop of recommendedFuelStops) {
+                const marker = new window.google.maps.Marker({
+                  position: { lat: stop.lat, lng: stop.lng },
+                  map,
+                  title: `Fuel stop #${stop.rank}: ${stop.name}`,
+                  label: {
+                    text: `F${stop.rank}`,
+                    color: "#ffffff",
+                    fontWeight: "700",
+                  },
+                  icon: {
+                    path: window.google.maps.SymbolPath.CIRCLE,
+                    fillColor: "#16a34a",
+                    fillOpacity: 1,
+                    strokeColor: "#14532d",
+                    strokeWeight: 1.5,
+                    scale: 10,
+                  },
+                })
+                const info = new window.google.maps.InfoWindow({
+                  content: `
+                    <div style="max-width:240px;padding:4px 2px;">
+                      <div style="font-weight:700;margin-bottom:4px;">#${stop.rank} ${stop.name}</div>
+                      <div style="font-size:12px;color:#4b5563;margin-bottom:4px;">${stop.address}</div>
+                      <div style="font-size:12px;">Score: <strong>$${stop.scoreUsd.toFixed(2)}</strong></div>
+                    </div>
+                  `,
+                })
+                marker.addListener("click", () => info.open({ anchor: marker, map }))
+                markersRef.current.push(marker)
+              }
+            }
+
             setIsLoading(false)
           } else {
             // Provide specific error messages for common issues
@@ -548,7 +604,7 @@ Visit: https://console.cloud.google.com/google/maps-apis`
       })
       markersRef.current = []
     }
-  }, [mapLoaded, origin, destination, originCoordinates, destinationCoordinates, stopsSig])
+  }, [mapLoaded, origin, destination, originCoordinates, destinationCoordinates, stopsSig, fuelStopsSig])
 
   // Keep map tiles painted when parent layout changes size.
   useEffect(() => {

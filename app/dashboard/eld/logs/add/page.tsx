@@ -21,6 +21,7 @@ import { getTrucks } from "@/app/actions/trucks"
 import { toast } from "sonner"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { FirstHoverTooltip } from "@/components/help/first-hover-tooltip"
 
 export default function AddELDLogPage() {
   const router = useRouter()
@@ -195,7 +196,13 @@ export default function AddELDLogPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="log_type">Log Type *</Label>
+                  <Label htmlFor="log_type">
+                    Log Type *
+                    <FirstHoverTooltip
+                      tooltipKey="hos-log-type"
+                      text="HOS duty status tracks legal driving time: Driving, On Duty, Off Duty, or Sleeper Berth."
+                    />
+                  </Label>
                   <Select value={formData.log_type} onValueChange={(value) => setFormData({ ...formData, log_type: value })}>
                     <SelectTrigger>
                       <SelectValue />

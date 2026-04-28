@@ -82,6 +82,63 @@ async function getCsaSnapshotText(): Promise<{ text: string; sourceUrl: string }
   return { text, sourceUrl }
 }
 
+async function parseScoresForDotsFromStream(response: Response, targetDots: Set<string>) {
+  if (!response.body) return null
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+  let headers: string[] | null = null
+  let dotIdx = -1
+  let idx: Record<CSACategoryKey, number> | null = null
+  const found = new Map<string, Record<CSACategoryKey, number | null>>()
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split(/\r?\n/)
+    buffer = lines.pop() || ""
+
+    for (const line of lines) {
+      if (!line.trim()) continue
+      if (!headers) {
+        headers = parseCsvLine(line)
+        dotIdx = headerIndex(headers, [/usdot/, /dot number/, /^dot$/])
+        if (dotIdx < 0) return null
+        idx = {
+          unsafe_driving: headerIndex(headers, [/unsafe driving/]),
+          hours_of_service: headerIndex(headers, [/hos/, /hours of service/]),
+          driver_fitness: headerIndex(headers, [/driver fitness/]),
+          controlled_substances: headerIndex(headers, [/controlled substances/, /alcohol/]),
+          vehicle_maintenance: headerIndex(headers, [/vehicle maintenance/]),
+          hazardous_materials: headerIndex(headers, [/hazardous materials/, /hazmat/]),
+          crash_indicator: headerIndex(headers, [/crash indicator/, /^crash$/]),
+        } as Record<CSACategoryKey, number>
+        continue
+      }
+
+      const cols = parseCsvLine(line)
+      const dot = String(cols[dotIdx] || "").replace(/\D/g, "")
+      if (!dot || !targetDots.has(dot) || found.has(dot)) continue
+      const parsed: Record<CSACategoryKey, number | null> = {
+        unsafe_driving: idx!.unsafe_driving >= 0 ? toPercent(cols[idx!.unsafe_driving]) : null,
+        hours_of_service: idx!.hours_of_service >= 0 ? toPercent(cols[idx!.hours_of_service]) : null,
+        driver_fitness: idx!.driver_fitness >= 0 ? toPercent(cols[idx!.driver_fitness]) : null,
+        controlled_substances: idx!.controlled_substances >= 0 ? toPercent(cols[idx!.controlled_substances]) : null,
+        vehicle_maintenance: idx!.vehicle_maintenance >= 0 ? toPercent(cols[idx!.vehicle_maintenance]) : null,
+        hazardous_materials: idx!.hazardous_materials >= 0 ? toPercent(cols[idx!.hazardous_materials]) : null,
+        crash_indicator: idx!.crash_indicator >= 0 ? toPercent(cols[idx!.crash_indicator]) : null,
+      }
+      found.set(dot, parsed)
+      if (found.size >= targetDots.size) {
+        await reader.cancel()
+        return found
+      }
+    }
+  }
+  return found
+}
+
 function parseCompanyScoresFromCsv(csvText: string, dotNumber: string) {
   const lines = csvText.split(/\r?\n/).filter(Boolean)
   if (lines.length < 2) return null
@@ -203,14 +260,50 @@ export async function syncAllCompaniesCSAScores() {
       .limit(10000)
     if (error) return { error: error.message, data: null }
 
+    const sourceUrl =
+      process.env.FMCSA_SMS_SNAPSHOT_URL ||
+      "https://ai.fmcsa.dot.gov/SMS/CarrierMonthlyData.csv"
+    const response = await fetch(sourceUrl, { cache: "no-store" })
+    if (!response.ok) return { error: `FMCSA snapshot download failed (${response.status})`, data: null }
+
+    const wantedDots = new Set(
+      (settings || [])
+        .map((s) => String(s.dot_number || "").replace(/\D/g, ""))
+        .filter(Boolean),
+    )
+    const parsedByDot = (await parseScoresForDotsFromStream(response, wantedDots)) || new Map()
+    const snapshotMonth = monthStart()
+
     let synced = 0
     const errors: Array<{ company_id: string; error: string }> = []
     for (const row of settings || []) {
+      const companyId = String(row.company_id)
       const dot = String(row.dot_number || "").replace(/\D/g, "")
       if (!dot) continue
-      const result = await syncCompanyCSAScores(String(row.company_id), dot)
-      if (result.error) errors.push({ company_id: String(row.company_id), error: result.error })
-      else synced++
+      const parsed = parsedByDot.get(dot)
+      if (!parsed) {
+        errors.push({ company_id: companyId, error: `USDOT ${dot} not found in FMCSA snapshot` })
+        continue
+      }
+
+      const upsert = await admin
+        .from("csa_scores")
+        .upsert(
+          {
+            company_id: companyId,
+            dot_number: dot,
+            snapshot_month: snapshotMonth,
+            ...parsed,
+            source_url: sourceUrl,
+          },
+          { onConflict: "company_id,snapshot_month" },
+        )
+      if (upsert.error) {
+        errors.push({ company_id: companyId, error: upsert.error.message })
+        continue
+      }
+      await createThresholdAlerts(companyId, snapshotMonth, parsed)
+      synced++
     }
     revalidatePath("/dashboard/compliance")
     return { data: { synced, errors }, error: null }

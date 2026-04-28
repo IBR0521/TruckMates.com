@@ -10,6 +10,8 @@ import Sidebar from "@/components/dashboard/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { FeedbackWidget } from "@/components/feedback-widget"
 import { NotificationsCenter } from "@/components/notifications-center"
+import { FirstLoginTour } from "@/components/onboarding/first-login-tour"
+import { FcmTokenRegistrar } from "@/components/notifications/fcm-token-registrar"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -145,6 +147,8 @@ export default function DashboardLayoutClient({
 
       {/* Floating Feedback Widget */}
       <FeedbackWidget />
+      <FirstLoginTour />
+      <FcmTokenRegistrar />
     </div>
   )
 }

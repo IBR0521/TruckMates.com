@@ -182,10 +182,14 @@ export async function createCustomer(formData: {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
-  // RBAC check
-  const permissionCheck = await checkCreatePermission("crm")
-  if (!permissionCheck.allowed) {
-    return { error: permissionCheck.error || "You don't have permission to create customers", data: null }
+  // RBAC check:
+  // Allow either CRM create or Loads create so dispatch can add a customer inline from the Add Load flow.
+  const crmPermission = await checkCreatePermission("crm")
+  if (!crmPermission.allowed) {
+    const loadsPermission = await checkCreatePermission("loads")
+    if (!loadsPermission.allowed) {
+      return { error: crmPermission.error || "You don't have permission to create customers", data: null }
+    }
   }
 
   // Professional validation

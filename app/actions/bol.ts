@@ -767,7 +767,7 @@ export async function sendBOLEmail(bolId: string, options?: { subject?: string; 
 
     const { data: bol, error } = await supabase
       .from("bols")
-      .select("id, bol_number, status, consignee_name, consignee_email")
+      .select("id, bol_number, status, consignee_name, consignee_email, load_id")
       .eq("id", bolId)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
@@ -804,6 +804,40 @@ export async function sendBOLEmail(bolId: string, options?: { subject?: string; 
     })
 
     if (emailResult.error) return { error: emailResult.error.message || "Failed to send email", data: null }
+
+    if (bol.load_id) {
+      try {
+        const { data: loadRef } = await supabase
+          .from("loads")
+          .select("customer_id")
+          .eq("id", bol.load_id)
+          .eq("company_id", ctx.companyId)
+          .maybeSingle()
+        if (loadRef?.customer_id) {
+          await supabase.from("contact_history").insert({
+            company_id: ctx.companyId,
+            customer_id: loadRef.customer_id,
+            type: "email",
+            subject,
+            message: bodyText,
+            direction: "outbound",
+            load_id: bol.load_id,
+            user_id: ctx.userId ?? null,
+            occurred_at: new Date().toISOString(),
+            external_id: emailResult.data?.id || null,
+            source: "email",
+            metadata: {
+              email_kind: "bol_send",
+              to: bol.consignee_email,
+              bol_id: bol.id,
+              bol_number: bol.bol_number,
+            },
+          })
+        }
+      } catch (logError) {
+        Sentry.captureException(logError)
+      }
+    }
 
     if (bol.status === "draft") {
       await supabase.from("bols").update({ status: "sent" }).eq("id", bolId).eq("company_id", ctx.companyId)

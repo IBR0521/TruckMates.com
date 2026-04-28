@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { getPlanFeatureAccessStatus } from "@/app/actions/plan-feature-access"
 import { getTerminals } from "@/app/actions/terminals"
+import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 export default function FleetMapPage() {
   const [vehicles, setVehicles] = useState<any[]>([])
@@ -53,6 +54,7 @@ export default function FleetMapPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [geofencingAllowed, setGeofencingAllowed] = useState(true)
   const [planName, setPlanName] = useState("starter")
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [mapCenter, setMapCenter] = useState<[number, number]>([37.7749, -122.4194])
   const [zoom, setZoom] = useState(6)
   const [geofences, setGeofences] = useState<any[]>([])
@@ -392,7 +394,10 @@ export default function FleetMapPage() {
                 {activeTab === "vehicles" ? `Vehicles (${vehicles.length})` : `Zones (${geofences.length})`}
               </h3>
               {activeTab === "zones" && (
-                <Button size="sm" disabled={!geofencingAllowed} onClick={() => setShowGeofenceDialog(true)}>
+                <Button
+                  size="sm"
+                  onClick={() => (geofencingAllowed ? setShowGeofenceDialog(true) : setShowUpgradeModal(true))}
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Create Zone
                 </Button>
@@ -524,7 +529,10 @@ export default function FleetMapPage() {
                     <Card className="p-5 text-center">
                       <p className="text-sm font-medium text-foreground mb-1">No zones created yet</p>
                       <p className="text-xs text-muted-foreground mb-3">Create geofences for entry/exit alerts.</p>
-                      <Button size="sm" disabled={!geofencingAllowed} onClick={() => setShowGeofenceDialog(true)}>
+                      <Button
+                        size="sm"
+                        onClick={() => (geofencingAllowed ? setShowGeofenceDialog(true) : setShowUpgradeModal(true))}
+                      >
                         <Plus className="h-4 w-4 mr-2" />
                         Create First Zone
                       </Button>
@@ -557,9 +565,9 @@ export default function FleetMapPage() {
                   <p className="text-xs text-amber-300">
                     Geofencing requires a paid plan. You are on <span className="font-semibold capitalize">{planName}</span>.
                   </p>
-                  <Link href="/dashboard/settings/billing">
-                    <Button size="sm" className="h-8">Upgrade Plan</Button>
-                  </Link>
+                  <Button size="sm" className="h-8" onClick={() => setShowUpgradeModal(true)}>
+                    Upgrade Plan
+                  </Button>
                 </div>
               </div>
             )}
@@ -615,9 +623,9 @@ export default function FleetMapPage() {
                     <Lock className="mx-auto mb-2 h-5 w-5 text-amber-400" />
                     <p className="text-sm font-semibold text-foreground">Geofencing is locked on your plan</p>
                     <p className="mt-1 text-xs text-muted-foreground">Upgrade to Fleet or Enterprise to create zones and alerts.</p>
-                    <Link href="/dashboard/settings/billing" className="mt-3 inline-block">
-                      <Button size="sm">Upgrade Plan</Button>
-                    </Link>
+                    <Button size="sm" className="mt-3" onClick={() => setShowUpgradeModal(true)}>
+                      Upgrade Plan
+                    </Button>
                   </div>
                 </div>
               )}
@@ -643,7 +651,11 @@ export default function FleetMapPage() {
                       <>
                         <p className="text-sm font-semibold text-foreground">No zones created</p>
                         <p className="mt-1 text-xs text-muted-foreground">Draw your first geofence zone for entry/exit alerts.</p>
-                        <Button size="sm" className="mt-3" onClick={() => setShowGeofenceDialog(true)}>
+                        <Button
+                          size="sm"
+                          className="mt-3"
+                          onClick={() => (geofencingAllowed ? setShowGeofenceDialog(true) : setShowUpgradeModal(true))}
+                        >
                           <Plus className="mr-2 h-4 w-4" />
                           Draw First Zone
                         </Button>
@@ -689,6 +701,7 @@ export default function FleetMapPage() {
             onSubmit={async (e) => {
               e.preventDefault()
               if (!geofencingAllowed) {
+                setShowUpgradeModal(true)
                 toast.error("Geofencing is available on Fleet and Enterprise plans.")
                 return
               }
@@ -1221,6 +1234,7 @@ export default function FleetMapPage() {
           </form>
         </DialogContent>
       </Dialog>
+      <UpgradeModal open={showUpgradeModal} onOpenChange={setShowUpgradeModal} feature="geofencing" />
     </div>
   )
 }

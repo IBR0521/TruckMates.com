@@ -72,6 +72,7 @@ export function TripPlanningEstimatorPanel({
     return suggestedRoutingDestination?.trim() ?? ""
   })
   const [mpg, setMpg] = useState("6.5")
+  const [gallonsNeeded, setGallonsNeeded] = useState("")
   const [grossLbs, setGrossLbs] = useState(
     truckGrossWeightLbs && truckGrossWeightLbs > 0 ? String(truckGrossWeightLbs) : "80000",
   )
@@ -146,6 +147,7 @@ export function TripPlanningEstimatorPanel({
             : routingDestination
           ).trim(),
         mpg: mpgNum,
+        gallonsNeeded: gallonsNeeded.trim() ? Number(gallonsNeeded) : undefined,
         truck: {
           grossWeightLbs: Number.isFinite(gross) && gross > 0 ? gross : undefined,
           axleCount: Number.isFinite(axleCount) && axleCount > 0 ? axleCount : undefined,
@@ -261,7 +263,7 @@ export function TripPlanningEstimatorPanel({
           </div>
         )}
 
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-7">
           <div>
             <Label htmlFor={pid("origin")}>Origin</Label>
             <Input
@@ -291,6 +293,19 @@ export function TripPlanningEstimatorPanel({
               min="1"
               value={mpg}
               onChange={(e) => setMpg(e.target.value)}
+              className="mt-1 h-10"
+            />
+          </div>
+          <div>
+            <Label htmlFor={pid("gallons-needed")}>Gallons needed</Label>
+            <Input
+              id={pid("gallons-needed")}
+              type="number"
+              step="0.1"
+              min="1"
+              value={gallonsNeeded}
+              onChange={(e) => setGallonsNeeded(e.target.value)}
+              placeholder="Auto from route"
               className="mt-1 h-10"
             />
           </div>
@@ -420,6 +435,44 @@ export function TripPlanningEstimatorPanel({
                 )}
               </div>
             </div>
+
+            {estimate.fuel?.optimizer?.recommendations?.length ? (
+              <div>
+                <p className="text-sm font-medium text-foreground mb-2">
+                  Fuel optimizer (top 3 stops)
+                </p>
+                <div className="overflow-x-auto rounded border border-border/50">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-secondary/30 text-left">
+                        <th className="px-3 py-2">Stop</th>
+                        <th className="px-3 py-2">Price</th>
+                        <th className="px-3 py-2">Out-of-route</th>
+                        <th className="px-3 py-2">Score</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {estimate.fuel.optimizer.recommendations.map((stop) => (
+                        <tr key={stop.id} className="border-b border-border/40">
+                          <td className="px-3 py-2">
+                            <p className="font-medium text-foreground">#{stop.rank} {stop.name}</p>
+                            <p className="text-xs text-muted-foreground">{stop.address}</p>
+                          </td>
+                          <td className="px-3 py-2">${stop.estimatedPricePerGallon.toFixed(3)}/gal</td>
+                          <td className="px-3 py-2">{stop.milesOutOfRoute.toFixed(1)} mi</td>
+                          <td className="px-3 py-2 font-medium">
+                            ${stop.scoreUsd.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Score = (price x gallons) + (out-of-route miles x fuel cost per mile).
+                </p>
+              </div>
+            ) : null}
 
             {(estimate.warnings?.length ?? 0) > 0 && (
               <div className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">

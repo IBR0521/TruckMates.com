@@ -22,6 +22,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+function calculateCalendarNightsBetween(pickupRaw: string, deliveryRaw: string): number {
+  const pickup = new Date(pickupRaw)
+  const delivery = new Date(deliveryRaw)
+  if (Number.isNaN(pickup.getTime()) || Number.isNaN(delivery.getTime()) || delivery <= pickup) return 0
+  const start = new Date(Date.UTC(pickup.getUTCFullYear(), pickup.getUTCMonth(), pickup.getUTCDate()))
+  const end = new Date(Date.UTC(delivery.getUTCFullYear(), delivery.getUTCMonth(), delivery.getUTCDate()))
+  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 86400000))
+}
+
 export default function CreateSettlementPage() {
   const router = useRouter()
   const [drivers, setDrivers] = useState<any[]>([])
@@ -93,10 +102,7 @@ export default function CreateSettlementPage() {
         const pickupRaw = load?.load_date || load?.pickup_date || load?.created_at
         const deliveryRaw = load?.actual_delivery || load?.estimated_delivery || pickupRaw
         if (!pickupRaw || !deliveryRaw) return sum
-        const pickupDate = new Date(pickupRaw)
-        const deliveryDate = new Date(deliveryRaw)
-        if (Number.isNaN(pickupDate.getTime()) || Number.isNaN(deliveryDate.getTime()) || deliveryDate <= pickupDate) return sum
-        const nights = Math.ceil((deliveryDate.getTime() - pickupDate.getTime()) / (24 * 60 * 60 * 1000))
+        const nights = calculateCalendarNightsBetween(String(pickupRaw), String(deliveryRaw))
         return sum + Math.max(0, nights)
       }, 0)
       setPerDiemEligibleNights(calculatedNights)

@@ -70,6 +70,9 @@ function calcConfidence(daysDiff: number, amountDiff: number): number {
   return Math.max(0, Math.min(100, score))
 }
 
+const AUTO_MATCH_MIN_CONFIDENCE = 70
+const AUTO_MATCH_BATCH_SIZE = 500
+
 export async function importBankStatementCsv(input: {
   csvText: string
   fileName?: string
@@ -155,17 +158,6 @@ export async function autoMatchBankTransactions(statementImportId: string) {
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null }
 
-    const { data: txns, error: txnError } = await supabase
-      .from("bank_statement_transactions")
-      .select("id, txn_date, amount, direction, status")
-      .eq("company_id", ctx.companyId)
-      .eq("statement_import_id", statementImportId)
-      .eq("status", "unmatched")
-      .eq("direction", "debit")
-      .limit(10000)
-
-    if (txnError) return { error: safeDbError(txnError), data: null }
-
     const { data: expenses, error: expenseError } = await supabase
       .from("expenses")
       .select("id, date, amount")
@@ -185,51 +177,68 @@ export async function autoMatchBankTransactions(statementImportId: string) {
     if (invoiceError) return { error: safeDbError(invoiceError), data: null }
 
     let matchedCount = 0
-    for (const txn of txns || []) {
-      const txnDate = String(txn.txn_date || "")
-      const txnAmount = Number(txn.amount || 0)
-      if (!txnDate || txnAmount <= 0) continue
-
-      let best: { entityType: MatchEntityType; entityId: string; confidence: number } | null = null
-
-      for (const e of expenses || []) {
-        const d = String(e.date || "")
-        const amount = Number(e.amount || 0)
-        if (!d || amount <= 0) continue
-        const amountDiff = Math.abs(amount - txnAmount)
-        if (amountDiff > 0.01) continue
-        const days = dateDistanceInDays(txnDate, d)
-        if (days > 7) continue
-        const confidence = calcConfidence(days, amountDiff)
-        if (!best || confidence > best.confidence) best = { entityType: "expense", entityId: e.id, confidence }
-      }
-
-      for (const inv of paidInvoices || []) {
-        const d = String(inv.paid_date || "")
-        const amount = Number(inv.amount || 0)
-        if (!d || amount <= 0) continue
-        const amountDiff = Math.abs(amount - txnAmount)
-        if (amountDiff > 0.01) continue
-        const days = dateDistanceInDays(txnDate, d)
-        if (days > 7) continue
-        const confidence = calcConfidence(days, amountDiff)
-        if (!best || confidence > best.confidence) best = { entityType: "vendor_invoice_payment", entityId: inv.id, confidence }
-      }
-
-      if (!best) continue
-
-      const { error: updateError } = await supabase
+    // Keep processing unmatched rows in bounded chunks.
+    for (let guard = 0; guard < 200; guard++) {
+      const { data: txns, error: txnError } = await supabase
         .from("bank_statement_transactions")
-        .update({
-          status: "matched",
-          matched_entity_type: best.entityType,
-          matched_entity_id: best.entityId,
-          confidence_score: best.confidence,
-        })
-        .eq("id", txn.id)
+        .select("id, txn_date, amount, direction, status")
         .eq("company_id", ctx.companyId)
+        .eq("statement_import_id", statementImportId)
+        .eq("status", "unmatched")
+        .eq("direction", "debit")
+        .order("txn_date", { ascending: false })
+        .limit(AUTO_MATCH_BATCH_SIZE)
 
-      if (!updateError) matchedCount += 1
+      if (txnError) return { error: safeDbError(txnError), data: null }
+      if (!txns || txns.length === 0) break
+
+      for (const txn of txns) {
+        const txnDate = String(txn.txn_date || "")
+        const txnAmount = Number(txn.amount || 0)
+        if (!txnDate || txnAmount <= 0) continue
+
+        let best: { entityType: MatchEntityType; entityId: string; confidence: number } | null = null
+
+        for (const e of expenses || []) {
+          const d = String(e.date || "")
+          const amount = Number(e.amount || 0)
+          if (!d || amount <= 0) continue
+          const amountDiff = Math.abs(amount - txnAmount)
+          if (amountDiff > 0.01) continue
+          const days = dateDistanceInDays(txnDate, d)
+          if (days > 7) continue
+          const confidence = calcConfidence(days, amountDiff)
+          if (!best || confidence > best.confidence) best = { entityType: "expense", entityId: e.id, confidence }
+        }
+
+        for (const inv of paidInvoices || []) {
+          const d = String(inv.paid_date || "")
+          const amount = Number(inv.amount || 0)
+          if (!d || amount <= 0) continue
+          const amountDiff = Math.abs(amount - txnAmount)
+          if (amountDiff > 0.01) continue
+          const days = dateDistanceInDays(txnDate, d)
+          if (days > 7) continue
+          const confidence = calcConfidence(days, amountDiff)
+          if (!best || confidence > best.confidence) best = { entityType: "vendor_invoice_payment", entityId: inv.id, confidence }
+        }
+
+        if (!best) continue
+        if (best.confidence < AUTO_MATCH_MIN_CONFIDENCE) continue
+
+        const { error: updateError } = await supabase
+          .from("bank_statement_transactions")
+          .update({
+            status: "matched",
+            matched_entity_type: best.entityType,
+            matched_entity_id: best.entityId,
+            confidence_score: best.confidence,
+          })
+          .eq("id", txn.id)
+          .eq("company_id", ctx.companyId)
+
+        if (!updateError) matchedCount += 1
+      }
     }
 
     revalidatePath("/dashboard/payables/reconcile")
