@@ -32,7 +32,7 @@ describe("hos-engine", () => {
   })
 
   it("enforces 11-hour driving rule", () => {
-    if (!computeHosClocks) return
+    if (!computeHosClocks) throw new Error("Module failed to load — check the import path")
     const logs = [
       entry("1", "2026-05-05", "driving", "2026-05-05T00:00:00.000Z", "2026-05-05T11:00:00.000Z"),
     ]
@@ -42,7 +42,7 @@ describe("hos-engine", () => {
   })
 
   it("enforces 14-hour on-duty window", () => {
-    if (!computeHosClocks) return
+    if (!computeHosClocks) throw new Error("Module failed to load — check the import path")
     const logs = [
       entry("1", "2026-05-05", "on_duty", "2026-05-05T00:00:00.000Z", "2026-05-05T06:00:00.000Z"),
       entry("2", "2026-05-05", "driving", "2026-05-05T06:00:00.000Z", "2026-05-05T14:00:00.000Z"),
@@ -52,7 +52,7 @@ describe("hos-engine", () => {
   })
 
   it("enforces 70-hour/8-day cycle", () => {
-    if (!computeHosClocks) return
+    if (!computeHosClocks) throw new Error("Module failed to load — check the import path")
     const logs = Array.from({ length: 8 }).map((_, idx) =>
       entry(
         String(idx),
@@ -67,7 +67,7 @@ describe("hos-engine", () => {
   })
 
   it("requires 30-minute break after 8 hours driving", () => {
-    if (!computeHosClocks) return
+    if (!computeHosClocks) throw new Error("Module failed to load — check the import path")
     const noBreak = [
       entry("1", "2026-05-05", "driving", "2026-05-05T00:00:00.000Z", "2026-05-05T08:00:00.000Z"),
     ]
@@ -92,7 +92,7 @@ describe("hos-engine", () => {
   })
 
   it("detects split sleeper berth eligibility (8/2)", () => {
-    if (!computeHosClocks) return
+    if (!computeHosClocks) throw new Error("Module failed to load — check the import path")
     const logs = [
       entry("1", "2026-05-05", "sleeper_berth", "2026-05-05T00:00:00.000Z", "2026-05-05T08:00:00.000Z"),
       entry("2", "2026-05-05", "off_duty", "2026-05-05T08:00:00.000Z", "2026-05-05T10:00:00.000Z"),
