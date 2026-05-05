@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { ClientProviders } from "@/components/providers/client-providers"
+import { PostHogProvider } from "@/components/providers/posthog-provider"
 import { GoogleMapsRootScript } from "@/components/google-maps-root-script"
 import { ErrorBoundary } from "@/app/error-boundary"
 import "@/lib/env-validation"
@@ -63,9 +64,11 @@ export default function RootLayout({
           Skip to main content
         </a>
         <ErrorBoundary>
-          <ClientProviders>
-            {children}
-          </ClientProviders>
+          <PostHogProvider>
+            <ClientProviders>
+              {children}
+            </ClientProviders>
+          </PostHogProvider>
         </ErrorBoundary>
         <Analytics />
       </body>

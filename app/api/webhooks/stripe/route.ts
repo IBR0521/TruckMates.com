@@ -3,6 +3,7 @@ import { errorMessage } from "@/lib/error-message"
 import { headers } from "next/headers"
 import Stripe from "stripe"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { capturePostHogServerEvent } from "@/lib/analytics/posthog-server"
 
 function getStripe() {
   const secretKey = process.env.STRIPE_SECRET_KEY
@@ -177,6 +178,13 @@ async function handleSubscriptionUpdated(supabase: any, subscription: Stripe.Sub
     console.error("Error upserting subscription:", error)
     throw error
   }
+
+  await capturePostHogServerEvent(`company:${companyId}`, "plan_upgraded", {
+    company_id: companyId,
+    plan_id: planId,
+    stripe_subscription_id: subscription.id,
+    status,
+  })
 
   console.log(`Subscription updated for company ${companyId}`)
 }

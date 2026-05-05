@@ -8,6 +8,7 @@ import { getELDMileageData } from "./eld"
 import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 import { STATE_FUEL_TAX_RATES, getFuelTaxRate } from "@/lib/fuel-tax-rates"
 import * as Sentry from "@sentry/nextjs"
+import { capturePostHogServerEvent } from "@/lib/analytics/posthog-server"
 
 
 function safeDbError(error: unknown, fallback = "Database operation failed"): string {
@@ -411,6 +412,14 @@ Options:
   if (error) {
     return { error: safeDbError(error), data: null }
   }
+
+  await capturePostHogServerEvent(ctx.userId || `company:${ctx.companyId}`, "ifta_report_generated", {
+    company_id: ctx.companyId,
+    user_id: ctx.userId || null,
+    ifta_report_id: data?.id || null,
+    quarter: formData.quarter,
+    year: formData.year,
+  })
 
   revalidatePath("/dashboard/ifta")
   return { data, error: null }

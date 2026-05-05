@@ -10,6 +10,7 @@ import { validateDriverData, sanitizeString, sanitizeEmail, sanitizePhone } from
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { mapLegacyRole } from "@/lib/roles"
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
+import { capturePostHogServerEvent } from "@/lib/analytics/posthog-server"
 import {
   collapseDuplicateDriversByEmail,
   purgeAllDriversKeepOneForCompany,
@@ -595,6 +596,13 @@ export async function createDriver(formData: {
   if (error) {
     return { error: safeDbError(error), data: null }
   }
+
+  await capturePostHogServerEvent(ctx.userId || `company:${ctx.companyId}`, "driver_added", {
+    company_id: ctx.companyId,
+    user_id: ctx.userId || null,
+    driver_id: data?.id || null,
+    driver_name: data?.name || null,
+  })
 
   revalidatePath("/dashboard/drivers")
   return { data, error: null }

@@ -7,6 +7,7 @@ import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
 import { getResendClientForCompany } from "@/lib/resend-client"
 import { buildInvoicePacketAttachments, buildInvoicePacketEmailContent } from "@/lib/invoice-packet-build"
+import { capturePostHogServerEvent } from "@/lib/analytics/posthog-server"
 
 /** Exported for factoring / other transactional email that uses the same Resend integration. */
 export async function getResendClient() {
@@ -253,6 +254,13 @@ export async function sendInvoiceEmail(
       .update({ status: "sent" })
       .eq("id", invoiceId)
       .eq("company_id", ctx.companyId)
+
+    await capturePostHogServerEvent(ctx.userId || `company:${ctx.companyId}`, "invoice_sent", {
+      company_id: ctx.companyId,
+      user_id: ctx.userId || null,
+      invoice_id: invoiceId,
+      resend_email_id: emailResult.data?.id || null,
+    })
 
     revalidatePath("/dashboard/accounting/invoices")
     revalidatePath(`/dashboard/accounting/invoices/${invoiceId}`)

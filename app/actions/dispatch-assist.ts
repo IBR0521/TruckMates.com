@@ -39,6 +39,7 @@ export interface DriverSuggestion {
   conflicts: string[]
   hos_violations: string[]
   estimated_profit?: number
+  ai_recommendation?: string
 }
 
 export interface LoadRequirements {
@@ -53,6 +54,95 @@ export interface LoadRequirements {
   priority?: string
   load_date?: Date
   estimated_delivery?: Date
+}
+
+function extractJsonObject(text: string): Record<string, unknown> | null {
+  const trimmed = text.trim()
+  try {
+    const parsed = JSON.parse(trimmed)
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null
+  } catch {
+    const start = trimmed.indexOf("{")
+    const end = trimmed.lastIndexOf("}")
+    if (start >= 0 && end > start) {
+      try {
+        const parsed = JSON.parse(trimmed.slice(start, end + 1))
+        return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null
+      } catch {
+        return null
+      }
+    }
+    return null
+  }
+}
+
+async function addAiRecommendationToTopSuggestions(suggestions: DriverSuggestion[]): Promise<void> {
+  if (!suggestions.length) return
+  const apiKey = String(process.env.ANTHROPIC_API_KEY || "").trim()
+  if (!apiKey) return
+
+  const topThree = suggestions.slice(0, 3).map((s) => ({
+    driver_id: s.driver_id,
+    driver_name: s.driver_name,
+    truck_number: s.truck_number,
+    score: s.score,
+    distance_miles: s.distance_miles,
+    remaining_drive_hours: s.remaining_drive_hours,
+    remaining_on_duty_hours: s.remaining_on_duty_hours,
+    equipment_match: s.equipment_match,
+    can_complete: s.can_complete,
+    conflicts_count: s.conflicts.length,
+    hos_violations_count: s.hos_violations.length,
+    top_reason: s.reasons[0] || null,
+  }))
+
+  const prompt = [
+    "You are helping a freight dispatcher choose a driver.",
+    "Given the top 3 scored drivers JSON, return JSON only with one concise sentence recommendation.",
+    'Schema: {"ai_recommendation":"string"}',
+    "Mention the best driver by name and one key reason from the stats.",
+    "No markdown. One sentence only.",
+    "",
+    JSON.stringify({ top_drivers: topThree }),
+  ].join("\n")
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 220,
+      temperature: 0,
+      messages: [
+        {
+          role: "user",
+          content: [{ type: "text", text: prompt }],
+        },
+      ],
+    }),
+  })
+
+  if (!response.ok) return
+
+  const payload = (await response.json()) as {
+    content?: Array<{ type?: string; text?: string }>
+  }
+  const text = (payload.content || [])
+    .filter((c) => c.type === "text" && typeof c.text === "string")
+    .map((c) => c.text as string)
+    .join("\n")
+
+  const parsed = extractJsonObject(text)
+  const recommendation = String(parsed?.ai_recommendation || "").trim()
+  if (!recommendation) return
+
+  for (let i = 0; i < Math.min(3, suggestions.length); i += 1) {
+    suggestions[i].ai_recommendation = recommendation
+  }
 }
 
 /**
@@ -353,6 +443,7 @@ export async function getOptimalDriverSuggestions(
 
     // Sort by score (highest first)
     suggestions.sort((a, b) => b.score - a.score)
+    await addAiRecommendationToTopSuggestions(suggestions)
 
     // Limit to max suggestions
     const maxSuggestions = options?.max_suggestions || 5
@@ -545,6 +636,7 @@ export async function getOptimalDriverSuggestionsForRoute(
     }
 
     suggestions.sort((a, b) => b.score - a.score)
+    await addAiRecommendationToTopSuggestions(suggestions)
 
     const maxSuggestions = options?.max_suggestions || 5
     return { data: suggestions.slice(0, maxSuggestions), error: null }

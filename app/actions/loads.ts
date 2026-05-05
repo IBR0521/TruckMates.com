@@ -12,6 +12,7 @@ import { sendNotification } from "./notifications"
 import { validateLoadData, validatePricingData, sanitizeString, sanitizeEmail, sanitizePhone, validateAddress } from "@/lib/validation"
 import { ALL_LOAD_STATUSES, getAllowedNextLoadStatuses, normalizeLoadStatus, parseLoadStatus } from "@/lib/load-status"
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
+import { capturePostHogServerEvent } from "@/lib/analytics/posthog-server"
 
 /** Subset of load fields used for background notifications after updates */
 type LoadUpdateNotificationPayload = {
@@ -979,6 +980,13 @@ export async function createLoad(formData: {
   } catch (error) {
     Sentry.captureException(error)
   }
+
+  await capturePostHogServerEvent(ctx.userId || `company:${ctx.companyId}`, "load_created", {
+    company_id: ctx.companyId,
+    user_id: ctx.userId || null,
+    load_id: data.id,
+    shipment_number: shipmentNumber,
+  })
 
   revalidatePath("/dashboard/loads")
   revalidatePath("/dashboard/routes")
