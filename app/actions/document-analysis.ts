@@ -108,8 +108,44 @@ function normalizeType(type: string): ExtractedData["type"] {
   return "expense"
 }
 
-async function fetchFileAsBase64(fileUrl: string): Promise<{ base64: string; mediaType: string }> {
-  const response = await fetch(fileUrl)
+function parseDataUrl(input: string): { base64: string; mediaType: string } | null {
+  const trimmed = input.trim()
+  const match = /^data:([^;,]+)?;base64,(.+)$/i.exec(trimmed)
+  if (!match) return null
+  return {
+    mediaType: match[1] || "application/octet-stream",
+    base64: match[2],
+  }
+}
+
+function looksLikeBase64(input: string): boolean {
+  const trimmed = input.trim()
+  if (!trimmed) return false
+  if (trimmed.startsWith("data:")) return true
+  if (trimmed.includes("http://") || trimmed.includes("https://")) return false
+  return /^[A-Za-z0-9+/=\s]+$/.test(trimmed) && trimmed.replace(/\s+/g, "").length > 32
+}
+
+async function toBase64AndMediaType(input: {
+  source: string
+  fileName: string
+}): Promise<{ base64: string; mediaType: string }> {
+  const source = String(input.source || "").trim()
+  if (!source) throw new Error("No document source provided")
+
+  const parsedDataUrl = parseDataUrl(source)
+  if (parsedDataUrl) {
+    return parsedDataUrl
+  }
+
+  if (looksLikeBase64(source)) {
+    return {
+      base64: source.replace(/\s+/g, ""),
+      mediaType: pickExtensionMediaType(input.fileName),
+    }
+  }
+
+  const response = await fetch(source)
   if (!response.ok) {
     throw new Error(`Failed to fetch file URL (${response.status})`)
   }
@@ -118,11 +154,11 @@ async function fetchFileAsBase64(fileUrl: string): Promise<{ base64: string; med
   return { base64: buffer.toString("base64"), mediaType }
 }
 
-async function runClaudeDocumentAnalysis(fileUrl: string, fileName: string): Promise<ExtractedData> {
+async function runClaudeDocumentAnalysis(source: string, fileName: string): Promise<ExtractedData> {
   const apiKey = String(process.env.ANTHROPIC_API_KEY || "").trim()
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured")
 
-  const { base64, mediaType: detectedType } = await fetchFileAsBase64(fileUrl)
+  const { base64, mediaType: detectedType } = await toBase64AndMediaType({ source, fileName })
   const mediaType = detectedType !== "application/octet-stream" ? detectedType : pickExtensionMediaType(fileName)
   const isPdf = mediaType.includes("pdf") || fileName.toLowerCase().endsWith(".pdf")
 
@@ -226,13 +262,13 @@ async function runClaudeDocumentAnalysis(fileUrl: string, fileName: string): Pro
   } as ExtractedData
 }
 
-export async function analyzeDocument(fileUrl: string, fileName: string): Promise<{
+export async function analyzeDocument(source: string, fileName: string): Promise<{
   data: ExtractedData | null
   error: string | null
   warning?: string | null
 }> {
   try {
-    const data = await runClaudeDocumentAnalysis(fileUrl, fileName)
+    const data = await runClaudeDocumentAnalysis(source, fileName)
     return { data, error: null, warning: null }
   } catch (error: unknown) {
     return { data: null, error: errorMessage(error, "Document analysis failed"), warning: null }

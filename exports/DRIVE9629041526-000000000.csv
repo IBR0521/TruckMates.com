@@ -1,0 +1,22 @@
+ELD File:,EB
+Driver FMCSA,Test,eld.test.508196,TX,CDL-508196,,,,,,TruckMates Carrier,,,TruckMates ELD,TMELD01,AUTH-TM-TEST,FMCSA upload qualification test file,F7
+User List:,3A
+1,D,Driver FMCSA,Test,EA
+CMV List:,70
+1,1HGBH41JXMN109186,ELD-508196,F9
+ELD Event List:,F9
+1,1,1,1,1,041526,110000,125615,5426.3,29.7604,-95.3698,1,1,,,,03
+2,1,1,1,4,041526,103000,125615,5426.3,29.7604,-95.3698,1,1,,,,53
+3,1,1,1,3,041526,063000,125615,5425.8,29.7604,-95.3698,1,1,,,,98
+4,1,1,1,4,041526,060000,125430,5421.7,29.7604,-95.3698,1,1,,,,23
+5,1,1,1,1,041526,000000,125430,5421.3,29.7604,-95.3698,1,1,,,,C3
+ELD Event Annotations or Comments:,A4
+,,Generated for FMCSA qualification testing,041526,182300,,,041526,182300,,1,10
+Driver's Certification/Recertification Actions:,68
+1,1,041526,182300,1,Certified by test driver,B9
+Malfunctions and Data Diagnostic Events:,30
+ELD Login/Logout Report:,FD
+1,1,5,1,041526,182300,125615,5426.3,80
+CMV Engine Power-Up and Shut Down Activity:,19
+Unidentified Driver Profile Records:,9A
+End of File:,CE17,86

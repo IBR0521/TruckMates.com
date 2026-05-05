@@ -2,6 +2,7 @@ import { storage } from "./storage"
 import { pushDvirs, pushEvents, pushLocations, pushLogs } from "./eld-api"
 import type { ELDDvir, ELDEvent, ELDLocation, ELDLog } from "../types/eld"
 import { supabase } from "./supabase"
+import AsyncStorage from "@react-native-async-storage/async-storage"
 
 type QueueItem =
   | { type: "locations"; payload: ELDLocation[] }
@@ -10,6 +11,7 @@ type QueueItem =
   | { type: "dvirs"; payload: ELDDvir[] }
 
 const STORAGE_KEY = "eld_sync_queue_v1"
+const FAILED_SYNC_PREFIX = "sync_queue_"
 const DEVICE_ID_KEY = "eld_device_id_v1"
 const LAST_USER_ID_KEY = "eld_last_user_id_v1"
 const scopedKey = (base: string, userId: string) => `${base}:${userId}`
@@ -61,6 +63,23 @@ async function getQueue(): Promise<QueueItem[]> {
 async function setQueue(items: QueueItem[]): Promise<void> {
   const key = await getQueueKey()
   await storage.set(key, items)
+}
+
+function isLikelyNetworkError(error: unknown): boolean {
+  const message = String((error as Error)?.message || error || "").toLowerCase()
+  return (
+    message.includes("network request failed") ||
+    message.includes("network error") ||
+    message.includes("failed to fetch") ||
+    message.includes("fetch failed") ||
+    message.includes("timeout") ||
+    message.includes("timed out")
+  )
+}
+
+async function persistFailedNetworkItem(item: QueueItem): Promise<void> {
+  const key = `${FAILED_SYNC_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  await AsyncStorage.setItem(key, JSON.stringify(item))
 }
 
 export async function enqueue(item: QueueItem): Promise<void> {
@@ -125,7 +144,11 @@ export async function flushQueue(token: string, deviceId: string): Promise<void>
 
     try {
       await sendItem({ type, payload } as QueueItem)
-    } catch {
+    } catch (error: unknown) {
+      if (isLikelyNetworkError(error)) {
+        await persistFailedNetworkItem({ type, payload } as QueueItem)
+        return
+      }
       if (payload.length <= 1) {
         remaining.push({ type, payload } as QueueItem)
         return
@@ -143,6 +166,40 @@ export async function flushQueue(token: string, deviceId: string): Promise<void>
   await flushTypeWithIsolation("locations", buckets.locations)
 
   await setQueue(remaining)
+}
+
+export async function drainQueue(token: string, deviceId: string): Promise<void> {
+  const entries = await AsyncStorage.getAllKeys()
+  const queuedKeys = entries.filter((key) => key.startsWith(FAILED_SYNC_PREFIX)).sort()
+  if (!queuedKeys.length) return
+
+  for (const key of queuedKeys) {
+    try {
+      const raw = await AsyncStorage.getItem(key)
+      if (!raw) {
+        await AsyncStorage.removeItem(key)
+        continue
+      }
+
+      const item = JSON.parse(raw) as QueueItem
+      if (!item || !item.type || !Array.isArray(item.payload)) {
+        await AsyncStorage.removeItem(key)
+        continue
+      }
+
+      if (item.type === "locations") await pushLocations(token, deviceId, item.payload)
+      if (item.type === "logs") await pushLogs(token, deviceId, item.payload)
+      if (item.type === "events") await pushEvents(token, deviceId, item.payload)
+      if (item.type === "dvirs") await pushDvirs(token, deviceId, item.payload)
+
+      await AsyncStorage.removeItem(key)
+    } catch (error: unknown) {
+      // Keep item in storage if still offline or transient failure.
+      if (isLikelyNetworkError(error)) return
+      // Non-network parse/shape errors should not block the queue forever.
+      await AsyncStorage.removeItem(key).catch(() => {})
+    }
+  }
 }
 
 async function tryFlushNow(): Promise<void> {

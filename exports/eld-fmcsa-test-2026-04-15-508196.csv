@@ -1,0 +1,52 @@
+Block,Field,Value
+USER_INFO,DriverName,Test Driver FMCSA
+USER_INFO,DriverEmail,eld.test.508196@example.com
+USER_INFO,LogDateUTC,2026-04-15
+USER_INFO,ELDProvider,other
+VEHICLE_INFO,TruckNumber,ELD-508196
+VEHICLE_INFO,VIN,1HGBH41JXMN109186
+VEHICLE_INFO,DeviceSerial,ELD-SN-508196
+POWER_UNIT_INFO,StartingOdometer,125430
+POWER_UNIT_INFO,EndingOdometer,125615
+POWER_UNIT_INFO,StartingEngineHours,5421.3
+POWER_UNIT_INFO,EndingEngineHours,5426.3
+EVENT_DATA,EventIndex,1
+EVENT_DATA,DutyStatus,off_duty
+EVENT_DATA,StartTimeUTC,2026-04-15 00:00
+EVENT_DATA,DurationMinutes,360
+EVENT_DATA,OdometerStart,125430
+EVENT_DATA,OdometerEnd,125430
+EVENT_DATA,MilesDriven,0
+EVENT_DATA,EngineHours,5421.3
+EVENT_DATA,EventIndex,2
+EVENT_DATA,DutyStatus,on_duty
+EVENT_DATA,StartTimeUTC,2026-04-15 06:00
+EVENT_DATA,DurationMinutes,30
+EVENT_DATA,OdometerStart,125430
+EVENT_DATA,OdometerEnd,125430
+EVENT_DATA,MilesDriven,0
+EVENT_DATA,EngineHours,5421.7
+EVENT_DATA,EventIndex,3
+EVENT_DATA,DutyStatus,driving
+EVENT_DATA,StartTimeUTC,2026-04-15 06:30
+EVENT_DATA,DurationMinutes,240
+EVENT_DATA,OdometerStart,125430
+EVENT_DATA,OdometerEnd,125615
+EVENT_DATA,MilesDriven,185
+EVENT_DATA,EngineHours,5425.8
+EVENT_DATA,EventIndex,4
+EVENT_DATA,DutyStatus,on_duty
+EVENT_DATA,StartTimeUTC,2026-04-15 10:30
+EVENT_DATA,DurationMinutes,30
+EVENT_DATA,OdometerStart,125615
+EVENT_DATA,OdometerEnd,125615
+EVENT_DATA,MilesDriven,0
+EVENT_DATA,EngineHours,5426.3
+EVENT_DATA,EventIndex,5
+EVENT_DATA,DutyStatus,off_duty
+EVENT_DATA,StartTimeUTC,2026-04-15 11:00
+EVENT_DATA,DurationMinutes,780
+EVENT_DATA,OdometerStart,125615
+EVENT_DATA,OdometerEnd,125615
+EVENT_DATA,MilesDriven,0
+EVENT_DATA,EngineHours,5426.3

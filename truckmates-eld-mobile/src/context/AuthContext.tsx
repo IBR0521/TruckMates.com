@@ -2,7 +2,8 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import { supabase } from "../services/supabase"
 import { registerDevice } from "../services/eld-api"
 import { storage } from "../services/storage"
-import { flushQueue, setQueueUserContext } from "../services/sync-queue"
+import NetInfo from "@react-native-community/netinfo"
+import { drainQueue, flushQueue, setQueueUserContext } from "../services/sync-queue"
 
 type AuthContextValue = {
   loading: boolean
@@ -155,6 +156,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     run()
     const id = setInterval(run, 5000)
     return () => clearInterval(id)
+  }, [sessionToken, deviceId])
+
+  // Retry persisted failed sync jobs as soon as connectivity is restored.
+  useEffect(() => {
+    if (!sessionToken || !deviceId) return
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      const online = Boolean(state.isConnected && state.isInternetReachable !== false)
+      if (!online) return
+      void drainQueue(sessionToken, deviceId).catch(() => {})
+    })
+    return () => unsubscribe()
   }, [sessionToken, deviceId])
 
   const value = useMemo<AuthContextValue>(
