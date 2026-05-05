@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import {
   User,
   Save,
@@ -13,6 +14,7 @@ import {
   Globe,
   Download,
   Trash2,
+  ShieldAlert,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
@@ -20,6 +22,12 @@ import { useRouter } from "next/navigation"
 import { getAccountSettings, updateAccountSettings, changePassword } from "@/app/actions/settings-account"
 import { getCompanySettings, updateCompanySettings } from "@/app/actions/number-formats"
 import { deleteMyOwnAccount } from "@/app/actions/account-privacy"
+import {
+  createDataSubjectRequest,
+  getDataSubjectExportPayload,
+  getMyDataSubjectRequests,
+  type DataSubjectRequestRow,
+} from "@/app/actions/data-subject-requests"
 import { createClient } from "@/lib/supabase/client"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
@@ -39,7 +47,14 @@ export default function AccountSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [isSubmittingPrivacyRequest, setIsSubmittingPrivacyRequest] = useState(false)
+  const [privacyRequests, setPrivacyRequests] = useState<DataSubjectRequestRow[]>([])
   const [deleteConfirm, setDeleteConfirm] = useState("")
+  const [privacyForm, setPrivacyForm] = useState({
+    jurisdiction: "gdpr" as "gdpr" | "ccpa",
+    request_type: "access_export" as "access_export" | "deletion" | "rectification" | "restriction",
+    description: "",
+  })
   const [showPassword, setShowPassword] = useState(false)
   const [account, setAccount] = useState({
     full_name: "",
@@ -80,6 +95,19 @@ export default function AccountSettingsPage() {
       }
     }
     loadSettings()
+  }, [])
+
+  const loadPrivacyRequests = async () => {
+    const result = await getMyDataSubjectRequests()
+    if (result.error) {
+      toast.error(result.error)
+      return
+    }
+    setPrivacyRequests(result.data)
+  }
+
+  useEffect(() => {
+    void loadPrivacyRequests()
   }, [])
 
   const handleSaveProfile = async () => {
@@ -189,6 +217,47 @@ export default function AccountSettingsPage() {
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const handleSubmitPrivacyRequest = async () => {
+    setIsSubmittingPrivacyRequest(true)
+    try {
+      const result = await createDataSubjectRequest({
+        jurisdiction: privacyForm.jurisdiction,
+        request_type: privacyForm.request_type,
+        description: privacyForm.description,
+      })
+      if (!result.success || result.error) {
+        toast.error(result.error || "Could not submit request")
+        return
+      }
+      toast.success("Privacy request submitted")
+      setPrivacyForm((prev) => ({ ...prev, description: "" }))
+      await loadPrivacyRequests()
+    } finally {
+      setIsSubmittingPrivacyRequest(false)
+    }
+  }
+
+  const handleDownloadRequestExport = async (requestId: string) => {
+    const result = await getDataSubjectExportPayload(requestId)
+    if (result.error || !result.data) {
+      toast.error(result.error || "No export available")
+      return
+    }
+    const blob = new Blob([JSON.stringify(result.data, null, 2)], {
+      type: "application/json;charset=utf-8",
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `data-subject-request-${requestId}.json`
+    a.rel = "noopener"
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+    toast.success("Export downloaded")
   }
 
   return (
@@ -354,6 +423,96 @@ export default function AccountSettingsPage() {
           <Button type="button" variant="outline" onClick={handleExportData} disabled={isExporting}>
             {isExporting ? "Preparing…" : "Download data export"}
           </Button>
+        </Card>
+
+        <Card className="p-6 border-primary/20">
+          <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5" />
+            GDPR / CCPA data subject requests
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Submit a formal request for access/export, deletion, rectification, or restriction. SLA is 30 days (GDPR) and 45 days (CCPA).
+          </p>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Jurisdiction</Label>
+              <Select
+                value={privacyForm.jurisdiction}
+                onValueChange={(value: "gdpr" | "ccpa") =>
+                  setPrivacyForm((prev) => ({ ...prev, jurisdiction: value }))
+                }
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gdpr">GDPR (30 days)</SelectItem>
+                  <SelectItem value="ccpa">CCPA (45 days)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Request Type</Label>
+              <Select
+                value={privacyForm.request_type}
+                onValueChange={(value: "access_export" | "deletion" | "rectification" | "restriction") =>
+                  setPrivacyForm((prev) => ({ ...prev, request_type: value }))
+                }
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="access_export">Access / Data export</SelectItem>
+                  <SelectItem value="deletion">Deletion</SelectItem>
+                  <SelectItem value="rectification">Rectification</SelectItem>
+                  <SelectItem value="restriction">Restriction of processing</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="mt-4 space-y-2">
+            <Label>Details (optional)</Label>
+            <Textarea
+              value={privacyForm.description}
+              onChange={(e) => setPrivacyForm((prev) => ({ ...prev, description: e.target.value }))}
+              placeholder="Provide any context that helps your privacy team process this request."
+              rows={3}
+            />
+          </div>
+          <div className="mt-4">
+            <Button type="button" onClick={handleSubmitPrivacyRequest} disabled={isSubmittingPrivacyRequest}>
+              {isSubmittingPrivacyRequest ? "Submitting..." : "Submit formal request"}
+            </Button>
+          </div>
+          <div className="mt-6 space-y-3">
+            <h3 className="text-sm font-semibold">My request history</h3>
+            {privacyRequests.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No requests submitted yet.</p>
+            ) : (
+              privacyRequests.map((row) => (
+                <div key={row.id} className="rounded-md border border-border p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium">
+                      {row.request_type.replaceAll("_", " ")} · {row.jurisdiction.toUpperCase()}
+                    </div>
+                    <div className="text-muted-foreground">
+                      Status: <span className="text-foreground font-medium">{row.status}</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Requested {new Date(row.requested_at).toLocaleString()} · Due {new Date(row.due_at).toLocaleDateString()}
+                  </p>
+                  {row.response_notes ? (
+                    <p className="text-xs mt-2 text-muted-foreground">{row.response_notes}</p>
+                  ) : null}
+                  {row.status === "completed" ? (
+                    <div className="mt-2">
+                      <Button variant="outline" size="sm" onClick={() => void handleDownloadRequestExport(row.id)}>
+                        Download request export
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </div>
         </Card>
 
         <Card className="p-6 border-destructive/40">

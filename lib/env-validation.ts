@@ -34,6 +34,7 @@ const envConfig: EnvConfig = {
     'QUICKBOOKS_CLIENT_ID',
     'QUICKBOOKS_CLIENT_SECRET',
     'NEXT_PUBLIC_APP_URL',
+    'ANTHROPIC_API_KEY',
   ],
   defaults: {
     NODE_ENV: 'development',
@@ -60,7 +61,7 @@ export function validateEnv(): { valid: boolean; errors: string[]; warnings: str
   }
 
   // Check optional but recommended variables
-  const recommended = ['NEXT_PUBLIC_SENTRY_DSN', 'RESEND_API_KEY']
+  const recommended = ['NEXT_PUBLIC_SENTRY_DSN', 'RESEND_API_KEY', 'ANTHROPIC_API_KEY']
   for (const key of recommended) {
     if (!process.env[key] && process.env.NODE_ENV === 'production') {
       warnings.push(`Recommended environment variable not set: ${key}`)
@@ -71,6 +72,22 @@ export function validateEnv(): { valid: boolean; errors: string[]; warnings: str
     warnings.push(
       'CRON_SECRET is not set — scheduled /api/cron/* routes return 401 and will not run (Vercel Cron requires this bearer token).',
     )
+  }
+
+  // ELD webhook HMAC secrets (self-generated; register with provider). Optional — many carriers omit ELD.
+  if (process.env.NODE_ENV === 'production') {
+    const eldWebhookSecrets: Array<[string, string]> = [
+      ['SAMSARA_WEBHOOK_SECRET', 'Samsara'],
+      ['KEEPTRUCKIN_WEBHOOK_SECRET', 'Motive (KeepTruckin)'],
+      ['GEOTAB_WEBHOOK_SECRET', 'Geotab'],
+    ]
+    for (const [key, label] of eldWebhookSecrets) {
+      if (!String(process.env[key] || '').trim()) {
+        warnings.push(
+          `${key} is not set — POST /api/webhooks/eld for ${label} will return 401 until configured (optional ELD integration).`,
+        )
+      }
+    }
   }
 
   // Validate format of known variables

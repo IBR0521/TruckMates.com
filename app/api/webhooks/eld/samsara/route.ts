@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
-import { createClient } from "@/lib/supabase/server"
 import crypto from "crypto"
 
 /**

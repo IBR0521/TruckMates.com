@@ -20,6 +20,9 @@
     "dev:alt": "next dev -p 3001",
     "dev:open": "npm run dev:platform",
     "lint": "eslint .",
+    "test": "vitest",
+    "test:unit": "vitest --run",
+    "test:ci": "vitest --run --reporter=dot",
     "start": "next start",
     "e2e:smoke": "node scripts/truckmates-smoke.mjs",
     "eld:generate-test-csv": "node scripts/generate-eld-test-csv.mjs",
@@ -98,6 +101,7 @@
     "stripe": "^20.0.0",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
+    "twilio": "^6.0.0",
     "vaul": "^1.1.2",
     "xlsx": "^0.18.5",
     "zod": "3.25.76"
@@ -115,9 +119,17 @@
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",
     "typescript": "^5",
-    "typescript-eslint": "^8.58.0"
+    "typescript-eslint": "^8.58.0",
+    "vitest": "^4.1.5"
   },
   "overrides": {
     "react-is": "19.2.4"
+  },
+  "vitest": {
+    "test": {
+      "alias": {
+        "@": "."
+      }
+    }
   }
 }

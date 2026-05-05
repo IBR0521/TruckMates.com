@@ -6,9 +6,21 @@ import { HosScreen } from "../screens/HosScreen"
 import { DvirScreen } from "../screens/DVIRScreen"
 import { SettingsScreen } from "../screens/SettingsScreen"
 import { ViolationsScreen } from "../screens/ViolationsScreen"
+import { CurrentLoadScreen } from "../screens/CurrentLoadScreen"
+import { PODCaptureScreen } from "../screens/PODCaptureScreen"
+import { NavigationScreen } from "../screens/NavigationScreen"
 import { colors } from "../theme/tokens"
 
-type TabKey = "home" | "hos" | "dvir" | "alerts" | "dot" | "settings"
+type TabKey =
+  | "home"
+  | "hos"
+  | "dvir"
+  | "alerts"
+  | "dot"
+  | "currentLoad"
+  | "podCapture"
+  | "navigation"
+  | "settings"
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "home", label: "Home" },
@@ -16,6 +28,9 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "dvir", label: "DVIR" },
   { key: "alerts", label: "Alerts" },
   { key: "dot", label: "DOT" },
+  { key: "currentLoad", label: "Current Load" },
+  { key: "podCapture", label: "POD Capture" },
+  { key: "navigation", label: "Navigation" },
   { key: "settings", label: "Settings" },
 ]
 
@@ -28,6 +43,9 @@ export function AppShell() {
     if (tab === "dvir") return <DvirScreen />
     if (tab === "alerts") return <ViolationsScreen />
     if (tab === "dot") return <DotInspectionScreen />
+    if (tab === "currentLoad") return <CurrentLoadScreen />
+    if (tab === "podCapture") return <PODCaptureScreen />
+    if (tab === "navigation") return <NavigationScreen />
     return <SettingsScreen />
   }, [tab])
 

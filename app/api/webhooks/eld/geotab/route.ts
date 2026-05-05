@@ -1,12 +1,37 @@
 import { NextRequest, NextResponse } from "next/server"
+import crypto from "crypto"
 import { errorMessage } from "@/lib/error-message"
-import { createClient } from "@/lib/supabase/server"
 
 /**
  * Geotab Webhook Endpoint
  * Receives real-time HOS logs, locations, and events from Geotab ELD devices
  * Geotab uses a different webhook format (DataChange events)
  */
+
+function verifyGeotabSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  secret: string
+): boolean {
+  if (!signatureHeader) return false
+
+  const trimmed = signatureHeader.trim()
+  const signatureValue = trimmed.toLowerCase().startsWith("sha256=")
+    ? trimmed.slice(7).trim()
+    : trimmed
+
+  const expectedHex = crypto
+    .createHmac("sha256", secret)
+    .update(rawBody, "utf8")
+    .digest("hex")
+
+  const sigBuffer = Buffer.from(signatureValue, "utf8")
+  const expectedBuffer = Buffer.from(expectedHex, "utf8")
+  if (sigBuffer.length !== expectedBuffer.length) {
+    return false
+  }
+  return crypto.timingSafeEqual(sigBuffer, expectedBuffer)
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,26 +43,16 @@ export async function POST(request: NextRequest) {
     }
 
     const signature = request.headers.get("x-geotab-signature")
-    if (!signature) {
-      console.error("[Geotab Webhook] Missing signature header")
-      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
-    }
 
     // Get raw body for HMAC verification
     const rawBody = await request.text()
-    const body = JSON.parse(rawBody)
 
-    // Verify HMAC SHA256 signature
-    const crypto = await import("crypto")
-    const expectedSignature = crypto
-      .createHmac("sha256", webhookSecret)
-      .update(rawBody)
-      .digest("hex")
-
-    if (signature.length !== expectedSignature.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
-      console.error("[Geotab Webhook] Invalid signature")
+    if (!verifyGeotabSignature(rawBody, signature, webhookSecret)) {
+      console.error("[Geotab Webhook] Invalid or missing signature")
       return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
     }
+
+    const body = JSON.parse(rawBody)
 
     // SECURITY: Use admin client for webhooks (no user session)
     const { createAdminClient } = await import("@/lib/supabase/admin")

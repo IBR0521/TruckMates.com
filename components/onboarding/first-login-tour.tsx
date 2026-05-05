@@ -36,7 +36,7 @@ export function FirstLoginTour() {
       const tour = new Shepherd.Tour({
         useModalOverlay: true,
         defaultStepOptions: {
-          classes: "shadow-xl rounded-lg border border-border bg-card text-foreground",
+          classes: "tm-tour-step",
           cancelIcon: { enabled: true },
           scrollTo: { behavior: "smooth", block: "center" },
         },
@@ -48,53 +48,54 @@ export function FirstLoginTour() {
 
       tour.addStep({
         id: "truck-step",
-        title: "Step 1 of 4: Create your first truck",
-        text: "Start by setting up your first vehicle. Click Vehicles, then add a truck.",
+        title: "Getting Started (1/4)",
+        text: "Create your first truck from Vehicles to activate dispatch and route planning.",
         attachTo: { element: 'a[href="/dashboard/trucks"]', on: "right" },
         buttons: [
-          { text: "Skip tour", action: tour.cancel },
-          { text: "Next", action: tour.next },
+          { text: "Skip", action: tour.cancel, classes: "tm-tour-btn tm-tour-btn-ghost" },
+          { text: "Next", action: tour.next, classes: "tm-tour-btn tm-tour-btn-primary" },
         ],
         beforeShowPromise: () => waitForElement('a[href="/dashboard/trucks"]'),
       })
 
       tour.addStep({
         id: "driver-step",
-        title: "Step 2 of 4: Create your first driver",
-        text: "Next, add your first driver so dispatch and HOS workflows can begin.",
+        title: "Add Driver (2/4)",
+        text: "Add your first driver so assignments, ELD, and compliance workflows can start.",
         attachTo: { element: 'a[href="/dashboard/drivers"]', on: "right" },
         buttons: [
-          { text: "Back", action: tour.back },
-          { text: "Next", action: tour.next },
+          { text: "Back", action: tour.back, classes: "tm-tour-btn tm-tour-btn-ghost" },
+          { text: "Next", action: tour.next, classes: "tm-tour-btn tm-tour-btn-primary" },
         ],
         beforeShowPromise: () => waitForElement('a[href="/dashboard/drivers"]'),
       })
 
       tour.addStep({
         id: "load-step",
-        title: "Step 3 of 4: Create your first load",
-        text: "Create your first load to kick off dispatch, tracking, and billing.",
+        title: "Create Load (3/4)",
+        text: "Create your first load to start dispatch, live tracking, and settlement flow.",
         attachTo: { element: 'a[href="/dashboard/loads"]', on: "right" },
         buttons: [
-          { text: "Back", action: tour.back },
-          { text: "Next", action: tour.next },
+          { text: "Back", action: tour.back, classes: "tm-tour-btn tm-tour-btn-ghost" },
+          { text: "Next", action: tour.next, classes: "tm-tour-btn tm-tour-btn-primary" },
         ],
         beforeShowPromise: () => waitForElement('a[href="/dashboard/loads"]'),
       })
 
       tour.addStep({
         id: "invoice-step",
-        title: "Step 4 of 4: Generate your first invoice",
-        text: "Finish your first workflow by generating an invoice in Accounting.",
+        title: "Generate Invoice (4/4)",
+        text: "Finish onboarding by generating your first invoice in Accounting.",
         attachTo: { element: 'a[href="/dashboard/accounting/invoices"]', on: "right" },
         buttons: [
-          { text: "Back", action: tour.back },
+          { text: "Back", action: tour.back, classes: "tm-tour-btn tm-tour-btn-ghost" },
           {
             text: "Finish",
             action: () => {
               void done()
               tour.complete()
             },
+            classes: "tm-tour-btn tm-tour-btn-primary",
           },
         ],
         beforeShowPromise: () => waitForElement('a[href="/dashboard/accounting/invoices"]'),

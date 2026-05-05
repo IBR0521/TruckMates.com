@@ -102,7 +102,11 @@ function applySecurityHeaders(response: NextResponse, nonce: string) {
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)')
-  response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
+  // Never send HSTS on local dev — Next.js listens on plain HTTP; browsers cache HSTS and then
+  // retry https://localhost, which yields "invalid response".
+  if (process.env.NODE_ENV === 'production') {
+    response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
+  }
 }
 
 const DASHBOARD_ROUTE_FEATURES: Array<{ pattern: RegExp; feature: FeatureCategory }> = [

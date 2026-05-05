@@ -17,8 +17,8 @@ function safeDbError(error: unknown, fallback = "Database operation failed"): st
 
 async function ensurePredictiveMaintenanceAccess() {
   return {
-    allowed: false as const,
-    error: "Predictive maintenance is temporarily disabled while AI features are being rebuilt.",
+    allowed: true as const,
+    error: null,
   }
 }
 
@@ -70,39 +70,53 @@ export async function predictMaintenanceNeeds(truckId?: string) {
     return { data: [], error: null }
   }
 
-  // Get maintenance history for these trucks - use DISTINCT ON to get only most recent per service type per truck
   const truckIds = trucks.map((t: { id: string; [key: string]: any }) => t.id)
-  
-  // Use a more efficient query: get only the most recent maintenance per service type per truck
-  // This prevents loading entire history into memory
-  const { data: maintenanceHistory } = await supabase
-    .from("maintenance")
-    .select("truck_id, service_type, mileage, scheduled_date")
+
+  // Primary source requested by product spec: maintenance_records + eld_logs.
+  // If maintenance_records table is absent in some environments, fall back to maintenance.
+  const { data: maintenanceRecords, error: maintenanceRecordsError } = await supabase
+    .from("maintenance_records")
+    .select("truck_id, service_type, mileage, service_date, completed_date, created_at")
     .in("truck_id", truckIds)
-    .eq("status", "completed")
-    .order("scheduled_date", { ascending: false })
-    .limit(1000) // Cap at 1000 rows to prevent memory issues
+    .order("service_date", { ascending: false })
+    .limit(5000)
 
-  // Predict maintenance needs
+  const { data: maintenanceFallback } = maintenanceRecordsError
+    ? await supabase
+        .from("maintenance")
+        .select("truck_id, service_type, mileage, completed_date, scheduled_date, created_at")
+        .in("truck_id", truckIds)
+        .eq("status", "completed")
+        .order("completed_date", { ascending: false })
+        .limit(5000)
+    : { data: null }
+
+  const records = (maintenanceRecordsError ? maintenanceFallback : maintenanceRecords) || []
+
+  const { data: eldLogs } = await supabase
+    .from("eld_logs")
+    .select("truck_id, miles_driven, odometer_end, end_time, start_time")
+    .in("truck_id", truckIds)
+    .order("start_time", { ascending: false })
+    .limit(15000)
+
   const predictions = trucks.map((truck: { id: string; truck_number: string; make: string | null; model: string | null; mileage: number | null; [key: string]: any }) => {
-    const truckMaintenance = maintenanceHistory?.filter((m: { truck_id: string; service_type: string; mileage: number | null; scheduled_date: string; [key: string]: any }) => m.truck_id === truck.id) || []
-    
-    // Calculate miles since last maintenance
-    const lastMaintenance = truckMaintenance[0]
-    const currentMileage = truck.mileage || 0
-    const milesSinceLastMaintenance = lastMaintenance
-      ? currentMileage - (lastMaintenance.mileage || 0)
-      : currentMileage
+    const truckRecords = records.filter((r: any) => r.truck_id === truck.id)
+    const truckLogs = (eldLogs || []).filter((l: any) => l.truck_id === truck.id)
+    const currentMileage = Number(truck.mileage || 0)
 
-    // Standard maintenance intervals (miles)
-    const maintenanceIntervals = {
-      oil_change: 10000,
-      tire_rotation: 15000,
-      brake_inspection: 20000,
-      major_service: 50000,
+    const groupedByService = new Map<string, Array<{ mileage: number; date: string | null }>>()
+    for (const record of truckRecords) {
+      const serviceType = String(record.service_type || "General Service").trim() || "General Service"
+      const mileage = Number(record.mileage || 0)
+      const serviceDate = String(record.service_date || record.completed_date || record.scheduled_date || record.created_at || "")
+      if (!groupedByService.has(serviceType)) groupedByService.set(serviceType, [])
+      groupedByService.get(serviceType)?.push({
+        mileage,
+        date: serviceDate || null,
+      })
     }
 
-    // Predict what maintenance is needed
     const needs: Array<{
       type: string
       priority: "high" | "medium" | "low"
@@ -110,44 +124,59 @@ export async function predictMaintenanceNeeds(truckId?: string) {
       estimated_mileage: number
     }> = []
 
-    // Oil change prediction
-    if (milesSinceLastMaintenance >= maintenanceIntervals.oil_change * 0.9) {
-      needs.push({
-        type: "Oil Change",
-        priority: milesSinceLastMaintenance >= maintenanceIntervals.oil_change ? "high" : "medium",
-        reason: `Miles since last maintenance: ${milesSinceLastMaintenance.toLocaleString()}`,
-        estimated_mileage: (lastMaintenance?.mileage || 0) + maintenanceIntervals.oil_change,
-      })
-    }
+    let milesSinceLastMaintenance = 0
+    let lastMaintenanceDate: string | null = null
 
-    // Tire rotation prediction
-    if (milesSinceLastMaintenance >= maintenanceIntervals.tire_rotation * 0.9) {
-      needs.push({
-        type: "Tire Rotation",
-        priority: milesSinceLastMaintenance >= maintenanceIntervals.tire_rotation ? "high" : "medium",
-        reason: `Miles since last maintenance: ${milesSinceLastMaintenance.toLocaleString()}`,
-        estimated_mileage: (lastMaintenance?.mileage || 0) + maintenanceIntervals.tire_rotation,
-      })
-    }
+    for (const [serviceType, entries] of groupedByService.entries()) {
+      const sortedByMileage = [...entries]
+        .filter((e) => Number.isFinite(e.mileage) && e.mileage > 0)
+        .sort((a, b) => a.mileage - b.mileage)
+      const latest = sortedByMileage[sortedByMileage.length - 1]
+      if (!latest) continue
 
-    // Brake inspection prediction
-    if (milesSinceLastMaintenance >= maintenanceIntervals.brake_inspection * 0.9) {
-      needs.push({
-        type: "Brake Inspection",
-        priority: milesSinceLastMaintenance >= maintenanceIntervals.brake_inspection ? "high" : "medium",
-        reason: `Miles since last maintenance: ${milesSinceLastMaintenance.toLocaleString()}`,
-        estimated_mileage: (lastMaintenance?.mileage || 0) + maintenanceIntervals.brake_inspection,
-      })
-    }
+      const intervals: number[] = []
+      for (let i = 1; i < sortedByMileage.length; i += 1) {
+        const diff = sortedByMileage[i].mileage - sortedByMileage[i - 1].mileage
+        if (diff > 0) intervals.push(diff)
+      }
 
-    // Major service prediction
-    if (milesSinceLastMaintenance >= maintenanceIntervals.major_service * 0.9) {
+      let avgInterval = intervals.length
+        ? intervals.reduce((sum, value) => sum + value, 0) / intervals.length
+        : 0
+
+      if (!avgInterval || !Number.isFinite(avgInterval)) {
+        const recentMiles = truckLogs
+          .map((l: any) => Number(l.miles_driven || 0))
+          .filter((v: number) => Number.isFinite(v) && v > 0)
+        if (recentMiles.length > 0) {
+          avgInterval = recentMiles.reduce((sum: number, value: number) => sum + value, 0)
+        }
+      }
+
+      if (!avgInterval || avgInterval <= 0) continue
+
+      const dueMileage = latest.mileage + avgInterval
+      const thresholdMileage = dueMileage - avgInterval * 0.1
+      const overdue = currentMileage >= dueMileage
+      const nearDue = !overdue && currentMileage >= thresholdMileage
+      if (!overdue && !nearDue) continue
+
+      const milesRemaining = Math.max(0, Math.round(dueMileage - currentMileage))
       needs.push({
-        type: "Major Service",
-        priority: milesSinceLastMaintenance >= maintenanceIntervals.major_service ? "high" : "medium",
-        reason: `Miles since last maintenance: ${milesSinceLastMaintenance.toLocaleString()}`,
-        estimated_mileage: (lastMaintenance?.mileage || 0) + maintenanceIntervals.major_service,
+        type: serviceType,
+        priority: overdue ? "high" : "medium",
+        reason: overdue
+          ? `Overdue by ${Math.round(currentMileage - dueMileage).toLocaleString()} miles. Avg interval ${Math.round(avgInterval).toLocaleString()} miles.`
+          : `Due soon (~${milesRemaining.toLocaleString()} miles remaining). Avg interval ${Math.round(avgInterval).toLocaleString()} miles.`,
+        estimated_mileage: Math.round(dueMileage),
       })
+
+      if (latest.date) {
+        if (!lastMaintenanceDate || new Date(latest.date).getTime() > new Date(lastMaintenanceDate).getTime()) {
+          lastMaintenanceDate = latest.date
+          milesSinceLastMaintenance = Math.max(0, Math.round(currentMileage - latest.mileage))
+        }
+      }
     }
 
     return {
@@ -157,7 +186,7 @@ export async function predictMaintenanceNeeds(truckId?: string) {
       model: truck.model,
       current_mileage: currentMileage,
       miles_since_last_maintenance: milesSinceLastMaintenance,
-      last_maintenance_date: lastMaintenance?.scheduled_date || null,
+      last_maintenance_date: lastMaintenanceDate,
       predicted_needs: needs,
       priority: needs.some((n) => n.priority === "high") ? "high" : needs.length > 0 ? "medium" : "low",
     }

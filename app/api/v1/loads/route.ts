@@ -23,18 +23,27 @@ export async function GET(request: NextRequest) {
   if (!rl.allowed) return NextResponse.json({ error: rl.error }, { status: rl.status })
   try {
     const url = new URL(request.url)
-    const page = Math.max(1, Number(url.searchParams.get("page") || 1))
     const perPage = Math.min(100, Math.max(1, Number(url.searchParams.get("per_page") || 100)))
-    const from = (page - 1) * perPage
-    const to = from + perPage - 1
+    const page = Math.max(1, Number(url.searchParams.get("page") || 1))
+    const cursor = (url.searchParams.get("cursor") || "").trim() || null
 
     const supabase = createAdminClient()
-    const { data, error } = await supabase
+    let query = supabase
       .from("loads")
       .select("id, shipment_number, origin, destination, status, driver_id, truck_id, load_date, estimated_delivery, value, created_at, updated_at")
       .eq("company_id", auth.companyId)
-      .order("created_at", { ascending: false })
-      .range(from, to)
+      .order("id", { ascending: true })
+      .limit(perPage + 1)
+
+    if (cursor) {
+      query = query.gt("id", cursor)
+    } else {
+      const from = (page - 1) * perPage
+      const to = from + perPage
+      query = query.range(from, to)
+    }
+
+    const { data, error } = await query
 
     const status = error ? 500 : 200
     await recordApiUsage({
@@ -48,8 +57,23 @@ export async function GET(request: NextRequest) {
       userAgent: auth.userAgent,
     })
     if (error) return NextResponse.json({ error: error.message || "Failed to fetch loads" }, { status })
-    const nextPage = (data || []).length === perPage ? page + 1 : null
-    return NextResponse.json({ data: data || [], next_page: nextPage }, { status: 200 })
+    const rows = data || []
+    const hasMore = rows.length > perPage
+    const sliced = hasMore ? rows.slice(0, perPage) : rows
+    const nextCursor = hasMore ? String(sliced[sliced.length - 1]?.id || "") : null
+    const nextPage = !cursor && hasMore ? page + 1 : null
+
+    const response = NextResponse.json(
+      { data: sliced, next_cursor: nextCursor, next_page: nextPage },
+      { status: 200 },
+    )
+    if (nextCursor) {
+      const nextUrl = new URL(request.url)
+      nextUrl.searchParams.set("cursor", nextCursor)
+      nextUrl.searchParams.set("per_page", String(perPage))
+      response.headers.set("Link", `<${nextUrl.toString()}>; rel="next"`)
+    }
+    return response
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
