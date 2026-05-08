@@ -158,9 +158,10 @@ async function executeDriverAssignment(payload: Record<string, unknown>): Promis
       .eq("id", driverId)
       .maybeSingle()
 
-    if ((driver as { user_id?: string | null } | null)?.user_id) {
+    const driverUserId = (driver as { user_id?: string | null } | null)?.user_id
+    if (driverUserId) {
       const { sendPushToUser } = await import("@/app/actions/push-notifications")
-      await sendPushToUser(String(driver.user_id), {
+      await sendPushToUser(String(driverUserId), {
         title: "New load assignment",
         body: "TruckMates AI assigned you a load.",
         data: {
