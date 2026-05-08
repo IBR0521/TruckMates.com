@@ -136,7 +136,11 @@ async function toBase64AndMediaType(input: {
   return { base64: buffer.toString("base64"), mediaType }
 }
 
-async function runClaudeDocumentAnalysis(source: string, fileName: string): Promise<{
+async function runClaudeDocumentAnalysis(
+  source: string,
+  fileName: string,
+  companyId: string | null
+): Promise<{
   extractedData: ExtractedData | null
   error: string | null
 }> {
@@ -176,7 +180,13 @@ async function runClaudeDocumentAnalysis(source: string, fileName: string): Prom
   const claude = await callClaude<Record<string, unknown>>(
     `${LOGISTICS_SYSTEM_PROMPT}\n\nParse logistics documents into structured JSON.`,
     prompt,
-    { expectJson: true, maxTokens: 1600 },
+    {
+      expectJson: true,
+      maxTokens: 1600,
+      model: "sonnet",
+      feature: "document_analysis",
+      companyId: companyId || undefined,
+    },
   )
   if (claude.error || !claude.data) {
     return { extractedData: null, error: claude.error || "Document analysis unavailable" }
@@ -224,7 +234,8 @@ export async function analyzeDocument(source: string, fileName: string): Promise
   warning?: string | null
 }> {
   try {
-    const result = await runClaudeDocumentAnalysis(source, fileName)
+    const ctx = await getCachedAuthContext()
+    const result = await runClaudeDocumentAnalysis(source, fileName, ctx.companyId || null)
     if (result.error) {
       return { data: null, error: result.error, warning: null }
     }

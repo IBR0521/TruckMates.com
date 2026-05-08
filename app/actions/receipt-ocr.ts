@@ -70,6 +70,7 @@ async function toBase64AndMediaType(input: {
 async function runAnthropicFuelReceiptOCR(input: {
   imageUrl?: string
   imageFile?: File
+  companyId?: string | null
 }): Promise<FuelReceiptResult> {
   const { base64, mediaType } = await toBase64AndMediaType(input)
   const prompt = [
@@ -96,7 +97,13 @@ async function runAnthropicFuelReceiptOCR(input: {
   const claude = await callClaude<Record<string, unknown>>(
     `${LOGISTICS_SYSTEM_PROMPT}\n\nExtract fuel receipt fields into structured JSON.`,
     prompt,
-    { expectJson: true, maxTokens: 900 },
+    {
+      expectJson: true,
+      maxTokens: 900,
+      model: "haiku",
+      feature: "receipt_ocr",
+      companyId: input.companyId || undefined,
+    },
   )
   if (claude.error || !claude.data) {
     throw new Error(claude.error || "Receipt OCR unavailable")
@@ -128,7 +135,12 @@ export async function extractFuelPurchaseFromReceipt(
   }
 
   try {
-    const data = await runAnthropicFuelReceiptOCR({ imageUrl, imageFile })
+    const ctx = await getCachedAuthContext()
+    const data = await runAnthropicFuelReceiptOCR({
+      imageUrl,
+      imageFile,
+      companyId: ctx.companyId || null,
+    })
     return { data, error: null }
   } catch (error: unknown) {
     return { data: null, error: errorMessage(error, "Failed to extract data from receipt") }
@@ -182,6 +194,7 @@ export async function uploadReceiptAndExtract(imageFile: File): Promise<{
     const parsed = await runAnthropicFuelReceiptOCR({
       imageUrl: signedData.signedUrl,
       imageFile,
+      companyId: ctx.companyId,
     })
 
     return {

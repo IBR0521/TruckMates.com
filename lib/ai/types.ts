@@ -10,6 +10,22 @@ export type AiResponse<T> = {
   model?: string
 }
 
+export type AiModel = "haiku" | "sonnet"
+
+export interface AiUsageRecord {
+  id: string
+  companyId: string | null
+  feature: string
+  model: string
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  costUsd: number
+  durationMs: number
+  createdAt: string
+}
+
 export type AutomationLevel = "off" | "notify" | "approval" | "autonomous"
 
 export type AgentAction = {

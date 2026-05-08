@@ -1,8 +1,14 @@
-import type { AiResponse } from "@/lib/ai/types"
+import type { AiModel, AiResponse } from "@/lib/ai/types"
+import { calculateCallCost, logAiUsage } from "@/lib/ai/usage"
 
 type CallClaudeOptions = {
   maxTokens?: number
   expectJson?: boolean
+  model?: AiModel
+  feature?: string
+  companyId?: string
+  cacheSystemPrompt?: boolean
+  cacheContext?: string
 }
 
 type AnthropicMessageResponse = {
@@ -15,10 +21,32 @@ type AnthropicMessageResponse = {
   usage?: {
     input_tokens?: number
     output_tokens?: number
+    cache_creation_input_tokens?: number
+    cache_read_input_tokens?: number
   }
   error?: {
     message?: string
   }
+}
+
+type ClaudeModelName = "claude-haiku-4-5" | "claude-sonnet-4-5"
+
+const MODEL_MAP: Record<AiModel, ClaudeModelName> = {
+  haiku: "claude-haiku-4-5",
+  sonnet: "claude-sonnet-4-5",
+}
+
+const MODEL_RATES: Record<ClaudeModelName, { input: number; output: number; cachedInput: number }> = {
+  "claude-haiku-4-5": {
+    input: 1.0,
+    output: 5.0,
+    cachedInput: 0.1,
+  },
+  "claude-sonnet-4-5": {
+    input: 3.0,
+    output: 15.0,
+    cachedInput: 0.3,
+  },
 }
 
 function extractTextContent(payload: AnthropicMessageResponse): string {
@@ -98,12 +126,28 @@ function toErrorMessage(error: unknown): string {
 export async function callClaude(
   systemPrompt: string,
   userPrompt: string,
-  options?: { maxTokens?: number; expectJson?: false }
+  options?: {
+    maxTokens?: number
+    expectJson?: false
+    model?: AiModel
+    feature?: string
+    companyId?: string
+    cacheSystemPrompt?: boolean
+    cacheContext?: string
+  }
 ): Promise<AiResponse<string>>
 export async function callClaude<T = Record<string, unknown>>(
   systemPrompt: string,
   userPrompt: string,
-  options?: { maxTokens?: number; expectJson?: true }
+  options?: {
+    maxTokens?: number
+    expectJson?: true
+    model?: AiModel
+    feature?: string
+    companyId?: string
+    cacheSystemPrompt?: boolean
+    cacheContext?: string
+  }
 ): Promise<AiResponse<T>>
 export async function callClaude<T = string>(
   systemPrompt: string,
@@ -115,6 +159,32 @@ export async function callClaude<T = string>(
     return { data: null, error: "AI unavailable" }
   }
 
+  const startedAt = Date.now()
+  const routedModel = MODEL_MAP[options.model || "sonnet"]
+  const shouldCacheSystemPrompt = options.cacheSystemPrompt !== false
+  const cacheContext = String(options.cacheContext || "").trim()
+  const feature = String(options.feature || "unknown")
+  const companyId = options.companyId ?? null
+
+  const systemPayload = shouldCacheSystemPrompt
+    ? ([
+        {
+          type: "text",
+          text: systemPrompt,
+          cache_control: { type: "ephemeral" as const },
+        },
+        ...(cacheContext
+          ? [
+              {
+                type: "text",
+                text: cacheContext,
+                cache_control: { type: "ephemeral" as const },
+              },
+            ]
+          : []),
+      ] as Array<{ type: "text"; text: string; cache_control: { type: "ephemeral" } }>)
+    : systemPrompt
+
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -124,8 +194,8 @@ export async function callClaude<T = string>(
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        system: systemPrompt,
+        model: routedModel,
+        system: systemPayload,
         max_tokens: options.maxTokens ?? 1024,
         temperature: 0,
         messages: [
@@ -148,17 +218,47 @@ export async function callClaude<T = string>(
     }
 
     const text = extractTextContent(payload)
-    const tokensUsed =
-      (payload.usage?.input_tokens || 0) + (payload.usage?.output_tokens || 0)
+    const inputTokens = payload.usage?.input_tokens || 0
+    const outputTokens = payload.usage?.output_tokens || 0
+    const cacheWriteTokens = payload.usage?.cache_creation_input_tokens || 0
+    const cacheReadTokens = payload.usage?.cache_read_input_tokens || 0
+    const tokensUsed = inputTokens + outputTokens + cacheWriteTokens + cacheReadTokens
+    const costUsd = calculateCallCost({
+      model: routedModel,
+      inputTokens,
+      outputTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+    })
+    const durationMs = Date.now() - startedAt
+    const expectedCachedInput = MODEL_RATES[routedModel].cachedInput
 
     if (process.env.NODE_ENV === "development") {
       console.log("[AI] callClaude usage", {
-        model: payload.model || "claude-sonnet-4-20250514",
-        inputTokens: payload.usage?.input_tokens || 0,
-        outputTokens: payload.usage?.output_tokens || 0,
+        feature,
+        model: payload.model || routedModel,
+        inputTokens,
+        outputTokens,
+        cacheWriteTokens,
+        cacheReadTokens,
+        expectedCachedInputRatePerM: expectedCachedInput,
         tokensUsed,
+        costUsd,
+        durationMs,
       })
     }
+
+    void logAiUsage({
+      companyId,
+      feature,
+      model: payload.model || routedModel,
+      inputTokens,
+      outputTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+      costUsd,
+      durationMs,
+    })
 
     if (options.expectJson) {
       const parsed = extractJson(text)
@@ -167,7 +267,7 @@ export async function callClaude<T = string>(
           data: null,
           error: "Failed to parse JSON response",
           tokensUsed,
-          model: payload.model || "claude-sonnet-4-20250514",
+          model: payload.model || routedModel,
         }
       }
 
@@ -175,7 +275,7 @@ export async function callClaude<T = string>(
         data: parsed as T,
         error: null,
         tokensUsed,
-        model: payload.model || "claude-sonnet-4-20250514",
+        model: payload.model || routedModel,
       }
     }
 
@@ -183,7 +283,7 @@ export async function callClaude<T = string>(
       data: text as T,
       error: null,
       tokensUsed,
-      model: payload.model || "claude-sonnet-4-20250514",
+      model: payload.model || routedModel,
     }
   } catch (error: unknown) {
     return { data: null, error: toErrorMessage(error) }

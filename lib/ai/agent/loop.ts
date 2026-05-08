@@ -165,6 +165,10 @@ export async function runAgentEvaluation(params: RunAgentEvaluationParams): Prom
   const aiResponse = await callClaude<AiDecisionPayload>(LOGISTICS_SYSTEM_PROMPT, decisionPrompt, {
     expectJson: true,
     maxTokens: 800,
+    model: "sonnet",
+    feature: `agent_${params.trigger}`,
+    companyId: params.companyId,
+    cacheSystemPrompt: true,
   })
 
   if (aiResponse.error || !aiResponse.data) {

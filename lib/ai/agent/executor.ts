@@ -47,7 +47,13 @@ async function buildExecutionSummary(action: AgentAction): Promise<string> {
   const response = await callClaude(
     LOGISTICS_SYSTEM_PROMPT,
     prompt,
-    { maxTokens: 120, expectJson: false }
+    {
+      maxTokens: 120,
+      expectJson: false,
+      model: "haiku",
+      feature: "automation_summary",
+      companyId: action.companyId,
+    }
   )
 
   if (!response.error && response.data) {
