@@ -9,6 +9,7 @@ import * as Sentry from "@sentry/nextjs"
 import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { runAgentEvaluation } from "@/lib/ai/agent/loop"
 
 
 function safeDbError(error: unknown, fallback = "Database operation failed"): string {
@@ -70,6 +71,31 @@ export async function detectIdleTime(
       await supabase.rpc('calculate_idle_fuel_cost', {
         p_session_id: sessionId
       })
+
+      const { data: session } = await supabase
+        .from("idle_time_sessions")
+        .select("id, company_id, truck_id, driver_id, duration_minutes, location_latitude, location_longitude, estimated_fuel_cost")
+        .eq("id", sessionId)
+        .maybeSingle()
+
+      const idleMinutes = Number(session?.duration_minutes || 0)
+      if (session?.company_id && idleMinutes > 20) {
+        runAgentEvaluation({
+          companyId: session.company_id,
+          trigger: "idle_time_alert",
+          triggerData: {
+            truckId: session.truck_id,
+            driverId: session.driver_id || null,
+            idleMinutes,
+            location:
+              session.location_latitude !== null && session.location_longitude !== null
+                ? `${session.location_latitude},${session.location_longitude}`
+                : "unknown",
+            estimatedFuelWasted: Number(session.estimated_fuel_cost || 0),
+          },
+          contextTypes: ["fleet", "driver"],
+        }).catch((err) => console.error("[Agent]", err))
+      }
     }
 
     return { data: { session_id: sessionId }, error: null }

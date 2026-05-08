@@ -6,6 +6,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkCreatePermission, checkViewPermission } from "@/lib/server-permissions"
 import { createMaintenance } from "./maintenance"
 import { sanitizeError } from "@/lib/error-message"
+import { runAgentEvaluation } from "@/lib/ai/agent/loop"
 import * as Sentry from "@sentry/nextjs"
 
 
@@ -197,6 +198,32 @@ export async function predictMaintenanceNeeds(truckId?: string) {
     const priorityOrder = { high: 3, medium: 2, low: 1 }
     return priorityOrder[b.priority as keyof typeof priorityOrder] - priorityOrder[a.priority as keyof typeof priorityOrder]
   })
+
+  for (const prediction of predictions) {
+    const failureProbability =
+      prediction.priority === "high" ? 85 : prediction.priority === "medium" ? 72 : 35
+    if (failureProbability <= 70) continue
+
+    const topNeed = Array.isArray(prediction.predicted_needs) ? prediction.predicted_needs[0] : null
+    runAgentEvaluation({
+      companyId: ctx.companyId,
+      trigger: "predictive_maintenance",
+      triggerData: {
+        truckId: prediction.truck_id,
+        failureProbability,
+        predictedComponent: topNeed?.type || "General Service",
+        recommendedAction: topNeed
+          ? `Schedule ${topNeed.type} service (${topNeed.priority} priority).`
+          : "Schedule maintenance inspection.",
+        currentMileage: Number(prediction.current_mileage || 0),
+        lastServiceMileage: Math.max(
+          0,
+          Number(prediction.current_mileage || 0) - Number(prediction.miles_since_last_maintenance || 0),
+        ),
+      },
+      contextTypes: ["maintenance", "fleet"],
+    }).catch((err) => console.error("[Agent]", err))
+  }
 
   return { data: predictions, error: null }
 }

@@ -73,6 +73,8 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
   const [isDesktop, setIsDesktop] = useState(true)
   const [mounted, setMounted] = useState(false)
   const [userRole, setUserRole] = useState<EmployeeRole | null>(null)
+  const [managerCompanyId, setManagerCompanyId] = useState<string | null>(null)
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0)
   const LAST_ROLE_KEY = "tm:lastKnownUserRole"
 
   // Check if we're on desktop (lg breakpoint = 1024px) - client only
@@ -128,10 +130,12 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
     async function checkUserRole() {
       try {
         let resolvedRole: string | null = null
+        let resolvedCompanyId: string | null = null
         const result = await getCurrentUser()
 
         if (result?.data?.role) {
           resolvedRole = result.data.role
+          resolvedCompanyId = (result.data as any).company_id || null
         } else {
           // Fallback for cases where server action transport fails in client runtime.
           // We still resolve role from DB first (not JWT metadata) to keep parity with auth policy.
@@ -142,11 +146,12 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
           if (authUserId) {
             const { data: userRow } = await supabase
               .from("users")
-              .select("role")
+              .select("role, company_id")
               .eq("id", authUserId)
               .maybeSingle()
 
             resolvedRole = userRow?.role || null
+            resolvedCompanyId = (userRow as any)?.company_id || null
           }
         }
 
@@ -162,17 +167,22 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
           }
 
           const managerRoles: EmployeeRole[] = ["super_admin", "operations_manager"]
-          setIsManager(managerRoles.includes(mappedRole))
+          const nextIsManager = managerRoles.includes(mappedRole)
+          setIsManager(nextIsManager)
+          setManagerCompanyId(nextIsManager ? resolvedCompanyId : null)
         } else {
           const cachedRole = typeof window !== "undefined" ? localStorage.getItem(LAST_ROLE_KEY) : null
           if (cachedRole) {
             const mappedCachedRole = mapLegacyRole(cachedRole) as EmployeeRole
             setUserRole(mappedCachedRole)
             const managerRoles: EmployeeRole[] = ["super_admin", "operations_manager"]
-            setIsManager(managerRoles.includes(mappedCachedRole))
+            const nextIsManager = managerRoles.includes(mappedCachedRole)
+            setIsManager(nextIsManager)
+            setManagerCompanyId(null)
           } else {
             setIsManager(false)
             setUserRole(null)
+            setManagerCompanyId(null)
           }
         }
       } catch (error) {
@@ -183,10 +193,13 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
           const mappedCachedRole = mapLegacyRole(cachedRole) as EmployeeRole
           setUserRole(mappedCachedRole)
           const managerRoles: EmployeeRole[] = ["super_admin", "operations_manager"]
-          setIsManager(managerRoles.includes(mappedCachedRole))
+          const nextIsManager = managerRoles.includes(mappedCachedRole)
+          setIsManager(nextIsManager)
+          setManagerCompanyId(null)
         } else {
           setIsManager(false)
           setUserRole(null)
+          setManagerCompanyId(null)
         }
       } finally {
         if (isMounted) {
@@ -200,6 +213,38 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
       isMounted = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!isManager || !managerCompanyId) {
+      setPendingApprovalsCount(0)
+      return
+    }
+
+    let isActive = true
+    const supabase = createBrowserClient()
+    const fetchPendingCount = async () => {
+      const now = new Date().toISOString()
+      const { count } = await supabase
+        .from("ai_pending_approvals")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", managerCompanyId)
+        .is("resolved_at", null)
+        .gt("expires_at", now)
+      if (isActive) {
+        setPendingApprovalsCount(count || 0)
+      }
+    }
+
+    void fetchPendingCount()
+    const timer = window.setInterval(() => {
+      void fetchPendingCount()
+    }, 60000)
+
+    return () => {
+      isActive = false
+      window.clearInterval(timer)
+    }
+  }, [isManager, managerCompanyId])
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -424,6 +469,13 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
                 <>
                   <NavSectionLabel label="Administration" isCollapsed={shouldShowCollapsed} />
                   <NavItem href="/dashboard/settings/users" icon={UserCog} label="Users & invites" isCollapsed={shouldShowCollapsed} />
+                  <NavItem
+                    href="/dashboard/settings/ai-automation"
+                    icon={Sparkles}
+                    label="AI Automation"
+                    badgeCount={pendingApprovalsCount}
+                    isCollapsed={shouldShowCollapsed}
+                  />
                 </>
               )}
             </>
@@ -472,6 +524,7 @@ interface NavItemProps {
   href: string
   icon?: any
   label: string
+  badgeCount?: number
   isSubitem?: boolean
   isCollapsed?: boolean
 }
@@ -488,7 +541,7 @@ function NavSectionLabel({ label, isCollapsed }: { label: string; isCollapsed?: 
   )
 }
 
-function NavItem({ href, icon: Icon, label, isSubitem, isCollapsed }: NavItemProps) {
+function NavItem({ href, icon: Icon, label, badgeCount, isSubitem, isCollapsed }: NavItemProps) {
   const content = (
     <div
       className={`flex items-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition font-medium ${
@@ -499,7 +552,12 @@ function NavItem({ href, icon: Icon, label, isSubitem, isCollapsed }: NavItemPro
       role={isSubitem ? "menuitem" : undefined}
     >
       {Icon && <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />}
-      {!isCollapsed && <span>{label}</span>}
+      {!isCollapsed && <span className="flex-1">{label}</span>}
+      {!isCollapsed && typeof badgeCount === "number" && badgeCount > 0 ? (
+        <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold text-white">
+          {badgeCount > 99 ? "99+" : badgeCount}
+        </span>
+      ) : null}
     </div>
   )
 

@@ -6,7 +6,53 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { createInvoice } from "./accounting"
 import { checkCreatePermission } from "@/lib/server-permissions"
+import { runAgentEvaluation } from "@/lib/ai/agent/loop"
 import * as Sentry from "@sentry/nextjs"
+
+function getAgingBucket(daysOutstanding: number): { daysOutstanding: 31 | 61 | 90; bucketLabel: "31-60" | "61-90" | "90+" } | null {
+  if (daysOutstanding === 90) return { daysOutstanding: 90, bucketLabel: "90+" }
+  if (daysOutstanding === 61) return { daysOutstanding: 61, bucketLabel: "61-90" }
+  if (daysOutstanding === 31) return { daysOutstanding: 31, bucketLabel: "31-60" }
+  return null
+}
+
+async function triggerInvoiceAgingEvaluations(companyId: string, supabase: Awaited<ReturnType<typeof createClient>>) {
+  try {
+    const { data: invoices } = await supabase
+      .from("invoices")
+      .select("id, company_id, customer_id, amount, issue_date, due_date, status")
+      .eq("company_id", companyId)
+      .not("status", "in", '("paid","cancelled","void")')
+      .limit(1000)
+
+    const now = Date.now()
+    for (const invoice of invoices || []) {
+      const issueDate = invoice.due_date || invoice.issue_date
+      if (!issueDate) continue
+      const issueTs = new Date(issueDate).getTime()
+      if (!Number.isFinite(issueTs) || issueTs > now) continue
+
+      const daysOutstanding = Math.floor((now - issueTs) / (1000 * 60 * 60 * 24))
+      const bucket = getAgingBucket(daysOutstanding)
+      if (!bucket) continue
+
+      runAgentEvaluation({
+        companyId,
+        trigger: "payment_followup",
+        triggerData: {
+          invoiceId: invoice.id,
+          customerId: invoice.customer_id || null,
+          amount: invoice.amount || 0,
+          daysOutstanding: bucket.daysOutstanding,
+          bucketLabel: bucket.bucketLabel,
+        },
+        contextTypes: ["financial"],
+      }).catch((err) => console.error("[Agent]", err))
+    }
+  } catch (err) {
+    console.error("[Agent]", err)
+  }
+}
 
 // BUG-010 FIX: Add try/catch and permission check
 export async function autoGenerateInvoicesFromLoads() {
@@ -186,6 +232,7 @@ export async function autoGenerateInvoicesFromLoads() {
 
     revalidatePath("/dashboard/accounting/invoices")
     revalidatePath("/dashboard/loads")
+    triggerInvoiceAgingEvaluations(ctx.companyId, supabase).catch((err) => console.error("[Agent]", err))
 
     return {
       data: {

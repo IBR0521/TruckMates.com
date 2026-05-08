@@ -1,15 +1,23 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import type React from "react"
 import { PostHogProvider as PHProvider } from "posthog-js/react"
 import { getPostHogBrowserClient, initPostHogBrowser } from "@/lib/analytics/posthog"
 
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
+  const [client, setClient] = useState<any>(null)
+
   useEffect(() => {
-    void initPostHogBrowser()
+    const key = String(process.env.NEXT_PUBLIC_POSTHOG_KEY || "").trim()
+    if (!key) return
+    void (async () => {
+      await initPostHogBrowser()
+      setClient(getPostHogBrowserClient())
+    })()
   }, [])
 
-  return <PHProvider client={getPostHogBrowserClient() as any}>{children}</PHProvider>
+  if (!client) return <>{children}</>
+  return <PHProvider client={client}>{children}</PHProvider>
 }
 

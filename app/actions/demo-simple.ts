@@ -10,6 +10,8 @@ import * as Sentry from "@sentry/nextjs"
 // Never hardcode credentials in source code - use env vars or generate random passwords
 const DEMO_EMAIL = process.env.DEMO_EMAIL || "demo@truckmates.com"
 const DEMO_COMPANY_NAME = process.env.DEMO_COMPANY_NAME || "Demo Logistics Company"
+const SUPABASE_RETRY_ATTEMPTS = 3
+const SUPABASE_RETRY_DELAY_MS = 500
 
 // Use a server-only password. If DEMO_PASSWORD is not configured, generate an ephemeral password
 // per setup run and apply it with admin APIs before server-side sign-in.
@@ -17,6 +19,42 @@ function getDemoPassword(): string {
   const configuredPassword = process.env.DEMO_PASSWORD
   if (configuredPassword) return configuredPassword
   return `demo_${randomBytes(24).toString("hex")}`
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isTransientSupabaseFetchError(err: unknown): boolean {
+  const message = errorMessage(err).toLowerCase()
+  return (
+    message.includes("fetch failed") ||
+    message.includes("network") ||
+    message.includes("econnrefused") ||
+    message.includes("econnreset") ||
+    message.includes("etimedout") ||
+    message.includes("enotfound") ||
+    message.includes("socket hang up")
+  )
+}
+
+async function withSupabaseRetry<T>(operationName: string, fn: () => Promise<T>): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= SUPABASE_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastError = err
+      const isLastAttempt = attempt === SUPABASE_RETRY_ATTEMPTS
+      if (!isTransientSupabaseFetchError(err) || isLastAttempt) break
+      Sentry.captureMessage(
+        `Transient Supabase error in ${operationName}; retrying (${attempt}/${SUPABASE_RETRY_ATTEMPTS})`,
+        "warning",
+      )
+      await sleep(SUPABASE_RETRY_DELAY_MS * attempt)
+    }
+  }
+  throw lastError
 }
 
 // Use a loose type here to avoid tight coupling to Supabase client generics
@@ -79,7 +117,9 @@ export async function createDemoAndSignIn() {
     })
 
     // Check if demo user already exists
-    const { data: existingUsers } = await adminClient.auth.admin.listUsers()
+    const { data: existingUsers } = await withSupabaseRetry("auth.admin.listUsers", async () => {
+      return await adminClient.auth.admin.listUsers()
+    })
     const demoUser = existingUsers.users.find(u => u.email === DEMO_EMAIL)
 
     let userId: string
@@ -99,17 +139,25 @@ export async function createDemoAndSignIn() {
       })
     } else {
       // Create new demo user with email already confirmed
-      const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
-        email: DEMO_EMAIL,
-        password: demoPassword,
-        email_confirm: true, // Auto-confirm email - no confirmation needed
-        user_metadata: {
-          is_demo: true,
-          role: 'super_admin'
-        }
+      const { data: newUser, error: createError } = await withSupabaseRetry("auth.admin.createUser", async () => {
+        return await adminClient.auth.admin.createUser({
+          email: DEMO_EMAIL,
+          password: demoPassword,
+          email_confirm: true, // Auto-confirm email - no confirmation needed
+          user_metadata: {
+            is_demo: true,
+            role: 'super_admin'
+          }
+        })
       })
 
       if (createError || !newUser.user) {
+        if (isTransientSupabaseFetchError(createError)) {
+          return {
+            error:
+              "Failed to reach Supabase while creating the demo account. Please verify NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, then try again.",
+          }
+        }
         return { error: `Failed to create demo user: ${createError?.message || "Unknown error"}` }
       }
 
@@ -360,6 +408,13 @@ export async function createDemoAndSignIn() {
         : typeof error === "string"
           ? error
           : "Failed to create demo. Please check your environment variables and try again."
+
+    if (isTransientSupabaseFetchError(error)) {
+      return {
+        error:
+          "Unable to connect to Supabase from the app server. Check your network, verify NEXT_PUBLIC_SUPABASE_URL points to a live project, and ensure SUPABASE_SERVICE_ROLE_KEY is valid.",
+      }
+    }
 
     return { error: errText }
   }

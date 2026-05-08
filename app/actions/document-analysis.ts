@@ -4,6 +4,8 @@ import crypto from "crypto"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { callClaude } from "@/lib/ai/client"
+import { LOGISTICS_SYSTEM_PROMPT } from "@/lib/ai/prompts/system"
 
 export interface ExtractedDriverData {
   type: "driver"
@@ -78,26 +80,6 @@ function pickExtensionMediaType(fileName: string): string {
   return "image/jpeg"
 }
 
-function extractJsonObject(text: string): Record<string, unknown> | null {
-  const trimmed = text.trim()
-  try {
-    const parsed = JSON.parse(trimmed)
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null
-  } catch {
-    const start = trimmed.indexOf("{")
-    const end = trimmed.lastIndexOf("}")
-    if (start >= 0 && end > start) {
-      try {
-        const parsed = JSON.parse(trimmed.slice(start, end + 1))
-        return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null
-      } catch {
-        return null
-      }
-    }
-    return null
-  }
-}
-
 function normalizeType(type: string): ExtractedData["type"] {
   const t = type.toLowerCase()
   if (t.includes("driver")) return "driver"
@@ -154,13 +136,17 @@ async function toBase64AndMediaType(input: {
   return { base64: buffer.toString("base64"), mediaType }
 }
 
-async function runClaudeDocumentAnalysis(source: string, fileName: string): Promise<ExtractedData> {
+async function runClaudeDocumentAnalysis(source: string, fileName: string): Promise<{
+  extractedData: ExtractedData | null
+  error: string | null
+}> {
   const apiKey = String(process.env.ANTHROPIC_API_KEY || "").trim()
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured")
+  if (!apiKey) {
+    return { extractedData: null, error: "Document analysis unavailable" }
+  }
 
   const { base64, mediaType: detectedType } = await toBase64AndMediaType({ source, fileName })
   const mediaType = detectedType !== "application/octet-stream" ? detectedType : pickExtensionMediaType(fileName)
-  const isPdf = mediaType.includes("pdf") || fileName.toLowerCase().endsWith(".pdf")
 
   const prompt = [
     "You are a freight operations document parser.",
@@ -181,60 +167,21 @@ async function runClaudeDocumentAnalysis(source: string, fileName: string): Prom
     "- type=load for BOL",
     "- type=invoice for invoice",
     "- type=maintenance for maintenance record",
+    "",
+    `File name: ${fileName}`,
+    `Media type: ${mediaType}`,
+    "Base64 content:",
+    base64,
   ].join("\n")
-
-  const docContent = isPdf
-    ? {
-        type: "document",
-        source: {
-          type: "base64",
-          media_type: "application/pdf",
-          data: base64,
-        },
-      }
-    : {
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: mediaType,
-          data: base64,
-        },
-      }
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1600,
-      temperature: 0,
-      messages: [
-        {
-          role: "user",
-          content: [{ type: "text", text: prompt }, docContent],
-        },
-      ],
-    }),
-  })
-  if (!response.ok) {
-    const text = await response.text().catch(() => "")
-    throw new Error(`Anthropic request failed (${response.status}): ${text.slice(0, 300)}`)
+  const claude = await callClaude<Record<string, unknown>>(
+    `${LOGISTICS_SYSTEM_PROMPT}\n\nParse logistics documents into structured JSON.`,
+    prompt,
+    { expectJson: true, maxTokens: 1600 },
+  )
+  if (claude.error || !claude.data) {
+    return { extractedData: null, error: claude.error || "Document analysis unavailable" }
   }
-
-  const payload = (await response.json()) as {
-    content?: Array<{ type?: string; text?: string }>
-  }
-  const text = (payload.content || [])
-    .filter((c) => c.type === "text" && typeof c.text === "string")
-    .map((c) => c.text as string)
-    .join("\n")
-
-  const parsed = extractJsonObject(text)
-  if (!parsed) throw new Error("Could not parse structured JSON from Claude response")
+  const parsed = claude.data
 
   const normalizedType = normalizeType(String(parsed.type || "expense"))
   const fields =
@@ -244,22 +191,31 @@ async function runClaudeDocumentAnalysis(source: string, fileName: string): Prom
 
   if (normalizedType === "load") {
     return {
+      extractedData: {
       type: "load",
       ...fields,
       delivery_points: deliveryPoints as DeliveryPoint[] | undefined,
+      },
+      error: null,
     }
   }
   if (normalizedType === "route") {
     return {
-      type: "route",
-      ...fields,
-      stops: stops as RouteStop[] | undefined,
+      extractedData: {
+        type: "route",
+        ...fields,
+        stops: stops as RouteStop[] | undefined,
+      },
+      error: null,
     }
   }
   return {
-    type: normalizedType as Exclude<ExtractedData["type"], "route" | "load">,
-    ...fields,
-  } as ExtractedData
+    extractedData: {
+      type: normalizedType as Exclude<ExtractedData["type"], "route" | "load">,
+      ...fields,
+    } as ExtractedData,
+    error: null,
+  }
 }
 
 export async function analyzeDocument(source: string, fileName: string): Promise<{
@@ -268,8 +224,11 @@ export async function analyzeDocument(source: string, fileName: string): Promise
   warning?: string | null
 }> {
   try {
-    const data = await runClaudeDocumentAnalysis(source, fileName)
-    return { data, error: null, warning: null }
+    const result = await runClaudeDocumentAnalysis(source, fileName)
+    if (result.error) {
+      return { data: null, error: result.error, warning: null }
+    }
+    return { data: result.extractedData, error: null, warning: null }
   } catch (error: unknown) {
     return { data: null, error: errorMessage(error, "Document analysis failed"), warning: null }
   }

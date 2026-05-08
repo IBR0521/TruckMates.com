@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { errorMessage } from "@/lib/error-message"
+import { callClaude } from "@/lib/ai/client"
+import { LOGISTICS_SYSTEM_PROMPT } from "@/lib/ai/prompts/system"
 
 type FuelReceiptResult = {
   purchase_date?: string
@@ -41,26 +43,6 @@ function normalizeFuelReceiptData(raw: unknown): FuelReceiptResult {
   }
 }
 
-function extractJsonObject(text: string): Record<string, unknown> | null {
-  const trimmed = text.trim()
-  try {
-    const parsed = JSON.parse(trimmed)
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null
-  } catch {
-    const start = trimmed.indexOf("{")
-    const end = trimmed.lastIndexOf("}")
-    if (start >= 0 && end > start) {
-      try {
-        const parsed = JSON.parse(trimmed.slice(start, end + 1))
-        return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null
-      } catch {
-        return null
-      }
-    }
-    return null
-  }
-}
-
 async function toBase64AndMediaType(input: {
   imageUrl?: string
   imageFile?: File
@@ -89,9 +71,6 @@ async function runAnthropicFuelReceiptOCR(input: {
   imageUrl?: string
   imageFile?: File
 }): Promise<FuelReceiptResult> {
-  const apiKey = String(process.env.ANTHROPIC_API_KEY || "").trim()
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured")
-
   const { base64, mediaType } = await toBase64AndMediaType(input)
   const prompt = [
     "Extract fuel receipt fields and return JSON only.",
@@ -106,55 +85,23 @@ async function runAnthropicFuelReceiptOCR(input: {
     '  "price_per_gallon": "number or null",',
     '  "total_cost": "number or null",',
     '  "receipt_number": "string or null",',
-    '  "odometer_reading": "number or null"',
+    '  "odometer_reading": "number or null",',
+    '  "_meta_media_type": "string"',
     "}",
+    "",
+    `Media type: ${mediaType}`,
+    "Base64 content:",
+    base64,
   ].join("\n")
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 900,
-      temperature: 0,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: mediaType,
-                data: base64,
-              },
-            },
-          ],
-        },
-      ],
-    }),
-  })
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "")
-    throw new Error(`Anthropic OCR request failed (${response.status}): ${body.slice(0, 300)}`)
+  const claude = await callClaude<Record<string, unknown>>(
+    `${LOGISTICS_SYSTEM_PROMPT}\n\nExtract fuel receipt fields into structured JSON.`,
+    prompt,
+    { expectJson: true, maxTokens: 900 },
+  )
+  if (claude.error || !claude.data) {
+    throw new Error(claude.error || "Receipt OCR unavailable")
   }
-
-  const payload = (await response.json()) as {
-    content?: Array<{ type?: string; text?: string }>
-  }
-  const text = (payload.content || [])
-    .filter((c) => c.type === "text" && typeof c.text === "string")
-    .map((c) => c.text as string)
-    .join("\n")
-
-  const parsed = extractJsonObject(text)
-  if (!parsed) throw new Error("Could not parse structured OCR JSON from Claude response")
+  const parsed = claude.data
   return normalizeFuelReceiptData(parsed)
 }
 
@@ -175,6 +122,11 @@ export async function extractFuelPurchaseFromReceipt(
   } | null
   error: string | null
 }> {
+  const apiKey = String(process.env.ANTHROPIC_API_KEY || "").trim()
+  if (!apiKey) {
+    return { data: null, error: "Receipt OCR unavailable" }
+  }
+
   try {
     const data = await runAnthropicFuelReceiptOCR({ imageUrl, imageFile })
     return { data, error: null }
@@ -198,6 +150,11 @@ export async function uploadReceiptAndExtract(imageFile: File): Promise<{
   } | null
   error: string | null
 }> {
+  const apiKey = String(process.env.ANTHROPIC_API_KEY || "").trim()
+  if (!apiKey) {
+    return { data: null, error: "Receipt OCR unavailable" }
+  }
+
   try {
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) {

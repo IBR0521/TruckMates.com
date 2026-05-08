@@ -7,6 +7,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { errorMessage } from "@/lib/error-message"
 import { checkViewPermission } from "@/lib/server-permissions"
 import { revalidatePath } from "next/cache"
+import { runAgentEvaluation } from "@/lib/ai/agent/loop"
 
 type CSACategoryKey =
   | "unsafe_driving"
@@ -177,6 +178,50 @@ function parseCompanyScoresFromCsv(csvText: string, dotNumber: string) {
 
 async function createThresholdAlerts(companyId: string, month: string, scores: Record<CSACategoryKey, number | null>) {
   const admin = createAdminClient()
+  const { data: previousSnapshot } = await admin
+    .from("csa_scores")
+    .select("unsafe_driving, hours_of_service, driver_fitness, controlled_substances, vehicle_maintenance, hazardous_materials, crash_indicator")
+    .eq("company_id", companyId)
+    .lt("snapshot_month", month)
+    .order("snapshot_month", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const isCrossingThreshold = (category: CSACategoryKey, current: number, threshold: number): boolean => {
+    const previous = Number((previousSnapshot as any)?.[category] ?? 0)
+    return current >= threshold && previous < threshold
+  }
+
+  const overWarning = Object.entries(scores).filter(([, value]) => Number(value) >= 55) as Array<[CSACategoryKey, number]>
+  for (const [key, value] of overWarning) {
+    if (!isCrossingThreshold(key, value, 55)) continue
+    runAgentEvaluation({
+      companyId,
+      trigger: "csa_threshold_alert",
+      triggerData: {
+        basicCategory: key,
+        score: value,
+        threshold: 55,
+        severity: "warning",
+      },
+      contextTypes: ["compliance"],
+    }).catch((err) => console.error("[Agent]", err))
+
+    if (isCrossingThreshold(key, value, 65)) {
+      runAgentEvaluation({
+        companyId,
+        trigger: "csa_threshold_alert",
+        triggerData: {
+          basicCategory: key,
+          score: value,
+          threshold: 65,
+          severity: "critical",
+        },
+        contextTypes: ["compliance"],
+      }).catch((err) => console.error("[Agent]", err))
+    }
+  }
+
   const overThreshold = Object.entries(scores).filter(([, value]) => Number(value) >= 65) as Array<[CSACategoryKey, number]>
   if (overThreshold.length === 0) return
 

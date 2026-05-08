@@ -5,6 +5,7 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
+import { runAgentEvaluation } from "@/lib/ai/agent/loop"
 
 /**
  * Fuel Card Import
@@ -55,6 +56,18 @@ function parseCSV(content: string): string[][] {
  */
 function parseExcelCSV(content: string): string[][] {
   return parseCSV(content)
+}
+
+function normalizeProductType(productType: string | null | undefined): string {
+  return String(productType || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+}
+
+function isUnexpectedProductType(productType: string | null | undefined): boolean {
+  const normalized = normalizeProductType(productType)
+  if (!normalized) return false
+  return !normalized.includes("diesel") && normalized !== "def"
 }
 
 /**
@@ -114,6 +127,7 @@ export async function importComdataFuelData(
     const locationIndex = headerRow.findIndex((h) => h && (h.includes("location") || h.includes("station")))
     const stateIndex = headerRow.findIndex((h) => h && (h.includes("state") || h.includes("st")))
     const gallonsIndex = headerRow.findIndex((h) => h && (h.includes("gallon") || h.includes("quantity")))
+    const productIndex = headerRow.findIndex((h) => h && (h.includes("product") || h.includes("fuel type") || h.includes("fuel")))
     const priceIndex = headerRow.findIndex(
       (h) => h && (h.includes("price") || h.includes("rate") || h.includes("per gallon"))
     )
@@ -136,15 +150,34 @@ export async function importComdataFuelData(
     // Get all trucks for matching
     const { data: trucks } = await supabase
       .from("trucks")
-      .select("id, truck_number")
+      .select("id, truck_number, driver_id")
       .eq("company_id", ctx.companyId)
 
     const truckMap = new Map<string, string>()
+    const truckDriverMap = new Map<string, string | null>()
     trucks?.forEach((truck: { id: string; truck_number: string | null }) => {
       if (truck.truck_number) {
         truckMap.set(truck.truck_number.toLowerCase(), truck.id)
       }
+      truckDriverMap.set(truck.id, (truck as any).driver_id || null)
     })
+
+    const avgTransactionCache = new Map<string, number>()
+    const getDriverAvgTransaction = async (driverId: string | null): Promise<number> => {
+      if (!driverId) return 0
+      if (avgTransactionCache.has(driverId)) return avgTransactionCache.get(driverId) || 0
+      const { data } = await supabase
+        .from("fuel_purchases")
+        .select("total_cost")
+        .eq("company_id", ctx.companyId)
+        .eq("driver_id", driverId)
+        .order("purchase_date", { ascending: false })
+        .limit(30)
+      const costs = (data || []).map((row: any) => Number(row.total_cost || 0)).filter((value: number) => value > 0)
+      const avg = costs.length > 0 ? costs.reduce((sum: number, value: number) => sum + value, 0) / costs.length : 0
+      avgTransactionCache.set(driverId, avg)
+      return avg
+    }
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i]
@@ -240,10 +273,18 @@ export async function importComdataFuelData(
           }
         }
 
+        const productType = productIndex !== -1 ? row[productIndex]?.trim() || null : null
+        const driverId: string | null = truckId ? truckDriverMap.get(truckId) || null : null
+        const driverAvgTransaction = await getDriverAvgTransaction(driverId)
+        const isAmountAnomalous = driverAvgTransaction > 0 && totalCost > driverAvgTransaction * 2
+        const isProductAnomalous = isUnexpectedProductType(productType)
+        const transactionId = `COMDATA-${i + 1}`
+
         // Insert fuel purchase
         const { error: insertError } = await supabase.from("fuel_purchases").insert({
           company_id: ctx.companyId,
           truck_id: truckId,
+          driver_id: driverId,
           purchase_date: purchaseDate.toISOString().split("T")[0],
           state: state,
           city: locationIndex !== -1 ? row[locationIndex]?.trim() : null,
@@ -251,7 +292,7 @@ export async function importComdataFuelData(
           gallons: gallons,
           price_per_gallon: pricePerGallon,
           total_cost: totalCost,
-          receipt_number: `COMDATA-${i + 1}`,
+          receipt_number: transactionId,
           notes: `Imported from Comdata file: ${fileName}`,
         })
 
@@ -267,6 +308,24 @@ export async function importComdataFuelData(
             total_cost: totalCost,
             truck_number: truckIndex !== -1 ? row[truckIndex]?.trim() : undefined,
           })
+
+          if (isAmountAnomalous || isProductAnomalous) {
+            runAgentEvaluation({
+              companyId: ctx.companyId,
+              trigger: "fuel_anomaly",
+              triggerData: {
+                transactionId,
+                driverId,
+                truckId,
+                amount: totalCost,
+                gallons,
+                location: locationIndex !== -1 ? row[locationIndex]?.trim() || null : null,
+                productType: productType || "unknown",
+                driverAvgTransaction,
+              },
+              contextTypes: ["fleet", "driver"],
+            }).catch((err) => console.error("[Agent]", err))
+          }
         }
       } catch (error: unknown) {
         importResult.failed++
@@ -583,12 +642,14 @@ export async function syncFuelCardTransactions(provider: LiveFuelProvider, fromD
 
     const { data: trucks } = await supabase
       .from("trucks")
-      .select("id, truck_number")
+      .select("id, truck_number, driver_id")
       .eq("company_id", cfg.data.companyId)
       .limit(2000)
     const truckMap = new Map<string, string>()
+    const truckDriverMap = new Map<string, string | null>()
     ;(trucks || []).forEach((t: any) => {
       if (t.truck_number) truckMap.set(String(t.truck_number).toLowerCase(), String(t.id))
+      truckDriverMap.set(String(t.id), t.driver_id ? String(t.driver_id) : null)
     })
 
     const transactionRows = normalizedTxns.map((t) => ({
@@ -619,7 +680,7 @@ export async function syncFuelCardTransactions(provider: LiveFuelProvider, fromD
     const purchaseRows = transactionRows.map((t) => ({
       company_id: t.company_id,
       truck_id: t.truck_id,
-      driver_id: null,
+      driver_id: t.truck_id ? truckDriverMap.get(String(t.truck_id)) || null : null,
       purchase_date: t.transaction_date,
       state: t.merchant_state || "NA",
       city: t.merchant_city || null,
@@ -630,6 +691,22 @@ export async function syncFuelCardTransactions(provider: LiveFuelProvider, fromD
       receipt_number: `${provider.toUpperCase()}-${t.external_transaction_id}`,
       notes: `Live API sync (${provider.toUpperCase()})`,
     }))
+    const avgTransactionCache = new Map<string, number>()
+    const getDriverAvgTransaction = async (driverId: string | null): Promise<number> => {
+      if (!driverId) return 0
+      if (avgTransactionCache.has(driverId)) return avgTransactionCache.get(driverId) || 0
+      const { data } = await supabase
+        .from("fuel_purchases")
+        .select("total_cost")
+        .eq("company_id", cfg.data.companyId)
+        .eq("driver_id", driverId)
+        .order("purchase_date", { ascending: false })
+        .limit(30)
+      const costs = (data || []).map((row: any) => Number(row.total_cost || 0)).filter((value: number) => value > 0)
+      const avg = costs.length > 0 ? costs.reduce((sum: number, value: number) => sum + value, 0) / costs.length : 0
+      avgTransactionCache.set(driverId, avg)
+      return avg
+    }
     for (const row of purchaseRows) {
       const exists = await supabase
         .from("fuel_purchases")
@@ -639,6 +716,37 @@ export async function syncFuelCardTransactions(provider: LiveFuelProvider, fromD
         .limit(1)
       if (exists.data && exists.data.length > 0) continue
       await supabase.from("fuel_purchases").insert(row)
+
+      const sourceTxn = transactionRows.find((t) => `${provider.toUpperCase()}-${t.external_transaction_id}` === row.receipt_number)
+      const productType =
+        (sourceTxn?.raw_payload?.product_type as string | undefined) ||
+        (sourceTxn?.raw_payload?.fuel_type as string | undefined) ||
+        (sourceTxn?.raw_payload?.product as string | undefined) ||
+        "unknown"
+      const driverId = row.driver_id || null
+      const driverAvgTransaction = await getDriverAvgTransaction(driverId)
+      const amount = Number(row.total_cost || 0)
+      const gallons = Number(row.gallons || 0)
+      const isAmountAnomalous = driverAvgTransaction > 0 && amount > driverAvgTransaction * 2
+      const isProductAnomalous = isUnexpectedProductType(productType)
+
+      if (isAmountAnomalous || isProductAnomalous) {
+        runAgentEvaluation({
+          companyId: cfg.data.companyId,
+          trigger: "fuel_anomaly",
+          triggerData: {
+            transactionId: row.receipt_number,
+            driverId,
+            truckId: row.truck_id || null,
+            amount,
+            gallons,
+            location: [row.city, row.state].filter(Boolean).join(", ") || null,
+            productType,
+            driverAvgTransaction,
+          },
+          contextTypes: ["fleet", "driver"],
+        }).catch((err) => console.error("[Agent]", err))
+      }
     }
 
     await supabase

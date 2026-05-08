@@ -5,6 +5,7 @@ import { errorMessage } from "@/lib/error-message"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { mapLegacyRole } from "@/lib/roles"
+import { runAgentEvaluation } from "@/lib/ai/agent/loop"
 import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
 import { createRoute } from "./routes"
@@ -1015,6 +1016,22 @@ export async function createLoad(formData: {
     // Don't fail load creation if DFM fails
     Sentry.captureException(error)
   }
+
+  if (!data.driver_id) {
+    runAgentEvaluation({
+      companyId: ctx.companyId,
+      trigger: "driver_assignment",
+      triggerData: {
+        loadId: data.id,
+        equipmentType: data.carrier_type || null,
+        origin: data.origin,
+        destination: data.destination,
+        pickupDate: data.load_date || null,
+        weight: data.weight_kg || data.weight || null,
+      },
+      contextTypes: ["load", "driver", "fleet"],
+    }).catch((err) => console.error("[Agent]", err))
+  }
   
   return { data, error: null }
 }
@@ -1334,6 +1351,20 @@ export async function updateLoad(
     return { error: "Failed to update load", data: null }
   }
 
+  if (String(updateData.status || "").toLowerCase() === "in_transit") {
+    runAgentEvaluation({
+      companyId: ctx.companyId,
+      trigger: "load_status_auto_update",
+      triggerData: {
+        loadId: id,
+        status: "in_transit",
+        driverId: data.driver_id || null,
+        truckId: data.truck_id || null,
+      },
+      contextTypes: ["load", "driver"],
+    }).catch((err) => console.error("[Agent]", err))
+  }
+
   // Auto-generate invoice when load status changes to "delivered"
   if (data && !wasDelivered && willBeDelivered) {
     // Check if invoice already exists for this load
@@ -1429,6 +1460,20 @@ export async function updateLoad(
         }
       }
     }
+  }
+
+  if (data && !wasDelivered && willBeDelivered) {
+    runAgentEvaluation({
+      companyId: ctx.companyId,
+      trigger: "invoice_auto_generation",
+      triggerData: {
+        loadId: id,
+        customerId: data.customer_id || null,
+        rate: data.rate || null,
+        accessorials: data.accessorial_charges || null,
+      },
+      contextTypes: ["load", "financial"],
+    }).catch((err) => console.error("[Agent]", err))
   }
 
   // Auto-generate rate confirmation when load status changes to confirmed

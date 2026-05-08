@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server"
 import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission, checkCreatePermission } from "@/lib/server-permissions"
+import { runAgentEvaluation } from "@/lib/ai/agent/loop"
 import * as Sentry from "@sentry/nextjs"
 
 
@@ -253,6 +254,23 @@ export async function checkAndCreateDetentions() {
     // Create detention records for each active detention (filtered by company)
     for (const detention of validDetentions) {
       try {
+        const minutesStationary = Number(detention.detention_minutes || 0)
+        const freeTimeMinutes = Number(detention.detention_threshold_minutes || 0)
+        if (minutesStationary > freeTimeMinutes) {
+          runAgentEvaluation({
+            companyId: ctx.companyId,
+            trigger: "detention_clock",
+            triggerData: {
+              loadId: detention.load_id || null,
+              location: detention.location || detention.zone_visit_id || "unknown",
+              minutesStationary,
+              freeTimeMinutes,
+              driverId: detention.driver_id || null,
+            },
+            contextTypes: ["load", "driver"],
+          }).catch((err) => console.error("[Agent]", err))
+        }
+
         // Check if detention already exists
         const { data: existing } = await supabase
           .from("detention_tracking")
