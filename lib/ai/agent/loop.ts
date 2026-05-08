@@ -86,7 +86,8 @@ async function assembleContext(
     maintenance: getMaintenanceContext(companyId, truckId || undefined),
   }
 
-  const requested = contextTypes.length > 0 ? contextTypes : ["fleet", "financial", "compliance"]
+  const requested: ContextType[] =
+    contextTypes.length > 0 ? contextTypes : ["fleet", "financial", "compliance"]
   const contextBlocks = await Promise.all(requested.map((key) => contextMap[key]))
   return contextBlocks.filter(Boolean).join("\n\n")
 }
