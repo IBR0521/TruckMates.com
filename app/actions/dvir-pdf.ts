@@ -47,8 +47,13 @@ export async function generateDVIRAuditPDF(filters: { start_date?: string; end_d
     }
 
     // Format date
-    const formatDate = (date: string | Date) => {
-      return new Date(date).toLocaleDateString("en-US", {
+    const formatDate = (date: unknown) => {
+      if (!(typeof date === "string" || typeof date === "number" || date instanceof Date)) {
+        return "N/A"
+      }
+      const parsed = new Date(date)
+      if (Number.isNaN(parsed.getTime())) return "N/A"
+      return parsed.toLocaleDateString("en-US", {
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -56,8 +61,8 @@ export async function generateDVIRAuditPDF(filters: { start_date?: string; end_d
     }
 
     // Format time - convert HH:MM:SS to 12-hour AM/PM format
-    const formatTime = (time: string | null) => {
-      if (!time) return "N/A"
+    const formatTime = (time: unknown) => {
+      if (typeof time !== "string" || !time) return "N/A"
       try {
         // Parse time string (HH:MM:SS or HH:MM)
         const parts = time.split(':')
