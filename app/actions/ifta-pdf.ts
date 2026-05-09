@@ -91,6 +91,12 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
         .replace(/'/g, "&#039;")
     }
 
+    const asDisplayText = (value: unknown, fallback = ""): string => {
+      if (typeof value === "string") return value
+      if (value === null || value === undefined) return fallback
+      return String(value)
+    }
+
     // Format date
     const formatDate = (dateString: string | null): string => {
       if (!dateString) return "N/A"
@@ -386,10 +392,10 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
                 .map(
                   (state: Record<string, unknown>) => `
                 <tr>
-                  <td>${escapeHtml(state.state || "N/A")}</td>
-                  <td>${state.miles?.toLocaleString() || "0"}</td>
-                  <td>${escapeHtml(state.fuel?.toString() || "0 gal")}</td>
-                  <td>${escapeHtml(state.tax?.toString() || "$0.00")}</td>
+                  <td>${escapeHtml(asDisplayText(state.state, "N/A"))}</td>
+                  <td>${escapeHtml(asDisplayText(state.miles, "0"))}</td>
+                  <td>${escapeHtml(asDisplayText(state.fuel, "0 gal"))}</td>
+                  <td>${escapeHtml(asDisplayText(state.tax, "$0.00"))}</td>
                 </tr>
               `
                 )
