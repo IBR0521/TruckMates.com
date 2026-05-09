@@ -534,8 +534,13 @@ export async function duplicateInvoice(id: string) {
   duplicateData.issue_date = new Date().toISOString().split("T")[0] // Today's date
   
   // Recalculate due_date based on new issue_date and payment_terms
-  const issueDate = new Date(duplicateData.issue_date)
-  const paymentTerms = duplicateData.payment_terms || "Net 30"
+  const issueDateValue =
+    typeof duplicateData.issue_date === "string"
+      ? duplicateData.issue_date
+      : new Date().toISOString().split("T")[0]
+  const issueDate = new Date(issueDateValue)
+  const paymentTerms =
+    typeof duplicateData.payment_terms === "string" ? duplicateData.payment_terms : "Net 30"
   let days = 30 // default
   if (paymentTerms.includes("Net 7")) days = 7
   else if (paymentTerms.includes("Net 15")) days = 15
