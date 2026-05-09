@@ -1180,7 +1180,7 @@ export async function testAllPlatformFunctions() {
     try {
       const unassignedLoads = await dispatchesActions.getUnassignedLoads()
       pushTested("getUnassignedLoads")
-      if (unassignedLoads.data !== undefined) pushPassed("getUnassignedLoads")
+      if (unassignedLoads.data !== null) pushPassed("getUnassignedLoads")
       else pushFailed({ function: "getUnassignedLoads", error: unassignedLoads.error })
     } catch (error: unknown) {
       pushFailed({ function: "getUnassignedLoads", error: errorMessage(error) })
@@ -1189,7 +1189,7 @@ export async function testAllPlatformFunctions() {
     try {
       const unassignedRoutes = await dispatchesActions.getUnassignedRoutes()
       pushTested("getUnassignedRoutes")
-      if (unassignedRoutes.data !== undefined) pushPassed("getUnassignedRoutes")
+      if (unassignedRoutes.data !== null) pushPassed("getUnassignedRoutes")
       else pushFailed({ function: "getUnassignedRoutes", error: unassignedRoutes.error })
     } catch (error: unknown) {
       pushFailed({ function: "getUnassignedRoutes", error: errorMessage(error) })
