@@ -535,12 +535,15 @@ export async function getFuelEfficiencyReport(filters?: {
         if (miles <= 0 || miles > 10000) continue
 
         let gallons = 0
-        if (prev.gallons && prev.gallons > 0) {
-          gallons = parseFloat(prev.gallons)
-        } else if (prev.price_per_gallon && prev.price_per_gallon > 0) {
-          gallons = (parseFloat(prev.amount) || 0) / parseFloat(prev.price_per_gallon)
+        const prevGallons = Number(prev.gallons) || 0
+        const prevPricePerGallon = Number(prev.price_per_gallon) || 0
+        const prevAmount = parseFloat(String(prev.amount)) || 0
+        if (prevGallons > 0) {
+          gallons = prevGallons
+        } else if (prevPricePerGallon > 0) {
+          gallons = prevAmount / prevPricePerGallon
         } else {
-          gallons = (parseFloat(prev.amount) || 0) / 3.50 // Fallback
+          gallons = prevAmount / 3.50 // Fallback
         }
 
         if (gallons > 0 && gallons < 200 && miles > 0) {
@@ -583,12 +586,15 @@ export async function getFuelEfficiencyReport(filters?: {
         if (miles <= 0 || miles > 10000) continue
 
         let gallons = 0
-        if (prev.gallons && prev.gallons > 0) {
-          gallons = parseFloat(prev.gallons)
-        } else if (prev.price_per_gallon && prev.price_per_gallon > 0) {
-          gallons = (parseFloat(prev.amount) || 0) / parseFloat(prev.price_per_gallon)
+        const prevGallons = Number(prev.gallons) || 0
+        const prevPricePerGallon = Number(prev.price_per_gallon) || 0
+        const prevAmount = parseFloat(String(prev.amount)) || 0
+        if (prevGallons > 0) {
+          gallons = prevGallons
+        } else if (prevPricePerGallon > 0) {
+          gallons = prevAmount / prevPricePerGallon
         } else {
-          gallons = (parseFloat(prev.amount) || 0) / 3.50 // Fallback
+          gallons = prevAmount / 3.50 // Fallback
         }
 
         if (gallons > 0 && gallons < 200 && miles > 0) {
