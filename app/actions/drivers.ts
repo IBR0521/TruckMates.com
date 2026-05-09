@@ -762,8 +762,9 @@ export async function updateDriver(
   if (typeof updateData.name === "string" && updateData.name) updateData.name = sanitizeString(updateData.name, 100)
   if (typeof updateData.email === "string" && updateData.email) updateData.email = sanitizeEmail(updateData.email)
   if (typeof updateData.phone === "string" && updateData.phone) {
-    updateData.phone = sanitizePhone(updateData.phone)
-    updateData.normalized_phone = toNormalizedPhone(updateData.phone)
+    const sanitizedPhone = sanitizePhone(updateData.phone)
+    updateData.phone = sanitizedPhone
+    updateData.normalized_phone = toNormalizedPhone(sanitizedPhone)
   }
   if (typeof updateData.license_number === "string" && updateData.license_number) {
     updateData.license_number = sanitizeString(updateData.license_number, 20).toUpperCase()
