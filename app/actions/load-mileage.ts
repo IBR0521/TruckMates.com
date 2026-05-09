@@ -5,6 +5,20 @@ import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { calculateDistanceMatrix } from "@/app/actions/integrations-google-maps"
 
+type DistanceMatrixElement = {
+  distance_meters?: number
+  status?: string
+}
+
+type DistanceMatrixPayload = {
+  rows?: Array<{ elements?: DistanceMatrixElement[] }>
+}
+
+function asDistanceMatrixPayload(value: unknown): DistanceMatrixPayload | null {
+  if (!value || typeof value !== "object") return null
+  return value as DistanceMatrixPayload
+}
+
 // Calculate mileage between two addresses using Google Distance Matrix (cached + truck mode via integrations)
 // SEC-003 FIX: Added authentication check
 export async function calculateMileage(origin: string, destination: string): Promise<{ miles: number | null; error: string | null }> {
@@ -15,10 +29,11 @@ export async function calculateMileage(origin: string, destination: string): Pro
 
   try {
     const dm = await calculateDistanceMatrix([origin.trim()], [destination.trim()])
-    if (dm.error || !dm.data?.rows?.[0]?.elements?.[0]) {
+    const payload = asDistanceMatrixPayload(dm.data)
+    const element = payload?.rows?.[0]?.elements?.[0]
+    if (dm.error || !element) {
       return { miles: null, error: dm.error || "Could not calculate distance" }
     }
-    const element = dm.data.rows[0].elements[0]
     if (element.status !== "OK") {
       return { miles: null, error: `Route calculation failed: ${element.status}` }
     }
