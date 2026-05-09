@@ -34,6 +34,16 @@ export async function generateDVIRAuditPDF(filters: { start_date?: string; end_d
       if (raw && typeof raw === "object") return Object.values(raw as Record<string, unknown>)
       return []
     }
+    const asDisplayString = (value: unknown, fallback = "N/A") =>
+      typeof value === "string" && value.trim().length > 0 ? value : fallback
+    const asMileageDisplay = (value: unknown) => {
+      if (typeof value === "number" && Number.isFinite(value)) return `${value.toLocaleString()} mi`
+      if (typeof value === "string" && value.trim().length > 0) {
+        const parsed = Number(value)
+        if (Number.isFinite(parsed)) return `${parsed.toLocaleString()} mi`
+      }
+      return "N/A"
+    }
 
     // Get company info
     const { data: company, error: companyError } = await supabase
@@ -272,19 +282,19 @@ export async function generateDVIRAuditPDF(filters: { start_date?: string; end_d
             </div>
             <div class="info-item">
               <div class="info-label">Driver</div>
-              <div class="info-value">${escapeHtml(dvir.driver_name || 'N/A')}</div>
+              <div class="info-value">${escapeHtml(asDisplayString(dvir.driver_name))}</div>
             </div>
             <div class="info-item">
               <div class="info-label">Truck</div>
-              <div class="info-value">${escapeHtml(dvir.truck_number || 'N/A')}</div>
+              <div class="info-value">${escapeHtml(asDisplayString(dvir.truck_number))}</div>
             </div>
             <div class="info-item">
               <div class="info-label">Location</div>
-              <div class="info-value">${escapeHtml(dvir.location || 'N/A')}</div>
+              <div class="info-value">${escapeHtml(asDisplayString(dvir.location))}</div>
             </div>
             <div class="info-item">
               <div class="info-label">Mileage</div>
-              <div class="info-value">${dvir.mileage ? dvir.mileage.toLocaleString() + ' mi' : 'N/A'}</div>
+              <div class="info-value">${asMileageDisplay(dvir.mileage)}</div>
             </div>
             <div class="info-item">
               <div class="info-label">Status</div>
@@ -335,7 +345,7 @@ export async function generateDVIRAuditPDF(filters: { start_date?: string; end_d
           ${dvir.notes ? `
             <div style="margin-top: 15px;">
               <div class="info-label">Notes:</div>
-              <div class="info-value" style="margin-top: 5px;">${escapeHtml(dvir.notes)}</div>
+              <div class="info-value" style="margin-top: 5px;">${escapeHtml(asDisplayString(dvir.notes, ""))}</div>
             </div>
           ` : ''}
 
@@ -356,7 +366,7 @@ export async function generateDVIRAuditPDF(filters: { start_date?: string; end_d
               <div class="signature-box">
                 <div class="signature-label">Certified By</div>
                 <div class="signature-line">
-                  <div class="signature-label">${escapeHtml(dvir.certified_by_name || 'N/A')}</div>
+                  <div class="signature-label">${escapeHtml(asDisplayString(dvir.certified_by_name))}</div>
                   <div class="signature-label">Date: ${dvir.certified_date ? formatDate(dvir.certified_date) : 'N/A'}</div>
                 </div>
               </div>
