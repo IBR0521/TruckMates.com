@@ -204,7 +204,7 @@ export async function getRouteDirections(origin: string, destination: string, wa
       duration: formatDurationText(duration_seconds),
       duration_seconds,
       polyline: route.overview_polyline?.points,
-      steps: allSteps.map((step) => {
+      steps: allSteps.map((step: unknown) => {
         const parsedStep = step as GoogleDirectionsStep
         return {
           instruction: parsedStep.html_instructions,
