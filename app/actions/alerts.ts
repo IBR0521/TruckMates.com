@@ -578,7 +578,6 @@ export async function createAlert(formData: {
         // FIXED: Use correct notification type instead of hardcoded "load_update"
         await sendSMSNotification(userId, smsNotificationType, {
           title: formData.title,
-          message: formData.message,
           shipmentNumber: metaString("shipment_number"),
           truckNumber: metaString("truck_number"),
           driverName: metaString("driver_name"),
