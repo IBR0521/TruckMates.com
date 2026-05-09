@@ -476,6 +476,12 @@ export async function createAlert(formData: {
     return { error: "Table not available. Please run the SQL schema.", data: null }
   }
 
+  const meta = formData.metadata ?? {}
+  const metaString = (key: string): string | undefined => {
+    const value = meta[key]
+    return typeof value === "string" && value.trim().length > 0 ? value : undefined
+  }
+
   // Send notifications based on alert rule and priority
   if (alertRule && alertRule.is_active) {
     const priority = formData.priority || alertRule.priority || "normal"
@@ -542,11 +548,6 @@ export async function createAlert(formData: {
     const smsNotificationType =
       notificationType === "reminder_due" ? "payment_reminder" : notificationType
     const adminForNotifications = createAdminClient()
-    const meta = formData.metadata ?? {}
-    const metaString = (key: string): string | undefined => {
-      const value = meta[key]
-      return typeof value === "string" && value.trim().length > 0 ? value : undefined
-    }
 
     // Send notifications
     for (const userId of notifyUserIds) {
