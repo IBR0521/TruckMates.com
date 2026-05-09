@@ -10,6 +10,13 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0
 }
 
+function normalizeAuditDetails(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  return {}
+}
+
 export type AuditLogRow = {
   id: string
   created_at: string
@@ -116,7 +123,7 @@ export async function getAuditLogs(filters?: {
       user_name: row.user_id ? userMap[row.user_id] || "Unknown user" : "System",
       ip_address: row.ip_address || null,
       user_agent: row.user_agent || null,
-      details: (row.details && typeof row.details === "object") ? row.details : {},
+      details: normalizeAuditDetails(row.details),
     }))
 
     return { data: rows, count: count || 0, error: null }
