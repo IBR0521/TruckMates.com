@@ -4,7 +4,9 @@ import { createClient } from "@supabase/supabase-js"
 import { randomBytes } from "crypto"
 import { errorMessage } from "@/lib/error-message"
 import { createClient as createServerClient } from "@/lib/supabase/server"
-import { isDevSurfaceBlocked } from "@/lib/security/dev-only"
+import { isProductionRuntime } from "@/lib/security/dev-only"
+import { getConfiguredProductionDemoCompanyId } from "@/lib/demo/production-demo-company-id"
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 
 // BUG-068 FIX: Use environment variables instead of hardcoded credentials
@@ -89,9 +91,7 @@ async function markDemoCompanySetupComplete(adminClient: DemoSetupAdminClient, c
 }
 
 export async function createDemoAndSignIn() {
-  if (isDevSurfaceBlocked()) {
-    return { error: "Not found" }
-  }
+  const skipDemoDataMutationPipeline = isProductionRuntime()
 
   try {
     // Use service role key to bypass RLS and create user directly
@@ -202,60 +202,88 @@ export async function createDemoAndSignIn() {
         })
     }
 
-    // Get or create demo company
-    let companyId: string | null = userRecord?.company_id || null
+    // Production: attach all demo viewers to one pre-seeded company (no cleanup / populate RPCs).
+    let companyId: string | null = null
 
-    if (!companyId) {
-      // Check if demo company exists
-      const { data: existingCompany } = await adminClient
+    if (skipDemoDataMutationPipeline) {
+      const sharedId = getConfiguredProductionDemoCompanyId()
+      const { data: sharedCompany, error: sharedCompanyError } = await adminClient
         .from("companies")
         .select("id")
-        .eq("name", DEMO_COMPANY_NAME)
+        .eq("id", sharedId)
         .maybeSingle()
 
-      if (existingCompany) {
-        companyId = existingCompany.id
-      } else {
-        // Create company using RPC function
-        const { data: newCompanyId, error: rpcError } = await adminClient.rpc('create_company_for_user', {
-          p_name: DEMO_COMPANY_NAME,
-          p_email: DEMO_EMAIL,
-          p_phone: "+1-555-DEMO",
-          p_user_id: userId,
-          p_company_type: null
-        })
+      const resolvedId =
+        typeof sharedCompany?.id === "string"
+          ? sharedCompany.id
+          : sharedCompany?.id != null
+            ? String(sharedCompany.id)
+            : null
 
-        if (rpcError) {
-          // If RPC fails, try direct insert as fallback
-          const { data: directCompany, error: directError } = await adminClient
-            .from("companies")
-            .insert({
-              name: DEMO_COMPANY_NAME,
-              email: DEMO_EMAIL,
-              phone: "+1-555-DEMO"
-            })
-            .select("id")
-            .single()
-
-          if (directError || !directCompany) {
-            return { error: `Failed to create company: ${rpcError.message || directError?.message}` }
-          }
-
-          companyId = directCompany.id
-        } else {
-          companyId = newCompanyId
+      if (sharedCompanyError || !resolvedId) {
+        return {
+          error:
+            "The shared demo workspace isn’t ready yet. Run the demo seed migration on your database or create a free account to get started.",
         }
       }
 
-      // Link user to company
-      await adminClient
+      companyId = resolvedId
+      const { error: attachError } = await adminClient
         .from("users")
         .update({ company_id: companyId, role: "super_admin" })
         .eq("id", userId)
+      if (attachError) {
+        return { error: safeDbError(attachError, "Could not open the demo workspace") }
+      }
+      await markDemoCompanySetupComplete(adminClient, companyId)
+    } else {
+      companyId = userRecord?.company_id || null
+
+      if (!companyId) {
+        const { data: existingCompany } = await adminClient
+          .from("companies")
+          .select("id")
+          .eq("name", DEMO_COMPANY_NAME)
+          .maybeSingle()
+
+        if (existingCompany) {
+          companyId = existingCompany.id
+        } else {
+          const { data: newCompanyId, error: rpcError } = await adminClient.rpc("create_company_for_user", {
+            p_name: DEMO_COMPANY_NAME,
+            p_email: DEMO_EMAIL,
+            p_phone: "+1-555-DEMO",
+            p_user_id: userId,
+            p_company_type: null,
+          })
+
+          if (rpcError) {
+            const { data: directCompany, error: directError } = await adminClient
+              .from("companies")
+              .insert({
+                name: DEMO_COMPANY_NAME,
+                email: DEMO_EMAIL,
+                phone: "+1-555-DEMO",
+              })
+              .select("id")
+              .single()
+
+            if (directError || !directCompany) {
+              return { error: `Failed to create company: ${rpcError.message || directError?.message}` }
+            }
+
+            companyId = directCompany.id
+          } else {
+            companyId = newCompanyId
+          }
+        }
+
+        await adminClient.from("users").update({ company_id: companyId, role: "super_admin" }).eq("id", userId)
+      }
     }
 
-    // Populate demo data - with timeout to prevent hanging
-    if (companyId) {
+    // Populate demo data (non-production only — avoids cleanup/seed load on every visit)
+    if (companyId && !skipDemoDataMutationPipeline) {
       try {
         Sentry.captureMessage(`Cleaning up existing demo data for company before repopulating: ${companyId}`, "info")
         // Ensure each demo run starts from a clean slate so new users see a fresh environment
@@ -397,8 +425,7 @@ export async function createDemoAndSignIn() {
       }
     }
 
-    // Success - mark setup complete so demo users skip the onboarding wizard
-    if (companyId) {
+    if (companyId && !skipDemoDataMutationPipeline) {
       await markDemoCompanySetupComplete(adminClient, companyId)
     }
 

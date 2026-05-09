@@ -8,3 +8,13 @@ export function isDevSurfaceBlocked(): boolean {
   return isProductionRuntime()
 }
 
+/** Paid or high-risk demo actions (writes outside shared seeding, destructive ops, infra probes). */
+export function isExpensiveDemoSurfaceBlocked(): boolean {
+  return isProductionRuntime()
+}
+
+/** Read-only demo browsing is allowed everywhere, including production. */
+export function isDemoBrowsingAllowed(): boolean {
+  return true
+}
+

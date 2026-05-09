@@ -3,7 +3,9 @@
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { isDevSurfaceBlocked } from "@/lib/security/dev-only"
+import { isExpensiveDemoSurfaceBlocked } from "@/lib/security/dev-only"
+
+const DEMO_ACTION_DISABLED_MESSAGE = "This action is disabled in the demo. Sign up to use it."
 import * as Sentry from "@sentry/nextjs"
 
 const DEMO_COMPANY_NAME = "Demo Logistics Company"
@@ -12,8 +14,8 @@ const DEMO_COMPANY_NAME = "Demo Logistics Company"
 // This is called AFTER the user is signed in on the client side
 // Platform is now free - no subscription needed
 export async function setupDemoCompany(userId: string | null) {
-  if (isDevSurfaceBlocked()) {
-    return { error: "Not found", data: null }
+  if (isExpensiveDemoSurfaceBlocked()) {
+    return { error: DEMO_ACTION_DISABLED_MESSAGE, data: null }
   }
 
   try {

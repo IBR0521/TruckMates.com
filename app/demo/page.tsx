@@ -23,9 +23,17 @@ export default function DemoPage() {
         </div>
 
         <Card className="bg-card border-border p-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2 text-center">Try Demo</h1>
-          <p className="text-center text-muted-foreground mb-10">
-            Experience the full platform with all features unlocked
+          <h1 className="text-3xl font-bold text-foreground mb-2 text-center">Try the interactive demo</h1>
+          <p className="text-center text-muted-foreground mb-6">
+            Browse a realistic, pre-populated fleet workspace — dashboards, loads, drivers, trucks, billing, and
+            more. No signup required to explore the UI.
+          </p>
+          <p className="text-center text-xs text-muted-foreground border border-border/70 rounded-lg py-3 px-4 mb-10 bg-muted/30">
+            Uses a shared read-focused demo tenant. Sensitive paid actions stay disabled unless you{" "}
+            <Link href="/register" className="text-primary font-medium hover:underline">
+              create your own account
+            </Link>
+            .
           </p>
 
           <Button
@@ -38,7 +46,7 @@ export default function DemoPage() {
             </Link>
           </Button>
           <p className="text-center text-sm text-muted-foreground mt-4">
-            You'll be logged in as a demo manager with full access to all platform features
+            You&apos;ll sign in automatically as a demo manager scoped to shared sample data
           </p>
 
           <div className="mt-8 text-center">

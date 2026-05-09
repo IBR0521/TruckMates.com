@@ -12,6 +12,14 @@ const Logo = dynamic(() => import("@/components/logo").then(mod => ({ default: m
   loading: () => <div className="h-16 w-48 bg-muted animate-pulse rounded" />
 })
 
+function formatDemoSetupError(raw: string): string {
+  const t = raw.trim()
+  if (!t || t === "Not found") {
+    return "We couldn’t open the demo preview. Try again, or sign up for a free account."
+  }
+  return t
+}
+
 function DemoSetupContent() {
   const [status, setStatus] = useState<"loading" | "error">("loading")
   const [errorMessage, setErrorMessage] = useState("")
@@ -36,7 +44,7 @@ function DemoSetupContent() {
         
         // Check if there's an error (and no warning, meaning it failed)
         if (result.error && !('warning' in result)) {
-          setErrorMessage(result.error)
+          setErrorMessage(formatDemoSetupError(result.error))
           setStatus("error")
           return
         }
@@ -45,7 +53,11 @@ function DemoSetupContent() {
         window.location.href = "/dashboard"
       } catch (error: unknown) {
         console.error("Demo setup error:", error)
-        setErrorMessage(formatCaughtError(error, "An unexpected error occurred. Please try again."))
+        setErrorMessage(
+          formatDemoSetupError(
+            formatCaughtError(error, "An unexpected error occurred. Please try again."),
+          ),
+        )
         setStatus("error")
       }
     }
@@ -65,8 +77,8 @@ function DemoSetupContent() {
         <div className="w-full max-w-md text-center">
           <Logo size="lg" />
           <div className="mt-8 p-6 bg-destructive/10 border border-destructive/20 rounded-lg">
-            <h2 className="text-xl font-bold text-destructive mb-2">Demo Setup Failed</h2>
-            <p className="text-sm text-muted-foreground mb-4">{errorMessage}</p>
+            <h2 className="text-xl font-bold text-destructive mb-2">Couldn&apos;t open the demo</h2>
+            <p className="text-sm text-muted-foreground mb-4">{formatDemoSetupError(errorMessage)}</p>
             
             {isConfigError && isProduction && (
               <div className="mt-4 p-4 bg-secondary/50 rounded-lg text-left">
@@ -101,6 +113,12 @@ function DemoSetupContent() {
               >
                 Go Home
               </a>
+              <a
+                href="/register"
+                className="text-sm px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/90 transition font-medium"
+              >
+                Sign up free
+              </a>
             </div>
           </div>
         </div>
@@ -114,9 +132,9 @@ function DemoSetupContent() {
         <Logo size="lg" />
         <div className="mt-8">
           <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-foreground mb-2">Setting up your demo...</h2>
+          <h2 className="text-xl font-bold text-foreground mb-2">Opening the demo...</h2>
           <p className="text-sm text-muted-foreground">
-            Creating your demo workspace. This will only take a moment.
+            Loading the shared demo workspace — same sample data everyone explores in preview mode.
           </p>
         </div>
       </div>
