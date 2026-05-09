@@ -16,12 +16,8 @@ const SUPABASE_RETRY_DELAY_MS = 500
 
 type DemoSetupAdminClient = {
   from: (table: string) => {
-    update: (values: {
-      setup_complete: boolean
-      setup_completed_at: string
-      setup_data: { is_demo: boolean }
-    }) => {
-      eq: (column: "id", value: string) => Promise<unknown>
+    update: (values: Record<string, unknown>) => {
+      eq: (column: string, value: string) => unknown
     }
   }
 }
