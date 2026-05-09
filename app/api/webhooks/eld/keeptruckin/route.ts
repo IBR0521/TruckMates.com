@@ -3,8 +3,8 @@ import { errorMessage } from "@/lib/error-message"
 import crypto from "crypto"
 
 type InsertClient = {
-  from: (table: string) => {
-    insert: (values: unknown) => Promise<{ error: unknown }>
+  from: (table: "eld_logs" | "eld_locations" | "eld_violations" | "eld_events") => {
+    insert: (values: unknown) => PromiseLike<{ error: unknown }>
   }
 }
 
@@ -161,7 +161,7 @@ async function processHOSLog(
   
   const log = {
     driver_id: data.driver_id, // Will need driver mapping
-    log_type: mapKeepTruckinStatus(data.status),
+    log_type: mapKeepTruckinStatus(data.status || "off_duty"),
     start_time: data.start_time || data.start,
     end_time: data.end_time || data.end || null,
     location_start: data.location_start

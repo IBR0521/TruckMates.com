@@ -220,8 +220,15 @@ async function handleSubscriptionDeleted(supabase: AdminClient, subscription: St
 }
 
 async function handleInvoicePaid(supabase: AdminClient, invoice: Stripe.Invoice) {
+  const invoiceRecord = invoice as unknown as Record<string, unknown>
+  const invoiceSubscription =
+    "subscription" in invoiceRecord ? invoiceRecord.subscription : undefined
   const subscriptionId =
-    typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id || ""
+    typeof invoiceSubscription === "string"
+      ? invoiceSubscription
+      : invoiceSubscription && typeof invoiceSubscription === "object" && "id" in invoiceSubscription
+        ? String((invoiceSubscription as { id?: unknown }).id || "")
+        : ""
 
   if (!subscriptionId) {
     return
@@ -278,8 +285,15 @@ async function handleInvoicePaid(supabase: AdminClient, invoice: Stripe.Invoice)
 }
 
 async function handleInvoicePaymentFailed(supabase: AdminClient, invoice: Stripe.Invoice) {
+  const invoiceRecord = invoice as unknown as Record<string, unknown>
+  const invoiceSubscription =
+    "subscription" in invoiceRecord ? invoiceRecord.subscription : undefined
   const subscriptionId =
-    typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id || ""
+    typeof invoiceSubscription === "string"
+      ? invoiceSubscription
+      : invoiceSubscription && typeof invoiceSubscription === "object" && "id" in invoiceSubscription
+        ? String((invoiceSubscription as { id?: unknown }).id || "")
+        : ""
 
   if (!subscriptionId) {
     return

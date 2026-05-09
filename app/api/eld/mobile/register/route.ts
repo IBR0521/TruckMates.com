@@ -126,6 +126,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (!device) {
+      return NextResponse.json(
+        { error: "Failed to register ELD device" },
+        { status: 500 }
+      )
+    }
+
     return NextResponse.json({
       success: true,
       device_id: device.id,

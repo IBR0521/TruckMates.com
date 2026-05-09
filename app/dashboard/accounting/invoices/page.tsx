@@ -23,9 +23,35 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+type InvoiceRow = {
+  id: string
+  company_id?: string
+  load_id?: string | null
+  items?: unknown
+  created_at?: string
+  updated_at?: string
+  invoice_number?: string | null
+  customer_name?: string | null
+  amount?: string | number | null
+  due_date?: string | null
+  status?: string | null
+  factoring_status?: string | null
+  [key: string]: unknown
+}
+
+const asInvoiceRow = (value: unknown): InvoiceRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as InvoiceRow
+}
+
+const invoiceAmount = (value: string | number | null | undefined): number =>
+  typeof value === "number" ? value : Number.parseFloat(typeof value === "string" ? value : "0") || 0
+
 export default function InvoicesPage() {
   const router = useRouter()
-  const [invoices, setInvoices] = useState<unknown[]>([])
+  const [invoices, setInvoices] = useState<InvoiceRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -39,7 +65,7 @@ export default function InvoicesPage() {
       return
     }
     if (result.data) {
-      setInvoices(result.data)
+      setInvoices((result.data as unknown[]).map(asInvoiceRow).filter((invoice): invoice is InvoiceRow => !!invoice))
     }
     setIsLoading(false)
   }
@@ -130,19 +156,19 @@ export default function InvoicesPage() {
             <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Total Outstanding</p>
               <p className="text-3xl font-bold text-foreground">
-                ${invoices.filter(i => i.status === "pending" || i.status === "sent").reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0).toFixed(2)}
+                ${invoices.filter(i => i.status === "pending" || i.status === "sent").reduce((sum, i) => sum + invoiceAmount(i.amount), 0).toFixed(2)}
               </p>
             </Card>
             <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Paid</p>
               <p className="text-3xl font-bold text-green-400">
-                ${invoices.filter(i => i.status === "paid").reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0).toFixed(2)}
+                ${invoices.filter(i => i.status === "paid").reduce((sum, i) => sum + invoiceAmount(i.amount), 0).toFixed(2)}
               </p>
             </Card>
             <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Overdue</p>
               <p className="text-3xl font-bold text-red-400">
-                ${invoices.filter(i => i.status === "overdue").reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0).toFixed(2)}
+                ${invoices.filter(i => i.status === "overdue").reduce((sum, i) => sum + invoiceAmount(i.amount), 0).toFixed(2)}
               </p>
             </Card>
             <Card className="border border-border/50 p-4 md:p-6">
@@ -194,7 +220,7 @@ export default function InvoicesPage() {
                         <tr key={invoice.id} className="border-b border-border hover:bg-secondary/20 transition">
                           <td className="px-6 py-4 text-foreground font-medium">{invoice.invoice_number || invoice.id}</td>
                           <td className="px-6 py-4 text-foreground">{invoice.customer_name || "N/A"}</td>
-                          <td className="px-6 py-4 text-foreground font-semibold">${invoice.amount ? parseFloat(invoice.amount).toFixed(2) : "0.00"}</td>
+                          <td className="px-6 py-4 text-foreground font-semibold">${invoice.amount ? parseFloat(String(invoice.amount)).toFixed(2) : "0.00"}</td>
                           <td className="px-6 py-4 text-foreground">{invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : "N/A"}</td>
                           <td className="px-6 py-4">
                             <InlineStatusSelect
@@ -268,7 +294,7 @@ export default function InvoicesPage() {
                       <div className="space-y-2 pt-2 border-t border-border/30">
                         <div>
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Amount</p>
-                          <p className="text-lg font-bold text-foreground">${invoice.amount ? parseFloat(invoice.amount).toFixed(2) : "0.00"}</p>
+                          <p className="text-lg font-bold text-foreground">${invoice.amount ? parseFloat(String(invoice.amount)).toFixed(2) : "0.00"}</p>
                         </div>
                         <div>
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Due Date</p>

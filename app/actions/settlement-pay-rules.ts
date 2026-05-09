@@ -60,6 +60,23 @@ export interface SettlementLineItem {
   taxable: boolean
 }
 
+type SettlementBonusDetail = {
+  type: string
+  description?: string
+  amount: number
+}
+
+type SettlementCalculationDetails = Record<string, unknown> & {
+  base_pay: number
+  bonuses: SettlementBonusDetail[]
+  bonus_total: number
+  deductions: unknown[]
+  deduction_total: number
+  minimum_guarantee_applied: boolean
+  line_items: SettlementLineItem[]
+  non_taxable_pay: number
+}
+
 /**
  * Create or update a driver pay rule
  */
@@ -244,7 +261,7 @@ export async function calculateGrossPayFromRule(params: {
 
   const payRule = payRuleResult.data
   let grossPay = 0
-  const calculationDetails: Record<string, unknown> = {
+  const calculationDetails: SettlementCalculationDetails = {
     base_pay: 0,
     bonuses: [],
     bonus_total: 0,

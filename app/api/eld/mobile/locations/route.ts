@@ -382,13 +382,21 @@ export async function POST(request: NextRequest) {
           })
 
           // Cache last known point/state for throttling.
-          const stateResult = res as StateCrossingResult | null
-          if (!stateResult?.error && stateResult?.data?.state_code) {
+          const stateResult =
+            res && typeof res === "object" ? (res as Record<string, unknown>) : null
+          const stateData =
+            stateResult?.data && typeof stateResult.data === "object"
+              ? (stateResult.data as Record<string, unknown>)
+              : null
+          const stateCode = stateData && typeof stateData.state_code === "string" ? stateData.state_code : null
+          const stateError =
+            stateResult && typeof stateResult.error === "string" ? stateResult.error : null
+          if (!stateError && stateCode) {
             stateCrossingCache.set(cacheKey, {
               lat: latestLocation.latitude,
               lng: latestLocation.longitude,
               ts: Date.now(),
-              state_code: stateResult.data.state_code,
+              state_code: stateCode,
             })
           } else {
             stateCrossingCache.set(cacheKey, {

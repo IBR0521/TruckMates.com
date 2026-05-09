@@ -14,6 +14,15 @@ type WebhookBody = {
 type CommunicationPayload = {
   customer_id?: string | null
   vendor_id?: string | null
+  contact_id?: string | null
+  type?: "phone" | "email" | "note" | "invoice_sent" | "sms" | "meeting" | "payment_received"
+  subject?: string | null
+  message?: string | null
+  direction?: "inbound" | "outbound"
+  external_id?: string | null
+  source?: "email" | "sms" | "webhook"
+  metadata?: Record<string, unknown>
+  occurred_at?: string
   [key: string]: unknown
 }
 
@@ -24,6 +33,11 @@ type CommunicationPayload = {
  */
 export async function POST(req: NextRequest) {
   try {
+    const asString = (value: unknown): string | undefined =>
+      typeof value === "string" ? value : undefined
+    const asNullableString = (value: unknown): string | null =>
+      typeof value === "string" ? value : null
+
     // Verify webhook authentication
     const webhookSecret = process.env.WEBHOOK_SECRET || ""
     const apiKey = req.headers.get("x-api-key") || ""
@@ -94,7 +108,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Determine source from headers or body
-    const source = req.headers.get("x-webhook-source") || body.source || "webhook"
+    const source = req.headers.get("x-webhook-source") || asString(body.source) || "webhook"
 
     // Extract communication data based on source
     let communicationData: CommunicationPayload = {}
@@ -103,67 +117,77 @@ export async function POST(req: NextRequest) {
       // Email webhook format
       communicationData = {
         type: "email",
-        direction: body.event === "bounce" || body.event === "spam_complaint" ? "inbound" : "outbound",
-        subject: body.subject || body.Subject || null,
-        message: body.text || body.TextBody || body.html || body.HtmlBody || null,
-        external_id: body.message_id || body.MessageID || body["message-id"] || null,
+        direction:
+          asString(body.event) === "bounce" || asString(body.event) === "spam_complaint"
+            ? "inbound"
+            : "outbound",
+        subject: asNullableString(body.subject) || asNullableString(body.Subject),
+        message:
+          asNullableString(body.text) ||
+          asNullableString(body.TextBody) ||
+          asNullableString(body.html) ||
+          asNullableString(body.HtmlBody),
+        external_id:
+          asNullableString(body.message_id) ||
+          asNullableString(body.MessageID) ||
+          asNullableString(body["message-id"]),
         source: "email",
         metadata: {
-          from: body.from || body.From || null,
-          to: body.to || body.To || null,
-          event: body.event || body.Event || null,
-          timestamp: body.timestamp || body.Timestamp || new Date().toISOString(),
+          from: asNullableString(body.from) || asNullableString(body.From),
+          to: asNullableString(body.to) || asNullableString(body.To),
+          event: asNullableString(body.event) || asNullableString(body.Event),
+          timestamp: asString(body.timestamp) || asString(body.Timestamp) || new Date().toISOString(),
         },
-        occurred_at: body.timestamp || body.Timestamp || new Date().toISOString(),
+        occurred_at: asString(body.timestamp) || asString(body.Timestamp) || new Date().toISOString(),
       }
 
       // Try to find customer/vendor by email
       // This would require a lookup - for now, we'll require customer_id/vendor_id in metadata
       if (body.metadata?.customer_id) {
-        communicationData.customer_id = body.metadata.customer_id
+        communicationData.customer_id = asNullableString(body.metadata.customer_id)
       }
       if (body.metadata?.vendor_id) {
-        communicationData.vendor_id = body.metadata.vendor_id
+        communicationData.vendor_id = asNullableString(body.metadata.vendor_id)
       }
     } else if (source === "twilio") {
       // SMS webhook format
       communicationData = {
         type: "sms",
-        direction: body.Direction === "inbound" ? "inbound" : "outbound",
-        message: body.Body || null,
-        external_id: body.MessageSid || null,
+        direction: asString(body.Direction) === "inbound" ? "inbound" : "outbound",
+        message: asNullableString(body.Body),
+        external_id: asNullableString(body.MessageSid),
         source: "sms",
         metadata: {
-          from: body.From || null,
-          to: body.To || null,
-          status: body.MessageStatus || null,
+          from: asNullableString(body.From),
+          to: asNullableString(body.To),
+          status: asNullableString(body.MessageStatus),
         },
-        occurred_at: body.Timestamp || new Date().toISOString(),
+        occurred_at: asString(body.Timestamp) || new Date().toISOString(),
       }
 
       // Try to find customer/vendor by phone number
       if (body.metadata?.customer_id) {
-        communicationData.customer_id = body.metadata.customer_id
+        communicationData.customer_id = asNullableString(body.metadata.customer_id)
       }
       if (body.metadata?.vendor_id) {
-        communicationData.vendor_id = body.metadata.vendor_id
+        communicationData.vendor_id = asNullableString(body.metadata.vendor_id)
       }
     } else {
       // Custom webhook format - expect direct mapping
       communicationData = {
-        type: body.type || "note",
-        direction: body.direction || "outbound",
-        subject: body.subject || null,
-        message: body.message || null,
-        customer_id: body.customer_id || null,
-        vendor_id: body.vendor_id || null,
-        contact_id: body.contact_id || null,
-        load_id: body.load_id || null,
-        invoice_id: body.invoice_id || null,
-        external_id: body.external_id || body.id || null,
-        source: source,
+        type: (asString(body.type) as CommunicationPayload["type"]) || "note",
+        direction: asString(body.direction) === "inbound" ? "inbound" : "outbound",
+        subject: asNullableString(body.subject),
+        message: asNullableString(body.message),
+        customer_id: asNullableString(body.customer_id),
+        vendor_id: asNullableString(body.vendor_id),
+        contact_id: asNullableString(body.contact_id),
+        load_id: asNullableString(body.load_id),
+        invoice_id: asNullableString(body.invoice_id),
+        external_id: asNullableString(body.external_id) || asNullableString(body.id),
+        source: "webhook",
         metadata: body.metadata || {},
-        occurred_at: body.occurred_at || body.timestamp || new Date().toISOString(),
+        occurred_at: asString(body.occurred_at) || asString(body.timestamp) || new Date().toISOString(),
       }
     }
 
@@ -176,7 +200,8 @@ export async function POST(req: NextRequest) {
     }
 
     // MEDIUM FIX: Validate company_id from body if provided (prevent cross-company data injection)
-    if (body.company_id) {
+    const requestCompanyId = asString(body.company_id)
+    if (requestCompanyId) {
       // Verify company_id matches the customer/vendor's company
       const { createAdminClient } = await import("@/lib/supabase/admin")
       const adminSupabase = createAdminClient()
@@ -188,7 +213,7 @@ export async function POST(req: NextRequest) {
           .eq("id", communicationData.customer_id)
           .single()
         
-        if (!customer || customer.company_id !== body.company_id) {
+        if (!customer || customer.company_id !== requestCompanyId) {
           return NextResponse.json(
             { error: "company_id does not match customer's company" },
             { status: 403 }
@@ -201,7 +226,7 @@ export async function POST(req: NextRequest) {
           .eq("id", communicationData.vendor_id)
           .single()
         
-        if (!vendor || vendor.company_id !== body.company_id) {
+        if (!vendor || vendor.company_id !== requestCompanyId) {
           return NextResponse.json(
             { error: "company_id does not match vendor's company" },
             { status: 403 }
@@ -211,7 +236,20 @@ export async function POST(req: NextRequest) {
     }
 
     // Log the communication
-    const result = await logCommunicationFromWebhook(communicationData)
+    const payloadForLog = {
+      customer_id: communicationData.customer_id ?? undefined,
+      vendor_id: communicationData.vendor_id ?? undefined,
+      contact_id: communicationData.contact_id ?? undefined,
+      type: communicationData.type || "note",
+      subject: communicationData.subject ?? undefined,
+      message: communicationData.message ?? undefined,
+      direction: communicationData.direction || "outbound",
+      external_id: communicationData.external_id || `webhook_${Date.now()}`,
+      source: communicationData.source || "webhook",
+      metadata: communicationData.metadata,
+      occurred_at: communicationData.occurred_at,
+    }
+    const result = await logCommunicationFromWebhook(payloadForLog)
 
     if (result.error) {
       return NextResponse.json({ error: result.error }, { status: 500 })

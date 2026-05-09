@@ -126,7 +126,7 @@ export async function GET(req: NextRequest) {
 
         const fileName = `dvir-audit-${start_date || "all"}-${end_date || "present"}.pdf`
 
-        return new NextResponse(pdfBuffer, {
+        return new NextResponse(new Uint8Array(pdfBuffer), {
           headers: {
             "Content-Type": "application/pdf",
             "Content-Disposition": `attachment; filename="${fileName}"`,

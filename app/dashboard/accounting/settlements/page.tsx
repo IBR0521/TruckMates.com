@@ -27,10 +27,47 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+type SettlementRow = {
+  id: string
+  company_id?: string
+  driver_id?: string | null
+  loads?: unknown
+  created_at?: string
+  updated_at?: string
+  status?: string | null
+  period_start?: string | null
+  period_end?: string | null
+  net_pay?: string | number | null
+  gross_pay?: string | number | null
+  total_deductions?: string | number | null
+  payment_method?: string | null
+  driver_approved?: boolean | null
+  [key: string]: unknown
+}
+
+type DriverOption = { id: string; name: string }
+
+const asSettlementRow = (value: unknown): SettlementRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as SettlementRow
+}
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string" || typeof obj.name !== "string") return null
+  return { id: obj.id, name: obj.name }
+}
+
+const money = (value: string | number | null | undefined): number =>
+  typeof value === "number" ? value : Number.parseFloat(typeof value === "string" ? value : "0") || 0
+
 export default function SettlementsPage() {
   const router = useRouter()
-  const [settlements, setSettlements] = useState<unknown[]>([])
-  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [settlements, setSettlements] = useState<SettlementRow[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [payingId, setPayingId] = useState<string | null>(null)
@@ -51,10 +88,14 @@ export default function SettlementsPage() {
       return
     }
     if (settlementsResult.data) {
-      setSettlements(settlementsResult.data)
+      setSettlements(
+        (settlementsResult.data as unknown[])
+          .map(asSettlementRow)
+          .filter((settlement): settlement is SettlementRow => !!settlement),
+      )
     }
     if (driversResult.data) {
-      setDrivers(driversResult.data)
+      setDrivers((driversResult.data as unknown[]).map(asDriverOption).filter((driver): driver is DriverOption => !!driver))
     }
     setIsLoading(false)
   }
@@ -179,13 +220,13 @@ export default function SettlementsPage() {
             <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Total Paid</p>
               <p className="text-3xl font-bold text-green-400">
-                ${filteredSettlements.filter(s => s.status === "paid").reduce((sum, s) => sum + (parseFloat(s.net_pay) || 0), 0).toFixed(2)}
+                ${filteredSettlements.filter(s => s.status === "paid").reduce((sum, s) => sum + money(s.net_pay), 0).toFixed(2)}
               </p>
             </Card>
             <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Pending Payments</p>
               <p className="text-3xl font-bold text-yellow-400">
-                ${filteredSettlements.filter(s => s.status === "pending").reduce((sum, s) => sum + (parseFloat(s.net_pay) || 0), 0).toFixed(2)}
+                ${filteredSettlements.filter(s => s.status === "pending").reduce((sum, s) => sum + money(s.net_pay), 0).toFixed(2)}
               </p>
             </Card>
             <Card className="border border-border/50 p-4 md:p-6">
@@ -272,9 +313,9 @@ export default function SettlementsPage() {
                                 ? `${new Date(settlement.period_start).toLocaleDateString()} - ${new Date(settlement.period_end).toLocaleDateString()}`
                                 : "N/A"}
                             </td>
-                            <td className="px-6 py-4 text-foreground">${settlement.gross_pay ? parseFloat(settlement.gross_pay).toFixed(2) : "0.00"}</td>
-                            <td className="px-6 py-4 text-red-400">${settlement.total_deductions ? parseFloat(settlement.total_deductions).toFixed(2) : "0.00"}</td>
-                            <td className="px-6 py-4 text-green-400 font-semibold">${settlement.net_pay ? parseFloat(settlement.net_pay).toFixed(2) : "0.00"}</td>
+                            <td className="px-6 py-4 text-foreground">${settlement.gross_pay ? parseFloat(String(settlement.gross_pay)).toFixed(2) : "0.00"}</td>
+                            <td className="px-6 py-4 text-red-400">${settlement.total_deductions ? parseFloat(String(settlement.total_deductions)).toFixed(2) : "0.00"}</td>
+                            <td className="px-6 py-4 text-green-400 font-semibold">${settlement.net_pay ? parseFloat(String(settlement.net_pay)).toFixed(2) : "0.00"}</td>
                             <td className="px-6 py-4">
                               <span
                                 className={`px-3 py-1 rounded-full text-xs font-semibold ${
@@ -293,7 +334,7 @@ export default function SettlementsPage() {
                                     variant="outline"
                                     size="sm"
                                     disabled={payingId === settlement.id}
-                                    onClick={() => handleMarkPaid(settlement.id, settlement.payment_method)}
+                                    onClick={() => handleMarkPaid(settlement.id, settlement.payment_method || undefined)}
                                   >
                                     <CheckCircle2 className="w-4 h-4 mr-1" />
                                     {payingId === settlement.id ? "Saving..." : "Mark Paid"}
@@ -358,15 +399,15 @@ export default function SettlementsPage() {
                         <div className="space-y-2 pt-2 border-t border-border/30">
                           <div>
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Gross Pay</p>
-                            <p className="text-sm text-foreground">${settlement.gross_pay ? parseFloat(settlement.gross_pay).toFixed(2) : "0.00"}</p>
+                            <p className="text-sm text-foreground">${settlement.gross_pay ? parseFloat(String(settlement.gross_pay)).toFixed(2) : "0.00"}</p>
                           </div>
                           <div>
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Deductions</p>
-                            <p className="text-sm text-red-400">${settlement.total_deductions ? parseFloat(settlement.total_deductions).toFixed(2) : "0.00"}</p>
+                            <p className="text-sm text-red-400">${settlement.total_deductions ? parseFloat(String(settlement.total_deductions)).toFixed(2) : "0.00"}</p>
                           </div>
                           <div>
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Net Pay</p>
-                            <p className="text-lg font-bold text-green-400">${settlement.net_pay ? parseFloat(settlement.net_pay).toFixed(2) : "0.00"}</p>
+                            <p className="text-lg font-bold text-green-400">${settlement.net_pay ? parseFloat(String(settlement.net_pay)).toFixed(2) : "0.00"}</p>
                           </div>
                         </div>
 
@@ -378,7 +419,7 @@ export default function SettlementsPage() {
                                 size="sm"
                                 className="flex-1"
                                 disabled={payingId === settlement.id}
-                                onClick={() => handleMarkPaid(settlement.id, settlement.payment_method)}
+                                onClick={() => handleMarkPaid(settlement.id, settlement.payment_method || undefined)}
                               >
                                 <CheckCircle2 className="w-4 h-4 mr-2" />
                                 {payingId === settlement.id ? "Saving..." : "Mark Paid"}

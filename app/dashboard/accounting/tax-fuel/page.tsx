@@ -54,6 +54,58 @@ import { getTrucks } from "@/app/actions/trucks"
 import { getDrivers } from "@/app/actions/drivers"
 import { uploadReceiptAndExtract } from "@/app/actions/receipt-ocr"
 
+type FuelPurchaseRow = {
+  id: string
+  truck_id?: string | null
+  driver_id?: string | null
+  purchase_date?: string | null
+  state?: string | null
+  city?: string | null
+  station_name?: string | null
+  gallons?: string | number | null
+  price_per_gallon?: string | number | null
+  odometer_reading?: string | number | null
+  receipt_number?: string | null
+  receipt_url?: string | null
+  notes?: string | null
+  total_cost?: string | number | null
+  trucks?: { truck_number?: string | null } | null
+  drivers?: { name?: string | null } | null
+  [key: string]: unknown
+}
+
+type TruckOption = { id: string; truck_number: string; make?: string; model?: string }
+type DriverOption = { id: string; name: string }
+
+const asFuelPurchaseRow = (value: unknown): FuelPurchaseRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as FuelPurchaseRow
+}
+
+const asTruckOption = (value: unknown): TruckOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string" || typeof obj.truck_number !== "string") return null
+  return {
+    id: obj.id,
+    truck_number: obj.truck_number,
+    make: typeof obj.make === "string" ? obj.make : undefined,
+    model: typeof obj.model === "string" ? obj.model : undefined,
+  }
+}
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string" || typeof obj.name !== "string") return null
+  return { id: obj.id, name: obj.name }
+}
+
+const toNumber = (value: string | number | null | undefined): number =>
+  typeof value === "number" ? value : Number.parseFloat(typeof value === "string" ? value : "0") || 0
+
 const US_STATES = [
   "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
   "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
@@ -63,12 +115,12 @@ const US_STATES = [
 ]
 
 export default function TaxFuelReconciliationPage() {
-  const [fuelPurchases, setFuelPurchases] = useState<unknown[]>([])
-  const [trucks, setTrucks] = useState<unknown[]>([])
-  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [fuelPurchases, setFuelPurchases] = useState<FuelPurchaseRow[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
-  const [editingPurchase, setEditingPurchase] = useState<unknown>(null)
+  const [editingPurchase, setEditingPurchase] = useState<FuelPurchaseRow | null>(null)
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false)
   const [filters, setFilters] = useState({
     startDate: "",
@@ -110,18 +162,22 @@ export default function TaxFuelReconciliationPage() {
       if (purchasesResult.error) {
         toast.error(purchasesResult.error)
       } else {
-        setFuelPurchases(purchasesResult.data || [])
+        setFuelPurchases(
+          ((purchasesResult.data || []) as unknown[])
+            .map(asFuelPurchaseRow)
+            .filter((purchase): purchase is FuelPurchaseRow => !!purchase),
+        )
       }
 
       // Load trucks and drivers for dropdowns
       const trucksResult = await getTrucks()
       if (!trucksResult.error && trucksResult.data) {
-        setTrucks(trucksResult.data)
+        setTrucks((trucksResult.data as unknown[]).map(asTruckOption).filter((truck): truck is TruckOption => !!truck))
       }
 
       const driversResult = await getDrivers()
       if (!driversResult.error && driversResult.data) {
-        setDrivers(driversResult.data)
+        setDrivers((driversResult.data as unknown[]).map(asDriverOption).filter((driver): driver is DriverOption => !!driver))
       }
     } catch (error: unknown) {
       toast.error(errorMessage(error, "Failed to load data"))
@@ -229,7 +285,7 @@ export default function TaxFuelReconciliationPage() {
     })
   }
 
-  function handleEdit(purchase: unknown) {
+  function handleEdit(purchase: FuelPurchaseRow) {
     setEditingPurchase(purchase)
     setFormData({
       truck_id: purchase.truck_id || "",
@@ -654,7 +710,7 @@ export default function TaxFuelReconciliationPage() {
                   {fuelPurchases.map((purchase) => (
                     <TableRow key={purchase.id}>
                       <TableCell>
-                        {new Date(purchase.purchase_date).toLocaleDateString()}
+                        {new Date(purchase.purchase_date || new Date().toISOString()).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
                         <span className="font-mono text-sm">{purchase.state}</span>
@@ -672,14 +728,14 @@ export default function TaxFuelReconciliationPage() {
                       </TableCell>
                       <TableCell>
                         {purchase.trucks ? (
-                          <span className="text-sm">{purchase.trucks.truck_number}</span>
+                          <span className="text-sm">{purchase.trucks.truck_number || "-"}</span>
                         ) : (
                           <span className="text-muted-foreground text-sm">-</span>
                         )}
                       </TableCell>
                       <TableCell>
                         {purchase.drivers ? (
-                          <span className="text-sm">{purchase.drivers.name}</span>
+                          <span className="text-sm">{purchase.drivers.name || "-"}</span>
                         ) : (
                           <span className="text-muted-foreground text-sm">-</span>
                         )}

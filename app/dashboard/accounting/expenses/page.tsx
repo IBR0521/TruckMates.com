@@ -23,11 +23,38 @@ import {
 } from "@/components/ui/alert-dialog"
 import { getExpenses, deleteExpense } from "@/app/actions/accounting"
 
+type ExpenseRow = {
+  id: string
+  company_id?: string
+  driver_id?: string | null
+  truck_id?: string | null
+  receipt_url?: string | null
+  created_at?: string
+  updated_at?: string
+  description?: string | null
+  vendor?: string | null
+  category?: string | null
+  amount?: string | number | null
+  date?: string | null
+  has_receipt?: boolean | null
+  [key: string]: unknown
+}
+
+const asExpenseRow = (value: unknown): ExpenseRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as ExpenseRow
+}
+
+const amountValue = (value: string | number | null | undefined): number =>
+  typeof value === "number" ? value : Number.parseFloat(typeof value === "string" ? value : "0") || 0
+
 export default function ExpensesPage() {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [expensesList, setExpensesList] = useState<unknown[]>([])
-  const [filteredExpenses, setFilteredExpenses] = useState<unknown[]>([])
+  const [expensesList, setExpensesList] = useState<ExpenseRow[]>([])
+  const [filteredExpenses, setFilteredExpenses] = useState<ExpenseRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -42,8 +69,9 @@ export default function ExpensesPage() {
       return
     }
     if (result.data) {
-      setExpensesList(result.data)
-      setFilteredExpenses(result.data)
+      const rows = (result.data as unknown[]).map(asExpenseRow).filter((row): row is ExpenseRow => !!row)
+      setExpensesList(rows)
+      setFilteredExpenses(rows)
     }
     setIsLoading(false)
   }
@@ -141,19 +169,19 @@ export default function ExpensesPage() {
             <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Total Expenses</p>
               <p className="text-3xl font-bold text-foreground">
-                ${expensesList.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0).toFixed(2)}
+                ${expensesList.reduce((sum, e) => sum + amountValue(e.amount), 0).toFixed(2)}
               </p>
             </Card>
             <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Fuel Costs</p>
               <p className="text-3xl font-bold text-foreground">
-                ${expensesList.filter(e => e.category === "fuel").reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0).toFixed(2)}
+                ${expensesList.filter(e => e.category === "fuel").reduce((sum, e) => sum + amountValue(e.amount), 0).toFixed(2)}
               </p>
             </Card>
             <Card className="border border-border/50 p-4 md:p-6">
               <p className="text-muted-foreground text-sm font-medium mb-2">Maintenance</p>
               <p className="text-3xl font-bold text-foreground">
-                ${expensesList.filter(e => e.category === "maintenance").reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0).toFixed(2)}
+                ${expensesList.filter(e => e.category === "maintenance").reduce((sum, e) => sum + amountValue(e.amount), 0).toFixed(2)}
               </p>
             </Card>
             <Card className="border border-border/50 p-4 md:p-6">
@@ -227,7 +255,7 @@ export default function ExpensesPage() {
                             </Badge>
                           </td>
                           <td className="px-6 py-4 text-foreground">{expense.description || "N/A"}</td>
-                          <td className="px-6 py-4 text-foreground font-semibold">${expense.amount ? parseFloat(expense.amount).toFixed(2) : "0.00"}</td>
+                          <td className="px-6 py-4 text-foreground font-semibold">${expense.amount ? parseFloat(String(expense.amount)).toFixed(2) : "0.00"}</td>
                           <td className="px-6 py-4 text-foreground">{expense.has_receipt ? "Yes" : "No"}</td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
@@ -274,7 +302,7 @@ export default function ExpensesPage() {
                       <div className="space-y-2 pt-2 border-t border-border/30">
                         <div>
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Amount</p>
-                          <p className="text-lg font-bold text-foreground">${expense.amount ? parseFloat(expense.amount).toFixed(2) : "0.00"}</p>
+                          <p className="text-lg font-bold text-foreground">${expense.amount ? parseFloat(String(expense.amount)).toFixed(2) : "0.00"}</p>
                         </div>
                         <div>
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Receipt</p>

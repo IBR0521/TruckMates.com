@@ -117,7 +117,7 @@ export async function getUnifiedNotifications(filters?: {
             title: notif.title,
             message: notif.message,
             priority: notif.priority || "normal",
-            read: notif.read,
+            read: Boolean(notif.read),
             created_at: notif.created_at,
             metadata: notif.metadata || {},
           })

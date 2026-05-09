@@ -22,11 +22,51 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { normalizeInvoiceLineItems } from "@/lib/invoice-line-items"
 
+type InvoiceDetail = {
+  id: string
+  invoice_number?: string | null
+  customer_name?: string | null
+  loads?: { shipment_number?: string | null } | null
+  amount?: string | number | null
+  status?: string | null
+  due_date?: string | null
+  issue_date?: string | null
+  payment_terms?: string | null
+  description?: string | null
+  items?: unknown
+  companies?: { name?: string | null } | null
+  quickbooks_id?: string | null
+  quickbooks_synced_at?: string | null
+  factoring_status?: string | null
+  factoring_submitted_at?: string | null
+  factoring_funded_at?: string | null
+  factoring_status_reason?: string | null
+}
+
+const asInvoiceDetail = (value: unknown): InvoiceDetail | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as InvoiceDetail
+}
+
+type InvoiceItem = {
+  description?: string
+  quantity?: number | string
+  rate?: number | string
+  amount?: number | string
+}
+
+const asInvoiceItem = (value: unknown): InvoiceItem => {
+  if (!value || typeof value !== "object") return {}
+  return value as InvoiceItem
+}
+
 export default function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
   const aliveRef = useRef(true)
-  const [invoice, setInvoice] = useState<unknown>(null)
+  const [invoice, setInvoice] = useState<InvoiceDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showShareMenu, setShowShareMenu] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
@@ -56,8 +96,9 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         if (aliveRef.current) router.push("/dashboard/accounting/invoices")
         return
       }
-      if (result.data) {
-        setInvoice(result.data)
+      const parsedInvoice = asInvoiceDetail(result.data)
+      if (parsedInvoice) {
+        setInvoice(parsedInvoice)
       }
       setIsLoading(false)
     }
@@ -117,9 +158,9 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     id: invoice.id,
     invoice_number: invoice.invoice_number,
     customer: invoice.customer_name,
-    load: invoice.loads ? (invoice.loads as unknown).shipment_number : null,
+    load: invoice.loads?.shipment_number || null,
     amount: `$${Number(invoice.amount).toFixed(2)}`,
-    status: invoice.status,
+    status: invoice.status || "draft",
     dueDate: invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : "N/A",
     issueDate: invoice.issue_date ? new Date(invoice.issue_date).toLocaleDateString() : "N/A",
     paymentTerms: invoice.payment_terms || "Net 30",
@@ -129,14 +170,17 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
   const handleDownload = () => {
     try {
-      const itemsHtml = invoiceData.items.map((item: unknown) => `
+      const itemsHtml = invoiceData.items.map((rawItem: unknown) => {
+        const item = asInvoiceItem(rawItem)
+        return `
         <tr>
           <td>${item.description || "Item"}</td>
           <td style="text-align: right;">${item.quantity || 1}</td>
           <td style="text-align: right;">$${Number(item.rate || item.amount || 0).toFixed(2)}</td>
           <td style="text-align: right;">$${Number(item.amount || 0).toFixed(2)}</td>
         </tr>
-      `).join("")
+      `
+      }).join("")
 
       const content = `
         <h1>Invoice ${invoiceData.invoice_number}</h1>
@@ -180,9 +224,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
    * PDF cannot be embedded in mailto: â€” we try Web Share with attachment, else download PDF then open Mail.
    */
   const handleShare = async (method: string) => {
-    const companyName =
-      (invoice as { companies?: { name?: string | null } | null }).companies?.name?.trim() || "Our company"
-    const loadRef = invoice.loads && (invoice.loads as { shipment_number?: string }).shipment_number
+    const companyName = invoice.companies?.name?.trim() || "Our company"
+    const loadRef = invoice.loads?.shipment_number
     const loadLine = loadRef ? `Load: ${loadRef}\n` : ""
 
     if (method === "email") {
@@ -551,9 +594,9 @@ PDF and supporting documents are not attached here. Use TruckMates â†’ Invoice â
               <div>
                 <h3 className="text-sm font-semibold text-muted-foreground mb-2">BILL TO</h3>
                 <p className="text-lg font-bold text-foreground">{invoiceData.customer}</p>
-                {invoice.loads && (invoice.loads as unknown).shipment_number && (
+                {invoice.loads?.shipment_number && (
                   <p className="text-sm text-muted-foreground mt-2">
-                    Related Load: {(invoice.loads as unknown).shipment_number}
+                    Related Load: {invoice.loads.shipment_number}
                   </p>
                 )}
               </div>
@@ -594,14 +637,17 @@ PDF and supporting documents are not attached here. Use TruckMates â†’ Invoice â
                   </tr>
                 </thead>
                 <tbody>
-                  {invoiceData.items.map((item: unknown, i: number) => (
-                    <tr key={i} className="border-b border-border">
-                      <td className="py-3 text-foreground">{item.description || "Item"}</td>
-                      <td className="text-right py-3 text-foreground">{item.quantity || 1}</td>
-                      <td className="text-right py-3 text-foreground">${Number(item.rate || item.amount || 0).toFixed(2)}</td>
-                      <td className="text-right py-3 text-foreground font-semibold">${Number(item.amount || 0).toFixed(2)}</td>
-                    </tr>
-                  ))}
+                  {invoiceData.items.map((rawItem: unknown, i: number) => {
+                    const item = asInvoiceItem(rawItem)
+                    return (
+                      <tr key={i} className="border-b border-border">
+                        <td className="py-3 text-foreground">{item.description || "Item"}</td>
+                        <td className="text-right py-3 text-foreground">{item.quantity || 1}</td>
+                        <td className="text-right py-3 text-foreground">${Number(item.rate || item.amount || 0).toFixed(2)}</td>
+                        <td className="text-right py-3 text-foreground font-semibold">${Number(item.amount || 0).toFixed(2)}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
                 <tfoot>
                   <tr>

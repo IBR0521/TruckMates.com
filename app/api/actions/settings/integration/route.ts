@@ -5,16 +5,22 @@ import { updateIntegrationSettings } from "@/app/actions/settings-integration"
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    const asOptionalString = (value: unknown): string | undefined =>
+      typeof value === "string" ? value : undefined
+    const asStringRecord = (value: unknown): Record<string, string> | undefined => {
+      if (!value || typeof value !== "object") return undefined
+      const entries = Object.entries(value as Record<string, unknown>).filter(
+        ([, v]) => typeof v === "string",
+      ) as Array<[string, string]>
+      return entries.length > 0 ? Object.fromEntries(entries) : undefined
+    }
 
     const result = await updateIntegrationSettings({
       quickbooks_default_income_account_id:
-        body?.quickbooks_default_income_account_id !== undefined
-          ? body.quickbooks_default_income_account_id
-          : undefined,
-      quickbooks_default_item_id:
-        body?.quickbooks_default_item_id !== undefined ? body.quickbooks_default_item_id : undefined,
+        asOptionalString(body?.quickbooks_default_income_account_id),
+      quickbooks_default_item_id: asOptionalString(body?.quickbooks_default_item_id),
       quickbooks_gl_account_mappings:
-        body?.quickbooks_gl_account_mappings !== undefined ? body.quickbooks_gl_account_mappings : undefined,
+        asStringRecord(body?.quickbooks_gl_account_mappings),
     })
 
     if (!result?.success) {

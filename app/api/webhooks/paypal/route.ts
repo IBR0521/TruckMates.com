@@ -195,8 +195,12 @@ export async function POST(request: NextRequest) {
 
       case "PAYMENT.SALE.COMPLETED": {
         // Payment received
-        const sale = body.resource
-        const subscriptionId = sale.billing_agreement_id
+        const sale =
+          body.resource && typeof body.resource === "object"
+            ? (body.resource as Record<string, unknown>)
+            : null
+        const subscriptionId =
+          sale && typeof sale.billing_agreement_id === "string" ? sale.billing_agreement_id : ""
 
         if (subscriptionId) {
           await supabase

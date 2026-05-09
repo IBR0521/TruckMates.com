@@ -106,24 +106,31 @@ export async function GET(request: NextRequest) {
       
       if (!usersError && users) {
         ;(users as UserRow[]).forEach((user) => {
-          userMap[user.id] = { name: user.name, email: user.email }
+          userMap[user.id] = {
+            name: user.name ?? undefined,
+            email: user.email ?? undefined,
+          }
         })
       }
     }
 
     // Format response with user names
-    const logs = auditRows.map((log) => ({
-      id: log.id,
-      user_id: log.user_id,
-      user_name: userMap[log.user_id]?.name || userMap[log.user_id]?.email || "Unknown User",
-      action: log.action,
-      resource_type: log.resource_type,
-      resource_id: log.resource_id,
-      details: log.details || {},
-      created_at: log.created_at,
-      ip_address: log.ip_address,
-      user_agent: log.user_agent,
-    }))
+    const logs = auditRows.map((log) => {
+      const userId = typeof log.user_id === "string" ? log.user_id : null
+      const userInfo = userId ? userMap[userId] : undefined
+      return {
+        id: log.id,
+        user_id: log.user_id,
+        user_name: userInfo?.name || userInfo?.email || "Unknown User",
+        action: log.action,
+        resource_type: log.resource_type,
+        resource_id: log.resource_id,
+        details: log.details || {},
+        created_at: log.created_at,
+        ip_address: log.ip_address,
+        user_agent: log.user_agent,
+      }
+    })
 
     return NextResponse.json({ logs })
   } catch (error: unknown) {

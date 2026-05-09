@@ -3,8 +3,8 @@ import crypto from "crypto"
 import { errorMessage } from "@/lib/error-message"
 
 type InsertClient = {
-  from: (table: string) => {
-    insert: (values: unknown) => Promise<{ error: unknown }>
+  from: (table: "eld_logs" | "eld_locations" | "eld_violations" | "eld_events") => {
+    insert: (values: unknown) => PromiseLike<{ error: unknown }>
   }
 }
 
@@ -172,7 +172,7 @@ async function processHOSLog(data: GeotabWebhookData, device: ELDDevice, supabas
   
   const log = {
     driver_id: logData.driver?.id || logData.driverId,
-    log_type: mapGeotabStatus(logData.dutyStatus || logData.status),
+    log_type: mapGeotabStatus(logData.dutyStatus || logData.status || "OFF_DUTY"),
     start_time: logData.dateTime || logData.startTime,
     end_time: logData.endDateTime || logData.endTime || null,
     location_start: logData.startLocation

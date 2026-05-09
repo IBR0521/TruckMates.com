@@ -94,7 +94,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
           margin: { top: "0.5in", right: "0.5in", bottom: "0.5in", left: "0.5in" },
         })
 
-        return new NextResponse(pdfBuffer, {
+        return new NextResponse(new Uint8Array(pdfBuffer), {
           headers: {
             "Content-Type": "application/pdf",
             "Content-Disposition": `attachment; filename="dvir-${String(id).slice(0, 8)}.pdf"`,

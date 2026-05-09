@@ -1931,7 +1931,7 @@ export async function duplicateLoad(id: string) {
         zip: typeof pointData.zip_code === "string" ? pointData.zip_code : undefined,
         contact_name: typeof pointData.contact_name === "string" ? pointData.contact_name : undefined,
         phone: typeof pointData.phone === "string" ? pointData.phone : undefined,
-        stop_type: typeof pointData.stop_type === "string" ? pointData.stop_type : undefined,
+        delivery_type: typeof pointData.stop_type === "string" ? pointData.stop_type : undefined,
         notes: typeof pointData.instructions === "string" ? pointData.instructions : undefined,
         coordinates: lat !== undefined && lng !== undefined ? { lat, lng } : undefined,
       })

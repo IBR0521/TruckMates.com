@@ -20,9 +20,24 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+type LoadOption = {
+  id: string
+  shipment_number?: string | null
+  origin?: string | null
+  destination?: string | null
+  value?: string | number | null
+}
+
+const asLoadOption = (value: unknown): LoadOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as LoadOption
+}
+
 export default function CreateInvoicePage() {
   const router = useRouter()
-  const [loads, setLoads] = useState<unknown[]>([])
+  const [loads, setLoads] = useState<LoadOption[]>([])
   const [isLoadingLoads, setIsLoadingLoads] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
@@ -43,7 +58,7 @@ export default function CreateInvoicePage() {
         getCompanySettings(),
       ])
       if (loadsResult.data) {
-        setLoads(loadsResult.data)
+        setLoads((loadsResult.data as unknown[]).map(asLoadOption).filter((load): load is LoadOption => !!load))
       }
       // Apply default payment terms from settings
       if (settingsResult.data?.default_payment_terms) {

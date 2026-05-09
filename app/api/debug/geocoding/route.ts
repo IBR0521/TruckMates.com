@@ -35,19 +35,29 @@ export async function GET(request: Request) {
 
     // Try to geocode
     const result = await geocodeAddress(address)
+    const geocodeData =
+      result.data && typeof result.data === "object" ? (result.data as Record<string, unknown>) : null
+    const lat = geocodeData && typeof geocodeData.lat === "number" ? geocodeData.lat : null
+    const lng = geocodeData && typeof geocodeData.lng === "number" ? geocodeData.lng : null
+    const formattedAddress =
+      geocodeData && typeof geocodeData.formatted_address === "string"
+        ? geocodeData.formatted_address
+        : null
 
     return NextResponse.json({
-      success: !!result.data,
+      success: lat !== null && lng !== null,
       error: result.error,
       address,
       apiKeyConfigured: true,
       apiKeyLength: apiKey.length,
       apiKeyPrefix: apiKey.substring(0, 10) + "...",
-      result: result.data ? {
-        lat: result.data.lat,
-        lng: result.data.lng,
-        formatted_address: result.data.formatted_address,
-      } : null,
+      result: lat !== null && lng !== null
+        ? {
+            lat,
+            lng,
+            formatted_address: formattedAddress,
+          }
+        : null,
     })
   } catch (error: unknown) {
     return NextResponse.json({

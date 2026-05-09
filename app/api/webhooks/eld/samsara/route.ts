@@ -3,8 +3,8 @@ import { errorMessage } from "@/lib/error-message"
 import crypto from "crypto"
 
 type InsertClient = {
-  from: (table: string) => {
-    insert: (values: unknown) => Promise<{ error: unknown }>
+  from: (table: "eld_logs" | "eld_locations" | "eld_violations" | "eld_events") => {
+    insert: (values: unknown) => PromiseLike<{ error: unknown }>
   }
 }
 
@@ -168,7 +168,11 @@ export async function POST(request: NextRequest) {
 }
 
 async function processHOSLogs(data: SamsaraWebhookData, device: ELDDevice, supabase: InsertClient) {
-  const logs = data.logs || data.hosLogs || [data]
+  const logs: SamsaraLog[] = Array.isArray(data.logs)
+    ? data.logs
+    : Array.isArray(data.hosLogs)
+      ? data.hosLogs
+      : [data as unknown as SamsaraLog]
   
   for (const logData of logs) {
     // Derive log_date from start_time (required field)
@@ -177,7 +181,7 @@ async function processHOSLogs(data: SamsaraWebhookData, device: ELDDevice, supab
     
     const log = {
       driver_id: logData.driver?.id || logData.driverId,
-      log_type: mapSamsaraStatus(logData.dutyStatus || logData.status),
+      log_type: mapSamsaraStatus(logData.dutyStatus || logData.status || "off_duty"),
       start_time: logData.startTime || logData.start_time,
       end_time: logData.endTime || logData.end_time || null,
       location_start: logData.startLocation

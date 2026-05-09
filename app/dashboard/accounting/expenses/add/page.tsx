@@ -31,10 +31,32 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 
+type DriverOption = { id: string; name: string }
+type TruckOption = { id: string; truck_number: string; make?: string; model?: string }
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string" || typeof obj.name !== "string") return null
+  return { id: obj.id, name: obj.name }
+}
+
+const asTruckOption = (value: unknown): TruckOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string" || typeof obj.truck_number !== "string") return null
+  return {
+    id: obj.id,
+    truck_number: obj.truck_number,
+    make: typeof obj.make === "string" ? obj.make : undefined,
+    model: typeof obj.model === "string" ? obj.model : undefined,
+  }
+}
+
 export default function AddExpensePage() {
   const router = useRouter()
-  const [drivers, setDrivers] = useState<unknown[]>([])
-  const [trucks, setTrucks] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
   const [glAccounts, setGlAccounts] = useState<Array<{ id: string; code: string; name: string }>>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
@@ -62,10 +84,14 @@ export default function AddExpensePage() {
         getGLAccounts("expense"),
       ])
       if (driversResult.data) {
-        setDrivers(driversResult.data)
+        setDrivers(
+          (driversResult.data as unknown[]).map(asDriverOption).filter((driver): driver is DriverOption => !!driver),
+        )
       }
       if (trucksResult.data) {
-        setTrucks(trucksResult.data)
+        setTrucks(
+          (trucksResult.data as unknown[]).map(asTruckOption).filter((truck): truck is TruckOption => !!truck),
+        )
       }
       if (glResult.data) {
         setGlAccounts(glResult.data)
