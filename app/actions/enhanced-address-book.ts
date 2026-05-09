@@ -492,10 +492,16 @@ export async function findNearbyAddresses(
     }
 
     // Coordinates are already extracted in the RPC function - no additional queries needed
-    const entries = ((data || []) as Array<AddressBookEntry & { lat?: number; lng?: number }>).map((entry) => ({
-      ...entry,
-      coordinates: entry.lat && entry.lng ? { lat: Number(entry.lat), lng: Number(entry.lng) } : null,
-    }))
+    const entries = (
+      (data || []) as Array<AddressBookEntry & { lat?: number; lng?: number; distance_km: number }>
+    ).map((entry) => {
+      const hasLat = typeof entry.lat === "number"
+      const hasLng = typeof entry.lng === "number"
+      return {
+        ...entry,
+        coordinates: hasLat && hasLng ? { lat: Number(entry.lat), lng: Number(entry.lng) } : null,
+      }
+    })
 
     return { data: entries, error: null }
   } catch (error: unknown) {
