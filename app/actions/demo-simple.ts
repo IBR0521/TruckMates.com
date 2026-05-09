@@ -293,7 +293,7 @@ export async function createDemoAndSignIn() {
           Sentry.captureException(populateError)
           
           // Check for common errors
-          const errorMsg = populateError.message || String(populateError)
+          const errorMsg = errorMessage(populateError, String(populateError))
           
           // If timeout or function missing, continue anyway - company is created
           if (errorMsg.includes('timed out') || errorMsg.includes('does not exist') || (errorMsg.includes('function') && errorMsg.includes('not found'))) {
