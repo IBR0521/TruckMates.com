@@ -624,8 +624,8 @@ export async function createAlert(formData: {
         await sendNotification(manager.id, "violation_alert", {
           title: formData.title,
           message: formData.message,
-          driverName: formData.metadata?.driver_name,
-          shipmentNumber: formData.metadata?.shipment_number,
+          driverName: metaString("driver_name"),
+          shipmentNumber: metaString("shipment_number"),
           violationType: formData.event_type,
           priority: formData.priority || "critical",
         }).catch(() => {
