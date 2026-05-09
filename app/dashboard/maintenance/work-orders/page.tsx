@@ -12,6 +12,25 @@ import { usePathname, useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { getWorkOrders } from "@/app/actions/maintenance-enhanced"
 
+type WorkOrderRow = {
+  id: string
+  work_order_number?: string | null
+  title?: string | null
+  status?: string | null
+  created_at?: string | null
+  actual_total_cost?: number | null
+  estimated_total_cost?: number | null
+  priority?: string | null
+  truck?: { truck_number?: string | null } | null
+}
+
+const asWorkOrderRow = (value: unknown): WorkOrderRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as WorkOrderRow
+}
+
 export default function WorkOrdersPage() {
   const router = useRouter()
   const pathname = usePathname()
@@ -22,8 +41,8 @@ export default function WorkOrdersPage() {
     }
   }, [pathname, router])
 
-  const [workOrders, setWorkOrders] = useState<unknown[]>([])
-  const [filteredWorkOrders, setFilteredWorkOrders] = useState<unknown[]>([])
+  const [workOrders, setWorkOrders] = useState<WorkOrderRow[]>([])
+  const [filteredWorkOrders, setFilteredWorkOrders] = useState<WorkOrderRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -38,8 +57,11 @@ export default function WorkOrdersPage() {
     if (result.error) {
       toast.error(result.error)
     } else {
-      setWorkOrders(result.data || [])
-      setFilteredWorkOrders(result.data || [])
+      const parsed = ((result.data || []) as unknown[])
+        .map(asWorkOrderRow)
+        .filter((wo): wo is WorkOrderRow => !!wo)
+      setWorkOrders(parsed)
+      setFilteredWorkOrders(parsed)
     }
     setIsLoading(false)
   }
@@ -152,7 +174,7 @@ export default function WorkOrdersPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {filteredWorkOrders.map((wo: unknown) => (
+              {filteredWorkOrders.map((wo: WorkOrderRow) => (
                 <Card key={wo.id} className="border-border p-6 hover:bg-secondary/20 transition">
                   <div className="flex justify-between items-start mb-4">
                     <div>
@@ -179,7 +201,7 @@ export default function WorkOrdersPage() {
                       <div>
                         <p className="text-xs text-muted-foreground">Truck</p>
                         <p className="text-sm font-medium">
-                          {(wo.truck as unknown)?.truck_number || "N/A"}
+                          {wo.truck?.truck_number || "N/A"}
                         </p>
                       </div>
                     </div>
@@ -188,7 +210,7 @@ export default function WorkOrdersPage() {
                       <div>
                         <p className="text-xs text-muted-foreground">Created</p>
                         <p className="text-sm font-medium">
-                          {new Date(wo.created_at).toLocaleDateString()}
+                          {wo.created_at ? new Date(wo.created_at).toLocaleDateString() : "N/A"}
                         </p>
                       </div>
                     </div>

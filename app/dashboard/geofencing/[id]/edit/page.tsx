@@ -28,6 +28,62 @@ import { getTrucks } from "@/app/actions/trucks"
 import { getRoutes } from "@/app/actions/routes"
 import { ALL_LOAD_STATUSES } from "@/lib/load-status"
 
+type GeofenceDetail = {
+  id: string
+  name?: string | null
+  description?: string | null
+  zone_type?: string | null
+  is_active?: boolean | null
+  alert_on_entry?: boolean | null
+  alert_on_exit?: boolean | null
+  alert_on_dwell?: boolean | null
+  dwell_time_minutes?: number | null
+  assigned_trucks?: string[] | null
+  assigned_routes?: string[] | null
+  address?: string | null
+  city?: string | null
+  state?: string | null
+  zip_code?: string | null
+  auto_update_load_status?: boolean | null
+  entry_load_status?: string | null
+  exit_load_status?: string | null
+}
+
+type TruckOption = {
+  id: string
+  truck_number?: string | null
+  make?: string | null
+  model?: string | null
+}
+
+type RouteOption = {
+  id: string
+  name?: string | null
+  origin?: string | null
+  destination?: string | null
+}
+
+const asGeofenceDetail = (value: unknown): GeofenceDetail | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as GeofenceDetail
+}
+
+const asTruckOption = (value: unknown): TruckOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as TruckOption
+}
+
+const asRouteOption = (value: unknown): RouteOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as RouteOption
+}
+
 export default function EditGeofencePage() {
   const params = useParams()
   const router = useRouter()
@@ -36,9 +92,9 @@ export default function EditGeofencePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
 
-  const [geofence, setGeofence] = useState<unknown>(null)
-  const [trucks, setTrucks] = useState<unknown[]>([])
-  const [routes, setRoutes] = useState<unknown[]>([])
+  const [geofence, setGeofence] = useState<GeofenceDetail | null>(null)
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
+  const [routes, setRoutes] = useState<RouteOption[]>([])
 
   const [formData, setFormData] = useState({
     name: "",
@@ -71,11 +127,16 @@ export default function EditGeofencePage() {
 
         if (geofenceResult.error) throw new Error(geofenceResult.error)
 
-        setGeofence(geofenceResult.data)
-        if (trucksResult.data) setTrucks(trucksResult.data)
-        if (routesResult.data) setRoutes(routesResult.data)
+        const parsedGeofence = asGeofenceDetail(geofenceResult.data)
+        setGeofence(parsedGeofence)
+        if (trucksResult.data) {
+          setTrucks((trucksResult.data as unknown[]).map(asTruckOption).filter((t): t is TruckOption => !!t))
+        }
+        if (routesResult.data) {
+          setRoutes((routesResult.data as unknown[]).map(asRouteOption).filter((r): r is RouteOption => !!r))
+        }
 
-        const g = geofenceResult.data
+        const g = parsedGeofence
         setFormData({
           name: g?.name || "",
           description: g?.description || "",
@@ -84,8 +145,8 @@ export default function EditGeofencePage() {
           alert_on_exit: g?.alert_on_exit !== false,
           alert_on_dwell: !!g?.alert_on_dwell,
           dwell_time_minutes: g?.dwell_time_minutes ? String(g.dwell_time_minutes) : "",
-          assigned_trucks: Array.isArray(g?.assigned_trucks) ? g.assigned_trucks : [],
-          assigned_routes: Array.isArray(g?.assigned_routes) ? g.assigned_routes : [],
+          assigned_trucks: Array.isArray(g?.assigned_trucks) ? g.assigned_trucks.filter((id): id is string => typeof id === "string") : [],
+          assigned_routes: Array.isArray(g?.assigned_routes) ? g.assigned_routes.filter((id): id is string => typeof id === "string") : [],
           address: g?.address || "",
           city: g?.city || "",
           state: g?.state || "",

@@ -22,11 +22,56 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ELDRealtimeMap } from "@/components/eld-realtime-map"
 
+type FleetHealth = {
+  complianceScore?: number
+  devices?: { active?: number; total?: number; inactive?: number }
+  violations?: { total?: number; critical?: number; warning?: number }
+  drivers?: { approachingLimit?: number; total?: number }
+}
+
+type PredictiveAlert = {
+  severity?: string | null
+  title?: string | null
+  description?: string | null
+  remainingHours?: number | null
+}
+
+type LocationRow = {
+  timestamp?: string | null
+  odometer?: number | string | null
+  engine_hours?: number | string | null
+  eld_devices?: {
+    trucks?: {
+      id?: string | null
+      truck_number?: string | null
+    } | null
+  } | null
+}
+
+type FaultEvent = {
+  fault_code?: string | null
+  event_type?: string | null
+  truck_id?: string | null
+  trucks?: { truck_number?: string | null } | null
+}
+
+const asFleetHealth = (value: unknown): FleetHealth | null =>
+  value && typeof value === "object" ? (value as FleetHealth) : null
+
+const asPredictiveAlert = (value: unknown): PredictiveAlert | null =>
+  value && typeof value === "object" ? (value as PredictiveAlert) : null
+
+const asLocationRow = (value: unknown): LocationRow | null =>
+  value && typeof value === "object" ? (value as LocationRow) : null
+
+const asFaultEvent = (value: unknown): FaultEvent | null =>
+  value && typeof value === "object" ? (value as FaultEvent) : null
+
 export default function FleetHealthPage() {
-  const [health, setHealth] = useState<unknown>(null)
-  const [alerts, setAlerts] = useState<unknown[]>([])
-  const [locations, setLocations] = useState<unknown[]>([])
-  const [faultEvents, setFaultEvents] = useState<unknown[]>([])
+  const [health, setHealth] = useState<FleetHealth | null>(null)
+  const [alerts, setAlerts] = useState<PredictiveAlert[]>([])
+  const [locations, setLocations] = useState<LocationRow[]>([])
+  const [faultEvents, setFaultEvents] = useState<FaultEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [sortKey, setSortKey] = useState<"truck" | "lastSeen" | "odometer" | "engineHours" | "faults">("lastSeen")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
@@ -49,20 +94,23 @@ export default function FleetHealthPage() {
       if (healthResult.error) {
         toast.error(healthResult.error)
       } else if (healthResult.data) {
-        setHealth(healthResult.data)
+        setHealth(asFleetHealth(healthResult.data))
       }
 
       if (alertsResult.error) {
         toast.error(alertsResult.error)
       } else if (alertsResult.data) {
-        setAlerts(alertsResult.data)
+        setAlerts((alertsResult.data as unknown[]).map(asPredictiveAlert).filter((a): a is PredictiveAlert => !!a))
       }
-      if (locationsResult?.data) setLocations(locationsResult.data)
+      if (locationsResult?.data) {
+        setLocations((locationsResult.data as unknown[]).map(asLocationRow).filter((loc): loc is LocationRow => !!loc))
+      }
       if (faultsResult?.data) {
         setFaultEvents(
-          faultsResult.data.filter(
-            (event: unknown) => event.fault_code || event.event_type === "device_malfunction"
-          )
+          (faultsResult.data as unknown[])
+            .map(asFaultEvent)
+            .filter((event): event is FaultEvent => !!event)
+            .filter((event) => Boolean(event.fault_code) || event.event_type === "device_malfunction")
         )
       }
     } catch (error) {
@@ -128,7 +176,7 @@ export default function FleetHealthPage() {
     )
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status?: string | null) => {
     switch (status) {
       case "excellent":
         return "bg-green-500/20 text-green-500 border-green-500/50"
@@ -276,7 +324,7 @@ export default function FleetHealthPage() {
                         <p className="text-sm text-muted-foreground">{alert.description}</p>
                         {alert.remainingHours !== undefined && (
                           <p className="text-xs text-muted-foreground mt-1">
-                            {alert.remainingHours.toFixed(1)} hours remaining
+                            {Number(alert.remainingHours ?? 0).toFixed(1)} hours remaining
                           </p>
                         )}
                       </div>

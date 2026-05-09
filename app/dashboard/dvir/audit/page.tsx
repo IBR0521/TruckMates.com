@@ -11,8 +11,22 @@ import { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { getTrucks } from "@/app/actions/trucks"
 
+type TruckOption = {
+  id: string
+  truck_number?: string | null
+  make?: string | null
+  model?: string | null
+}
+
+const asTruckOption = (value: unknown): TruckOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as TruckOption
+}
+
 export default function DVIRAuditPage() {
-  const [trucks, setTrucks] = useState<unknown[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
   const [selectedTruck, setSelectedTruck] = useState<string>("all")
   const [startDate, setStartDate] = useState<string>("")
   const [endDate, setEndDate] = useState<string>("")
@@ -31,7 +45,7 @@ export default function DVIRAuditPage() {
   async function loadTrucks() {
     const result = await getTrucks()
     if (result.data) {
-      setTrucks(result.data)
+      setTrucks((result.data as unknown[]).map(asTruckOption).filter((truck): truck is TruckOption => !!truck))
     }
   }
 

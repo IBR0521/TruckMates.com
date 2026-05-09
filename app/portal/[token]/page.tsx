@@ -104,7 +104,7 @@ export default function CustomerPortalPage() {
     }
   }, [token, router])
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status?: string | null) => {
     switch (status?.toLowerCase()) {
       case "delivered":
       case "completed":
@@ -124,7 +124,7 @@ export default function CustomerPortalPage() {
     }
   }
 
-  const formatDate = (date: string | null) => {
+  const formatDate = (date?: string | null) => {
     if (!date) return "N/A"
     return new Date(date).toLocaleDateString("en-US", {
       year: "numeric",
@@ -462,7 +462,7 @@ export default function CustomerPortalPage() {
                             {invoice.status?.toUpperCase() || "UNKNOWN"}
                           </Badge>
                           {invoice.amount && (
-                            <span className="text-lg font-semibold">${parseFloat(invoice.amount).toFixed(2)}</span>
+                            <span className="text-lg font-semibold">${Number(invoice.amount || 0).toFixed(2)}</span>
                           )}
                         </div>
                       </div>

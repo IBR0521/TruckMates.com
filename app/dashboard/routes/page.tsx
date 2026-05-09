@@ -64,6 +64,7 @@ type DriverRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getDrivers
 type TruckRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getTrucks>>["data"]>[number]>
 type RoutePreview = NonNullable<Awaited<ReturnType<typeof getRoute>>["data"]>
 type RouteStop = NonNullable<NonNullable<Awaited<ReturnType<typeof getRouteStops>>["data"]>[number]>
+type RouteDeleteDependency = { type: string; id: string; name: string; link?: string }
 
 function formatDurationMinutes(minutes: number | null | undefined) {
   if (minutes == null || !Number.isFinite(Number(minutes))) return null
@@ -90,7 +91,7 @@ function formatTimeDisplay(route: RouteRow) {
 export default function RoutesPage() {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [deleteDependencies, setDeleteDependencies] = useState<unknown[]>([])
+  const [deleteDependencies, setDeleteDependencies] = useState<RouteDeleteDependency[]>([])
   const [routesList, setRoutesList] = useState<RouteRow[]>([])
   const [filteredRoutes, setFilteredRoutes] = useState<RouteRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -213,8 +214,8 @@ export default function RoutesPage() {
           return (a.name || "").localeCompare(b.name || "")
         case "distance":
           return (
-            parseFloat(String(a.distance || "0").replace(/[^\d.]/g, "") || "0") -
-            parseFloat(String(b.distance || "0").replace(/[^\d.]/g, "") || "0")
+            Number(String(a.distance || "0").replace(/[^\d.]/g, "") || "0") -
+            Number(String(b.distance || "0").replace(/[^\d.]/g, "") || "0")
           )
         case "status":
           return (a.status || "").localeCompare(b.status || "")
@@ -246,7 +247,23 @@ export default function RoutesPage() {
       const response = await fetch(`/api/check-dependencies?resource_type=route&resource_id=${id}`)
       if (response.ok) {
         const data = await response.json()
-        setDeleteDependencies(data.dependencies || [])
+        setDeleteDependencies(
+          ((data?.dependencies as unknown[]) || [])
+            .map((dep) => {
+              if (!dep || typeof dep !== "object") return null
+              const obj = dep as Record<string, unknown>
+              if (typeof obj.type !== "string" || typeof obj.id !== "string" || typeof obj.name !== "string") {
+                return null
+              }
+              return {
+                type: obj.type,
+                id: obj.id,
+                name: obj.name,
+                link: typeof obj.link === "string" ? obj.link : undefined,
+              } as RouteDeleteDependency
+            })
+            .filter((dep): dep is RouteDeleteDependency => !!dep),
+        )
       }
     } catch (error) {
       console.error("Failed to check dependencies:", error)

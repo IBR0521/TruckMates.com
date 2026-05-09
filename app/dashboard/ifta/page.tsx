@@ -23,6 +23,24 @@ import {
 import IFTATripPlanningPage from "./trip-planning/page"
 import IFTATripSheetPage from "./trip-sheet/page"
 
+type IftaReportRow = {
+  id: string
+  quarter?: string | number | null
+  year?: string | number | null
+  period?: string | null
+  total_miles?: number | null
+  fuel_purchased?: number | null
+  tax_owed?: number | null
+  status?: string | null
+}
+
+const asIftaReportRow = (value: unknown): IftaReportRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as IftaReportRow
+}
+
 export default function IFTAPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -30,7 +48,7 @@ export default function IFTAPage() {
   const tabParam = (searchParams.get("tab") || "reports").toLowerCase()
   const activeTab = ["reports", "trip-planning", "trip-sheet"].includes(tabParam) ? tabParam : "reports"
 
-  const [iftaReports, setIftaReports] = useState<unknown[]>([])
+  const [iftaReports, setIftaReports] = useState<IftaReportRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
@@ -43,7 +61,7 @@ export default function IFTAPage() {
       return
     }
     if (result.data) {
-      setIftaReports(result.data)
+      setIftaReports((result.data as unknown[]).map(asIftaReportRow).filter((report): report is IftaReportRow => !!report))
     }
     setIsLoading(false)
   }
@@ -54,7 +72,7 @@ export default function IFTAPage() {
 
   const handleExport = () => {
     try {
-      const exportData = iftaReports.map(({ id, company_id, state_breakdown, truck_ids, created_at, updated_at, ...rest }) => rest)
+      const exportData = iftaReports.map(({ id, ...rest }) => rest)
       exportToExcel(exportData, "ifta-reports")
       toast.success("IFTA reports exported successfully")
     } catch (error) {

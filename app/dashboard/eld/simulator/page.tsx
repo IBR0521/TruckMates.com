@@ -34,6 +34,46 @@ import { getELDDevices } from "@/app/actions/eld"
 import { getTrucks } from "@/app/actions/trucks"
 import { getDrivers } from "@/app/actions/drivers"
 
+type DeviceOption = {
+  id: string
+  provider?: string | null
+  device_name?: string | null
+  device_serial_number?: string | null
+}
+
+type TruckOption = {
+  id: string
+  truck_number?: string | null
+  make?: string | null
+  model?: string | null
+}
+
+type DriverOption = {
+  id: string
+  name?: string | null
+}
+
+const asDeviceOption = (value: unknown): DeviceOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DeviceOption
+}
+
+const asTruckOption = (value: unknown): TruckOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as TruckOption
+}
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DriverOption
+}
+
 // BUG-069 FIX: ELD Simulator must not be accessible in production
 // This is a dev testing tool that allows injection of fake GPS and HOS data
 // Violates FMCSA ELD compliance if accessible in production
@@ -48,9 +88,9 @@ export default function ELDSimulatorPage() {
   const [deviceName, setDeviceName] = useState("Fake ELD Device")
   const [speed, setSpeed] = useState(60)
   const [updateInterval, setUpdateInterval] = useState(30)
-  const [devices, setDevices] = useState<unknown[]>([])
-  const [trucks, setTrucks] = useState<unknown[]>([])
-  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [devices, setDevices] = useState<DeviceOption[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
   const [simulatorInterval, setSimulatorInterval] = useState<NodeJS.Timeout | null>(null)
   const [stats, setStats] = useState({
     locationsSent: 0,
@@ -93,13 +133,17 @@ export default function ELDSimulatorPage() {
     ])
 
     if (devicesRes.data) {
-      setDevices(devicesRes.data.filter((d: unknown) => d.provider === "truckmates_simulator"))
+      setDevices(
+        (devicesRes.data as unknown[])
+          .map(asDeviceOption)
+          .filter((d): d is DeviceOption => !!d && d.provider === "truckmates_simulator"),
+      )
     }
     if (trucksRes.data) {
-      setTrucks(trucksRes.data)
+      setTrucks((trucksRes.data as unknown[]).map(asTruckOption).filter((t): t is TruckOption => !!t))
     }
     if (driversRes.data) {
-      setDrivers(driversRes.data)
+      setDrivers((driversRes.data as unknown[]).map(asDriverOption).filter((d): d is DriverOption => !!d))
     }
   }
 

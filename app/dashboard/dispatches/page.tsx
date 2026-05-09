@@ -73,7 +73,21 @@ import { createClient } from "@/lib/supabase/client"
 import { useRealtimeSubscription } from "@/lib/hooks/use-realtime"
 import { getTerminals } from "@/app/actions/terminals"
 
-type UnassignedLoad = NonNullable<NonNullable<Awaited<ReturnType<typeof getUnassignedLoads>>["data"]>[number]>
+type DispatchScopedLoad = {
+  id: string
+  shipment_number?: string | null
+  status?: string | null
+  status_color?: string | null
+  origin?: string | null
+  destination?: string | null
+  load_date?: string | null
+  driver_id?: string | null
+  truck_id?: string | null
+  priority?: string | null
+  urgency_score?: number | null
+  [key: string]: unknown
+}
+type UnassignedLoad = DispatchScopedLoad
 type UnassignedRoute = NonNullable<NonNullable<Awaited<ReturnType<typeof getUnassignedRoutes>>["data"]>[number]>
 type DriverRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getDrivers>>["data"]>[number]>
 type TruckRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getTrucks>>["data"]>[number]>
@@ -84,6 +98,13 @@ type RealtimePayload = {
   driver_id?: string | null
   truck_id?: string | null
   [key: string]: unknown
+}
+
+const asDispatchScopedLoad = (value: unknown): DispatchScopedLoad | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DispatchScopedLoad
 }
 
 export default function DispatchesPage() {
@@ -268,7 +289,13 @@ export default function DispatchesPage() {
         getTrucks({ limit: 100, terminal_id: terminalFilter === "all" ? undefined : terminalFilter }),
       ])
 
-      if (loadsResult.data) setUnassignedLoads(loadsResult.data)
+      if (loadsResult.data) {
+        setUnassignedLoads(
+          (loadsResult.data as unknown[])
+            .map(asDispatchScopedLoad)
+            .filter((load): load is DispatchScopedLoad => !!load),
+        )
+      }
       if (routesResult.data) setUnassignedRoutes(routesResult.data)
       if (driversResult.data) setDrivers(driversResult.data.filter((d: DriverRecord) => d.status === "active"))
       if (trucksResult.data) setTrucks(trucksResult.data.filter((t: TruckRecord) => t.status === "available" || t.status === "in_use"))
@@ -1010,7 +1037,7 @@ export default function DispatchesPage() {
                     <Card key={load.id} className="border-border p-4">
                       <div className="flex items-center justify-between">
                         <h3 className="font-semibold text-foreground">{load.shipment_number}</h3>
-                        {getStatusBadge(load.status, load.status_color)}
+                        {getStatusBadge(load.status || "pending", load.status_color || undefined)}
                       </div>
                       <p className="text-sm text-muted-foreground mt-2">{load.origin} → {load.destination}</p>
                       <div className="grid grid-cols-2 gap-2 mt-4">
@@ -1075,7 +1102,7 @@ export default function DispatchesPage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <h3 className="font-semibold text-foreground">{load.shipment_number}</h3>
-                            {getStatusBadge(load.status, statusColor)}
+                            {getStatusBadge(load.status || "pending", statusColor)}
                             {load.priority && load.priority !== 'normal' && (
                               <Badge variant="outline" className="text-xs">
                                 {load.priority.toUpperCase()}
@@ -1218,7 +1245,7 @@ export default function DispatchesPage() {
                   <Card key={load.id} className="border border-amber-500/40 bg-amber-500/5 p-4">
                     <div className="flex items-center justify-between">
                       <h3 className="font-semibold text-foreground">{load.shipment_number}</h3>
-                      {getStatusBadge(load.status, load.status_color)}
+                      {getStatusBadge(load.status || "pending", load.status_color || undefined)}
                     </div>
                     <p className="text-sm text-muted-foreground mt-2">{load.origin} → {load.destination}</p>
                     <Button className="w-full mt-3" variant="outline" onClick={() => handleLoadClick(load.id)}>
@@ -1660,17 +1687,17 @@ export default function DispatchesPage() {
                         )}
                         {loadDetails.shipper_address_book.custom_fields && Object.keys(loadDetails.shipper_address_book.custom_fields).length > 0 && (
                           <div className="space-y-1 mt-2">
-                            {loadDetails.shipper_address_book.custom_fields.gate_code && (
-                              <p><span className="text-muted-foreground">Gate Code:</span> <span className="font-semibold">{loadDetails.shipper_address_book.custom_fields.gate_code}</span></p>
+                            {Boolean(loadDetails.shipper_address_book.custom_fields.gate_code) && (
+                              <p><span className="text-muted-foreground">Gate Code:</span> <span className="font-semibold">{String(loadDetails.shipper_address_book.custom_fields.gate_code)}</span></p>
                             )}
-                            {loadDetails.shipper_address_book.custom_fields.warehouse_hours && (
-                              <p><span className="text-muted-foreground">Hours:</span> {loadDetails.shipper_address_book.custom_fields.warehouse_hours}</p>
+                            {Boolean(loadDetails.shipper_address_book.custom_fields.warehouse_hours) && (
+                              <p><span className="text-muted-foreground">Hours:</span> {String(loadDetails.shipper_address_book.custom_fields.warehouse_hours)}</p>
                             )}
-                            {loadDetails.shipper_address_book.custom_fields.dock_count && (
-                              <p><span className="text-muted-foreground">Docks:</span> {loadDetails.shipper_address_book.custom_fields.dock_count}</p>
+                            {Boolean(loadDetails.shipper_address_book.custom_fields.dock_count) && (
+                              <p><span className="text-muted-foreground">Docks:</span> {String(loadDetails.shipper_address_book.custom_fields.dock_count)}</p>
                             )}
-                            {loadDetails.shipper_address_book.custom_fields.loading_instructions && (
-                              <p><span className="text-muted-foreground">Loading Instructions:</span> {loadDetails.shipper_address_book.custom_fields.loading_instructions}</p>
+                            {Boolean(loadDetails.shipper_address_book.custom_fields.loading_instructions) && (
+                              <p><span className="text-muted-foreground">Loading Instructions:</span> {String(loadDetails.shipper_address_book.custom_fields.loading_instructions)}</p>
                             )}
                             {loadDetails.shipper_address_book.custom_fields.accepts_flatbed_after_3pm !== undefined && (
                               <p><span className="text-muted-foreground">Accepts Flatbed After 3PM:</span> {loadDetails.shipper_address_book.custom_fields.accepts_flatbed_after_3pm ? "Yes" : "No"}</p>
@@ -1687,17 +1714,17 @@ export default function DispatchesPage() {
                         )}
                         {loadDetails.consignee_address_book.custom_fields && Object.keys(loadDetails.consignee_address_book.custom_fields).length > 0 && (
                           <div className="space-y-1 mt-2">
-                            {loadDetails.consignee_address_book.custom_fields.gate_code && (
-                              <p><span className="text-muted-foreground">Gate Code:</span> <span className="font-semibold">{loadDetails.consignee_address_book.custom_fields.gate_code}</span></p>
+                            {Boolean(loadDetails.consignee_address_book.custom_fields.gate_code) && (
+                              <p><span className="text-muted-foreground">Gate Code:</span> <span className="font-semibold">{String(loadDetails.consignee_address_book.custom_fields.gate_code)}</span></p>
                             )}
-                            {loadDetails.consignee_address_book.custom_fields.warehouse_hours && (
-                              <p><span className="text-muted-foreground">Hours:</span> {loadDetails.consignee_address_book.custom_fields.warehouse_hours}</p>
+                            {Boolean(loadDetails.consignee_address_book.custom_fields.warehouse_hours) && (
+                              <p><span className="text-muted-foreground">Hours:</span> {String(loadDetails.consignee_address_book.custom_fields.warehouse_hours)}</p>
                             )}
-                            {loadDetails.consignee_address_book.custom_fields.dock_count && (
-                              <p><span className="text-muted-foreground">Docks:</span> {loadDetails.consignee_address_book.custom_fields.dock_count}</p>
+                            {Boolean(loadDetails.consignee_address_book.custom_fields.dock_count) && (
+                              <p><span className="text-muted-foreground">Docks:</span> {String(loadDetails.consignee_address_book.custom_fields.dock_count)}</p>
                             )}
-                            {loadDetails.consignee_address_book.custom_fields.loading_instructions && (
-                              <p><span className="text-muted-foreground">Delivery Instructions:</span> {loadDetails.consignee_address_book.custom_fields.loading_instructions}</p>
+                            {Boolean(loadDetails.consignee_address_book.custom_fields.loading_instructions) && (
+                              <p><span className="text-muted-foreground">Delivery Instructions:</span> {String(loadDetails.consignee_address_book.custom_fields.loading_instructions)}</p>
                             )}
                           </div>
                         )}

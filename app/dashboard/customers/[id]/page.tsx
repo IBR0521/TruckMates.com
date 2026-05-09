@@ -35,17 +35,113 @@ import { CommunicationTimeline } from "@/components/crm/communication-timeline"
 import { CRMSectionHeader } from "@/components/crm/crm-section-header"
 import { UnifiedCommunicationsThread } from "@/components/communications/unified-communications-thread"
 
+type CustomerDetail = {
+  id: string
+  name?: string | null
+  company_name?: string | null
+  status?: string | null
+  customer_type?: string | null
+  email?: string | null
+  phone?: string | null
+  website?: string | null
+  tax_id?: string | null
+  address_line1?: string | null
+  address_line2?: string | null
+  city?: string | null
+  state?: string | null
+  zip?: string | null
+  country?: string | null
+  total_revenue?: number | null
+  total_loads?: number | null
+  payment_terms?: string | null
+  credit_limit?: number | null
+  last_load_date?: string | null
+  primary_contact_name?: string | null
+  primary_contact_email?: string | null
+  primary_contact_phone?: string | null
+  notes?: string | null
+}
+
+type PortalAccessDetail = {
+  access_token?: string | null
+  is_active?: boolean | null
+  expires_at?: string | null
+  last_accessed_at?: string | null
+  access_count?: number | null
+  can_view_loads?: boolean | null
+  can_view_location?: boolean | null
+  can_download_documents?: boolean | null
+  can_view_invoices?: boolean | null
+  can_submit_loads?: boolean | null
+  email_notifications?: boolean | null
+  sms_notifications?: boolean | null
+}
+
+type CustomerLoad = {
+  id: string
+  shipment_number?: string | null
+  origin?: string | null
+  destination?: string | null
+  status?: string | null
+  load_date?: string | null
+}
+
+type CustomerInvoice = {
+  id: string
+  invoice_number?: string | null
+  amount?: string | number | null
+  status?: string | null
+  issue_date?: string | null
+  due_date?: string | null
+}
+
+type CustomerHistoryItem = {
+  id: string
+  subject?: string | null
+  type?: string | null
+  occurred_at?: string | null
+  direction?: string | null
+  message?: string | null
+}
+
+const asCustomerDetail = (value: unknown): CustomerDetail | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  return typeof obj.id === "string" ? (obj as CustomerDetail) : null
+}
+
+const asPortalAccessDetail = (value: unknown): PortalAccessDetail | null =>
+  value && typeof value === "object" ? (value as PortalAccessDetail) : null
+
+const asCustomerLoad = (value: unknown): CustomerLoad | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  return typeof obj.id === "string" ? (obj as CustomerLoad) : null
+}
+
+const asCustomerInvoice = (value: unknown): CustomerInvoice | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  return typeof obj.id === "string" ? (obj as CustomerInvoice) : null
+}
+
+const asCustomerHistoryItem = (value: unknown): CustomerHistoryItem | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  return typeof obj.id === "string" ? (obj as CustomerHistoryItem) : null
+}
+
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
   const aliveRef = useRef(true)
-  const [customer, setCustomer] = useState<unknown>(null)
-  const [loads, setLoads] = useState<unknown[]>([])
-  const [invoices, setInvoices] = useState<unknown[]>([])
-  const [history, setHistory] = useState<unknown[]>([])
+  const [customer, setCustomer] = useState<CustomerDetail | null>(null)
+  const [loads, setLoads] = useState<CustomerLoad[]>([])
+  const [invoices, setInvoices] = useState<CustomerInvoice[]>([])
+  const [history, setHistory] = useState<CustomerHistoryItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"overview" | "loads" | "invoices" | "history" | "documents" | "communications">("overview")
-  const [portalAccess, setPortalAccess] = useState<unknown>(null)
+  const [portalAccess, setPortalAccess] = useState<PortalAccessDetail | null>(null)
   const [isPortalDialogOpen, setIsPortalDialogOpen] = useState(false)
   const [portalSettings, setPortalSettings] = useState({
     can_view_location: false,
@@ -82,20 +178,29 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         return
       }
 
-      setCustomer(customerResult.data)
-      setLoads(loadsResult.data || [])
-      setInvoices(invoicesResult.data || [])
-      setHistory(historyResult.data || [])
+      setCustomer(asCustomerDetail(customerResult.data))
+      setLoads(((loadsResult.data || []) as unknown[]).map(asCustomerLoad).filter((load): load is CustomerLoad => !!load))
+      setInvoices(
+        ((invoicesResult.data || []) as unknown[])
+          .map(asCustomerInvoice)
+          .filter((invoice): invoice is CustomerInvoice => !!invoice),
+      )
+      setHistory(
+        ((historyResult.data || []) as unknown[])
+          .map(asCustomerHistoryItem)
+          .filter((item): item is CustomerHistoryItem => !!item),
+      )
       
       if (portalResult.data) {
-        setPortalAccess(portalResult.data)
+        const parsedPortal = asPortalAccessDetail(portalResult.data)
+        setPortalAccess(parsedPortal)
         setPortalSettings({
-          can_view_location: portalResult.data.can_view_location || false,
-          can_submit_loads: portalResult.data.can_submit_loads || false,
-          email_notifications: portalResult.data.email_notifications !== false,
-          sms_notifications: portalResult.data.sms_notifications || false,
-          expires_days: portalResult.data.expires_at 
-            ? Math.ceil((new Date(portalResult.data.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+          can_view_location: parsedPortal?.can_view_location || false,
+          can_submit_loads: parsedPortal?.can_submit_loads || false,
+          email_notifications: parsedPortal?.email_notifications !== false,
+          sms_notifications: parsedPortal?.sms_notifications || false,
+          expires_days: parsedPortal?.expires_at
+            ? Math.ceil((new Date(parsedPortal.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
             : 365,
         })
       }
@@ -175,7 +280,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
     return null
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status?: string | null) => {
     switch (status) {
       case "active":
         return <Badge className="bg-green-500/20 text-green-400 border-green-500/50">Active</Badge>
@@ -184,11 +289,11 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       case "prospect":
         return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/50">Prospect</Badge>
       default:
-        return <Badge>{status}</Badge>
+        return <Badge>{status || "Unknown"}</Badge>
     }
   }
 
-  const getTypeBadge = (type: string) => {
+  const getTypeBadge = (type?: string | null) => {
     const types: Record<string, { label: string; className: string }> = {
       shipper: { label: "Shipper", className: "bg-purple-500/20 text-purple-400 border-purple-500/50" },
       broker: { label: "Broker", className: "bg-orange-500/20 text-orange-400 border-orange-500/50" },
@@ -196,11 +301,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       "3pl": { label: "3PL", className: "bg-pink-500/20 text-pink-400 border-pink-500/50" },
       other: { label: "Other", className: "bg-gray-500/20 text-gray-400 border-gray-500/50" },
     }
-    const typeInfo = types[type] || { label: type, className: "bg-gray-500/20 text-gray-400 border-gray-500/50" }
+    const typeInfo = types[type || "other"] || {
+      label: type || "Other",
+      className: "bg-gray-500/20 text-gray-400 border-gray-500/50",
+    }
     return <Badge className={typeInfo.className}>{typeInfo.label}</Badge>
   }
 
-  const getStatusVariant = (status: string): "success" | "default" | "info" => {
+  const getStatusVariant = (status?: string | null): "success" | "default" | "info" => {
     switch (status) {
       case "active":
         return "success"
@@ -213,9 +321,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="w-full space-y-4">
-      <CRMSectionHeader currentPage="customer-detail" entityName={customer.name} />
+      <CRMSectionHeader currentPage="customer-detail" entityName={customer.name || ""} />
       <DetailPageLayout
-        title={customer.name}
+        title={customer.name || "Customer"}
         subtitle={customer.company_name || undefined}
         backUrl="/dashboard/customers"
         editUrl={`/dashboard/customers/${id}/edit`}
@@ -312,11 +420,11 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               <InfoGrid cols={2}>
                 <InfoField
                   label="Status"
-                  value={<StatusBadge status={customer.status || "Unknown"} variant={getStatusVariant(customer.status)} />}
+                  value={<StatusBadge status={customer.status || "Unknown"} variant={getStatusVariant(customer.status || "inactive")} />}
                 />
                 <InfoField
                   label="Type"
-                  value={getTypeBadge(customer.customer_type)}
+                  value={getTypeBadge(customer.customer_type || "other")}
                 />
                   {customer.email && (
                   <InfoField
@@ -395,7 +503,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                   label="Total Revenue"
                   value={
                     <span className="text-2xl font-bold">
-                      ${customer.total_revenue?.toFixed(2) || "0.00"}
+                      ${Number(customer.total_revenue ?? 0).toFixed(2)}
                     </span>
                   }
                 />
@@ -412,7 +520,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                   {customer.credit_limit && (
                   <InfoField
                     label="Credit Limit"
-                    value={<span className="text-lg">${customer.credit_limit.toFixed(2)}</span>}
+                    value={<span className="text-lg">${Number(customer.credit_limit).toFixed(2)}</span>}
                   />
                   )}
                   {customer.last_load_date && (
@@ -752,7 +860,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     {invoices.map((invoice) => (
                       <tr key={invoice.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
                         <td className="p-3 font-medium">{invoice.invoice_number || "—"}</td>
-                        <td className="p-3 font-semibold">${parseFloat(invoice.amount || 0).toFixed(2)}</td>
+                        <td className="p-3 font-semibold">${Number(invoice.amount ?? 0).toFixed(2)}</td>
                         <td className="p-3">
                           <StatusBadge 
                             status={invoice.status || "Unknown"} 
@@ -804,15 +912,15 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                   <div key={item.id} className="border border-border rounded-lg p-4 hover:bg-secondary/20 transition-colors">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
-                        <p className="font-semibold text-foreground mb-1">{item.subject || item.type}</p>
+                        <p className="font-semibold text-foreground mb-1">{item.subject || item.type || "Communication"}</p>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span className="capitalize">{item.type}</span>
+                          <span className="capitalize">{item.type || "note"}</span>
                           <span>•</span>
-                          <span>{new Date(item.occurred_at).toLocaleString()}</span>
+                          <span>{item.occurred_at ? new Date(item.occurred_at).toLocaleString() : "—"}</span>
                         </div>
                       </div>
                       <Badge variant={item.direction === "inbound" ? "secondary" : "default"}>
-                        {item.direction}
+                        {item.direction || "outbound"}
                       </Badge>
                     </div>
                     {item.message && (

@@ -29,16 +29,112 @@ import Link from "next/link"
 import { Progress } from "@/components/ui/progress"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts"
 
+type InsightRow = {
+  type?: string | null
+  severity?: string | null
+  title?: string | null
+  description?: string | null
+  action?: string | null
+}
+
+type InsightSummary = {
+  totalViolations?: number
+  totalDrivers?: number
+  avgViolationsPerDriver?: number
+  totalMiles?: number
+}
+
+type DriverOption = {
+  id: string
+  name?: string | null
+}
+
+type Recommendation = {
+  title?: string | null
+  description?: string | null
+  action?: string | null
+  priority?: string | null
+}
+
+type DriverBehaviorScore = {
+  score?: number
+  grade?: string | null
+  trend?: number
+  breakdown?: {
+    violation_score?: number
+    compliance_score?: number
+    safety_score?: number
+  }
+  metrics?: {
+    violations_per_100_hours?: number
+    total_violations?: number
+  }
+}
+
+type FleetBehaviorScoreRow = {
+  driver_id: string
+  driver_name?: string | null
+  score?: number
+  grade?: string | null
+  trend?: number
+  metrics?: {
+    total_violations?: number
+  }
+}
+
+type AllDriverBehaviorScores = {
+  average_score?: number
+  scores: FleetBehaviorScoreRow[]
+}
+
+const asInsightRow = (value: unknown): InsightRow | null =>
+  value && typeof value === "object" ? (value as InsightRow) : null
+
+const asInsightSummary = (value: unknown): InsightSummary | null =>
+  value && typeof value === "object" ? (value as InsightSummary) : null
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DriverOption
+}
+
+const asRecommendation = (value: unknown): Recommendation | null =>
+  value && typeof value === "object" ? (value as Recommendation) : null
+
+const asDriverBehaviorScore = (value: unknown): DriverBehaviorScore | null =>
+  value && typeof value === "object" ? (value as DriverBehaviorScore) : null
+
+const asFleetBehaviorScoreRow = (value: unknown): FleetBehaviorScoreRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.driver_id !== "string") return null
+  return obj as FleetBehaviorScoreRow
+}
+
+const asAllDriverBehaviorScores = (value: unknown): AllDriverBehaviorScores | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  const scores = Array.isArray(obj.scores)
+    ? obj.scores.map(asFleetBehaviorScoreRow).filter((s): s is FleetBehaviorScoreRow => !!s)
+    : []
+  return {
+    average_score: typeof obj.average_score === "number" ? obj.average_score : 0,
+    scores,
+  }
+}
+
 export default function ELDInsightsPage() {
-  const [insights, setInsights] = useState<unknown[]>([])
-  const [summary, setSummary] = useState<unknown>(null)
+  const [insights, setInsights] = useState<InsightRow[]>([])
+  const [summary, setSummary] = useState<InsightSummary | null>(null)
   const [driverId, setDriverId] = useState<string>("")
-  const [drivers, setDrivers] = useState<unknown[]>([])
-  const [recommendations, setRecommendations] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([])
   const [days, setDays] = useState(7)
   const [isLoading, setIsLoading] = useState(true)
-  const [driverScore, setDriverScore] = useState<unknown>(null)
-  const [allDriverScores, setAllDriverScores] = useState<unknown>(null)
+  const [driverScore, setDriverScore] = useState<DriverBehaviorScore | null>(null)
+  const [allDriverScores, setAllDriverScores] = useState<AllDriverBehaviorScores | null>(null)
 
   useEffect(() => {
     loadDrivers()
@@ -48,7 +144,7 @@ export default function ELDInsightsPage() {
   async function loadDrivers() {
     const result = await getDrivers()
     if (result.data) {
-      setDrivers(result.data)
+      setDrivers((result.data as unknown[]).map(asDriverOption).filter((driver): driver is DriverOption => !!driver))
     }
   }
 
@@ -59,8 +155,11 @@ export default function ELDInsightsPage() {
       if (result.error) {
         toast.error(result.error)
       } else if (result.data) {
-        setInsights(result.data.insights)
-        setSummary(result.data.summary)
+        const insightsData = Array.isArray(result.data.insights)
+          ? result.data.insights.map(asInsightRow).filter((insight): insight is InsightRow => !!insight)
+          : []
+        setInsights(insightsData)
+        setSummary(asInsightSummary(result.data.summary))
       }
 
       if (driverId) {
@@ -69,10 +168,13 @@ export default function ELDInsightsPage() {
           getDriverBehaviorScore(driverId, days),
         ])
         if (recResult.data) {
-          setRecommendations(recResult.data.recommendations)
+          const recs = Array.isArray(recResult.data.recommendations)
+            ? recResult.data.recommendations.map(asRecommendation).filter((r): r is Recommendation => !!r)
+            : []
+          setRecommendations(recs)
         }
         if (scoreResult.data) {
-          setDriverScore(scoreResult.data)
+          setDriverScore(asDriverBehaviorScore(scoreResult.data))
         }
       } else {
         setRecommendations([])
@@ -80,7 +182,7 @@ export default function ELDInsightsPage() {
         // Load all driver scores
         const allScoresResult = await getAllDriverBehaviorScores(days)
         if (allScoresResult.data) {
-          setAllDriverScores(allScoresResult.data)
+          setAllDriverScores(asAllDriverBehaviorScores(allScoresResult.data))
         }
       }
     } catch (error) {
@@ -180,9 +282,9 @@ export default function ELDInsightsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Drivers</SelectItem>
-                    {drivers.map((driver) => (
+                  {drivers.map((driver) => (
                       <SelectItem key={driver.id} value={driver.id}>
-                        {driver.name}
+                        {driver.name || "Driver"}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -218,14 +320,14 @@ export default function ELDInsightsPage() {
                   <AlertTriangle className="w-5 h-5 text-red-500" />
                   <p className="text-sm text-muted-foreground">Total Violations</p>
                 </div>
-                <p className="text-2xl font-bold text-foreground">{summary.totalViolations}</p>
+                <p className="text-2xl font-bold text-foreground">{summary.totalViolations || 0}</p>
               </Card>
               <Card className="p-4 border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <Users className="w-5 h-5 text-blue-500" />
                   <p className="text-sm text-muted-foreground">Active Drivers</p>
                 </div>
-                <p className="text-2xl font-bold text-foreground">{summary.totalDrivers}</p>
+                <p className="text-2xl font-bold text-foreground">{summary.totalDrivers || 0}</p>
               </Card>
               <Card className="p-4 border-border">
                 <div className="flex items-center gap-2 mb-2">
@@ -233,7 +335,7 @@ export default function ELDInsightsPage() {
                   <p className="text-sm text-muted-foreground">Avg Violations/Driver</p>
                 </div>
                 <p className="text-2xl font-bold text-foreground">
-                  {summary.avgViolationsPerDriver.toFixed(1)}
+                  {Number(summary.avgViolationsPerDriver || 0).toFixed(1)}
                 </p>
               </Card>
               <Card className="p-4 border-border">
@@ -241,7 +343,7 @@ export default function ELDInsightsPage() {
                   <TrendingUp className="w-5 h-5 text-green-500" />
                   <p className="text-sm text-muted-foreground">Total Miles</p>
                 </div>
-                <p className="text-2xl font-bold text-foreground">{summary.totalMiles}</p>
+                <p className="text-2xl font-bold text-foreground">{summary.totalMiles || 0}</p>
               </Card>
             </div>
           )}
@@ -250,7 +352,7 @@ export default function ELDInsightsPage() {
             <Card className="border-border p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-foreground">Violations Trend (Last 8 Weeks)</h3>
-                <Badge variant="outline">{summary.totalViolations} total</Badge>
+                <Badge variant="outline">{summary.totalViolations || 0} total</Badge>
               </div>
               <div className="h-52">
                 <ResponsiveContainer width="100%" height="100%">
@@ -282,12 +384,12 @@ export default function ELDInsightsPage() {
             ) : (
               <div className="space-y-4">
                 {insights.map((insight, index) => (
-                  <Card key={index} className={`border p-6 ${getInsightColor(insight.type)}`}>
+                  <Card key={index} className={`border p-6 ${getInsightColor(insight.type || "info")}`}>
                     <div className="flex items-start gap-4">
-                      <div className="mt-1">{getInsightIcon(insight.type)}</div>
+                      <div className="mt-1">{getInsightIcon(insight.type || "info")}</div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-semibold text-foreground">{insight.title}</h3>
+                          <h3 className="font-semibold text-foreground">{insight.title || "Insight"}</h3>
                           <Badge
                             className={
                               insight.severity === "critical"
@@ -297,14 +399,14 @@ export default function ELDInsightsPage() {
                                 : "bg-blue-500/20 text-blue-500 border-blue-500/50"
                             }
                           >
-                            {insight.severity}
+                            {insight.severity || "info"}
                           </Badge>
                         </div>
-                        <p className="text-sm text-muted-foreground mb-3">{insight.description}</p>
+                        <p className="text-sm text-muted-foreground mb-3">{insight.description || ""}</p>
                         {insight.action && (
                           <div className="rounded border border-border/50 bg-background p-3">
                             <p className="mb-1 text-xs font-medium text-foreground">Recommended Action:</p>
-                            <p className="mb-2 text-sm text-muted-foreground">{insight.action}</p>
+                            <p className="mb-2 text-sm text-muted-foreground">{insight.action || ""}</p>
                             <Button size="sm" variant="outline">
                               Take action
                               <ArrowRight className="ml-1 h-3.5 w-3.5" />
@@ -332,55 +434,59 @@ export default function ELDInsightsPage() {
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-foreground">Overall Score</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-3xl font-bold text-foreground">{driverScore.score}/100</span>
+                        <span className="text-3xl font-bold text-foreground">{driverScore.score || 0}/100</span>
                         <Badge
                           className={
-                            driverScore.score >= 90
+                            (driverScore.score || 0) >= 90
                               ? "bg-green-500/20 text-green-500 border-green-500/50"
-                              : driverScore.score >= 75
+                              : (driverScore.score || 0) >= 75
                               ? "bg-blue-500/20 text-blue-500 border-blue-500/50"
-                              : driverScore.score >= 60
+                              : (driverScore.score || 0) >= 60
                               ? "bg-yellow-500/20 text-yellow-500 border-yellow-500/50"
                               : "bg-red-500/20 text-red-500 border-red-500/50"
                           }
                         >
-                          {driverScore.grade}
+                          {driverScore.grade || "N/A"}
                         </Badge>
                       </div>
                     </div>
-                    <Progress value={driverScore.score} className="h-3" />
+                    <Progress value={driverScore.score || 0} className="h-3" />
                   </div>
                   <div className="grid grid-cols-3 gap-4 pt-4 border-t border-border">
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Violation Score</p>
-                      <p className="text-lg font-semibold text-foreground">{driverScore.breakdown.violation_score}/50</p>
+                      <p className="text-lg font-semibold text-foreground">{driverScore.breakdown?.violation_score || 0}/50</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Compliance Score</p>
-                      <p className="text-lg font-semibold text-foreground">{driverScore.breakdown.compliance_score}/30</p>
+                      <p className="text-lg font-semibold text-foreground">{driverScore.breakdown?.compliance_score || 0}/30</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Safety Score</p>
-                      <p className="text-lg font-semibold text-foreground">{driverScore.breakdown.safety_score}/20</p>
+                      <p className="text-lg font-semibold text-foreground">{driverScore.breakdown?.safety_score || 0}/20</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Violations per 100 Hours</p>
-                      <p className="text-lg font-semibold text-foreground">{driverScore.metrics.violations_per_100_hours}</p>
+                      <p className="text-lg font-semibold text-foreground">{driverScore.metrics?.violations_per_100_hours || 0}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Trend</p>
                       <div className="flex items-center gap-2">
-                        {driverScore.trend > 0 ? (
+                        {(driverScore.trend || 0) > 0 ? (
                           <TrendingDown className="w-4 h-4 text-green-500" />
-                        ) : driverScore.trend < 0 ? (
+                        ) : (driverScore.trend || 0) < 0 ? (
                           <TrendingUp className="w-4 h-4 text-red-500" />
                         ) : (
                           <Info className="w-4 h-4 text-muted-foreground" />
                         )}
                         <p className="text-lg font-semibold text-foreground">
-                          {driverScore.trend > 0 ? `${Math.abs(driverScore.trend).toFixed(1)}%` : driverScore.trend < 0 ? `+${Math.abs(driverScore.trend).toFixed(1)}%` : "No change"}
+                          {(driverScore.trend || 0) > 0
+                            ? `${Math.abs(driverScore.trend || 0).toFixed(1)}%`
+                            : (driverScore.trend || 0) < 0
+                            ? `+${Math.abs(driverScore.trend || 0).toFixed(1)}%`
+                            : "No change"}
                         </p>
                       </div>
                     </div>
@@ -397,52 +503,52 @@ export default function ELDInsightsPage() {
                 <Users className="w-5 h-5 text-primary" />
                 <h2 className="text-lg font-semibold text-foreground">Fleet Behavior Scores</h2>
                 <Badge className="ml-auto">
-                  Avg: {allDriverScores.average_score}/100
+                  Avg: {allDriverScores.average_score || 0}/100
                 </Badge>
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {allDriverScores.scores.map((score: unknown) => (
+                {allDriverScores.scores.map((score) => (
                   <Card key={score.driver_id} className="border border-border/50 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-semibold text-foreground">{score.driver_name}</p>
+                        <p className="font-semibold text-foreground">{score.driver_name || "Driver"}</p>
                         <Badge
                           className={
-                            score.score >= 90
+                            (score.score || 0) >= 90
                               ? "bg-green-500/20 text-green-500 border-green-500/50"
-                              : score.score >= 75
+                              : (score.score || 0) >= 75
                               ? "bg-blue-500/20 text-blue-500 border-blue-500/50"
-                              : score.score >= 60
+                              : (score.score || 0) >= 60
                               ? "bg-yellow-500/20 text-yellow-500 border-yellow-500/50"
                               : "bg-red-500/20 text-red-500 border-red-500/50"
                           }
                         >
-                          Grade {score.grade}
+                          Grade {score.grade || "N/A"}
                         </Badge>
                       </div>
-                      {scoreRing(score.score)}
+                      {scoreRing(score.score || 0)}
                     </div>
                     <div className="mt-3 flex items-center justify-between">
                       <div>
                         <p className="text-xs text-muted-foreground">Violations (30d)</p>
-                        <p className="font-semibold text-foreground">{score.metrics.total_violations}</p>
+                        <p className="font-semibold text-foreground">{score.metrics?.total_violations || 0}</p>
                       </div>
-                      {violationSparkline(score.metrics.total_violations)}
+                      {violationSparkline(score.metrics?.total_violations || 0)}
                       <div className="text-right">
                         <p className="text-xs text-muted-foreground">Trend</p>
                         <div className="flex items-center gap-1">
-                          {score.trend > 0 ? (
+                          {(score.trend || 0) > 0 ? (
                             <TrendingDown className="h-4 w-4 text-green-500" />
-                          ) : score.trend < 0 ? (
+                          ) : (score.trend || 0) < 0 ? (
                             <TrendingUp className="h-4 w-4 text-red-500" />
                           ) : (
                             <Info className="h-4 w-4 text-muted-foreground" />
                           )}
                           <span className="text-sm font-medium text-foreground">
-                            {score.trend > 0
-                              ? `${Math.abs(score.trend).toFixed(1)}%`
-                              : score.trend < 0
-                              ? `+${Math.abs(score.trend).toFixed(1)}%`
+                            {(score.trend || 0) > 0
+                              ? `${Math.abs(score.trend || 0).toFixed(1)}%`
+                              : (score.trend || 0) < 0
+                              ? `+${Math.abs(score.trend || 0).toFixed(1)}%`
                               : "0.0%"}
                           </span>
                         </div>
@@ -470,7 +576,7 @@ export default function ELDInsightsPage() {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-semibold text-foreground">{rec.title}</h3>
+                          <h3 className="font-semibold text-foreground">{rec.title || "Recommendation"}</h3>
                           <Badge
                             className={
                               rec.priority === "high"
@@ -480,12 +586,12 @@ export default function ELDInsightsPage() {
                                 : "bg-blue-500/20 text-blue-500 border-blue-500/50"
                             }
                           >
-                            {rec.priority} priority
+                            {(rec.priority || "low")} priority
                           </Badge>
                         </div>
-                        <p className="text-sm text-muted-foreground mb-3">{rec.description}</p>
+                        <p className="text-sm text-muted-foreground mb-3">{rec.description || ""}</p>
                         <div className="p-3 bg-primary/5 rounded border border-primary/20">
-                          <p className="text-sm font-medium text-foreground">{rec.action}</p>
+                          <p className="text-sm font-medium text-foreground">{rec.action || ""}</p>
                         </div>
                       </div>
                     </div>

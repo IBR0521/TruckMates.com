@@ -33,11 +33,31 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 
+type FuelEfficiencyReport = NonNullable<Awaited<ReturnType<typeof getFuelEfficiencyReport>>["data"]>
+type FuelTruckRow = FuelEfficiencyReport["by_truck"][number]
+type FuelDriverRow = FuelEfficiencyReport["by_driver"][number]
+type TruckOption = { id: string; truck_number?: string | null }
+type DriverOption = { id: string; name?: string | null }
+
+const asTruckOption = (value: unknown): TruckOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as TruckOption
+}
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as DriverOption
+}
+
 export default function FuelEfficiencyReportPage() {
-  const [report, setReport] = useState<unknown>(null)
+  const [report, setReport] = useState<FuelEfficiencyReport | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [trucks, setTrucks] = useState<unknown[]>([])
-  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
   const [filters, setFilters] = useState({
     start_date: "",
     end_date: "",
@@ -57,21 +77,26 @@ export default function FuelEfficiencyReportPage() {
   async function loadTrucks() {
     const result = await getTrucks()
     if (result.data) {
-      setTrucks(result.data)
+      setTrucks((result.data as unknown[]).map(asTruckOption).filter((truck): truck is TruckOption => !!truck))
     }
   }
 
   async function loadDrivers() {
     const result = await getDrivers()
     if (result.data) {
-      setDrivers(result.data)
+      setDrivers((result.data as unknown[]).map(asDriverOption).filter((driver): driver is DriverOption => !!driver))
     }
   }
 
   async function loadReport() {
     setIsLoading(true)
     try {
-      const reportFilters: unknown = {}
+      const reportFilters: {
+        start_date?: string
+        end_date?: string
+        truck_id?: string
+        driver_id?: string
+      } = {}
       if (filters.start_date) reportFilters.start_date = filters.start_date
       if (filters.end_date) reportFilters.end_date = filters.end_date
       if (filters.truck_id !== "all") reportFilters.truck_id = filters.truck_id
@@ -149,7 +174,7 @@ export default function FuelEfficiencyReportPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Trucks</SelectItem>
-                    {trucks.map((truck) => (
+                    {trucks.map((truck: TruckOption) => (
                       <SelectItem key={truck.id} value={truck.id}>
                         {truck.truck_number}
                       </SelectItem>
@@ -168,7 +193,7 @@ export default function FuelEfficiencyReportPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Drivers</SelectItem>
-                    {drivers.map((driver) => (
+                    {drivers.map((driver: DriverOption) => (
                       <SelectItem key={driver.id} value={driver.id}>
                         {driver.name}
                       </SelectItem>
@@ -288,7 +313,7 @@ export default function FuelEfficiencyReportPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {report.by_truck.map((truck: unknown, index: number) => (
+                        {report.by_truck.map((truck: FuelTruckRow, index: number) => (
                           <TableRow key={truck.truck_id}>
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
@@ -357,7 +382,7 @@ export default function FuelEfficiencyReportPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {report.by_driver.map((driver: unknown, index: number) => (
+                        {report.by_driver.map((driver: FuelDriverRow, index: number) => (
                           <TableRow key={driver.driver_id}>
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">

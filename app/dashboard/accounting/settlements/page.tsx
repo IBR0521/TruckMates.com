@@ -313,9 +313,9 @@ export default function SettlementsPage() {
                                 ? `${new Date(settlement.period_start).toLocaleDateString()} - ${new Date(settlement.period_end).toLocaleDateString()}`
                                 : "N/A"}
                             </td>
-                            <td className="px-6 py-4 text-foreground">${settlement.gross_pay ? parseFloat(String(settlement.gross_pay)).toFixed(2) : "0.00"}</td>
-                            <td className="px-6 py-4 text-red-400">${settlement.total_deductions ? parseFloat(String(settlement.total_deductions)).toFixed(2) : "0.00"}</td>
-                            <td className="px-6 py-4 text-green-400 font-semibold">${settlement.net_pay ? parseFloat(String(settlement.net_pay)).toFixed(2) : "0.00"}</td>
+                            <td className="px-6 py-4 text-foreground">${Number(settlement.gross_pay || 0).toFixed(2)}</td>
+                            <td className="px-6 py-4 text-red-400">${Number(settlement.total_deductions || 0).toFixed(2)}</td>
+                            <td className="px-6 py-4 text-green-400 font-semibold">${Number(settlement.net_pay || 0).toFixed(2)}</td>
                             <td className="px-6 py-4">
                               <span
                                 className={`px-3 py-1 rounded-full text-xs font-semibold ${
@@ -399,15 +399,15 @@ export default function SettlementsPage() {
                         <div className="space-y-2 pt-2 border-t border-border/30">
                           <div>
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Gross Pay</p>
-                            <p className="text-sm text-foreground">${settlement.gross_pay ? parseFloat(String(settlement.gross_pay)).toFixed(2) : "0.00"}</p>
+                            <p className="text-sm text-foreground">${Number(settlement.gross_pay || 0).toFixed(2)}</p>
                           </div>
                           <div>
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Deductions</p>
-                            <p className="text-sm text-red-400">${settlement.total_deductions ? parseFloat(String(settlement.total_deductions)).toFixed(2) : "0.00"}</p>
+                            <p className="text-sm text-red-400">${Number(settlement.total_deductions || 0).toFixed(2)}</p>
                           </div>
                           <div>
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Net Pay</p>
-                            <p className="text-lg font-bold text-green-400">${settlement.net_pay ? parseFloat(String(settlement.net_pay)).toFixed(2) : "0.00"}</p>
+                            <p className="text-lg font-bold text-green-400">${Number(settlement.net_pay || 0).toFixed(2)}</p>
                           </div>
                         </div>
 

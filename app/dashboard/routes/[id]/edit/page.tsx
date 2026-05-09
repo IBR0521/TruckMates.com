@@ -30,17 +30,57 @@ import { getRoute, updateRoute } from "@/app/actions/routes"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { RouteStopsManager } from "@/components/route-stops-manager"
+import type { Stop } from "@/components/route-stops-manager"
 import { getRouteStops, createRouteStop, updateRouteStop, deleteRouteStop } from "@/app/actions/route-stops"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
+
+type DriverOption = { id: string; name?: string | null }
+type TruckOption = { id: string; truck_number?: string | null; make?: string | null; model?: string | null }
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as DriverOption
+}
+
+const asTruckOption = (value: unknown): TruckOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as TruckOption
+}
+
+const asStop = (value: unknown, fallbackNumber: number): Stop | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  const stopNumber = Number(obj.stop_number)
+  return {
+    id: typeof obj.id === "string" ? obj.id : undefined,
+    stop_number: Number.isFinite(stopNumber) ? stopNumber : fallbackNumber,
+    location_name: typeof obj.location_name === "string" ? obj.location_name : "",
+    location_id: typeof obj.location_id === "string" ? obj.location_id : undefined,
+    address: typeof obj.address === "string" ? obj.address : "",
+    city: typeof obj.city === "string" ? obj.city : undefined,
+    state: typeof obj.state === "string" ? obj.state : undefined,
+    zip: typeof obj.zip === "string" ? obj.zip : undefined,
+    phone: typeof obj.phone === "string" ? obj.phone : undefined,
+    contact_name: typeof obj.contact_name === "string" ? obj.contact_name : undefined,
+    contact_phone: typeof obj.contact_phone === "string" ? obj.contact_phone : undefined,
+    stop_type: typeof obj.stop_type === "string" ? obj.stop_type : undefined,
+    priority: typeof obj.priority === "string" ? obj.priority : undefined,
+    notes: typeof obj.notes === "string" ? obj.notes : undefined,
+  }
+}
 
 export default function EditRoutePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [drivers, setDrivers] = useState<unknown[]>([])
-  const [trucks, setTrucks] = useState<unknown[]>([])
-  const [stops, setStops] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
+  const [stops, setStops] = useState<Stop[]>([])
   const [formData, setFormData] = useState({
     // Basic Information
     name: "",
@@ -136,9 +176,19 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
           notes: route.notes || "",
         })
 
-        if (driversResult.data) setDrivers(driversResult.data)
-        if (trucksResult.data) setTrucks(trucksResult.data)
-        if (stopsResult.data) setStops(stopsResult.data || [])
+        if (driversResult.data) {
+          setDrivers((driversResult.data as unknown[]).map(asDriverOption).filter((driver): driver is DriverOption => !!driver))
+        }
+        if (trucksResult.data) {
+          setTrucks((trucksResult.data as unknown[]).map(asTruckOption).filter((truck): truck is TruckOption => !!truck))
+        }
+        if (stopsResult.data) {
+          setStops(
+            (stopsResult.data as unknown[])
+              .map((stop, index) => asStop(stop, index + 1))
+              .filter((stop): stop is Stop => !!stop),
+          )
+        }
       } catch (error: unknown) {
         toast.error("Failed to load route data")
         console.error(error)
@@ -163,9 +213,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
     // Validate stops
     if (stops.length > 0) {
-      const invalidStops = stops.filter(
-        (stop) => !stop.location_name || !stop.address
-      )
+      const invalidStops = stops.filter((stop: Stop) => !stop.location_name || !stop.address)
       if (invalidStops.length > 0) {
         toast.error("Please fill in location name and address for all stops")
         setIsSubmitting(false)

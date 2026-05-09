@@ -14,23 +14,23 @@ const mockStripeClient = {
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
-}), { virtual: true })
+}))
 
 vi.mock("@/lib/auth/server", () => ({
   getCachedAuthContext: () => mockGetCachedAuthContext(),
-}), { virtual: true })
+}))
 
 vi.mock("@/lib/error-message", () => ({
   errorMessage: (e: unknown, fallback = "error") => (e instanceof Error ? e.message : fallback),
-}), { virtual: true })
+}))
 
 vi.mock("@/lib/roles", () => ({
   mapLegacyRole: (role: string) => role,
-}), { virtual: true })
+}))
 
 vi.mock("@sentry/nextjs", () => ({
   captureException: (...args: unknown[]) => mockCaptureException(...args),
-}), { virtual: true })
+}))
 
 vi.mock("stripe", () => ({
   default: class StripeMock {

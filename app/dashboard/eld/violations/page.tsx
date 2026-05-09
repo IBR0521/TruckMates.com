@@ -35,15 +35,45 @@ import { getDrivers } from "@/app/actions/drivers"
 import { toast } from "sonner"
 import Link from "next/link"
 
+type DriverOption = {
+  id: string
+  name?: string | null
+}
+
+type ViolationRow = {
+  id: string
+  title?: string | null
+  event_type?: string | null
+  severity?: string | null
+  description?: string | null
+  event_time?: string | null
+  resolved?: boolean | null
+  drivers?: { name?: string | null } | null
+}
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DriverOption
+}
+
+const asViolationRow = (value: unknown): ViolationRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as ViolationRow
+}
+
 export default function ELDViolationsPage() {
-  const [violations, setViolations] = useState<unknown[]>([])
-  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [violations, setViolations] = useState<ViolationRow[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
   const [repeatOffenders, setRepeatOffenders] = useState<
     { driverId: string; driverName: string; count: number }[]
   >([])
   const [isLoading, setIsLoading] = useState(true)
   const [showResolveDialog, setShowResolveDialog] = useState(false)
-  const [selectedViolation, setSelectedViolation] = useState<unknown>(null)
+  const [selectedViolation, setSelectedViolation] = useState<ViolationRow | null>(null)
   const [resolutionNotes, setResolutionNotes] = useState("")
   const [filters, setFilters] = useState({
     driver_id: "",
@@ -85,7 +115,9 @@ export default function ELDViolationsPage() {
   async function loadData() {
     try {
       const driversResult = await getDrivers()
-      if (driversResult.data) setDrivers(driversResult.data)
+      if (driversResult.data) {
+        setDrivers((driversResult.data as unknown[]).map(asDriverOption).filter((d): d is DriverOption => !!d))
+      }
     } catch (error) {
       toast.error("Failed to load data")
     }
@@ -114,7 +146,11 @@ export default function ELDViolationsPage() {
         toast.error(result.error)
         setViolations([])
       } else {
-        setViolations(result.data || [])
+        setViolations(
+          ((result.data || []) as unknown[])
+            .map(asViolationRow)
+            .filter((violation): violation is ViolationRow => !!violation),
+        )
       }
     } catch (error) {
       toast.error("Failed to load violations")
@@ -142,7 +178,7 @@ export default function ELDViolationsPage() {
     }
   }
 
-  const getSeverityColor = (severity: string) => {
+  const getSeverityColor = (severity?: string | null) => {
     switch (severity) {
       case "critical":
         return "bg-red-500/20 text-red-400 border-red-500/50"
@@ -155,7 +191,7 @@ export default function ELDViolationsPage() {
     }
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status?: string | null) => {
     switch (status) {
       case "open":
         return "bg-red-500/20 text-red-400"

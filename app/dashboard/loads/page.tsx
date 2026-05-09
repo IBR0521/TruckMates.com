@@ -40,10 +40,10 @@ import { useLoadsInitialData } from "@/components/dashboard/initial-list-data-co
 
 type LoadListItem = NonNullable<Awaited<ReturnType<typeof getLoads>>["data"]>[number]
 type LoadDeleteDependency = {
-  type?: string
-  id?: string
-  label?: string
-  details?: string
+  type: string
+  id: string
+  name: string
+  link?: string
 }
 
 export default function LoadsPage() {
@@ -120,8 +120,25 @@ export default function LoadsPage() {
     try {
       const response = await fetch(`/api/check-dependencies?resource_type=load&resource_id=${id}`)
       if (response.ok) {
-      const data = (await response.json()) as { dependencies?: LoadDeleteDependency[] }
-      setDeleteDependencies(data.dependencies || [])
+        const data = (await response.json()) as {
+          dependencies?: Array<{
+            type?: string
+            id?: string
+            name?: string
+            label?: string
+            details?: string
+            link?: string
+          }>
+        }
+        const deps = (data.dependencies || [])
+          .map((dep) => ({
+            type: dep.type || "dependency",
+            id: dep.id || "",
+            name: dep.name || dep.label || dep.details || "Related record",
+            link: dep.link,
+          }))
+          .filter((dep) => dep.id.length > 0)
+        setDeleteDependencies(deps)
       }
     } catch (error) {
       console.error("Failed to check dependencies:", error)

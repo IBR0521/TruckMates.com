@@ -25,14 +25,74 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 
+type GeofenceDetail = {
+  id: string
+  name?: string | null
+  description?: string | null
+  is_active?: boolean | null
+  zone_type?: string | null
+  center_latitude?: number | null
+  center_longitude?: number | null
+  radius_meters?: number | null
+  north_bound?: number | null
+  south_bound?: number | null
+  east_bound?: number | null
+  west_bound?: number | null
+  polygon_coordinates?: unknown[] | null
+  address?: string | null
+  city?: string | null
+  state?: string | null
+  zip_code?: string | null
+  alert_on_entry?: boolean | null
+  alert_on_exit?: boolean | null
+  alert_on_dwell?: boolean | null
+  dwell_time_minutes?: number | null
+}
+
+type GeofenceStateRow = {
+  truck_id: string
+  geofence_id: string
+  last_seen_at?: string | null
+  is_inside?: boolean | null
+  trucks?: { truck_number?: string | null } | null
+}
+
+type ZoneVisitRow = {
+  id: string
+  event_type?: string | null
+  timestamp?: string | null
+  duration_minutes?: number | null
+}
+
+const asGeofenceDetail = (value: unknown): GeofenceDetail | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as GeofenceDetail
+}
+
+const asGeofenceStateRow = (value: unknown): GeofenceStateRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.truck_id !== "string" || typeof obj.geofence_id !== "string") return null
+  return obj as unknown as GeofenceStateRow
+}
+
+const asZoneVisitRow = (value: unknown): ZoneVisitRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as ZoneVisitRow
+}
+
 export default function GeofenceDetailPage() {
   const params = useParams()
   const router = useRouter()
   const aliveRef = useRef(true)
   const geofenceId = params.id as string
-  const [geofence, setGeofence] = useState<unknown>(null)
-  const [visits, setVisits] = useState<unknown[]>([])
-  const [states, setStates] = useState<unknown[]>([])
+  const [geofence, setGeofence] = useState<GeofenceDetail | null>(null)
+  const [visits, setVisits] = useState<ZoneVisitRow[]>([])
+  const [states, setStates] = useState<GeofenceStateRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -58,7 +118,7 @@ export default function GeofenceDetailPage() {
       toast.error(result.error)
       if (aliveRef.current) router.push("/dashboard/geofencing")
     } else {
-      setGeofence(result.data)
+      setGeofence(asGeofenceDetail(result.data))
     }
     setIsLoading(false)
   }
@@ -66,24 +126,34 @@ export default function GeofenceDetailPage() {
   async function loadVisits() {
     const result = await getZoneVisits({ geofence_id: geofenceId })
     if (result.data) {
-      setVisits(result.data.slice(0, 50)) // Last 50 visits
+      setVisits(
+        (result.data as unknown[])
+          .map(asZoneVisitRow)
+          .filter((visit): visit is ZoneVisitRow => !!visit)
+          .slice(0, 50),
+      ) // Last 50 visits
     }
   }
 
   async function loadStates() {
     const result = await getGeofenceStates({ geofence_id: geofenceId, limit: 50 })
     if (result.data) {
-      setStates(result.data.slice(0, 20))
+      setStates(
+        (result.data as unknown[])
+          .map(asGeofenceStateRow)
+          .filter((state): state is GeofenceStateRow => !!state)
+          .slice(0, 20),
+      )
     }
   }
 
   async function handleToggleActive() {
     if (!geofence) return
-    const result = await updateGeofence(geofenceId, { is_active: !geofence.is_active })
+    const result = await updateGeofence(geofenceId, { is_active: !Boolean(geofence.is_active) })
     if (result.error) {
       toast.error(result.error)
     } else {
-      toast.success(`Zone ${!geofence.is_active ? "activated" : "deactivated"}`)
+      toast.success(`Zone ${!Boolean(geofence.is_active) ? "activated" : "deactivated"}`)
       loadGeofence()
       loadStates()
     }
@@ -119,7 +189,7 @@ export default function GeofenceDetailPage() {
 
   return (
     <DetailPageLayout
-      title={geofence.name}
+      title={geofence.name || "Geofence"}
       subtitle={geofence.description || "Geofencing Zone Details"}
       backUrl="/dashboard/geofencing"
       actions={
@@ -144,7 +214,7 @@ export default function GeofenceDetailPage() {
           <div className="grid grid-cols-2 gap-6">
             <div>
               <p className="text-sm text-muted-foreground mb-1">Zone Type</p>
-              <Badge variant="outline">{geofence.zone_type}</Badge>
+              <Badge variant="outline">{geofence.zone_type || "unknown"}</Badge>
             </div>
             <div>
               <p className="text-sm text-muted-foreground mb-1">Status</p>
@@ -300,7 +370,7 @@ export default function GeofenceDetailPage() {
                       {visit.event_type === "entry" ? "Entry" : visit.event_type === "exit" ? "Exit" : "Dwell"}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {format(new Date(visit.timestamp), "MMM d, yyyy h:mm a")}
+                      {visit.timestamp ? format(new Date(visit.timestamp), "MMM d, yyyy h:mm a") : "N/A"}
                     </p>
                   </div>
                   {visit.duration_minutes && (

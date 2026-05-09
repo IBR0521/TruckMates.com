@@ -1030,55 +1030,63 @@ export default function EnhancedAddressBookPage() {
                 {getCategoryCustomFields(formData.category).map((field) => (
                   <div key={field.key}>
                     <Label htmlFor={field.key}>{field.label}</Label>
-                    {field.type === "textarea" ? (
-                      <Textarea
-                        id={field.key}
-                        value={formData.custom_fields?.[field.key] || ""}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            custom_fields: {
-                              ...formData.custom_fields,
-                              [field.key]: e.target.value,
-                            },
-                          })
-                        }
-                      />
-                    ) : field.type === "checkbox" ? (
-                      <div className="flex items-center space-x-2 mt-2">
-                        <Checkbox
+                    {(() => {
+                      const rawValue = formData.custom_fields?.[field.key]
+                      const fieldText =
+                        typeof rawValue === "string" || typeof rawValue === "number"
+                          ? String(rawValue)
+                          : ""
+                      const fieldChecked = typeof rawValue === "boolean" ? rawValue : false
+                      return field.type === "textarea" ? (
+                        <Textarea
                           id={field.key}
-                          checked={formData.custom_fields?.[field.key] || false}
-                          onCheckedChange={(checked) =>
+                          value={fieldText}
+                          onChange={(e) =>
                             setFormData({
                               ...formData,
                               custom_fields: {
                                 ...formData.custom_fields,
-                                [field.key]: checked,
+                                [field.key]: e.target.value,
                               },
                             })
                           }
                         />
-                        <Label htmlFor={field.key} className="text-sm">
-                          {field.label}
-                        </Label>
-                      </div>
-                    ) : (
-                      <Input
-                        id={field.key}
-                        type={field.type}
-                        value={formData.custom_fields?.[field.key] || ""}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            custom_fields: {
-                              ...formData.custom_fields,
-                              [field.key]: field.type === "number" ? Number(e.target.value) : e.target.value,
-                            },
-                          })
-                        }
-                      />
-                    )}
+                      ) : field.type === "checkbox" ? (
+                        <div className="flex items-center space-x-2 mt-2">
+                          <Checkbox
+                            id={field.key}
+                            checked={fieldChecked}
+                            onCheckedChange={(checked) =>
+                              setFormData({
+                                ...formData,
+                                custom_fields: {
+                                  ...formData.custom_fields,
+                                  [field.key]: checked,
+                                },
+                              })
+                            }
+                          />
+                          <Label htmlFor={field.key} className="text-sm">
+                            {field.label}
+                          </Label>
+                        </div>
+                      ) : (
+                        <Input
+                          id={field.key}
+                          type={field.type}
+                          value={fieldText}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              custom_fields: {
+                                ...formData.custom_fields,
+                                [field.key]: field.type === "number" ? Number(e.target.value) : e.target.value,
+                              },
+                            })
+                          }
+                        />
+                      )
+                    })()}
                   </div>
                 ))}
                 <div>

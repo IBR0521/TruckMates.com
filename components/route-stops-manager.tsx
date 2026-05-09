@@ -16,7 +16,7 @@ import {
 import { Plus, Trash2, GripVertical, MapPin } from "lucide-react"
 import { toast } from "sonner"
 
-interface Stop {
+export interface Stop {
   id?: string
   stop_number: number
   location_name: string

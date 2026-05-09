@@ -50,7 +50,12 @@ type VendorRow = {
   [key: string]: unknown
 }
 
-type DependencyRow = Record<string, unknown>
+type DependencyRow = {
+  type: string
+  id: string
+  name: string
+  link?: string
+}
 
 export default function VendorsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -132,7 +137,23 @@ export default function VendorsPage() {
       const response = await fetch(`/api/check-dependencies?resource_type=vendor&resource_id=${id}`)
       if (response.ok) {
         const data = await response.json()
-        setDeleteDependencies(data.dependencies || [])
+        setDeleteDependencies(
+          ((data?.dependencies as unknown[]) || [])
+            .map((dependency) => {
+              if (!dependency || typeof dependency !== "object") return null
+              const obj = dependency as Record<string, unknown>
+              if (typeof obj.type !== "string" || typeof obj.id !== "string" || typeof obj.name !== "string") {
+                return null
+              }
+              return {
+                type: obj.type,
+                id: obj.id,
+                name: obj.name,
+                link: typeof obj.link === "string" ? obj.link : undefined,
+              } as DependencyRow
+            })
+            .filter((dependency): dependency is DependencyRow => !!dependency),
+        )
       }
     } catch (error) {
       console.error("Failed to check dependencies:", error)
@@ -176,18 +197,18 @@ export default function VendorsPage() {
     }
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status?: string | null) => {
     switch (status) {
       case "active":
         return <Badge className="bg-green-500/20 text-green-400 border-green-500/50">Active</Badge>
       case "inactive":
         return <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/50">Inactive</Badge>
       default:
-        return <Badge>{status}</Badge>
+        return <Badge>{status || "Unknown"}</Badge>
     }
   }
 
-  const getTypeBadge = (type: string) => {
+  const getTypeBadge = (type?: string | null) => {
     const types: Record<string, { label: string; className: string }> = {
       supplier: { label: "Supplier", className: "bg-blue-500/20 text-blue-400 border-blue-500/50" },
       maintenance: { label: "Maintenance", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/50" },
@@ -195,7 +216,10 @@ export default function VendorsPage() {
       parts: { label: "Parts", className: "bg-purple-500/20 text-purple-400 border-purple-500/50" },
       other: { label: "Other", className: "bg-gray-500/20 text-gray-400 border-gray-500/50" },
     }
-    const typeInfo = types[type] || { label: type, className: "bg-gray-500/20 text-gray-400 border-gray-500/50" }
+    const typeInfo = types[type || "other"] || {
+      label: type || "Other",
+      className: "bg-gray-500/20 text-gray-400 border-gray-500/50",
+    }
     return <Badge className={typeInfo.className}>{typeInfo.label}</Badge>
   }
 
@@ -334,7 +358,7 @@ export default function VendorsPage() {
                         <div className="text-sm text-muted-foreground">{vendor.phone}</div>
                       )}
                     </td>
-                    <td className="p-4">{getTypeBadge(vendor.vendor_type)}</td>
+                    <td className="p-4">{getTypeBadge(String(vendor.vendor_type || "other"))}</td>
                     <td className="p-4">
                       <InlineEdit
                         value={vendor.status || ""}

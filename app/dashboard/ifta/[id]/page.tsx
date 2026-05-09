@@ -11,10 +11,50 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { getIFTAReport } from "@/app/actions/tax-fuel-reconciliation"
 
+type IftaStateBreakdownRow = {
+  state?: string | null
+  miles?: number | string | null
+  fuel?: number | string | null
+  taxRate?: number | null
+  tax_rate?: number | null
+  tax?: number | null
+  tax_paid?: number | null
+  net_tax_due?: number | null
+  mileage_source?: string | null
+}
+
+type IftaDataSources = {
+  summary?: string | null
+  uses_gps?: boolean | null
+  uses_trip_sheets?: boolean | null
+}
+
+type IftaReportDetail = {
+  id: string
+  quarter?: string | number | null
+  year?: string | number | null
+  submitted_at?: string | null
+  total_miles?: number | null
+  total_gallons?: number | null
+  total_tax_paid?: number | null
+  total_tax_due?: number | null
+  net_tax_due?: number | null
+  status?: string | null
+  ifta_data_sources?: IftaDataSources | null
+  state_breakdown?: IftaStateBreakdownRow[] | null
+}
+
+const asIftaReportDetail = (value: unknown): IftaReportDetail | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as IftaReportDetail
+}
+
 export default function IFTADetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
-  const [report, setReport] = useState<unknown>(null)
+  const [report, setReport] = useState<IftaReportDetail | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -33,7 +73,7 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
       if (result.error) {
         toast.error(result.error)
       } else {
-        setReport(result.data)
+        setReport(asIftaReportDetail(result.data))
       }
     } catch (error: unknown) {
       toast.error(errorMessage(error, "Failed to load IFTA report"))
@@ -121,6 +161,11 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
     approved: "bg-green-500/20 text-green-400",
     rejected: "bg-red-500/20 text-red-400",
   }
+  const statusKey = typeof report.status === "string" ? report.status : "draft"
+  const statusLabel =
+    typeof report.status === "string" && report.status.length > 0
+      ? report.status.charAt(0).toUpperCase() + report.status.slice(1)
+      : "Draft"
 
   return (
     <div className="w-full">
@@ -170,16 +215,16 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
             <Card className="border-border p-4 bg-secondary/20">
               <p className="text-sm font-medium text-foreground mb-1">Mileage data sources</p>
               <p className="text-sm text-muted-foreground">
-                {(report.ifta_data_sources as unknown).summary ||
+                {report.ifta_data_sources?.summary ||
                   "GPS/trip sheet mix (see per-state below)."}
               </p>
               <div className="flex flex-wrap gap-2 mt-2">
-                {(report.ifta_data_sources as unknown).uses_gps && (
+                {report.ifta_data_sources?.uses_gps && (
                   <span className="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
                     GPS / ELD crossings
                   </span>
                 )}
-                {(report.ifta_data_sources as unknown).uses_trip_sheets && (
+                {report.ifta_data_sources?.uses_trip_sheets && (
                   <span className="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40">
                     Manual trip sheets
                   </span>
@@ -191,8 +236,8 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
           <Card className="border-border p-8">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-foreground">State-by-State Breakdown</h3>
-              <span className={`px-3 py-1 rounded-full text-sm font-semibold ${statusColors[report.status] || statusColors.draft}`}>
-                {report.status?.charAt(0).toUpperCase() + report.status?.slice(1) || "Draft"}
+              <span className={`px-3 py-1 rounded-full text-sm font-semibold ${statusColors[statusKey] || statusColors.draft}`}>
+                {statusLabel}
               </span>
             </div>
 
@@ -212,17 +257,17 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
                     </tr>
                   </thead>
                   <tbody>
-                    {report.state_breakdown.map((state: unknown, i: number) => {
+                    {report.state_breakdown.map((state: IftaStateBreakdownRow, i: number) => {
                       // FIXED: Align field names with what createIFTAReport actually stores
                       // createIFTAReport stores: state, miles, fuel (number), tax (number), taxRate
                       // Detail page expects: state, miles, gallons, tax_rate, tax_due, tax_paid, net_tax_due
-                      const miles = state.miles || 0
-                      const fuel = typeof state.fuel === 'number' ? state.fuel : parseFloat((state.fuel || "0").toString().replace(/[^0-9.]/g, ""))
-                      const taxRate = state.taxRate || state.tax_rate || 0.25
-                      const taxDue = state.tax || (fuel * taxRate) || 0
+                      const miles = Number(state.miles || 0)
+                      const fuel = typeof state.fuel === 'number' ? state.fuel : parseFloat(String(state.fuel || "0").replace(/[^0-9.]/g, ""))
+                      const taxRate = Number(state.taxRate ?? state.tax_rate ?? 0.25)
+                      const taxDue = Number(state.tax ?? (fuel * taxRate))
                       // Tax paid and net tax due are not stored in current schema, calculate if needed
-                      const taxPaid = state.tax_paid || 0
-                      const netTaxDue = state.net_tax_due || (taxDue - taxPaid)
+                      const taxPaid = Number(state.tax_paid || 0)
+                      const netTaxDue = Number(state.net_tax_due ?? (taxDue - taxPaid))
                       const src = state.mileage_source as string | undefined
                       const srcLabel =
                         src === "gps"
@@ -235,7 +280,7 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
 
                       return (
                         <tr key={i} className="border-b border-border hover:bg-secondary/20 transition">
-                          <td className="px-6 py-4 text-foreground font-medium">{state.state}</td>
+                          <td className="px-6 py-4 text-foreground font-medium">{state.state || "—"}</td>
                           <td className="px-6 py-4 text-muted-foreground text-sm">{srcLabel}</td>
                           <td className="px-6 py-4 text-foreground">{miles.toLocaleString()}</td>
                           <td className="px-6 py-4 text-foreground">{fuel.toLocaleString()}</td>

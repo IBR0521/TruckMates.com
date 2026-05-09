@@ -15,11 +15,55 @@ import {
   getTruckMovements,
 } from "@/app/actions/ltl-shipments"
 
+type ShipmentRow = {
+  id: string
+  shipment_number?: string | null
+  shipper_name?: string | null
+  consignee_name?: string | null
+  total_weight_lbs?: number | string | null
+  total_cube_ft?: number | string | null
+}
+
+type MovementRow = {
+  id: string
+  movement_number?: string | null
+  status?: string | null
+  max_weight_lbs?: number | string | null
+  max_cube_ft?: number | string | null
+}
+
+type MovementShipmentRow = {
+  id: string
+  shipments?: ShipmentRow | null
+}
+
+const asShipmentRow = (value: unknown): ShipmentRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as ShipmentRow
+}
+
+const asMovementRow = (value: unknown): MovementRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as MovementRow
+}
+
+const asMovementShipmentRow = (value: unknown): MovementShipmentRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  const shipment = asShipmentRow(obj.shipments)
+  return { ...(obj as MovementShipmentRow), shipments: shipment }
+}
+
 export default function LtlDispatchPage() {
-  const [shipments, setShipments] = useState<unknown[]>([])
-  const [movements, setMovements] = useState<unknown[]>([])
+  const [shipments, setShipments] = useState<ShipmentRow[]>([])
+  const [movements, setMovements] = useState<MovementRow[]>([])
   const [selectedMovement, setSelectedMovement] = useState<string>("")
-  const [movementShipments, setMovementShipments] = useState<unknown[]>([])
+  const [movementShipments, setMovementShipments] = useState<MovementShipmentRow[]>([])
   const [loading, setLoading] = useState(false)
 
   const [newShipment, setNewShipment] = useState({ shipment_number: "", shipper_name: "", consignee_name: "" })
@@ -33,8 +77,8 @@ export default function LtlDispatchPage() {
   async function loadData() {
     setLoading(true)
     const [s, m] = await Promise.all([getShipments(), getTruckMovements()])
-    if (s.data) setShipments(s.data)
-    if (m.data) setMovements(m.data)
+    if (s.data) setShipments((s.data as unknown[]).map(asShipmentRow).filter((row): row is ShipmentRow => !!row))
+    if (m.data) setMovements((m.data as unknown[]).map(asMovementRow).filter((row): row is MovementRow => !!row))
     setLoading(false)
   }
 
@@ -46,7 +90,11 @@ export default function LtlDispatchPage() {
     if (!selectedMovement) return
     void (async () => {
       const result = await getMovementShipments(selectedMovement)
-      if (result.data) setMovementShipments(result.data)
+      if (result.data) {
+        setMovementShipments(
+          (result.data as unknown[]).map(asMovementShipmentRow).filter((row): row is MovementShipmentRow => !!row),
+        )
+      }
     })()
   }, [selectedMovement])
 
@@ -91,7 +139,11 @@ export default function LtlDispatchPage() {
     if (result.error) return toast.error(result.error)
     toast.success("Shipment attached")
     const refresh = await getMovementShipments(selectedMovement)
-    if (refresh.data) setMovementShipments(refresh.data)
+    if (refresh.data) {
+      setMovementShipments(
+        (refresh.data as unknown[]).map(asMovementShipmentRow).filter((row): row is MovementShipmentRow => !!row),
+      )
+    }
   }
 
   return (

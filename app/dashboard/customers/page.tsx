@@ -37,11 +37,29 @@ import { CRMSectionHeader } from "@/components/crm/crm-section-header"
 type CustomerRow = NonNullable<Awaited<ReturnType<typeof getCustomers>>["data"]>[number]
 type CustomerFilters = NonNullable<Parameters<typeof getCustomers>[0]>
 type CustomerUpdateInput = Parameters<typeof updateCustomer>[1]
+type DeleteDependency = {
+  type: string
+  id: string
+  name: string
+  link?: string
+}
+
+const asDeleteDependency = (value: unknown): DeleteDependency | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.type !== "string" || typeof obj.id !== "string" || typeof obj.name !== "string") return null
+  return {
+    type: obj.type,
+    id: obj.id,
+    name: obj.name,
+    link: typeof obj.link === "string" ? obj.link : undefined,
+  }
+}
 
 export default function CustomersPage() {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [deleteDependencies, setDeleteDependencies] = useState<unknown[]>([])
+  const [deleteDependencies, setDeleteDependencies] = useState<DeleteDependency[]>([])
   const [customersList, setCustomersList] = useState<CustomerRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -94,7 +112,11 @@ export default function CustomersPage() {
       const response = await fetch(`/api/check-dependencies?resource_type=customer&resource_id=${id}`)
       if (response.ok) {
         const data = await response.json()
-        setDeleteDependencies(data.dependencies || [])
+        const dependencyList = Array.isArray(data?.dependencies) ? (data.dependencies as unknown[]) : []
+        const dependencies = dependencyList
+          .map(asDeleteDependency)
+          .filter((dep): dep is DeleteDependency => !!dep)
+        setDeleteDependencies(dependencies)
       }
     } catch (error) {
       console.error("Failed to check dependencies:", error)
@@ -163,7 +185,7 @@ export default function CustomersPage() {
     }
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status?: string | null) => {
     switch (status) {
       case "active":
         return <Badge className="bg-green-500/20 text-green-400 border-green-500/50">Active</Badge>
@@ -172,11 +194,11 @@ export default function CustomersPage() {
       case "prospect":
         return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/50">Prospect</Badge>
       default:
-        return <Badge>{status}</Badge>
+        return <Badge>{status || "Unknown"}</Badge>
     }
   }
 
-  const getTypeBadge = (type: string) => {
+  const getTypeBadge = (type?: string | null) => {
     const types: Record<string, { label: string; className: string }> = {
       shipper: { label: "Shipper", className: "bg-purple-500/20 text-purple-400 border-purple-500/50" },
       broker: { label: "Broker", className: "bg-orange-500/20 text-orange-400 border-orange-500/50" },
@@ -184,7 +206,10 @@ export default function CustomersPage() {
       "3pl": { label: "3PL", className: "bg-pink-500/20 text-pink-400 border-pink-500/50" },
       other: { label: "Other", className: "bg-gray-500/20 text-gray-400 border-gray-500/50" },
     }
-    const typeInfo = types[type] || { label: type, className: "bg-gray-500/20 text-gray-400 border-gray-500/50" }
+    const typeInfo = types[type || "other"] || {
+      label: type || "Other",
+      className: "bg-gray-500/20 text-gray-400 border-gray-500/50",
+    }
     return <Badge className={typeInfo.className}>{typeInfo.label}</Badge>
   }
 

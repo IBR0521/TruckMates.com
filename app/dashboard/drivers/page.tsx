@@ -61,7 +61,24 @@ type DriverRow = {
   [key: string]: unknown
 }
 
-type DependencyRow = Record<string, unknown>
+type DependencyRow = {
+  type: string
+  id: string
+  name: string
+  link?: string
+}
+
+const asDependencyRow = (value: unknown): DependencyRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.type !== "string" || typeof obj.id !== "string" || typeof obj.name !== "string") return null
+  return {
+    type: obj.type,
+    id: obj.id,
+    name: obj.name,
+    link: typeof obj.link === "string" ? obj.link : undefined,
+  }
+}
 
 function DriversPageContent() {
   const router = useRouter()
@@ -198,7 +215,10 @@ function DriversPageContent() {
       const response = await fetch(`/api/check-dependencies?resource_type=driver&resource_id=${id}`)
       if (response.ok) {
         const data = await response.json()
-        setDeleteDependencies(data.dependencies || [])
+        const dependencyList = Array.isArray(data?.dependencies) ? (data.dependencies as unknown[]) : []
+        setDeleteDependencies(
+          dependencyList.map(asDependencyRow).filter((dep): dep is DependencyRow => !!dep),
+        )
       }
     } catch (error) {
       console.error("Failed to check dependencies:", error)

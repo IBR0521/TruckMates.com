@@ -54,18 +54,18 @@ function makeSupabaseMock(resultsByTable: Record<string, QueryResult>) {
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
-}), { virtual: true })
+}))
 vi.mock("@/lib/auth/server", () => ({
   getCachedAuthContext: () => mockGetCachedAuthContext(),
-}), { virtual: true })
+}))
 vi.mock("@/lib/server-permissions", () => ({
   checkCreatePermission: () => mockCheckCreatePermission(),
   checkDeletePermission: vi.fn(async () => ({ allowed: true, error: null })),
-}), { virtual: true })
+}))
 vi.mock("@/lib/error-message", () => ({
   errorMessage: (e: unknown) => (e instanceof Error ? e.message : "error"),
   sanitizeError: (e: unknown) => (e instanceof Error ? e.message : "error"),
-}), { virtual: true })
+}))
 vi.mock("../../app/actions/eld", () => ({
   getELDMileageData: vi.fn(async () => ({ data: { totalMiles: 0 }, error: null })),
 }))
@@ -75,7 +75,7 @@ vi.mock("@/lib/fuel-tax-rates", () => ({
     const ratesByState: Record<string, number> = { TX: 0.2, OK: 0.25 }
     return ratesByState[state] ?? fallback
   },
-}), { virtual: true })
+}))
 vi.mock("@sentry/nextjs", () => ({
   default: {},
   captureException: vi.fn(),
@@ -164,8 +164,10 @@ describe("app/actions/ifta.ts", () => {
     const insertCall = (insertMock?.mock.calls[0]?.[0] ?? {}) as IftaReportInsertPayload
     const tx = insertCall.state_breakdown.find((s) => s.state_code === "TX")
     const ok = insertCall.state_breakdown.find((s) => s.state_code === "OK")
-    expect(tx.taxRate).toBe(0.2)
-    expect(ok.taxRate).toBe(0.25)
+    expect(tx).toBeDefined()
+    expect(ok).toBeDefined()
+    expect(tx?.taxRate).toBe(0.2)
+    expect(ok?.taxRate).toBe(0.25)
     expect(insertCall.tax_owed).toBeGreaterThan(0)
   })
 
@@ -190,6 +192,7 @@ describe("app/actions/ifta.ts", () => {
     const insertMock = supabase.tableChains.get("ifta_reports")?.insert
     const insertCall = (insertMock?.mock.calls[0]?.[0] ?? {}) as IftaReportInsertPayload
     const tx = insertCall.state_breakdown.find((s) => s.state_code === "TX")
-    expect(tx.fuel).toBe(35) // 15 DB + 20 trip sheet gallons
+    expect(tx).toBeDefined()
+    expect(tx?.fuel).toBe(35) // 15 DB + 20 trip sheet gallons
   })
 })

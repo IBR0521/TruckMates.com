@@ -12,8 +12,27 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
+type TrailerListRow = {
+  id: string
+  trailer_number?: string | null
+  vin?: string | null
+  plate_number?: string | null
+  trailer_type?: string | null
+  make?: string | null
+  model?: string | null
+  year?: string | number | null
+  status?: string | null
+}
+
+const asTrailerListRow = (value: unknown): TrailerListRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as TrailerListRow
+}
+
 export default function TrailersPage() {
-  const [trailers, setTrailers] = useState<unknown[]>([])
+  const [trailers, setTrailers] = useState<TrailerListRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
 
@@ -23,7 +42,11 @@ export default function TrailersPage() {
     if (result.error) {
       toast.error(result.error)
     } else {
-      setTrailers(result.data || [])
+      setTrailers(
+        ((result.data as unknown[]) || [])
+          .map(asTrailerListRow)
+          .filter((row): row is TrailerListRow => !!row),
+      )
     }
     setLoading(false)
   }
@@ -32,7 +55,7 @@ export default function TrailersPage() {
     void loadTrailers()
   }, [])
 
-  const filtered = trailers.filter((t) => {
+  const filtered = trailers.filter((t: TrailerListRow) => {
     const q = search.toLowerCase()
     return (
       (t.trailer_number || "").toLowerCase().includes(q) ||
@@ -93,7 +116,7 @@ export default function TrailersPage() {
           </Card>
         ) : (
           <div className="grid gap-3">
-            {filtered.map((t) => (
+            {filtered.map((t: TrailerListRow) => (
               <Card key={t.id} className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div>
                   <p className="font-semibold">{t.trailer_number}</p>

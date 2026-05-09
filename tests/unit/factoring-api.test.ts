@@ -5,16 +5,16 @@ const mockRevalidatePath = vi.fn()
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
-}), { virtual: true })
+}))
 
 vi.mock("@/lib/auth/server", () => ({
   getCachedAuthContext: () => mockGetCachedAuthContext(),
-}), { virtual: true })
+}))
 
 vi.mock("@/lib/error-message", () => ({
   sanitizeError: (e: unknown) => (e instanceof Error ? e.message : "error"),
   errorMessage: (e: unknown, fallback = "error") => (e instanceof Error ? e.message : fallback),
-}), { virtual: true })
+}))
 
 vi.mock("@/lib/invoice-packet-build", () => ({
   buildInvoicePacketAttachments: vi.fn(async () => ({
@@ -22,15 +22,15 @@ vi.mock("@/lib/invoice-packet-build", () => ({
     docLines: ["Invoice PDF"],
     error: null,
   })),
-}), { virtual: true })
+}))
 
 vi.mock("@sentry/nextjs", () => ({
   captureException: vi.fn(),
-}), { virtual: true })
+}))
 
 vi.mock("next/cache", () => ({
   revalidatePath: (path: string) => mockRevalidatePath(path),
-}), { virtual: true })
+}))
 
 function makeSupabaseMock() {
   const invoiceUpdates: Array<Record<string, unknown>> = []

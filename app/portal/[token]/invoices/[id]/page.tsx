@@ -95,7 +95,7 @@ export default function CustomerPortalInvoicePage() {
     }
   }, [token, invoiceId, router])
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status?: string | null) => {
     switch (status?.toLowerCase()) {
       case "paid":
         return "bg-green-500"
@@ -111,7 +111,7 @@ export default function CustomerPortalInvoicePage() {
     }
   }
 
-  const formatDate = (date: string | null) => {
+  const formatDate = (date?: string | null) => {
     if (!date) return "N/A"
     return new Date(date).toLocaleDateString("en-US", {
       year: "numeric",
@@ -120,11 +120,11 @@ export default function CustomerPortalInvoicePage() {
     })
   }
 
-  const formatCurrency = (amount: number | string) => {
+  const formatCurrency = (amount: number | string | null | undefined) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
-    }).format(parseFloat(amount?.toString() || "0"))
+    }).format(Number(amount || 0))
   }
 
   if (isLoading) {
@@ -156,8 +156,8 @@ export default function CustomerPortalInvoicePage() {
   }
 
   const items = invoice.items || []
-  const subtotal = items.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0)
-  const tax = parseFloat(invoice.tax || 0)
+  const subtotal = items.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  const tax = Number(invoice.tax || 0)
   const total = subtotal + tax
 
   return (

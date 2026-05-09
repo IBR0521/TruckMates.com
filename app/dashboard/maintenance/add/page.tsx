@@ -31,11 +31,50 @@ import { getTrailers } from "@/app/actions/trailers"
 import { getVendors } from "@/app/actions/vendors"
 import { createMaintenance } from "@/app/actions/maintenance"
 
+type TruckOption = {
+  id: string
+  truck_number?: string | null
+  make?: string | null
+  model?: string | null
+}
+
+type TrailerOption = {
+  id: string
+  trailer_number?: string | null
+  trailer_type?: string | null
+}
+
+type VendorOption = {
+  id: string
+  name?: string | null
+}
+
+const asTruckOption = (value: unknown): TruckOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as TruckOption
+}
+
+const asTrailerOption = (value: unknown): TrailerOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as TrailerOption
+}
+
+const asVendorOption = (value: unknown): VendorOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as VendorOption
+}
+
 export default function AddMaintenancePage() {
   const router = useRouter()
-  const [trucks, setTrucks] = useState<unknown[]>([])
-  const [trailers, setTrailers] = useState<unknown[]>([])
-  const [vendors, setVendors] = useState<unknown[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
+  const [trailers, setTrailers] = useState<TrailerOption[]>([])
+  const [vendors, setVendors] = useState<VendorOption[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     asset_type: "truck",
@@ -57,9 +96,19 @@ export default function AddMaintenancePage() {
         getTrailers(),
         getVendors(),
       ])
-      if (trucksResult.data) setTrucks(trucksResult.data)
-      if (trailersResult.data) setTrailers(trailersResult.data)
-      if (vendorsResult.data) setVendors(vendorsResult.data)
+      if (trucksResult.data) {
+        setTrucks((trucksResult.data as unknown[]).map(asTruckOption).filter((truck): truck is TruckOption => !!truck))
+      }
+      if (trailersResult.data) {
+        setTrailers(
+          (trailersResult.data as unknown[])
+            .map(asTrailerOption)
+            .filter((trailer): trailer is TrailerOption => !!trailer),
+        )
+      }
+      if (vendorsResult.data) {
+        setVendors((vendorsResult.data as unknown[]).map(asVendorOption).filter((vendor): vendor is VendorOption => !!vendor))
+      }
     }
     loadData()
   }, [])

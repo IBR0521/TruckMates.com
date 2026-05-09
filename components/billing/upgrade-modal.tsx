@@ -75,7 +75,7 @@ export function UpgradeModal({
 
   const startCheckout = async () => {
     setIsCheckoutStarting(true)
-    const result = await createUpgradeCheckoutSession(feature, offer?.target_plan?.name)
+    const result = await createUpgradeCheckoutSession(feature)
     setIsCheckoutStarting(false)
 
     if (result.error || !result.data?.checkout_url) {

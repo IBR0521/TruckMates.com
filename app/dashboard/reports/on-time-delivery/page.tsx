@@ -26,10 +26,21 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+type OnTimeAnalytics = NonNullable<Awaited<ReturnType<typeof getOnTimeDeliveryAnalytics>>["data"]>
+type OnTimeCustomer = OnTimeAnalytics["customers"][number]
+type CustomerOption = { id: string; name?: string | null; company_name?: string | null }
+
+const asCustomerOption = (value: unknown): CustomerOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as CustomerOption
+}
+
 export default function OnTimeDeliveryScorecardPage() {
-  const [analytics, setAnalytics] = useState<unknown>(null)
+  const [analytics, setAnalytics] = useState<OnTimeAnalytics | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [customers, setCustomers] = useState<unknown[]>([])
+  const [customers, setCustomers] = useState<CustomerOption[]>([])
   const [filters, setFilters] = useState({
     start_date: "",
     end_date: "",
@@ -47,14 +58,18 @@ export default function OnTimeDeliveryScorecardPage() {
   async function loadCustomers() {
     const result = await getCustomers()
     if (result.data) {
-      setCustomers(result.data)
+      setCustomers(
+        (result.data as unknown[])
+          .map(asCustomerOption)
+          .filter((customer): customer is CustomerOption => !!customer),
+      )
     }
   }
 
   async function loadAnalytics() {
     setIsLoading(true)
     try {
-      const analyticsFilters: unknown = {}
+      const analyticsFilters: { start_date?: string; end_date?: string; customer_id?: string } = {}
       if (filters.start_date) analyticsFilters.start_date = filters.start_date
       if (filters.end_date) analyticsFilters.end_date = filters.end_date
       if (filters.customer_id !== "all") analyticsFilters.customer_id = filters.customer_id
@@ -152,7 +167,7 @@ export default function OnTimeDeliveryScorecardPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Customers</SelectItem>
-                    {customers.map((customer) => (
+                    {customers.map((customer: CustomerOption) => (
                       <SelectItem key={customer.id} value={customer.id}>
                         {customer.name || customer.company_name}
                       </SelectItem>
@@ -273,7 +288,7 @@ export default function OnTimeDeliveryScorecardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {analytics.customers.map((customer: unknown, index: number) => (
+                    {analytics.customers.map((customer: OnTimeCustomer, index: number) => (
                       <TableRow key={customer.customer_id}>
                         <TableCell className="font-medium">
                           {customer.customer_name}

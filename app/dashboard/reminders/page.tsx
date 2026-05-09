@@ -18,17 +18,62 @@ import { getLoads } from "@/app/actions/loads"
 import { Calendar, Plus, CheckCircle2, AlertTriangle, Clock } from "lucide-react"
 import { format } from "date-fns"
 
+type ReminderRow = {
+  id: string
+  title?: string | null
+  description?: string | null
+  reminder_type?: string | null
+  due_date?: string | null
+  due_time?: string | null
+  status?: string | null
+  is_recurring?: boolean | null
+  driver_id?: string | null
+  truck_id?: string | null
+}
+
+type DriverOption = { id: string; name?: string | null }
+type TruckOption = { id: string; truck_number?: string | null }
+type LoadOption = { id: string; shipment_number?: string | null }
+
+const asReminderRow = (value: unknown): ReminderRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as ReminderRow
+}
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as DriverOption
+}
+
+const asTruckOption = (value: unknown): TruckOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as TruckOption
+}
+
+const asLoadOption = (value: unknown): LoadOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as LoadOption
+}
+
 export default function RemindersPage() {
-  const [reminders, setReminders] = useState<unknown[]>([])
-  const [overdueReminders, setOverdueReminders] = useState<unknown[]>([])
+  const [reminders, setReminders] = useState<ReminderRow[]>([])
+  const [overdueReminders, setOverdueReminders] = useState<ReminderRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState("pending") // pending, completed, overdue, all
   const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [editingReminder, setEditingReminder] = useState<any | null>(null)
+  const [editingReminder, setEditingReminder] = useState<ReminderRow | null>(null)
   const [deletingReminder, setDeletingReminder] = useState<string | null>(null)
-  const [drivers, setDrivers] = useState<unknown[]>([])
-  const [trucks, setTrucks] = useState<unknown[]>([])
-  const [loads, setLoads] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
+  const [loads, setLoads] = useState<LoadOption[]>([])
   
   const [formData, setFormData] = useState({
     title: "",
@@ -56,9 +101,15 @@ export default function RemindersPage() {
           getTrucks(),
           getLoads(),
         ])
-        if (driversResult.data) setDrivers(driversResult.data)
-        if (trucksResult.data) setTrucks(trucksResult.data)
-        if (loadsResult.data) setLoads(loadsResult.data)
+        if (driversResult.data) {
+          setDrivers((driversResult.data as unknown[]).map(asDriverOption).filter((driver): driver is DriverOption => !!driver))
+        }
+        if (trucksResult.data) {
+          setTrucks((trucksResult.data as unknown[]).map(asTruckOption).filter((truck): truck is TruckOption => !!truck))
+        }
+        if (loadsResult.data) {
+          setLoads((loadsResult.data as unknown[]).map(asLoadOption).filter((load): load is LoadOption => !!load))
+        }
       } catch (error: unknown) {
         console.error("Failed to load static data:", error)
       }
@@ -78,7 +129,11 @@ export default function RemindersPage() {
       if (filter === "overdue") {
         const overdueResult = await getOverdueReminders()
         if (overdueResult.data) {
-          setOverdueReminders(overdueResult.data)
+          setOverdueReminders(
+            (overdueResult.data as unknown[])
+              .map(asReminderRow)
+              .filter((reminder): reminder is ReminderRow => !!reminder),
+          )
         }
         setIsLoading(false)
         return
@@ -90,10 +145,18 @@ export default function RemindersPage() {
       ])
 
       if (remindersResult.data) {
-        setReminders(remindersResult.data)
+        setReminders(
+          (remindersResult.data as unknown[])
+            .map(asReminderRow)
+            .filter((reminder): reminder is ReminderRow => !!reminder),
+        )
       }
       if (overdueResult.data) {
-        setOverdueReminders(overdueResult.data)
+        setOverdueReminders(
+          (overdueResult.data as unknown[])
+            .map(asReminderRow)
+            .filter((reminder): reminder is ReminderRow => !!reminder),
+        )
       }
     } catch (error: unknown) {
       toast.error("Failed to load reminders")
@@ -185,11 +248,11 @@ export default function RemindersPage() {
     }
     try {
       const result = await updateReminder(editingReminder.id, {
-        title: editingReminder.title,
-        description: editingReminder.description,
-        reminder_type: editingReminder.reminder_type,
-        due_date: editingReminder.due_date,
-        due_time: editingReminder.due_time,
+        title: editingReminder.title || undefined,
+        description: editingReminder.description || undefined,
+        reminder_type: editingReminder.reminder_type || undefined,
+        due_date: editingReminder.due_date || undefined,
+        due_time: editingReminder.due_time || undefined,
       })
       if (result.error) {
         toast.error(result.error)
@@ -207,7 +270,7 @@ export default function RemindersPage() {
     return type.split("_").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ")
   }
 
-  function getStatusBadge(status: string) {
+  function getStatusBadge(status?: string | null) {
     switch (status) {
       case "pending":
         return <Badge variant="secondary"><Clock className="w-3 h-3 mr-1" />Pending</Badge>
@@ -216,7 +279,7 @@ export default function RemindersPage() {
       case "overdue":
         return <Badge variant="destructive"><AlertTriangle className="w-3 h-3 mr-1" />Overdue</Badge>
       default:
-        return <Badge variant="outline">{status}</Badge>
+        return <Badge variant="outline">{status || "Unknown"}</Badge>
     }
   }
 
@@ -391,13 +454,13 @@ export default function RemindersPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {displayReminders.map((reminder) => (
+              {displayReminders.map((reminder: ReminderRow) => (
                 <Card key={reminder.id} className="p-6">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        {getStatusBadge(reminder.status)}
-                        <Badge variant="outline">{getTypeLabel(reminder.reminder_type)}</Badge>
+                        {getStatusBadge(reminder.status || "pending")}
+                        <Badge variant="outline">{getTypeLabel(reminder.reminder_type || "custom")}</Badge>
                         {reminder.is_recurring && (
                           <Badge variant="secondary">Recurring</Badge>
                         )}
@@ -409,14 +472,14 @@ export default function RemindersPage() {
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
-                          Due: {format(new Date(reminder.due_date), "MMM d, yyyy")}
+                          Due: {reminder.due_date ? format(new Date(reminder.due_date), "MMM d, yyyy") : "N/A"}
                           {reminder.due_time && ` at ${reminder.due_time}`}
                         </span>
                         {reminder.driver_id && (
-                          <span>Driver: {drivers.find(d => d.id === reminder.driver_id)?.name || "Unknown"}</span>
+                          <span>Driver: {drivers.find((d: DriverOption) => d.id === reminder.driver_id)?.name || "Unknown"}</span>
                         )}
                         {reminder.truck_id && (
-                          <span>Truck: {trucks.find(t => t.id === reminder.truck_id)?.truck_number || "Unknown"}</span>
+                          <span>Truck: {trucks.find((t: TruckOption) => t.id === reminder.truck_id)?.truck_number || "Unknown"}</span>
                         )}
                       </div>
                     </div>
@@ -468,7 +531,7 @@ export default function RemindersPage() {
                 <Label htmlFor="edit-title">Title *</Label>
                 <Input
                   id="edit-title"
-                  value={editingReminder.title}
+                  value={editingReminder.title || ""}
                   onChange={(e) => setEditingReminder({ ...editingReminder, title: e.target.value })}
                   className="mt-2"
                 />
@@ -487,7 +550,7 @@ export default function RemindersPage() {
                 <Input
                   id="edit-due_date"
                   type="date"
-                  value={editingReminder.due_date}
+                  value={editingReminder.due_date || ""}
                   onChange={(e) => setEditingReminder({ ...editingReminder, due_date: e.target.value })}
                   className="mt-2"
                   min={new Date().toISOString().split('T')[0]}

@@ -13,11 +13,31 @@ import { Label } from "@/components/ui/label"
 import { CheckCircle2, Plus, Trash2 } from "lucide-react"
 import { deleteVendorInvoice, getVendorInvoices, markVendorInvoicePaid } from "@/app/actions/vendor-invoices"
 
+type VendorInvoiceRow = {
+  id: string
+  status?: string | null
+  amount?: number | null
+  vendors?: { company_name?: string | null; name?: string | null } | null
+  invoice_number?: string | null
+  invoice_date?: string | null
+  due_date?: string | null
+  actual_total_cost?: number | null
+  estimated_total_cost?: number | null
+  priority?: string | null
+}
+
+const asVendorInvoiceRow = (value: unknown): VendorInvoiceRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as VendorInvoiceRow
+}
+
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount || 0)
 }
 
-function badgeClass(status: string) {
+function badgeClass(status?: string | null) {
   const s = String(status || "").toLowerCase()
   if (s === "paid") return "bg-green-500/20 text-green-400 border-green-500/30"
   if (s === "overdue") return "bg-orange-500/20 text-orange-400 border-orange-500/30"
@@ -26,7 +46,7 @@ function badgeClass(status: string) {
 }
 
 export default function VendorInvoicesPage() {
-  const [rows, setRows] = useState<unknown[]>([])
+  const [rows, setRows] = useState<VendorInvoiceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [markPaidId, setMarkPaidId] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState("ach")
@@ -41,7 +61,11 @@ export default function VendorInvoicesPage() {
         toast.error(result.error || "Failed to load vendor invoices")
         setRows([])
       } else {
-        setRows(result.data)
+        setRows(
+          (result.data as unknown[])
+            .map(asVendorInvoiceRow)
+            .filter((row): row is VendorInvoiceRow => !!row),
+        )
       }
     } finally {
       setLoading(false)
@@ -84,8 +108,8 @@ export default function VendorInvoicesPage() {
   }
 
   const outstanding = rows
-    .filter((r) => String(r.status || "").toLowerCase() !== "paid")
-    .reduce((sum, r) => sum + Number(r.amount || 0), 0)
+    .filter((r: VendorInvoiceRow) => String(r.status || "").toLowerCase() !== "paid")
+    .reduce((sum: number, r: VendorInvoiceRow) => sum + Number(r.amount || 0), 0)
 
   return (
     <div className="w-full">
@@ -144,7 +168,7 @@ export default function VendorInvoicesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((row) => (
+                    {rows.map((row: VendorInvoiceRow) => (
                       <tr key={row.id} className="border-b border-border hover:bg-secondary/10">
                         <td className="px-4 py-3 text-sm text-foreground">
                           {row.vendors?.company_name || row.vendors?.name || "Unknown Vendor"}
@@ -156,7 +180,7 @@ export default function VendorInvoicesPage() {
                         </td>
                         <td className="px-4 py-3 text-sm font-semibold text-foreground">{formatCurrency(Number(row.amount || 0))}</td>
                         <td className="px-4 py-3">
-                          <Badge className={badgeClass(row.status)}>
+                          <Badge className={badgeClass(String(row.status || ""))}>
                             {String(row.status || "").replaceAll("_", " ").toUpperCase()}
                           </Badge>
                         </td>

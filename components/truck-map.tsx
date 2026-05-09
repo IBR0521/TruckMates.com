@@ -109,13 +109,18 @@ export function TruckMap({
         const waypointAddresses = stopsList.map((s) => s.address || s.location_name)
         const result = await getRouteDirections(origin, destination, waypointAddresses.length > 0 ? waypointAddresses : undefined)
         
-        if (result.data) {
+        if (result.data && typeof result.data === "object") {
+          const routeData = result.data as {
+            distance?: string
+            duration?: string
+            polyline?: string
+          }
           setRoute({
-            distance: result.data.distance,
-            duration: result.data.duration,
+            distance: routeData.distance || "—",
+            duration: routeData.duration || "—",
             truckFriendly: true,
             waypoints: waypointsArray,
-            polyline: result.data.polyline as string | undefined,
+            polyline: routeData.polyline,
           })
         } else {
           setRoute({

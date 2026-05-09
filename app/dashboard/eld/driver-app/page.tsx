@@ -19,11 +19,45 @@ import { getELDLogs } from "@/app/actions/eld"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
+type DriverOption = {
+  id: string
+  name?: string | null
+}
+
+type HosSummary = {
+  canDrive?: boolean
+  violations?: string[]
+  remainingDriving?: number
+  remainingOnDuty?: number
+  drivingHours?: number
+  onDutyHours?: number
+  offDutyHours?: number
+  needsBreak?: boolean
+}
+
+type EldLogSummary = {
+  end_time?: string | null
+  log_type?: string | null
+}
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DriverOption
+}
+
+const asHosSummary = (value: unknown): HosSummary | null =>
+  value && typeof value === "object" ? (value as HosSummary) : null
+
+const asEldLogSummary = (value: unknown): EldLogSummary | null =>
+  value && typeof value === "object" ? (value as EldLogSummary) : null
+
 export default function DriverAppPage() {
   const router = useRouter()
   const [driverId, setDriverId] = useState("")
-  const [drivers, setDrivers] = useState<unknown[]>([])
-  const [hosData, setHosData] = useState<unknown>(null)
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
+  const [hosData, setHosData] = useState<HosSummary | null>(null)
   const [currentStatus, setCurrentStatus] = useState<string>("off_duty")
   const [isLoading, setIsLoading] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
@@ -43,7 +77,7 @@ export default function DriverAppPage() {
   async function loadDrivers() {
     const result = await getDrivers()
     if (result.data) {
-      setDrivers(result.data)
+      setDrivers((result.data as unknown[]).map(asDriverOption).filter((driver): driver is DriverOption => !!driver))
     }
   }
 
@@ -56,16 +90,16 @@ export default function DriverAppPage() {
       if (result.error) {
         toast.error(result.error)
       } else if (result.data) {
-        setHosData(result.data)
+        setHosData(asHosSummary(result.data))
         setLastUpdate(new Date())
       }
 
       // Get current status from latest log
       const logsResult = await getELDLogs({ driver_id: driverId })
       if (logsResult.data && logsResult.data.length > 0) {
-        const latestLog = logsResult.data[0]
-        if (latestLog.end_time === null) {
-          setCurrentStatus(latestLog.log_type)
+        const latestLog = asEldLogSummary(logsResult.data[0])
+        if (latestLog && latestLog.end_time === null) {
+          setCurrentStatus(latestLog.log_type || "off_duty")
         } else {
           setCurrentStatus("off_duty")
         }
@@ -77,7 +111,7 @@ export default function DriverAppPage() {
     }
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status?: string | null) => {
     switch (status) {
       case "driving":
         return "bg-blue-500/20 text-blue-500 border-blue-500/50"
@@ -92,7 +126,7 @@ export default function DriverAppPage() {
     }
   }
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status?: string | null) => {
     switch (status) {
       case "driving":
         return <Truck className="w-6 h-6" />
@@ -179,9 +213,9 @@ export default function DriverAppPage() {
                   <h3 className="text-lg font-bold text-foreground">
                     {hosData.canDrive ? "✅ Can Drive" : "❌ Cannot Drive"}
                   </h3>
-                  {hosData.violations.length > 0 && (
+                  {(hosData.violations || []).length > 0 && (
                     <div className="mt-2 space-y-1">
-                      {hosData.violations.map((violation: string, index: number) => (
+                      {(hosData.violations || []).map((violation: string, index: number) => (
                         <p key={index} className="text-sm text-red-500">• {violation}</p>
                       ))}
                     </div>
@@ -197,14 +231,14 @@ export default function DriverAppPage() {
                   <p className="text-sm text-muted-foreground mb-2">Remaining Driving</p>
                   <p
                     className={`text-4xl font-bold ${
-                      hosData.remainingDriving > 2
+                      (hosData.remainingDriving ?? 0) > 2
                         ? "text-green-500"
-                        : hosData.remainingDriving > 0
+                        : (hosData.remainingDriving ?? 0) > 0
                         ? "text-yellow-500"
                         : "text-red-500"
                     }`}
                   >
-                    {hosData.remainingDriving.toFixed(1)}h
+                    {Number(hosData.remainingDriving ?? 0).toFixed(1)}h
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">of 11.0h max</p>
                 </div>
@@ -215,14 +249,14 @@ export default function DriverAppPage() {
                   <p className="text-sm text-muted-foreground mb-2">Remaining On-Duty</p>
                   <p
                     className={`text-4xl font-bold ${
-                      hosData.remainingOnDuty > 2
+                      (hosData.remainingOnDuty ?? 0) > 2
                         ? "text-green-500"
-                        : hosData.remainingOnDuty > 0
+                        : (hosData.remainingOnDuty ?? 0) > 0
                         ? "text-yellow-500"
                         : "text-red-500"
                     }`}
                   >
-                    {hosData.remainingOnDuty.toFixed(1)}h
+                    {Number(hosData.remainingOnDuty ?? 0).toFixed(1)}h
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">of 14.0h max</p>
                 </div>
@@ -239,7 +273,7 @@ export default function DriverAppPage() {
                     <span className="text-sm text-foreground">Driving</span>
                   </div>
                   <span className="font-semibold text-foreground">
-                    {hosData.drivingHours.toFixed(1)}h
+                    {Number(hosData.drivingHours ?? 0).toFixed(1)}h
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -248,7 +282,7 @@ export default function DriverAppPage() {
                     <span className="text-sm text-foreground">On-Duty</span>
                   </div>
                   <span className="font-semibold text-foreground">
-                    {hosData.onDutyHours.toFixed(1)}h
+                    {Number(hosData.onDutyHours ?? 0).toFixed(1)}h
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -257,7 +291,7 @@ export default function DriverAppPage() {
                     <span className="text-sm text-foreground">Off-Duty</span>
                   </div>
                   <span className="font-semibold text-foreground">
-                    {hosData.offDutyHours.toFixed(1)}h
+                    {Number(hosData.offDutyHours ?? 0).toFixed(1)}h
                   </span>
                 </div>
               </div>

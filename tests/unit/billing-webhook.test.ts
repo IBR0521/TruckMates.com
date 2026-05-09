@@ -49,19 +49,19 @@ vi.mock("stripe", () => ({
 
 vi.mock("next/headers", () => ({
   headers: () => mockHeaders(),
-}), { virtual: true })
+}))
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => mockAdminClient,
-}), { virtual: true })
+}))
 
 vi.mock("@/lib/analytics/posthog-server", () => ({
   capturePostHogServerEvent: (...args: unknown[]) => mockCapturePostHogServerEvent(...args),
-}), { virtual: true })
+}))
 
 vi.mock("@/lib/error-message", () => ({
   errorMessage: (e: unknown) => (e instanceof Error ? e.message : "error"),
-}), { virtual: true })
+}))
 
 describe("app/api/webhooks/stripe/route.ts", () => {
   beforeEach(() => {

@@ -23,7 +23,7 @@ function getStripe() {
 // EXT-003 FIX: Don't default to empty string - return 503 if not configured
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request | NextRequest) {
   // EXT-003: Check webhook secret before processing
   if (!webhookSecret) {
     console.error('[Stripe] STRIPE_WEBHOOK_SECRET not configured')

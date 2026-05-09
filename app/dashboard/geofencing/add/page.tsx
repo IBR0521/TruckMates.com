@@ -18,11 +18,39 @@ import { getTrucks } from "@/app/actions/trucks"
 import { getRoutes } from "@/app/actions/routes"
 import { useEffect } from "react"
 
+type TruckOption = {
+  id: string
+  truck_number?: string | null
+  make?: string | null
+  model?: string | null
+}
+
+type RouteOption = {
+  id: string
+  name?: string | null
+  origin?: string | null
+  destination?: string | null
+}
+
+const asTruckOption = (value: unknown): TruckOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as TruckOption
+}
+
+const asRouteOption = (value: unknown): RouteOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as RouteOption
+}
+
 export default function AddGeofencePage() {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [trucks, setTrucks] = useState<unknown[]>([])
-  const [routes, setRoutes] = useState<unknown[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
+  const [routes, setRoutes] = useState<RouteOption[]>([])
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -55,14 +83,14 @@ export default function AddGeofencePage() {
   async function loadTrucks() {
     const result = await getTrucks()
     if (result.data) {
-      setTrucks(result.data)
+      setTrucks((result.data as unknown[]).map(asTruckOption).filter((truck): truck is TruckOption => !!truck))
     }
   }
 
   async function loadRoutes() {
     const result = await getRoutes()
     if (result.data) {
-      setRoutes(result.data)
+      setRoutes((result.data as unknown[]).map(asRouteOption).filter((route): route is RouteOption => !!route))
     }
   }
 

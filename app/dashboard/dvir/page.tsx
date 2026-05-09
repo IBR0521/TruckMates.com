@@ -25,6 +25,35 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+type DvirRow = {
+  id: string
+  inspection_date?: string | null
+  inspection_type?: string | null
+  status?: string | null
+  location?: string | null
+  defects_found?: boolean
+  defects?: unknown
+  drivers?: { name?: string | null } | null
+  trucks?: { truck_number?: string | null } | null
+}
+
+type DvirStats = {
+  total?: number | null
+  passed?: number | null
+  with_defects?: number | null
+  unsafe?: number | null
+}
+
+const asDvirRow = (value: unknown): DvirRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DvirRow
+}
+
+const asDvirStats = (value: unknown): DvirStats | null =>
+  value && typeof value === "object" ? (value as DvirStats) : null
+
 function DefectsListCell({ dvir }: { dvir: { defects_found?: boolean; defects?: unknown } }) {
   const summary = summarizeDefectSeverities(dvir.defects)
   if (!dvir.defects_found) {
@@ -55,14 +84,14 @@ function DefectsListCell({ dvir }: { dvir: { defects_found?: boolean; defects?: 
 
 export default function DVIRPage() {
   const router = useRouter()
-  const [dvirRecords, setDvirRecords] = useState<unknown[]>([])
-  const [filteredDvirs, setFilteredDvirs] = useState<unknown[]>([])
+  const [dvirRecords, setDvirRecords] = useState<DvirRow[]>([])
+  const [filteredDvirs, setFilteredDvirs] = useState<DvirRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState("all")
-  const [stats, setStats] = useState<unknown>(null)
+  const [stats, setStats] = useState<DvirStats | null>(null)
   const [openDefectTrucks, setOpenDefectTrucks] = useState<
     Array<{
       truck_id: string
@@ -90,11 +119,12 @@ export default function DVIRPage() {
     if (dvirResult.error) {
       toast.error(dvirResult.error)
     } else if (dvirResult.data) {
+      const rows = (dvirResult.data as unknown[]).map(asDvirRow).filter((dvir): dvir is DvirRow => !!dvir)
       // Apply client-side search filter only (server handles status/type)
-      let filtered = dvirResult.data
+      let filtered = rows
       if (filters?.search) {
         filtered = filtered.filter(
-          (dvir: { drivers?: { name?: string | null } | null; trucks?: { truck_number?: string | null } | null; location?: string | null; [key: string]: unknown }) =>
+          (dvir) =>
             dvir.drivers?.name?.toLowerCase().includes(filters.search!.toLowerCase()) ||
             dvir.trucks?.truck_number?.toLowerCase().includes(filters.search!.toLowerCase()) ||
             dvir.location?.toLowerCase().includes(filters.search!.toLowerCase())
@@ -105,7 +135,7 @@ export default function DVIRPage() {
     }
 
     if (statsResult.data) {
-      setStats(statsResult.data)
+      setStats(asDvirStats(statsResult.data))
     }
 
     if (trucksResult?.data) {
@@ -126,10 +156,15 @@ export default function DVIRPage() {
 
   const handleExport = () => {
     try {
-      const exportData = dvirRecords.map(({ id, company_id, driver_id, truck_id, created_at, updated_at, drivers, trucks, ...rest }) => ({
-        ...rest,
-        driver_name: drivers?.name,
-        truck_number: trucks?.truck_number,
+      const exportData = dvirRecords.map((dvir) => ({
+        id: dvir.id,
+        inspection_date: dvir.inspection_date,
+        inspection_type: dvir.inspection_type,
+        status: dvir.status,
+        location: dvir.location,
+        defects_found: dvir.defects_found,
+        driver_name: dvir.drivers?.name,
+        truck_number: dvir.trucks?.truck_number,
       }))
       exportToExcel(exportData, "dvir")
       toast.success("DVIR records exported successfully")
@@ -150,7 +185,7 @@ export default function DVIRPage() {
     }
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status?: string | null) => {
     switch (status) {
       case "passed":
         return <Badge className="bg-green-500/20 text-green-500 border-green-500/50">Passed</Badge>
@@ -163,7 +198,7 @@ export default function DVIRPage() {
     }
   }
 
-  const getTypeLabel = (type: string) => {
+  const getTypeLabel = (type?: string | null) => {
     switch (type) {
       case "pre_trip":
         return "Pre-Trip"

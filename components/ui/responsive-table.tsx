@@ -24,6 +24,15 @@ export function ResponsiveTable({
   emptyMessage = "No data available",
 }: ResponsiveTableProps) {
   const isMobile = useIsMobile()
+  const getRowKey = (row: Record<string, unknown>, index: number): React.Key => {
+    const rawId = row.id
+    return typeof rawId === "string" || typeof rawId === "number" ? rawId : index
+  }
+  const renderFallbackValue = (value: unknown) => {
+    if (value === null || value === undefined || value === "") return "N/A"
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value)
+    return "N/A"
+  }
 
   if (isMobile) {
     // Mobile: Show cards
@@ -40,7 +49,7 @@ export function ResponsiveTable({
     return (
       <div className="space-y-4">
         {data.map((row, index) => (
-          <Card key={row.id || index} className="border-border p-4">
+          <Card key={getRowKey(row, index)} className="border-border p-4">
             {renderMobileCard ? (
               renderMobileCard(row)
             ) : (
@@ -53,7 +62,7 @@ export function ResponsiveTable({
                         {header.label}
                       </span>
                       <span className="text-sm text-foreground">
-                        {renderCell ? renderCell(header.key, value, row) : (value || 'N/A')}
+                        {renderCell ? renderCell(header.key, value, row) : renderFallbackValue(value)}
                       </span>
                     </div>
                   )
@@ -89,12 +98,12 @@ export function ResponsiveTable({
               </TableRow>
             ) : (
               data.map((row, index) => (
-                <TableRow key={row.id || index}>
+                <TableRow key={getRowKey(row, index)}>
                   {headers.map((header) => {
                     const value = row[header.key]
                     return (
                       <TableCell key={header.key} className={header.className}>
-                        {renderCell ? renderCell(header.key, value, row) : (value || 'N/A')}
+                        {renderCell ? renderCell(header.key, value, row) : renderFallbackValue(value)}
                       </TableCell>
                     )
                   })}

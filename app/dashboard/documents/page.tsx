@@ -24,15 +24,31 @@ import { Badge } from "@/components/ui/badge"
 import { getDocuments, deleteDocument, deleteDocuments, getDocumentUrl, uploadDocument } from "@/app/actions/documents"
 import { getExpiringItems } from "@/app/actions/document-expiry"
 
+type DocumentRow = {
+  id: string
+  name?: string | null
+  type?: string | null
+  expiry_date?: string | null
+  file_size?: number | null
+  upload_date?: string | null
+}
+
+const asDocumentRow = (value: unknown): DocumentRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DocumentRow
+}
+
 export default function DocumentsPage() {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
-  const [documentsList, setDocumentsList] = useState<unknown[]>([])
-  const [filteredDocuments, setFilteredDocuments] = useState<unknown[]>([])
+  const [documentsList, setDocumentsList] = useState<DocumentRow[]>([])
+  const [filteredDocuments, setFilteredDocuments] = useState<DocumentRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [expiringItems, setExpiringItems] = useState<unknown>(null)
+  const [expiringItems, setExpiringItems] = useState<Awaited<ReturnType<typeof getExpiringItems>>["data"] | null>(null)
   const [expiryFilter, setExpiryFilter] = useState<string>("all") // all, expiring, expired
   const [isUploading, setIsUploading] = useState(false)
 
@@ -45,8 +61,9 @@ export default function DocumentsPage() {
       return
     }
     if (result.data) {
-      setDocumentsList(result.data)
-      setFilteredDocuments(result.data)
+      const rows = (result.data as unknown[]).map(asDocumentRow).filter((doc): doc is DocumentRow => !!doc)
+      setDocumentsList(rows)
+      setFilteredDocuments(rows)
     }
     setIsLoading(false)
   }
@@ -113,7 +130,7 @@ export default function DocumentsPage() {
     setSelectedIds(newSelected)
   }
 
-  const handleView = async (doc: unknown) => {
+  const handleView = async (doc: DocumentRow) => {
     try {
       const result = await getDocumentUrl(doc.id)
       if (result.error) {
@@ -130,7 +147,7 @@ export default function DocumentsPage() {
     }
   }
 
-  const handleDownload = async (doc: unknown) => {
+  const handleDownload = async (doc: DocumentRow) => {
     try {
       const result = await getDocumentUrl(doc.id)
       if (result.error) {
@@ -297,7 +314,7 @@ export default function DocumentsPage() {
                 <Card className="border border-border/50 p-6">
                   <p className="text-muted-foreground text-sm font-medium mb-2">Storage Used</p>
                   <p className="text-3xl font-bold text-foreground">
-                    {formatFileSize(documentsList.reduce((sum, d) => sum + (d.file_size || 0), 0))}
+                    {formatFileSize(documentsList.reduce((sum, d) => sum + Number(d.file_size || 0), 0))}
                   </p>
                 </Card>
               </div>
@@ -422,7 +439,7 @@ export default function DocumentsPage() {
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredDocuments.map((doc) => {
-                const expiryStatus = getExpiryStatus(doc.expiry_date)
+                const expiryStatus = getExpiryStatus(doc.expiry_date ?? null)
                 const isSelected = selectedIds.has(doc.id)
                 return (
                 <Card 
@@ -473,7 +490,7 @@ export default function DocumentsPage() {
                   <h3 className="text-foreground font-semibold mb-2 text-sm">{doc.name || "Unnamed Document"}</h3>
                   <div className="space-y-1 text-xs text-muted-foreground mb-4">
                     <p>Uploaded: {doc.upload_date ? new Date(doc.upload_date).toLocaleDateString() : "N/A"}</p>
-                    <p>Size: {formatFileSize(doc.file_size)}</p>
+                    <p>Size: {formatFileSize(Number(doc.file_size || 0))}</p>
                     {doc.expiry_date && (
                       <p className={expiryStatus?.status === "expired" ? "text-red-400 font-medium" : expiryStatus?.status === "expiring_soon" ? "text-yellow-400 font-medium" : ""}>
                         Expires: {new Date(doc.expiry_date).toLocaleDateString()}

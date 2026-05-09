@@ -15,10 +15,19 @@ import { getCompanySettings, updateCompanySettings } from "@/app/actions/number-
 import { getCurrentUser } from "@/lib/auth/server"
 import { mapLegacyRole } from "@/lib/roles"
 
+type DriverOption = { id: string; name?: string | null }
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as DriverOption
+}
+
 export default function PayRulesPage() {
-  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
   const [selectedDriverId, setSelectedDriverId] = useState<string>("")
-  const [history, setHistory] = useState<unknown[]>([])
+  const [history, setHistory] = useState<DriverPayRule[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isSavingPerDiem, setIsSavingPerDiem] = useState(false)
@@ -50,7 +59,11 @@ export default function PayRulesPage() {
     if (driversResult.error) {
       toast.error(driversResult.error)
     } else {
-      setDrivers(driversResult.data || [])
+      setDrivers(
+        ((driversResult.data as unknown[]) || [])
+          .map(asDriverOption)
+          .filter((driver): driver is DriverOption => !!driver),
+      )
     }
     if (!userResult.error && userResult.data) {
       const mapped = mapLegacyRole(userResult.data.role)
@@ -75,7 +88,7 @@ export default function PayRulesPage() {
     ])
     if (activeResult.error) toast.error(activeResult.error)
     if (historyResult.error) toast.error(historyResult.error)
-    const ruleHistory = historyResult.data || []
+    const ruleHistory = ((historyResult.data as DriverPayRule[]) || [])
     setHistory(ruleHistory)
 
     if (activeResult.data) {
@@ -198,7 +211,7 @@ export default function PayRulesPage() {
                 <SelectValue placeholder="Select driver" />
               </SelectTrigger>
               <SelectContent>
-                {drivers.map((driver) => (
+                {drivers.map((driver: DriverOption) => (
                   <SelectItem key={driver.id} value={driver.id}>
                     {driver.name}
                   </SelectItem>
@@ -308,7 +321,7 @@ export default function PayRulesPage() {
                   <p className="text-sm text-muted-foreground">No rules found.</p>
                 ) : (
                   <div className="space-y-2">
-                    {history.map((rule) => (
+                    {history.map((rule: DriverPayRule) => (
                       <div key={rule.id} className="flex items-center justify-between border border-border rounded-md p-3">
                         <div className="text-sm">
                           <p className="font-medium text-foreground flex items-center gap-2">
@@ -317,8 +330,8 @@ export default function PayRulesPage() {
                           </p>
                           <p className="text-muted-foreground">Effective {rule.effective_from} {rule.effective_to ? `to ${rule.effective_to}` : ""}</p>
                         </div>
-                        {!rule.is_active && isManager && (
-                          <Button variant="outline" size="sm" onClick={() => handleDelete(rule.id)}>
+                        {!rule.is_active && isManager && rule.id && (
+                          <Button variant="outline" size="sm" onClick={() => handleDelete(rule.id!)}>
                             <Trash2 className="w-4 h-4 mr-1" />
                             Delete
                           </Button>

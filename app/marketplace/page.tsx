@@ -312,7 +312,7 @@ export default function MarketplacePage() {
                                     {load.equipment_type || "Any Equipment"}
                                   </Badge>
                                   <Badge variant="secondary" className="text-sm">
-                                    {formatCurrency(load.rate)}
+                                    {formatCurrency(Number(load.rate || 0))}
                                   </Badge>
                                 </div>
                                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
@@ -353,7 +353,7 @@ export default function MarketplacePage() {
                                   {load.equipment_type || "Any Equipment"}
                                 </Badge>
                                 <Badge variant="secondary" className="text-sm">
-                                  {formatCurrency(load.rate)}
+                                  {formatCurrency(Number(load.rate || 0))}
                                 </Badge>
                               </div>
                               <div className="flex items-center gap-2 text-muted-foreground mb-1">
@@ -387,7 +387,7 @@ export default function MarketplacePage() {
                       <div className="flex flex-col gap-2 md:items-end">
                         <div className="text-right mb-2">
                           <div className="text-2xl font-bold text-primary">
-                            {formatCurrency(load.rate)}
+                            {formatCurrency(Number(load.rate || 0))}
                           </div>
                           <p className="text-sm text-muted-foreground">
                             {load.rate_type === "per_mile" ? "per mile" : "flat rate"}

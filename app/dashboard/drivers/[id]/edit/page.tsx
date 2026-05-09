@@ -30,12 +30,26 @@ import { getDriver, updateDriver } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 
+type TruckOption = {
+  id: string
+  truck_number?: string | null
+  make?: string | null
+  model?: string | null
+}
+
+const asTruckOption = (value: unknown): TruckOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as TruckOption
+}
+
 export default function EditDriverPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [trucks, setTrucks] = useState<unknown[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -71,7 +85,7 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
       ])
       
       if (trucksResult.data) {
-        setTrucks(trucksResult.data)
+        setTrucks((trucksResult.data as unknown[]).map(asTruckOption).filter((t): t is TruckOption => !!t))
       }
       
       if (driverResult.data) {

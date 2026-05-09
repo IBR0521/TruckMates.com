@@ -200,8 +200,8 @@ export default function TaxFuelReconciliationPage() {
         state: formData.state,
         city: formData.city || undefined,
         station_name: formData.station_name || undefined,
-        gallons: parseFloat(formData.gallons),
-        price_per_gallon: parseFloat(formData.price_per_gallon),
+        gallons: Number(formData.gallons),
+        price_per_gallon: Number(formData.price_per_gallon),
         odometer_reading: formData.odometer_reading ? parseInt(formData.odometer_reading) : undefined,
         receipt_number: formData.receipt_number || undefined,
         receipt_url: formData.receipt_url || undefined,
@@ -234,8 +234,8 @@ export default function TaxFuelReconciliationPage() {
         state: formData.state,
         city: formData.city || undefined,
         station_name: formData.station_name || undefined,
-        gallons: parseFloat(formData.gallons),
-        price_per_gallon: parseFloat(formData.price_per_gallon),
+        gallons: Number(formData.gallons),
+        price_per_gallon: Number(formData.price_per_gallon),
         odometer_reading: formData.odometer_reading ? parseInt(formData.odometer_reading) : undefined,
         receipt_number: formData.receipt_number || undefined,
         receipt_url: formData.receipt_url || undefined,
@@ -346,8 +346,8 @@ export default function TaxFuelReconciliationPage() {
     }
   }
 
-  const totalGallons = fuelPurchases.reduce((sum, p) => sum + parseFloat(p.gallons?.toString() || "0"), 0)
-  const totalCost = fuelPurchases.reduce((sum, p) => sum + parseFloat(p.total_cost?.toString() || "0"), 0)
+  const totalGallons = fuelPurchases.reduce((sum, p) => sum + Number(p.gallons || 0), 0)
+  const totalCost = fuelPurchases.reduce((sum, p) => sum + Number(p.total_cost || 0), 0)
   const avgPricePerGallon = totalGallons > 0 ? totalCost / totalGallons : 0
 
   return (
@@ -493,7 +493,7 @@ export default function TaxFuelReconciliationPage() {
               {formData.gallons && formData.price_per_gallon && (
                 <div className="p-3 bg-muted rounded-lg">
                   <p className="text-sm font-medium">
-                    Total Cost: ${(parseFloat(formData.gallons) * parseFloat(formData.price_per_gallon)).toFixed(2)}
+                    Total Cost: ${(Number(formData.gallons || 0) * Number(formData.price_per_gallon || 0)).toFixed(2)}
                   </p>
                 </div>
               )}
@@ -721,10 +721,10 @@ export default function TaxFuelReconciliationPage() {
                           {purchase.city && <p className="text-xs text-muted-foreground">{purchase.city}</p>}
                         </div>
                       </TableCell>
-                      <TableCell>{parseFloat(purchase.gallons?.toString() || "0").toFixed(2)}</TableCell>
-                      <TableCell>${parseFloat(purchase.price_per_gallon?.toString() || "0").toFixed(4)}</TableCell>
+                      <TableCell>{Number(purchase.gallons || 0).toFixed(2)}</TableCell>
+                      <TableCell>${Number(purchase.price_per_gallon || 0).toFixed(4)}</TableCell>
                       <TableCell className="font-medium">
-                        ${parseFloat(purchase.total_cost?.toString() || "0").toFixed(2)}
+                        ${Number(purchase.total_cost || 0).toFixed(2)}
                       </TableCell>
                       <TableCell>
                         {purchase.trucks ? (

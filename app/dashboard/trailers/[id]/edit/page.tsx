@@ -10,6 +10,24 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+type TrailerFormData = {
+  trailer_number: string
+  vin: string
+  plate_number: string
+  plate_state: string
+  year: string
+  make: string
+  model: string
+  trailer_type: string
+  length_ft: string
+  capacity_lbs: string
+  door_type: string
+  status: string
+  registration_expiry: string
+  next_dot_inspection_date: string
+  last_brake_inspection_date: string
+}
+
 export default function EditTrailerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
@@ -18,7 +36,7 @@ export default function EditTrailerPage({ params }: { params: Promise<{ id: stri
   const [uploadingDoc, setUploadingDoc] = useState(false)
   const [docType, setDocType] = useState("registration")
   const [docFile, setDocFile] = useState<File | null>(null)
-  const [formData, setFormData] = useState<unknown>({
+  const [formData, setFormData] = useState<TrailerFormData>({
     trailer_number: "",
     vin: "",
     plate_number: "",

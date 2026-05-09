@@ -18,10 +18,59 @@ import {
   setBankTransactionStatus,
 } from "@/app/actions/bank-reconciliation"
 
-type ReconciliationData = NonNullable<Awaited<ReturnType<typeof getBankReconciliationData>>["data"]>
-type ImportRow = ReconciliationData["imports"][number]
-type TransactionRow = ReconciliationData["transactions"][number]
-type ManualMatchOptions = NonNullable<Awaited<ReturnType<typeof getManualMatchCandidates>>["data"]>
+type ImportRow = {
+  id: string
+  imported_at?: string | null
+  file_name?: string | null
+  account_name?: string | null
+}
+type TransactionRow = {
+  id: string
+  txn_date?: string | null
+  description?: string | null
+  amount?: number | string | null
+  status?: string | null
+}
+type ManualExpense = {
+  id: string
+  date?: string | null
+  amount?: number | string | null
+  category?: string | null
+}
+type ManualInvoice = {
+  id: string
+  invoice_number?: string | null
+  amount?: number | string | null
+}
+type ManualMatchOptions = { expenses: ManualExpense[]; invoices: ManualInvoice[] }
+
+const asImportRow = (value: unknown): ImportRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as ImportRow
+}
+
+const asTransactionRow = (value: unknown): TransactionRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as TransactionRow
+}
+
+const asManualExpense = (value: unknown): ManualExpense | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as ManualExpense
+}
+
+const asManualInvoice = (value: unknown): ManualInvoice | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as ManualInvoice
+}
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount || 0)
@@ -58,8 +107,16 @@ export default function BankReconciliationPage() {
         toast.error(result.error || "Failed to load reconciliation data")
         return
       }
-      setImports(result.data.imports || [])
-      setTransactions(result.data.transactions || [])
+      setImports(
+        ((result.data.imports || []) as unknown[])
+          .map(asImportRow)
+          .filter((row): row is ImportRow => !!row),
+      )
+      setTransactions(
+        ((result.data.transactions || []) as unknown[])
+          .map(asTransactionRow)
+          .filter((row): row is TransactionRow => !!row),
+      )
       setSummary(result.data.summary || { total: 0, matched: 0, unmatched: 0, ignored: 0 })
       setLatestImportId(result.data.latest_import_id || null)
     } finally {
@@ -124,7 +181,14 @@ export default function BankReconciliationPage() {
       setManualOptions({ expenses: [], invoices: [] })
       return
     }
-    setManualOptions(result.data)
+    setManualOptions({
+      expenses: ((result.data.expenses || []) as unknown[])
+        .map(asManualExpense)
+        .filter((expense): expense is ManualExpense => !!expense),
+      invoices: ((result.data.invoices || []) as unknown[])
+        .map(asManualInvoice)
+        .filter((invoice): invoice is ManualInvoice => !!invoice),
+    })
   }
 
   async function handleManualMatch() {
@@ -221,7 +285,7 @@ export default function BankReconciliationPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {unmatchedRows.map((row) => (
+                    {unmatchedRows.map((row: TransactionRow) => (
                       <tr key={row.id} className="border-b border-border hover:bg-secondary/10">
                         <td className="px-4 py-3 text-sm">{row.txn_date}</td>
                         <td className="px-4 py-3 text-sm">{row.description || "-"}</td>
@@ -247,7 +311,7 @@ export default function BankReconciliationPage() {
               <p className="text-sm text-muted-foreground">No statements imported yet.</p>
             ) : (
               <div className="space-y-2">
-                {imports.map((row) => (
+                {imports.map((row: ImportRow) => (
                   <div key={row.id} className="text-sm text-muted-foreground">
                     {row.imported_at} - {row.file_name || "statement.csv"} ({row.account_name || "Unspecified account"})
                   </div>
@@ -271,12 +335,12 @@ export default function BankReconciliationPage() {
                   <SelectValue placeholder="Choose expense or vendor payment" />
                 </SelectTrigger>
                 <SelectContent>
-                  {manualOptions.expenses.map((expense) => (
+                  {manualOptions.expenses.map((expense: ManualExpense) => (
                     <SelectItem key={`expense:${expense.id}`} value={`expense:${expense.id}`}>
                       {`Expense - ${expense.date} - ${formatCurrency(Number(expense.amount || 0))} - ${expense.category || "Uncategorized"}`}
                     </SelectItem>
                   ))}
-                  {manualOptions.invoices.map((invoice) => (
+                  {manualOptions.invoices.map((invoice: ManualInvoice) => (
                     <SelectItem key={`vendor_invoice_payment:${invoice.id}`} value={`vendor_invoice_payment:${invoice.id}`}>
                       {`Vendor Invoice - ${invoice.invoice_number} - ${formatCurrency(Number(invoice.amount || 0))}`}
                     </SelectItem>

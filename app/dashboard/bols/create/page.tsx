@@ -22,13 +22,50 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 
+type LoadOption = {
+  id: string
+  shipment_number?: string | null
+  origin?: string | null
+  destination?: string | null
+  company_name?: string | null
+  load_date?: string | null
+  estimated_delivery?: string | null
+  contents?: string | null
+  weight?: string | number | null
+}
+
+type TemplateOption = {
+  id: string
+  name?: string | null
+  is_default?: boolean | null
+}
+
+type BOLActions = {
+  getBOLTemplates: () => Promise<{ data: unknown[] | null; error: string | null }>
+  createBOL: (input: Record<string, unknown>) => Promise<{ data: { id: string } | null; error: string | null }>
+}
+
+const asLoadOption = (value: unknown): LoadOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as LoadOption
+}
+
+const asTemplateOption = (value: unknown): TemplateOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as TemplateOption
+}
+
 export default function CreateBOLPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [loads, setLoads] = useState<unknown[]>([])
-  const [templates, setTemplates] = useState<unknown[]>([])
-  const [selectedLoad, setSelectedLoad] = useState<any | null>(null)
+  const [loads, setLoads] = useState<LoadOption[]>([])
+  const [templates, setTemplates] = useState<TemplateOption[]>([])
+  const [selectedLoad, setSelectedLoad] = useState<LoadOption | null>(null)
   const [formData, setFormData] = useState({
     load_id: "",
     template_id: "",
@@ -120,14 +157,16 @@ export default function CreateBOLPage() {
     // MEDIUM FIX 14: Filter out completed and cancelled loads
     const [loadsResult, templatesResult] = await Promise.all([
       getLoads({ status: undefined }), // Will filter client-side to exclude completed/cancelled
-      (bolActions as unknown).getBOLTemplates(),
+      (bolActions as unknown as BOLActions).getBOLTemplates(),
     ])
 
     if (loadsResult.data) {
-      setLoads(loadsResult.data)
+      setLoads((loadsResult.data as unknown[]).map(asLoadOption).filter((load): load is LoadOption => !!load))
     }
     if (templatesResult.data) {
-      setTemplates(templatesResult.data)
+      setTemplates(
+        (templatesResult.data as unknown[]).map(asTemplateOption).filter((t): t is TemplateOption => !!t),
+      )
     }
   }
 
@@ -155,7 +194,7 @@ export default function CreateBOLPage() {
       return
     }
 
-    const result = await (bolActions as unknown).createBOL({
+    const result = await (bolActions as unknown as BOLActions).createBOL({
       load_id: formData.load_id,
       template_id: formData.template_id || undefined,
       shipper_name: formData.shipper_name,

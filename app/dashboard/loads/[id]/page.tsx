@@ -233,8 +233,11 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         setRoutesResult(routesResult)
         if (routesResult.data) {
           // Calculate load weight in kg
-          const loadWeightKg = loadResult.data.weight_kg || 
-            (loadResult.data.weight ? parseFloat(loadResult.data.weight.replace(/[^0-9.]/g, "")) * 1000 : 0)
+          const normalizedWeight =
+            typeof loadResult.data.weight === "string"
+              ? Number(loadResult.data.weight.replace(/[^0-9.]/g, "")) || 0
+              : Number(loadResult.data.weight || 0)
+          const loadWeightKg = Number(loadResult.data.weight_kg || 0) || (normalizedWeight ? normalizedWeight * 1000 : 0)
           
           // Get truck dimensions if available
           let truckHeight = 4.0 // default in meters
@@ -263,7 +266,8 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           const loadOriginNormalized = normalizeLocation(loadResult.data.origin || "")
           const loadDestNormalized = normalizeLocation(loadResult.data.destination || "")
           
-          const matchingRoutes = routesResult.data.filter((route) => {
+          const routeRows = (routesResult.data || []) as RouteData[]
+          const matchingRoutes = routeRows.filter((route: RouteData) => {
             const routeOriginNormalized = normalizeLocation(route.origin || "")
             const routeDestNormalized = normalizeLocation(route.destination || "")
             
@@ -286,7 +290,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           })
           
           // Score and rank routes based on truck compatibility
-          const scoredRoutes: ScoredRoute[] = matchingRoutes.map((route) => {
+          const scoredRoutes: ScoredRoute[] = matchingRoutes.map((route: RouteData) => {
             let score = 0
             const reasons: string[] = []
             
@@ -381,7 +385,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           
           // If load has a route_id, prioritize that route
           if (loadResult.data.route_id) {
-            const specificRoute = routesResult.data.find((r) => r.id === loadResult.data.route_id)
+            const specificRoute = routeRows.find((r: RouteData) => r.id === loadResult.data.route_id)
             if (specificRoute) {
               // Find it in scored routes or add it
               const existingIndex = scoredRoutes.findIndex((sr) => sr.route.id === specificRoute.id)
@@ -443,9 +447,11 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         const [driversResult, trucksResult] = await Promise.all([getDrivers(), getTrucks()])
         if (!active) return
 
-        const activeDrivers = (driversResult.data || []).filter((d) => d.status === "active")
-        const assignableTrucks = (trucksResult.data || []).filter(
-          (t) => t.status === "available" || t.status === "in_use"
+        const activeDrivers = ((driversResult.data || []) as DriverData[]).filter(
+          (d: DriverData) => d.status === "active",
+        )
+        const assignableTrucks = ((trucksResult.data || []) as TruckData[]).filter(
+          (t: TruckData) => t.status === "available" || t.status === "in_use"
         )
 
         setDrivers(activeDrivers)
@@ -497,7 +503,11 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   // Calculate weight in kg for the map
-  const weightKg = load.weight_kg || (load.weight ? parseFloat(load.weight.replace(/[^0-9.]/g, "")) * 1000 : 0)
+  const weightKg = load.weight_kg
+    ? Number(load.weight_kg)
+    : typeof load.weight === "string"
+      ? (Number(load.weight.replace(/[^0-9.]/g, "")) || 0) * 1000
+      : Number(load.weight || 0) * 1000
 
   // Helper function to format dates consistently (prevents hydration mismatch)
   const formatDate = (dateString: string | null | undefined) => {
@@ -529,7 +539,9 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const getStatusVariant = (status: string): "success" | "default" | "warning" | "danger" | "info" => {
+  const getStatusVariant = (
+    status?: string | null,
+  ): "success" | "default" | "warning" | "danger" | "info" => {
     switch (status?.toLowerCase()) {
       case "delivered":
         return "success"
@@ -680,10 +692,10 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           toast.error(result.error)
           return
         }
-        setLoad((prev) => (prev ? { ...prev, status: "scheduled" } : prev))
+        setLoad((prev: LoadData | null) => (prev ? { ...prev, status: "scheduled" } : prev))
       }
 
-      setLoad((prev) => (prev ? {
+      setLoad((prev: LoadData | null) => (prev ? {
         ...prev,
         driver_id: selectedDispatchDriverId,
         truck_id: selectedDispatchTruckId,
@@ -733,7 +745,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
       if (load?.status === "pending" || load?.status === "draft" || load?.status === "confirmed") {
         const statusResult = await updateLoad(id, { status: "scheduled" })
         if (!statusResult.error) {
-          setLoad((prev) => (prev ? { ...prev, status: "scheduled" } : prev))
+          setLoad((prev: LoadData | null) => (prev ? { ...prev, status: "scheduled" } : prev))
         }
       }
 
@@ -858,7 +870,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         toast.error(result.error || "Failed to update request")
         return
       }
-      setLoad((prev) => (prev ? { ...prev, ...result.data } : prev))
+      setLoad((prev: LoadData | null) => (prev ? { ...prev, ...result.data } : prev))
       toast.success(decision === "accepted" ? "Load request accepted" : "Load request rejected")
       setPortalReviewMessage("")
       setPortalQuotedRate("")
@@ -1512,7 +1524,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                   <div>
                     <p className="text-xs uppercase tracking-wider text-zinc-500">Shipment Value</p>
                     <p className="mt-1 text-2xl font-semibold text-emerald-400">
-                      ${typeof load.value === 'number' ? load.value.toLocaleString('en-US') : parseFloat(load.value || '0').toLocaleString('en-US')}
+                      ${Number(load.value || 0).toLocaleString('en-US')}
                     </p>
                   </div>
                 )}
@@ -1658,7 +1670,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                   <div>
                       <p className="text-sm text-muted-foreground mb-2">Rate</p>
                       <p className="text-lg text-foreground font-bold">
-                        ${typeof load.rate === 'number' ? load.rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(load.rate || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ${Number(load.rate || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         {load.rate_type && <span className="text-sm text-muted-foreground ml-2">({load.rate_type})</span>}
                       </p>
                   </div>
@@ -1667,7 +1679,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                     <div>
                       <p className="text-sm text-muted-foreground mb-2">Fuel Surcharge</p>
                       <p className="text-foreground font-medium">
-                        ${typeof load.fuel_surcharge === 'number' ? load.fuel_surcharge.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(load.fuel_surcharge || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ${Number(load.fuel_surcharge || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
                   )}
@@ -1675,7 +1687,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                     <div>
                       <p className="text-sm text-muted-foreground mb-2">Accessorial Charges</p>
                       <p className="text-foreground font-medium">
-                        ${typeof load.accessorial_charges === 'number' ? load.accessorial_charges.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(load.accessorial_charges || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ${Number(load.accessorial_charges || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
                   )}
@@ -1683,7 +1695,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                     <div>
                       <p className="text-sm text-muted-foreground mb-2">Discount</p>
                       <p className="text-foreground font-medium text-red-400">
-                        -${typeof load.discount === 'number' ? load.discount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(load.discount || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        -${Number(load.discount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
                   )}
@@ -1691,7 +1703,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                     <div className="md:col-span-2 pt-4 border-t border-border">
                       <p className="text-sm text-muted-foreground mb-2">Total Rate</p>
                       <p className="text-2xl text-foreground font-bold">
-                        ${typeof load.total_rate === 'number' ? load.total_rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(load.total_rate || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ${Number(load.total_rate || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
                   )}
@@ -1707,7 +1719,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                         <div>
                           <p className="text-sm text-muted-foreground mb-2">Estimated Revenue</p>
                           <p className="text-foreground font-medium text-green-400">
-                            ${typeof load.estimated_revenue === 'number' ? load.estimated_revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(load.estimated_revenue || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            ${Number(load.estimated_revenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
                         </div>
                       )}
@@ -1715,7 +1727,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                         <div>
                           <p className="text-sm text-muted-foreground mb-2">Estimated Profit</p>
                           <p className="text-foreground font-medium text-green-400">
-                            ${typeof load.estimated_profit === 'number' ? load.estimated_profit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : parseFloat(load.estimated_profit || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            ${Number(load.estimated_profit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
                         </div>
                       )}
@@ -2040,7 +2052,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                   <div>
                     <p className="text-sm text-muted-foreground mb-2">Truck Route Waypoints</p>
                     <div className="space-y-1">
-                      {matchingRoute.waypoints.map((waypoint, idx: number) => (
+                      {matchingRoute.waypoints.map((waypoint: unknown, idx: number) => (
                         <div key={idx} className="flex items-center gap-2 text-sm">
                           <div className="w-2 h-2 rounded-full bg-primary" />
                           <span className="text-foreground">

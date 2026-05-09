@@ -27,6 +27,27 @@ import WorkOrdersPage from "./work-orders/page"
 import FaultCodeRulesPage from "./fault-code-rules/page"
 import PredictiveMaintenancePage from "./predictive/page"
 
+type MaintenanceRow = {
+  id: string
+  truck_id?: string | null
+  trailer_id?: string | null
+  service_type?: string | null
+  scheduled_date?: string | null
+  mileage?: number | null
+  priority?: string | null
+  estimated_cost?: number | null
+  status?: string | null
+  vendor?: string | null
+  technician?: string | null
+}
+
+const asMaintenanceRow = (value: unknown): MaintenanceRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as MaintenanceRow
+}
+
 export default function MaintenancePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -36,8 +57,8 @@ export default function MaintenancePage() {
     ? tabParam
     : "schedule"
 
-  const [maintenanceRecords, setMaintenanceRecords] = useState<unknown[]>([])
-  const [filteredMaintenance, setFilteredMaintenance] = useState<unknown[]>([])
+  const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRow[]>([])
+  const [filteredMaintenance, setFilteredMaintenance] = useState<MaintenanceRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
@@ -53,8 +74,11 @@ export default function MaintenancePage() {
       return
     }
     if (result.data) {
-      setMaintenanceRecords(result.data)
-      setFilteredMaintenance(result.data)
+      const parsed = (result.data as unknown[])
+        .map(asMaintenanceRow)
+        .filter((record): record is MaintenanceRow => !!record)
+      setMaintenanceRecords(parsed)
+      setFilteredMaintenance(parsed)
     }
     setIsLoading(false)
   }
@@ -101,7 +125,7 @@ export default function MaintenancePage() {
 
   const handleExport = () => {
     try {
-      const exportData = maintenanceRecords.map(({ id, company_id, truck_id, trailer_id, created_at, updated_at, ...rest }) => rest)
+      const exportData = maintenanceRecords.map(({ id, truck_id, trailer_id, ...rest }) => rest)
       exportToExcel(exportData, "maintenance")
       toast.success("Maintenance records exported successfully")
     } catch (error) {

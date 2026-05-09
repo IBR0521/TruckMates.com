@@ -14,13 +14,90 @@ import { getVendor, getVendorExpenses, getVendorMaintenance } from "@/app/action
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 
+type VendorDetail = {
+  id: string
+  name?: string | null
+  company_name?: string | null
+  status?: string | null
+  vendor_type?: string | null
+  email?: string | null
+  phone?: string | null
+  website?: string | null
+  tax_id?: string | null
+  address_line1?: string | null
+  address_line2?: string | null
+  city?: string | null
+  state?: string | null
+  zip?: string | null
+  country?: string | null
+  total_spent?: number | null
+  total_transactions?: number | null
+  payment_terms?: string | null
+  last_transaction_date?: string | null
+  primary_contact_name?: string | null
+  primary_contact_email?: string | null
+  primary_contact_phone?: string | null
+  notes?: string | null
+}
+
+type VendorExpenseRow = {
+  id: string
+  date?: string | null
+  category?: string | null
+  description?: string | null
+  amount?: number | null
+}
+
+type VendorMaintenanceRow = {
+  id: string
+  service_type?: string | null
+  scheduled_date?: string | null
+  status?: string | null
+  actual_cost?: number | null
+  estimated_cost?: number | null
+}
+
+const asVendorDetail = (value: unknown): VendorDetail | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as VendorDetail
+}
+
+const asVendorExpenseRow = (value: unknown): VendorExpenseRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return {
+    id: obj.id,
+    date: typeof obj.date === "string" ? obj.date : null,
+    category: typeof obj.category === "string" ? obj.category : null,
+    description: typeof obj.description === "string" ? obj.description : null,
+    amount: typeof obj.amount === "number" ? obj.amount : Number(obj.amount) || 0,
+  }
+}
+
+const asVendorMaintenanceRow = (value: unknown): VendorMaintenanceRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return {
+    id: obj.id,
+    service_type: typeof obj.service_type === "string" ? obj.service_type : null,
+    scheduled_date: typeof obj.scheduled_date === "string" ? obj.scheduled_date : null,
+    status: typeof obj.status === "string" ? obj.status : null,
+    actual_cost: typeof obj.actual_cost === "number" ? obj.actual_cost : Number(obj.actual_cost) || 0,
+    estimated_cost: typeof obj.estimated_cost === "number" ? obj.estimated_cost : Number(obj.estimated_cost) || 0,
+  }
+}
+
 export default function VendorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
   const aliveRef = useRef(true)
-  const [vendor, setVendor] = useState<unknown>(null)
-  const [expenses, setExpenses] = useState<unknown[]>([])
-  const [maintenance, setMaintenance] = useState<unknown[]>([])
+  const [vendor, setVendor] = useState<VendorDetail | null>(null)
+  const [expenses, setExpenses] = useState<VendorExpenseRow[]>([])
+  const [maintenance, setMaintenance] = useState<VendorMaintenanceRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"overview" | "expenses" | "maintenance" | "documents" | "communications">("overview")
 
@@ -49,9 +126,17 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
         return
       }
 
-      setVendor(vendorResult.data)
-      setExpenses(expensesResult.data || [])
-      setMaintenance(maintenanceResult.data || [])
+      setVendor(asVendorDetail(vendorResult.data))
+      setExpenses(
+        ((expensesResult.data as unknown[]) || [])
+          .map(asVendorExpenseRow)
+          .filter((expense): expense is VendorExpenseRow => !!expense),
+      )
+      setMaintenance(
+        ((maintenanceResult.data as unknown[]) || [])
+          .map(asVendorMaintenanceRow)
+          .filter((record): record is VendorMaintenanceRow => !!record),
+      )
     } catch (error: unknown) {
       toast.error("Failed to load vendor data")
     } finally {
@@ -73,18 +158,18 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
     return null
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status?: string | null) => {
     switch (status) {
       case "active":
         return <Badge className="bg-green-500/20 text-green-400 border-green-500/50">Active</Badge>
       case "inactive":
         return <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/50">Inactive</Badge>
       default:
-        return <Badge>{status}</Badge>
+        return <Badge>{status || "Unknown"}</Badge>
     }
   }
 
-  const getTypeBadge = (type: string) => {
+  const getTypeBadge = (type?: string | null) => {
     const types: Record<string, { label: string; className: string }> = {
       supplier: { label: "Supplier", className: "bg-blue-500/20 text-blue-400 border-blue-500/50" },
       maintenance: { label: "Maintenance", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/50" },
@@ -92,7 +177,10 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
       parts: { label: "Parts", className: "bg-purple-500/20 text-purple-400 border-purple-500/50" },
       other: { label: "Other", className: "bg-gray-500/20 text-gray-400 border-gray-500/50" },
     }
-    const typeInfo = types[type] || { label: type, className: "bg-gray-500/20 text-gray-400 border-gray-500/50" }
+    const typeInfo = types[type || "other"] || {
+      label: type || "Other",
+      className: "bg-gray-500/20 text-gray-400 border-gray-500/50",
+    }
     return <Badge className={typeInfo.className}>{typeInfo.label}</Badge>
   }
 
@@ -101,7 +189,7 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="space-y-3 min-w-0">
-          <CRMSectionHeader currentPage="vendor-detail" entityName={vendor.name} />
+          <CRMSectionHeader currentPage="vendor-detail" entityName={String(vendor.name || "Vendor")} />
           <div className="flex items-center gap-4">
             <Link href="/dashboard/vendors">
               <Button variant="ghost" size="sm">
@@ -139,11 +227,11 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
                 <div className="grid md:grid-cols-2 gap-6">
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">Status</p>
-                    <div className="mb-4">{getStatusBadge(vendor.status)}</div>
+                    <div className="mb-4">{getStatusBadge(String(vendor.status || "inactive"))}</div>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">Type</p>
-                    <div className="mb-4">{getTypeBadge(vendor.vendor_type)}</div>
+                    <div className="mb-4">{getTypeBadge(String(vendor.vendor_type || "other"))}</div>
                   </div>
                   {vendor.email && (
                     <div className="flex items-center gap-3">
@@ -360,7 +448,7 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
                       </tr>
                     </thead>
                     <tbody>
-                      {expenses.map((expense) => (
+                      {expenses.map((expense: VendorExpenseRow) => (
                         <tr key={expense.id} className="border-b border-border/50 hover:bg-secondary/20">
                           <td className="p-3">
                             {expense.date ? new Date(expense.date).toLocaleDateString() : "—"}
@@ -408,7 +496,7 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
                       </tr>
                     </thead>
                     <tbody>
-                      {maintenance.map((record) => (
+                      {maintenance.map((record: VendorMaintenanceRow) => (
                         <tr key={record.id} className="border-b border-border/50 hover:bg-secondary/20">
                           <td className="p-3 font-medium">{record.service_type}</td>
                           <td className="p-3">

@@ -47,6 +47,63 @@ import {
   retryWebhookDelivery,
 } from "@/app/actions/webhooks"
 
+type WebhookRow = {
+  id: string
+  url: string
+  events: string[]
+  secret?: string | null
+  description?: string | null
+  active: boolean
+  created_at: string
+}
+
+type WebhookDeliveryRow = {
+  id: string
+  event_type: string
+  status: string
+  response_code?: number | null
+  attempts: number
+  max_attempts: number
+  created_at: string
+}
+
+const asStringArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+
+const asWebhookRow = (value: unknown): WebhookRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string" || typeof obj.url !== "string" || typeof obj.created_at !== "string") {
+    return null
+  }
+  return {
+    id: obj.id,
+    url: obj.url,
+    events: asStringArray(obj.events),
+    secret: typeof obj.secret === "string" ? obj.secret : null,
+    description: typeof obj.description === "string" ? obj.description : null,
+    active: Boolean(obj.active),
+    created_at: obj.created_at,
+  }
+}
+
+const asWebhookDeliveryRow = (value: unknown): WebhookDeliveryRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string" || typeof obj.event_type !== "string" || typeof obj.created_at !== "string") {
+    return null
+  }
+  return {
+    id: obj.id,
+    event_type: obj.event_type,
+    status: typeof obj.status === "string" ? obj.status : "pending",
+    response_code: typeof obj.response_code === "number" ? obj.response_code : null,
+    attempts: typeof obj.attempts === "number" ? obj.attempts : 0,
+    max_attempts: typeof obj.max_attempts === "number" ? obj.max_attempts : 0,
+    created_at: obj.created_at,
+  }
+}
+
 const WEBHOOK_EVENTS = [
   { id: "load.created", label: "Load Created" },
   { id: "load.updated", label: "Load Updated" },
@@ -67,12 +124,12 @@ const WEBHOOK_EVENTS = [
 ] as const
 
 export default function WebhooksPage() {
-  const [webhooks, setWebhooks] = useState<unknown[]>([])
+  const [webhooks, setWebhooks] = useState<WebhookRow[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
-  const [editingWebhook, setEditingWebhook] = useState<unknown>(null)
+  const [editingWebhook, setEditingWebhook] = useState<WebhookRow | null>(null)
   const [selectedWebhook, setSelectedWebhook] = useState<string | null>(null)
-  const [deliveries, setDeliveries] = useState<unknown[]>([])
+  const [deliveries, setDeliveries] = useState<WebhookDeliveryRow[]>([])
   const [showDeliveries, setShowDeliveries] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -94,7 +151,11 @@ export default function WebhooksPage() {
       if (result.error) {
         toast.error(result.error)
       } else {
-        setWebhooks(result.data || [])
+        setWebhooks(
+          ((result.data as unknown[]) || [])
+            .map(asWebhookRow)
+            .filter((webhook): webhook is WebhookRow => !!webhook),
+        )
       }
     } catch (error: unknown) {
       toast.error(errorMessage(error, "Failed to load webhooks"))
@@ -179,7 +240,11 @@ export default function WebhooksPage() {
       if (result.error) {
         toast.error(result.error)
       } else {
-        setDeliveries(result.data || [])
+        setDeliveries(
+          ((result.data as unknown[]) || [])
+            .map(asWebhookDeliveryRow)
+            .filter((delivery): delivery is WebhookDeliveryRow => !!delivery),
+        )
         setSelectedWebhook(webhookId)
         setShowDeliveries(true)
       }
@@ -198,11 +263,11 @@ export default function WebhooksPage() {
     })
   }
 
-  function handleEdit(webhook: unknown) {
+  function handleEdit(webhook: WebhookRow) {
     setEditingWebhook(webhook)
     setFormData({
       url: webhook.url,
-      events: webhook.events || [],
+      events: webhook.events,
       secret: "", // Don't show existing secret
       description: webhook.description || "",
       active: webhook.active,
@@ -219,7 +284,7 @@ export default function WebhooksPage() {
     }))
   }
 
-  function getStatusIcon(status: string) {
+  function getStatusIcon(status?: string | null) {
     switch (status) {
       case "delivered":
         return <CheckCircle2 className="w-4 h-4 text-green-500" />
@@ -375,7 +440,7 @@ export default function WebhooksPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {webhooks.map((webhook) => (
+                  {webhooks.map((webhook: WebhookRow) => (
                     <TableRow key={webhook.id}>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -388,14 +453,14 @@ export default function WebhooksPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
-                          {(webhook.events || []).slice(0, 3).map((event: string) => (
+                          {webhook.events.slice(0, 3).map((event: string) => (
                             <span key={event} className="text-xs px-2 py-1 bg-muted rounded">
                               {event}
                             </span>
                           ))}
-                          {(webhook.events || []).length > 3 && (
+                          {webhook.events.length > 3 && (
                             <span className="text-xs px-2 py-1 bg-muted rounded">
-                              +{(webhook.events || []).length - 3} more
+                              +{webhook.events.length - 3} more
                             </span>
                           )}
                         </div>
@@ -482,7 +547,7 @@ export default function WebhooksPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {deliveries.map((delivery) => (
+                  {deliveries.map((delivery: WebhookDeliveryRow) => (
                     <TableRow key={delivery.id}>
                       <TableCell className="font-mono text-sm">{delivery.event_type}</TableCell>
                       <TableCell>
@@ -521,7 +586,9 @@ export default function WebhooksPage() {
                                 toast.error(result.error)
                               } else {
                                 toast.success("Webhook retry initiated")
-                                loadDeliveries(selectedWebhook!)
+                                if (selectedWebhook) {
+                                  loadDeliveries(selectedWebhook)
+                                }
                               }
                             }}
                           >

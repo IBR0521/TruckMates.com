@@ -28,12 +28,21 @@ import { getTruck, updateTruck } from "@/app/actions/trucks"
 import { getDrivers } from "@/app/actions/drivers"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 
+type DriverOption = { id: string; name?: string | null }
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as DriverOption
+}
+
 export default function EditTruckPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
   const [formData, setFormData] = useState({
     truckNumber: "",
     make: "",
@@ -69,7 +78,11 @@ export default function EditTruckPage({ params }: { params: Promise<{ id: string
       ])
       
       if (driversResult.data) {
-        setDrivers(driversResult.data)
+        setDrivers(
+          ((driversResult.data as unknown[]) || [])
+            .map(asDriverOption)
+            .filter((driver): driver is DriverOption => !!driver),
+        )
       }
       
       if (truckResult.data) {
@@ -431,7 +444,7 @@ export default function EditTruckPage({ params }: { params: Promise<{ id: string
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">None</SelectItem>
-                          {drivers.map(d => (
+                          {drivers.map((d: DriverOption) => (
                             <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                           ))}
                         </SelectContent>

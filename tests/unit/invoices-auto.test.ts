@@ -6,19 +6,19 @@ const mockRevalidatePath = vi.fn()
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
-}), { virtual: true })
+}))
 vi.mock("@/lib/auth/server", () => ({
   getCachedAuthContext: () => mockGetCachedAuthContext(),
-}), { virtual: true })
+}))
 vi.mock("@/lib/server-permissions", () => ({
   checkCreatePermission: () => mockCheckCreatePermission(),
-}), { virtual: true })
+}))
 vi.mock("@/lib/error-message", () => ({
   errorMessage: (e: unknown) => (e instanceof Error ? e.message : "error"),
-}), { virtual: true })
+}))
 vi.mock("@/app/actions/accounting", () => ({
   createInvoice: vi.fn(),
-}), { virtual: true })
+}))
 vi.mock("@sentry/nextjs", () => ({
   default: {},
   captureException: vi.fn(),

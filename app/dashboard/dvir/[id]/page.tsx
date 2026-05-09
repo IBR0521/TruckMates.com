@@ -34,9 +34,29 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-type DvirRecord = NonNullable<Awaited<ReturnType<typeof getDVIR>>["data"]>
-type DvirListItem = NonNullable<NonNullable<Awaited<ReturnType<typeof getDVIRs>>["data"]>[number]>
-type WorkOrderRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getDVIRWorkOrders>>["data"]>[number]>
+type DvirRecord = {
+  id: string
+  inspection_type?: string | null
+  inspection_date?: string | null
+  inspection_time?: string | null
+  location?: string | null
+  mileage?: number | null
+  odometer_reading?: number | null
+  defects?: unknown
+  defects_found?: boolean | null
+  status?: string | null
+  safe_to_operate?: boolean | null
+  notes?: string | null
+  corrective_action?: string | null
+  certified_date?: string | null
+  driver_signature_date?: string | null
+  driver_signature?: string | null
+  drivers?: { id?: string | null; name?: string | null } | null
+  trucks?: { id?: string | null; truck_number?: string | null; make?: string | null; model?: string | null } | null
+  certified_by_user?: { full_name?: string | null } | null
+}
+type DvirListItem = { id: string }
+type WorkOrderRecord = { id: string; work_order_number?: string | null; title?: string | null }
 type DvirDefect = {
   component?: string | null
   severity?: string | null
@@ -44,6 +64,31 @@ type DvirDefect = {
   corrected?: boolean | null
   corrected_by?: string | null
   corrected_at?: string | null
+}
+
+const asDvirRecord = (value: unknown): DvirRecord | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DvirRecord
+}
+
+const asDvirListItem = (value: unknown): DvirListItem | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return { id: obj.id }
+}
+
+const asWorkOrderRecord = (value: unknown): WorkOrderRecord | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return {
+    id: obj.id,
+    work_order_number: typeof obj.work_order_number === "string" ? obj.work_order_number : null,
+    title: typeof obj.title === "string" ? obj.title : null,
+  }
 }
 
 export default function DVIRDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -78,18 +123,29 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
         toast.error(result.error)
         if (aliveRef.current) router.push("/dashboard/dvir")
       } else if (result.data) {
-        setDvir(result.data)
+        const parsedDvir = asDvirRecord(result.data)
+        if (!parsedDvir) {
+          toast.error("Unable to parse DVIR record")
+          if (aliveRef.current) router.push("/dashboard/dvir")
+          return
+        }
+        setDvir(parsedDvir)
         const wo = await getDVIRWorkOrders(id)
         if (!wo.error && wo.data) {
-          setWorkOrders(wo.data)
+          setWorkOrders(
+            (wo.data as unknown[])
+              .map(asWorkOrderRecord)
+              .filter((item): item is WorkOrderRecord => !!item),
+          )
         }
         const list = await getDVIRs({ limit: 200, offset: 0 })
         if (!list.error && list.data?.length) {
-          const index = list.data.findIndex((item: DvirListItem) => item.id === id)
+          const dvirItems = (list.data as unknown[]).map(asDvirListItem).filter((item): item is DvirListItem => !!item)
+          const index = dvirItems.findIndex((item: DvirListItem) => item.id === id)
           if (index !== -1) {
             setAdjacentReports({
-              previous: list.data[index + 1]?.id || null,
-              next: list.data[index - 1]?.id || null,
+              previous: dvirItems[index + 1]?.id || null,
+              next: dvirItems[index - 1]?.id || null,
             })
           }
         }
@@ -114,9 +170,15 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
           : "Work order request completed",
       )
       const refreshed = await getDVIR(id)
-      if (refreshed.data) setDvir(refreshed.data)
+      if (refreshed.data) setDvir(asDvirRecord(refreshed.data))
       const wo = await getDVIRWorkOrders(id)
-      if (!wo.error && wo.data) setWorkOrders(wo.data)
+      if (!wo.error && wo.data) {
+        setWorkOrders(
+          (wo.data as unknown[])
+            .map(asWorkOrderRecord)
+            .filter((item): item is WorkOrderRecord => !!item),
+        )
+      }
     } finally {
       setCreatingWorkOrders(false)
     }
@@ -140,7 +202,7 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
     return null
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status?: string | null) => {
     switch (status) {
       case "passed":
         return <Badge className="bg-green-500/20 text-green-500 border-green-500/50">Passed</Badge>
@@ -153,7 +215,7 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const getTypeLabel = (type: string) => {
+  const getTypeLabel = (type?: string | null) => {
     switch (type) {
       case "pre_trip":
         return "Pre-Trip Inspection"
@@ -166,7 +228,7 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const getTypeClasses = (type: string) => {
+  const getTypeClasses = (type?: string | null) => {
     if (type === "post_trip") return "bg-blue-500/15 text-blue-300 border-blue-500/40"
     if (type === "on_road") return "bg-purple-500/15 text-purple-300 border-purple-500/40"
     return "bg-emerald-500/15 text-emerald-300 border-emerald-500/40"
@@ -186,13 +248,13 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
 
   const hasIncompleteComplianceRecord = missingComplianceFields.length > 0
 
-  const getDefectIcon = (component: string) => {
+  const getDefectIcon = (component?: string | null) => {
     const normalized = String(component || "").toLowerCase()
     if (normalized.includes("light")) return <Lightbulb className="w-4 h-4 text-amber-300" />
     return <Settings className="w-4 h-4 text-muted-foreground" />
   }
 
-  const formatTimestamp = (value?: string) => {
+  const formatTimestamp = (value?: string | null) => {
     if (!value) return notRecorded
     return new Date(value).toLocaleString()
   }
@@ -474,7 +536,9 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
                             : "bg-yellow-500/20 text-yellow-500 border-yellow-500/50 mt-1"
                         }
                       >
-                        {defect.severity?.charAt(0).toUpperCase() + defect.severity?.slice(1) || "Minor"}
+                        {defect.severity
+                          ? defect.severity.charAt(0).toUpperCase() + defect.severity.slice(1)
+                          : "Minor"}
                       </Badge>
                     </div>
                     {defect.corrected && (

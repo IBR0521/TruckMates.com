@@ -31,6 +31,31 @@ interface Location {
   }
 }
 
+const asLocation = (value: unknown): Location | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  const lat = Number(obj.latitude)
+  const lng = Number(obj.longitude)
+  const timestamp = typeof obj.timestamp === "string" ? obj.timestamp : null
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || !timestamp) return null
+
+  return {
+    id: typeof obj.id === "string" ? obj.id : crypto.randomUUID?.() || `${timestamp}-${lat}-${lng}`,
+    latitude: lat,
+    longitude: lng,
+    timestamp,
+    speed: typeof obj.speed === "number" ? obj.speed : Number(obj.speed) || undefined,
+    heading: typeof obj.heading === "number" ? obj.heading : Number(obj.heading) || undefined,
+    engine_status: typeof obj.engine_status === "string" ? obj.engine_status : undefined,
+    eld_devices:
+      obj.eld_devices && typeof obj.eld_devices === "object"
+        ? (obj.eld_devices as Location["eld_devices"])
+        : undefined,
+    drivers:
+      obj.drivers && typeof obj.drivers === "object" ? (obj.drivers as Location["drivers"]) : undefined,
+  }
+}
+
 export function ELDRealtimeMap() {
   const [locations, setLocations] = useState<Location[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -43,7 +68,11 @@ export function ELDRealtimeMap() {
       if (result.error) {
         toast.error(result.error)
       } else if (result.data) {
-        setLocations(result.data)
+        setLocations(
+          ((result.data as unknown[]) || [])
+            .map(asLocation)
+            .filter((location): location is Location => !!location),
+        )
       }
     } catch (error) {
       toast.error("Failed to load locations")
@@ -61,7 +90,7 @@ export function ELDRealtimeMap() {
     }
   }, [autoRefresh])
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status?: string | null) => {
     switch (status) {
       case "active":
         return "bg-green-500"

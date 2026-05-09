@@ -255,7 +255,7 @@ export default function ExpensesPage() {
                             </Badge>
                           </td>
                           <td className="px-6 py-4 text-foreground">{expense.description || "N/A"}</td>
-                          <td className="px-6 py-4 text-foreground font-semibold">${expense.amount ? parseFloat(String(expense.amount)).toFixed(2) : "0.00"}</td>
+                          <td className="px-6 py-4 text-foreground font-semibold">${Number(expense.amount || 0).toFixed(2)}</td>
                           <td className="px-6 py-4 text-foreground">{expense.has_receipt ? "Yes" : "No"}</td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
@@ -302,7 +302,7 @@ export default function ExpensesPage() {
                       <div className="space-y-2 pt-2 border-t border-border/30">
                         <div>
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Amount</p>
-                          <p className="text-lg font-bold text-foreground">${expense.amount ? parseFloat(String(expense.amount)).toFixed(2) : "0.00"}</p>
+                          <p className="text-lg font-bold text-foreground">${Number(expense.amount || 0).toFixed(2)}</p>
                         </div>
                         <div>
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Receipt</p>

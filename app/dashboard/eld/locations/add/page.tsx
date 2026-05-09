@@ -21,11 +21,48 @@ import { toast } from "sonner"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
+type DeviceOption = {
+  id: string
+  device_name?: string | null
+  device_serial_number?: string | null
+}
+
+type DriverOption = {
+  id: string
+  name?: string | null
+}
+
+type TruckOption = {
+  id: string
+  truck_number?: string | null
+}
+
+const asDeviceOption = (value: unknown): DeviceOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DeviceOption
+}
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DriverOption
+}
+
+const asTruckOption = (value: unknown): TruckOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as TruckOption
+}
+
 export default function AddELDLocationPage() {
   const router = useRouter()
-  const [devices, setDevices] = useState<unknown[]>([])
-  const [drivers, setDrivers] = useState<unknown[]>([])
-  const [trucks, setTrucks] = useState<unknown[]>([])
+  const [devices, setDevices] = useState<DeviceOption[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     eld_device_id: "",
@@ -52,9 +89,15 @@ export default function AddELDLocationPage() {
       getTrucks(),
     ])
 
-    if (devicesResult.data) setDevices(devicesResult.data)
-    if (driversResult.data) setDrivers(driversResult.data)
-    if (trucksResult.data) setTrucks(trucksResult.data)
+    if (devicesResult.data) {
+      setDevices((devicesResult.data as unknown[]).map(asDeviceOption).filter((d): d is DeviceOption => !!d))
+    }
+    if (driversResult.data) {
+      setDrivers((driversResult.data as unknown[]).map(asDriverOption).filter((d): d is DriverOption => !!d))
+    }
+    if (trucksResult.data) {
+      setTrucks((trucksResult.data as unknown[]).map(asTruckOption).filter((t): t is TruckOption => !!t))
+    }
   }
 
   async function handleSubmit() {

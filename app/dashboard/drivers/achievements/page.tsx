@@ -30,6 +30,48 @@ import {
 import { format } from "date-fns"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
+type DriverOption = {
+  id: string
+  name?: string | null
+}
+
+type DriverBadge = {
+  id: string
+  badge_type?: string | null
+  badge_name?: string | null
+  badge_description?: string | null
+  earned_date?: string | null
+}
+
+type PerformanceScore = {
+  overall_score?: number | null
+  safety_score?: number | null
+  compliance_score?: number | null
+  efficiency_score?: number | null
+  rank?: number | null
+  total_loads?: number | null
+  on_time_rate?: number | null
+  total_miles?: number | null
+  hos_violations?: number | null
+}
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DriverOption
+}
+
+const asDriverBadge = (value: unknown): DriverBadge | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DriverBadge
+}
+
+const asPerformanceScore = (value: unknown): PerformanceScore | null =>
+  value && typeof value === "object" ? (value as PerformanceScore) : null
+
 export default function DriverAchievementsPage() {
   const router = useRouter()
   const pathname = usePathname()
@@ -40,9 +82,9 @@ export default function DriverAchievementsPage() {
     }
   }, [pathname, router])
 
-  const [badges, setBadges] = useState<unknown[]>([])
-  const [performance, setPerformance] = useState<unknown>(null)
-  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [badges, setBadges] = useState<DriverBadge[]>([])
+  const [performance, setPerformance] = useState<PerformanceScore | null>(null)
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
   const [scorecardsAllowed, setScorecardsAllowed] = useState(true)
   const [planName, setPlanName] = useState("starter")
   const [selectedDriverId, setSelectedDriverId] = useState<string>("all")
@@ -83,10 +125,13 @@ export default function DriverAchievementsPage() {
 
     const result = await getDrivers()
     if (result.data) {
-      setDrivers(result.data)
+      const driverOptions = (result.data as unknown[])
+        .map(asDriverOption)
+        .filter((driver): driver is DriverOption => !!driver)
+      setDrivers(driverOptions)
       // Auto-select first driver if available
-      if (result.data.length > 0 && selectedDriverId === "all") {
-        setSelectedDriverId(result.data[0].id)
+      if (driverOptions.length > 0 && selectedDriverId === "all") {
+        setSelectedDriverId(driverOptions[0].id)
       }
     }
   }
@@ -105,14 +150,18 @@ export default function DriverAchievementsPage() {
       if (badgesResult.error) {
         toast.error(badgesResult.error)
       } else {
-        setBadges(badgesResult.data || [])
+        setBadges(
+          ((badgesResult.data || []) as unknown[])
+            .map(asDriverBadge)
+            .filter((badge): badge is DriverBadge => !!badge),
+        )
       }
 
       if (performanceResult.error) {
         // Performance might not exist yet, that's okay
         setPerformance(null)
       } else {
-        setPerformance(performanceResult.data)
+        setPerformance(asPerformanceScore(performanceResult.data))
       }
     } catch (error: unknown) {
       toast.error("Failed to load achievements")
@@ -188,9 +237,9 @@ export default function DriverAchievementsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Drivers</SelectItem>
-                  {drivers.map((driver) => (
+                    {drivers.map((driver) => (
                     <SelectItem key={driver.id} value={driver.id}>
-                      {driver.name}
+                      {driver.name || "Driver"}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -294,11 +343,11 @@ export default function DriverAchievementsPage() {
                     {badges.map((badge) => (
                       <Card
                         key={badge.id}
-                        className={`p-6 border-2 ${getBadgeColor(badge.badge_type)}`}
+                        className={`p-6 border-2 ${getBadgeColor(badge.badge_type || "")}`}
                       >
                         <div className="flex items-start gap-4">
                           <div className="flex-shrink-0">
-                            {getBadgeIcon(badge.badge_type)}
+                            {getBadgeIcon(badge.badge_type || "")}
                           </div>
                           <div className="flex-1">
                             <h3 className="font-semibold text-foreground mb-1">
@@ -310,7 +359,7 @@ export default function DriverAchievementsPage() {
                               </p>
                             )}
                             <p className="text-xs text-muted-foreground">
-                              Earned: {format(new Date(badge.earned_date), "MMM d, yyyy")}
+                              Earned: {badge.earned_date ? format(new Date(badge.earned_date), "MMM d, yyyy") : "N/A"}
                             </p>
                           </div>
                         </div>

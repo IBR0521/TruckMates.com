@@ -23,7 +23,8 @@ describe("hos-engine", () => {
 
   beforeAll(async () => {
     try {
-      const mod = await import("../../lib/eld/hos-engine")
+      const modulePath = "../../lib/eld/hos-engine"
+      const mod = await import(modulePath)
       computeHosClocks = mod.computeHosClocks
     } catch {
       // The requested path may not exist in all workspaces yet.

@@ -33,12 +33,55 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
+type TruckDetail = {
+  id: string
+  truck_number?: string | null
+  status?: string | null
+  current_driver_id?: string | null
+  make?: string | null
+  model?: string | null
+  current_location?: string | null
+  last_known_address?: string | null
+  vin?: string | null
+  license_plate?: string | null
+  registration_state?: string | null
+  license_state?: string | null
+  gross_vehicle_weight?: number | string | null
+  current_route_name?: string | null
+  current_load_number?: string | null
+  fuel_level?: number | null
+  last_fueled_at?: string | null
+  mileage?: number | string | null
+  last_service_mileage?: number | string | null
+  next_oil_change_miles?: number | string | null
+  average_mpg?: number | string | null
+  mpg_average?: number | string | null
+  last_maintenance_date?: string | null
+  next_service_date?: string | null
+  open_work_orders?: number | string | null
+  license_expiry?: string | null
+  license_expiry_date?: string | null
+  inspection_expiry?: string | null
+  inspection_date?: string | null
+  insurance_expiry?: string | null
+  ifta_decal_expiry?: string | null
+  last_gps_at?: string | null
+  last_seen_at?: string | null
+  updated_at?: string | null
+  vehicle_type?: string | null
+  body_type?: string | null
+  load_type?: string | null
+  notes?: string | null
+}
+
+type DriverDetail = { id: string; name?: string | null; phone?: string | null }
+
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
   const aliveRef = useRef(true)
-  const [truck, setTruck] = useState<unknown>(null)
-  const [driver, setDriver] = useState<unknown>(null)
+  const [truck, setTruck] = useState<TruckDetail | null>(null)
+  const [driver, setDriver] = useState<DriverDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -106,7 +149,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     )
   }
 
-  const getStatusChipClass = (status: string) => {
+  const getStatusChipClass = (status?: string | null) => {
     switch (status?.toLowerCase()) {
       case "available":
         return "bg-emerald-500 text-white"
@@ -137,6 +180,8 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const inspectionHealth = getDeadlineHealth(truck.inspection_expiry || truck.inspection_date)
   const insuranceHealth = getDeadlineHealth(truck.insurance_expiry)
   const iftaHealth = getDeadlineHealth(truck.ifta_decal_expiry)
+  const registrationDate = truck.license_expiry ?? truck.license_expiry_date ?? null
+  const inspectionDateValue = truck.inspection_expiry ?? truck.inspection_date ?? null
   const lastSeenTime = truck.last_gps_at || truck.last_seen_at || truck.updated_at
   const lastSeenLabel = lastSeenTime ? new Date(lastSeenTime).toLocaleString() : "Unknown"
 
@@ -163,7 +208,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           <div className="min-w-0">
             <div className="truncate">{truck.truck_number || "Vehicle Details"}</div>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${getStatusChipClass(truck.status)}`}>
+              <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${getStatusChipClass(String(truck.status || ""))}`}>
                 {truck.status?.replace("_", " ") || "Unknown"}
               </span>
               {driver?.id ? (
@@ -312,7 +357,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               <div>
                 <p className="text-xs uppercase tracking-wider text-zinc-500">Mileage</p>
                 <p className="mt-2 text-2xl font-bold text-foreground">
-                  {truck.mileage ? `${parseInt(truck.mileage).toLocaleString()} miles` : "Not set"}
+                  {truck.mileage ? `${Number(truck.mileage).toLocaleString()} miles` : "Not set"}
                 </p>
                 <p className="mt-2 text-xs text-muted-foreground">
                   Last service at: {truck.last_service_mileage ? `${Number(truck.last_service_mileage).toLocaleString()} mi` : "Not recorded"}
@@ -365,14 +410,14 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               <div>
                 <p className="text-xs uppercase tracking-wider text-zinc-500">Registration</p>
                 <p className={`mt-1 text-sm ${licenseHealth.className}`}>
-                  {(truck.license_expiry || truck.license_expiry_date) ? new Date(truck.license_expiry || truck.license_expiry_date).toLocaleDateString() : "Not set"}
+                  {registrationDate ? new Date(registrationDate).toLocaleDateString() : "Not set"}
                 </p>
                 <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] ${licenseHealth.pill}`}>{licenseHealth.label}</span>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wider text-zinc-500">Annual Inspection</p>
                 <p className={`mt-1 text-sm ${inspectionHealth.className}`}>
-                  {(truck.inspection_expiry || truck.inspection_date) ? new Date(truck.inspection_expiry || truck.inspection_date).toLocaleDateString() : "Not set"}
+                  {inspectionDateValue ? new Date(inspectionDateValue).toLocaleDateString() : "Not set"}
                 </p>
                 <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] ${inspectionHealth.pill}`}>{inspectionHealth.label}</span>
               </div>

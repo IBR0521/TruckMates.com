@@ -167,7 +167,7 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
     return null
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status?: string | null) => {
     switch (status) {
       case "draft":
         return <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/50">Draft</Badge>
@@ -180,7 +180,7 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
       case "completed":
         return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50">Completed</Badge>
       default:
-        return <Badge>{status}</Badge>
+        return <Badge>{status || "Unknown"}</Badge>
     }
   }
 

@@ -12,7 +12,29 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useRealtimeNotifications } from "@/lib/hooks/use-realtime"
 
-type NotificationItem = ReturnType<typeof useRealtimeNotifications>["notifications"][number]
+type NotificationItem = {
+  id: string
+  type?: string | null
+  title?: string | null
+  message?: string | null
+  read?: boolean
+  created_at?: string | Date | null
+}
+
+const asNotificationItem = (value: unknown): NotificationItem | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return {
+    id: obj.id,
+    type: typeof obj.type === "string" ? obj.type : null,
+    title: typeof obj.title === "string" ? obj.title : null,
+    message: typeof obj.message === "string" ? obj.message : null,
+    read: Boolean(obj.read),
+    created_at:
+      typeof obj.created_at === "string" || obj.created_at instanceof Date ? obj.created_at : null,
+  }
+}
 
 function formatNotificationDate(value: string | Date | null | undefined): string {
   if (!value) return "Unknown date"
@@ -40,7 +62,7 @@ export function NotificationsCenter() {
   // Note: Notifications are managed by the useRealtimeNotifications hook
   // This component just displays them
 
-  const getNotificationIcon = (type: string) => {
+  const getNotificationIcon = (type?: string | null) => {
     switch (type) {
       case "route_update":
         return "🛣️"
@@ -57,7 +79,7 @@ export function NotificationsCenter() {
     }
   }
 
-  const getNotificationColor = (type: string) => {
+  const getNotificationColor = (type?: string | null) => {
     switch (type) {
       case "route_update":
         return "bg-blue-500/10 text-blue-500"
@@ -129,7 +151,10 @@ export function NotificationsCenter() {
             </div>
           ) : (
             <div className="divide-y">
-              {notifications.map((notification: NotificationItem) => (
+              {(notifications as unknown[])
+                .map(asNotificationItem)
+                .filter((notification): notification is NotificationItem => !!notification)
+                .map((notification: NotificationItem) => (
                 <div
                   key={notification.id}
                   className={`p-4 hover:bg-muted/50 transition-colors ${

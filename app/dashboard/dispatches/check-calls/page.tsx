@@ -15,13 +15,49 @@ import { Radio, Clock, MapPin, AlertTriangle, CheckCircle2, XCircle } from "luci
 import { format } from "date-fns"
 import { usePathname, useRouter } from "next/navigation"
 
+type CheckCallRow = {
+  id: string
+  driver_id?: string | null
+  load_id?: string | null
+  status?: string | null
+  call_type?: string | null
+  scheduled_time?: string | null
+  actual_time?: string | null
+  location?: string | null
+  notes?: string | null
+}
+
+type DriverRow = { id: string; name?: string | null }
+type LoadRow = { id: string; shipment_number?: string | null }
+
+const asCheckCallRow = (value: unknown): CheckCallRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as CheckCallRow
+}
+
+const asDriverRow = (value: unknown): DriverRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DriverRow
+}
+
+const asLoadRow = (value: unknown): LoadRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as LoadRow
+}
+
 export default function CheckCallsPage() {
-  const [checkCalls, setCheckCalls] = useState<unknown[]>([])
-  const [overdueCalls, setOverdueCalls] = useState<unknown[]>([])
+  const [checkCalls, setCheckCalls] = useState<CheckCallRow[]>([])
+  const [overdueCalls, setOverdueCalls] = useState<CheckCallRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState("all") // all, pending, completed, missed, overdue
-  const [drivers, setDrivers] = useState<unknown[]>([])
-  const [loads, setLoads] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<DriverRow[]>([])
+  const [loads, setLoads] = useState<LoadRow[]>([])
 
   const router = useRouter()
   const pathname = usePathname()
@@ -47,16 +83,18 @@ export default function CheckCallsPage() {
       ])
 
       if (callsResult.data) {
-        setCheckCalls(callsResult.data)
+        setCheckCalls((callsResult.data as unknown[]).map(asCheckCallRow).filter((call): call is CheckCallRow => !!call))
       }
       if (overdueResult.data) {
-        setOverdueCalls(overdueResult.data)
+        setOverdueCalls(
+          (overdueResult.data as unknown[]).map(asCheckCallRow).filter((call): call is CheckCallRow => !!call),
+        )
       }
       if (driversResult.data) {
-        setDrivers(driversResult.data)
+        setDrivers((driversResult.data as unknown[]).map(asDriverRow).filter((driver): driver is DriverRow => !!driver))
       }
       if (loadsResult.data) {
-        setLoads(loadsResult.data)
+        setLoads((loadsResult.data as unknown[]).map(asLoadRow).filter((load): load is LoadRow => !!load))
       }
     } catch (error: unknown) {
       toast.error("Failed to load check calls")
@@ -79,7 +117,7 @@ export default function CheckCallsPage() {
     }
   }
 
-  function getStatusBadge(status: string) {
+  function getStatusBadge(status?: string | null) {
     switch (status) {
       case "completed":
         return <Badge variant="default"><CheckCircle2 className="w-3 h-3 mr-1" />Completed</Badge>
@@ -161,7 +199,7 @@ export default function CheckCallsPage() {
           ) : (
             <div className="space-y-4">
               {displayCalls.map((call) => {
-                const driver = driverMap.get(call.driver_id)
+                const driver = call.driver_id ? driverMap.get(call.driver_id) : null
                 const load = call.load_id ? loadMap.get(call.load_id) : null
 
                 return (
@@ -169,8 +207,8 @@ export default function CheckCallsPage() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          {getStatusBadge(call.status)}
-                          <Badge variant="outline">{getCallTypeLabel(call.call_type)}</Badge>
+                          {getStatusBadge(call.status || "pending")}
+                          <Badge variant="outline">{getCallTypeLabel(call.call_type || "scheduled")}</Badge>
                         </div>
                         <div className="space-y-1">
                           <p className="font-medium">

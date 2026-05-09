@@ -28,10 +28,30 @@ import {
 } from "@/app/actions/driver-onboarding"
 import { getDriver } from "@/app/actions/drivers"
 
+type OnboardingRecord = {
+  current_step?: number | null
+  documents_completed?: unknown[] | null
+  completion_percentage?: number | null
+  status?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  [key: string]: unknown
+}
+
+type DriverBrief = {
+  name?: string | null
+}
+
+const asOnboardingRecord = (value: unknown): OnboardingRecord | null =>
+  value && typeof value === "object" ? (value as OnboardingRecord) : null
+
+const asDriverBrief = (value: unknown): DriverBrief | null =>
+  value && typeof value === "object" ? (value as DriverBrief) : null
+
 export default function DriverOnboardingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const [onboarding, setOnboarding] = useState<unknown>(null)
-  const [driver, setDriver] = useState<unknown>(null)
+  const [onboarding, setOnboarding] = useState<OnboardingRecord | null>(null)
+  const [driver, setDriver] = useState<DriverBrief | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -49,13 +69,13 @@ export default function DriverOnboardingPage({ params }: { params: Promise<{ id:
       if (onboardingResult.error && onboardingResult.error !== "Onboarding record not found") {
         toast.error(onboardingResult.error)
       } else {
-        setOnboarding(onboardingResult.data)
+        setOnboarding(asOnboardingRecord(onboardingResult.data))
       }
 
       if (driverResult.error) {
         toast.error(driverResult.error)
       } else {
-        setDriver(driverResult.data)
+        setDriver(asDriverBrief(driverResult.data))
       }
     } catch (error: unknown) {
       toast.error(errorMessage(error, "Failed to load data"))
@@ -104,15 +124,17 @@ export default function DriverOnboardingPage({ params }: { params: Promise<{ id:
 
   const getStepStatus = (stepNumber: number) => {
     if (!onboarding) return "pending"
-    if (stepNumber < onboarding.current_step) return "completed"
-    if (stepNumber === onboarding.current_step) return "current"
+    const currentStep = onboarding.current_step ?? 1
+    if (stepNumber < currentStep) return "completed"
+    if (stepNumber === currentStep) return "current"
     return "pending"
   }
 
   const getDocumentStatus = (docType: string) => {
     if (!onboarding) return false
     const completed = Array.isArray(onboarding.documents_completed) ? onboarding.documents_completed : []
-    return onboarding[`${docType}_uploaded`] || completed.some((doc: unknown) => doc === docType)
+    const uploadFlag = onboarding[`${docType}_uploaded`]
+    return Boolean(uploadFlag) || completed.some((doc: unknown) => doc === docType)
   }
 
   if (isLoading) {
@@ -167,22 +189,22 @@ export default function DriverOnboardingPage({ params }: { params: Promise<{ id:
                   <h2 className="text-lg font-semibold mb-2">Onboarding Progress</h2>
                   <p className="text-sm text-muted-foreground">
                     Status: <Badge variant={onboarding.status === "completed" ? "default" : "outline"}>
-                      {onboarding.status.replace("_", " ").toUpperCase()}
+                      {(onboarding.status || "pending").replace("_", " ").toUpperCase()}
                     </Badge>
                   </p>
                 </div>
                 <div className="text-right">
                   <div className="text-3xl font-bold text-primary">
-                    {onboarding.completion_percentage}%
+                    {onboarding.completion_percentage ?? 0}%
                   </div>
                   <p className="text-sm text-muted-foreground">Complete</p>
                 </div>
               </div>
-              <Progress value={onboarding.completion_percentage} className="h-2" />
+              <Progress value={onboarding.completion_percentage ?? 0} className="h-2" />
               <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4" />
-                  <span>Started: {new Date(onboarding.started_at).toLocaleDateString()}</span>
+                  <span>Started: {onboarding.started_at ? new Date(onboarding.started_at).toLocaleDateString() : "N/A"}</span>
                 </div>
                 {onboarding.completed_at && (
                   <div className="flex items-center gap-2">
@@ -262,7 +284,7 @@ export default function DriverOnboardingPage({ params }: { params: Promise<{ id:
             </div>
 
             {/* Complete Onboarding Button */}
-            {onboarding.status !== "completed" && onboarding.completion_percentage >= 100 && (
+            {onboarding.status !== "completed" && (onboarding.completion_percentage ?? 0) >= 100 && (
               <Card className="p-6 border-primary/20 bg-primary/5">
                 <div className="flex items-center justify-between">
                   <div>

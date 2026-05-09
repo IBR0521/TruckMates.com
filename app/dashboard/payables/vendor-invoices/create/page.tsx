@@ -13,10 +13,23 @@ import { getVendors } from "@/app/actions/vendors"
 import { createVendorInvoice } from "@/app/actions/vendor-invoices"
 import { getGLAccounts } from "@/app/actions/gl-accounts"
 
+type VendorOption = {
+  id: string
+  company_name?: string | null
+  name?: string | null
+}
+
+const asVendorOption = (value: unknown): VendorOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as VendorOption
+}
+
 export default function CreateVendorInvoicePage() {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
-  const [vendors, setVendors] = useState<unknown[]>([])
+  const [vendors, setVendors] = useState<VendorOption[]>([])
   const [glAccounts, setGlAccounts] = useState<Array<{ id: string; code: string; name: string }>>([])
   const [loadingVendors, setLoadingVendors] = useState(true)
   const [form, setForm] = useState({
@@ -34,7 +47,13 @@ export default function CreateVendorInvoicePage() {
       setLoadingVendors(true)
       const [result, glResult] = await Promise.all([getVendors({ limit: 500 }), getGLAccounts("expense")])
       if (result.error) toast.error(result.error)
-      else setVendors(result.data || [])
+      else {
+        setVendors(
+          ((result.data || []) as unknown[])
+            .map(asVendorOption)
+            .filter((vendor): vendor is VendorOption => !!vendor),
+        )
+      }
       if (!glResult.error) setGlAccounts(glResult.data || [])
       setLoadingVendors(false)
     }

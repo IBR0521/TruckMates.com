@@ -82,7 +82,7 @@ export default function CustomerPortalLoadPage() {
     }
   }, [token, loadId, router])
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status?: string | null) => {
     switch (status?.toLowerCase()) {
       case "delivered":
       case "completed":
@@ -99,7 +99,7 @@ export default function CustomerPortalLoadPage() {
     }
   }
 
-  const formatDate = (date: string | null) => {
+  const formatDate = (date?: string | null) => {
     if (!date) return "N/A"
     return new Date(date).toLocaleDateString("en-US", {
       year: "numeric",
@@ -242,7 +242,7 @@ export default function CustomerPortalLoadPage() {
                     <FileText className="w-5 h-5 text-muted-foreground mt-0.5" />
                     <div>
                       <p className="text-xs text-muted-foreground">Rate</p>
-                      <p className="text-sm font-medium">${parseFloat(load.rate || 0).toFixed(2)}</p>
+                      <p className="text-sm font-medium">${Number(load.rate || 0).toFixed(2)}</p>
                     </div>
                   </div>
                 )}

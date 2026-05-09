@@ -52,6 +52,7 @@ import { calculateMileage } from "@/app/actions/load-mileage"
 import { getCompanySettings } from "@/app/actions/number-formats"
 import { getOrderedDeliveryStopAddresses } from "@/lib/load-routing-from-stops"
 import { LoadDeliveryPointsManager } from "@/components/load-delivery-points-manager"
+import type { DeliveryPoint } from "@/components/load-delivery-points-manager"
 import { createLoadDeliveryPoint } from "@/app/actions/load-delivery-points"
 import { checkPermitFeasibility } from "@/app/actions/permits"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
@@ -77,8 +78,11 @@ type TruckOption = NonNullable<NonNullable<Awaited<ReturnType<typeof getTrucks>>
 type TrailerOption = NonNullable<NonNullable<Awaited<ReturnType<typeof getTrailers>>["data"]>[number]>
 type RouteOption = NonNullable<NonNullable<Awaited<ReturnType<typeof getRoutes>>["data"]>[number]>
 type CustomerOption = NonNullable<NonNullable<Awaited<ReturnType<typeof getCustomers>>["data"]>[number]>
-type DeliveryPoint = { state?: string | null; delivery_state?: string | null; [key: string]: unknown }
 type CreateLoadPayload = Parameters<typeof createLoad>[0]
+
+const asString = (value: unknown): string | undefined => {
+  return typeof value === "string" ? value : undefined
+}
 
 export default function AddLoadPage() {
   const wizardSteps = [
@@ -285,7 +289,7 @@ export default function AddLoadPage() {
           [
             formData.shipperState,
             formData.consigneeState,
-            ...deliveryPoints.map((point: DeliveryPoint) => point?.state || point?.delivery_state || ""),
+            ...deliveryPoints.map((point: DeliveryPoint) => point.state || ""),
           ]
             .map((x) => String(x || "").trim().toUpperCase())
             .filter(Boolean),
@@ -1015,7 +1019,10 @@ export default function AddLoadPage() {
                                 origin: entry.coordinates 
                                   ? `${entry.coordinates.lat}, ${entry.coordinates.lng}`
                                   : `${entry.city}, ${entry.state}`.replace(/^,\s*|,\s*$/g, ''),
-                                pickupInstructions: entry.custom_fields?.loading_instructions || entry.notes || prev.pickupInstructions,
+                                pickupInstructions:
+                                  asString((entry.custom_fields as Record<string, unknown> | null | undefined)?.loading_instructions) ||
+                                  entry.notes ||
+                                  prev.pickupInstructions,
                               }))
                               toast.success(`Selected ${entry.name} from address book`)
                             }
@@ -1173,7 +1180,10 @@ export default function AddLoadPage() {
                                     destination: entry.coordinates 
                                       ? `${entry.coordinates.lat}, ${entry.coordinates.lng}`
                                       : `${entry.city}, ${entry.state}`.replace(/^,\s*|,\s*$/g, ''),
-                                    deliveryInstructions: entry.custom_fields?.loading_instructions || entry.notes || prev.deliveryInstructions,
+                                    deliveryInstructions:
+                                      asString((entry.custom_fields as Record<string, unknown> | null | undefined)?.loading_instructions) ||
+                                      entry.notes ||
+                                      prev.deliveryInstructions,
                                   }))
                                   toast.success(`Selected ${entry.name} from address book`)
                                 }

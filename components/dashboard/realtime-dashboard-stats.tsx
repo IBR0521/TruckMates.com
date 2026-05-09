@@ -11,7 +11,8 @@ import { toast } from "sonner"
  * OPTIMIZED: Debounced updates to prevent cascading reloads
  */
 export function useRealtimeDashboardStats() {
-  const [stats, setStats] = useState<Record<string, unknown> | null>(null)
+  type DashboardStatsData = NonNullable<Awaited<ReturnType<typeof getDashboardStats>>["data"]>
+  const [stats, setStats] = useState<DashboardStatsData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
   const pendingUpdateRef = useRef(false)

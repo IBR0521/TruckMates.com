@@ -126,12 +126,5 @@
   },
   "overrides": {
     "react-is": "19.2.4"
-  },
-  "vitest": {
-    "test": {
-      "alias": {
-        "@": "."
-      }
-    }
   }
 }

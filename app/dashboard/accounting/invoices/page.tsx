@@ -220,7 +220,7 @@ export default function InvoicesPage() {
                         <tr key={invoice.id} className="border-b border-border hover:bg-secondary/20 transition">
                           <td className="px-6 py-4 text-foreground font-medium">{invoice.invoice_number || invoice.id}</td>
                           <td className="px-6 py-4 text-foreground">{invoice.customer_name || "N/A"}</td>
-                          <td className="px-6 py-4 text-foreground font-semibold">${invoice.amount ? parseFloat(String(invoice.amount)).toFixed(2) : "0.00"}</td>
+                          <td className="px-6 py-4 text-foreground font-semibold">${Number(invoice.amount || 0).toFixed(2)}</td>
                           <td className="px-6 py-4 text-foreground">{invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : "N/A"}</td>
                           <td className="px-6 py-4">
                             <InlineStatusSelect
@@ -294,7 +294,7 @@ export default function InvoicesPage() {
                       <div className="space-y-2 pt-2 border-t border-border/30">
                         <div>
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Amount</p>
-                          <p className="text-lg font-bold text-foreground">${invoice.amount ? parseFloat(String(invoice.amount)).toFixed(2) : "0.00"}</p>
+                          <p className="text-lg font-bold text-foreground">${Number(invoice.amount || 0).toFixed(2)}</p>
                         </div>
                         <div>
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Due Date</p>

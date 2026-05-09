@@ -95,12 +95,15 @@ export function AuditTrail({ resourceType, resourceId, trigger, className }: Aud
       const formatValue = (val: unknown) => {
         if (val === null || val === undefined) return "—"
         if (typeof val === "boolean") return val ? "Yes" : "No"
-        if (typeof val === "number" && field.toLowerCase().includes("rate") || field.toLowerCase().includes("price")) {
+        if (
+          typeof val === "number" &&
+          (field.toLowerCase().includes("rate") || field.toLowerCase().includes("price"))
+        ) {
           return `$${Number(val).toFixed(2)}`
         }
         if (field.toLowerCase().includes("date")) {
           try {
-            return format(new Date(val), "MMM dd, yyyy")
+            return format(new Date(String(val)), "MMM dd, yyyy")
           } catch {
             return String(val)
           }

@@ -41,11 +41,12 @@ type TruckRow = {
   current_location?: string | null
   [key: string]: unknown
 }
+type TruckDeleteDependency = { type: string; id: string; name: string; link?: string }
 
 export default function TrucksPage() {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [deleteDependencies, setDeleteDependencies] = useState<unknown[]>([])
+  const [deleteDependencies, setDeleteDependencies] = useState<TruckDeleteDependency[]>([])
   const [trucksList, setTrucksList] = useState<TruckRow[]>([])
   const [filteredTrucks, setFilteredTrucks] = useState<TruckRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -128,7 +129,23 @@ export default function TrucksPage() {
       const response = await fetch(`/api/check-dependencies?resource_type=truck&resource_id=${id}`)
       if (response.ok) {
         const data = await response.json()
-        setDeleteDependencies(data.dependencies || [])
+        setDeleteDependencies(
+          ((data?.dependencies as unknown[]) || [])
+            .map((dep) => {
+              if (!dep || typeof dep !== "object") return null
+              const obj = dep as Record<string, unknown>
+              if (typeof obj.type !== "string" || typeof obj.id !== "string" || typeof obj.name !== "string") {
+                return null
+              }
+              return {
+                type: obj.type,
+                id: obj.id,
+                name: obj.name,
+                link: typeof obj.link === "string" ? obj.link : undefined,
+              } as TruckDeleteDependency
+            })
+            .filter((dep): dep is TruckDeleteDependency => !!dep),
+        )
       }
     } catch (error) {
       console.error("Failed to check dependencies:", error)

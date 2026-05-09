@@ -10,8 +10,22 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { getBOLTemplates, createBOLTemplate, updateBOLTemplate, deleteBOLTemplate } from "@/app/actions/bol"
 
+type TemplateRow = {
+  id: string
+  name?: string | null
+  description?: string | null
+  is_default?: boolean | null
+}
+
+const asTemplateRow = (value: unknown): TemplateRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as TemplateRow
+}
+
 export default function BOLTemplatesPage() {
-  const [templates, setTemplates] = useState<unknown[]>([])
+  const [templates, setTemplates] = useState<TemplateRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [newName, setNewName] = useState("")
   const [newDesc, setNewDesc] = useState("")
@@ -25,7 +39,10 @@ export default function BOLTemplatesPage() {
       setIsLoading(false)
       return
     }
-    setTemplates(result.data || [])
+    const templateRows = (Array.isArray(result.data) ? result.data : [])
+      .map(asTemplateRow)
+      .filter((tpl): tpl is TemplateRow => !!tpl)
+    setTemplates(templateRows)
     setIsLoading(false)
   }
 
@@ -48,9 +65,9 @@ export default function BOLTemplatesPage() {
     await loadTemplates()
   }
 
-  const saveTemplate = async (tpl: unknown) => {
+  const saveTemplate = async (tpl: TemplateRow) => {
     const result = await updateBOLTemplate(tpl.id, {
-      name: tpl.name,
+      name: tpl.name || "Untitled Template",
       description: tpl.description || undefined,
       is_default: !!tpl.is_default,
     })

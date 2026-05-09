@@ -50,21 +50,24 @@ import { UpgradeModal } from "@/components/billing/upgrade-modal"
 type TruckData = NonNullable<Awaited<ReturnType<typeof getTrucks>>["data"]>[number]
 type RouteData = NonNullable<Awaited<ReturnType<typeof getRoutes>>["data"]>[number]
 type GeofenceData = NonNullable<Awaited<ReturnType<typeof getGeofences>>["data"]>[number]
-type DrawnShape = google.maps.Circle | google.maps.Rectangle | google.maps.Polygon
+type GoogleMapInstance = any
+type GoogleDrawingManager = any
+type GoogleLatLng = { lat: () => number; lng: () => number }
+type DrawnShape = any
 
 type VehicleLocation = {
   latitude: number
   longitude: number
-  speed?: number | null
-  heading?: number | null
-  timestamp?: string | null
+  speed?: number
+  heading?: number
+  timestamp: string
 }
 
 type VehicleData = {
   id: string
-  truck_number?: string | null
-  status?: string | null
-  driver?: { name?: string | null }
+  truck_number: string
+  status?: string
+  driver?: { name: string }
   location?: VehicleLocation
 }
 
@@ -165,8 +168,8 @@ export default function FleetMapPage() {
     zip_code: "",
   })
   const mapRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<google.maps.Map | null>(null)
-  const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null)
+  const mapInstanceRef = useRef<GoogleMapInstance | null>(null)
+  const drawingManagerRef = useRef<GoogleDrawingManager | null>(null)
   const drawnShapeRef = useRef<DrawnShape | null>(null)
 
   useEffect(() => {
@@ -209,21 +212,21 @@ export default function FleetMapPage() {
         const result = await getVehiclesInViewport(90, -90, 180, -180)
         if (result.data) {
           // Transform to Vehicle format with location data
-          const viewportRows = result.data.filter(isViewportVehicleRow)
+          const viewportRows = (result.data as unknown[]).filter(isViewportVehicleRow)
           const rows = terminalFilter === "all"
             ? viewportRows
-            : viewportRows.filter((loc) => loc.trucks?.terminal_id === terminalFilter)
-          const vehiclesWithLocation = rows.map((loc) => ({
+            : viewportRows.filter((loc: ViewportVehicleRow) => loc.trucks?.terminal_id === terminalFilter)
+          const vehiclesWithLocation = rows.map((loc: ViewportVehicleRow) => ({
             id: loc.truck_id,
             truck_number: loc.trucks?.truck_number || "Unknown",
-            status: loc.trucks?.status,
-            driver: loc.trucks?.drivers ? { name: loc.trucks.drivers.name } : undefined,
+            status: typeof loc.trucks?.status === "string" ? loc.trucks.status : undefined,
+            driver: typeof loc.trucks?.drivers?.name === "string" ? { name: loc.trucks.drivers.name } : undefined,
             location: {
               latitude: loc.latitude,
               longitude: loc.longitude,
-              speed: loc.speed,
-              heading: loc.heading,
-              timestamp: loc.timestamp,
+              speed: typeof loc.speed === "number" ? loc.speed : undefined,
+              heading: typeof loc.heading === "number" ? loc.heading : undefined,
+              timestamp: loc.timestamp || new Date().toISOString(),
             }
           }))
           setVehicles(vehiclesWithLocation)
@@ -231,7 +234,11 @@ export default function FleetMapPage() {
           // Fallback to trucks if map-optimization fails
           const trucksResult = await getTrucks({ terminal_id: terminalFilter === "all" ? undefined : terminalFilter })
           if (trucksResult.data) {
-            setVehicles((trucksResult.data || []).map(mapTruckToVehicle).filter((truck): truck is VehicleData => truck !== null))
+            setVehicles(
+              (trucksResult.data as TruckData[])
+                .map((truck: TruckData) => mapTruckToVehicle(truck))
+                .filter((truck): truck is VehicleData => truck !== null),
+            )
           }
         }
       } catch (error) {
@@ -241,7 +248,11 @@ export default function FleetMapPage() {
           toast.error(result.error)
           return
         }
-        setVehicles((result.data || []).map(mapTruckToVehicle).filter((truck): truck is VehicleData => truck !== null))
+        setVehicles(
+          (result.data as TruckData[])
+            .map((truck: TruckData) => mapTruckToVehicle(truck))
+            .filter((truck): truck is VehicleData => truck !== null),
+        )
       }
       if (activeTab === "vehicles") {
         setLastUpdatedAt(new Date())
@@ -355,7 +366,9 @@ export default function FleetMapPage() {
   }
 
   // Filter vehicles with and without GPS
-  const vehiclesWithLocation = vehicles.filter((v) => v.location)
+  const vehiclesWithLocation = vehicles.filter(
+    (v): v is VehicleData & { location: VehicleLocation } => Boolean(v.location),
+  )
   const vehiclesWithoutLocation = vehicles.filter((v) => !v.location)
   const showZonePaywall = activeTab === "zones" && !geofencingAllowed
   const showVehicleEmptyOverlay = activeTab === "vehicles" && !isLoading && vehiclesWithLocation.length === 0
@@ -804,7 +817,7 @@ export default function FleetMapPage() {
               let polygonCoordinates: Array<{ lat: number; lng: number }> | undefined
               if (geofenceFormData.zone_type === "polygon" && drawnShapeRef.current) {
                 const paths = drawnShapeRef.current.getPath()
-                polygonCoordinates = paths.getArray().map((latLng: google.maps.LatLng) => ({
+                polygonCoordinates = paths.getArray().map((latLng: GoogleLatLng) => ({
                   lat: latLng.lat(),
                   lng: latLng.lng(),
                 }))
@@ -943,7 +956,7 @@ export default function FleetMapPage() {
                     onClick={() => {
                       setGeofenceFormData({ ...geofenceFormData, zone_type: "circle" })
                       if (drawingManagerRef.current && mapInstanceRef.current) {
-                        drawingManagerRef.current.setDrawingMode(window.google.maps.drawing.OverlayType.CIRCLE)
+                        drawingManagerRef.current.setDrawingMode((window.google as any).maps.drawing.OverlayType.CIRCLE)
                       }
                     }}
                   >
@@ -956,7 +969,7 @@ export default function FleetMapPage() {
                     onClick={() => {
                       setGeofenceFormData({ ...geofenceFormData, zone_type: "rectangle" })
                       if (drawingManagerRef.current && mapInstanceRef.current) {
-                        drawingManagerRef.current.setDrawingMode(window.google.maps.drawing.OverlayType.RECTANGLE)
+                        drawingManagerRef.current.setDrawingMode((window.google as any).maps.drawing.OverlayType.RECTANGLE)
                       }
                     }}
                   >
@@ -969,7 +982,7 @@ export default function FleetMapPage() {
                     onClick={() => {
                       setGeofenceFormData({ ...geofenceFormData, zone_type: "polygon" })
                       if (drawingManagerRef.current && mapInstanceRef.current) {
-                        drawingManagerRef.current.setDrawingMode(window.google.maps.drawing.OverlayType.POLYGON)
+                        drawingManagerRef.current.setDrawingMode((window.google as any).maps.drawing.OverlayType.POLYGON)
                       }
                     }}
                   >
@@ -1319,8 +1332,8 @@ function GeofenceDrawingMap({
   onShapeComplete,
 }: {
   mapRef: React.RefObject<HTMLDivElement | null>
-  mapInstanceRef: React.MutableRefObject<google.maps.Map | null>
-  drawingManagerRef: React.MutableRefObject<google.maps.drawing.DrawingManager | null>
+  mapInstanceRef: React.MutableRefObject<GoogleMapInstance | null>
+  drawingManagerRef: React.MutableRefObject<GoogleDrawingManager | null>
   drawnShapeRef: React.MutableRefObject<DrawnShape | null>
   zoneType: "circle" | "polygon" | "rectangle"
   onShapeComplete: (
@@ -1331,14 +1344,14 @@ function GeofenceDrawingMap({
       | { kind: "polygon" }
   ) => void
 }) {
-  const localMapInstanceRef = useRef<google.maps.Map | null>(null)
+  const localMapInstanceRef = useRef<GoogleMapInstance | null>(null)
   const applyDrawingMode = (mode: "circle" | "polygon" | "rectangle") => {
-    if (!drawingManagerRef.current || !window.google?.maps?.drawing) return
+    if (!drawingManagerRef.current || !(window.google as any)?.maps?.drawing) return
     const overlayType = mode === "circle"
-      ? window.google.maps.drawing.OverlayType.CIRCLE
+      ? (window.google as any).maps.drawing.OverlayType.CIRCLE
       : mode === "rectangle"
-        ? window.google.maps.drawing.OverlayType.RECTANGLE
-        : window.google.maps.drawing.OverlayType.POLYGON
+        ? (window.google as any).maps.drawing.OverlayType.RECTANGLE
+        : (window.google as any).maps.drawing.OverlayType.POLYGON
     drawingManagerRef.current.setDrawingMode(overlayType)
   }
   
@@ -1358,7 +1371,7 @@ function GeofenceDrawingMap({
         return
       }
 
-      const map = new window.google.maps.Map(mapRef.current!, {
+      const map = new (window.google as any).maps.Map(mapRef.current!, {
         center: { lat: 37.7749, lng: -122.4194 },
         zoom: 10,
       })
@@ -1369,7 +1382,7 @@ function GeofenceDrawingMap({
         mapInstanceRef.current = map
       }
 
-      const drawingManager = new window.google.maps.drawing.DrawingManager({
+      const drawingManager = new (window.google as any).maps.drawing.DrawingManager({
         drawingMode: null,
         drawingControl: false,
         circleOptions: {
@@ -1405,14 +1418,14 @@ function GeofenceDrawingMap({
       drawingManagerRef.current = drawingManager
       applyDrawingMode(zoneType)
 
-      drawingManager.addListener("circlecomplete", (circle: google.maps.Circle) => {
+      drawingManager.addListener("circlecomplete", (circle: any) => {
         const center = circle.getCenter()
         const radius = circle.getRadius()
         onShapeComplete(circle, { kind: "circle", center: { lat: center.lat(), lng: center.lng() }, radius })
         drawingManager.setDrawingMode(null)
       })
 
-      drawingManager.addListener("rectanglecomplete", (rectangle: google.maps.Rectangle) => {
+      drawingManager.addListener("rectanglecomplete", (rectangle: any) => {
         const bounds = rectangle.getBounds()
         const ne = bounds.getNorthEast()
         const sw = bounds.getSouthWest()
@@ -1428,7 +1441,7 @@ function GeofenceDrawingMap({
         drawingManager.setDrawingMode(null)
       })
 
-      drawingManager.addListener("polygoncomplete", (polygon: google.maps.Polygon) => {
+      drawingManager.addListener("polygoncomplete", (polygon: any) => {
         onShapeComplete(polygon, { kind: "polygon" })
         drawingManager.setDrawingMode(null)
       })
@@ -1455,12 +1468,15 @@ function GeofenceDrawingMap({
       // Wait for it to load
       checkInterval = setInterval(() => {
         if (window.google && window.google.maps) {
-          clearInterval(checkInterval)
+          const intervalId = checkInterval
+          if (intervalId) clearInterval(intervalId)
           setTimeout(initMap, 300)
         }
       }, 100)
       
-      setTimeout(() => clearInterval(checkInterval), 10000)
+      setTimeout(() => {
+        if (checkInterval) clearInterval(checkInterval)
+      }, 10000)
       return () => {
         if (checkInterval) clearInterval(checkInterval)
         if (waitForScript) clearInterval(waitForScript)
@@ -1475,12 +1491,15 @@ function GeofenceDrawingMap({
     // If not, wait a bit and check again
     waitForScript = setInterval(() => {
       if (window.google && window.google.maps) {
-        clearInterval(waitForScript)
+        const intervalId = waitForScript
+        if (intervalId) clearInterval(intervalId)
         setTimeout(initMap, 300)
       }
     }, 100)
 
-    setTimeout(() => clearInterval(waitForScript), 10000)
+    setTimeout(() => {
+      if (waitForScript) clearInterval(waitForScript)
+    }, 10000)
 
     // Cleanup: clear timers and restore refs when dialog closes/unmounts
     return () => {

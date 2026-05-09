@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/client"
 import { use } from "react"
 
 type TrackedShipment = {
-  status: string
+  status?: string | null
   shipment_number?: string
   origin?: string
   destination?: string
@@ -24,6 +24,25 @@ type TrackedShipment = {
 }
 
 export default function TrackingPage({ params }: { params: Promise<{ id: string }> }) {
+  const normalizeShipment = (value: unknown): TrackedShipment | null => {
+    if (!value || typeof value !== "object") return null
+    const obj = value as Record<string, unknown>
+    return {
+      status: typeof obj.status === "string" ? obj.status : "pending",
+      shipment_number: typeof obj.shipment_number === "string" ? obj.shipment_number : undefined,
+      origin: typeof obj.origin === "string" ? obj.origin : undefined,
+      destination: typeof obj.destination === "string" ? obj.destination : undefined,
+      load_date: typeof obj.load_date === "string" ? obj.load_date : undefined,
+      estimated_delivery: typeof obj.estimated_delivery === "string" ? obj.estimated_delivery : undefined,
+      actual_delivery: typeof obj.actual_delivery === "string" ? obj.actual_delivery : undefined,
+      contents: typeof obj.contents === "string" ? obj.contents : undefined,
+      weight:
+        typeof obj.weight === "string" || typeof obj.weight === "number" ? obj.weight : undefined,
+      carrier_type: typeof obj.carrier_type === "string" ? obj.carrier_type : undefined,
+      company_name: typeof obj.company_name === "string" ? obj.company_name : undefined,
+    }
+  }
+
   const { id } = use(params)
   const [shipment, setShipment] = useState<TrackedShipment | null>(null)
   const [trackingId, setTrackingId] = useState<string>("")
@@ -80,7 +99,13 @@ export default function TrackingPage({ params }: { params: Promise<{ id: string 
         return
       }
 
-      setShipment(loads[0])
+      const normalizedShipment = normalizeShipment(loads[0])
+      if (!normalizedShipment) {
+        setError("Shipment data is invalid.")
+        return
+      }
+
+      setShipment(normalizedShipment)
     } catch (err: unknown) {
       setError(errorMessage(err, "An error occurred"))
     } finally {
@@ -95,7 +120,7 @@ export default function TrackingPage({ params }: { params: Promise<{ id: string 
     }
   }
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status?: string | null) => {
     switch (status) {
       case "delivered":
         return <CheckCircle className="w-5 h-5 text-green-400" />
@@ -108,7 +133,7 @@ export default function TrackingPage({ params }: { params: Promise<{ id: string 
     }
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status?: string | null) => {
     switch (status) {
       case "pending":
         return <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/50">Pending</Badge>
@@ -119,16 +144,21 @@ export default function TrackingPage({ params }: { params: Promise<{ id: string 
       case "delivered":
         return <Badge className="bg-green-500/20 text-green-400 border-green-500/50">Delivered</Badge>
       default:
-        return <Badge>{status}</Badge>
+        return <Badge>{status || "Unknown"}</Badge>
     }
   }
 
-  const getStatusTimeline = (status: string) => {
+  const getStatusTimeline = (status?: string | null) => {
+    const normalizedStatus = typeof status === "string" ? status : "pending"
     const timeline = [
       { status: "pending", label: "Order Received", completed: true },
-      { status: "scheduled", label: "Scheduled for Pickup", completed: status !== "pending" },
-      { status: "in_transit", label: "In Transit", completed: status === "in_transit" || status === "delivered" },
-      { status: "delivered", label: "Delivered", completed: status === "delivered" },
+      { status: "scheduled", label: "Scheduled for Pickup", completed: normalizedStatus !== "pending" },
+      {
+        status: "in_transit",
+        label: "In Transit",
+        completed: normalizedStatus === "in_transit" || normalizedStatus === "delivered",
+      },
+      { status: "delivered", label: "Delivered", completed: normalizedStatus === "delivered" },
     ]
 
     return timeline

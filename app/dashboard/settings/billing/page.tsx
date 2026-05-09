@@ -87,6 +87,45 @@ type PaymentMethodRow = {
   is_default?: boolean | null
 }
 
+const asPaymentHistoryRow = (value: unknown): PaymentHistoryRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string" || typeof obj.status !== "string" || typeof obj.payment_date !== "string") {
+    return null
+  }
+  return {
+    id: obj.id,
+    amount: Number(obj.amount) || 0,
+    status: obj.status,
+    payment_date: obj.payment_date,
+    currency_symbol: typeof obj.currency_symbol === "string" ? obj.currency_symbol : null,
+    payment_method: typeof obj.payment_method === "string" ? obj.payment_method : null,
+    payment_method_last4: typeof obj.payment_method_last4 === "string" ? obj.payment_method_last4 : null,
+    invoice_number: typeof obj.invoice_number === "string" ? obj.invoice_number : null,
+  }
+}
+
+const asPaymentMethodRow = (value: unknown): PaymentMethodRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  const type = obj.type
+  if (type !== "card" && type !== "ach" && type !== "wire" && type !== "check") return null
+  return {
+    id: typeof obj.id === "string" ? obj.id : undefined,
+    type,
+    card_brand: typeof obj.card_brand === "string" ? obj.card_brand : null,
+    card_last4: typeof obj.card_last4 === "string" ? obj.card_last4 : null,
+    account_last4: typeof obj.account_last4 === "string" ? obj.account_last4 : null,
+    card_exp_month: typeof obj.card_exp_month === "number" ? obj.card_exp_month : null,
+    card_exp_year: typeof obj.card_exp_year === "number" ? obj.card_exp_year : null,
+    cardholder_name: typeof obj.cardholder_name === "string" ? obj.cardholder_name : null,
+    is_default: typeof obj.is_default === "boolean" ? obj.is_default : null,
+  }
+}
+
+const parsePaymentMethods = (rows: unknown[]): PaymentMethodRow[] =>
+  rows.map(asPaymentMethodRow).filter((row): row is PaymentMethodRow => !!row)
+
 export default function BillingSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -169,11 +208,15 @@ export default function BillingSettingsPage() {
         }
 
         if (historyResult.data) {
-          setPaymentHistory(historyResult.data)
+          setPaymentHistory(
+            (historyResult.data as unknown[])
+              .map(asPaymentHistoryRow)
+              .filter((row): row is PaymentHistoryRow => !!row),
+          )
         }
 
         if (methodsResult.data) {
-          setPaymentMethods(methodsResult.data)
+          setPaymentMethods(parsePaymentMethods(methodsResult.data as unknown[]))
         }
         if (usageResult.data) {
           setUsageRows(usageResult.data)
@@ -542,7 +585,7 @@ export default function BillingSettingsPage() {
                             toast.success("Payment method deleted")
                             const methodsResult = await getPaymentMethods()
                             if (methodsResult.data) {
-                              setPaymentMethods(methodsResult.data)
+                              setPaymentMethods(parsePaymentMethods(methodsResult.data as unknown[]))
                             }
                           }
                         }
@@ -680,7 +723,7 @@ export default function BillingSettingsPage() {
                   setShowPaymentMethodDialog(false)
                   const methodsResult = await getPaymentMethods()
                   if (methodsResult.data) {
-                    setPaymentMethods(methodsResult.data)
+                    setPaymentMethods(parsePaymentMethods(methodsResult.data as unknown[]))
                   }
                 }
               }}

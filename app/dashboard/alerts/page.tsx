@@ -21,8 +21,27 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+type AlertRow = {
+  id: string
+  title?: string | null
+  message?: string | null
+  priority?: string | null
+  status?: string | null
+  event_type?: string | null
+  created_at?: string | null
+  load_id?: string | null
+  driver_id?: string | null
+}
+
+const asAlertRow = (value: unknown): AlertRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as AlertRow
+}
+
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState<unknown[]>([])
+  const [alerts, setAlerts] = useState<AlertRow[]>([])
   const [alertCounts, setAlertCounts] = useState({ active: 0, critical: 0, acknowledged: 0, resolved: 0 }) // FIXED: Use efficient counts instead of fetching all records
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState("active") // active, acknowledged, resolved, all
@@ -30,7 +49,7 @@ export default function AlertsPage() {
   // FIXED: Add confirmation dialog state
   const [acknowledgeDialogOpen, setAcknowledgeDialogOpen] = useState(false)
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
-  const [selectedAlert, setSelectedAlert] = useState<unknown>(null)
+  const [selectedAlert, setSelectedAlert] = useState<AlertRow | null>(null)
 
   useEffect(() => {
     loadAlerts()
@@ -54,7 +73,9 @@ export default function AlertsPage() {
       }
       
       if (filteredResult.data) {
-        setAlerts(filteredResult.data) // Store for list view
+        setAlerts(
+          (filteredResult.data as unknown[]).map(asAlertRow).filter((alert): alert is AlertRow => !!alert),
+        ) // Store for list view
       } else if (filteredResult.error) {
         // Only show error if it's not "No company found" (user might be setting up)
         if (filteredResult.error !== "No company found") {
@@ -69,12 +90,12 @@ export default function AlertsPage() {
   }
 
   // FIXED: Add confirmation dialogs before actions
-  function handleAcknowledgeClick(alert: unknown) {
+  function handleAcknowledgeClick(alert: AlertRow) {
     setSelectedAlert(alert)
     setAcknowledgeDialogOpen(true)
   }
 
-  function handleResolveClick(alert: unknown) {
+  function handleResolveClick(alert: AlertRow) {
     setSelectedAlert(alert)
     setResolveDialogOpen(true)
   }
@@ -128,7 +149,7 @@ export default function AlertsPage() {
     }
   }
 
-  function getStatusBadge(status: string) {
+  function getStatusBadge(status?: string | null) {
     switch (status) {
       case "active":
         return <Badge variant="destructive"><AlertTriangle className="w-3 h-3 mr-1" />Active</Badge>
@@ -137,7 +158,7 @@ export default function AlertsPage() {
       case "resolved":
         return <Badge variant="default" className="bg-green-500/10 text-green-500 border-green-500/20"><CheckCircle2 className="w-3 h-3 mr-1" />Resolved</Badge>
       default:
-        return <Badge variant="outline">{status}</Badge>
+        return <Badge variant="outline">{status || "Unknown"}</Badge>
     }
   }
 
@@ -259,16 +280,16 @@ export default function AlertsPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        {getPriorityBadge(alert.priority)}
-                        {getStatusBadge(alert.status)}
-                        <Badge variant="outline">{getEventTypeLabel(alert.event_type)}</Badge>
+                        {getPriorityBadge(alert.priority || "normal")}
+                        {getStatusBadge(alert.status || "active")}
+                        <Badge variant="outline">{getEventTypeLabel(alert.event_type || "")}</Badge>
                       </div>
-                      <h3 className="font-semibold text-lg mb-1">{alert.title}</h3>
-                      <p className="text-muted-foreground mb-3">{alert.message}</p>
+                      <h3 className="font-semibold text-lg mb-1">{alert.title || "Alert"}</h3>
+                      <p className="text-muted-foreground mb-3">{alert.message || ""}</p>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Clock className="w-4 h-4" />
-                          {format(new Date(alert.created_at), "MMM d, yyyy h:mm a")}
+                          {alert.created_at ? format(new Date(alert.created_at), "MMM d, yyyy h:mm a") : "—"}
                         </span>
                         {alert.load_id && typeof alert.load_id === 'string' && alert.load_id.trim() !== '' ? (
                           <Link href={`/dashboard/loads/${alert.load_id}`} className="text-primary hover:underline">

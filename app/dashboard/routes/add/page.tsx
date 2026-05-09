@@ -30,10 +30,56 @@ import Link from "next/link"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { RouteStopsManager } from "@/components/route-stops-manager"
+import type { Stop } from "@/components/route-stops-manager"
 import { createRouteStop } from "@/app/actions/route-stops"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { GoogleMapsRoute } from "@/components/google-maps-route"
 import { Check, AlertTriangle, ChevronLeft, ChevronRight, Sparkles } from "lucide-react"
+
+type DriverOption = {
+  id: string
+  name?: string | null
+  hos_status?: string | null
+  status?: string | null
+  remaining_drive_hours?: number | null
+}
+
+type TruckOption = {
+  id: string
+  truck_number?: string | null
+  status?: string | null
+}
+
+const asDriverOption = (value: unknown): DriverOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as DriverOption
+}
+
+const asTruckOption = (value: unknown): TruckOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as TruckOption
+}
+
+const asStop = (value: unknown, fallbackNumber: number): Stop | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  const stopNumber = Number(obj.stop_number)
+  return {
+    id: typeof obj.id === "string" ? obj.id : undefined,
+    stop_number: Number.isFinite(stopNumber) ? stopNumber : fallbackNumber,
+    location_name: typeof obj.location_name === "string" ? obj.location_name : "",
+    address: typeof obj.address === "string" ? obj.address : "",
+    stop_type: typeof obj.stop_type === "string" ? obj.stop_type : undefined,
+    city: typeof obj.city === "string" ? obj.city : undefined,
+    state: typeof obj.state === "string" ? obj.state : undefined,
+    zip: typeof obj.zip === "string" ? obj.zip : undefined,
+    notes: typeof obj.notes === "string" ? obj.notes : undefined,
+  }
+}
 
 function timeFromDateTimeLocal(dt: string): string | undefined {
   if (!dt || !dt.includes("T")) return undefined
@@ -55,9 +101,9 @@ export default function AddRoutePage() {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isEstimating, setIsEstimating] = useState(false)
-  const [drivers, setDrivers] = useState<unknown[]>([])
-  const [trucks, setTrucks] = useState<unknown[]>([])
-  const [stops, setStops] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
+  const [stops, setStops] = useState<Stop[]>([])
   const [activeStep, setActiveStep] = useState<WizardStepKey>("basic")
   const [autoNameEnabled, setAutoNameEnabled] = useState(true)
   const [assignLater, setAssignLater] = useState(false)
@@ -94,8 +140,12 @@ export default function AddRoutePage() {
   useEffect(() => {
     async function loadData() {
       const [driversResult, trucksResult] = await Promise.all([getDrivers(), getTrucks()])
-      if (driversResult.data) setDrivers(driversResult.data)
-      if (trucksResult.data) setTrucks(trucksResult.data)
+      if (driversResult.data) {
+        setDrivers((driversResult.data as unknown[]).map(asDriverOption).filter((driver): driver is DriverOption => !!driver))
+      }
+      if (trucksResult.data) {
+        setTrucks((trucksResult.data as unknown[]).map(asTruckOption).filter((truck): truck is TruckOption => !!truck))
+      }
     }
     loadData()
   }, [])
@@ -177,7 +227,7 @@ export default function AddRoutePage() {
     setIsSubmitting(true)
 
     if (stops.length > 0) {
-      const invalidStops = stops.filter((stop) => !stop.location_name || !stop.address)
+      const invalidStops = stops.filter((stop: Stop) => !stop.location_name || !stop.address)
       if (invalidStops.length > 0) {
         toast.error("Please fill in location name and address for all stops")
         setIsSubmitting(false)
@@ -227,7 +277,7 @@ export default function AddRoutePage() {
 
     if (stops.length > 0 && result.data?.id) {
       try {
-        for (const stop of stops) {
+        for (const stop of stops.map((item, index) => asStop(item, index + 1)).filter((item): item is Stop => !!item)) {
           await createRouteStop(result.data.id, stop)
         }
         toast.success(`Route added successfully with ${stops.length} stops`)

@@ -57,15 +57,56 @@ import {
   getEldSyncVisual,
 } from "@/components/eld/eld-device-sync-status"
 
+type EldDeviceRow = {
+  id: string
+  device_serial_number: string
+  device_name: string
+  provider?: string | null
+  provider_device_id?: string | null
+  truck_id?: string | null
+  installation_date?: string | null
+  firmware_version?: string | null
+  api_key?: string | null
+  api_secret?: string | null
+  status?: string | null
+  notes?: string | null
+  last_sync_at?: string | null
+  lastSyncAt?: string | null
+  trucks?: {
+    id?: string | null
+    truck_number?: string | null
+  } | null
+}
+
+type TruckOption = {
+  id: string
+  truck_number?: string | null
+}
+
+const asEldDeviceRow = (value: unknown): EldDeviceRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  if (typeof obj.device_serial_number !== "string" || typeof obj.device_name !== "string") return null
+  return obj as EldDeviceRow
+}
+
+const asTruckOption = (value: unknown): TruckOption | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as TruckOption
+}
+
 export default function ELDDevicesPage() {
-  const [devices, setDevices] = useState<unknown[]>([])
-  const [trucks, setTrucks] = useState<unknown[]>([])
+  const [devices, setDevices] = useState<EldDeviceRow[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [selectedDevice, setSelectedDevice] = useState<unknown>(null)
+  const [selectedDevice, setSelectedDevice] = useState<EldDeviceRow | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     device_serial_number: "",
@@ -93,8 +134,12 @@ export default function ELDDevicesPage() {
         getTrucks(),
       ])
 
-      if (devicesResult.data) setDevices(devicesResult.data)
-      if (trucksResult.data) setTrucks(trucksResult.data)
+      if (devicesResult.data) {
+        setDevices((devicesResult.data as unknown[]).map(asEldDeviceRow).filter((d): d is EldDeviceRow => !!d))
+      }
+      if (trucksResult.data) {
+        setTrucks((trucksResult.data as unknown[]).map(asTruckOption).filter((t): t is TruckOption => !!t))
+      }
     } catch (error) {
       toast.error("Failed to load devices")
     } finally {
@@ -197,7 +242,7 @@ export default function ELDDevicesPage() {
     setSelectedDevice(null)
   }
 
-  function openEditDialog(device: unknown) {
+  function openEditDialog(device: EldDeviceRow) {
     setSelectedDevice(device)
     setFormData({
       device_serial_number: device.device_serial_number,
@@ -215,11 +260,14 @@ export default function ELDDevicesPage() {
     setShowEditDialog(true)
   }
 
-  const filteredDevices = devices.filter((device) =>
-    device.device_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    device.device_serial_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    device.provider?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredDevices = devices.filter((device) => {
+    const q = searchQuery.toLowerCase()
+    return (
+      device.device_name.toLowerCase().includes(q) ||
+      device.device_serial_number.toLowerCase().includes(q) ||
+      device.provider?.toLowerCase().includes(q)
+    )
+  })
 
   function providerLabel(provider?: string | null) {
     const p = (provider || "").toLowerCase()

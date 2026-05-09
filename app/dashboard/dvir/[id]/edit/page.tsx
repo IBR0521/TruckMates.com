@@ -16,11 +16,55 @@ import { toast } from "sonner"
 import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/form-page-layout"
 import { getDVIR, updateDVIR } from "@/app/actions/dvir"
 
+type DefectEntry = {
+  component: string
+  description: string
+  severity: string
+  corrected: boolean
+}
+
+type DvirRecord = {
+  id: string
+  inspection_type?: string | null
+  inspection_date?: string | null
+  inspection_time?: string | null
+  location?: string | null
+  mileage?: number | null
+  odometer_reading?: number | null
+  defects_found?: boolean | null
+  safe_to_operate?: boolean | null
+  defects?: unknown
+  notes?: string | null
+  corrective_action?: string | null
+  driver_signature?: string | null
+  certified?: boolean | null
+}
+
+type UpdateDvirInput = Parameters<typeof updateDVIR>[1]
+
+const asDvirRecord = (value: unknown): DvirRecord | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DvirRecord
+}
+
+const asDefectEntry = (value: unknown): DefectEntry | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  return {
+    component: typeof obj.component === "string" ? obj.component : "",
+    description: typeof obj.description === "string" ? obj.description : "",
+    severity: typeof obj.severity === "string" ? obj.severity : "minor",
+    corrected: Boolean(obj.corrected),
+  }
+}
+
 export default function EditDVIRPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
 
-  const [dvir, setDVIR] = useState<unknown>(null)
+  const [dvir, setDVIR] = useState<DvirRecord | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -57,9 +101,8 @@ export default function EditDVIRPage({ params }: { params: Promise<{ id: string 
           return
         }
 
-        if (dvirRes.data) setDVIR(dvirRes.data)
-
-        const existing = dvirRes.data
+        const existing = asDvirRecord(dvirRes.data)
+        if (existing) setDVIR(existing)
         if (existing) {
           setFormData({
             inspection_type: existing.inspection_type || "pre_trip",
@@ -71,7 +114,9 @@ export default function EditDVIRPage({ params }: { params: Promise<{ id: string 
               existing.odometer_reading !== null && existing.odometer_reading !== undefined ? String(existing.odometer_reading) : "",
             defects_found: !!existing.defects_found,
             safe_to_operate: existing.safe_to_operate !== undefined ? !!existing.safe_to_operate : true,
-            defects: Array.isArray(existing.defects) ? existing.defects : [],
+            defects: Array.isArray(existing.defects)
+              ? existing.defects.map(asDefectEntry).filter((defect): defect is DefectEntry => !!defect)
+              : [],
             notes: existing.notes || "",
             corrective_action: existing.corrective_action || "",
             driver_signature: existing.driver_signature || "",
@@ -86,7 +131,7 @@ export default function EditDVIRPage({ params }: { params: Promise<{ id: string 
     load()
   }, [id, router])
 
-  const certifiedLocked = !!dvir?.certified
+  const certifiedLocked = Boolean(dvir?.certified)
 
   const handleAddDefect = () => {
     setFormData((prev) => ({
@@ -151,7 +196,7 @@ export default function EditDVIRPage({ params }: { params: Promise<{ id: string 
       const mileageNum = formData.mileage.trim() ? Number(formData.mileage) : undefined
       const odometerNum = formData.odometer_reading.trim() ? Number(formData.odometer_reading) : undefined
 
-      const result = await updateDVIR(id, {
+      const payload: UpdateDvirInput = {
         inspection_type: formData.inspection_type,
         inspection_date: formData.inspection_date,
         inspection_time: formData.inspection_time,
@@ -165,7 +210,8 @@ export default function EditDVIRPage({ params }: { params: Promise<{ id: string 
         corrective_action: formData.corrective_action || undefined,
         driver_signature: formData.driver_signature || undefined,
         certified: formData.certified,
-      } as unknown)
+      }
+      const result = await updateDVIR(id, payload)
 
       if (result.error) {
         toast.error(result.error)

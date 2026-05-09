@@ -14,7 +14,10 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
     if (!key) return
     void (async () => {
       await initPostHogBrowser()
-      setClient(getPostHogBrowserClient())
+      const posthogClient = getPostHogBrowserClient()
+      if (posthogClient) {
+        setClient(posthogClient as PostHog)
+      }
     })()
   }, [])
 

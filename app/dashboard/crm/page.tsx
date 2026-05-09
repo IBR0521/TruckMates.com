@@ -54,7 +54,7 @@ type ExpiringDocument = {
   vendor_name?: string | null
   document_type: string
   days_until_expiration: number
-  expiration_date: string
+  expiration_date: string | null
 }
 
 type InactiveCustomer = {
@@ -598,7 +598,7 @@ export default function CRMDashboardPage() {
                     {doc.days_until_expiration} days
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(doc.expiration_date).toLocaleDateString()}
+                    {doc.expiration_date ? new Date(doc.expiration_date).toLocaleDateString() : "—"}
                   </p>
                 </div>
               </div>

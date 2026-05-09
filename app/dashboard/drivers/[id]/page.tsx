@@ -40,20 +40,106 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { UnifiedCommunicationsThread } from "@/components/communications/unified-communications-thread"
 
+type DriverDetail = {
+  id: string
+  name?: string | null
+  driver_id?: string | null
+  status?: string | null
+  hos_status?: string | null
+  current_hos_status?: string | null
+  eld_status?: string | null
+  email?: string | null
+  phone?: string | null
+  truck_id?: string | null
+  route_name?: string | null
+  current_route_name?: string | null
+  employee_type?: string | null
+  license_expiry?: string | null
+  medical_certificate_expiry?: string | null
+  dot_medical_expiry?: string | null
+  custom_fields?: Record<string, unknown> | null
+  medical_expiry?: string | null
+  license_number?: string | null
+  emergency_contact_name?: string | null
+  emergency_contact_phone?: string | null
+  emergency_contact_relationship?: string | null
+  home_terminal?: string | null
+  base_location?: string | null
+  city?: string | null
+  state?: string | null
+  hire_date?: string | null
+  years_experience?: number | string | null
+  language_preference?: string | null
+  preferred_language?: string | null
+  address?: string | null
+  zip?: string | null
+  license_state?: string | null
+  license_type?: string | null
+  license_endorsements?: string | null
+  pay_rate?: number | string | null
+  pay_rate_type?: string | null
+  notes?: string | null
+}
+
+type TruckDetail = {
+  id: string
+  truck_number?: string | null
+  make?: string | null
+  model?: string | null
+}
+
+type ActiveLeaseDetail = {
+  lease_type?: string | null
+  total_amount?: number | string | null
+  weekly_payment?: number | string | null
+  remaining_balance?: number | string | null
+}
+
+type LeasePaymentRow = {
+  id: string
+  payment_date?: string | null
+  amount?: number | string | null
+  remaining_balance_after?: number | string | null
+}
+
+const asDriverDetail = (value: unknown): DriverDetail | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as DriverDetail
+}
+
+const asTruckDetail = (value: unknown): TruckDetail | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as TruckDetail
+}
+
+const asActiveLeaseDetail = (value: unknown): ActiveLeaseDetail | null =>
+  value && typeof value === "object" ? (value as ActiveLeaseDetail) : null
+
+const asLeasePaymentRow = (value: unknown): LeasePaymentRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as LeasePaymentRow
+}
+
 export default function DriverDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
   const aliveRef = useRef(true)
-  const [driver, setDriver] = useState<unknown>(null)
-  const [truck, setTruck] = useState<unknown>(null)
+  const [driver, setDriver] = useState<DriverDetail | null>(null)
+  const [truck, setTruck] = useState<TruckDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [inspectionStats, setInspectionStats] = useState<{
     total_inspections: number
     oos_rate: number
     violation_count: number
   } | null>(null)
-  const [activeLease, setActiveLease] = useState<unknown>(null)
-  const [leasePayments, setLeasePayments] = useState<unknown[]>([])
+  const [activeLease, setActiveLease] = useState<ActiveLeaseDetail | null>(null)
+  const [leasePayments, setLeasePayments] = useState<LeasePaymentRow[]>([])
   const [creatingLease, setCreatingLease] = useState(false)
   const [leaseForm, setLeaseForm] = useState({
     lease_type: "lease-to-own",
@@ -86,13 +172,14 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
         if (aliveRef.current) router.push("/dashboard/drivers")
         return
       }
-      setDriver(result.data)
+      const parsedDriver = asDriverDetail(result.data)
+      setDriver(parsedDriver)
 
       // Load truck if assigned
-      if (result.data?.truck_id) {
-        const truckResult = await getTruck(result.data.truck_id)
+      if (parsedDriver?.truck_id) {
+        const truckResult = await getTruck(parsedDriver.truck_id)
         if (truckResult.data) {
-          setTruck(truckResult.data)
+          setTruck(asTruckDetail(truckResult.data))
         }
       }
 
@@ -104,8 +191,14 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
         getActiveLeaseAgreement(id),
         getLeasePaymentHistory(id),
       ])
-      if (leaseResult.data) setActiveLease(leaseResult.data)
-      if (paymentsResult.data) setLeasePayments(paymentsResult.data)
+      if (leaseResult.data) setActiveLease(asActiveLeaseDetail(leaseResult.data))
+      if (paymentsResult.data) {
+        setLeasePayments(
+          (paymentsResult.data as unknown[])
+            .map(asLeasePaymentRow)
+            .filter((payment): payment is LeasePaymentRow => !!payment),
+        )
+      }
     } catch (error: unknown) {
       toast.error("Failed to load driver details")
     } finally {
@@ -139,7 +232,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
     )
   }
 
-  const getStatusVariant = (status: string): "success" | "default" | "info" | "warning" => {
+  const getStatusVariant = (status?: string | null): "success" | "default" | "info" | "warning" => {
     switch (status?.toLowerCase()) {
       case "active":
       case "on_route":
@@ -207,10 +300,14 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
   }
 
   const licenseHealth = getLicenseHealth(driver.license_expiry)
+  const medicalCertCustomField =
+    typeof driver.custom_fields?.medical_certificate_expiry === "string"
+      ? driver.custom_fields.medical_certificate_expiry
+      : null
   const medicalCertDate =
     driver.medical_certificate_expiry ||
     driver.dot_medical_expiry ||
-    driver.custom_fields?.medical_certificate_expiry ||
+    medicalCertCustomField ||
     driver.medical_expiry ||
     null
   const medicalHealth = getLicenseHealth(medicalCertDate)
@@ -259,8 +356,14 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
       getActiveLeaseAgreement(id),
       getLeasePaymentHistory(id),
     ])
-    if (leaseResult.data) setActiveLease(leaseResult.data)
-    if (paymentsResult.data) setLeasePayments(paymentsResult.data)
+    if (leaseResult.data) setActiveLease(asActiveLeaseDetail(leaseResult.data))
+    if (paymentsResult.data) {
+      setLeasePayments(
+        (paymentsResult.data as unknown[])
+          .map(asLeasePaymentRow)
+          .filter((payment): payment is LeasePaymentRow => !!payment),
+      )
+    }
   }
 
   return (
@@ -275,7 +378,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <StatusBadge
                 status={driver.status?.replace("_", " ") || "Unknown"}
-                variant={getStatusVariant(driver.status)}
+                variant={getStatusVariant(driver.status || "inactive")}
               />
               <StatusBadge
                 status={`HOS: ${displayHosStatus}`}
@@ -433,7 +536,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
                 driver.pay_rate
                   ? driver.pay_rate_type === "percentage"
                     ? `${driver.pay_rate}%`
-                    : `$${parseFloat(driver.pay_rate || 0).toFixed(2)}/${driver.pay_rate_type === "hourly" ? "hr" : "mile"}`
+                    : `$${Number(driver.pay_rate ?? 0).toFixed(2)}/${driver.pay_rate_type === "hourly" ? "hr" : "mile"}`
                   : "Not set",
               )}
               {driver.notes && denseField("Notes", <span className="whitespace-pre-wrap">{driver.notes}</span>, "md:col-span-2 lg:col-span-3")}

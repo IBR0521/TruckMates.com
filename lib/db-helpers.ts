@@ -6,7 +6,7 @@ import { databaseErrorMessage } from "@/lib/error-message"
 export function isTableMissingError(error: unknown): boolean {
   if (!error) return false
   const candidate = error as { code?: string; message?: string }
-  return (
+  return Boolean(
     candidate.code === "42P01" ||
     candidate.message?.includes("does not exist") ||
     (candidate.message?.includes("relation") && candidate.message?.includes("does not exist"))

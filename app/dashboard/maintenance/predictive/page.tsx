@@ -8,6 +8,45 @@ import { toast } from "sonner"
 import { predictMaintenanceNeeds, createMaintenanceFromPrediction } from "@/app/actions/maintenance-predictive"
 import { usePathname, useRouter } from "next/navigation"
 
+type PredictedNeed = {
+  type: string
+  priority?: string | null
+  reason?: string | null
+  estimated_mileage?: number | null
+}
+
+type TruckPrediction = {
+  truck_id: string
+  truck_number?: string | null
+  make?: string | null
+  model?: string | null
+  priority?: string | null
+  current_mileage?: number | null
+  miles_since_last_maintenance?: number | null
+  last_maintenance_date?: string | null
+  predicted_needs?: PredictedNeed[] | null
+}
+
+const asPredictedNeed = (value: unknown): PredictedNeed | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.type !== "string") return null
+  return obj as unknown as PredictedNeed
+}
+
+const asTruckPrediction = (value: unknown): TruckPrediction | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.truck_id !== "string") return null
+  const predictedNeeds = Array.isArray(obj.predicted_needs)
+    ? obj.predicted_needs.map(asPredictedNeed).filter((need): need is PredictedNeed => !!need)
+    : undefined
+  return {
+    ...(obj as unknown as TruckPrediction),
+    predicted_needs: predictedNeeds,
+  }
+}
+
 export default function PredictiveMaintenancePage() {
   const router = useRouter()
   const pathname = usePathname()
@@ -18,7 +57,7 @@ export default function PredictiveMaintenancePage() {
     }
   }, [pathname, router])
 
-  const [predictions, setPredictions] = useState<unknown[]>([])
+  const [predictions, setPredictions] = useState<TruckPrediction[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [schedulingId, setSchedulingId] = useState<string | null>(null)
 
@@ -34,7 +73,11 @@ export default function PredictiveMaintenancePage() {
         toast.error(result.error)
         setPredictions([])
       } else {
-        setPredictions(result.data || [])
+        setPredictions(
+          ((result.data || []) as unknown[])
+            .map(asTruckPrediction)
+            .filter((truck): truck is TruckPrediction => !!truck),
+        )
       }
     } catch (error) {
       toast.error("Failed to load predictions")
@@ -44,14 +87,14 @@ export default function PredictiveMaintenancePage() {
     }
   }
 
-  const handleScheduleMaintenance = async (truck: unknown, need: unknown) => {
+  const handleScheduleMaintenance = async (truck: TruckPrediction, need: PredictedNeed) => {
     setSchedulingId(`${truck.truck_id}-${need.type}`)
     try {
       const result = await createMaintenanceFromPrediction({
         truck_id: truck.truck_id,
         service_type: need.type,
         estimated_cost: 0,
-        notes: need.reason,
+      notes: need.reason || undefined,
       })
 
       if (result.error) {
@@ -110,7 +153,7 @@ export default function PredictiveMaintenancePage() {
               </p>
             </Card>
           ) : (
-            predictions.map((truck, index) => (
+            predictions.map((truck: TruckPrediction, index: number) => (
               <Card key={index} className="p-6 border border-border/50">
                 <div className="mb-4">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
@@ -124,7 +167,7 @@ export default function PredictiveMaintenancePage() {
                         ? "bg-yellow-500/10 text-yellow-500"
                         : "bg-blue-500/10 text-blue-500"
                     }`}>
-                      {truck.priority.toUpperCase()} PRIORITY
+                      {(truck.priority || "low").toUpperCase()} PRIORITY
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 text-sm">
@@ -133,7 +176,7 @@ export default function PredictiveMaintenancePage() {
                       <div>
                         <p className="text-xs text-muted-foreground">Current Mileage</p>
                         <p className="font-medium text-foreground">
-                          {truck.current_mileage.toLocaleString()} miles
+                          {Number(truck.current_mileage || 0).toLocaleString()} miles
                         </p>
                       </div>
                     </div>
@@ -142,7 +185,7 @@ export default function PredictiveMaintenancePage() {
                       <div>
                         <p className="text-xs text-muted-foreground">Miles Since Last Maintenance</p>
                         <p className="font-medium text-foreground">
-                          {truck.miles_since_last_maintenance.toLocaleString()} miles
+                          {Number(truck.miles_since_last_maintenance || 0).toLocaleString()} miles
                         </p>
                       </div>
                     </div>
@@ -163,7 +206,7 @@ export default function PredictiveMaintenancePage() {
                 {truck.predicted_needs && truck.predicted_needs.length > 0 && (
                   <div className="space-y-3 mt-4 pt-4 border-t">
                     <h4 className="font-semibold text-sm">Predicted Maintenance Needs:</h4>
-                    {truck.predicted_needs.map((need: unknown, needIndex: number) => (
+                    {truck.predicted_needs.map((need: PredictedNeed, needIndex: number) => (
                       <div key={needIndex} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 p-3 bg-secondary rounded-lg">
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -174,12 +217,12 @@ export default function PredictiveMaintenancePage() {
                                 ? "bg-red-500/10 text-red-500" 
                                 : "bg-yellow-500/10 text-yellow-500"
                             }`}>
-                              {need.priority.toUpperCase()}
+                              {(need.priority || "normal").toUpperCase()}
                             </span>
                           </div>
                           <p className="text-xs text-muted-foreground mb-2 break-words">{need.reason}</p>
                           <p className="text-xs text-muted-foreground">
-                            Estimated at: {need.estimated_mileage.toLocaleString()} miles
+                            Estimated at: {Number(need.estimated_mileage || 0).toLocaleString()} miles
                           </p>
                         </div>
                         <Button

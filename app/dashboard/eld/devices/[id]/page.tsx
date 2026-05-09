@@ -25,15 +25,77 @@ import {
   getDeviceLastSyncAt,
 } from "@/components/eld/eld-device-sync-status"
 
+type EldDeviceDetail = {
+  id: string
+  device_name?: string | null
+  device_serial_number?: string | null
+  manufacturer?: string | null
+  model?: string | null
+  provider?: string | null
+  firmware_version?: string | null
+  installation_date?: string | null
+  status?: string | null
+  api_key?: string | null
+  notes?: string | null
+  last_sync_at?: string | null
+  trucks?: {
+    id?: string | null
+    truck_number?: string | null
+    make?: string | null
+    model?: string | null
+  } | null
+}
+
+type EldLogRow = {
+  id: string
+  log_type?: string | null
+  log_date?: string | null
+  start_time?: string | null
+  end_time?: string | null
+  duration_minutes?: number | null
+  drivers?: { name?: string | null } | null
+}
+
+type EldEventRow = {
+  id: string
+  severity?: string | null
+  title?: string | null
+  description?: string | null
+  event_time?: string | null
+  resolved?: boolean | null
+  drivers?: { name?: string | null } | null
+}
+
+const asEldDeviceDetail = (value: unknown): EldDeviceDetail | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as EldDeviceDetail
+}
+
+const asEldLogRow = (value: unknown): EldLogRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as EldLogRow
+}
+
+const asEldEventRow = (value: unknown): EldEventRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as EldEventRow
+}
+
 export default function ELDDeviceDetailsPage() {
   const params = useParams()
   const router = useRouter()
   const aliveRef = useRef(true)
   const deviceId = params.id as string
 
-  const [device, setDevice] = useState<unknown>(null)
-  const [logs, setLogs] = useState<unknown[]>([])
-  const [events, setEvents] = useState<unknown[]>([])
+  const [device, setDevice] = useState<EldDeviceDetail | null>(null)
+  const [logs, setLogs] = useState<EldLogRow[]>([])
+  const [events, setEvents] = useState<EldEventRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSyncing, setIsSyncing] = useState(false)
   const [activeTab, setActiveTab] = useState<"overview" | "logs" | "events">("overview")
@@ -67,15 +129,15 @@ export default function ELDDeviceDetailsPage() {
       }
 
       if (deviceResult.data) {
-        setDevice(deviceResult.data)
+        setDevice(asEldDeviceDetail(deviceResult.data))
       }
 
       if (logsResult.data) {
-        setLogs(logsResult.data)
+        setLogs((logsResult.data as unknown[]).map(asEldLogRow).filter((log): log is EldLogRow => !!log))
       }
 
       if (eventsResult.data) {
-        setEvents(eventsResult.data)
+        setEvents((eventsResult.data as unknown[]).map(asEldEventRow).filter((event): event is EldEventRow => !!event))
       }
     } catch (error) {
       toast.error("Failed to load device data")

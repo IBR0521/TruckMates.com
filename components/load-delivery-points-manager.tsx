@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import { Plus, Trash2, ChevronDown, ChevronUp, MapPin, Package, Clock, FileText, ChevronRight } from "lucide-react"
 
-interface DeliveryPoint {
+export interface DeliveryPoint {
   id?: string
   delivery_number: number
   location_name: string

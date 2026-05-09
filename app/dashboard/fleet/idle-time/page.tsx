@@ -27,9 +27,23 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+type IdleTimeStats = NonNullable<Awaited<ReturnType<typeof getIdleTimeStats>>["data"]>
+
+type IdleSessionRow = IdleTimeSession & {
+  trucks?: { truck_number?: string | null } | null
+  drivers?: { name?: string | null } | null
+}
+
+const asIdleSessionRow = (value: unknown): IdleSessionRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as IdleSessionRow
+}
+
 export default function IdleTimeDashboardPage() {
-  const [sessions, setSessions] = useState<IdleTimeSession[]>([])
-  const [stats, setStats] = useState<unknown>(null)
+  const [sessions, setSessions] = useState<IdleSessionRow[]>([])
+  const [stats, setStats] = useState<IdleTimeStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [filters, setFilters] = useState({
     start_date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -60,7 +74,7 @@ export default function IdleTimeDashboardPage() {
       if (sessionsResult.error) {
         toast.error(sessionsResult.error)
       } else if (sessionsResult.data) {
-        setSessions(sessionsResult.data)
+        setSessions((sessionsResult.data as unknown[]).map(asIdleSessionRow).filter((s): s is IdleSessionRow => !!s))
       }
 
       if (statsResult.error) {
@@ -221,8 +235,8 @@ export default function IdleTimeDashboardPage() {
               ) : (
                 <div className="space-y-3">
                   {sessions.map((session) => {
-                    const truck = (session as unknown)?.trucks
-                    const driver = (session as unknown)?.drivers
+                    const truck = session.trucks
+                    const driver = session.drivers
                     return (
                       <Card key={session.id} className="border-border p-4">
                         <div className="flex items-start justify-between">

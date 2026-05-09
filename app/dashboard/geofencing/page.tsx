@@ -23,9 +23,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getPlanFeatureAccessStatus } from "@/app/actions/plan-feature-access"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
+type GeofenceRow = {
+  id: string
+  name?: string | null
+  description?: string | null
+  address?: string | null
+  city?: string | null
+  state?: string | null
+  zone_type?: string | null
+  is_active?: boolean | null
+  alert_on_entry?: boolean | null
+  alert_on_exit?: boolean | null
+  radius_meters?: number | null
+}
+
+const asGeofenceRow = (value: unknown): GeofenceRow | null => {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.id !== "string") return null
+  return obj as unknown as GeofenceRow
+}
+
 export default function GeofencingPage() {
-  const [geofences, setGeofences] = useState<unknown[]>([])
-  const [filteredGeofences, setFilteredGeofences] = useState<unknown[]>([])
+  const [geofences, setGeofences] = useState<GeofenceRow[]>([])
+  const [filteredGeofences, setFilteredGeofences] = useState<GeofenceRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [geofencingAllowed, setGeofencingAllowed] = useState(true)
   const [planName, setPlanName] = useState("starter")
@@ -81,8 +102,11 @@ export default function GeofencingPage() {
     if (result.error) {
       toast.error(result.error)
     } else {
-      setGeofences(result.data || [])
-      setFilteredGeofences(result.data || [])
+      const parsed = ((result.data || []) as unknown[])
+        .map(asGeofenceRow)
+        .filter((geofence): geofence is GeofenceRow => !!geofence)
+      setGeofences(parsed)
+      setFilteredGeofences(parsed)
     }
     setIsLoading(false)
   }
