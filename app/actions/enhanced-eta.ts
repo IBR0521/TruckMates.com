@@ -29,6 +29,23 @@ export interface EnhancedETA {
   uses_traffic_data: boolean
 }
 
+type DirectionsPayload = {
+  polyline?: string
+  duration_seconds: number
+  distance_meters?: number
+}
+
+function asDirectionsPayload(value: unknown): DirectionsPayload | null {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.duration_seconds !== "number") return null
+  return {
+    polyline: typeof obj.polyline === "string" ? obj.polyline : undefined,
+    duration_seconds: obj.duration_seconds,
+    distance_meters: typeof obj.distance_meters === "number" ? obj.distance_meters : undefined,
+  }
+}
+
 /**
  * Update traffic-aware route from Google Maps API
  * Should be called periodically (every 5-10 minutes) for active routes
@@ -77,7 +94,10 @@ export async function updateTrafficAwareRoute(routeId: string) {
       return { error: directionsResult.error || "Failed to get traffic data", data: null }
     }
 
-    const routeData = directionsResult.data
+    const routeData = asDirectionsPayload(directionsResult.data)
+    if (!routeData) {
+      return { error: "Invalid directions payload returned", data: null }
+    }
 
     // Decode polyline to get waypoints
     const decodedPoints = decodePolyline(routeData.polyline || "")
