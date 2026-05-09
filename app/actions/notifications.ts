@@ -513,7 +513,7 @@ function getEmailContent(
             <div class="content">
               <p>Hello ${escapeHtml(userName)},</p>
               <p>A payment reminder for <strong>${escapeHtml(data.driverName || "driver")}</strong>.</p>
-              ${data.amount ? `<p><strong>Amount:</strong> $${escapeHtml(parseFloat(data.amount).toFixed(2))}</p>` : ""}
+              ${data.amount ? `<p><strong>Amount:</strong> $${escapeHtml(parseFloat(String(data.amount)).toFixed(2))}</p>` : ""}
               ${data.period ? `<p><strong>Period:</strong> ${escapeHtml(data.period)}</p>` : ""}
               <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://your-app.vercel.app"}/dashboard/accounting/settlements" class="button">View Settlement</a>
             </div>

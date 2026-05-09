@@ -1522,12 +1522,15 @@ export async function updateLoad(
   const shouldNotifyLoadUpdate =
     !!updateData.status || !!updateData.origin || !!updateData.destination
   if (data && shouldNotifyLoadUpdate) {
+    const status = typeof updateData.status === "string" ? updateData.status : undefined
+    const origin = typeof updateData.origin === "string" ? updateData.origin : undefined
+    const destination = typeof updateData.destination === "string" ? updateData.destination : undefined
     const notificationPayload: LoadUpdateNotificationPayload = {
       driver_id: data.driver_id,
       shipment_number: data.shipment_number,
-      status: updateData.status ?? undefined,
-      origin: updateData.origin ?? undefined,
-      destination: updateData.destination ?? undefined,
+      status,
+      origin,
+      destination,
     }
     // Don't await - send notifications in background
     sendNotificationsForLoadUpdate(notificationPayload).catch((error) => {
@@ -1911,12 +1914,27 @@ export async function duplicateLoad(id: string) {
   if (deliveryPoints && deliveryPoints.length > 0) {
     const { createLoadDeliveryPoint } = await import("./load-delivery-points")
     for (const point of deliveryPoints) {
-      const pointData: Record<string, unknown> = { ...point }
-      delete pointData.id
-      delete pointData.load_id
-      delete pointData.created_at
-      delete pointData.updated_at
-      await createLoadDeliveryPoint(newLoad.id, pointData)
+      const pointData = point as Record<string, unknown>
+      const lat = typeof pointData.lat === "number" ? pointData.lat : undefined
+      const lng = typeof pointData.lng === "number" ? pointData.lng : undefined
+      await createLoadDeliveryPoint(newLoad.id, {
+        delivery_number: typeof pointData.sequence === "number" ? pointData.sequence : 1,
+        location_name:
+          typeof pointData.company_name === "string"
+            ? pointData.company_name
+            : typeof pointData.contact_name === "string"
+              ? pointData.contact_name
+              : "Delivery Stop",
+        address: typeof pointData.address_line1 === "string" ? pointData.address_line1 : "",
+        city: typeof pointData.city === "string" ? pointData.city : undefined,
+        state: typeof pointData.state === "string" ? pointData.state : undefined,
+        zip: typeof pointData.zip_code === "string" ? pointData.zip_code : undefined,
+        contact_name: typeof pointData.contact_name === "string" ? pointData.contact_name : undefined,
+        phone: typeof pointData.phone === "string" ? pointData.phone : undefined,
+        stop_type: typeof pointData.stop_type === "string" ? pointData.stop_type : undefined,
+        notes: typeof pointData.instructions === "string" ? pointData.instructions : undefined,
+        coordinates: lat !== undefined && lng !== undefined ? { lat, lng } : undefined,
+      })
     }
   }
 

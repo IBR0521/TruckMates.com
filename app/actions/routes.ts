@@ -59,11 +59,15 @@ async function sendNotificationsForRouteUpdate(routeData: RouteNotificationPaylo
       await Promise.all(
         relevantUsers.map(async (relevantUser: { id: string; role: string }) => {
           try {
+            const routeName = typeof routeData.name === "string" ? routeData.name : undefined
+            const status = typeof routeData.status === "string" ? routeData.status : undefined
+            const origin = typeof routeData.origin === "string" ? routeData.origin : undefined
+            const destination = typeof routeData.destination === "string" ? routeData.destination : undefined
             await sendNotification(relevantUser.id, "route_update", {
-              routeName: routeData.name,
-              status: routeData.status,
-              origin: routeData.origin,
-              destination: routeData.destination,
+              routeName,
+              status,
+              origin,
+              destination,
             })
           } catch (error) {
             Sentry.captureException(error)
@@ -666,12 +670,27 @@ export async function duplicateRoute(id: string) {
   
   if (stopsResult.data && stopsResult.data.length > 0) {
     for (const stop of stopsResult.data) {
-      const stopData: Record<string, unknown> = { ...stop }
-      delete stopData.id
-      delete stopData.route_id
-      delete stopData.created_at
-      delete stopData.updated_at
-      await createRouteStop(newRoute.id, stopData)
+      const stopData = stop as Record<string, unknown>
+      const lat = typeof stopData.lat === "number" ? stopData.lat : undefined
+      const lng = typeof stopData.lng === "number" ? stopData.lng : undefined
+      await createRouteStop(newRoute.id, {
+        stop_number: typeof stopData.sequence === "number" ? stopData.sequence : 1,
+        location_name:
+          typeof stopData.company_name === "string"
+            ? stopData.company_name
+            : typeof stopData.contact_name === "string"
+              ? stopData.contact_name
+              : "Route Stop",
+        address: typeof stopData.address_line1 === "string" ? stopData.address_line1 : "",
+        city: typeof stopData.city === "string" ? stopData.city : undefined,
+        state: typeof stopData.state === "string" ? stopData.state : undefined,
+        zip: typeof stopData.zip_code === "string" ? stopData.zip_code : undefined,
+        contact_name: typeof stopData.contact_name === "string" ? stopData.contact_name : undefined,
+        phone: typeof stopData.phone === "string" ? stopData.phone : undefined,
+        stop_type: typeof stopData.stop_type === "string" ? stopData.stop_type : undefined,
+        notes: typeof stopData.instructions === "string" ? stopData.instructions : undefined,
+        coordinates: lat !== undefined && lng !== undefined ? { lat, lng } : undefined,
+      })
     }
   }
 

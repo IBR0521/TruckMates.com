@@ -443,11 +443,13 @@ async function autoCreateLoadsForMatchingCarriers(marketplaceLoadId: string) {
     if (sub.max_rate && marketplaceLoad.rate > sub.max_rate) return false
 
     // Check equipment type
+    const equipmentTypes = Array.isArray(sub.equipment_types)
+      ? sub.equipment_types.filter((item): item is string => typeof item === "string")
+      : []
     if (
-      sub.equipment_types &&
-      sub.equipment_types.length > 0 &&
+      equipmentTypes.length > 0 &&
       marketplaceLoad.equipment_type &&
-      !sub.equipment_types.includes(marketplaceLoad.equipment_type)
+      !equipmentTypes.includes(marketplaceLoad.equipment_type)
     ) {
       return false
     }

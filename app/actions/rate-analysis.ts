@@ -29,6 +29,22 @@ export interface MarketRateSuggestion {
   source: 'dat_iq' | 'truckstop' | 'internal' | 'estimated'
 }
 
+type GeocodePayload = { lat: number; lng: number }
+type DirectionsPayload = { distance_meters?: number }
+
+function asGeocodePayload(value: unknown): GeocodePayload | null {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.lat !== "number" || typeof obj.lng !== "number") return null
+  return { lat: obj.lat, lng: obj.lng }
+}
+
+function asDirectionsPayload(value: unknown): DirectionsPayload | null {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  return { distance_meters: typeof obj.distance_meters === "number" ? obj.distance_meters : undefined }
+}
+
 /**
  * Get market rate suggestion for a lane
  * Tries DAT iQ/Truckstop first, falls back to internal database
@@ -135,15 +151,17 @@ async function getDATiQRate(
     // Geocode addresses to get coordinates
     const originGeo = await geocodeAddress(origin)
     const destGeo = await geocodeAddress(destination)
+    const originCoords = asGeocodePayload(originGeo.data)
+    const destinationCoords = asGeocodePayload(destGeo.data)
 
-    if (originGeo.error || !originGeo.data || destGeo.error || !destGeo.data) {
+    if (originGeo.error || !originCoords || destGeo.error || !destinationCoords) {
       return { error: "Failed to geocode addresses", data: null }
     }
 
     // DAT iQ API endpoint (example - adjust based on actual API)
     const url = `https://api.dat.com/v1/rates/spot?` +
-      `origin_lat=${originGeo.data.lat}&origin_lng=${originGeo.data.lng}&` +
-      `dest_lat=${destGeo.data.lat}&dest_lng=${destGeo.data.lng}&` +
+      `origin_lat=${originCoords.lat}&origin_lng=${originCoords.lng}&` +
+      `dest_lat=${destinationCoords.lat}&dest_lng=${destinationCoords.lng}&` +
       `equipment_type=${equipmentType}`
 
     const response = await fetch(url, {
@@ -355,7 +373,8 @@ async function getEstimatedRate(
       return { error: "Failed to calculate distance", data: null }
     }
 
-    const distanceMiles = (directions.data.distance_meters || 0) / 1609.34
+    const directionsData = asDirectionsPayload(directions.data)
+    const distanceMiles = (directionsData?.distance_meters || 0) / 1609.34
 
     // Estimate rate: $1.50-$2.50 per mile (varies by equipment)
     const ratePerMile = equipmentType === 'flatbed' ? 2.0 : 

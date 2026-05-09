@@ -61,6 +61,30 @@ export type TripPlanningEstimate = {
   warnings: string[]
 }
 
+type GeocodePayload = { lat: number; lng: number; formatted_address?: string }
+type RouteDirectionsPayload = { polyline?: string; distance_meters?: number; duration_seconds?: number }
+
+function asGeocodePayload(value: unknown): GeocodePayload | null {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.lat !== "number" || typeof obj.lng !== "number") return null
+  return {
+    lat: obj.lat,
+    lng: obj.lng,
+    formatted_address: typeof obj.formatted_address === "string" ? obj.formatted_address : undefined,
+  }
+}
+
+function asRouteDirectionsPayload(value: unknown): RouteDirectionsPayload | null {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  return {
+    polyline: typeof obj.polyline === "string" ? obj.polyline : undefined,
+    distance_meters: typeof obj.distance_meters === "number" ? obj.distance_meters : undefined,
+    duration_seconds: typeof obj.duration_seconds === "number" ? obj.duration_seconds : undefined,
+  }
+}
+
 function milesFromMeters(m: number) {
   return Math.round((m / 1609.34) * 10) / 10
 }
@@ -94,11 +118,17 @@ export async function getTripPlanningEstimate(input: {
 
   const o = await geocodeAddress(input.origin.trim())
   const d = await geocodeAddress(input.destination.trim())
-  if (o.error || !o.data) return { data: null, error: o.error || "Origin geocoding failed" }
-  if (d.error || !d.data) return { data: null, error: d.error || "Destination geocoding failed" }
+  const originGeo = asGeocodePayload(o.data)
+  const destinationGeo = asGeocodePayload(d.data)
+  if (o.error || !originGeo) return { data: null, error: o.error || "Origin geocoding failed" }
+  if (d.error || !destinationGeo) return { data: null, error: d.error || "Destination geocoding failed" }
 
-  const origin = { lat: o.data.lat, lng: o.data.lng, label: o.data.formatted_address }
-  const destination = { lat: d.data.lat, lng: d.data.lng, label: d.data.formatted_address }
+  const origin = { lat: originGeo.lat, lng: originGeo.lng, label: originGeo.formatted_address || input.origin }
+  const destination = {
+    lat: destinationGeo.lat,
+    lng: destinationGeo.lng,
+    label: destinationGeo.formatted_address || input.destination,
+  }
 
   const hereKey = process.env.HERE_API_KEY || ""
   const googleKey = process.env.GOOGLE_MAPS_API_KEY || ""
@@ -141,12 +171,13 @@ export async function getTripPlanningEstimate(input: {
       `${origin.lat},${origin.lng}`,
       `${destination.lat},${destination.lng}`
     )
-    if (g.error || !g.data?.polyline) {
+    const routeData = asRouteDirectionsPayload(g.data)
+    if (g.error || !routeData?.polyline) {
       return { data: null, error: g.error || "Could not build route polyline" }
     }
-    path = decodeGoogleEncodedPolyline(g.data.polyline)
-    distanceMeters = g.data.distance_meters || 0
-    durationSeconds = g.data.duration_seconds || 0
+    path = decodeGoogleEncodedPolyline(routeData.polyline)
+    distanceMeters = routeData.distance_meters || 0
+    durationSeconds = routeData.duration_seconds || 0
     routing_provider = "google_fallback"
   }
 

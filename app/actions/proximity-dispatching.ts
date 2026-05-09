@@ -35,6 +35,15 @@ export interface ProximityDispatchingOptions {
   limit?: number // Number of results to return (default: 3)
 }
 
+type GeocodePayload = { lat: number; lng: number }
+
+function asGeocodePayload(value: unknown): GeocodePayload | null {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  if (typeof obj.lat !== "number" || typeof obj.lng !== "number") return null
+  return { lat: obj.lat, lng: obj.lng }
+}
+
 /**
  * Find nearby drivers for a load using PostGIS proximity + HOS filtering
  */
@@ -85,9 +94,10 @@ export async function findNearbyDriversForLoad(
 
       if (address) {
         const geocodeResult = await geocodeAddress(address)
-        if (geocodeResult.data) {
-          pickupLat = geocodeResult.data.lat
-          pickupLng = geocodeResult.data.lng
+        const geo = asGeocodePayload(geocodeResult.data)
+        if (geo) {
+          pickupLat = geo.lat
+          pickupLng = geo.lng
         }
       }
     }
