@@ -246,7 +246,8 @@ export async function generateDVIRAuditPDF(filters: { start_date?: string; end_d
         <div style="text-align: center; padding: 40px;">
           <p>No DVIRs found for the selected criteria.</p>
         </div>
-      ` : dvirs.map((dvir: Record<string, unknown>) => {
+      ` : dvirs.map((rawDvir) => {
+        const dvir = (rawDvir && typeof rawDvir === "object" ? rawDvir : {}) as Record<string, unknown>
         const defectRows = defectsAsRows(dvir)
         const shortId = String(dvir.id ?? "").slice(0, 8).toUpperCase() || "UNKNOWN"
         return `
