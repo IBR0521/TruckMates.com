@@ -270,9 +270,9 @@ export async function getFuelAnalytics(filters?: {
         if (mpgEntriesForMonth.length > 0) {
           // Estimate: average MPG * estimated gallons per fill
           const avgMPG = mpgEntriesForMonth.length > 0 
-            ? mpgEntriesForMonth.reduce((sum: number, mpg) => sum + mpg.mpg, 0) / mpgEntriesForMonth.length
+            ? mpgEntriesForMonth.reduce((sum: number, mpg) => sum + (Number(mpg.mpg) || 0), 0) / mpgEntriesForMonth.length
             : 0
-          const estimatedGallons = parseFloat(expense.amount) / 3.50 // Rough estimate
+          const estimatedGallons = parseFloat(String(expense.amount)) / 3.50 // Rough estimate
           monthlyTruckMiles[monthKey] = (monthlyTruckMiles[monthKey] || 0) + (avgMPG * estimatedGallons)
         } else {
           // Fallback: estimate 500 miles per fuel fill
@@ -482,7 +482,7 @@ export async function getFuelEfficiencyReport(filters?: {
       }
 
       truckEfficiency[truckId].expenses.push(expense)
-      truckEfficiency[truckId].total_cost += parseFloat(expense.amount) || 0
+      truckEfficiency[truckId].total_cost += parseFloat(String(expense.amount)) || 0
 
       if (expense.gallons) {
         truckEfficiency[truckId].total_gallons += parseFloat(expense.gallons)
@@ -506,7 +506,7 @@ export async function getFuelEfficiencyReport(filters?: {
       }
 
       driverEfficiency[driverId].expenses.push(expense)
-      driverEfficiency[driverId].total_cost += parseFloat(expense.amount) || 0
+      driverEfficiency[driverId].total_cost += parseFloat(String(expense.amount)) || 0
 
       if (expense.gallons) {
         driverEfficiency[driverId].total_gallons += parseFloat(expense.gallons)
