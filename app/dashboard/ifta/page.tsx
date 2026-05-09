@@ -30,7 +30,7 @@ export default function IFTAPage() {
   const tabParam = (searchParams.get("tab") || "reports").toLowerCase()
   const activeTab = ["reports", "trip-planning", "trip-sheet"].includes(tabParam) ? tabParam : "reports"
 
-  const [iftaReports, setIftaReports] = useState<any[]>([])
+  const [iftaReports, setIftaReports] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 

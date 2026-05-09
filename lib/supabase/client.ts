@@ -34,7 +34,7 @@ export function createClient() {
       'https://placeholder.supabase.co',
       'placeholder-key',
       {}
-    ) as any
+    ) as ReturnType<typeof createBrowserClient>
   }
 
   // Validate URL format
@@ -46,7 +46,7 @@ export function createClient() {
       'https://placeholder.supabase.co',
       'placeholder-key',
       {}
-    ) as any
+    ) as ReturnType<typeof createBrowserClient>
   }
 
   // Create client with timeout settings for browser

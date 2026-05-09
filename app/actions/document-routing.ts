@@ -1,19 +1,11 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkEditPermission, checkViewPermission } from "@/lib/server-permissions"
-import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /**
  * Link a document to an existing record
  */
@@ -129,7 +121,7 @@ export async function linkDocumentToRecord(
     }
 
     // Update document with appropriate foreign key
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
 
     switch (recordType) {
       case "driver":
@@ -217,7 +209,7 @@ export async function linkDocumentToRecord(
  */
 export async function getRecordsForRouting(
   recordType: "driver" | "vehicle" | "trailer" | "load" | "route" | "invoice" | "expense" | "maintenance"
-): Promise<{ data: Array<{ id: string; name: string; [key: string]: any }> | null; error: string | null }> {
+): Promise<{ data: Array<{ id: string; name: string; [key: string]: unknown }> | null; error: string | null }> {
   // FIXED: Add RBAC check
   const permissionCheck = await checkViewPermission("documents")
   if (!permissionCheck.allowed) {
@@ -231,7 +223,7 @@ export async function getRecordsForRouting(
       return { error: ctx.error || "Not authenticated", data: null }
     }
 
-    let query: any = null
+    let query: ReturnType<typeof supabase.from> | null = null
     let selectFields = "id"
 
     switch (recordType) {
@@ -309,7 +301,7 @@ export async function getRecordsForRouting(
     }
 
     // Format data for display
-    const formattedData = data?.map((record: any) => {
+    const formattedData = data?.map((record: Record<string, unknown>) => {
       let name = ""
       switch (recordType) {
         case "driver":
@@ -349,9 +341,5 @@ export async function getRecordsForRouting(
     return { error: errorMessage(error, "Failed to fetch records"), data: null }
   }
 }
-
-
-
-
 
 

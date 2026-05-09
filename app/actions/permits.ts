@@ -1,18 +1,13 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { checkCreatePermission, checkViewPermission } from "@/lib/server-permissions"
 import { validateFileMagicBytes } from "@/lib/file-signature"
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
 type PermitLimitRule = {
   maxWeight: number
   maxWidthIn: number

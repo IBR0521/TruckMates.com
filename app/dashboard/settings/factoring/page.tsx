@@ -12,6 +12,20 @@ import { toast } from "sonner"
 import { getCompanySettings, updateCompanySettings } from "@/app/actions/number-formats"
 import { Save, Landmark } from "lucide-react"
 
+type FactoringSettings = {
+  factoring_company_name?: string | null
+  factoring_submission_email?: string | null
+  factoring_include_bol?: boolean | null
+  factoring_include_rate_conf?: boolean | null
+  factoring_include_pod?: boolean | null
+  factoring_email_template?: string | null
+  factoring_auto_submit?: boolean | null
+  triumphpay_enabled?: boolean | null
+  triumphpay_api_base_url?: string | null
+  triumphpay_api_key?: string | null
+  triumphpay_api_secret?: string | null
+}
+
 export default function FactoringSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -43,18 +57,19 @@ export default function FactoringSettingsPage() {
       }
       const s = r.data
       if (s) {
+        const settings = s as FactoringSettings
         setForm({
-          factoring_company_name: (s as any).factoring_company_name || "",
-          factoring_submission_email: (s as any).factoring_submission_email || "",
-          factoring_include_bol: (s as any).factoring_include_bol !== false,
-          factoring_include_rate_conf: (s as any).factoring_include_rate_conf !== false,
-          factoring_include_pod: (s as any).factoring_include_pod !== false,
-          factoring_email_template: (s as any).factoring_email_template || "",
-          factoring_auto_submit: Boolean((s as any).factoring_auto_submit),
-          triumphpay_enabled: Boolean((s as any).triumphpay_enabled),
-          triumphpay_api_base_url: (s as any).triumphpay_api_base_url || "",
-          triumphpay_api_key: (s as any).triumphpay_api_key || "",
-          triumphpay_api_secret: (s as any).triumphpay_api_secret || "",
+          factoring_company_name: settings.factoring_company_name || "",
+          factoring_submission_email: settings.factoring_submission_email || "",
+          factoring_include_bol: settings.factoring_include_bol !== false,
+          factoring_include_rate_conf: settings.factoring_include_rate_conf !== false,
+          factoring_include_pod: settings.factoring_include_pod !== false,
+          factoring_email_template: settings.factoring_email_template || "",
+          factoring_auto_submit: Boolean(settings.factoring_auto_submit),
+          triumphpay_enabled: Boolean(settings.triumphpay_enabled),
+          triumphpay_api_base_url: settings.triumphpay_api_base_url || "",
+          triumphpay_api_key: settings.triumphpay_api_key || "",
+          triumphpay_api_secret: settings.triumphpay_api_secret || "",
         })
       }
     } finally {

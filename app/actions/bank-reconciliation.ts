@@ -1,19 +1,14 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { sanitizeString } from "@/lib/validation"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkCreatePermission, checkEditPermission, checkViewPermission } from "@/lib/server-permissions"
-
 type MatchEntityType = "expense" | "vendor_invoice_payment"
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 function parseCsv(text: string): Array<Record<string, string>> {
   const lines = text

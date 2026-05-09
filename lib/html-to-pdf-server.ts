@@ -38,7 +38,15 @@ function resolveSystemChromeExecutable(): string | undefined {
  */
 export async function htmlToPdfBuffer(html: string): Promise<{ pdf: Buffer | null; error: string | null }> {
   try {
-    type PuppeteerModule = { launch: (opts: Record<string, unknown>) => Promise<{ newPage: () => Promise<any>; close: () => Promise<void> }> }
+    type PuppeteerPage = {
+      setContent: (html: string, options: { waitUntil: string }) => Promise<void>
+      pdf: (options: Record<string, unknown>) => Promise<Uint8Array>
+    }
+    type PuppeteerBrowser = {
+      newPage: () => Promise<PuppeteerPage>
+      close: () => Promise<void>
+    }
+    type PuppeteerModule = { launch: (opts: Record<string, unknown>) => Promise<PuppeteerBrowser> }
     let puppeteer: PuppeteerModule | null = null
     let executablePath: string | undefined
     let chromiumArgs: string[] | undefined

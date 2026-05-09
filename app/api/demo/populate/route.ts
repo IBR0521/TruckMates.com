@@ -1,8 +1,13 @@
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { NextRequest, NextResponse } from "next/server"
+import { isDevSurfaceBlocked } from "@/lib/security/dev-only"
 
 export async function POST(request: NextRequest) {
+  if (isDevSurfaceBlocked()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
   try {
     const supabase = await createClient()
     

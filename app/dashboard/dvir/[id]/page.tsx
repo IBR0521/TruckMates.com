@@ -34,12 +34,24 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
+type DvirRecord = NonNullable<Awaited<ReturnType<typeof getDVIR>>["data"]>
+type DvirListItem = NonNullable<NonNullable<Awaited<ReturnType<typeof getDVIRs>>["data"]>[number]>
+type WorkOrderRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getDVIRWorkOrders>>["data"]>[number]>
+type DvirDefect = {
+  component?: string | null
+  severity?: string | null
+  description?: string | null
+  corrected?: boolean | null
+  corrected_by?: string | null
+  corrected_at?: string | null
+}
+
 export default function DVIRDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
   const aliveRef = useRef(true)
-  const [dvir, setDvir] = useState<any>(null)
-  const [workOrders, setWorkOrders] = useState<any[]>([])
+  const [dvir, setDvir] = useState<DvirRecord | null>(null)
+  const [workOrders, setWorkOrders] = useState<WorkOrderRecord[]>([])
   const [adjacentReports, setAdjacentReports] = useState<{ previous: string | null; next: string | null }>({
     previous: null,
     next: null,
@@ -73,7 +85,7 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
         }
         const list = await getDVIRs({ limit: 200, offset: 0 })
         if (!list.error && list.data?.length) {
-          const index = list.data.findIndex((item: any) => item.id === id)
+          const index = list.data.findIndex((item: DvirListItem) => item.id === id)
           if (index !== -1) {
             setAdjacentReports({
               previous: list.data[index + 1]?.id || null,
@@ -231,10 +243,10 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const defects = Array.isArray(dvir.defects) ? dvir.defects : []
+  const defects = (Array.isArray(dvir.defects) ? dvir.defects : []) as DvirDefect[]
   const showCreateWorkOrderCta =
     !!dvir.defects_found && dvir.status !== "defects_corrected"
-  const correctedDefects = defects.filter((defect: any) => defect.corrected).length
+  const correctedDefects = defects.filter((defect: DvirDefect) => defect.corrected).length
   const outstandingDefects = Math.max(0, defects.length - correctedDefects)
 
   return (
@@ -347,7 +359,7 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
               </p>
             ) : (
               <ul className="space-y-2">
-                {workOrders.map((wo: any) => (
+                {workOrders.map((wo: WorkOrderRecord) => (
                   <li key={wo.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/50 bg-secondary/20 px-3 py-2">
                     <span className="font-medium text-foreground">
                       {wo.work_order_number || wo.id}
@@ -436,7 +448,7 @@ export default function DVIRDetailPage({ params }: { params: Promise<{ id: strin
               <div className="rounded-md border border-border/60 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
                 {defects.length} defects found · {correctedDefects} corrected · {outstandingDefects} outstanding
               </div>
-              {defects.map((defect: any, index: number) => (
+              {defects.map((defect: DvirDefect, index: number) => (
                 <Card
                   key={index}
                   className={`p-4 border ${

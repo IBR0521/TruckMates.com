@@ -1,21 +1,14 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
 async function generateSixDigitInvitationCode(adminSupabase: ReturnType<typeof import("@/lib/supabase/admin").createAdminClient>) {
@@ -70,7 +63,7 @@ export async function getCompanyUsers() {
     }
 
     // Map to include status (active by default)
-    const usersWithStatus = users.map((u: { id: string; email: string; full_name: string | null; phone: string | null; role: string; created_at: string; [key: string]: any }) => ({
+    const usersWithStatus = users.map((u: { id: string; email: string; full_name: string | null; phone: string | null; role: string; created_at: string }) => ({
       ...u,
       status: "Active", // You can add a status field to users table if needed
     }))
@@ -867,11 +860,5 @@ export async function cancelInvitation(invitationId: string) {
   revalidatePath("/dashboard/settings/users")
   return { success: true, error: null }
 }
-
-
-
-
-
-
 
 

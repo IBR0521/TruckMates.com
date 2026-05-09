@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     const cookie = request.cookies.get("qb_oauth_state")?.value
     if (!cookie) throw new Error("missing_state_cookie")
 
-    let parsed: any = null
+    let parsed: { state?: string; companyId?: string } | null = null
     try {
       parsed = JSON.parse(cookie)
     } catch {

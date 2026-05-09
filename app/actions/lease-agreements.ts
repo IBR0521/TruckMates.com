@@ -1,16 +1,10 @@
 "use server"
 
-import * as Sentry from "@sentry/nextjs"
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { sanitizeError } from "@/lib/error-message"
 import { checkCreatePermission, checkViewPermission } from "@/lib/server-permissions"
 import { revalidatePath } from "next/cache"
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 export async function createLeaseAgreement(input: {
   driver_id: string

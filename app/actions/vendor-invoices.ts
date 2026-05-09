@@ -1,18 +1,13 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { sanitizeString } from "@/lib/validation"
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
 export type VendorInvoiceStatus = "draft" | "approved" | "paid" | "overdue"
 type APAgingBucketKey = "0-30" | "31-60" | "61-90" | "90+"
 

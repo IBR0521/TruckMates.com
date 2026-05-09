@@ -11,7 +11,7 @@ import { toast } from "sonner"
 import { getBOLTemplates, createBOLTemplate, updateBOLTemplate, deleteBOLTemplate } from "@/app/actions/bol"
 
 export default function BOLTemplatesPage() {
-  const [templates, setTemplates] = useState<any[]>([])
+  const [templates, setTemplates] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [newName, setNewName] = useState("")
   const [newDesc, setNewDesc] = useState("")
@@ -48,7 +48,7 @@ export default function BOLTemplatesPage() {
     await loadTemplates()
   }
 
-  const saveTemplate = async (tpl: any) => {
+  const saveTemplate = async (tpl: unknown) => {
     const result = await updateBOLTemplate(tpl.id, {
       name: tpl.name,
       description: tpl.description || undefined,

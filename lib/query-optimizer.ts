@@ -41,7 +41,7 @@ export async function getCachedUserCompany(userId: string): Promise<{ company_id
  */
 export async function batchCountQueries(
   companyId: string,
-  queries: Array<{ table: string; filters?: Record<string, any> }>
+  queries: Array<{ table: string; filters?: Record<string, unknown> }>
 ): Promise<Record<string, number>> {
   const supabase = await createClient()
   const results: Record<string, number> = {}
@@ -95,10 +95,10 @@ export interface PaginationOptions {
   offset?: number
 }
 
-export function applyPagination<T>(
-  query: any,
+export function applyPagination<TQuery extends { range: (from: number, to: number) => TQuery }>(
+  query: TQuery,
   options: PaginationOptions = {}
-): { query: any; pagination: { page: number; limit: number; offset: number } } {
+): { query: TQuery; pagination: { page: number; limit: number; offset: number } } {
   const page = options.page || 1
   const limit = options.limit || 50
   const offset = options.offset !== undefined ? options.offset : (page - 1) * limit

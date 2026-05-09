@@ -102,8 +102,10 @@ export async function getVehiclesInViewport(
     }
 
     // Get latest location per truck
-    const latestLocations: Record<string, any> = {}
-    locations?.forEach((loc: any) => {
+    type LocationRow = { truck_id: string | null; timestamp: string }
+    const latestLocations: Record<string, LocationRow> = {}
+    locations?.forEach((loc: LocationRow) => {
+      if (!loc.truck_id) return
       if (!latestLocations[loc.truck_id] || 
           new Date(loc.timestamp) > new Date(latestLocations[loc.truck_id].timestamp)) {
         latestLocations[loc.truck_id] = loc

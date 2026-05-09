@@ -21,8 +21,8 @@ import { useEffect } from "react"
 export default function AddGeofencePage() {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [trucks, setTrucks] = useState<any[]>([])
-  const [routes, setRoutes] = useState<any[]>([])
+  const [trucks, setTrucks] = useState<unknown[]>([])
+  const [routes, setRoutes] = useState<unknown[]>([])
   const [formData, setFormData] = useState({
     name: "",
     description: "",

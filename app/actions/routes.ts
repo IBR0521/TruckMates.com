@@ -1,7 +1,8 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -9,20 +10,28 @@ import { validateRequiredString, sanitizeString } from "@/lib/validation"
 import { sendNotification } from "./notifications"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
 const ROUTE_DETAIL_SELECT =
   "id, company_id, name, origin, destination, distance, estimated_time, priority, status, driver_id, truck_id, waypoints, estimated_arrival, depot_name, depot_address, pre_route_time_minutes, post_route_time_minutes, route_start_time, route_departure_time, route_complete_time, route_type, scenario, notes, special_instructions, estimated_fuel_cost, estimated_toll_cost, total_estimated_cost, origin_coordinates, destination_coordinates, traffic_distance_meters, traffic_duration_minutes, created_at, updated_at"
 
 const ROUTE_LIST_SELECT =
   "id, name, origin, destination, status, driver_id, truck_id, priority, created_at, updated_at, distance, estimated_time, estimated_fuel_cost, estimated_toll_cost, total_estimated_cost, origin_coordinates, destination_coordinates, traffic_distance_meters, traffic_duration_minutes"
 
+type RouteNotificationPayload = {
+  name?: string | null
+  status?: string | null
+  origin?: string | null
+  destination?: string | null
+  driver_id?: string | null
+}
+
+type RouteChange = {
+  field: string
+  old_value: unknown
+  new_value: unknown
+}
+
 // Helper function to send notifications in background (non-blocking)
-async function sendNotificationsForRouteUpdate(routeData: any) {
+async function sendNotificationsForRouteUpdate(routeData: RouteNotificationPayload) {
   try {
     const supabase = await createClient()
     const ctx = await getCachedAuthContext()
@@ -281,7 +290,7 @@ export async function createRoute(formData: {
   }
 
   // Ensure required fields are present and handle undefined values
-  const routeData: any = {
+  const routeData: Record<string, unknown> = {
     company_id: ctx.companyId,
     name: sanitizeString(formData.name, 200),
     origin: sanitizeString(formData.origin, 200),
@@ -344,7 +353,7 @@ export async function updateRoute(
     truck_id?: string
     status?: string
     estimated_arrival?: string | null
-    waypoints?: any
+    waypoints?: unknown
     depot_name?: string
     depot_address?: string
     pre_route_time_minutes?: number
@@ -359,7 +368,7 @@ export async function updateRoute(
     estimated_fuel_cost?: number
     estimated_toll_cost?: number
     total_estimated_cost?: number
-    [key: string]: any
+    [key: string]: unknown
   }
 ) {
   // Check permission
@@ -387,8 +396,8 @@ export async function updateRoute(
   }
 
   // Build update data and track changes
-  const updateData: any = {}
-  const changes: Array<{ field: string; old_value: any; new_value: any }> = []
+  const updateData: Record<string, unknown> = {}
+  const changes: RouteChange[] = []
   
   const fieldsToCheck = [
     "name", "origin", "destination", "distance", "estimated_time", "priority",
@@ -539,7 +548,9 @@ export async function bulkDeleteRoutes(ids: string[]) {
     .eq("company_id", ctx.companyId)
 
   if (activeLoads && activeLoads.length > 0) {
-    const blockedRouteIds = [...new Set(activeLoads.map((load: { route_id: string | null; [key: string]: any }) => load.route_id))]
+    const blockedRouteIds = [
+      ...new Set((activeLoads as Array<{ route_id: string | null }>).map((load) => load.route_id)),
+    ]
     const blockedRoutes = await supabase
       .from("routes")
       .select("id, name")
@@ -547,7 +558,7 @@ export async function bulkDeleteRoutes(ids: string[]) {
       .eq("company_id", ctx.companyId)
 
     if (blockedRoutes.data && blockedRoutes.data.length > 0) {
-      const routeNames = blockedRoutes.data.map((r: { name: string; [key: string]: any }) => r.name).join(", ")
+      const routeNames = blockedRoutes.data.map((r: { name: string }) => r.name).join(", ")
       return { 
         error: `Cannot delete routes with active loads: ${routeNames}. Please complete or cancel their loads first.`,
         data: null 
@@ -628,7 +639,7 @@ export async function duplicateRoute(id: string) {
   }
 
   // Create duplicate with new name and reset status
-  const duplicateData: any = { ...originalRoute }
+  const duplicateData: Record<string, unknown> = { ...originalRoute }
   delete duplicateData.id
   delete duplicateData.created_at
   delete duplicateData.updated_at
@@ -648,14 +659,14 @@ export async function duplicateRoute(id: string) {
     return { error: createError?.message || "Failed to create duplicated route", data: null }
   }
 
-  // Duplicate stops if any
+  // Duplicate stops when present
   const { getRouteStops } = await import("./route-stops")
   const { createRouteStop } = await import("./route-stops")
   const stopsResult = await getRouteStops(id)
   
   if (stopsResult.data && stopsResult.data.length > 0) {
     for (const stop of stopsResult.data) {
-      const stopData: any = { ...stop }
+      const stopData: Record<string, unknown> = { ...stop }
       delete stopData.id
       delete stopData.route_id
       delete stopData.created_at
@@ -676,7 +687,11 @@ export async function getRouteSuggestions(origin?: string, destination?: string)
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
-  const suggestions: any = {
+  const suggestions: {
+    suggestedDriver: unknown
+    suggestedTruck: unknown
+    similarRoutes: unknown[]
+  } = {
     suggestedDriver: null,
     suggestedTruck: null,
     similarRoutes: [],
@@ -695,7 +710,7 @@ export async function getRouteSuggestions(origin?: string, destination?: string)
     if (recentRoutes && recentRoutes.length > 0) {
       const driverCounts: Record<string, number> = {}
       const truckCounts: Record<string, number> = {}
-      recentRoutes.forEach((route: { driver_id: string | null; truck_id: string | null; [key: string]: any }) => {
+      recentRoutes.forEach((route: { driver_id: string | null; truck_id: string | null }) => {
         if (route.driver_id) {
           driverCounts[route.driver_id] = (driverCounts[route.driver_id] || 0) + 1
         }

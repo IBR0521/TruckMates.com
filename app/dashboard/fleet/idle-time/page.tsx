@@ -29,7 +29,7 @@ import { Label } from "@/components/ui/label"
 
 export default function IdleTimeDashboardPage() {
   const [sessions, setSessions] = useState<IdleTimeSession[]>([])
-  const [stats, setStats] = useState<any>(null)
+  const [stats, setStats] = useState<unknown>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [filters, setFilters] = useState({
     start_date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -221,8 +221,8 @@ export default function IdleTimeDashboardPage() {
               ) : (
                 <div className="space-y-3">
                   {sessions.map((session) => {
-                    const truck = (session as any)?.trucks
-                    const driver = (session as any)?.drivers
+                    const truck = (session as unknown)?.trucks
+                    const driver = (session as unknown)?.drivers
                     return (
                       <Card key={session.id} className="border-border p-4">
                         <div className="flex items-start justify-between">

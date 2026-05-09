@@ -1021,7 +1021,7 @@ export default function LoadSettingsPage() {
                 <Label htmlFor="accessorial_category">Category</Label>
                 <Select
                   value={accessorialForm.category}
-                  onValueChange={(value: any) => setAccessorialForm({ ...accessorialForm, category: value })}
+                  onValueChange={(value: "pickup" | "delivery" | "transit" | "other") => setAccessorialForm({ ...accessorialForm, category: value })}
                 >
                   <SelectTrigger className="mt-1">
                     <SelectValue />
@@ -1052,7 +1052,7 @@ export default function LoadSettingsPage() {
                 <Label htmlFor="accessorial_charge_type">Charge Type *</Label>
                 <Select
                   value={accessorialForm.charge_type}
-                  onValueChange={(value: any) => setAccessorialForm({ ...accessorialForm, charge_type: value })}
+                  onValueChange={(value: "flat" | "per_hour" | "per_day" | "percentage") => setAccessorialForm({ ...accessorialForm, charge_type: value })}
                 >
                   <SelectTrigger className="mt-1">
                     <SelectValue />

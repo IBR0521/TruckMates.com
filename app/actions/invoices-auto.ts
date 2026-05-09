@@ -103,7 +103,7 @@ export async function autoGenerateInvoicesFromLoads() {
   const existingLoadIds = new Set<string>()
   if (existingInvoices && Array.isArray(existingInvoices)) {
     for (let i = 0; i < existingInvoices.length; i++) {
-      const invoice = existingInvoices[i] as { load_id: string | null; [key: string]: any }
+      const invoice = existingInvoices[i] as { load_id: string | null; [key: string]: unknown }
       if (invoice && invoice.load_id) {
         existingLoadIds.add(invoice.load_id)
       }
@@ -115,7 +115,7 @@ export async function autoGenerateInvoicesFromLoads() {
 
   // BUG-008 FIX: Batch invoice creation instead of sequential loop to prevent timeout
   // First, get all customer names in one query
-  const customerIds = [...new Set(loads.map((l: any) => l.customer_id).filter(Boolean) as string[])]
+  const customerIds = [...new Set(loads.map((l: { customer_id: string | null }) => l.customer_id).filter(Boolean) as string[])]
   const customerMap = new Map<string, string>()
   
   if (customerIds.length > 0) {

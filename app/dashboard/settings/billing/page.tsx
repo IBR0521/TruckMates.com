@@ -46,6 +46,47 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
+type BillingSubscription = {
+  plan_display_name?: string | null
+  plan_name?: string | null
+  amount?: number | null
+  billing_cycle?: string | null
+  status?: string | null
+  currency_symbol?: string | null
+  end_date?: string | null
+}
+
+type UsageRow = {
+  key: string
+  label: string
+  used: number
+  limit: number | null
+  percent?: number | null
+}
+
+type PaymentHistoryRow = {
+  id: string
+  currency_symbol?: string | null
+  amount: number
+  status: string
+  payment_date: string
+  payment_method?: string | null
+  payment_method_last4?: string | null
+  invoice_number?: string | null
+}
+
+type PaymentMethodRow = {
+  id?: string
+  type: "card" | "ach" | "wire" | "check"
+  card_brand?: string | null
+  card_last4?: string | null
+  account_last4?: string | null
+  card_exp_month?: number | null
+  card_exp_year?: number | null
+  cardholder_name?: string | null
+  is_default?: boolean | null
+}
+
 export default function BillingSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -60,12 +101,12 @@ export default function BillingSettingsPage() {
     payment_terms: "Net 30",
     billing_notes: "",
   })
-  const [subscription, setSubscription] = useState<any>(null)
-  const [usageRows, setUsageRows] = useState<any[]>([])
-  const [paymentHistory, setPaymentHistory] = useState<any[]>([])
-  const [paymentMethods, setPaymentMethods] = useState<any[]>([])
+  const [subscription, setSubscription] = useState<BillingSubscription | null>(null)
+  const [usageRows, setUsageRows] = useState<UsageRow[]>([])
+  const [paymentHistory, setPaymentHistory] = useState<PaymentHistoryRow[]>([])
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodRow[]>([])
   const [showPaymentMethodDialog, setShowPaymentMethodDialog] = useState(false)
-  const [editingPaymentMethod, setEditingPaymentMethod] = useState<any>(null)
+  const [editingPaymentMethod, setEditingPaymentMethod] = useState<PaymentMethodRow | null>(null)
   const [paymentMethodForm, setPaymentMethodForm] = useState({
     type: "card" as "card" | "ach" | "wire" | "check",
     card_last4: "",
@@ -534,7 +575,7 @@ export default function BillingSettingsPage() {
               <Label htmlFor="pm_type">Payment Method Type</Label>
               <Select
                 value={paymentMethodForm.type}
-                onValueChange={(value: any) => setPaymentMethodForm({ ...paymentMethodForm, type: value })}
+                onValueChange={(value: "card" | "ach" | "wire" | "check") => setPaymentMethodForm({ ...paymentMethodForm, type: value })}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue />

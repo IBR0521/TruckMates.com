@@ -1,17 +1,12 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateRequiredString, validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
 import * as Sentry from "@sentry/nextjs"
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
 /** `public.vendors` — supabase/crm_schema_complete.sql */
 const VENDOR_FULL_SELECT = `
   id, company_id, name, company_name, email, phone, website,
@@ -314,8 +309,8 @@ export async function updateVendor(
   }
 
   // Build update data and track changes
-  const updateData: any = {}
-  const changes: Array<{ field: string; old_value: any; new_value: any }> = []
+  const updateData: Record<string, unknown> = {}
+  const changes: Array<{ field: string; old_value: unknown; new_value: unknown }> = []
   
   const fieldsToCheck = [
     "name", "company_name", "email", "phone", "website", "address_line1", "address_line2",

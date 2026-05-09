@@ -8,7 +8,7 @@
  */
 export function generateCacheKey(
   apiName: string,
-  params: Record<string, any>
+  params: Record<string, unknown>
 ): string {
   const sortedParams = Object.keys(params)
     .sort()

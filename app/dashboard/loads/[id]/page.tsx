@@ -60,16 +60,44 @@ import { getDrivers } from "@/app/actions/drivers"
 import { createPermit, getPermits, uploadPermitDocument } from "@/app/actions/permits"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
+type LoadData = NonNullable<Awaited<ReturnType<typeof getLoad>>["data"]>
+type RouteData = NonNullable<Awaited<ReturnType<typeof getRoutes>>["data"]>[number]
+type RoutesResult = Awaited<ReturnType<typeof getRoutes>>
+type TruckData = NonNullable<Awaited<ReturnType<typeof getTrucks>>["data"]>[number]
+type DeliveryPointData = NonNullable<Awaited<ReturnType<typeof getLoadDeliveryPoints>>["data"]>[number]
+type LoadSummaryData = NonNullable<Awaited<ReturnType<typeof getLoadSummary>>["data"]>
+type InvoiceData = NonNullable<Awaited<ReturnType<typeof getInvoices>>["data"]>[number]
+type DriverData = NonNullable<Awaited<ReturnType<typeof getDrivers>>["data"]>[number]
+type LoadDocumentData = NonNullable<Awaited<ReturnType<typeof getDocuments>>["data"]>[number]
+type PermitData = NonNullable<Awaited<ReturnType<typeof getPermits>>["data"]>[number]
+
+type ScoredRoute = {
+  route: RouteData
+  score: number
+  reasons: string[]
+}
+
+type RouteDataWithCompatibility = RouteData & {
+  _compatibilityScore?: number
+  _compatibilityReasons?: string[]
+}
+
+function hasRequiredUpgrade(value: unknown): value is { upgrade?: { required?: boolean } } {
+  if (!value || typeof value !== "object" || !("upgrade" in value)) return false
+  const upgrade = (value as { upgrade?: unknown }).upgrade
+  return !!upgrade && typeof upgrade === "object" && "required" in upgrade
+}
+
 export default function LoadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
-  const [load, setLoad] = useState<any>(null)
-  const [matchingRoute, setMatchingRoute] = useState<any>(null)
-  const [truck, setTruck] = useState<any>(null)
-  const [routesResult, setRoutesResult] = useState<{ data: any[] | null; error: string | null } | null>(null)
-  const [deliveryPoints, setDeliveryPoints] = useState<any[]>([])
-  const [loadSummary, setLoadSummary] = useState<any>(null)
-  const [relatedInvoice, setRelatedInvoice] = useState<any>(null)
+  const [load, setLoad] = useState<LoadData | null>(null)
+  const [matchingRoute, setMatchingRoute] = useState<RouteDataWithCompatibility | null>(null)
+  const [truck, setTruck] = useState<TruckData | null>(null)
+  const [routesResult, setRoutesResult] = useState<RoutesResult | null>(null)
+  const [deliveryPoints, setDeliveryPoints] = useState<DeliveryPointData[]>([])
+  const [loadSummary, setLoadSummary] = useState<LoadSummaryData | null>(null)
+  const [relatedInvoice, setRelatedInvoice] = useState<InvoiceData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false)
@@ -80,15 +108,15 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false)
   const [isQuickDispatching, setIsQuickDispatching] = useState(false)
   const [isQuickInvoicing, setIsQuickInvoicing] = useState(false)
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [trucks, setTrucks] = useState<any[]>([])
+  const [drivers, setDrivers] = useState<DriverData[]>([])
+  const [trucks, setTrucks] = useState<TruckData[]>([])
   const [selectedDispatchDriverId, setSelectedDispatchDriverId] = useState<string>("")
   const [selectedDispatchTruckId, setSelectedDispatchTruckId] = useState<string>("")
-  const [loadDocuments, setLoadDocuments] = useState<any[]>([])
+  const [loadDocuments, setLoadDocuments] = useState<LoadDocumentData[]>([])
   const [isGeneratingRateConf, setIsGeneratingRateConf] = useState(false)
   const [isGeneratingHazmatPaper, setIsGeneratingHazmatPaper] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
-  const [permits, setPermits] = useState<any[]>([])
+  const [permits, setPermits] = useState<PermitData[]>([])
   const [isCreatingPermit, setIsCreatingPermit] = useState(false)
   const [portalReviewMessage, setPortalReviewMessage] = useState("")
   const [portalQuotedRate, setPortalQuotedRate] = useState("")
@@ -235,7 +263,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           const loadOriginNormalized = normalizeLocation(loadResult.data.origin || "")
           const loadDestNormalized = normalizeLocation(loadResult.data.destination || "")
           
-          const matchingRoutes = routesResult.data.filter((route: any) => {
+          const matchingRoutes = routesResult.data.filter((route) => {
             const routeOriginNormalized = normalizeLocation(route.origin || "")
             const routeDestNormalized = normalizeLocation(route.destination || "")
             
@@ -258,7 +286,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           })
           
           // Score and rank routes based on truck compatibility
-          const scoredRoutes = matchingRoutes.map((route: any) => {
+          const scoredRoutes: ScoredRoute[] = matchingRoutes.map((route) => {
             let score = 0
             const reasons: string[] = []
             
@@ -349,14 +377,14 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           })
           
           // Sort by score (highest first)
-          scoredRoutes.sort((a: { score: number; [key: string]: any }, b: { score: number; [key: string]: any }) => b.score - a.score)
+          scoredRoutes.sort((a, b) => b.score - a.score)
           
           // If load has a route_id, prioritize that route
           if (loadResult.data.route_id) {
-            const specificRoute = routesResult.data.find((r: any) => r.id === loadResult.data.route_id)
+            const specificRoute = routesResult.data.find((r) => r.id === loadResult.data.route_id)
             if (specificRoute) {
               // Find it in scored routes or add it
-              const existingIndex = scoredRoutes.findIndex((sr: any) => sr.route.id === specificRoute.id)
+              const existingIndex = scoredRoutes.findIndex((sr) => sr.route.id === specificRoute.id)
               if (existingIndex >= 0) {
                 // Boost its score
                 scoredRoutes[existingIndex].score += 200
@@ -370,12 +398,12 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                 })
               }
               // Re-sort
-              scoredRoutes.sort((a: { score: number; [key: string]: any }, b: { score: number; [key: string]: any }) => b.score - a.score)
+              scoredRoutes.sort((a, b) => b.score - a.score)
             }
           }
           
           // Get the best route
-          const bestRoute = scoredRoutes.length > 0 ? scoredRoutes[0].route : null
+          const bestRoute = scoredRoutes.length > 0 ? (scoredRoutes[0].route as RouteDataWithCompatibility) : null
           
           // Store route compatibility info
           if (bestRoute && scoredRoutes.length > 0) {
@@ -415,9 +443,9 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         const [driversResult, trucksResult] = await Promise.all([getDrivers(), getTrucks()])
         if (!active) return
 
-        const activeDrivers = (driversResult.data || []).filter((d: any) => d.status === "active")
+        const activeDrivers = (driversResult.data || []).filter((d) => d.status === "active")
         const assignableTrucks = (trucksResult.data || []).filter(
-          (t: any) => t.status === "available" || t.status === "in_use"
+          (t) => t.status === "available" || t.status === "in_use"
         )
 
         setDrivers(activeDrivers)
@@ -652,14 +680,14 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           toast.error(result.error)
           return
         }
-        setLoad((prev: any) => ({ ...prev, status: "scheduled" }))
+        setLoad((prev) => (prev ? { ...prev, status: "scheduled" } : prev))
       }
 
-      setLoad((prev: any) => ({
+      setLoad((prev) => (prev ? {
         ...prev,
         driver_id: selectedDispatchDriverId,
         truck_id: selectedDispatchTruckId,
-      }))
+      } : prev))
       toast.success("Load dispatched successfully.")
       setIsDispatchDialogOpen(false)
     } catch (error: unknown) {
@@ -705,7 +733,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
       if (load?.status === "pending" || load?.status === "draft" || load?.status === "confirmed") {
         const statusResult = await updateLoad(id, { status: "scheduled" })
         if (!statusResult.error) {
-          setLoad((prev: any) => ({ ...prev, status: "scheduled" }))
+          setLoad((prev) => (prev ? { ...prev, status: "scheduled" } : prev))
         }
       }
 
@@ -746,7 +774,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
     const result = await generateHazmatShippingPaper(id)
     setIsGeneratingHazmatPaper(false)
     if (result.error) {
-      if ((result as any)?.upgrade?.required) {
+      if (hasRequiredUpgrade(result) && result.upgrade?.required) {
         setShowUpgradeModal(true)
       }
       toast.error(result.error)
@@ -830,7 +858,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         toast.error(result.error || "Failed to update request")
         return
       }
-      setLoad((prev: any) => ({ ...prev, ...result.data }))
+      setLoad((prev) => (prev ? { ...prev, ...result.data } : prev))
       toast.success(decision === "accepted" ? "Load request accepted" : "Load request rejected")
       setPortalReviewMessage("")
       setPortalQuotedRate("")
@@ -2012,10 +2040,16 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                   <div>
                     <p className="text-sm text-muted-foreground mb-2">Truck Route Waypoints</p>
                     <div className="space-y-1">
-                      {matchingRoute.waypoints.map((waypoint: any, idx: number) => (
+                      {matchingRoute.waypoints.map((waypoint, idx: number) => (
                         <div key={idx} className="flex items-center gap-2 text-sm">
                           <div className="w-2 h-2 rounded-full bg-primary" />
-                          <span className="text-foreground">{typeof waypoint === 'string' ? waypoint : waypoint.name || waypoint}</span>
+                          <span className="text-foreground">
+                            {typeof waypoint === "string"
+                              ? waypoint
+                              : typeof waypoint === "object" && waypoint !== null && "name" in waypoint
+                                ? String((waypoint as { name?: unknown }).name || "")
+                                : String(waypoint)}
+                          </span>
                         </div>
                       ))}
                     </div>

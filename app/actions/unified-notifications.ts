@@ -1,19 +1,12 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
 import { mapLegacyRole } from "@/lib/roles"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /** `public.notifications` — supabase/notifications_table.sql */
 const NOTIFICATIONS_LIST_SELECT =
   "id, user_id, company_id, type, title, message, priority, metadata, read, read_at, created_at, updated_at"
@@ -21,6 +14,30 @@ const NOTIFICATIONS_LIST_SELECT =
 /** `public.alerts` — supabase/trucklogics_features_schema.sql */
 const ALERTS_LIST_SELECT =
   "id, company_id, alert_rule_id, title, message, event_type, priority, status, load_id, route_id, driver_id, truck_id, metadata, escalated, escalation_level, escalated_at, acknowledged_by, acknowledged_at, resolved_at, created_at, updated_at"
+
+type NotificationRow = {
+  id: string
+  title?: string | null
+  message?: string | null
+  priority?: string | null
+  read?: boolean | null
+  created_at: string
+  metadata?: Record<string, unknown> | null
+}
+
+type AlertRow = {
+  id: string
+  title?: string | null
+  message?: string | null
+  priority?: string | null
+  status?: string | null
+  created_at: string
+  event_type?: string | null
+  load_id?: string | null
+  route_id?: string | null
+  driver_id?: string | null
+  truck_id?: string | null
+}
 
 /**
  * Get all unified notifications (system notifications + alerts)
@@ -55,7 +72,18 @@ export async function getUnifiedNotifications(filters?: {
       loadIdsForDriver = (loadRows || []).map((r: { id: string }) => String(r.id))
     }
 
-    const unifiedNotifications: any[] = []
+    const unifiedNotifications: Array<{
+      id: string
+      type: "notification" | "alert"
+      source: "system" | "alerts"
+      title: string | null | undefined
+      message: string | null | undefined
+      priority: string
+      read: boolean
+      created_at: string
+      status?: string | null
+      metadata: Record<string, unknown>
+    }> = []
 
     // Get system notifications
     if (!filters?.type || filters.type === "all" || filters.type === "notifications") {
@@ -81,7 +109,7 @@ export async function getUnifiedNotifications(filters?: {
       const { data: notifications, error: notifError } = await notificationsQuery
 
       if (!notifError && notifications) {
-        notifications.forEach((notif: any) => {
+        notifications.forEach((notif: NotificationRow) => {
           unifiedNotifications.push({
             id: notif.id,
             type: "notification",
@@ -144,7 +172,7 @@ export async function getUnifiedNotifications(filters?: {
       const { data: alerts, error: alertsError } = await alertsQuery
 
       if (!alertsError && alerts) {
-        let alertRows = alerts as any[]
+        let alertRows = alerts as AlertRow[]
         if (role === "driver" && filters?.search) {
           const q = filters.search.toLowerCase()
           alertRows = alertRows.filter(
@@ -153,7 +181,7 @@ export async function getUnifiedNotifications(filters?: {
               (a.message && String(a.message).toLowerCase().includes(q))
           )
         }
-        alertRows.forEach((alert: any) => {
+        alertRows.forEach((alert: AlertRow) => {
           unifiedNotifications.push({
             id: alert.id,
             type: "alert",

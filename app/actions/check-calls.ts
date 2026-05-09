@@ -218,7 +218,14 @@ export async function scheduleCheckCallsForLoad(loadId: string) {
   const intervalHours = settings.default_check_call_interval || 4
 
   // Schedule check calls
-  const checkCalls: any[] = []
+  const checkCalls: Array<{
+    company_id: string
+    load_id: string
+    driver_id: string
+    call_type: "pickup" | "scheduled" | "delivery"
+    scheduled_time: string
+    status: "pending"
+  }> = []
 
   // Pickup check call
   if (settings.require_check_call_at_pickup && load.load_date) {

@@ -24,8 +24,12 @@ interface Reminder {
   load_id?: string
 }
 
+type ReminderWithFlags = Reminder & {
+  isOverdue?: boolean
+}
+
 export function RemindersWidget() {
-  const [reminders, setReminders] = useState<Reminder[]>([])
+  const [reminders, setReminders] = useState<ReminderWithFlags[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [completingId, setCompletingId] = useState<string | null>(null)
   const [totalOverdueCount, setTotalOverdueCount] = useState(0)
@@ -205,7 +209,7 @@ export function RemindersWidget() {
       </div>
 
       <div className="space-y-3">
-        {reminders.map((reminder: any) => {
+        {reminders.map((reminder: ReminderWithFlags) => {
           // LOW FIX 1: Parse as local noon for consistent timezone handling
           const reminderDate = new Date(reminder.due_date + "T12:00:00")
           const now = new Date()

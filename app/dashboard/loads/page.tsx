@@ -38,11 +38,19 @@ import { AuditTrail } from "@/components/dashboard/audit-trail"
 import { History } from "lucide-react"
 import { useLoadsInitialData } from "@/components/dashboard/initial-list-data-contexts"
 
+type LoadListItem = NonNullable<Awaited<ReturnType<typeof getLoads>>["data"]>[number]
+type LoadDeleteDependency = {
+  type?: string
+  id?: string
+  label?: string
+  details?: string
+}
+
 export default function LoadsPage() {
   const router = useRouter()
   const { initialLoads, initialError } = useLoadsInitialData()
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [loadsList, setLoadsList] = useState<any[]>(() => initialLoads || [])
+  const [loadsList, setLoadsList] = useState<LoadListItem[]>(() => (initialLoads as LoadListItem[]) || [])
   const [isLoading, setIsLoading] = useState(() => !initialLoads && !initialError)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(() => !!initialLoads || !!initialError)
   const [searchTerm, setSearchTerm] = useState("")
@@ -51,7 +59,7 @@ export default function LoadsPage() {
   const [sortBy, setSortBy] = useState("created_at")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isBulkMode, setIsBulkMode] = useState(false)
-  const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
+  const [deleteDependencies, setDeleteDependencies] = useState<LoadDeleteDependency[]>([])
   const [generatingInvoiceId, setGeneratingInvoiceId] = useState<string | null>(null)
 
   const loadLoads = useCallback(async () => {
@@ -112,8 +120,8 @@ export default function LoadsPage() {
     try {
       const response = await fetch(`/api/check-dependencies?resource_type=load&resource_id=${id}`)
       if (response.ok) {
-        const data = await response.json()
-        setDeleteDependencies(data.dependencies || [])
+      const data = (await response.json()) as { dependencies?: LoadDeleteDependency[] }
+      setDeleteDependencies(data.dependencies || [])
       }
     } catch (error) {
       console.error("Failed to check dependencies:", error)
@@ -144,7 +152,7 @@ export default function LoadsPage() {
     // filteredLoads will automatically update via useMemo when loadsList changes
 
     // Then save to server
-    const updateData: any = { [field]: value }
+    const updateData: Record<string, string | number | null> = { [field]: value }
     const result = await updateLoad(loadId, updateData)
     
     if (result.error) {
@@ -213,7 +221,7 @@ export default function LoadsPage() {
     // Success - no toast, no reload
   }
 
-  const handleGenerateInvoice = async (load: any) => {
+  const handleGenerateInvoice = async (load: LoadListItem) => {
     if (!load?.id) return
     setGeneratingInvoiceId(load.id)
     const result = await autoGenerateInvoiceOnPOD(load.id)

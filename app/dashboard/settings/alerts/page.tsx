@@ -27,19 +27,27 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter, useSearchParams } from "next/navigation"
 import ReminderSettingsPage from "../reminder/page"
 
+type AlertRule = NonNullable<NonNullable<Awaited<ReturnType<typeof getAlertRules>>["data"]>[number]>
+type AlertConditions = {
+  status?: string
+  hours_late?: number
+  minutes_overdue?: number
+  [key: string]: unknown
+}
+
 function AlertsTabContent() {
-  const [alertRules, setAlertRules] = useState<any[]>([])
+  const [alertRules, setAlertRules] = useState<AlertRule[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [editingRule, setEditingRule] = useState<any>(null) // FIXED: Track rule being edited
-  const [deletingRule, setDeletingRule] = useState<any>(null) // FIXED: Track rule being deleted
+  const [editingRule, setEditingRule] = useState<AlertRule | null>(null) // FIXED: Track rule being edited
+  const [deletingRule, setDeletingRule] = useState<AlertRule | null>(null) // FIXED: Track rule being deleted
 
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     event_type: "load_status_change",
-    conditions: {} as any,
+    conditions: {} as AlertConditions,
     send_email: false,
     send_sms: false,
     send_in_app: true,
@@ -72,7 +80,7 @@ function AlertsTabContent() {
     setIsSaving(true)
     try {
       // Build conditions based on event type
-      const conditions: any = {}
+      const conditions: AlertConditions = {}
       
       if (formData.event_type === "load_status_change") {
         conditions.status = formData.conditions.status || "any"
@@ -116,13 +124,16 @@ function AlertsTabContent() {
   }
 
   // FIXED: Implement edit handler
-  async function handleEdit(rule: any) {
+  async function handleEdit(rule: AlertRule) {
+    const conditions: AlertConditions =
+      rule.conditions && typeof rule.conditions === "object" ? (rule.conditions as AlertConditions) : {}
+
     setEditingRule(rule)
     setFormData({
       name: rule.name,
       description: rule.description || "",
       event_type: rule.event_type,
-      conditions: rule.conditions || {},
+      conditions,
       send_email: rule.send_email || false,
       send_sms: rule.send_sms || false,
       send_in_app: rule.send_in_app !== false,
@@ -157,7 +168,7 @@ function AlertsTabContent() {
       // Update existing rule
       setIsSaving(true)
       try {
-        const conditions: any = {}
+        const conditions: AlertConditions = {}
         if (formData.event_type === "load_status_change") {
           conditions.status = formData.conditions.status || "any"
         } else if (formData.event_type === "driver_late") {

@@ -1,17 +1,18 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
-import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
+import { errorMessage } from "@/lib/error-message"
+import { isDevSurfaceBlocked } from "@/lib/security/dev-only"
 export async function testSupabaseConnection() {
+  if (isDevSurfaceBlocked()) {
+    return {
+      success: false,
+      error: "Not found",
+      details: "This endpoint is disabled in production.",
+    }
+  }
+
   try {
     const supabase = await createClient()
     
@@ -41,18 +42,5 @@ export async function testSupabaseConnection() {
     }
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

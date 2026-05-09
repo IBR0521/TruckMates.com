@@ -1,5 +1,6 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * Enhanced DVIR Features
  * - Automated defect to work order flow
@@ -8,18 +9,12 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { mapLegacyRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission } from "@/lib/server-permissions"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 
 /**
@@ -74,7 +69,7 @@ export async function getDVIRsForAudit(filters?: {
   truck_id?: string
   start_date?: string
   end_date?: string
-}): Promise<{ data: any[] | null; error: string | null }> {
+}): Promise<{ data: unknown[] | null; error: string | null }> {
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
@@ -116,7 +111,7 @@ export async function getDVIRsForAudit(filters?: {
  */
 export async function createWorkOrdersFromDVIRDefects(
   dvirId: string
-): Promise<{ data: any[] | null; error: string | null }> {
+): Promise<{ data: unknown[] | null; error: string | null }> {
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
@@ -169,7 +164,7 @@ export async function createWorkOrdersFromDVIRDefects(
  */
 export async function getDVIRWorkOrders(
   dvirId: string
-): Promise<{ data: any[] | null; error: string | null }> {
+): Promise<{ data: unknown[] | null; error: string | null }> {
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
@@ -189,8 +184,8 @@ export async function getDVIRWorkOrders(
       return { error: "DVIR not found", data: null }
     }
 
-    const workOrderIds = ((dvir.work_orders_created as any[]) || [])
-      .map((wo: any) => wo.work_order_id)
+    const workOrderIds = ((dvir.work_orders_created as Array<{ work_order_id?: string }> | null) || [])
+      .map((wo) => wo.work_order_id)
       .filter((id: string) => id)
 
     if (workOrderIds.length === 0) {

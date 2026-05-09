@@ -1,7 +1,8 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { getELDMileageData } from "./eld"
@@ -9,14 +10,6 @@ import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permi
 import { STATE_FUEL_TAX_RATES, getFuelTaxRate } from "@/lib/fuel-tax-rates"
 import * as Sentry from "@sentry/nextjs"
 import { capturePostHogServerEvent } from "@/lib/analytics/posthog-server"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 const IFTA_REPORT_SELECT =
   "id, company_id, quarter, year, period, total_miles, fuel_purchased, tax_owed, status, filed_date, state_breakdown, truck_ids, include_eld, created_at, updated_at"
 
@@ -105,7 +98,7 @@ export async function createIFTAReport(formData: {
       return { error: "Failed to validate trucks", data: null }
     }
 
-    const validTruckIds = ownedTrucks?.map((t: { id: string; [key: string]: any }) => t.id) || []
+    const validTruckIds = ownedTrucks?.map((t: { id: string; [key: string]: unknown }) => t.id) || []
     if (validTruckIds.length !== formData.truck_ids.length) {
       return { error: "One or more trucks do not belong to your company", data: null }
     }
@@ -300,7 +293,7 @@ export async function createIFTAReport(formData: {
       
       // Filter by trip date if available, otherwise fall back to created_at
       // First try route_start_time, then route_departure_time, then created_at
-      let routes: any[] = []
+      let routes: Array<{ distance?: string | null }> = []
       
       // Try route_start_time first
       const { data: routesByStartTime } = await routesQuery

@@ -1,5 +1,6 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * Enhanced Maintenance Features
  * - ELD Fault Code Analysis
@@ -14,17 +15,10 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { validateFileMagicBytes } from "@/lib/file-signature"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 
 function unknownErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
+  return safeDbError(error, fallback)
 }
 
 /** `public.fault_code_maintenance_rules` — supabase/eld_fault_code_maintenance.sql */
@@ -549,7 +543,7 @@ export async function updateWorkOrder(
     status?: string
     assigned_to?: string
     assigned_vendor_id?: string
-    parts_required?: any[]
+    parts_required?: unknown[]
     estimated_labor_hours?: number
     estimated_total_cost?: number
     started_at?: string
@@ -564,7 +558,7 @@ export async function updateWorkOrder(
   }
 
   try {
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (updates.status !== undefined) updateData.status = updates.status
     if (updates.assigned_to !== undefined) updateData.assigned_to = updates.assigned_to
     if (updates.assigned_vendor_id !== undefined) updateData.assigned_vendor_id = updates.assigned_vendor_id
@@ -774,7 +768,7 @@ export async function upsertFaultCodeRule(rule: {
   }
 
   try {
-    const ruleData: any = {
+    const ruleData: Record<string, unknown> = {
       company_id: ctx.companyId,
       fault_code: rule.fault_code,
       fault_code_category: rule.fault_code_category || null,

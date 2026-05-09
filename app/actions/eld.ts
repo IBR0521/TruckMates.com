@@ -1,21 +1,14 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { ensureDriverIdForUser } from "@/lib/eld/ensure-driver"
 import { resolveTruckIdForDriver } from "@/lib/eld/resolve-driver-truck"
 import { mapLegacyRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /** Drivers: same provisioning as dashboard/mobile (`ensureDriverIdForUser`). Others: DB lookup only. */
 async function resolveDriverIdForELD(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -201,7 +194,7 @@ export async function createELDDevice(formData: {
     }
 
     // Build insert data
-    const deviceData: any = {
+    const deviceData: Record<string, unknown> = {
       company_id: ctx.companyId,
       device_name: formData.device_name.trim(),
       device_serial_number: formData.device_serial_number.trim(),
@@ -270,7 +263,7 @@ export async function updateELDDevice(
     }
 
     // Build update data
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (formData.device_name !== undefined) updateData.device_name = formData.device_name
     if (formData.device_serial_number !== undefined) updateData.device_serial_number = formData.device_serial_number
     if (formData.provider !== undefined) updateData.provider = formData.provider
@@ -593,7 +586,7 @@ export async function getELDMileageData(filters: {
 
   // Aggregate mileage by truck
   const mileageByTruck: Record<string, number> = {}
-  logs?.forEach((log: { truck_id: string | null; miles_driven: number | string | null; [key: string]: any }) => {
+  logs?.forEach((log: { truck_id: string | null; miles_driven: number | string | null; [key: string]: unknown }) => {
     if (log.truck_id && log.miles_driven) {
       mileageByTruck[log.truck_id] = (mileageByTruck[log.truck_id] || 0) + Number(log.miles_driven)
     }

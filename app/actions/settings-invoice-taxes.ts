@@ -1,17 +1,8 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import * as Sentry from "@sentry/nextjs"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 export interface InvoiceTax {
   id?: string
   name: string
@@ -50,7 +41,7 @@ export async function getInvoiceTaxes(): Promise<{ data: InvoiceTax[] | null; er
   }
 
   // Parse JSONB fields
-  const taxes = (data || []).map((tax: { state_codes: string[] | null; customer_ids: string[] | null; [key: string]: any }) => ({
+  const taxes = (data || []).map((tax: { state_codes: string[] | null; customer_ids: string[] | null; [key: string]: unknown }) => ({
     ...tax,
     state_codes: tax.state_codes || [],
     customer_ids: tax.customer_ids || [],
@@ -181,7 +172,7 @@ export async function updateInvoiceTax(id: string, tax: Partial<InvoiceTax>): Pr
       .neq("id", id)
   }
 
-  const updateData: any = {}
+  const updateData: Record<string, unknown> = {}
   if (tax.name !== undefined) updateData.name = tax.name.trim()
   if (tax.rate !== undefined) updateData.rate = tax.rate
   if (tax.tax_type !== undefined) updateData.tax_type = tax.tax_type
@@ -250,10 +241,5 @@ export async function deleteInvoiceTax(id: string): Promise<{ error: string | nu
 
   return { error: null }
 }
-
-
-
-
-
 
 

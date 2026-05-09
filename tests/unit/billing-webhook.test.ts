@@ -99,7 +99,7 @@ describe("app/api/webhooks/stripe/route.ts", () => {
       method: "POST",
       body: '{"id":"evt_1"}',
     })
-    const response = await POST(request as any)
+    const response = await POST(request)
     const json = await response.json()
 
     expect(response.status).toBe(200)

@@ -1,24 +1,35 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * Automated Detention Tracking
  * Monitors time drivers spend in zones and automatically adds detention fees
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission, checkCreatePermission } from "@/lib/server-permissions"
 import { runAgentEvaluation } from "@/lib/ai/agent/loop"
-import * as Sentry from "@sentry/nextjs"
 
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
+type ActiveDetentionRpcRow = {
+  zone_visit_id: string
+  detention_minutes?: number | string | null
+  detention_threshold_minutes?: number | string | null
+  total_fee?: number | string | null
+  load_id?: string | null
+  location?: string | null
+  driver_id?: string | null
 }
 
+type ZoneVisitRow = {
+  id: string
+  geofence_id: string
+}
 
+type GeofenceRow = {
+  id: string
+}
 export interface DetentionRecord {
   id: string
   geofence_id: string
@@ -74,7 +85,7 @@ export async function getActiveDetentions() {
     }
 
     // FIXED: Filter zone_visit_ids by company_id to prevent cross-company data leak
-    const zoneVisitIds = activeDetentions.map((d: any) => d.zone_visit_id)
+    const zoneVisitIds = (activeDetentions as ActiveDetentionRpcRow[]).map((d) => d.zone_visit_id)
     const { data: zoneVisits } = await supabase
       .from("zone_visits")
       .select("id, geofence_id")
@@ -84,12 +95,13 @@ export async function getActiveDetentions() {
       .from("geofences")
       .select("id, company_id")
       .eq("company_id", ctx.companyId)
-      .in("id", zoneVisits?.map((zv: any) => zv.geofence_id) || [])
+      .in("id", ((zoneVisits || []) as ZoneVisitRow[]).map((zv) => zv.geofence_id))
     
-    const validGeofenceIds = new Set(geofences?.map((g: any) => g.id) || [])
-    const validZoneVisitIds = zoneVisits
-      ?.filter((zv: any) => validGeofenceIds.has(zv.geofence_id))
-      .map((zv: any) => zv.id) || []
+    const validGeofenceIds = new Set(((geofences || []) as GeofenceRow[]).map((g) => g.id))
+    const validZoneVisitIds =
+      ((zoneVisits || []) as ZoneVisitRow[])
+        .filter((zv) => validGeofenceIds.has(zv.geofence_id))
+        .map((zv) => zv.id)
     
     if (validZoneVisitIds.length === 0) {
       return { data: [], error: null }
@@ -230,7 +242,7 @@ export async function checkAndCreateDetentions() {
     }
 
     // FIXED: Filter zone_visit_ids by company_id to prevent cross-company data leak
-    const zoneVisitIds = activeDetentions.map((d: any) => d.zone_visit_id)
+    const zoneVisitIds = (activeDetentions as ActiveDetentionRpcRow[]).map((d) => d.zone_visit_id)
     const { data: zoneVisits } = await supabase
       .from("zone_visits")
       .select("id, geofence_id")
@@ -240,11 +252,11 @@ export async function checkAndCreateDetentions() {
       .from("geofences")
       .select("id, company_id")
       .eq("company_id", ctx.companyId)
-      .in("id", zoneVisits?.map((zv: any) => zv.geofence_id) || [])
+      .in("id", ((zoneVisits || []) as ZoneVisitRow[]).map((zv) => zv.geofence_id))
     
-    const validGeofenceIds = new Set(geofences?.map((g: any) => g.id) || [])
-    const validDetentions = activeDetentions.filter((d: any) => {
-      const zv = zoneVisits?.find((zv: any) => zv.id === d.zone_visit_id)
+    const validGeofenceIds = new Set(((geofences || []) as GeofenceRow[]).map((g) => g.id))
+    const validDetentions = (activeDetentions as ActiveDetentionRpcRow[]).filter((d) => {
+      const zv = ((zoneVisits || []) as ZoneVisitRow[]).find((zoneVisit) => zoneVisit.id === d.zone_visit_id)
       return zv && validGeofenceIds.has(zv.geofence_id)
     })
 
@@ -303,7 +315,12 @@ export async function checkAndCreateDetentions() {
             .eq("id", detention.zone_visit_id)
             .single()
           
-          if (!zoneVisit || (zoneVisit.geofences as any)?.company_id !== ctx.companyId) {
+          const zoneVisitRow = zoneVisit as { geofences?: { company_id?: string } | { company_id?: string }[] } | null
+          const geofenceCompany =
+            Array.isArray(zoneVisitRow?.geofences)
+              ? zoneVisitRow?.geofences[0]?.company_id
+              : zoneVisitRow?.geofences?.company_id
+          if (!zoneVisitRow || geofenceCompany !== ctx.companyId) {
             errors.push({
               zone_visit_id: detention.zone_visit_id,
               error: "Zone visit does not belong to your company"
@@ -512,7 +529,12 @@ export async function updateGeofenceDetentionSettings(
   }
 
   try {
-    const updateData: any = {}
+    const updateData: {
+      detention_enabled?: boolean
+      detention_threshold_minutes?: number
+      detention_hourly_rate?: number
+      detention_auto_bill?: boolean
+    } = {}
     
     if (settings.detention_enabled !== undefined) {
       updateData.detention_enabled = settings.detention_enabled
@@ -612,7 +634,11 @@ export async function getDetentionAnalytics(filters?: {
       average_fee: number
     }>()
 
-    detentions?.forEach((detention: any) => {
+    detentions?.forEach((detention: {
+      total_fee?: string | number | null
+      detention_minutes?: string | number | null
+      loads?: { customers?: { id?: string; name?: string | null; company_name?: string | null } | null } | null
+    }) => {
       const customer = detention.loads?.customers
       if (!customer || !customer.id) return
 
@@ -666,6 +692,5 @@ export async function getDetentionAnalytics(filters?: {
     return { error: errorMessage(error, "Failed to get detention analytics"), data: null }
   }
 }
-
 
 

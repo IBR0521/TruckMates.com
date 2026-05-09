@@ -16,7 +16,8 @@ export function useFeatureAccess() {
         const result = await getCurrentUser()
         if (result?.data) {
           // Get employee_role from user metadata or fallback to legacy role
-          const employeeRole = (result.data as any).employee_role || result.data.role
+          const userData = result.data as { employee_role?: string; role?: string }
+          const employeeRole = userData.employee_role || userData.role
           const mappedRole = mapLegacyRole(employeeRole) as EmployeeRole
           setUserRole(mappedRole)
           try {

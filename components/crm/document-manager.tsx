@@ -190,7 +190,7 @@ export function DocumentManager({ customerId, vendorId }: DocumentManagerProps) 
                 <Select
                   value={uploadData.document_type}
                   onValueChange={(v) =>
-                    setUploadData({ ...uploadData, document_type: v as any })
+                    setUploadData({ ...uploadData, document_type: v as CRMDocument["document_type"] })
                   }
                 >
                   <SelectTrigger>

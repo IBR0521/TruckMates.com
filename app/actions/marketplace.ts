@@ -173,7 +173,7 @@ export async function postLoadToMarketplace(formData: {
   consignee_contact_phone?: string
   consignee_contact_email?: string
   notes?: string
-  [key: string]: any
+  [key: string]: unknown
 }) {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
@@ -421,7 +421,7 @@ async function autoCreateLoadsForMatchingCarriers(marketplaceLoadId: string) {
   }
 
   // Find matching carriers
-  const matchingCarriers = subscriptions.filter((sub: { origin_filter: string[] | null; destination_filter: string[] | null; min_rate: number | null; max_rate: number | null; [key: string]: any }) => {
+  const matchingCarriers = subscriptions.filter((sub: { origin_filter: string[] | null; destination_filter: string[] | null; min_rate: number | null; max_rate: number | null; [key: string]: unknown }) => {
     // Check origin filter
     if (sub.origin_filter && sub.origin_filter.length > 0) {
       const originMatch = sub.origin_filter.some((filter: string) =>

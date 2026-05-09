@@ -2,6 +2,70 @@ import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import crypto from "crypto"
 
+type InsertClient = {
+  from: (table: string) => {
+    insert: (values: unknown) => Promise<{ error: unknown }>
+  }
+}
+
+type ELDDevice = {
+  id: string
+  company_id: string
+  truck_id: string | null
+}
+
+type SamsaraLog = {
+  startTime?: string
+  start_time?: string
+  start?: string
+  driver?: { id?: string }
+  driverId?: string
+  dutyStatus?: string
+  status?: string
+  endTime?: string
+  end_time?: string
+  startLocation?: { latitude?: number; longitude?: number }
+  endLocation?: { latitude?: number; longitude?: number }
+  startOdometer?: number
+  odometer_start?: number
+  endOdometer?: number
+  odometer_end?: number
+  location?: string
+  locationName?: string
+  certified?: boolean
+}
+
+type SamsaraLocation = {
+  latitude?: number
+  lat?: number
+  longitude?: number
+  lng?: number
+  speed?: number
+  heading?: number
+  bearing?: number
+  timestamp?: string
+  time?: string
+}
+
+type SamsaraWebhookData = SamsaraLocation & {
+  vehicle?: { id?: string }
+  vehicle_id?: string
+  eventType?: string
+  type?: string
+  name?: string
+  logs?: SamsaraLog[]
+  hosLogs?: SamsaraLog[]
+  location?: SamsaraLocation
+  gpsLocation?: SamsaraLocation
+  driver?: { id?: string }
+  driverId?: string
+  severity?: string
+  violationType?: string
+  violation_type?: string
+  description?: string
+  message?: string
+}
+
 /**
  * Samsara Webhook Endpoint
  * Receives real-time HOS logs, locations, and events from Samsara ELD devices
@@ -48,7 +112,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
     }
     
-    const data = JSON.parse(body)
+    const data: SamsaraWebhookData = JSON.parse(body)
     // SECURITY: Use admin client for webhooks (no user session)
     const { createAdminClient } = await import("@/lib/supabase/admin")
     const supabase = createAdminClient()
@@ -68,6 +132,7 @@ export async function POST(request: NextRequest) {
       console.error("[Samsara Webhook] Device not found:", vehicleId)
       return NextResponse.json({ error: "Device not found" }, { status: 404 })
     }
+    const typedDevice: ELDDevice = device
     
     // Process webhook event type
     const eventType = data.eventType || data.type || data.name
@@ -75,17 +140,17 @@ export async function POST(request: NextRequest) {
     switch (eventType) {
       case "hos_logs":
       case "hosLogs":
-        await processHOSLogs(data, device, supabase)
+        await processHOSLogs(data, typedDevice, supabase)
         break
         
       case "gps_location":
       case "gpsLocation":
-        await processLocation(data, device, supabase)
+        await processLocation(data, typedDevice, supabase)
         break
         
       case "hos_violation":
       case "hosViolation":
-        await processViolation(data, device, supabase)
+        await processViolation(data, typedDevice, supabase)
         break
         
       default:
@@ -102,7 +167,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function processHOSLogs(data: any, device: any, supabase: any) {
+async function processHOSLogs(data: SamsaraWebhookData, device: ELDDevice, supabase: InsertClient) {
   const logs = data.logs || data.hosLogs || [data]
   
   for (const logData of logs) {
@@ -157,7 +222,11 @@ async function processHOSLogs(data: any, device: any, supabase: any) {
   }
 }
 
-async function processLocation(data: any, device: any, supabase: any) {
+async function processLocation(
+  data: SamsaraWebhookData,
+  device: ELDDevice,
+  supabase: InsertClient
+) {
   const location = data.location || data.gpsLocation || data
   
   const locationData = {
@@ -186,7 +255,11 @@ async function processLocation(data: any, device: any, supabase: any) {
   }
 }
 
-async function processViolation(data: any, device: any, supabase: any) {
+async function processViolation(
+  data: SamsaraWebhookData,
+  device: ELDDevice,
+  supabase: InsertClient
+) {
   const event = {
     company_id: device.company_id,
     truck_id: device.truck_id,

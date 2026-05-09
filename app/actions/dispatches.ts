@@ -1,20 +1,41 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { addDays } from "date-fns"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkEditPermission } from "@/lib/server-permissions"
 import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
+type DispatchScopedLoad = {
+  terminal_id?: string | null
+  status?: string | null
+  driver_id?: string | null
+  truck_id?: string | null
 }
 
+type OverlapLoadRow = {
+  id: string
+  shipment_number?: string | null
+  load_date?: string | null
+  estimated_delivery?: string | null
+}
 
+type PermitRow = {
+  expiry_date?: string | null
+  document_id?: string | null
+}
+
+type DriverUserRow = {
+  user_id?: string | null
+}
+
+type AssignmentUpdateData = {
+  driver_id?: string
+  truck_id?: string
+  status?: string
+}
 /**
  * Get unassigned loads (loads without driver/truck, excluding drafts)
  */
@@ -67,8 +88,10 @@ export async function getUnassignedLoads(terminalId?: string) {
     }
 
     // Additional filter for pending/draft status loads that might already have assignments
-    const scopedLoads = terminalId ? (loads || []).filter((l: any) => l.terminal_id === terminalId) : (loads || [])
-    const unassignedLoads = scopedLoads.filter((load: any) => 
+    const scopedLoads = terminalId
+      ? ((loads || []) as DispatchScopedLoad[]).filter((l) => l.terminal_id === terminalId)
+      : ((loads || []) as DispatchScopedLoad[])
+    const unassignedLoads = scopedLoads.filter((load) =>
       String(load.status || "").toLowerCase() !== "draft" &&
       (!load.driver_id || !load.truck_id || String(load.status || "").toLowerCase() === "pending")
     )
@@ -122,9 +145,9 @@ export async function getUnassignedRoutes() {
     }
 
     // Additional filter for pending status routes that might have assignments
-    const unassignedRoutes = routes?.filter((route: any) => 
+    const unassignedRoutes = (routes || []).filter((route: DispatchScopedLoad) =>
       !route.driver_id || !route.truck_id || route.status === "pending"
-    ) || []
+    )
 
     return { data: unassignedRoutes, error: null }
   } catch (error: unknown) {
@@ -222,7 +245,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
         .in("status", ["pending", "scheduled", "in_transit"])
       if (overlapError) return { error: safeDbError(overlapError), data: null }
 
-      const conflict = (overlaps || []).find((row: any) => {
+      const conflict = ((overlaps || []) as OverlapLoadRow[]).find((row) => {
         const rowStart = new Date(row.load_date || row.estimated_delivery)
         const rowEnd = new Date(row.estimated_delivery || row.load_date)
         if (Number.isNaN(rowStart.getTime()) || Number.isNaN(rowEnd.getTime())) return false
@@ -237,7 +260,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
     }
   }
 
-  const updateData: any = {}
+  const updateData: AssignmentUpdateData = {}
   if (driverId) updateData.driver_id = driverId
   if (truckId) updateData.truck_id = truckId
   
@@ -253,7 +276,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
       if (permitError) {
         return { error: safeDbError(permitError), data: null }
       }
-      const validPermit = (permits || []).some((permit: any) => {
+      const validPermit = ((permits || []) as PermitRow[]).some((permit) => {
         const notExpired = !permit.expiry_date || permit.expiry_date >= today
         return Boolean(permit.document_id) && notExpired
       })
@@ -307,9 +330,10 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
         .eq("id", driverId)
         .eq("company_id", ctx.companyId)
         .maybeSingle()
-      if ((driverUser as any)?.user_id) {
+      const assignedDriverUser = driverUser as DriverUserRow | null
+      if (assignedDriverUser?.user_id) {
         const { sendPushToUser } = await import("./push-notifications")
-        await sendPushToUser((driverUser as any).user_id, {
+        await sendPushToUser(assignedDriverUser.user_id, {
           title: "New load assigned",
           body: `${data.shipment_number || "Load"}: ${data.origin || "Origin"} -> ${data.destination || "Destination"}`,
           data: {
@@ -438,7 +462,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
     }
   }
 
-  const updateData: any = {}
+  const updateData: AssignmentUpdateData = {}
   if (driverId) updateData.driver_id = driverId
   if (truckId) updateData.truck_id = truckId
   

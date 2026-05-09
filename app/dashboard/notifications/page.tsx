@@ -39,8 +39,10 @@ import { useRouter, useSearchParams } from "next/navigation"
 import AlertsPage from "../alerts/page"
 import RemindersPage from "../reminders/page"
 
+type UnifiedNotification = NonNullable<Awaited<ReturnType<typeof getUnifiedNotifications>>["data"]>[number]
+
 function NotificationsTabContent() {
-  const [notifications, setNotifications] = useState<any[]>([])
+  const [notifications, setNotifications] = useState<UnifiedNotification[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [filters, setFilters] = useState({
     type: "all" as "all" | "notifications" | "alerts",
@@ -140,7 +142,7 @@ function NotificationsTabContent() {
     }
   }
 
-  function getNotificationLink(notification: any) {
+  function getNotificationLink(notification: UnifiedNotification) {
     if (notification.metadata?.load_id) {
       return `/dashboard/loads/${notification.metadata.load_id}`
     }
@@ -191,7 +193,9 @@ function NotificationsTabContent() {
                 <label className="text-sm font-medium mb-2 block">Type</label>
                 <Select
                   value={filters.type}
-                  onValueChange={(value: any) => setFilters({ ...filters, type: value })}
+                  onValueChange={(value: "all" | "notifications" | "alerts") =>
+                    setFilters({ ...filters, type: value })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />

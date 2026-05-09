@@ -38,9 +38,9 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [trucks, setTrucks] = useState<any[]>([])
-  const [stops, setStops] = useState<any[]>([])
+  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [trucks, setTrucks] = useState<unknown[]>([])
+  const [stops, setStops] = useState<unknown[]>([])
   const [formData, setFormData] = useState({
     // Basic Information
     name: "",

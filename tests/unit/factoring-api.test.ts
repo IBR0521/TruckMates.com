@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest"
 
 const mockGetCachedAuthContext = vi.fn()
 const mockRevalidatePath = vi.fn()
@@ -114,7 +114,7 @@ describe("app/actions/factoring-api.ts", () => {
   it("submits invoice packet to TriumphPay and marks invoice submitted", async () => {
     const { createClient } = await import("@/lib/supabase/server")
     const supabase = makeSupabaseMock()
-    ;(createClient as any).mockResolvedValue(supabase)
+    ;(createClient as unknown as Mock).mockResolvedValue(supabase)
 
     const fetchMock = vi.fn(async () => ({
       status: 201,

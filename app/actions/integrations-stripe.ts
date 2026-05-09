@@ -280,7 +280,7 @@ export async function processPayPalInvoicePayment(invoiceId: string, amount?: nu
     }
 
     const order = await orderResponse.json()
-    const approvalUrl = order.links?.find((link: any) => link.rel === "approve")?.href
+    const approvalUrl = order.links?.find((link: { rel?: string; href?: string }) => link.rel === "approve")?.href
 
     // Store order ID
     await supabase

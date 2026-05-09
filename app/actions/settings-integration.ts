@@ -1,19 +1,12 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 export async function getIntegrationSettings() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
@@ -113,17 +106,31 @@ export async function getIntegrationSettings() {
     // If platform keys exist, services are automatically configured for all users
     // No per-company configuration needed - it just works
     // Note: hasPlatformGoogleMapsKey and hasPlatformResendKey are already declared above
+    const integrationData = data as {
+      comdata_enabled?: boolean | null
+      wex_enabled?: boolean | null
+      efs_enabled?: boolean | null
+      comdata_api_key?: string | null
+      comdata_api_secret?: string | null
+      wex_api_key?: string | null
+      wex_api_secret?: string | null
+      efs_api_key?: string | null
+      efs_api_secret?: string | null
+      fuel_card_last_synced_at?: string | null
+      quickbooks_gl_account_mappings?: Record<string, string> | null
+    }
+
     const safeData = {
       quickbooks_enabled: !!data.quickbooks_enabled,
       quickbooks_company_id: data.quickbooks_company_id || "",
       stripe_enabled: !!data.stripe_enabled,
-      comdata_enabled: !!(data as any).comdata_enabled,
-      wex_enabled: !!(data as any).wex_enabled,
-      efs_enabled: !!(data as any).efs_enabled,
-      has_comdata_credentials: !!((data as any).comdata_api_key && (data as any).comdata_api_secret),
-      has_wex_credentials: !!((data as any).wex_api_key && (data as any).wex_api_secret),
-      has_efs_credentials: !!((data as any).efs_api_key && (data as any).efs_api_secret),
-      fuel_card_last_synced_at: (data as any).fuel_card_last_synced_at || null,
+      comdata_enabled: !!integrationData.comdata_enabled,
+      wex_enabled: !!integrationData.wex_enabled,
+      efs_enabled: !!integrationData.efs_enabled,
+      has_comdata_credentials: !!(integrationData.comdata_api_key && integrationData.comdata_api_secret),
+      has_wex_credentials: !!(integrationData.wex_api_key && integrationData.wex_api_secret),
+      has_efs_credentials: !!(integrationData.efs_api_key && integrationData.efs_api_secret),
+      fuel_card_last_synced_at: integrationData.fuel_card_last_synced_at || null,
       paypal_enabled: !!data.paypal_enabled,
       google_maps_enabled: data.google_maps_enabled !== false,
       resend_enabled: data.resend_enabled !== false,
@@ -134,7 +141,7 @@ export async function getIntegrationSettings() {
       quickbooks_synced_at: data.quickbooks_synced_at || null,
       quickbooks_default_income_account_id: data.quickbooks_default_income_account_id || "",
       quickbooks_default_item_id: data.quickbooks_default_item_id || "",
-      quickbooks_gl_account_mappings: (data as any).quickbooks_gl_account_mappings || {},
+      quickbooks_gl_account_mappings: integrationData.quickbooks_gl_account_mappings || {},
       has_stripe_api_key: !!data.stripe_api_key,
       has_paypal_client_id: !!data.paypal_client_id,
       // Platform keys take priority - if they exist, service is configured
@@ -206,7 +213,7 @@ export async function updateIntegrationSettings(settings: {
   }
 
   // MEDIUM FIX 17: Build explicit updateData object to prevent column injection
-  const updateData: any = {}
+  const updateData: Record<string, unknown> = {}
   if (settings.quickbooks_enabled !== undefined) updateData.quickbooks_enabled = settings.quickbooks_enabled
   if (settings.quickbooks_api_key !== undefined) updateData.quickbooks_api_key = settings.quickbooks_api_key
   if (settings.quickbooks_api_secret !== undefined) updateData.quickbooks_api_secret = settings.quickbooks_api_secret

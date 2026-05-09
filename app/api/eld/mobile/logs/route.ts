@@ -4,6 +4,35 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getMobileAuthContext } from "@/lib/auth/mobile"
 import { ensureDriverIdForUser } from "@/lib/eld/ensure-driver"
 
+type IncomingLog = {
+  driver_id?: string
+  log_type?: string
+  status?: string
+  start_time?: string
+  startTime?: string
+  end_time?: string
+  endTime?: string
+  log_date?: string
+  date?: string
+  truck_id?: string
+  duration_minutes?: number
+  durationMinutes?: number
+  location_start?: unknown
+  startLocation?: unknown
+  location_end?: unknown
+  endLocation?: unknown
+  odometer_start?: number
+  odometerStart?: number
+  odometer_end?: number
+  odometerEnd?: number
+  miles_driven?: number
+  milesDriven?: number
+  engine_hours?: number
+  engineHours?: number
+  violations?: unknown
+  raw_data?: unknown
+}
+
 /**
  * Receive HOS (Hours of Service) log entries from mobile app
  * POST /api/eld/mobile/logs
@@ -68,10 +97,11 @@ export async function POST(request: NextRequest) {
 
     // Resolve driver IDs so ELD logs always store internal drivers.id.
     // Mobile app may send auth user id; platform dashboards read by drivers.id.
+    const incomingLogs = logs as IncomingLog[]
     const candidateDriverIds = Array.from(
       new Set(
-        logs
-          .map((log: any) => String(log?.driver_id || user?.id || "").trim())
+        incomingLogs
+          .map((log) => String(log?.driver_id || user?.id || "").trim())
           .filter((id: string) => id.length > 0)
       )
     )
@@ -112,9 +142,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Transform and validate logs
-    const logsToInsert = logs
-      .filter((log: any) => log.log_type && log.start_time) // Filter invalid logs
-      .map((log: any) => {
+    const logsToInsert = incomingLogs
+      .filter((log) => log.log_type && log.start_time) // Filter invalid logs
+      .map((log) => {
         // Parse log_date or use today
         const logDate = log.log_date || log.date || new Date().toISOString().split("T")[0]
         

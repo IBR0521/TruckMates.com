@@ -89,7 +89,7 @@ export function LoadDeliveryPointsManager({ deliveryPoints, onDeliveryPointsChan
     }
   }
 
-  const updateDeliveryPoint = (index: number, field: keyof DeliveryPoint, value: any) => {
+  const updateDeliveryPoint = (index: number, field: keyof DeliveryPoint, value: DeliveryPoint[keyof DeliveryPoint]) => {
     const newPoints = [...deliveryPoints]
     newPoints[index] = { ...newPoints[index], [field]: value }
     onDeliveryPointsChange(newPoints)

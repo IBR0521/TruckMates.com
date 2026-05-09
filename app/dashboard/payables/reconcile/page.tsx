@@ -18,14 +18,19 @@ import {
   setBankTransactionStatus,
 } from "@/app/actions/bank-reconciliation"
 
+type ReconciliationData = NonNullable<Awaited<ReturnType<typeof getBankReconciliationData>>["data"]>
+type ImportRow = ReconciliationData["imports"][number]
+type TransactionRow = ReconciliationData["transactions"][number]
+type ManualMatchOptions = NonNullable<Awaited<ReturnType<typeof getManualMatchCandidates>>["data"]>
+
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount || 0)
 }
 
 export default function BankReconciliationPage() {
   const [loading, setLoading] = useState(true)
-  const [imports, setImports] = useState<any[]>([])
-  const [transactions, setTransactions] = useState<any[]>([])
+  const [imports, setImports] = useState<ImportRow[]>([])
+  const [transactions, setTransactions] = useState<TransactionRow[]>([])
   const [summary, setSummary] = useState({ total: 0, matched: 0, unmatched: 0, ignored: 0 })
   const [latestImportId, setLatestImportId] = useState<string | null>(null)
 
@@ -36,7 +41,7 @@ export default function BankReconciliationPage() {
   const [submittingImport, setSubmittingImport] = useState(false)
 
   const [manualTxnId, setManualTxnId] = useState<string | null>(null)
-  const [manualOptions, setManualOptions] = useState<{ expenses: any[]; invoices: any[] }>({ expenses: [], invoices: [] })
+  const [manualOptions, setManualOptions] = useState<ManualMatchOptions>({ expenses: [], invoices: [] })
   const [manualValue, setManualValue] = useState("")
   const [manualSubmitting, setManualSubmitting] = useState(false)
 

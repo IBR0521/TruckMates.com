@@ -16,7 +16,7 @@ import { getGLAccounts } from "@/app/actions/gl-accounts"
 export default function CreateVendorInvoicePage() {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
-  const [vendors, setVendors] = useState<any[]>([])
+  const [vendors, setVendors] = useState<unknown[]>([])
   const [glAccounts, setGlAccounts] = useState<Array<{ id: string; code: string; name: string }>>([])
   const [loadingVendors, setLoadingVendors] = useState(true)
   const [form, setForm] = useState({

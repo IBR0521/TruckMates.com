@@ -26,14 +26,17 @@ type Props = {
   embeddedInEldShell?: boolean
 }
 
+type EldLogRow = NonNullable<Awaited<ReturnType<typeof getELDLogs>>["data"]>[number]
+type TruckRow = NonNullable<Awaited<ReturnType<typeof getTrucks>>["data"]>[number]
+
 /**
  * Fleet manager Logs experience: 24h HosLogGrid first, then filters + raw rows.
  * Used by `/dashboard/eld/logs` and the fleet ELD `?tab=logs` shell.
  */
 export function EldLogsTab({ embeddedInEldShell = false }: Props) {
-  const [logs, setLogs] = useState<any[]>([])
+  const [logs, setLogs] = useState<EldLogRow[]>([])
   const [drivers, setDrivers] = useState<{ id: string; name: string }[]>([])
-  const [trucks, setTrucks] = useState<any[]>([])
+  const [trucks, setTrucks] = useState<TruckRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [filters, setFilters] = useState({
     driver_id: "",

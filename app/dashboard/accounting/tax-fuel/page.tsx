@@ -63,12 +63,12 @@ const US_STATES = [
 ]
 
 export default function TaxFuelReconciliationPage() {
-  const [fuelPurchases, setFuelPurchases] = useState<any[]>([])
-  const [trucks, setTrucks] = useState<any[]>([])
-  const [drivers, setDrivers] = useState<any[]>([])
+  const [fuelPurchases, setFuelPurchases] = useState<unknown[]>([])
+  const [trucks, setTrucks] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<unknown[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
-  const [editingPurchase, setEditingPurchase] = useState<any>(null)
+  const [editingPurchase, setEditingPurchase] = useState<unknown>(null)
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false)
   const [filters, setFilters] = useState({
     startDate: "",
@@ -229,7 +229,7 @@ export default function TaxFuelReconciliationPage() {
     })
   }
 
-  function handleEdit(purchase: any) {
+  function handleEdit(purchase: unknown) {
     setEditingPurchase(purchase)
     setFormData({
       truck_id: purchase.truck_id || "",

@@ -7,11 +7,22 @@ import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/
 const NOTIFICATIONS_SELECT =
   "id, user_id, company_id, type, title, message, priority, metadata, read, read_at, created_at, updated_at"
 
+type RecordWithId = {
+  id?: unknown
+} & Record<string, unknown>
+
+type NotificationLike = {
+  id?: string
+  user_id?: string
+  read?: boolean
+  read_at?: string
+} & Record<string, unknown>
+
 /**
  * Hook for real-time subscriptions to Supabase tables
  * Automatically handles connection, reconnection, and cleanup
  */
-export function useRealtimeSubscription<T = any>(
+export function useRealtimeSubscription<T extends RecordWithId = RecordWithId>(
   table: string,
   options: {
     filter?: string // e.g., "company_id=eq.xxx"
@@ -54,7 +65,7 @@ export function useRealtimeSubscription<T = any>(
             table,
             filter: filter || undefined,
           },
-          (payload: RealtimePostgresChangesPayload<any>) => {
+          (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
             try {
               if (payload.eventType === "INSERT" && onInsert) {
                 onInsert(payload.new as T)
@@ -68,14 +79,16 @@ export function useRealtimeSubscription<T = any>(
               if (payload.eventType === "INSERT") {
                 setData((prev) => [...prev, payload.new as T])
               } else if (payload.eventType === "UPDATE") {
+                const newRow = payload.new as RecordWithId
                 setData((prev) =>
-                  prev.map((item: any) =>
-                    item.id === (payload.new as any).id ? payload.new : item
+                  prev.map((item) =>
+                    item.id === newRow.id ? (payload.new as T) : item
                   )
                 )
               } else if (payload.eventType === "DELETE") {
+                const oldRow = payload.old as RecordWithId
                 setData((prev) =>
-                  prev.filter((item: any) => item.id !== (payload.old as any).id)
+                  prev.filter((item) => item.id !== oldRow.id)
                 )
               }
             } catch (err) {
@@ -109,7 +122,7 @@ export function useRealtimeSubscription<T = any>(
 /**
  * Hook for real-time updates to a single record
  */
-export function useRealtimeRecord<T = any>(
+export function useRealtimeRecord<T = unknown>(
   table: string,
   recordId: string | null,
   options: {
@@ -138,7 +151,7 @@ export function useRealtimeRecord<T = any>(
           table,
           filter: `id=eq.${recordId}`,
         },
-        (payload: RealtimePostgresChangesPayload<any>) => {
+        (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
           const updated = payload.new as T
           setRecord(updated)
           if (onUpdate) {
@@ -163,7 +176,7 @@ export function useRealtimeRecord<T = any>(
  * Note: Requires notifications table in database
  */
 export function useRealtimeNotifications() {
-  const [notifications, setNotifications] = useState<any[]>([])
+  const [notifications, setNotifications] = useState<NotificationLike[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [userId, setUserId] = useState<string | null>(null)
   // FIXED: Memoize supabase client to avoid dependency issues
@@ -229,8 +242,8 @@ export function useRealtimeNotifications() {
             table: "notifications",
             filter: `user_id=eq.${userId}`, // FIXED: Filter by user_id
           },
-          (payload: RealtimePostgresChangesPayload<any>) => {
-            const notification = payload.new
+          (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
+            const notification = payload.new as NotificationLike
             // Only add if it's for this user
             if (notification.user_id === userId) {
               setNotifications((prev) => [notification, ...prev])

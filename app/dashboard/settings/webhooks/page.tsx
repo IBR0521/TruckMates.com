@@ -67,12 +67,12 @@ const WEBHOOK_EVENTS = [
 ] as const
 
 export default function WebhooksPage() {
-  const [webhooks, setWebhooks] = useState<any[]>([])
+  const [webhooks, setWebhooks] = useState<unknown[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
-  const [editingWebhook, setEditingWebhook] = useState<any>(null)
+  const [editingWebhook, setEditingWebhook] = useState<unknown>(null)
   const [selectedWebhook, setSelectedWebhook] = useState<string | null>(null)
-  const [deliveries, setDeliveries] = useState<any[]>([])
+  const [deliveries, setDeliveries] = useState<unknown[]>([])
   const [showDeliveries, setShowDeliveries] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -198,7 +198,7 @@ export default function WebhooksPage() {
     })
   }
 
-  function handleEdit(webhook: any) {
+  function handleEdit(webhook: unknown) {
     setEditingWebhook(webhook)
     setFormData({
       url: webhook.url,

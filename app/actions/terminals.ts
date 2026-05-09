@@ -1,18 +1,13 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkCreatePermission, checkDeletePermission, checkEditPermission, checkViewPermission } from "@/lib/server-permissions"
 import { revalidatePath } from "next/cache"
 import { sanitizeString } from "@/lib/validation"
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
 export async function getTerminals() {
   try {
     const supabase = await createClient()
@@ -141,7 +136,15 @@ export async function getTerminalMetrics() {
       .order("name", { ascending: true })
     if (error) return { error: safeDbError(error), data: null }
 
-    const out: Array<any> = []
+    const out: Array<{
+      id: string
+      name: string
+      timezone: string
+      trucks: number
+      drivers: number
+      loads: number
+      in_transit: number
+    }> = []
     for (const t of terminals || []) {
       const [trucks, drivers, loads, inTransit] = await Promise.all([
         supabase.from("trucks").select("id", { count: "exact", head: true }).eq("company_id", ctx.companyId).eq("terminal_id", t.id),
@@ -152,7 +155,7 @@ export async function getTerminalMetrics() {
       out.push({
         id: t.id,
         name: t.name,
-        timezone: t.timezone,
+        timezone: t.timezone || "UTC",
         trucks: trucks.count || 0,
         drivers: drivers.count || 0,
         loads: loads.count || 0,

@@ -3,12 +3,12 @@
 import { createContext, useContext } from "react"
 
 type LoadsInitialContextValue = {
-  initialLoads: any[] | null
+  initialLoads: unknown[] | null
   initialError: string | null
 }
 
 type DriversInitialContextValue = {
-  initialDrivers: any[] | null
+  initialDrivers: unknown[] | null
   initialCount: number | null
   initialError: string | null
 }

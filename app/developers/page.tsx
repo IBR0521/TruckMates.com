@@ -5,16 +5,23 @@ import { Card } from "@/components/ui/card"
 import Link from "next/link"
 
 export default function DevelopersPage() {
-  const [spec, setSpec] = useState<any>(null)
+  const [spec, setSpec] = useState<unknown>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     void (async () => {
       try {
         const response = await fetch("/api/v1/openapi")
-        const json = await response.json()
+        const json: unknown = await response.json()
         if (!response.ok) {
-          setError(json?.error || "Failed to load OpenAPI spec")
+          const message =
+            typeof json === "object" &&
+            json !== null &&
+            "error" in json &&
+            typeof json.error === "string"
+              ? json.error
+              : "Failed to load OpenAPI spec"
+          setError(message)
           return
         }
         setSpec(json)

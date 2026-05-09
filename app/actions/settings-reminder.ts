@@ -1,18 +1,9 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import * as Sentry from "@sentry/nextjs"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 export async function getReminderSettings() {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
@@ -89,7 +80,7 @@ export async function updateReminderSettings(settings: {
   }
 
   // MEDIUM FIX 17: Build explicit updateData object to prevent column injection
-  const updateData: any = {
+  const updateData: Record<string, unknown> = {
     company_id: ctx.companyId,
   }
   if (settings.email_enabled !== undefined) updateData.email_enabled = settings.email_enabled
@@ -120,15 +111,5 @@ export async function updateReminderSettings(settings: {
   revalidatePath("/dashboard/settings/reminder")
   return { success: true, error: null }
 }
-
-
-
-
-
-
-
-
-
-
 
 

@@ -5,6 +5,28 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+interface PdfPageLike {
+  setContent(html: string, options: { waitUntil: string }): Promise<void>
+  pdf(options: {
+    format: string
+    printBackground: boolean
+    margin: { top: string; right: string; bottom: string; left: string }
+  }): Promise<Buffer>
+}
+
+interface PdfBrowserLike {
+  newPage(): Promise<PdfPageLike>
+  close(): Promise<void>
+}
+
+interface PuppeteerLike {
+  launch(options: {
+    headless: boolean
+    args: string[]
+    executablePath?: string
+  }): Promise<PdfBrowserLike>
+}
+
 // Generate BOL PDF data (returns HTML that can be converted to PDF)
 export async function generateBOLPDF(bolId: string): Promise<{
   html: string
@@ -492,7 +514,7 @@ export async function generateBOLPDFFile(bolId: string): Promise<{
     
     try {
       // Try puppeteer-core first (for serverless/Vercel)
-      let puppeteer: any
+      let puppeteer: PuppeteerLike | null = null
       let executablePath: string | undefined
       let chromiumArgs: string[] | undefined
 
@@ -501,7 +523,15 @@ export async function generateBOLPDFFile(bolId: string): Promise<{
         const chromiumModule = await import(/* webpackIgnore: true */ "@sparticuz/chromium").catch(() => null)
         
         if (puppeteerCore && chromiumModule) {
-          puppeteer = puppeteerCore
+          const candidate = (puppeteerCore.default || puppeteerCore) as unknown
+          if (
+            typeof candidate === "object" &&
+            candidate !== null &&
+            "launch" in candidate &&
+            typeof (candidate as { launch?: unknown }).launch === "function"
+          ) {
+            puppeteer = candidate as PuppeteerLike
+          }
           // @sparticuz/chromium may export as default or named export
           const chromium = chromiumModule.default || chromiumModule
           executablePath = await chromium.executablePath()
@@ -510,7 +540,16 @@ export async function generateBOLPDFFile(bolId: string): Promise<{
       } catch {
         // Fallback: full `puppeteer` is optional (dev); production uses puppeteer-core + chromium
         // @ts-expect-error — `puppeteer` may not be installed; optional fallback for local dev
-        puppeteer = await import(/* webpackIgnore: true */ "puppeteer").catch(() => null)
+        const puppeteerModule = await import(/* webpackIgnore: true */ "puppeteer").catch(() => null)
+        const candidate = (puppeteerModule?.default || puppeteerModule) as unknown
+        if (
+          typeof candidate === "object" &&
+          candidate !== null &&
+          "launch" in candidate &&
+          typeof (candidate as { launch?: unknown }).launch === "function"
+        ) {
+          puppeteer = candidate as PuppeteerLike
+        }
       }
       
       if (!puppeteer) {

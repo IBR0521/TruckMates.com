@@ -199,7 +199,7 @@ export async function createPayPalSubscription(planId: string) {
     const subscription = await subscriptionResponse.json()
 
     // Find approval link
-    const approvalLink = subscription.links?.find((link: any) => link.rel === "approve")?.href
+    const approvalLink = subscription.links?.find((link: { rel?: string; href?: string }) => link.rel === "approve")?.href
 
     if (!approvalLink) {
       return { error: "Failed to get PayPal approval URL", data: null }

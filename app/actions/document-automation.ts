@@ -1,20 +1,11 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { getCompanySettings } from "./number-formats"
 import { checkCreatePermission, checkViewPermission } from "@/lib/server-permissions"
-import { sanitizeError } from "@/lib/error-message"
-import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /**
  * Auto-attach documents to loads based on settings
  */
@@ -136,7 +127,7 @@ export async function updateDocumentTemplates(templates: {
     return { error: "Only managers can update templates", data: null }
   }
 
-  const updateData: any = {}
+  const updateData: Record<string, unknown> = {}
   if (templates.bol_template !== undefined) {
     updateData.bol_template = templates.bol_template
   }

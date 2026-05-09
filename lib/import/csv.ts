@@ -43,7 +43,7 @@ export function mapRow<T>(
   row: CsvRow,
   mapping: Record<Extract<keyof T, string>, string>,
 ): T {
-  const out: any = {}
+  const out: Partial<Record<Extract<keyof T, string>, string | null>> = {}
   for (const [key, header] of Object.entries(mapping) as Array<[Extract<keyof T, string>, string]>) {
     out[key] = row[header] ?? null
   }

@@ -18,6 +18,21 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
 import { rateLimitRedis } from "@/lib/rate-limit-redis"
 
+type SmsTemplateData = {
+  routeName?: string
+  status?: string
+  destination?: string
+  shipmentNumber?: string
+  origin?: string
+  serviceType?: string
+  truckNumber?: string
+  scheduledDate?: string
+  driverName?: string
+  amount?: number | string
+  title?: string
+  violationType?: string
+}
+
 // Get Twilio client (returns null if not configured)
 async function getTwilioClient() {
   const accountSid = process.env.TWILIO_ACCOUNT_SID
@@ -130,7 +145,7 @@ export async function sendSMS(phoneNumber: string, message: string) {
 export async function sendSMSNotification(
   userId: string,
   type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "dispatch_assigned" | "violation_alert",
-  data: any
+  data: SmsTemplateData
 ) {
   const supabase = await createClient()
 
@@ -210,7 +225,7 @@ export async function sendSMSNotification(
 // Generate SMS message content
 function generateSMSMessage(
   type: "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "dispatch_assigned" | "violation_alert",
-  data: any
+  data: SmsTemplateData
 ): string {
   switch (type) {
     case "route_update":
@@ -278,11 +293,11 @@ export async function sendSMSToDriver(
         .limit(1000)
 
       const dispatchUserIds = (companyUsers || [])
-        .filter((u: any) => {
+        .filter((u: { id: string | number; role?: string | null }) => {
           const role = String(u?.role || "")
           return ["super_admin", "operations_manager", "dispatcher", "safety_compliance"].includes(role)
         })
-        .map((u: any) => String(u.id))
+        .map((u: { id: string | number }) => String(u.id))
 
       const participants = Array.from(
         new Set([ctx.userId, ...(driver.user_id ? [String(driver.user_id)] : []), ...dispatchUserIds]),
@@ -313,12 +328,16 @@ export async function sendSMSToDriver(
       }
 
       if (thread?.id) {
-        const unreadCount =
-          thread.unread_count && typeof thread.unread_count === "object" ? { ...thread.unread_count } : {}
+        const unreadCount: Record<string, number> =
+          thread.unread_count && typeof thread.unread_count === "object"
+            ? Object.fromEntries(
+                Object.entries(thread.unread_count as Record<string, unknown>).map(([k, v]) => [k, Number(v) || 0])
+              )
+            : {}
         for (const uid of participants) {
           if (uid === ctx.userId) continue
-          const current = Number((unreadCount as any)[uid] || 0)
-          ;(unreadCount as any)[uid] = current + 1
+          const current = Number(unreadCount[uid] || 0)
+          unreadCount[uid] = current + 1
         }
 
         await supabase.from("chat_messages").insert({

@@ -1,20 +1,11 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import crypto from "crypto"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
-import * as Sentry from "@sentry/nextjs"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /**
  * Generate a secure API key
  */
@@ -235,7 +226,7 @@ export async function updateAPIKey(
   }
 
   // MEDIUM FIX 9: Build explicit updateData object to prevent overwriting key_hash, company_id, etc.
-  const updateData: any = {}
+  const updateData: Record<string, unknown> = {}
   if (updates.name !== undefined) updateData.name = updates.name
   if (updates.is_active !== undefined) updateData.is_active = updates.is_active
   if (updates.rate_limit_per_minute !== undefined) updateData.rate_limit_per_minute = updates.rate_limit_per_minute

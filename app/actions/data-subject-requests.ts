@@ -6,6 +6,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import { createAuditLog } from "@/lib/audit-log"
 import { errorMessage } from "@/lib/error-message"
+import { safeDbError } from "@/lib/utils/error"
 
 type Jurisdiction = "gdpr" | "ccpa"
 type RequestType = "access_export" | "deletion" | "rectification" | "restriction"
@@ -149,7 +150,7 @@ export async function createDataSubjectRequest(input: {
       .insert(payload)
       .select("*")
       .single()
-    if (error) return { success: false, error: error.message || "Failed to submit request" }
+    if (error) return { success: false, error: safeDbError(error, "Failed to submit request") }
 
     await createAuditLog({
       action: "privacy.request.created",
@@ -188,7 +189,7 @@ export async function getMyDataSubjectRequests(): Promise<{ data: DataSubjectReq
       .eq("requester_user_id", ctx.userId)
       .order("requested_at", { ascending: false })
       .limit(100)
-    if (error) return { data: [], error: error.message || "Failed to load requests" }
+    if (error) return { data: [], error: safeDbError(error, "Failed to load requests") }
     return { data: (data || []) as DataSubjectRequestRow[], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
@@ -219,7 +220,7 @@ export async function getCompanyDataSubjectRequests(): Promise<{ data: DataSubje
       .order("requested_at", { ascending: false })
       .limit(300)
 
-    if (error) return { data: [], error: error.message || "Failed to load requests" }
+    if (error) return { data: [], error: safeDbError(error, "Failed to load requests") }
     return { data: (data || []) as DataSubjectRequestRow[], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
@@ -246,7 +247,7 @@ export async function updateDataSubjectRequest(input: {
       .eq("id", input.id)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
-    if (reqErr || !req) return { success: false, error: reqErr?.message || "Request not found" }
+    if (reqErr || !req) return { success: false, error: reqErr ? safeDbError(reqErr, "Request not found") : "Request not found" }
 
     let exportPayload: Record<string, unknown> | null = null
     if (input.status === "completed" && input.attach_export_payload) {
@@ -267,7 +268,7 @@ export async function updateDataSubjectRequest(input: {
     if (exportPayload) patch.export_payload = exportPayload
 
     const { error } = await supabase.from("data_subject_requests").update(patch).eq("id", input.id)
-    if (error) return { success: false, error: error.message || "Failed to update request" }
+    if (error) return { success: false, error: safeDbError(error, "Failed to update request") }
 
     await createAuditLog({
       action: `privacy.request.${input.status}`,
@@ -302,7 +303,7 @@ export async function getDataSubjectExportPayload(requestId: string): Promise<{
       .eq("id", requestId)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
-    if (error || !req) return { data: null, error: error?.message || "Request not found" }
+    if (error || !req) return { data: null, error: error ? safeDbError(error, "Request not found") : "Request not found" }
 
     const isOwner = String(req.requester_user_id) === String(ctx.userId)
     if (!isOwner && !isManagerRole(role)) return { data: null, error: "You do not have access to this export." }

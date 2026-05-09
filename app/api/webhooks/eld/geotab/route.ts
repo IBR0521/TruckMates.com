@@ -2,6 +2,62 @@ import { NextRequest, NextResponse } from "next/server"
 import crypto from "crypto"
 import { errorMessage } from "@/lib/error-message"
 
+type InsertClient = {
+  from: (table: string) => {
+    insert: (values: unknown) => Promise<{ error: unknown }>
+  }
+}
+
+type ELDDevice = {
+  id: string
+  company_id: string
+  truck_id: string | null
+}
+
+type GeotabEntity = {
+  type?: string
+  device?: { id?: string }
+  driver?: { id?: string }
+  driverId?: string
+  dutyStatus?: string
+  status?: string
+  dateTime?: string
+  startTime?: string
+  start?: string
+  endDateTime?: string
+  endTime?: string
+  startLocation?: { latitude?: number; longitude?: number }
+  endLocation?: { latitude?: number; longitude?: number }
+  startOdometer?: number
+  odometerStart?: number
+  endOdometer?: number
+  odometerEnd?: number
+  location?: string
+  locationName?: string
+  certified?: boolean
+  latitude?: number
+  lat?: number
+  longitude?: number
+  lng?: number
+  speed?: number
+  heading?: number
+  bearing?: number
+  timestamp?: string
+  severity?: string
+  exceptionType?: string
+  violation_type?: string
+  description?: string
+  message?: string
+}
+
+type GeotabWebhookData = GeotabEntity & {
+  entityType?: string
+  type?: string
+  entity?: GeotabEntity
+  deviceId?: string
+  device?: { id?: string }
+}
+
 /**
  * Geotab Webhook Endpoint
  * Receives real-time HOS logs, locations, and events from Geotab ELD devices
@@ -52,7 +108,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
     }
 
-    const body = JSON.parse(rawBody)
+    const body: GeotabWebhookData = JSON.parse(rawBody)
 
     // SECURITY: Use admin client for webhooks (no user session)
     const { createAdminClient } = await import("@/lib/supabase/admin")
@@ -74,22 +130,23 @@ export async function POST(request: NextRequest) {
       console.error("[Geotab Webhook] Device not found:", deviceId)
       return NextResponse.json({ error: "Device not found" }, { status: 404 })
     }
+    const typedDevice: ELDDevice = device
     
     // Process Geotab entity type
     switch (entityType) {
       case "LogRecord":
       case "hos_log":
-        await processHOSLog(body, device, supabase)
+        await processHOSLog(body, typedDevice, supabase)
         break
         
       case "StatusData":
       case "gps_location":
-        await processLocation(body, device, supabase)
+        await processLocation(body, typedDevice, supabase)
         break
         
       case "ExceptionEvent":
       case "hos_violation":
-        await processViolation(body, device, supabase)
+        await processViolation(body, typedDevice, supabase)
         break
         
       default:
@@ -106,7 +163,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function processHOSLog(data: any, device: any, supabase: any) {
+async function processHOSLog(data: GeotabWebhookData, device: ELDDevice, supabase: InsertClient) {
   const logData = data.entity || data
   
   // Derive log_date from start_time (required field)
@@ -159,7 +216,11 @@ async function processHOSLog(data: any, device: any, supabase: any) {
   }
 }
 
-async function processLocation(data: any, device: any, supabase: any) {
+async function processLocation(
+  data: GeotabWebhookData,
+  device: ELDDevice,
+  supabase: InsertClient
+) {
   const locationData = data.entity || data
   
   const location = {
@@ -188,7 +249,11 @@ async function processLocation(data: any, device: any, supabase: any) {
   }
 }
 
-async function processViolation(data: any, device: any, supabase: any) {
+async function processViolation(
+  data: GeotabWebhookData,
+  device: ELDDevice,
+  supabase: InsertClient
+) {
   const violationData = data.entity || data
   
   const event = {

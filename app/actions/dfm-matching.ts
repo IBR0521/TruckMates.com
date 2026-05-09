@@ -1,20 +1,15 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * Digital Freight Matching (DFM)
  * Automatically matches loads to available trucks
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 
 export interface MatchingTruck {
@@ -189,6 +184,5 @@ export async function autoMatchLoadToTrucks(loadId: string) {
     return { error: errorMessage(error, "Failed to auto-match load"), data: null }
   }
 }
-
 
 

@@ -36,6 +36,14 @@ interface SearchResult {
   keywords?: string
 }
 
+type LoadSearchItem = { id: string; shipment_number?: string; origin?: string; destination?: string; status?: string }
+type RouteSearchItem = { id: string; name?: string; origin?: string; destination?: string; status?: string }
+type DriverSearchItem = { id: string; name?: string; email?: string; phone?: string; license_number?: string; status?: string }
+type TruckSearchItem = { id: string; truck_number?: string; make?: string; model?: string; license_plate?: string; status?: string }
+type CustomerSearchItem = { id: string; name?: string; company_name?: string; email?: string; phone?: string; status?: string; customer_type?: string }
+type InvoiceSearchItem = { id: string; invoice_number?: string; customer_name?: string; amount?: number | string; status?: string }
+type DocumentSearchItem = { id: string; name?: string; type?: string }
+
 export function GlobalSearch() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -99,14 +107,14 @@ export function GlobalSearch() {
         if (loadsResult.data) {
           loadsResult.data
             .filter(
-              (load: any) =>
+              (load: LoadSearchItem) =>
                 load.shipment_number?.toLowerCase().includes(searchTerm) ||
                 load.origin?.toLowerCase().includes(searchTerm) ||
                 load.destination?.toLowerCase().includes(searchTerm) ||
                 load.status?.toLowerCase().includes(searchTerm)
             )
             .slice(0, 5)
-            .forEach((load: any) => {
+            .forEach((load: LoadSearchItem) => {
               allResults.push({
                 id: load.id,
                 type: "load",
@@ -124,14 +132,14 @@ export function GlobalSearch() {
         if (routesResult.data) {
           routesResult.data
             .filter(
-              (route: any) =>
+              (route: RouteSearchItem) =>
                 route.name?.toLowerCase().includes(searchTerm) ||
                 route.origin?.toLowerCase().includes(searchTerm) ||
                 route.destination?.toLowerCase().includes(searchTerm) ||
                 route.status?.toLowerCase().includes(searchTerm)
             )
             .slice(0, 5)
-            .forEach((route: any) => {
+            .forEach((route: RouteSearchItem) => {
               allResults.push({
                 id: route.id,
                 type: "route",
@@ -149,14 +157,14 @@ export function GlobalSearch() {
         if (driversResult.data) {
           driversResult.data
             .filter(
-              (driver: any) =>
+              (driver: DriverSearchItem) =>
                 driver.name?.toLowerCase().includes(searchTerm) ||
                 driver.email?.toLowerCase().includes(searchTerm) ||
                 driver.phone?.includes(searchTerm) ||
                 driver.license_number?.toLowerCase().includes(searchTerm)
             )
             .slice(0, 5)
-            .forEach((driver: any) => {
+            .forEach((driver: DriverSearchItem) => {
               allResults.push({
                 id: driver.id,
                 type: "driver",
@@ -174,14 +182,14 @@ export function GlobalSearch() {
         if (trucksResult.data) {
           trucksResult.data
             .filter(
-              (truck: any) =>
+              (truck: TruckSearchItem) =>
                 truck.truck_number?.toLowerCase().includes(searchTerm) ||
                 truck.make?.toLowerCase().includes(searchTerm) ||
                 truck.model?.toLowerCase().includes(searchTerm) ||
                 truck.license_plate?.toLowerCase().includes(searchTerm)
             )
             .slice(0, 5)
-            .forEach((truck: any) => {
+            .forEach((truck: TruckSearchItem) => {
               allResults.push({
                 id: truck.id,
                 type: "truck",
@@ -199,7 +207,7 @@ export function GlobalSearch() {
         if (customersResult.data) {
           customersResult.data
             .slice(0, 5)
-            .forEach((customer: any) => {
+            .forEach((customer: CustomerSearchItem) => {
               allResults.push({
                 id: customer.id,
                 type: "customer",
@@ -217,14 +225,14 @@ export function GlobalSearch() {
         if (invoicesResult.data) {
           invoicesResult.data
             .filter(
-              (invoice: any) =>
+              (invoice: InvoiceSearchItem) =>
                 invoice.invoice_number?.toLowerCase().includes(searchTerm) ||
                 invoice.customer_name?.toLowerCase().includes(searchTerm) ||
                 String(invoice.amount || "").toLowerCase().includes(searchTerm) ||
                 invoice.status?.toLowerCase().includes(searchTerm)
             )
             .slice(0, 5)
-            .forEach((invoice: any) => {
+            .forEach((invoice: InvoiceSearchItem) => {
               allResults.push({
                 id: invoice.id,
                 type: "invoice",
@@ -242,12 +250,12 @@ export function GlobalSearch() {
         if (documentsResult.data) {
           documentsResult.data
             .filter(
-              (document: any) =>
+              (document: DocumentSearchItem) =>
                 document.name?.toLowerCase().includes(searchTerm) ||
                 document.type?.toLowerCase().includes(searchTerm)
             )
             .slice(0, 5)
-            .forEach((document: any) => {
+            .forEach((document: DocumentSearchItem) => {
               allResults.push({
                 id: document.id,
                 type: "document",

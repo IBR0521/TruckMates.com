@@ -1,7 +1,8 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -16,11 +17,6 @@ import {
   purgeAllDriversKeepOneForCompany,
 } from "@/lib/drivers/collapse-duplicate-driver-rows"
 
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
 function toNormalizedPhone(raw: string | null | undefined): string | null {
   const value = String(raw || "").trim()
   if (!value) return null
@@ -33,6 +29,14 @@ function toNormalizedPhone(raw: string | null | undefined): string | null {
 
 const DRIVER_LIST_SELECT =
   "id, name, email, phone, status, license_number, license_expiry, truck_id, terminal_id, created_at"
+
+type ReconcileCompanyUser = {
+  id?: string | null
+  role?: string | null
+  email?: string | null
+  full_name?: string | null
+  phone?: string | null
+}
 
 function invalidateDriverDashboardCaches(companyId: string) {
   cache.delete(cacheKeys.dashboardStats(companyId))
@@ -159,7 +163,7 @@ export async function getDrivers(filters?: {
       }
 
       const missing = (companyUsers || [])
-        .filter((u: any) => {
+        .filter((u: ReconcileCompanyUser) => {
           if (!u?.id) return false
           const normalizedRole = mapLegacyRole(String(u?.role ?? "").trim())
           if (normalizedRole !== "driver") return false
@@ -169,7 +173,7 @@ export async function getDrivers(filters?: {
           if (emailLower && existingByEmail.has(emailLower)) return false
           return true
         })
-        .map((u: any) => {
+        .map((u: ReconcileCompanyUser) => {
           const emailLower = (u.email || "").toLowerCase().trim()
           const name =
             (u.full_name || "").toString().trim() ||
@@ -327,7 +331,8 @@ export async function getDriver(id: string) {
       
       // Add truck data to driver object
       if (truck) {
-        (driver as any).truck = truck
+        const driverWithTruck = driver as typeof driver & { truck?: typeof truck }
+        driverWithTruck.truck = truck
       }
     }
 
@@ -348,7 +353,7 @@ export async function createDriver(formData: {
   status?: string
   truck_id?: string | null
   terminal_id?: string | null
-  [key: string]: any // Allow additional fields
+  [key: string]: unknown // Allow additional fields
 }) {
   // Check permission
   const permission = await checkCreatePermission("drivers")
@@ -494,7 +499,7 @@ export async function createDriver(formData: {
 
   // Build insert data with professional sanitization
   // Include all extended fields from the drivers table schema
-  const driverData: any = {
+  const driverData: Record<string, unknown> = {
     company_id: ctx.companyId,
     name: sanitizeString(formData.name, 100),
     status: formData.status || "active",
@@ -618,7 +623,7 @@ export async function updateDriver(
     license_expiry?: string | null
     status?: string
     truck_id?: string | null
-    [key: string]: any
+    [key: string]: unknown
   }
 ) {
   // Check permission
@@ -689,11 +694,11 @@ export async function updateDriver(
 
   // Build update data, only including fields that are provided
   // Include all extended fields from the drivers table schema
-  const updateData: any = {}
-  const changes: Array<{ field: string; old_value: any; new_value: any }> = []
+  const updateData: Record<string, unknown> = {}
+  const changes: Array<{ field: string; old_value: unknown; new_value: unknown }> = []
   
   // Helper function to check and update field
-  const updateField = (field: string, newValue: any, oldValue: any = null) => {
+  const updateField = (field: string, newValue: unknown, oldValue: unknown = null) => {
     const currentValue = oldValue !== null ? oldValue : (currentDriver[field] ?? null)
     if (newValue !== undefined && newValue !== currentValue) {
       updateData[field] = newValue === "" ? null : newValue
@@ -813,7 +818,8 @@ export async function updateDriver(
     
     // Add truck data to driver object
     if (truck) {
-      (data as any).truck = truck
+      const dataWithTruck = data as typeof data & { truck?: typeof truck }
+      dataWithTruck.truck = truck
     }
   }
 

@@ -20,14 +20,41 @@ import { getPortalAccessByToken, getCustomerPortalInvoices } from "@/app/actions
 import { toast } from "sonner"
 import Link from "next/link"
 
+type PortalAccess = {
+  company?: { name?: string; phone?: string; email?: string }
+}
+
+type InvoiceItem = {
+  description?: string
+  name?: string
+  quantity?: number | string
+  rate?: number | string
+  amount?: number | string
+}
+
+type PortalInvoice = {
+  id?: string
+  invoice_number?: string
+  description?: string
+  status?: string
+  amount?: number | string
+  issue_date?: string | null
+  due_date?: string | null
+  paid_date?: string | null
+  customer_name?: string
+  items?: InvoiceItem[]
+  tax?: number | string
+  notes?: string
+}
+
 export default function CustomerPortalInvoicePage() {
   const params = useParams()
   const router = useRouter()
   const token = params.token as string
   const invoiceId = params.id as string
   const [isLoading, setIsLoading] = useState(true)
-  const [invoice, setInvoice] = useState<any>(null)
-  const [portalAccess, setPortalAccess] = useState<any>(null)
+  const [invoice, setInvoice] = useState<PortalInvoice | null>(null)
+  const [portalAccess, setPortalAccess] = useState<PortalAccess | null>(null)
 
   useEffect(() => {
     async function loadData() {
@@ -48,7 +75,7 @@ export default function CustomerPortalInvoicePage() {
           return
         }
 
-        const foundInvoice = invoicesResult.data.find((inv: any) => inv.id === invoiceId)
+        const foundInvoice = invoicesResult.data.find((inv: PortalInvoice) => inv.id === invoiceId)
         if (!foundInvoice) {
           toast.error("Invoice not found")
           router.push(`/portal/${token}`)
@@ -128,7 +155,7 @@ export default function CustomerPortalInvoicePage() {
     )
   }
 
-  const items = (invoice.items as any[]) || []
+  const items = invoice.items || []
   const subtotal = items.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0)
   const tax = parseFloat(invoice.tax || 0)
   const total = subtotal + tax
@@ -231,7 +258,7 @@ export default function CustomerPortalInvoicePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((item: any, index: number) => (
+                      {items.map((item, index: number) => (
                         <tr key={index} className="border-b">
                           <td className="py-2 px-3 text-sm">{item.description || item.name || "N/A"}</td>
                           <td className="py-2 px-3 text-sm text-right">{item.quantity || 1}</td>

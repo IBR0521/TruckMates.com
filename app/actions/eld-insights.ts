@@ -13,6 +13,34 @@ const ELD_LOGS_SELECT =
 const ELD_EVENTS_SELECT =
   "id, company_id, eld_device_id, driver_id, truck_id, event_type, severity, title, description, event_time, location, resolved, resolved_at, resolved_by, metadata, created_at, fault_code, fault_code_category, fault_code_description, maintenance_created, maintenance_id"
 
+type EldInsight = {
+  type: "warning" | "success" | "info" | "critical"
+  title: string
+  description: string
+  severity: "warning" | "info" | "critical"
+  action: string
+}
+type EldRecommendation = {
+  type: "training" | "safety" | "recognition"
+  title: string
+  description: string
+  action: string
+  priority: "high" | "medium" | "low"
+}
+type EldViolation = {
+  event_time: string
+  event_type: string
+  drivers?: { name?: string | null } | null
+}
+type EldLog = {
+  driver_id: string | null
+  log_type: string
+  miles_driven?: number | string | null
+  duration_minutes?: number | null
+  location_start?: { address?: string } | null
+  location_end?: { address?: string } | null
+}
+
 // Generate AI-powered insights based on ELD data
 export async function generateELDInsights(driverId?: string, days: number = 7) {
   // FIXED: Add RBAC check
@@ -77,11 +105,11 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
   }
 
   // Analyze patterns and generate insights
-  const insights: any[] = []
+  const insights: EldInsight[] = []
 
   // 1. Violation trends
   const violationCounts: Record<string, number> = {}
-  violations?.forEach((v: { event_time: string; [key: string]: any }) => {
+  violations?.forEach((v: EldViolation) => {
     const date = new Date(v.event_time).toISOString().split('T')[0]
     violationCounts[date] = (violationCounts[date] || 0) + 1
   })
@@ -126,7 +154,7 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
   // 2. Driver performance comparison
   if (!driverId) {
     const driverViolations: Record<string, number> = {}
-    violations?.forEach((v: { drivers?: { name?: string }; [key: string]: any }) => {
+    violations?.forEach((v: EldViolation) => {
       const driverName = v.drivers?.name || "Unknown"
       driverViolations[driverName] = (driverViolations[driverName] || 0) + 1
     })
@@ -157,7 +185,7 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
 
   // 3. Route efficiency
   const routeMiles: Record<string, number> = {}
-  logs?.forEach((log: { log_type: string; miles_driven?: number | string | null; location_start?: { address?: string }; location_end?: { address?: string }; [key: string]: any }) => {
+  logs?.forEach((log: EldLog) => {
     if (log.log_type === "driving" && log.miles_driven) {
       const routeKey = `${log.location_start?.address || "Unknown"} → ${log.location_end?.address || "Unknown"}`
       routeMiles[routeKey] = (routeMiles[routeKey] || 0) + Number(log.miles_driven)
@@ -166,7 +194,7 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
 
   // 4. Time-based patterns
   const hourViolations: Record<number, number> = {}
-  violations?.forEach((v: { event_time: string; [key: string]: any }) => {
+  violations?.forEach((v: EldViolation) => {
     const hour = new Date(v.event_time).getHours()
     hourViolations[hour] = (hourViolations[hour] || 0) + 1
   })
@@ -184,7 +212,7 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
 
   // 5. Compliance score trend
   const totalViolations = violations?.length || 0
-  const totalDrivers = new Set(logs?.map((l: { driver_id: string | null; [key: string]: any }) => l.driver_id).filter(Boolean)).size || 1
+  const totalDrivers = new Set(logs?.map((l: EldLog) => l.driver_id).filter(Boolean)).size || 1
   const avgViolationsPerDriver = totalViolations / totalDrivers
 
   if (avgViolationsPerDriver > 2) {
@@ -207,12 +235,12 @@ export async function generateELDInsights(driverId?: string, days: number = 7) {
 
   // 6. Efficiency insights
   const totalMiles = logs
-    ?.filter((l: { log_type: string; miles_driven?: number | string | null; [key: string]: any }) => l.log_type === "driving")
-    .reduce((sum: number, l: { log_type: string; miles_driven?: number | string | null; [key: string]: any }) => sum + (Number(l.miles_driven) || 0), 0) || 0
+    ?.filter((l: EldLog) => l.log_type === "driving")
+    .reduce((sum: number, l: EldLog) => sum + (Number(l.miles_driven) || 0), 0) || 0
 
   const totalDrivingHours = logs
-    ?.filter((l: { log_type: string; duration_minutes?: number | null; [key: string]: any }) => l.log_type === "driving")
-    .reduce((sum: number, l: { log_type: string; duration_minutes?: number | null; [key: string]: any }) => sum + (l.duration_minutes || 0) / 60, 0) || 0
+    ?.filter((l: EldLog) => l.log_type === "driving")
+    .reduce((sum: number, l: EldLog) => sum + (l.duration_minutes || 0) / 60, 0) || 0
 
   const avgSpeed = totalDrivingHours > 0 ? totalMiles / totalDrivingHours : 0
 
@@ -266,11 +294,11 @@ export async function getDriverRecommendations(driverId: string) {
     return { error: violationsError.message, data: null }
   }
 
-  const recommendations: any[] = []
+  const recommendations: EldRecommendation[] = []
 
   // Analyze violation types
   const violationTypes: Record<string, number> = {}
-  violations?.forEach((v: { event_type: string; [key: string]: any }) => {
+  violations?.forEach((v: EldViolation) => {
     violationTypes[v.event_type] = (violationTypes[v.event_type] || 0) + 1
   })
 
@@ -371,8 +399,8 @@ export async function getDriverBehaviorScore(driverId: string, days: number = 30
     // Calculate score components
     const totalViolations = violations?.length || 0
     const totalDrivingHours = logs
-      ?.filter((l: { log_type: string; duration_minutes?: number | null; [key: string]: any }) => l.log_type === "driving")
-      .reduce((sum: number, l: { log_type: string; duration_minutes?: number | null; [key: string]: any }) => sum + (l.duration_minutes || 0) / 60, 0) || 0
+      ?.filter((l: EldLog) => l.log_type === "driving")
+      .reduce((sum: number, l: EldLog) => sum + (l.duration_minutes || 0) / 60, 0) || 0
 
     // Violation score (0-50 points)
     // Fewer violations = higher score
@@ -394,12 +422,12 @@ export async function getDriverBehaviorScore(driverId: string, days: number = 30
 
     // Compliance score (0-30 points)
     // Based on HOS compliance
-    const hosViolations = violations?.filter((v: { event_type: string; [key: string]: any }) => v.event_type === "hos_violation").length || 0
+    const hosViolations = violations?.filter((v: EldViolation) => v.event_type === "hos_violation").length || 0
     const complianceScore = hosViolations === 0 ? 30 : Math.max(0, 30 - (hosViolations * 5))
 
     // Safety score (0-20 points)
     // Based on safety-related violations
-    const safetyViolations = violations?.filter((v: { event_type: string; [key: string]: any }) => 
+    const safetyViolations = violations?.filter((v: EldViolation) => 
       v.event_type === "hard_brake" || v.event_type === "speeding"
     ).length || 0
     const safetyScore = safetyViolations === 0 ? 20 : Math.max(0, 20 - (safetyViolations * 2))
@@ -490,16 +518,16 @@ export async function getAllDriverBehaviorScores(days: number = 30) {
       })
     )
 
-    const validScores = scores.filter((s) => s !== null)
+    const validScores = scores.filter((s): s is { score: number } => s !== null)
 
     // Sort by score (highest first)
-    validScores.sort((a: any, b: any) => b.score - a.score)
+    validScores.sort((a, b) => b.score - a.score)
 
     return {
       data: {
         scores: validScores,
         average_score: validScores.length > 0
-          ? Math.round(validScores.reduce((sum: number, s: any) => sum + s.score, 0) / validScores.length)
+          ? Math.round(validScores.reduce((sum: number, s) => sum + s.score, 0) / validScores.length)
           : 0,
         total_drivers: validScores.length,
       },

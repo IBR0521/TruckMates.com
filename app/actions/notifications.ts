@@ -1,7 +1,8 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -9,14 +10,6 @@ import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-ses
 import { createAdminClient } from "@/lib/supabase/admin"
 import { mapLegacyRole } from "@/lib/roles"
 import { getResendClientForCompany } from "@/lib/resend-client"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 type NotificationType =
   | "route_update"
   | "load_update"
@@ -28,6 +21,36 @@ type NotificationType =
   | "marketplace_new_matching_load"
   | "morning_digest"
   | "violation_alert"
+
+interface NotificationData {
+  routeName?: string
+  status?: string
+  shipmentNumber?: string
+  truckNumber?: string
+  serviceType?: string
+  driverName?: string
+  amount?: number | string
+  title?: string
+  description?: string
+  due_date?: string
+  count?: number | string
+  inTransitLoads?: number
+  scheduledLoads?: number
+  deliveredToday?: number
+  activeAlerts?: number
+  criticalAlerts?: number
+  maintenanceDue?: number
+  overdueInvoices?: number
+  priority?: string
+  message?: string
+  origin?: string
+  destination?: string
+  scheduledDate?: string
+  period?: string
+  rate?: number | string
+  violationType?: string
+  [key: string]: unknown
+}
 
 const NOTIFICATION_PREFS_SELECT =
   "id, user_id, email_alerts, sms_alerts, weekly_reports, route_updates, load_updates, maintenance_alerts, payment_reminders, created_at, updated_at"
@@ -129,7 +152,7 @@ function escapeHtml(text: string | null | undefined): string {
 export async function sendNotification(
   userId: string,
   type: NotificationType,
-  data: any
+  data: NotificationData
 ) {
   const supabase = await createClient()
 
@@ -198,7 +221,7 @@ export async function sendNotification(
       break
   }
 
-  const results: { email?: any; sms?: any } = {}
+  const results: { email?: Record<string, unknown>; sms?: Record<string, unknown> } = {}
 
   // Send email notification
   if (shouldNotifyEmail) {
@@ -239,7 +262,7 @@ export async function sendNotification(
 
           if (result.error) {
             Sentry.captureException(result.error)
-            results.email = { sent: false, reason: result.error.message || "Failed to send email" }
+            results.email = { sent: false, reason: safeDbError(result.error, "Failed to send email") }
           } else {
             results.email = { sent: true, email: userData.email, messageId: result.data?.id }
           }
@@ -370,7 +393,7 @@ export async function sendNotification(
 // Helper function to generate email content
 function getEmailContent(
   type: NotificationType,
-  data: any,
+  data: NotificationData,
   userName: string
 ) {
   const baseStyle = `
@@ -723,7 +746,7 @@ export async function sendTestEmail() {
 
     if (result.error) {
       Sentry.captureException(result.error)
-      return { sent: false, error: result.error.message || "Failed to send test email" }
+      return { sent: false, error: safeDbError(result.error, "Failed to send test email") }
     }
 
     return { 
@@ -897,7 +920,7 @@ export async function cleanupReadNotifications(olderThanDays: number = 90) {
 
     return {
       data: { success: !error, cutoffISO: cutoff },
-      error: error ? error.message : null,
+      error: error ? safeDbError(error, "Failed to cleanup notifications") : null,
     }
   } catch (err: unknown) {
     return {
@@ -925,7 +948,7 @@ export async function dispatchMorningDigests() {
     .limit(2000)
 
   if (usersError) {
-    return { data: null, error: usersError.message }
+    return { data: null, error: safeDbError(usersError, "Failed to load manager users") }
   }
 
   const users = managerUsers || []

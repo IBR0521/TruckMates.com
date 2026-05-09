@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/alert-dialog"
 
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState<any[]>([])
+  const [alerts, setAlerts] = useState<unknown[]>([])
   const [alertCounts, setAlertCounts] = useState({ active: 0, critical: 0, acknowledged: 0, resolved: 0 }) // FIXED: Use efficient counts instead of fetching all records
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState("active") // active, acknowledged, resolved, all
@@ -30,7 +30,7 @@ export default function AlertsPage() {
   // FIXED: Add confirmation dialog state
   const [acknowledgeDialogOpen, setAcknowledgeDialogOpen] = useState(false)
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
-  const [selectedAlert, setSelectedAlert] = useState<any>(null)
+  const [selectedAlert, setSelectedAlert] = useState<unknown>(null)
 
   useEffect(() => {
     loadAlerts()
@@ -69,12 +69,12 @@ export default function AlertsPage() {
   }
 
   // FIXED: Add confirmation dialogs before actions
-  function handleAcknowledgeClick(alert: any) {
+  function handleAcknowledgeClick(alert: unknown) {
     setSelectedAlert(alert)
     setAcknowledgeDialogOpen(true)
   }
 
-  function handleResolveClick(alert: any) {
+  function handleResolveClick(alert: unknown) {
     setSelectedAlert(alert)
     setResolveDialogOpen(true)
   }

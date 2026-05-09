@@ -28,6 +28,12 @@ import { FormPageLayout, FormSection, FormGrid } from "@/components/dashboard/fo
 import { Slider } from "@/components/ui/slider"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
+type DriverOption = {
+  id: string
+  name: string
+}
+type UpgradeAwareResult = { upgrade?: { required?: boolean } }
+
 export default function AddVehiclePage() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const wizardSteps = [
@@ -43,7 +49,7 @@ export default function AddVehiclePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [activeStep, setActiveStep] = useState<WizardStepKey>("basic")
   const [isDecodingVin, setIsDecodingVin] = useState(false)
-  const [drivers, setDrivers] = useState<any[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
   const [formData, setFormData] = useState({
     truckNumber: "",
     vehicleType: "",
@@ -265,7 +271,7 @@ export default function AddVehiclePage() {
     setIsSubmitting(false)
 
     if (result.error) {
-      if ((result as any)?.upgrade?.required) {
+      if ((result as UpgradeAwareResult)?.upgrade?.required) {
         setShowUpgradeModal(true)
       }
       toast.error(result.error)

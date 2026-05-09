@@ -1,18 +1,11 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /**
  * Invoice Three-Way Matching
  * Verifies invoices against load data and BOLs
@@ -250,7 +243,7 @@ export async function batchVerifyInvoices() {
     // RCE-002 FIX: Batch verify invoices in parallel instead of sequential N+1 queries
     // This prevents timeouts on Vercel's 30-second function limit
     const verificationResults = await Promise.all(
-      invoices.map(async (invoice: { id: string; [key: string]: any }) => {
+      invoices.map(async (invoice: { id: string; [key: string]: unknown }) => {
         try {
           const { data: verification, error: verifyError } = await supabase.rpc(
             "verify_invoice_three_way_match",
@@ -312,6 +305,5 @@ export async function batchVerifyInvoices() {
     return { error: errorMessage(error, "Failed to batch verify invoices"), data: null }
   }
 }
-
 
 

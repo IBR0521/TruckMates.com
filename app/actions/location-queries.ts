@@ -7,8 +7,31 @@
 
 import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+
+type RadiusLocationRow = {
+  id: string
+  timestamp?: string | null
+  location_timestamp?: string | null
+}
+
+type LocationIdRow = {
+  id: string
+}
+
+type NearestLocationRow = {
+  id: string
+  latitude: number
+  longitude: number
+  timestamp: string
+  speed: number | null
+  heading: number | null
+  eld_device_id: string | null
+  truck_id: string | null
+  driver_id: string | null
+}
 
 /**
  * Find all locations within a radius using PostGIS
@@ -43,8 +66,8 @@ export async function findLocationsWithinRadius(
     const limit = filters?.limit ?? 200
 
     // Prefer the newer, bounded RPC (if deployed); fall back to the legacy RPC.
-    let data: any[] = []
-    let rpcError: any = null
+    let data: RadiusLocationRow[] = []
+    let rpcError: unknown = null
     try {
       const rpcResult = await supabase.rpc('find_locations_within_radius_filtered', {
         center_lat: centerLat,
@@ -71,7 +94,7 @@ export async function findLocationsWithinRadius(
       })
 
       if (legacyResult.error) {
-        return { error: legacyResult.error.message, data: null }
+        return { error: safeDbError(legacyResult.error, "Failed to find locations"), data: null }
       }
 
       data = legacyResult.data || []
@@ -85,12 +108,12 @@ export async function findLocationsWithinRadius(
       const { data: locations } = await supabase
         .from('eld_locations')
         .select('id, eld_device_id, truck_id, driver_id, timestamp')
-        .in('id', filteredData.map((d: any) => d.id))
+        .in('id', filteredData.map((d) => d.id))
         .eq('eld_device_id', filters.device_id)
       
       if (locations) {
-        const locationIds = new Set(locations.map((l: { id: string; [key: string]: any }) => l.id))
-        filteredData = filteredData.filter((d: any) => locationIds.has(d.id))
+        const locationIds = new Set((locations as LocationIdRow[]).map((l) => l.id))
+        filteredData = filteredData.filter((d) => locationIds.has(d.id))
       }
     }
 
@@ -98,17 +121,17 @@ export async function findLocationsWithinRadius(
       const { data: locations } = await supabase
         .from('eld_locations')
         .select('id, truck_id')
-        .in('id', filteredData.map((d: any) => d.id))
+        .in('id', filteredData.map((d) => d.id))
         .eq('truck_id', filters.truck_id)
       
       if (locations) {
-        const locationIds = new Set(locations.map((l: { id: string; [key: string]: any }) => l.id))
-        filteredData = filteredData.filter((d: any) => locationIds.has(d.id))
+        const locationIds = new Set((locations as LocationIdRow[]).map((l) => l.id))
+        filteredData = filteredData.filter((d) => locationIds.has(d.id))
       }
     }
 
     // Filter by time window (handles both `timestamp` and `location_timestamp` fields).
-    filteredData = filteredData.filter((d: any) => {
+    filteredData = filteredData.filter((d) => {
       const ts = d.timestamp ?? d.location_timestamp
       if (!ts) return false
       const ms = new Date(ts).getTime()
@@ -215,7 +238,7 @@ export async function findNearestLocations(
       const { data: locations, error: fallbackError } = await query
 
       if (fallbackError) {
-        return { error: fallbackError.message, data: null }
+        return { error: safeDbError(fallbackError, "Failed to find nearest locations"), data: null }
       }
 
       if (!locations || locations.length === 0) {
@@ -224,7 +247,7 @@ export async function findNearestLocations(
 
       // Calculate distances using PostGIS for each location (fallback only)
       const locationsWithDistance = await Promise.all(
-        locations.map(async (loc: { id: string; latitude: number; longitude: number; timestamp: string; speed: number | null; heading: number | null; eld_device_id: string | null; truck_id: string | null; driver_id: string | null; [key: string]: any }) => {
+        (locations as NearestLocationRow[]).map(async (loc) => {
           const distanceResult = await calculateDistancePostGIS(
             centerLat,
             centerLng,

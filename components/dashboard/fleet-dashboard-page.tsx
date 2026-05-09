@@ -44,6 +44,11 @@ type MetricCardProps = {
   secondary?: Array<{ label: string; value: string | number; tone?: "good" | "warning" | "danger" | "neutral" }>
 }
 
+type RecentActivityItem = {
+  action: string
+  time: string | null
+}
+
 const TONE_STYLES = {
   good: "text-emerald-400 border-emerald-500/35 bg-emerald-500/8",
   warning: "text-amber-400 border-amber-500/35 bg-amber-500/8",
@@ -653,7 +658,7 @@ export default function FleetDashboardPage({
                   <p className="text-sm text-muted-foreground">No recent activity</p>
                 ) : (
                   <div className="space-y-1">
-                    {recentActivity.map((activity: any, index: number) => (
+                    {recentActivity.map((activity: RecentActivityItem, index: number) => (
                       <div key={index} className="flex items-start gap-3 rounded-md border-b border-border/30 py-3 last:border-0">
                         <div className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-md border ${getActivityVisual(activity.action).tone}`}>
                           {(() => {

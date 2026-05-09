@@ -4,6 +4,60 @@ import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+type FuelExpense = {
+  id: string
+  amount: string | number
+  date: string
+  mileage: number | null
+  truck_id: string | null
+  driver_id?: string | null
+  description: string | null
+  gallons: number | string | null
+  price_per_gallon: number | string | null
+  trucks?: { truck_number?: string | null } | null
+  drivers?: { name?: string | null } | null
+}
+
+type TruckAnalyticsEntry = {
+  truck_id: string
+  truck_number: string
+  total_fuel_cost: number
+  total_fuel_expenses: number
+  total_miles: number
+  avg_mpg: number | null
+  avg_cost_per_mile: number | null
+  mpg_data: Array<{ date: string; mpg: number; cost_per_mile: number }>
+  fuel_expenses: FuelExpense[]
+}
+
+type RouteFuelCostEntry = {
+  route_id: string
+  route_number: string
+  origin: string
+  destination: string
+  total_fuel_cost: number
+  fuel_expenses_count: number
+}
+
+type EfficiencyEntry = {
+  expenses: FuelExpense[]
+  total_cost: number
+  total_gallons: number
+  total_miles: number
+  avg_mpg?: number | null
+  avg_cost_per_mile?: number | null
+}
+
+type TruckEfficiencyEntry = EfficiencyEntry & {
+  truck_id: string
+  truck_number: string
+}
+
+type DriverEfficiencyEntry = EfficiencyEntry & {
+  driver_id: string
+  driver_name: string
+}
+
 /**
  * Get fuel analytics for a truck or all trucks
  */
@@ -68,7 +122,7 @@ export async function getFuelAnalytics(filters?: {
     const totalFuelExpenses = expenses.length
 
     // Calculate MPG per truck
-    const truckAnalytics: Record<string, any> = {}
+    const truckAnalytics: Record<string, TruckAnalyticsEntry> = {}
     
     for (const truck of trucks || []) {
       const truckExpenses = expenses.filter((e: { id: string; amount: string | number; date: string; mileage: number | null; truck_id: string | null; description: string | null; gallons: number | string | null; price_per_gallon: number | string | null }) => e.truck_id === truck.id)
@@ -196,16 +250,16 @@ export async function getFuelAnalytics(filters?: {
 
     // Calculate miles per month from truck analytics
     // Use the total_miles from each truck's analytics, grouped by month
-    Object.values(truckAnalytics).forEach((truck: any) => {
+    Object.values(truckAnalytics).forEach((truck) => {
       // Group fuel expenses by month to estimate miles per month
       const monthlyTruckMiles: Record<string, number> = {}
       
-      truck.fuel_expenses?.forEach((expense: any, index: number) => {
+      truck.fuel_expenses?.forEach((expense) => {
         const date = new Date(expense.date)
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
         
         // Estimate miles for this month based on MPG data
-        const mpgEntriesForMonth = truck.mpg_data?.filter((mpg: any) => {
+        const mpgEntriesForMonth = truck.mpg_data?.filter((mpg) => {
           const mpgDate = new Date(mpg.date)
           const mpgMonthKey = `${mpgDate.getFullYear()}-${String(mpgDate.getMonth() + 1).padStart(2, '0')}`
           return mpgMonthKey === monthKey
@@ -216,7 +270,7 @@ export async function getFuelAnalytics(filters?: {
         if (mpgEntriesForMonth.length > 0) {
           // Estimate: average MPG * estimated gallons per fill
           const avgMPG = mpgEntriesForMonth.length > 0 
-            ? mpgEntriesForMonth.reduce((sum: number, mpg: any) => sum + mpg.mpg, 0) / mpgEntriesForMonth.length
+            ? mpgEntriesForMonth.reduce((sum: number, mpg) => sum + mpg.mpg, 0) / mpgEntriesForMonth.length
             : 0
           const estimatedGallons = parseFloat(expense.amount) / 3.50 // Rough estimate
           monthlyTruckMiles[monthKey] = (monthlyTruckMiles[monthKey] || 0) + (avgMPG * estimatedGallons)
@@ -312,12 +366,12 @@ export async function getFuelCostPerRoute(filters?: {
 
     // Calculate fuel cost per route
     // Since route_id might not be in expenses, we'll match by truck_id and date proximity
-    const routeFuelCosts: Record<string, any> = {}
+    const routeFuelCosts: Record<string, RouteFuelCostEntry> = {}
 
     for (const route of routes || []) {
       // Try to match expenses to routes by truck_id and date
       // This is approximate - ideally expenses would have route_id
-      const routeExpenses = (fuelExpenses || []).filter((e: { id: string; amount: string | number; date: string; mileage: number | null; truck_id: string | null; [key: string]: any }) => {
+      const routeExpenses = ((fuelExpenses || []) as FuelExpense[]).filter((e) => {
         // Match by truck if route has truck_id
         if (route.truck_id && e.truck_id === route.truck_id) {
           return true
@@ -325,7 +379,7 @@ export async function getFuelCostPerRoute(filters?: {
         return false
       })
       
-      const totalCost = routeExpenses.reduce((sum: number, e: { id: string; amount: string | number; date: string; mileage: number | null; truck_id: string | null; [key: string]: any }) => sum + (parseFloat(String(e.amount)) || 0), 0)
+      const totalCost = routeExpenses.reduce((sum: number, e) => sum + (parseFloat(String(e.amount)) || 0), 0)
       
       if (routeExpenses.length > 0) {
         routeFuelCosts[route.id] = {
@@ -408,11 +462,11 @@ export async function getFuelEfficiencyReport(filters?: {
     const expenses = fuelExpenses || []
 
     // Calculate by truck
-    const truckEfficiency: Record<string, any> = {}
-    const driverEfficiency: Record<string, any> = {}
+    const truckEfficiency: Record<string, TruckEfficiencyEntry> = {}
+    const driverEfficiency: Record<string, DriverEfficiencyEntry> = {}
 
     // Group expenses by truck
-    expenses.forEach((expense: any) => {
+    ;(expenses as FuelExpense[]).forEach((expense) => {
       if (!expense.truck_id) return
 
       const truckId = expense.truck_id
@@ -436,7 +490,7 @@ export async function getFuelEfficiencyReport(filters?: {
     })
 
     // Group expenses by driver
-    expenses.forEach((expense: any) => {
+    ;(expenses as FuelExpense[]).forEach((expense) => {
       if (!expense.driver_id) return
 
       const driverId = expense.driver_id
@@ -460,8 +514,8 @@ export async function getFuelEfficiencyReport(filters?: {
     })
 
     // Calculate MPG for each truck (using consecutive fills)
-    Object.values(truckEfficiency).forEach((truck: any) => {
-      const sortedExpenses = [...truck.expenses].sort((a: any, b: any) =>
+    Object.values(truckEfficiency).forEach((truck) => {
+      const sortedExpenses = [...truck.expenses].sort((a, b) =>
         new Date(a.date).getTime() - new Date(b.date).getTime()
       )
 
@@ -508,8 +562,8 @@ export async function getFuelEfficiencyReport(filters?: {
     })
 
     // Calculate MPG for each driver (using consecutive fills)
-    Object.values(driverEfficiency).forEach((driver: any) => {
-      const sortedExpenses = [...driver.expenses].sort((a: any, b: any) =>
+    Object.values(driverEfficiency).forEach((driver) => {
+      const sortedExpenses = [...driver.expenses].sort((a, b) =>
         new Date(a.date).getTime() - new Date(b.date).getTime()
       )
 
@@ -557,9 +611,9 @@ export async function getFuelEfficiencyReport(filters?: {
 
     // Sort and format results
     const truckResults = Object.values(truckEfficiency)
-      .filter((t: any) => t.avg_mpg !== null)
-      .sort((a: any, b: any) => (b.avg_mpg || 0) - (a.avg_mpg || 0))
-      .map((t: any) => ({
+      .filter((t) => t.avg_mpg !== null)
+      .sort((a, b) => (b.avg_mpg || 0) - (a.avg_mpg || 0))
+      .map((t) => ({
         truck_id: t.truck_id,
         truck_number: t.truck_number,
         total_cost: Math.round(t.total_cost * 100) / 100,
@@ -571,9 +625,9 @@ export async function getFuelEfficiencyReport(filters?: {
       }))
 
     const driverResults = Object.values(driverEfficiency)
-      .filter((d: any) => d.avg_mpg !== null)
-      .sort((a: any, b: any) => (b.avg_mpg || 0) - (a.avg_mpg || 0))
-      .map((d: any) => ({
+      .filter((d) => d.avg_mpg !== null)
+      .sort((a, b) => (b.avg_mpg || 0) - (a.avg_mpg || 0))
+      .map((d) => ({
         driver_id: d.driver_id,
         driver_name: d.driver_name,
         total_cost: Math.round(d.total_cost * 100) / 100,

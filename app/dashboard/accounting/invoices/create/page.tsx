@@ -22,7 +22,7 @@ import {
 
 export default function CreateInvoicePage() {
   const router = useRouter()
-  const [loads, setLoads] = useState<any[]>([])
+  const [loads, setLoads] = useState<unknown[]>([])
   const [isLoadingLoads, setIsLoadingLoads] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({

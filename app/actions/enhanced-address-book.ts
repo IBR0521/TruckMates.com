@@ -1,5 +1,6 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * Enhanced Address Book Actions
  * Features:
@@ -10,18 +11,12 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { geocodeAddress } from "./integrations-google-maps"
 import { analyzeDocument } from "./document-analysis"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 
 export type AddressBookCategory = 
@@ -56,7 +51,7 @@ export interface AddressBookEntry {
   formatted_address?: string
   place_id?: string
   category: AddressBookCategory
-  custom_fields: Record<string, any>
+  custom_fields: Record<string, unknown>
   notes?: string
   is_active: boolean
   is_verified: boolean
@@ -84,11 +79,41 @@ export interface CreateAddressBookEntryInput {
   zip_code: string
   country?: string
   category: AddressBookCategory
-  custom_fields?: Record<string, any>
+  custom_fields?: Record<string, unknown>
   notes?: string
   auto_create_geofence?: boolean
   geofence_radius_meters?: number
   auto_geocode?: boolean // Auto-geocode on creation
+}
+
+type AddressBookRow = Omit<AddressBookEntry, "coordinates"> & {
+  coordinates: unknown
+}
+
+type BatchCoordinateResult = {
+  point_index: number
+  lat: number | string
+  lng: number | string
+}
+
+type ExtractedAddressData = {
+  shipper_name?: string
+  shipper_company?: string
+  origin_address?: string
+  origin?: string
+  origin_city?: string
+  origin_state?: string
+  origin_zip?: string
+  pickup_notes?: string
+  special_instructions?: string
+  receiver_name?: string
+  receiver_company?: string
+  destination_address?: string
+  destination?: string
+  destination_city?: string
+  destination_state?: string
+  destination_zip?: string
+  delivery_notes?: string
 }
 
 /**
@@ -362,8 +387,9 @@ export async function getAddressBookEntries(filters?: {
 
     // OPTIMIZED: Batch extract coordinates for all entries in a single RPC call
     // This eliminates N+1 queries - processes all points at once
-    const entriesWithCoordinates = (data || []).filter((entry: any) => entry.coordinates)
-    const coordinatesArray = entriesWithCoordinates.map((entry: any) => entry.coordinates)
+    const rows = (data || []) as AddressBookRow[]
+    const entriesWithCoordinates = rows.filter((entry) => entry.coordinates)
+    const coordinatesArray = entriesWithCoordinates.map((entry) => entry.coordinates)
     
     let coordinatesMap: Map<number, { lat: number; lng: number }> = new Map()
     
@@ -375,7 +401,7 @@ export async function getAddressBookEntries(filters?: {
       
       if (!coordError && batchCoords) {
         // Map coordinates by index
-        batchCoords.forEach((coord: any) => {
+        ;(batchCoords as BatchCoordinateResult[]).forEach((coord) => {
           coordinatesMap.set(coord.point_index, { lat: Number(coord.lat), lng: Number(coord.lng) })
         })
       }
@@ -383,7 +409,7 @@ export async function getAddressBookEntries(filters?: {
     
     // Merge coordinates back into entries
     let coordIndex = 0
-    const entries: AddressBookEntry[] = (data || []).map((entry: any) => {
+    const entries: AddressBookEntry[] = rows.map((entry) => {
       let coordinates: { lat: number; lng: number } | null = null
       if (entry.coordinates) {
         const coords = coordinatesMap.get(coordIndex)
@@ -443,7 +469,7 @@ export async function findNearbyAddresses(
     }
 
     // Coordinates are already extracted in the RPC function - no additional queries needed
-    const entries = (data || []).map((entry: any) => ({
+    const entries = ((data || []) as Array<AddressBookEntry & { lat?: number; lng?: number }>).map((entry) => ({
       ...entry,
       coordinates: entry.lat && entry.lng ? { lat: Number(entry.lat), lng: Number(entry.lng) } : null,
     }))
@@ -685,18 +711,19 @@ export async function extractAddressesFromRateCon(
     const extracted = analysisResult.data
 
     // Extract shipper and receiver addresses from load/route data
+    const extractedData = extracted.data as ExtractedAddressData
     const shipper: CreateAddressBookEntryInput | undefined = extracted.type === "load" || extracted.type === "route_and_load"
       ? {
-          name: (extracted.data as any).shipper_name || "Shipper",
-          company_name: (extracted.data as any).shipper_company,
-          address_line1: (extracted.data as any).origin_address || (extracted.data as any).origin,
-          city: (extracted.data as any).origin_city,
-          state: (extracted.data as any).origin_state,
-          zip_code: (extracted.data as any).origin_zip,
+          name: extractedData.shipper_name || "Shipper",
+          company_name: extractedData.shipper_company,
+          address_line1: extractedData.origin_address || extractedData.origin,
+          city: extractedData.origin_city,
+          state: extractedData.origin_state,
+          zip_code: extractedData.origin_zip,
           category: "shipper",
           custom_fields: {
-            pickup_notes: (extracted.data as any).pickup_notes,
-            special_instructions: (extracted.data as any).special_instructions,
+            pickup_notes: extractedData.pickup_notes,
+            special_instructions: extractedData.special_instructions,
           },
           auto_geocode: true,
         }
@@ -704,16 +731,16 @@ export async function extractAddressesFromRateCon(
 
     const receiver: CreateAddressBookEntryInput | undefined = extracted.type === "load" || extracted.type === "route_and_load"
       ? {
-          name: (extracted.data as any).receiver_name || "Receiver",
-          company_name: (extracted.data as any).receiver_company,
-          address_line1: (extracted.data as any).destination_address || (extracted.data as any).destination,
-          city: (extracted.data as any).destination_city,
-          state: (extracted.data as any).destination_state,
-          zip_code: (extracted.data as any).destination_zip,
+          name: extractedData.receiver_name || "Receiver",
+          company_name: extractedData.receiver_company,
+          address_line1: extractedData.destination_address || extractedData.destination,
+          city: extractedData.destination_city,
+          state: extractedData.destination_state,
+          zip_code: extractedData.destination_zip,
           category: "receiver",
           custom_fields: {
-            delivery_notes: (extracted.data as any).delivery_notes,
-            special_instructions: (extracted.data as any).special_instructions,
+            delivery_notes: extractedData.delivery_notes,
+            special_instructions: extractedData.special_instructions,
           },
           auto_geocode: true,
         }
@@ -751,7 +778,7 @@ export async function updateAddressBookEntry(
   }
 
   try {
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
 
     if (updates.name !== undefined) updateData.name = updates.name
     if (updates.company_name !== undefined) updateData.company_name = updates.company_name

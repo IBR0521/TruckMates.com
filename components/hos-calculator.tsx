@@ -17,10 +17,22 @@ import { calculateRemainingHOS } from "@/app/actions/eld-advanced"
 import { getDrivers } from "@/app/actions/drivers"
 import { toast } from "sonner"
 
+type DriverOption = { id: string; name: string }
+
+type HosSummary = {
+  canDrive: boolean
+  violations: string[]
+  drivingHours: number
+  onDutyHours: number
+  remainingDriving: number
+  remainingOnDuty: number
+  needsBreak: boolean
+}
+
 export function HOSCalculator() {
   const [driverId, setDriverId] = useState("")
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [hosData, setHosData] = useState<any>(null)
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
+  const [hosData, setHosData] = useState<HosSummary | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
 

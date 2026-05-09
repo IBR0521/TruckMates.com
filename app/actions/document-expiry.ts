@@ -293,7 +293,7 @@ export async function createExpiryAlerts(daysAhead: number = 30) {
 
   // Create a set of existing alert item IDs for deduplication
   const existingAlertItems = new Set<string>()
-  existingAlerts?.forEach((alert: any) => {
+  existingAlerts?.forEach((alert: { metadata?: { item_id?: string } | null }) => {
     if (alert.metadata?.item_id) {
       existingAlertItems.add(alert.metadata.item_id)
     }
@@ -372,7 +372,7 @@ export async function createExpiryAlerts(daysAhead: number = 30) {
 /**
  * Helper function to generate alert message for expiring items
  */
-function getExpiryAlertMessage(item: any): string {
+function getExpiryAlertMessage(item: { days_until_expiry: number; name?: string | null; item_type: string }): string {
   const days = item.days_until_expiry
   const itemName = item.name || item.item_type
   const itemType = item.item_type.replace("_", " ")
@@ -389,7 +389,7 @@ function getExpiryAlertMessage(item: any): string {
 /**
  * Helper function to generate alert message for expired items
  */
-function getExpiredAlertMessage(item: any): string {
+function getExpiredAlertMessage(item: { days_expired: number; name?: string | null; item_type: string }): string {
   const days = item.days_expired
   const itemName = item.name || item.item_type
   const itemType = item.item_type.replace("_", " ")

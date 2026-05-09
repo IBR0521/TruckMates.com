@@ -104,7 +104,7 @@ export async function getRevenueTrend(period: Period = 'weekly') {
 
     // FIXED: Track which loads have invoices to prevent double-counting
     const loadIdsWithInvoices = new Set<string>()
-    invoices?.forEach((inv: any) => {
+    invoices?.forEach((inv: { load_id: string | null }) => {
       if (inv.load_id) {
         loadIdsWithInvoices.add(inv.load_id)
       }
@@ -130,7 +130,7 @@ export async function getRevenueTrend(period: Period = 'weekly') {
 
     // Process invoices
     if (invoices && invoices.length > 0) {
-      invoices.forEach((inv: any) => {
+      invoices.forEach((inv: { amount: number | string | null; created_at: string | null; issue_date: string | null }) => {
         let date: Date | null = null
         if (inv.created_at) {
           date = new Date(inv.created_at)
@@ -160,7 +160,7 @@ export async function getRevenueTrend(period: Period = 'weekly') {
 
     // FIXED: Process loads - only add if no invoice exists for that load (no 0.5 factor)
     if (loads && loads.length > 0) {
-      loads.forEach((load: any) => {
+      loads.forEach((load: { id: string | null; created_at: string | null; total_rate: number | string | null; value: number | string | null }) => {
         if (!load.created_at) return
         // Skip if this load already has an invoice
         if (load.id && loadIdsWithInvoices.has(load.id)) {

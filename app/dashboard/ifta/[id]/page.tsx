@@ -14,7 +14,7 @@ import { getIFTAReport } from "@/app/actions/tax-fuel-reconciliation"
 export default function IFTADetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
-  const [report, setReport] = useState<any>(null)
+  const [report, setReport] = useState<unknown>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -170,16 +170,16 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
             <Card className="border-border p-4 bg-secondary/20">
               <p className="text-sm font-medium text-foreground mb-1">Mileage data sources</p>
               <p className="text-sm text-muted-foreground">
-                {(report.ifta_data_sources as any).summary ||
+                {(report.ifta_data_sources as unknown).summary ||
                   "GPS/trip sheet mix (see per-state below)."}
               </p>
               <div className="flex flex-wrap gap-2 mt-2">
-                {(report.ifta_data_sources as any).uses_gps && (
+                {(report.ifta_data_sources as unknown).uses_gps && (
                   <span className="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
                     GPS / ELD crossings
                   </span>
                 )}
-                {(report.ifta_data_sources as any).uses_trip_sheets && (
+                {(report.ifta_data_sources as unknown).uses_trip_sheets && (
                   <span className="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40">
                     Manual trip sheets
                   </span>
@@ -212,7 +212,7 @@ export default function IFTADetailPage({ params }: { params: Promise<{ id: strin
                     </tr>
                   </thead>
                   <tbody>
-                    {report.state_breakdown.map((state: any, i: number) => {
+                    {report.state_breakdown.map((state: unknown, i: number) => {
                       // FIXED: Align field names with what createIFTAReport actually stores
                       // createIFTAReport stores: state, miles, fuel (number), tax (number), taxRate
                       // Detail page expects: state, miles, gallons, tax_rate, tax_due, tax_paid, net_tax_due

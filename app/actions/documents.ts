@@ -1,7 +1,8 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
@@ -9,14 +10,6 @@ import { mapLegacyRole } from "@/lib/roles"
 import { checkViewPermission, checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 import { validateFileMagicBytes } from "@/lib/file-signature"
 import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /**
  * Documents:
  * - **driver** — rows tied to their `drivers.id`, uploads under their auth folder (`{userId}/…` in `file_url`), or fleet can set `driver_id` on upload.

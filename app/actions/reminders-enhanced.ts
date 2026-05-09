@@ -1,18 +1,11 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /** Matches `public.reminders` in supabase/trucklogics_features_schema.sql */
 const REMINDERS_SELECT = `
   id, company_id, title, description, reminder_type,
@@ -65,7 +58,7 @@ export async function autoCreateMaintenanceReminders(): Promise<{
  * Get reminders for dashboard widget
  */
 export async function getDashboardReminders(limit: number = 5): Promise<{
-  data: any[] | null
+  data: Array<Record<string, unknown> & { due_date: string; isOverdue: boolean }> | null
   error: string | null
 }> {
   const supabase = await createClient()
@@ -105,8 +98,8 @@ export async function getDashboardReminders(limit: number = 5): Promise<{
 
     // Combine and sort: overdue first, then by due date
     const allReminders = [
-      ...(overdue || []).map((r: any) => ({ ...r, isOverdue: true })),
-      ...(upcoming || []).map((r: any) => ({ ...r, isOverdue: false })),
+      ...(overdue || []).map((r: Record<string, unknown>) => ({ ...r, isOverdue: true })),
+      ...(upcoming || []).map((r: Record<string, unknown>) => ({ ...r, isOverdue: false })),
     ].sort((a, b) => {
       if (a.isOverdue && !b.isOverdue) return -1
       if (!a.isOverdue && b.isOverdue) return 1
@@ -120,6 +113,5 @@ export async function getDashboardReminders(limit: number = 5): Promise<{
     return { error: message, data: null }
   }
 }
-
 
 

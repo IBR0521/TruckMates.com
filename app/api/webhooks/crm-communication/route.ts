@@ -3,6 +3,20 @@ import { errorMessage } from "@/lib/error-message"
 import { logCommunicationFromWebhook } from "@/app/actions/crm-communication"
 import crypto from "crypto"
 
+type WebhookBody = {
+  source?: string
+  company_id?: string
+  metadata?: Record<string, unknown>
+  resource?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+type CommunicationPayload = {
+  customer_id?: string | null
+  vendor_id?: string | null
+  [key: string]: unknown
+}
+
 /**
  * Webhook endpoint for automated communication logging
  * Supports SendGrid, Postmark, Twilio, and custom webhooks
@@ -22,7 +36,7 @@ export async function POST(req: NextRequest) {
 
     // Get raw body for signature verification (if needed)
     const rawBody = await req.text()
-    let body: any = {}
+    let body: WebhookBody = {}
 
     // Verify SendGrid/Postmark signature if present (HMAC-SHA256)
     const sendgridSig = req.headers.get("x-sendgrid-signature")
@@ -83,7 +97,7 @@ export async function POST(req: NextRequest) {
     const source = req.headers.get("x-webhook-source") || body.source || "webhook"
 
     // Extract communication data based on source
-    let communicationData: any = {}
+    let communicationData: CommunicationPayload = {}
 
     if (source === "sendgrid" || source === "postmark") {
       // Email webhook format

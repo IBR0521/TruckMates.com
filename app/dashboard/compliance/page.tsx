@@ -64,6 +64,12 @@ type ComplianceRegistration = {
   company_id: string
 }
 
+type RoadsideInspection = NonNullable<NonNullable<Awaited<ReturnType<typeof getRoadsideInspections>>["data"]>[number]>
+type IncidentRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getIncidents>>["data"]>[number]>
+type DriverRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getDrivers>>["data"]>[number]>
+type TruckRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getTrucks>>["data"]>[number]>
+type CSAScoreRow = NonNullable<NonNullable<Awaited<ReturnType<typeof getCSAScoreHistory>>["data"]>[number]>
+
 function daysUntil(date: string) {
   const target = new Date(date)
   target.setHours(0, 0, 0, 0)
@@ -100,21 +106,21 @@ export default function CompliancePage() {
   })
   const [roadsideLoading, setRoadsideLoading] = useState(true)
   const [roadsideSaving, setRoadsideSaving] = useState(false)
-  const [roadsideItems, setRoadsideItems] = useState<any[]>([])
-  const [roadsideEditItem, setRoadsideEditItem] = useState<any | null>(null)
+  const [roadsideItems, setRoadsideItems] = useState<RoadsideInspection[]>([])
+  const [roadsideEditItem, setRoadsideEditItem] = useState<RoadsideInspection | null>(null)
   const [roadsideDeleteId, setRoadsideDeleteId] = useState<string | null>(null)
   const [roadsideDialogOpen, setRoadsideDialogOpen] = useState(false)
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [trucks, setTrucks] = useState<any[]>([])
+  const [drivers, setDrivers] = useState<DriverRecord[]>([])
+  const [trucks, setTrucks] = useState<TruckRecord[]>([])
   const [incidentLoading, setIncidentLoading] = useState(true)
   const [incidentSaving, setIncidentSaving] = useState(false)
-  const [incidentItems, setIncidentItems] = useState<any[]>([])
-  const [incidentEditItem, setIncidentEditItem] = useState<any | null>(null)
+  const [incidentItems, setIncidentItems] = useState<IncidentRecord[]>([])
+  const [incidentEditItem, setIncidentEditItem] = useState<IncidentRecord | null>(null)
   const [incidentDeleteId, setIncidentDeleteId] = useState<string | null>(null)
   const [incidentDialogOpen, setIncidentDialogOpen] = useState(false)
   const [exportingRegister, setExportingRegister] = useState(false)
   const [csaLoading, setCsaLoading] = useState(true)
-  const [csaRows, setCsaRows] = useState<any[]>([])
+  const [csaRows, setCsaRows] = useState<CSAScoreRow[]>([])
   const [incidentForm, setIncidentForm] = useState({
     incident_date: "",
     location: "",
@@ -222,7 +228,7 @@ export default function CompliancePage() {
     setRoadsideDialogOpen(true)
   }
 
-  function openRoadsideEdit(item: any) {
+  function openRoadsideEdit(item: RoadsideInspection) {
     setRoadsideEditItem(item)
     setRoadsideForm({
       inspection_date: item.inspection_date || "",
@@ -308,7 +314,7 @@ export default function CompliancePage() {
     setIncidentDialogOpen(true)
   }
 
-  function openIncidentEdit(item: any) {
+  function openIncidentEdit(item: IncidentRecord) {
     setIncidentEditItem(item)
     setIncidentForm({
       incident_date: item.incident_date || "",

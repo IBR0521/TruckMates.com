@@ -40,6 +40,14 @@ import { ROLES, mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 const SIX_ROLES: EmployeeRole[] = ["super_admin", "operations_manager", "dispatcher", "safety_compliance", "financial_controller", "driver"]
+type CompanyUser = {
+  id: string
+  email: string
+  full_name: string | null
+  phone: string | null
+  role: string
+}
+type UpgradeAwareResult = { upgrade?: { required?: boolean } }
 
 function getRoleDisplayName(rawRole: string): string {
   const mapped = mapLegacyRole(rawRole)
@@ -103,7 +111,7 @@ export default function UsersSettingsPage() {
         } else {
           if (usersResult.data) {
             setUsers(
-              usersResult.data.map((u: any) => ({
+              usersResult.data.map((u: CompanyUser) => ({
                 id: u.id,
                 email: u.email,
                 full_name: u.full_name,
@@ -139,7 +147,7 @@ export default function UsersSettingsPage() {
       toast.success("User role updated successfully")
       const reloadResult = await getCompanyUsers()
       if (reloadResult.data) {
-        setUsers(reloadResult.data.map((u: any) => ({
+        setUsers(reloadResult.data.map((u: CompanyUser) => ({
           id: u.id,
           email: u.email,
           full_name: u.full_name,
@@ -165,7 +173,7 @@ export default function UsersSettingsPage() {
       // Reload users
       const reloadResult = await getCompanyUsers()
       if (reloadResult.data) {
-        setUsers(reloadResult.data.map((u: any) => ({
+        setUsers(reloadResult.data.map((u: CompanyUser) => ({
           id: u.id,
           email: u.email,
           full_name: u.full_name,
@@ -191,7 +199,7 @@ export default function UsersSettingsPage() {
       })
 
       if (result.error) {
-        if ((result as any)?.upgrade?.required) {
+        if ((result as UpgradeAwareResult)?.upgrade?.required) {
           setShowUpgradeModal(true)
         }
         toast.error(result.error)

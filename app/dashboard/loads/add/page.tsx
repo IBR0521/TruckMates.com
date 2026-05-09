@@ -72,6 +72,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
+type DriverOption = NonNullable<NonNullable<Awaited<ReturnType<typeof getDrivers>>["data"]>[number]>
+type TruckOption = NonNullable<NonNullable<Awaited<ReturnType<typeof getTrucks>>["data"]>[number]>
+type TrailerOption = NonNullable<NonNullable<Awaited<ReturnType<typeof getTrailers>>["data"]>[number]>
+type RouteOption = NonNullable<NonNullable<Awaited<ReturnType<typeof getRoutes>>["data"]>[number]>
+type CustomerOption = NonNullable<NonNullable<Awaited<ReturnType<typeof getCustomers>>["data"]>[number]>
+type DeliveryPoint = { state?: string | null; delivery_state?: string | null; [key: string]: unknown }
+type CreateLoadPayload = Parameters<typeof createLoad>[0]
+
 export default function AddLoadPage() {
   const wizardSteps = [
     { key: "load-info", label: "Load Info", required: true },
@@ -86,13 +94,13 @@ export default function AddLoadPage() {
 
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [trucks, setTrucks] = useState<any[]>([])
-  const [trailers, setTrailers] = useState<any[]>([])
-  const [routes, setRoutes] = useState<any[]>([])
-  const [customers, setCustomers] = useState<any[]>([])
-  const [deliveryPoints, setDeliveryPoints] = useState<any[]>([])
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
+  const [trailers, setTrailers] = useState<TrailerOption[]>([])
+  const [routes, setRoutes] = useState<RouteOption[]>([])
+  const [customers, setCustomers] = useState<CustomerOption[]>([])
+  const [deliveryPoints, setDeliveryPoints] = useState<DeliveryPoint[]>([])
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null)
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [showAddShipper, setShowAddShipper] = useState(false)
   const [showAddConsignee, setShowAddConsignee] = useState(false)
@@ -277,7 +285,7 @@ export default function AddLoadPage() {
           [
             formData.shipperState,
             formData.consigneeState,
-            ...deliveryPoints.map((point: any) => point?.state || point?.delivery_state || ""),
+            ...deliveryPoints.map((point: DeliveryPoint) => point?.state || point?.delivery_state || ""),
           ]
             .map((x) => String(x || "").trim().toUpperCase())
             .filter(Boolean),
@@ -666,7 +674,7 @@ export default function AddLoadPage() {
 
       const multiStop = deliveryPoints.length > 0
       const effectiveStatus = submitAsStatus || formData.status
-      const payload: any = {
+      const payload: CreateLoadPayload = {
         shipment_number: formData.autoNumbering ? "" : formData.shipmentNumber,
       origin: formData.origin,
         destination: multiStop ? "Multiple Locations" : formData.destination,

@@ -22,6 +22,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+type DriverRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getDrivers>>["data"]>[number]>
+type DriverLoad = NonNullable<NonNullable<Awaited<ReturnType<typeof getDriverLoadsForPeriod>>["data"]>[number]>
+type FuelExpense = NonNullable<NonNullable<Awaited<ReturnType<typeof getDriverFuelExpensesForPeriod>>["data"]>[number]>
+type ELDLogRecord = { log_type?: string | null; miles_driven?: number | string | null }
+
 function calculateCalendarNightsBetween(pickupRaw: string, deliveryRaw: string): number {
   const pickup = new Date(pickupRaw)
   const delivery = new Date(deliveryRaw)
@@ -33,12 +38,12 @@ function calculateCalendarNightsBetween(pickupRaw: string, deliveryRaw: string):
 
 export default function CreateSettlementPage() {
   const router = useRouter()
-  const [drivers, setDrivers] = useState<any[]>([])
+  const [drivers, setDrivers] = useState<DriverRecord[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isCalculating, setIsCalculating] = useState(false)
-  const [selectedLoads, setSelectedLoads] = useState<any[]>([])
-  const [fuelExpenses, setFuelExpenses] = useState<any[]>([])
-  const [selectedDriver, setSelectedDriver] = useState<any>(null)
+  const [selectedLoads, setSelectedLoads] = useState<DriverLoad[]>([])
+  const [fuelExpenses, setFuelExpenses] = useState<FuelExpense[]>([])
+  const [selectedDriver, setSelectedDriver] = useState<DriverRecord | null>(null)
   const [glAccounts, setGlAccounts] = useState<Array<{ id: string; code: string; name: string }>>([])
   const [perDiemRate, setPerDiemRate] = useState<number>(69)
   const [perDiemEligibleNights, setPerDiemEligibleNights] = useState<number>(0)
@@ -98,7 +103,7 @@ export default function CreateSettlementPage() {
 
       const loads = loadsResult.data || []
       setSelectedLoads(loads)
-      const calculatedNights = loads.reduce((sum: number, load: any) => {
+      const calculatedNights = loads.reduce((sum: number, load: DriverLoad) => {
         const pickupRaw = load?.load_date || load?.pickup_date || load?.created_at
         const deliveryRaw = load?.actual_delivery || load?.estimated_delivery || pickupRaw
         if (!pickupRaw || !deliveryRaw) return sum
@@ -135,7 +140,7 @@ export default function CreateSettlementPage() {
           const payRateNum = Number(payRate) || 0
           if (payRateNum <= 1) {
             // Percentage: multiply each load value by pay rate
-            const totalLoadValue = loads.reduce((sum: number, load: any) => sum + (Number(load.value) || 0), 0)
+            const totalLoadValue = loads.reduce((sum: number, load: DriverLoad) => sum + (Number(load.value) || 0), 0)
             calculatedGrossPay = totalLoadValue * payRateNum
             calculationBreakdown = `${loads.length} loads × $${totalLoadValue.toFixed(2)} total value × ${(payRateNum * 100).toFixed(1)}% = $${calculatedGrossPay.toFixed(2)}`
           } else {
@@ -145,7 +150,7 @@ export default function CreateSettlementPage() {
           }
         } else {
           // If no pay rate, sum load values as estimate
-          calculatedGrossPay = loads.reduce((sum: number, load: any) => sum + (Number(load.value) || 0), 0)
+          calculatedGrossPay = loads.reduce((sum: number, load: DriverLoad) => sum + (Number(load.value) || 0), 0)
           calculationBreakdown = `Sum of ${loads.length} load values = $${calculatedGrossPay.toFixed(2)} (Note: Set driver pay rate for accurate calculation)`
         }
       }
@@ -168,9 +173,10 @@ export default function CreateSettlementPage() {
         })
         
         if (eldLogsResult.data) {
-          const eldMiles = eldLogsResult.data
-            .filter((log: any) => log.log_type === "driving" && log.miles_driven)
-            .reduce((sum: number, log: any) => sum + (Number(log.miles_driven) || 0), 0)
+          const eldLogs = (eldLogsResult.data || []) as ELDLogRecord[]
+          const eldMiles = eldLogs
+            .filter((log: ELDLogRecord) => log.log_type === "driving" && log.miles_driven)
+            .reduce((sum: number, log: ELDLogRecord) => sum + (Number(log.miles_driven) || 0), 0)
           
           if (eldMiles > 0) {
             eldMilesMessage = ` ELD miles: ${eldMiles.toFixed(0)} miles.`

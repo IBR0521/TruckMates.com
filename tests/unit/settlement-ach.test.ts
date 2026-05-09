@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest"
 
 const mockGetCachedAuthContext = vi.fn()
 const mockCaptureException = vi.fn()
@@ -84,7 +84,7 @@ describe("app/actions/settlement-ach.ts", () => {
 
   it("executes Stripe transfer + payout for valid ACH settlement", async () => {
     const { createClient } = await import("@/lib/supabase/server")
-    ;(createClient as any).mockResolvedValue(makeSupabaseMock({ id: "d1", stripe_account_id: "acct_1" }))
+    ;(createClient as unknown as Mock).mockResolvedValue(makeSupabaseMock({ id: "d1", stripe_account_id: "acct_1" }))
 
     mockStripeClient.transfers.create.mockResolvedValue({ id: "tr_123" })
     mockStripeClient.payouts.create.mockResolvedValue({
@@ -113,7 +113,7 @@ describe("app/actions/settlement-ach.ts", () => {
 
   it("rejects ACH transfer when driver has no connected Stripe account", async () => {
     const { createClient } = await import("@/lib/supabase/server")
-    ;(createClient as any).mockResolvedValue(makeSupabaseMock({ id: "d1", stripe_account_id: null }))
+    ;(createClient as unknown as Mock).mockResolvedValue(makeSupabaseMock({ id: "d1", stripe_account_id: null }))
 
     const { executeSettlementAchTransfer } = await import("../../app/actions/settlement-ach")
     const result = await executeSettlementAchTransfer({

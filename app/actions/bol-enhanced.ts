@@ -93,7 +93,23 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
     
     try {
       // Try puppeteer-core first (for serverless/Vercel)
-      let puppeteer: any
+      let puppeteer: {
+        launch: (options: {
+          headless: boolean
+          args: string[]
+          executablePath?: string
+        }) => Promise<{
+          newPage: () => Promise<{
+            setContent: (html: string, options: { waitUntil: "networkidle0" }) => Promise<void>
+            pdf: (options: {
+              format: "Letter"
+              printBackground: boolean
+              margin: { top: string; right: string; bottom: string; left: string }
+            }) => Promise<Buffer>
+          }>
+          close: () => Promise<void>
+        }>
+      } | null = null
       let executablePath: string | undefined
       let chromiumArgs: string[] | undefined
 
@@ -289,9 +305,9 @@ export async function autoStoreBOLPDFOnCompletion(bolId: string, companyId?: str
       }
 
       // Check if PDF already stored
-      if (bol.metadata && (bol.metadata as any).signed_pdf_url) {
+      if (bol.metadata && (bol.metadata as { signed_pdf_url?: string }).signed_pdf_url) {
         return {
-          data: { pdf_url: (bol.metadata as any).signed_pdf_url },
+          data: { pdf_url: (bol.metadata as { signed_pdf_url: string }).signed_pdf_url },
           error: null,
         }
       }

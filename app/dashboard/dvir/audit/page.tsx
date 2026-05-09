@@ -12,7 +12,7 @@ import { toast } from "sonner"
 import { getTrucks } from "@/app/actions/trucks"
 
 export default function DVIRAuditPage() {
-  const [trucks, setTrucks] = useState<any[]>([])
+  const [trucks, setTrucks] = useState<unknown[]>([])
   const [selectedTruck, setSelectedTruck] = useState<string>("all")
   const [startDate, setStartDate] = useState<string>("")
   const [endDate, setEndDate] = useState<string>("")

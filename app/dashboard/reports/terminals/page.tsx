@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Building2, Truck, Users, Package, Route } from "lucide-react"
 import { getTerminalMetrics } from "@/app/actions/terminals"
 import { toast } from "sonner"
+import type { LucideIcon } from "lucide-react"
 
 export default function TerminalsReportPage() {
   const [loading, setLoading] = useState(true)
@@ -65,7 +66,7 @@ export default function TerminalsReportPage() {
   )
 }
 
-function Metric({ icon: Icon, label, value }: { icon: any; label: string; value: number }) {
+function Metric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
   return (
     <div className="rounded-md border p-3">
       <div className="flex items-center gap-2 text-muted-foreground text-xs">

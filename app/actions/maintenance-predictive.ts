@@ -1,21 +1,12 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkCreatePermission, checkViewPermission } from "@/lib/server-permissions"
 import { createMaintenance } from "./maintenance"
-import { sanitizeError } from "@/lib/error-message"
 import { runAgentEvaluation } from "@/lib/ai/agent/loop"
-import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 async function ensurePredictiveMaintenanceAccess() {
   return {
     allowed: true as const,
@@ -71,7 +62,7 @@ export async function predictMaintenanceNeeds(truckId?: string) {
     return { data: [], error: null }
   }
 
-  const truckIds = trucks.map((t: { id: string; [key: string]: any }) => t.id)
+  const truckIds = trucks.map((t: { id: string }) => t.id)
 
   // Primary source requested by product spec: maintenance_records + eld_logs.
   // If maintenance_records table is absent in some environments, fall back to maintenance.
@@ -101,9 +92,9 @@ export async function predictMaintenanceNeeds(truckId?: string) {
     .order("start_time", { ascending: false })
     .limit(15000)
 
-  const predictions = trucks.map((truck: { id: string; truck_number: string; make: string | null; model: string | null; mileage: number | null; [key: string]: any }) => {
-    const truckRecords = records.filter((r: any) => r.truck_id === truck.id)
-    const truckLogs = (eldLogs || []).filter((l: any) => l.truck_id === truck.id)
+  const predictions = trucks.map((truck: { id: string; truck_number: string; make: string | null; model: string | null; mileage: number | null }) => {
+    const truckRecords = records.filter((r: { truck_id: string | null }) => r.truck_id === truck.id)
+    const truckLogs = (eldLogs || []).filter((l: { truck_id: string | null }) => l.truck_id === truck.id)
     const currentMileage = Number(truck.mileage || 0)
 
     const groupedByService = new Map<string, Array<{ mileage: number; date: string | null }>>()
@@ -147,7 +138,7 @@ export async function predictMaintenanceNeeds(truckId?: string) {
 
       if (!avgInterval || !Number.isFinite(avgInterval)) {
         const recentMiles = truckLogs
-          .map((l: any) => Number(l.miles_driven || 0))
+          .map((l: { miles_driven: number | string | null }) => Number(l.miles_driven || 0))
           .filter((v: number) => Number.isFinite(v) && v > 0)
         if (recentMiles.length > 0) {
           avgInterval = recentMiles.reduce((sum: number, value: number) => sum + value, 0)
@@ -194,7 +185,7 @@ export async function predictMaintenanceNeeds(truckId?: string) {
   })
 
   // Sort by priority
-  predictions.sort((a: { priority: string; [key: string]: any }, b: { priority: string; [key: string]: any }) => {
+  predictions.sort((a: { priority: "high" | "medium" | "low" }, b: { priority: "high" | "medium" | "low" }) => {
     const priorityOrder = { high: 3, medium: 2, low: 1 }
     return priorityOrder[b.priority as keyof typeof priorityOrder] - priorityOrder[a.priority as keyof typeof priorityOrder]
   })
@@ -264,15 +255,5 @@ export async function createMaintenanceFromPrediction(data: {
   revalidatePath("/dashboard/maintenance/predictive")
   return { data: result.data, error: null }
 }
-
-
-
-
-
-
-
-
-
-
 
 

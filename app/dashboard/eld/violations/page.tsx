@@ -36,14 +36,14 @@ import { toast } from "sonner"
 import Link from "next/link"
 
 export default function ELDViolationsPage() {
-  const [violations, setViolations] = useState<any[]>([])
-  const [drivers, setDrivers] = useState<any[]>([])
+  const [violations, setViolations] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<unknown[]>([])
   const [repeatOffenders, setRepeatOffenders] = useState<
     { driverId: string; driverName: string; count: number }[]
   >([])
   const [isLoading, setIsLoading] = useState(true)
   const [showResolveDialog, setShowResolveDialog] = useState(false)
-  const [selectedViolation, setSelectedViolation] = useState<any>(null)
+  const [selectedViolation, setSelectedViolation] = useState<unknown>(null)
   const [resolutionNotes, setResolutionNotes] = useState("")
   const [filters, setFilters] = useState({
     driver_id: "",

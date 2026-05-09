@@ -33,8 +33,8 @@ import {
 
 export default function AddExpensePage() {
   const router = useRouter()
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [trucks, setTrucks] = useState<any[]>([])
+  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [trucks, setTrucks] = useState<unknown[]>([])
   const [glAccounts, setGlAccounts] = useState<Array<{ id: string; code: string; name: string }>>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({

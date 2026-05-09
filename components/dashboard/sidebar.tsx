@@ -33,6 +33,7 @@ import {
   MessageSquare,
   Sparkles,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Logo } from "@/components/logo"
@@ -52,6 +53,12 @@ interface SidebarProps {
   onToggle: () => void
   isCollapsed: boolean
   onCollapseToggle: () => void
+}
+
+type CurrentUserData = {
+  role?: string | null
+  employee_role?: string | null
+  company_id?: string | null
 }
 
 export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggle }: SidebarProps) {
@@ -134,8 +141,9 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
         const result = await getCurrentUser()
 
         if (result?.data?.role) {
-          resolvedRole = result.data.role
-          resolvedCompanyId = (result.data as any).company_id || null
+          const currentUser = result.data as CurrentUserData
+          resolvedRole = currentUser.role || null
+          resolvedCompanyId = currentUser.company_id || null
         } else {
           // Fallback for cases where server action transport fails in client runtime.
           // We still resolve role from DB first (not JWT metadata) to keep parity with auth policy.
@@ -150,8 +158,9 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               .eq("id", authUserId)
               .maybeSingle()
 
-            resolvedRole = userRow?.role || null
-            resolvedCompanyId = (userRow as any)?.company_id || null
+            const userCompanyRow = userRow as { role?: string | null; company_id?: string | null } | null
+            resolvedRole = userCompanyRow?.role || null
+            resolvedCompanyId = userCompanyRow?.company_id || null
           }
         }
 
@@ -522,7 +531,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
 
 interface NavItemProps {
   href: string
-  icon?: any
+  icon?: LucideIcon
   label: string
   badgeCount?: number
   isSubitem?: boolean
@@ -580,7 +589,7 @@ function NavItem({ href, icon: Icon, label, badgeCount, isSubitem, isCollapsed }
 }
 
 interface DropdownItemProps {
-  icon: any
+  icon: LucideIcon
   label: string
   href: string
   isOpen: boolean

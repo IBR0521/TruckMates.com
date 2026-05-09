@@ -3,6 +3,29 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { generateDVIRAuditPDF } from "@/app/actions/dvir-pdf"
 
+type PdfPage = {
+  setContent: (html: string, options: { waitUntil: "load" }) => Promise<void>
+  pdf: (options: {
+    format: string
+    printBackground: boolean
+    margin: { top: string; right: string; bottom: string; left: string }
+  }) => Promise<Buffer>
+}
+
+type PdfBrowser = {
+  newPage: () => Promise<PdfPage>
+  close: () => Promise<void>
+}
+
+type PuppeteerLike = {
+  launch: (options: Record<string, unknown>) => Promise<PdfBrowser>
+}
+
+type ChromiumLike = {
+  executablePath: () => Promise<string>
+  args: string[]
+}
+
 /**
  * Generate DVIR Audit report as a real PDF file.
  * Uses Puppeteer server-side so the client never imports it.
@@ -48,7 +71,7 @@ export async function GET(req: NextRequest) {
     // Convert HTML to PDF using Puppeteer
     // CRH-002 FIX: Use puppeteer-core + @sparticuz/chromium for serverless (reduces bundle from ~300MB to ~50MB)
     try {
-      let puppeteer: any
+      let puppeteer: PuppeteerLike | null = null
       let executablePath: string | undefined
       let chromiumArgs: string[] | undefined
 
@@ -59,14 +82,15 @@ export async function GET(req: NextRequest) {
         const chromium = chromiumModule?.default || chromiumModule
         
         if (puppeteerCore && chromium) {
-          puppeteer = puppeteerCore
-          executablePath = await (chromium as any).executablePath()
-          chromiumArgs = (chromium as any).args
+          puppeteer = puppeteerCore as unknown as PuppeteerLike
+          const chromiumRuntime = chromium as ChromiumLike
+          executablePath = await chromiumRuntime.executablePath()
+          chromiumArgs = chromiumRuntime.args
         }
       } catch {
         // Fallback: full `puppeteer` is optional (dev); production uses puppeteer-core + chromium
         // @ts-expect-error — `puppeteer` may not be installed; optional fallback for local dev
-        puppeteer = await import(/* webpackIgnore: true */ "puppeteer").catch(() => null)
+        puppeteer = (await import(/* webpackIgnore: true */ "puppeteer").catch(() => null)) as PuppeteerLike | null
       }
 
       if (!puppeteer) {

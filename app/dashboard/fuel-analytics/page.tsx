@@ -20,11 +20,39 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
+type FuelAnalyticsFilters = Parameters<typeof getFuelAnalytics>[0]
+type TruckRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getTrucks>>["data"]>[number]>
+type FuelAnalyticsData = Awaited<ReturnType<typeof getFuelAnalytics>>["data"]
+type RouteFuelCost = {
+  route_id: string
+  route_number?: string | null
+  origin?: string | null
+  destination?: string | null
+  fuel_expenses_count: number
+  total_fuel_cost: number
+}
+type TruckFuelAnalytics = {
+  truck_id: string
+  truck_number?: string | null
+  total_fuel_cost?: number | null
+  total_fuel_expenses?: number | null
+  total_miles?: number | null
+  avg_mpg?: number | null
+  avg_cost_per_mile?: number | null
+}
+type FuelTrend = {
+  month: string
+  cost: number
+  expenses: number
+  miles?: number | null
+  avg_cost_per_mile?: number | null
+}
+
 export default function FuelAnalyticsPage() {
-  const [analytics, setAnalytics] = useState<any>(null)
-  const [routeCosts, setRouteCosts] = useState<any[]>([])
+  const [analytics, setAnalytics] = useState<FuelAnalyticsData | null>(null)
+  const [routeCosts, setRouteCosts] = useState<RouteFuelCost[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [trucks, setTrucks] = useState<any[]>([])
+  const [trucks, setTrucks] = useState<TruckRecord[]>([])
   const [filters, setFilters] = useState({
     truck_id: "all",
     start_date: "",
@@ -49,7 +77,7 @@ export default function FuelAnalyticsPage() {
   const loadAnalytics = async () => {
     setIsLoading(true)
     try {
-      const analyticsFilters: any = {}
+      const analyticsFilters: FuelAnalyticsFilters = {}
       if (filters.truck_id !== "all") {
         analyticsFilters.truck_id = filters.truck_id
       }
@@ -83,7 +111,10 @@ export default function FuelAnalyticsPage() {
     }
   }
 
-  const truckAnalytics = analytics?.truck_analytics ? Object.values(analytics.truck_analytics) : []
+  const truckAnalytics: TruckFuelAnalytics[] = analytics?.truck_analytics
+    ? (Object.values(analytics.truck_analytics) as TruckFuelAnalytics[])
+    : []
+  const trends: FuelTrend[] = analytics?.trends ? (analytics.trends as FuelTrend[]) : []
 
   return (
     <div className="w-full">
@@ -232,7 +263,7 @@ export default function FuelAnalyticsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {truckAnalytics.map((truck: any) => (
+                      {truckAnalytics.map((truck: TruckFuelAnalytics) => (
                         <TableRow key={truck.truck_id}>
                           <TableCell className="font-medium">{truck.truck_number}</TableCell>
                           <TableCell>${(truck.total_fuel_cost || 0).toFixed(2)}</TableCell>
@@ -279,7 +310,7 @@ export default function FuelAnalyticsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {routeCosts.map((route: any) => (
+                        {routeCosts.map((route: RouteFuelCost) => (
                           <TableRow key={route.route_id}>
                             <TableCell className="font-medium">{route.route_number || "N/A"}</TableCell>
                             <TableCell>
@@ -296,7 +327,7 @@ export default function FuelAnalyticsPage() {
               )}
 
               {/* Monthly Trends */}
-              {analytics?.trends && analytics.trends.length > 0 && (
+              {trends.length > 0 && (
                 <Card className="border border-border/50 p-6">
                   <h2 className="text-lg font-semibold text-foreground mb-4">Monthly Fuel Trends</h2>
                   <div className="overflow-x-auto">
@@ -311,7 +342,7 @@ export default function FuelAnalyticsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {analytics.trends.map((trend: any) => (
+                        {trends.map((trend: FuelTrend) => (
                           <TableRow key={trend.month}>
                             <TableCell className="font-medium">
                               {new Date(trend.month + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" })}

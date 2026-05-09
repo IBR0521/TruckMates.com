@@ -1,25 +1,17 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * CRM Communication Logging Actions
  * Handles automated and manual communication logging
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission } from "@/lib/server-permissions"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
-import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 export interface CommunicationLog {
   id: string
   company_id: string
@@ -34,10 +26,10 @@ export interface CommunicationLog {
   invoice_id: string | null
   user_id: string | null
   occurred_at: string
-  attachments: any[] | null
+  attachments: unknown[] | null
   external_id: string | null
   source: "manual" | "email" | "sms" | "webhook"
-  metadata: Record<string, any> | null
+  metadata: Record<string, unknown> | null
   created_at: string
   customer_name?: string | null
   vendor_name?: string | null
@@ -70,7 +62,7 @@ export async function logCommunication(input: {
   load_id?: string
   invoice_id?: string
   occurred_at?: string
-  attachments?: any[]
+  attachments?: unknown[]
 }): Promise<{ data: CommunicationLog | null; error: string | null }> {
   const access = await ensureCrmAccess()
   if (!access.allowed) {
@@ -187,7 +179,13 @@ export async function getCommunicationTimeline(filters: {
     }
 
     // Format the response
-    const formattedData = (data || []).map((log: any) => ({
+    const formattedData = (data || []).map((log: {
+      customers?: { name?: string | null } | null
+      vendors?: { name?: string | null } | null
+      contacts?: { first_name?: string | null; last_name?: string | null } | null
+      users?: { full_name?: string | null } | null
+      [key: string]: unknown
+    }) => ({
       ...log,
       customer_name: log.customers?.name || null,
       vendor_name: log.vendors?.name || null,
@@ -216,7 +214,7 @@ export async function logCommunicationFromWebhook(input: {
   direction: "inbound" | "outbound"
   external_id: string
   source: "email" | "sms" | "webhook"
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   occurred_at?: string
 }): Promise<{ data: CommunicationLog | null; error: string | null }> {
   const access = await ensureCrmAccess()
@@ -276,7 +274,7 @@ export async function logCommunicationFromWebhook(input: {
       }
 
       if (existing) {
-        return { data: existing as any, error: null }
+        return { data: existing as unknown as CommunicationLog, error: null }
       }
     }
 
@@ -310,6 +308,5 @@ export async function logCommunicationFromWebhook(input: {
     return { error: errorMessage(error, "Failed to log communication"), data: null }
   }
 }
-
 
 

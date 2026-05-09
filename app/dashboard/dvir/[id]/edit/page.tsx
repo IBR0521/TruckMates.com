@@ -20,7 +20,7 @@ export default function EditDVIRPage({ params }: { params: Promise<{ id: string 
   const router = useRouter()
   const { id } = use(params)
 
-  const [dvir, setDVIR] = useState<any>(null)
+  const [dvir, setDVIR] = useState<unknown>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -106,7 +106,7 @@ export default function EditDVIRPage({ params }: { params: Promise<{ id: string 
     }))
   }
 
-  const handleDefectChange = (index: number, field: string, value: any) => {
+  const handleDefectChange = (index: number, field: string, value: unknown) => {
     setFormData((prev) => {
       const next = [...prev.defects]
       next[index] = { ...next[index], [field]: value }
@@ -165,7 +165,7 @@ export default function EditDVIRPage({ params }: { params: Promise<{ id: string 
         corrective_action: formData.corrective_action || undefined,
         driver_signature: formData.driver_signature || undefined,
         certified: formData.certified,
-      } as any)
+      } as unknown)
 
       if (result.error) {
         toast.error(result.error)

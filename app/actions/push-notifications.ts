@@ -5,6 +5,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getFirebaseAdminMessaging } from "@/lib/firebase/admin"
+import { safeDbError } from "@/lib/utils/error"
 
 export async function saveFcmToken(fcmToken: string) {
   const token = String(fcmToken || "").trim()
@@ -16,11 +17,11 @@ export async function saveFcmToken(fcmToken: string) {
   const supabase = await createClient()
   const { error } = await supabase
     .from("users")
-    .update({ fcm_token: token } as any)
+    .update({ fcm_token: token } as Record<string, unknown>)
     .eq("id", ctx.userId)
     .eq("company_id", ctx.companyId)
 
-  if (error) return { error: error.message || "Failed to save FCM token", data: null }
+  if (error) return { error: safeDbError(error, "Failed to save FCM token"), data: null }
   return { error: null, data: { saved: true } }
 }
 
@@ -30,10 +31,10 @@ export async function clearFcmToken() {
   const supabase = await createClient()
   const { error } = await supabase
     .from("users")
-    .update({ fcm_token: null } as any)
+    .update({ fcm_token: null } as Record<string, unknown>)
     .eq("id", ctx.userId)
     .eq("company_id", ctx.companyId)
-  return { error: error?.message || null, data: { cleared: !error } }
+  return { error: error ? safeDbError(error, "Failed to clear FCM token") : null, data: { cleared: !error } }
 }
 
 export async function sendPushToUser(
@@ -46,7 +47,7 @@ export async function sendPushToUser(
 
     const supabase = createAdminClient()
     const { data: user } = await supabase.from("users").select("fcm_token").eq("id", userId).maybeSingle()
-    const token = String((user as any)?.fcm_token || "").trim()
+    const token = String((user as { fcm_token?: string | null } | null)?.fcm_token || "").trim()
     if (!token) return { sent: false, error: "User has no registered FCM token" }
 
     await messaging.send({
@@ -80,7 +81,7 @@ export async function sendPushToCompanyRoles(
       .not("fcm_token", "is", null)
 
     const tokens = (users || [])
-      .map((u: any) => String(u.fcm_token || "").trim())
+      .map((u: { fcm_token?: string | null }) => String(u.fcm_token || "").trim())
       .filter((t: string) => Boolean(t))
     if (tokens.length === 0) return { sent: 0, error: null }
 

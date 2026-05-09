@@ -31,9 +31,9 @@ export default function ELDDeviceDetailsPage() {
   const aliveRef = useRef(true)
   const deviceId = params.id as string
 
-  const [device, setDevice] = useState<any>(null)
-  const [logs, setLogs] = useState<any[]>([])
-  const [events, setEvents] = useState<any[]>([])
+  const [device, setDevice] = useState<unknown>(null)
+  const [logs, setLogs] = useState<unknown[]>([])
+  const [events, setEvents] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSyncing, setIsSyncing] = useState(false)
   const [activeTab, setActiveTab] = useState<"overview" | "logs" | "events">("overview")

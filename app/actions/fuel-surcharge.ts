@@ -1,20 +1,13 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { fetchLatestUsDieselPrice } from "@/lib/promiles/eia-diesel"
 import { EIA_US_DIESEL_DUOAREA } from "@/lib/promiles/padd-state-map"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 const DEFAULT_FSC_BASE_PRICE = 1.2
 const DEFAULT_FSC_MPG = 6.5
 

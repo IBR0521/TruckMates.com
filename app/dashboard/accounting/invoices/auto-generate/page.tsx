@@ -9,9 +9,20 @@ import { toast } from "sonner"
 import { autoGenerateInvoicesFromLoads } from "@/app/actions/invoices-auto"
 import { useRouter } from "next/navigation"
 
+type AutoGenerateInvoiceError = {
+  load_id: string
+  error: string
+}
+
+type AutoGenerateInvoiceResult = {
+  generated: number
+  message?: string | null
+  errors?: AutoGenerateInvoiceError[]
+}
+
 export default function AutoGenerateInvoicesPage() {
   const [isGenerating, setIsGenerating] = useState(false)
-  const [result, setResult] = useState<any>(null)
+  const [result, setResult] = useState<AutoGenerateInvoiceResult | null>(null)
   const router = useRouter()
 
   const handleGenerate = async () => {
@@ -94,7 +105,7 @@ export default function AutoGenerateInvoicesPage() {
                   <div className="mt-4">
                     <p className="font-semibold text-red-400 mb-2">Errors:</p>
                     <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                      {result.errors.map((error: any, index: number) => (
+                      {result.errors.map((error: AutoGenerateInvoiceError, index: number) => (
                         <li key={index}>
                           Load {error.load_id}: {error.error}
                         </li>

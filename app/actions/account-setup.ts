@@ -1,20 +1,13 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
 import { createDriver } from "./drivers"
 import { createTruck } from "./trucks"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 // Note: getCachedUserCompany removed - using direct queries for setup to avoid cache issues
 
 /**
@@ -95,7 +88,7 @@ export async function updateCompanyProfile(data: {
     if (rpcError) {
       Sentry.captureException(rpcError)
       // Fallback to direct update if RPC doesn't exist
-      const updateData: any = {}
+      const updateData: Record<string, unknown> = {}
       if (data.business_address) updateData.address = data.business_address
       if (data.business_phone) updateData.phone = data.business_phone
       if (data.business_email) updateData.email = data.business_email

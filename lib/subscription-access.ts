@@ -3,7 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
-const TEMP_DISABLE_PAYMENT_GATE = true
+const TEMP_DISABLE_PAYMENT_GATE = false
 
 type SubscriptionStatus = "active" | "trialing" | "past_due" | "canceled" | "unpaid" | "incomplete" | "unknown"
 

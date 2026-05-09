@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useRealtimeNotifications } from "@/lib/hooks/use-realtime"
 
+type NotificationItem = ReturnType<typeof useRealtimeNotifications>["notifications"][number]
+
 function formatNotificationDate(value: string | Date | null | undefined): string {
   if (!value) return "Unknown date"
   const d = value instanceof Date ? value : new Date(value)
@@ -127,7 +129,7 @@ export function NotificationsCenter() {
             </div>
           ) : (
             <div className="divide-y">
-              {notifications.map((notification: any) => (
+              {notifications.map((notification: NotificationItem) => (
                 <div
                   key={notification.id}
                   className={`p-4 hover:bg-muted/50 transition-colors ${

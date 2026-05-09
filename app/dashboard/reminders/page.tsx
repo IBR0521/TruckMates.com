@@ -19,16 +19,16 @@ import { Calendar, Plus, CheckCircle2, AlertTriangle, Clock } from "lucide-react
 import { format } from "date-fns"
 
 export default function RemindersPage() {
-  const [reminders, setReminders] = useState<any[]>([])
-  const [overdueReminders, setOverdueReminders] = useState<any[]>([])
+  const [reminders, setReminders] = useState<unknown[]>([])
+  const [overdueReminders, setOverdueReminders] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState("pending") // pending, completed, overdue, all
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingReminder, setEditingReminder] = useState<any | null>(null)
   const [deletingReminder, setDeletingReminder] = useState<string | null>(null)
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [trucks, setTrucks] = useState<any[]>([])
-  const [loads, setLoads] = useState<any[]>([])
+  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [trucks, setTrucks] = useState<unknown[]>([])
+  const [loads, setLoads] = useState<unknown[]>([])
   
   const [formData, setFormData] = useState({
     title: "",

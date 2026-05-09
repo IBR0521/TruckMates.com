@@ -26,8 +26,8 @@ export default function CreateBOLPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [loads, setLoads] = useState<any[]>([])
-  const [templates, setTemplates] = useState<any[]>([])
+  const [loads, setLoads] = useState<unknown[]>([])
+  const [templates, setTemplates] = useState<unknown[]>([])
   const [selectedLoad, setSelectedLoad] = useState<any | null>(null)
   const [formData, setFormData] = useState({
     load_id: "",
@@ -120,7 +120,7 @@ export default function CreateBOLPage() {
     // MEDIUM FIX 14: Filter out completed and cancelled loads
     const [loadsResult, templatesResult] = await Promise.all([
       getLoads({ status: undefined }), // Will filter client-side to exclude completed/cancelled
-      (bolActions as any).getBOLTemplates(),
+      (bolActions as unknown).getBOLTemplates(),
     ])
 
     if (loadsResult.data) {
@@ -155,7 +155,7 @@ export default function CreateBOLPage() {
       return
     }
 
-    const result = await (bolActions as any).createBOL({
+    const result = await (bolActions as unknown).createBOL({
       load_id: formData.load_id,
       template_id: formData.template_id || undefined,
       shipper_name: formData.shipper_name,

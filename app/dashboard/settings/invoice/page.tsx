@@ -773,7 +773,7 @@ export default function InvoiceSettingsPage() {
                 <Label htmlFor="tax_type">Tax Type *</Label>
                 <Select
                   value={taxForm.tax_type}
-                  onValueChange={(value: any) => setTaxForm({ ...taxForm, tax_type: value })}
+                  onValueChange={(value: "percentage" | "fixed") => setTaxForm({ ...taxForm, tax_type: value })}
                 >
                   <SelectTrigger className="mt-1">
                     <SelectValue />
@@ -816,7 +816,7 @@ export default function InvoiceSettingsPage() {
               <Label htmlFor="tax_applies_to">Applies To</Label>
               <Select
                 value={taxForm.applies_to}
-                onValueChange={(value: any) => setTaxForm({ ...taxForm, applies_to: value })}
+                onValueChange={(value: "all" | "specific_states" | "specific_customers") => setTaxForm({ ...taxForm, applies_to: value })}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue />

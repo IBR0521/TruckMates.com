@@ -1,21 +1,14 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { validateRequiredString, sanitizeString } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /** `public.geofences` — geofencing_schema.sql + PostGIS columns from postgis_migration.sql */
 const GEOFENCE_FULL_SELECT =
   "id, company_id, name, description, zone_type, center_latitude, center_longitude, radius_meters, polygon_coordinates, north_bound, south_bound, east_bound, west_bound, is_active, alert_on_entry, alert_on_exit, alert_on_dwell, dwell_time_minutes, assigned_trucks, assigned_routes, address, city, state, zip_code, created_at, updated_at, center_geography, polygon_geography"
@@ -23,6 +16,19 @@ const GEOFENCE_FULL_SELECT =
 /** `public.zone_visits` — supabase/geofencing_schema.sql */
 const ZONE_VISITS_SELECT =
   "id, company_id, geofence_id, truck_id, driver_id, route_id, event_type, latitude, longitude, timestamp, entry_timestamp, exit_timestamp, duration_minutes, speed, heading, created_at"
+
+type GeofencePolygonCoordinate =
+  | { lat: number; lng: number }
+  | { latitude: number; longitude: number }
+  | [number, number]
+
+type ZoneVisitLite = {
+  id?: string
+  geofence_id: string
+  event_type?: string
+  entry_timestamp?: string | null
+  exit_timestamp?: string | null
+}
 
 async function ensureGeofencingAccess() {
   const access = await getCurrentCompanyFeatureAccess("geofencing")
@@ -40,7 +46,7 @@ async function ensureGeofencingAccess() {
  * Falls back to client-side calculation if PostGIS function fails
  */
 async function isPointInGeofencePostGIS(
-  supabase: any,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   lat: number,
   lng: number,
   geofenceId: string
@@ -76,7 +82,7 @@ function isPointInGeofence(
     center_latitude?: number
     center_longitude?: number
     radius_meters?: number
-    polygon_coordinates?: any
+    polygon_coordinates?: GeofencePolygonCoordinate[]
     north_bound?: number
     south_bound?: number
     east_bound?: number
@@ -267,7 +273,7 @@ export async function createGeofence(formData: {
   }
 
   // Check permission
-  const permission = await checkCreatePermission("fleet_map" as any)
+  const permission = await checkCreatePermission("fleet_map")
   if (!permission.allowed) {
     return { error: permission.error || "You don't have permission to create geofences", data: null }
   }
@@ -379,7 +385,7 @@ export async function updateGeofence(id: string, formData: Partial<{
   }
 
   // Check permission
-  const permission = await checkEditPermission("fleet_map" as any)
+  const permission = await checkEditPermission("fleet_map")
   if (!permission.allowed) {
     return { error: permission.error || "You don't have permission to edit geofences", data: null }
   }
@@ -391,7 +397,7 @@ export async function updateGeofence(id: string, formData: Partial<{
   }
 
   try {
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     }
 
@@ -475,7 +481,7 @@ export async function deleteGeofence(id: string) {
   }
 
   // Check permission
-  const permission = await checkDeletePermission("fleet_map" as any)
+  const permission = await checkDeletePermission("fleet_map")
   if (!permission.allowed) {
     return { error: permission.error || "You don't have permission to delete geofences", data: null }
   }
@@ -563,10 +569,10 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
       return { data: { events: [] }, error: null }
     }
 
-    const events: any[] = []
+    const events: Array<Record<string, unknown>> = []
 
     // Batch fetch all recent visits for this truck across all geofences
-    const geofenceIds = geofences.map((g: { id: string; [key: string]: any }) => g.id)
+    const geofenceIds = geofences.map((g: { id: string }) => g.id)
     const { data: allRecentVisits } = await supabase
       .from("zone_visits")
       .select(ZONE_VISITS_SELECT)
@@ -575,9 +581,9 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
       .order("timestamp", { ascending: false })
 
     // Group visits by geofence_id (get most recent per geofence)
-    const visitsByGeofence = new Map<string, any>()
+    const visitsByGeofence = new Map<string, ZoneVisitLite>()
     if (allRecentVisits) {
-      allRecentVisits.forEach((visit: { geofence_id: string; [key: string]: any }) => {
+      allRecentVisits.forEach((visit: ZoneVisitLite) => {
         if (!visitsByGeofence.has(visit.geofence_id)) {
           visitsByGeofence.set(visit.geofence_id, visit)
         }
@@ -942,15 +948,15 @@ export async function getGeofencingStats(filters?: {
     const stats = {
       total_geofences: geofences?.length || 0,
       total_visits: visits?.length || 0,
-      entries: visits?.filter((v: { event_type: string; [key: string]: any }) => v.event_type === "entry").length || 0,
-      exits: visits?.filter((v: { event_type: string; [key: string]: any }) => v.event_type === "exit").length || 0,
+      entries: visits?.filter((v: { event_type: string }) => v.event_type === "entry").length || 0,
+      exits: visits?.filter((v: { event_type: string }) => v.event_type === "exit").length || 0,
       avg_duration_minutes:
-        visits?.filter((v: { duration_minutes: number | null; [key: string]: any }) => v.duration_minutes && v.duration_minutes > 0).length > 0
+        visits?.filter((v: { duration_minutes: number | null }) => v.duration_minutes && v.duration_minutes > 0).length > 0
           ? Math.round(
               visits
-                .filter((v: { duration_minutes: number | null; [key: string]: any }) => v.duration_minutes && v.duration_minutes > 0)
-                .reduce((sum: number, v: { duration_minutes: number | null; [key: string]: any }) => sum + (v.duration_minutes || 0), 0) /
-                visits.filter((v: { duration_minutes: number | null; [key: string]: any }) => v.duration_minutes && v.duration_minutes > 0).length
+                .filter((v: { duration_minutes: number | null }) => v.duration_minutes && v.duration_minutes > 0)
+                .reduce((sum: number, v: { duration_minutes: number | null }) => sum + (v.duration_minutes || 0), 0) /
+                visits.filter((v: { duration_minutes: number | null }) => v.duration_minutes && v.duration_minutes > 0).length
             )
           : null,
     }
@@ -960,7 +966,5 @@ export async function getGeofencingStats(filters?: {
     return { error: errorMessage(error, "Failed to get geofencing stats"), data: null }
   }
 }
-
-
 
 

@@ -2,6 +2,7 @@
 
 import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -155,11 +156,11 @@ export async function importComdataFuelData(
 
     const truckMap = new Map<string, string>()
     const truckDriverMap = new Map<string, string | null>()
-    trucks?.forEach((truck: { id: string; truck_number: string | null }) => {
+    trucks?.forEach((truck: { id: string; truck_number: string | null; driver_id: string | null }) => {
       if (truck.truck_number) {
         truckMap.set(truck.truck_number.toLowerCase(), truck.id)
       }
-      truckDriverMap.set(truck.id, (truck as any).driver_id || null)
+      truckDriverMap.set(truck.id, truck.driver_id || null)
     })
 
     const avgTransactionCache = new Map<string, number>()
@@ -173,7 +174,9 @@ export async function importComdataFuelData(
         .eq("driver_id", driverId)
         .order("purchase_date", { ascending: false })
         .limit(30)
-      const costs = (data || []).map((row: any) => Number(row.total_cost || 0)).filter((value: number) => value > 0)
+      const costs = (data || [])
+        .map((row: NumericCostRow) => Number(row.total_cost || 0))
+        .filter((value: number) => value > 0)
       const avg = costs.length > 0 ? costs.reduce((sum: number, value: number) => sum + value, 0) / costs.length : 0
       avgTransactionCache.set(driverId, avg)
       return avg
@@ -413,153 +416,171 @@ type NormalizedFuelTxn = {
   price_per_gallon?: number | null
   total_amount: number
   odometer?: number | null
-  raw_payload: any
+  raw_payload: unknown
 }
 
-function getProviderRows(payload: any): any[] {
-  return Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload?.transactions)
-      ? payload.transactions
-      : Array.isArray(payload?.data)
-        ? payload.data
-        : []
+type ProviderRow = Record<string, unknown>
+type NumericCostRow = { total_cost?: number | string | null }
+type ProviderIntegrationConfigRow = {
+  comdata_enabled?: unknown
+  comdata_api_base_url?: unknown
+  comdata_api_key?: unknown
+  comdata_api_secret?: unknown
+  wex_enabled?: unknown
+  wex_api_base_url?: unknown
+  wex_api_key?: unknown
+  wex_api_secret?: unknown
+  efs_enabled?: unknown
+  efs_api_base_url?: unknown
+  efs_api_key?: unknown
+  efs_api_secret?: unknown
 }
 
-function normalizeComdataTxns(payload: any): NormalizedFuelTxn[] {
+const asProviderRow = (value: unknown): ProviderRow =>
+  value && typeof value === "object" ? (value as ProviderRow) : {}
+
+function getProviderRows(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload
+  const payloadObj = asProviderRow(payload)
+  const transactions = payloadObj.transactions
+  if (Array.isArray(transactions)) return transactions
+  const data = payloadObj.data
+  if (Array.isArray(data)) return data
+  return []
+}
+
+function normalizeComdataTxns(payload: unknown): NormalizedFuelTxn[] {
   const rawRows = getProviderRows(payload)
   return rawRows
-    .map((row: any, idx: number) => {
-      const transactionDate = String(row.transaction_date || row.date || row.purchase_date || "").slice(0, 10)
-      const total = Number(row.total_amount ?? row.total ?? row.amount ?? 0)
-      const gallons = Number(row.gallons ?? row.qty ?? row.quantity ?? 0)
+    .map((row: unknown, idx: number) => {
+      const rowObj = asProviderRow(row)
+      const transactionDate = String(rowObj.transaction_date || rowObj.date || rowObj.purchase_date || "").slice(0, 10)
+      const total = Number(rowObj.total_amount ?? rowObj.total ?? rowObj.amount ?? 0)
+      const gallons = Number(rowObj.gallons ?? rowObj.qty ?? rowObj.quantity ?? 0)
       if (!transactionDate || !Number.isFinite(total) || total <= 0 || !Number.isFinite(gallons) || gallons <= 0) return null
       return {
-        external_transaction_id: String(row.id || row.transaction_id || row.reference || `txn-${idx}`),
+        external_transaction_id: String(rowObj.id || rowObj.transaction_id || rowObj.reference || `txn-${idx}`),
         transaction_date: transactionDate,
-        posted_date: row.posted_date ? String(row.posted_date).slice(0, 10) : null,
-        truck_number: row.truck_number || row.unit_number || null,
-        driver_external_id: row.driver_id || row.employee_id || null,
-        card_number_last4: row.card_last4 || row.card_number_last4 || null,
-        merchant_name: row.merchant_name || row.location || null,
-        merchant_city: row.merchant_city || row.city || null,
-        merchant_state: row.merchant_state || row.state || null,
+        posted_date: rowObj.posted_date ? String(rowObj.posted_date).slice(0, 10) : null,
+        truck_number: rowObj.truck_number || rowObj.unit_number || null,
+        driver_external_id: rowObj.driver_id || rowObj.employee_id || null,
+        card_number_last4: rowObj.card_last4 || rowObj.card_number_last4 || null,
+        merchant_name: rowObj.merchant_name || rowObj.location || null,
+        merchant_city: rowObj.merchant_city || rowObj.city || null,
+        merchant_state: rowObj.merchant_state || rowObj.state || null,
         gallons,
-        price_per_gallon: Number.isFinite(Number(row.price_per_gallon ?? row.ppg))
-          ? Number(row.price_per_gallon ?? row.ppg)
+        price_per_gallon: Number.isFinite(Number(rowObj.price_per_gallon ?? rowObj.ppg))
+          ? Number(rowObj.price_per_gallon ?? rowObj.ppg)
           : Number.isFinite(total / gallons)
             ? total / gallons
             : null,
         total_amount: total,
-        odometer: Number.isFinite(Number(row.odometer)) ? Number(row.odometer) : null,
+        odometer: Number.isFinite(Number(rowObj.odometer)) ? Number(rowObj.odometer) : null,
         raw_payload: row,
       } as NormalizedFuelTxn
     })
     .filter(Boolean) as NormalizedFuelTxn[]
 }
 
-function normalizeWexTxns(payload: any): NormalizedFuelTxn[] {
+function normalizeWexTxns(payload: unknown): NormalizedFuelTxn[] {
   const rawRows = getProviderRows(payload)
   return rawRows
-    .map((row: any, idx: number) => {
-      const transactionDate = String(row.transactionDate || row.date || row.purchaseDate || "").slice(0, 10)
-      const total = Number(row.totalAmount ?? row.amount ?? 0)
-      const gallons = Number(row.fuelQty ?? row.gallons ?? 0)
+    .map((row: unknown, idx: number) => {
+      const rowObj = asProviderRow(row)
+      const transactionDate = String(rowObj.transactionDate || rowObj.date || rowObj.purchaseDate || "").slice(0, 10)
+      const total = Number(rowObj.totalAmount ?? rowObj.amount ?? 0)
+      const gallons = Number(rowObj.fuelQty ?? rowObj.gallons ?? 0)
       if (!transactionDate || !Number.isFinite(total) || total <= 0 || !Number.isFinite(gallons) || gallons <= 0) return null
       return {
-        external_transaction_id: String(row.transactionId || row.id || `txn-${idx}`),
+        external_transaction_id: String(rowObj.transactionId || rowObj.id || `txn-${idx}`),
         transaction_date: transactionDate,
-        posted_date: row.postedDate ? String(row.postedDate).slice(0, 10) : null,
-        truck_number: row.unitNumber || row.truckNumber || null,
-        driver_external_id: row.driverId || null,
-        card_number_last4: row.cardLast4 || null,
-        merchant_name: row.merchantName || row.merchant || null,
-        merchant_city: row.city || row.merchantCity || null,
-        merchant_state: row.state || row.merchantState || null,
+        posted_date: rowObj.postedDate ? String(rowObj.postedDate).slice(0, 10) : null,
+        truck_number: rowObj.unitNumber || rowObj.truckNumber || null,
+        driver_external_id: rowObj.driverId || null,
+        card_number_last4: rowObj.cardLast4 || null,
+        merchant_name: rowObj.merchantName || rowObj.merchant || null,
+        merchant_city: rowObj.city || rowObj.merchantCity || null,
+        merchant_state: rowObj.state || rowObj.merchantState || null,
         gallons,
-        price_per_gallon: Number.isFinite(Number(row.pricePerGallon))
-          ? Number(row.pricePerGallon)
+        price_per_gallon: Number.isFinite(Number(rowObj.pricePerGallon))
+          ? Number(rowObj.pricePerGallon)
           : Number.isFinite(total / gallons)
             ? total / gallons
             : null,
         total_amount: total,
-        odometer: Number.isFinite(Number(row.odometer)) ? Number(row.odometer) : null,
+        odometer: Number.isFinite(Number(rowObj.odometer)) ? Number(rowObj.odometer) : null,
         raw_payload: row,
       } as NormalizedFuelTxn
     })
     .filter(Boolean) as NormalizedFuelTxn[]
 }
 
-function normalizeEfsTxns(payload: any): NormalizedFuelTxn[] {
+function normalizeEfsTxns(payload: unknown): NormalizedFuelTxn[] {
   const rawRows = getProviderRows(payload)
   return rawRows
-    .map((row: any, idx: number) => {
-      const transactionDate = String(row.txn_date || row.transaction_date || row.date || "").slice(0, 10)
-      const total = Number(row.net_amount ?? row.total_amount ?? row.amount ?? 0)
-      const gallons = Number(row.gallons ?? row.quantity ?? row.qty ?? 0)
+    .map((row: unknown, idx: number) => {
+      const rowObj = asProviderRow(row)
+      const transactionDate = String(rowObj.txn_date || rowObj.transaction_date || rowObj.date || "").slice(0, 10)
+      const total = Number(rowObj.net_amount ?? rowObj.total_amount ?? rowObj.amount ?? 0)
+      const gallons = Number(rowObj.gallons ?? rowObj.quantity ?? rowObj.qty ?? 0)
       if (!transactionDate || !Number.isFinite(total) || total <= 0 || !Number.isFinite(gallons) || gallons <= 0) return null
       return {
-        external_transaction_id: String(row.transaction_id || row.id || row.reference_number || `txn-${idx}`),
+        external_transaction_id: String(rowObj.transaction_id || rowObj.id || rowObj.reference_number || `txn-${idx}`),
         transaction_date: transactionDate,
-        posted_date: row.posted_date ? String(row.posted_date).slice(0, 10) : null,
-        truck_number: row.truck_id || row.unit_number || null,
-        driver_external_id: row.driver_id || null,
-        card_number_last4: row.card_last4 || row.card_suffix || null,
-        merchant_name: row.merchant_name || row.location_name || null,
-        merchant_city: row.city || null,
-        merchant_state: row.state || null,
+        posted_date: rowObj.posted_date ? String(rowObj.posted_date).slice(0, 10) : null,
+        truck_number: rowObj.truck_id || rowObj.unit_number || null,
+        driver_external_id: rowObj.driver_id || null,
+        card_number_last4: rowObj.card_last4 || rowObj.card_suffix || null,
+        merchant_name: rowObj.merchant_name || rowObj.location_name || null,
+        merchant_city: rowObj.city || null,
+        merchant_state: rowObj.state || null,
         gallons,
-        price_per_gallon: Number.isFinite(Number(row.price_per_gallon))
-          ? Number(row.price_per_gallon)
+        price_per_gallon: Number.isFinite(Number(rowObj.price_per_gallon))
+          ? Number(rowObj.price_per_gallon)
           : Number.isFinite(total / gallons)
             ? total / gallons
             : null,
         total_amount: total,
-        odometer: Number.isFinite(Number(row.odometer)) ? Number(row.odometer) : null,
+        odometer: Number.isFinite(Number(rowObj.odometer)) ? Number(rowObj.odometer) : null,
         raw_payload: row,
       } as NormalizedFuelTxn
     })
     .filter(Boolean) as NormalizedFuelTxn[]
 }
 
-function normalizeLiveTxns(payload: any, provider: LiveFuelProvider): NormalizedFuelTxn[] {
+function normalizeLiveTxns(payload: unknown, provider: LiveFuelProvider): NormalizedFuelTxn[] {
   if (provider === "comdata") return normalizeComdataTxns(payload)
   if (provider === "wex") return normalizeWexTxns(payload)
   return normalizeEfsTxns(payload)
 }
 
-function normalizeLiveTxnsLegacy(payload: any): NormalizedFuelTxn[] {
-  const rawRows = Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload?.transactions)
-      ? payload.transactions
-      : Array.isArray(payload?.data)
-        ? payload.data
-        : []
+function normalizeLiveTxnsLegacy(payload: unknown): NormalizedFuelTxn[] {
+  const rawRows = getProviderRows(payload)
   return rawRows
-    .map((row: any, idx: number) => {
-      const transactionDate = String(row.transaction_date || row.date || row.purchase_date || "").slice(0, 10)
-      const total = Number(row.total_amount ?? row.total ?? row.amount ?? 0)
-      const gallons = Number(row.gallons ?? row.qty ?? row.quantity ?? 0)
+    .map((row: unknown, idx: number) => {
+      const rowObj = asProviderRow(row)
+      const transactionDate = String(rowObj.transaction_date || rowObj.date || rowObj.purchase_date || "").slice(0, 10)
+      const total = Number(rowObj.total_amount ?? rowObj.total ?? rowObj.amount ?? 0)
+      const gallons = Number(rowObj.gallons ?? rowObj.qty ?? rowObj.quantity ?? 0)
       if (!transactionDate || !Number.isFinite(total) || total <= 0 || !Number.isFinite(gallons) || gallons <= 0) return null
       return {
-        external_transaction_id: String(row.id || row.transaction_id || row.reference || `txn-${idx}`),
+        external_transaction_id: String(rowObj.id || rowObj.transaction_id || rowObj.reference || `txn-${idx}`),
         transaction_date: transactionDate,
-        posted_date: row.posted_date ? String(row.posted_date).slice(0, 10) : null,
-        truck_number: row.truck_number || row.unit_number || row.vehicle || null,
-        driver_external_id: row.driver_id || row.employee_id || null,
-        card_number_last4: row.card_last4 || row.card_number_last4 || null,
-        merchant_name: row.merchant_name || row.location || row.station_name || null,
-        merchant_city: row.merchant_city || row.city || null,
-        merchant_state: row.merchant_state || row.state || null,
+        posted_date: rowObj.posted_date ? String(rowObj.posted_date).slice(0, 10) : null,
+        truck_number: rowObj.truck_number || rowObj.unit_number || rowObj.vehicle || null,
+        driver_external_id: rowObj.driver_id || rowObj.employee_id || null,
+        card_number_last4: rowObj.card_last4 || rowObj.card_number_last4 || null,
+        merchant_name: rowObj.merchant_name || rowObj.location || rowObj.station_name || null,
+        merchant_city: rowObj.merchant_city || rowObj.city || null,
+        merchant_state: rowObj.merchant_state || rowObj.state || null,
         gallons,
-        price_per_gallon: Number.isFinite(Number(row.price_per_gallon ?? row.ppg))
-          ? Number(row.price_per_gallon ?? row.ppg)
+        price_per_gallon: Number.isFinite(Number(rowObj.price_per_gallon ?? rowObj.ppg))
+          ? Number(rowObj.price_per_gallon ?? rowObj.ppg)
           : Number.isFinite(total / gallons)
             ? total / gallons
             : null,
         total_amount: total,
-        odometer: Number.isFinite(Number(row.odometer)) ? Number(row.odometer) : null,
+        odometer: Number.isFinite(Number(rowObj.odometer)) ? Number(rowObj.odometer) : null,
         raw_payload: row,
       } as NormalizedFuelTxn
     })
@@ -569,7 +590,7 @@ function normalizeLiveTxnsLegacy(payload: any): NormalizedFuelTxn[] {
 async function getLiveProviderConfig(provider: LiveFuelProvider) {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null as any }
+  if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null }
 
   const { data, error } = await supabase
     .from("company_integrations")
@@ -580,33 +601,34 @@ async function getLiveProviderConfig(provider: LiveFuelProvider) {
     `)
     .eq("company_id", ctx.companyId)
     .maybeSingle()
-  if (error || !data) return { error: "Fuel-card integration is not configured", data: null as any }
+  if (error || !data) return { error: "Fuel-card integration is not configured", data: null }
+  const configRow = data as ProviderIntegrationConfigRow
 
   const configByProvider: Record<LiveFuelProvider, { enabled: boolean; base_url: string; api_key: string; api_secret: string }> = {
     comdata: {
-      enabled: !!(data as any).comdata_enabled,
-      base_url: String((data as any).comdata_api_base_url || ""),
-      api_key: String((data as any).comdata_api_key || ""),
-      api_secret: String((data as any).comdata_api_secret || ""),
+      enabled: !!configRow.comdata_enabled,
+      base_url: String(configRow.comdata_api_base_url || ""),
+      api_key: String(configRow.comdata_api_key || ""),
+      api_secret: String(configRow.comdata_api_secret || ""),
     },
     wex: {
-      enabled: !!(data as any).wex_enabled,
-      base_url: String((data as any).wex_api_base_url || ""),
-      api_key: String((data as any).wex_api_key || ""),
-      api_secret: String((data as any).wex_api_secret || ""),
+      enabled: !!configRow.wex_enabled,
+      base_url: String(configRow.wex_api_base_url || ""),
+      api_key: String(configRow.wex_api_key || ""),
+      api_secret: String(configRow.wex_api_secret || ""),
     },
     efs: {
-      enabled: !!(data as any).efs_enabled,
-      base_url: String((data as any).efs_api_base_url || ""),
-      api_key: String((data as any).efs_api_key || ""),
-      api_secret: String((data as any).efs_api_secret || ""),
+      enabled: !!configRow.efs_enabled,
+      base_url: String(configRow.efs_api_base_url || ""),
+      api_key: String(configRow.efs_api_key || ""),
+      api_secret: String(configRow.efs_api_secret || ""),
     },
   }
 
   const providerConfig = configByProvider[provider]
-  if (!providerConfig.enabled) return { error: `${provider.toUpperCase()} integration is not enabled`, data: null as any }
+  if (!providerConfig.enabled) return { error: `${provider.toUpperCase()} integration is not enabled`, data: null }
   if (!providerConfig.base_url || !providerConfig.api_key || !providerConfig.api_secret) {
-    return { error: `${provider.toUpperCase()} API credentials are incomplete`, data: null as any }
+    return { error: `${provider.toUpperCase()} API credentials are incomplete`, data: null }
   }
   return { error: null, data: { ...providerConfig, companyId: ctx.companyId } }
 }
@@ -647,7 +669,7 @@ export async function syncFuelCardTransactions(provider: LiveFuelProvider, fromD
       .limit(2000)
     const truckMap = new Map<string, string>()
     const truckDriverMap = new Map<string, string | null>()
-    ;(trucks || []).forEach((t: any) => {
+    ;(trucks || []).forEach((t: { id: string; truck_number: string | null; driver_id: string | null }) => {
       if (t.truck_number) truckMap.set(String(t.truck_number).toLowerCase(), String(t.id))
       truckDriverMap.set(String(t.id), t.driver_id ? String(t.driver_id) : null)
     })
@@ -674,7 +696,7 @@ export async function syncFuelCardTransactions(provider: LiveFuelProvider, fromD
     const upsertRes = await supabase
       .from("fuel_card_transactions")
       .upsert(transactionRows, { onConflict: "company_id,provider,external_transaction_id" })
-    if (upsertRes.error) return { error: upsertRes.error.message, data: null }
+    if (upsertRes.error) return { error: safeDbError(upsertRes.error, "Failed to sync fuel transactions"), data: null }
 
     // Mirror into fuel_purchases table so existing reports remain live.
     const purchaseRows = transactionRows.map((t) => ({
@@ -702,7 +724,9 @@ export async function syncFuelCardTransactions(provider: LiveFuelProvider, fromD
         .eq("driver_id", driverId)
         .order("purchase_date", { ascending: false })
         .limit(30)
-      const costs = (data || []).map((row: any) => Number(row.total_cost || 0)).filter((value: number) => value > 0)
+      const costs = (data || [])
+        .map((row: NumericCostRow) => Number(row.total_cost || 0))
+        .filter((value: number) => value > 0)
       const avg = costs.length > 0 ? costs.reduce((sum: number, value: number) => sum + value, 0) / costs.length : 0
       avgTransactionCache.set(driverId, avg)
       return avg

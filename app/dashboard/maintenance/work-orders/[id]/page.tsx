@@ -22,11 +22,34 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 
+type WorkOrderData = Awaited<ReturnType<typeof getWorkOrder>>["data"]
+type WorkOrder = NonNullable<WorkOrderData>
+
+type ReservationPart = {
+  reserved?: boolean | null
+  part_name?: string | null
+}
+
+type RelatedEntity = {
+  id?: string | null
+  name?: string | null
+  email?: string | null
+  service_type?: string | null
+  truck_number?: string | null
+}
+
+type WorkOrderPart = {
+  part_number?: string | null
+  name?: string | null
+  quantity?: number | null
+  unit_cost?: number | null
+}
+
 export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
   const aliveRef = useRef(true)
-  const [workOrder, setWorkOrder] = useState<any>(null)
+  const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false)
   const [actualCost, setActualCost] = useState("")
@@ -66,13 +89,13 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     if (result.error) {
       toast.error(result.error)
     } else {
-      const allReserved = result.data?.every((p: any) => p.reserved)
+      const allReserved = result.data?.every((p: ReservationPart) => p.reserved)
       if (allReserved) {
         toast.success("All parts reserved successfully")
       } else {
-        const unreserved = result.data?.filter((p: any) => !p.reserved)
+        const unreserved = result.data?.filter((p: ReservationPart) => !p.reserved)
         toast.warning(
-          `Some parts could not be reserved: ${unreserved?.map((p: any) => p.part_name).join(", ")}`
+          `Some parts could not be reserved: ${unreserved?.map((p: ReservationPart) => p.part_name).join(", ")}`
         )
       }
       loadWorkOrder()
@@ -130,11 +153,11 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
     )
   }
 
-  const maintenance = workOrder.maintenance as any
-  const truck = workOrder.truck as any
-  const assignedUser = workOrder.assigned_user as any
-  const assignedVendor = workOrder.assigned_vendor as any
-  const partsRequired = (workOrder.parts_required as any[]) || []
+  const maintenance = (workOrder.maintenance ?? null) as RelatedEntity | null
+  const truck = (workOrder.truck ?? null) as RelatedEntity | null
+  const assignedUser = (workOrder.assigned_user ?? null) as RelatedEntity | null
+  const assignedVendor = (workOrder.assigned_vendor ?? null) as RelatedEntity | null
+  const partsRequired = (Array.isArray(workOrder.parts_required) ? workOrder.parts_required : []) as WorkOrderPart[]
 
   return (
     <div className="w-full">
@@ -369,7 +392,7 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
                     </tr>
                   </thead>
                   <tbody>
-                    {partsRequired.map((part: any, idx: number) => (
+                    {partsRequired.map((part: WorkOrderPart, idx: number) => (
                       <tr key={idx} className="border-b border-border">
                         <td className="px-4 py-2">{part.part_number || "N/A"}</td>
                         <td className="px-4 py-2">{part.name || "N/A"}</td>

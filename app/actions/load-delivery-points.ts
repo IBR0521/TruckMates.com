@@ -1,18 +1,10 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
-import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 // Get all delivery points for a load
 export async function getLoadDeliveryPoints(loadId: string) {
   try {
@@ -212,7 +204,7 @@ export async function updateLoadDeliveryPoint(deliveryPointId: string, deliveryP
       return { error: ctx.error || "Not authenticated", data: null }
     }
 
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (deliveryPointData.delivery_number !== undefined) updateData.delivery_number = deliveryPointData.delivery_number
     if (deliveryPointData.location_name !== undefined) updateData.location_name = deliveryPointData.location_name
     if (deliveryPointData.location_id !== undefined) updateData.location_id = deliveryPointData.location_id || null
@@ -335,13 +327,13 @@ export async function getLoadSummary(loadId: string) {
 
     const summary = {
       total_delivery_points: deliveryPoints.length,
-      total_weight_kg: deliveryPoints.reduce((sum: number, dp: { weight_kg: number | string | null; [key: string]: any }) => sum + (parseFloat(String(dp.weight_kg || 0)) || 0), 0),
-      total_weight_lbs: deliveryPoints.reduce((sum: number, dp: { weight_lbs: number | string | null; [key: string]: any }) => sum + (parseFloat(String(dp.weight_lbs || 0)) || 0), 0),
-      total_pieces: deliveryPoints.reduce((sum: number, dp: { pieces: number | null; [key: string]: any }) => sum + (dp.pieces || 0), 0),
-      total_pallets: deliveryPoints.reduce((sum: number, dp: { pallets: number | null; [key: string]: any }) => sum + (dp.pallets || 0), 0),
-      total_boxes: deliveryPoints.reduce((sum: number, dp: { boxes: number | null; [key: string]: any }) => sum + (dp.boxes || 0), 0),
-      total_carts: deliveryPoints.reduce((sum: number, dp: { carts: number | null; [key: string]: any }) => sum + (dp.carts || 0), 0),
-      total_volume: deliveryPoints.reduce((sum: number, dp: { volume_cubic_meters: number | string | null; [key: string]: any }) => sum + (parseFloat(String(dp.volume_cubic_meters || 0)) || 0), 0),
+      total_weight_kg: deliveryPoints.reduce((sum: number, dp: { weight_kg: number | string | null; [key: string]: unknown }) => sum + (parseFloat(String(dp.weight_kg || 0)) || 0), 0),
+      total_weight_lbs: deliveryPoints.reduce((sum: number, dp: { weight_lbs: number | string | null; [key: string]: unknown }) => sum + (parseFloat(String(dp.weight_lbs || 0)) || 0), 0),
+      total_pieces: deliveryPoints.reduce((sum: number, dp: { pieces: number | null; [key: string]: unknown }) => sum + (dp.pieces || 0), 0),
+      total_pallets: deliveryPoints.reduce((sum: number, dp: { pallets: number | null; [key: string]: unknown }) => sum + (dp.pallets || 0), 0),
+      total_boxes: deliveryPoints.reduce((sum: number, dp: { boxes: number | null; [key: string]: unknown }) => sum + (dp.boxes || 0), 0),
+      total_carts: deliveryPoints.reduce((sum: number, dp: { carts: number | null; [key: string]: unknown }) => sum + (dp.carts || 0), 0),
+      total_volume: deliveryPoints.reduce((sum: number, dp: { volume_cubic_meters: number | string | null; [key: string]: unknown }) => sum + (parseFloat(String(dp.volume_cubic_meters || 0)) || 0), 0),
     }
 
     return { data: summary, error: null }

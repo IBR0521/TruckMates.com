@@ -24,8 +24,8 @@ import { getPlanFeatureAccessStatus } from "@/app/actions/plan-feature-access"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 export default function GeofencingPage() {
-  const [geofences, setGeofences] = useState<any[]>([])
-  const [filteredGeofences, setFilteredGeofences] = useState<any[]>([])
+  const [geofences, setGeofences] = useState<unknown[]>([])
+  const [filteredGeofences, setFilteredGeofences] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [geofencingAllowed, setGeofencingAllowed] = useState(true)
   const [planName, setPlanName] = useState("starter")

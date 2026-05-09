@@ -1,24 +1,19 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * CRM Document Management Actions
  * Handles W9, COI, MC certificates, insurance policies, etc. with expiration tracking
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 import { validateFileMagicBytes } from "@/lib/file-signature"
 import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 
 export interface CRMDocument {
@@ -234,7 +229,7 @@ export async function getCRMDocuments(filters?: {
     }
 
     // Format the response
-    const formattedData = (data || []).map((doc: any) => ({
+    const formattedData = (data || []).map((doc: Record<string, unknown> & { customers?: { name?: string | null } | null; vendors?: { name?: string | null } | null }) => ({
       ...doc,
       customer_name: doc.customers?.name || null,
       vendor_name: doc.vendors?.name || null,
@@ -305,7 +300,7 @@ export async function getExpiringCRMDocuments(
       }
 
       // Calculate days until expiration
-      const formattedData = (directData || []).map((doc: any) => {
+      const formattedData = (directData || []).map((doc: Record<string, unknown> & { expiration_date: string; customers?: { name?: string | null } | null; vendors?: { name?: string | null } | null }) => {
         const expirationDate = new Date(doc.expiration_date)
         const today = new Date()
         const daysUntil = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))

@@ -2,6 +2,53 @@ import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import crypto from "crypto"
 
+type InsertClient = {
+  from: (table: string) => {
+    insert: (values: unknown) => Promise<{ error: unknown }>
+  }
+}
+
+type ELDDevice = {
+  id: string
+  company_id: string
+  truck_id: string | null
+}
+
+type KeepTruckinWebhookData = {
+  device_id?: string
+  device_serial?: string
+  event_type?: string
+  type?: string
+  start_time?: string
+  start?: string
+  end_time?: string
+  end?: string
+  driver_id?: string
+  status?: string
+  location_start?: { lat?: number; latitude?: number; lng?: number; longitude?: number }
+  location_end?: { lat?: number; latitude?: number; lng?: number; longitude?: number }
+  odometer_start?: number
+  odometer_reading_start?: number
+  odometer_end?: number
+  odometer_reading_end?: number
+  location?: string
+  location_name?: string
+  certified?: boolean
+  latitude?: number
+  lat?: number
+  longitude?: number
+  lng?: number
+  speed?: number
+  heading?: number
+  bearing?: number
+  timestamp?: string
+  time?: string
+  severity?: string
+  violation_type?: string
+  description?: string
+  message?: string
+}
+
 /**
  * KeepTruckin Webhook Endpoint
  * Receives real-time HOS logs, locations, and events from KeepTruckin ELD devices
@@ -50,7 +97,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
     }
     
-    const data = JSON.parse(body)
+    const data: KeepTruckinWebhookData = JSON.parse(body)
     // SECURITY: Use admin client for webhooks (no user session)
     const { createAdminClient } = await import("@/lib/supabase/admin")
     const supabase = createAdminClient()
@@ -67,6 +114,7 @@ export async function POST(request: NextRequest) {
       console.error("[KeepTruckin Webhook] Device not found:", data.device_id)
       return NextResponse.json({ error: "Device not found" }, { status: 404 })
     }
+    const typedDevice: ELDDevice = device
     
     // Process webhook event type
     const eventType = data.event_type || data.type
@@ -74,17 +122,17 @@ export async function POST(request: NextRequest) {
     switch (eventType) {
       case "log_updated":
       case "hos_log":
-        await processHOSLog(data, device, supabase)
+        await processHOSLog(data, typedDevice, supabase)
         break
         
       case "location_updated":
       case "gps_location":
-        await processLocation(data, device, supabase)
+        await processLocation(data, typedDevice, supabase)
         break
         
       case "violation_detected":
       case "hos_violation":
-        await processViolation(data, device, supabase)
+        await processViolation(data, typedDevice, supabase)
         break
         
       default:
@@ -101,7 +149,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function processHOSLog(data: any, device: any, supabase: any) {
+async function processHOSLog(
+  data: KeepTruckinWebhookData,
+  device: ELDDevice,
+  supabase: InsertClient
+) {
   // Map KeepTruckin log format to TruckMates format
   // Derive log_date from start_time (required field)
   const startTime = data.start_time || data.start
@@ -153,7 +205,11 @@ async function processHOSLog(data: any, device: any, supabase: any) {
   }
 }
 
-async function processLocation(data: any, device: any, supabase: any) {
+async function processLocation(
+  data: KeepTruckinWebhookData,
+  device: ELDDevice,
+  supabase: InsertClient
+) {
   const location = {
     truck_id: device.truck_id,
     latitude: data.latitude || data.lat,
@@ -180,7 +236,11 @@ async function processLocation(data: any, device: any, supabase: any) {
   }
 }
 
-async function processViolation(data: any, device: any, supabase: any) {
+async function processViolation(
+  data: KeepTruckinWebhookData,
+  device: ELDDevice,
+  supabase: InsertClient
+) {
   const event = {
     company_id: device.company_id,
     truck_id: device.truck_id,

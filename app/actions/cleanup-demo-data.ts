@@ -3,12 +3,17 @@
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { isDevSurfaceBlocked } from "@/lib/security/dev-only"
 
 /**
  * Remove all demo data from the current user's company
  * This identifies demo data by common patterns (DEMO- prefix, demo email domains, etc.)
  */
 export async function removeAllDemoData() {
+  if (isDevSurfaceBlocked()) {
+    return { error: "Not found", data: null }
+  }
+
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {

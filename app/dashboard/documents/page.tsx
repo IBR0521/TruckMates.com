@@ -29,10 +29,10 @@ export default function DocumentsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
-  const [documentsList, setDocumentsList] = useState<any[]>([])
-  const [filteredDocuments, setFilteredDocuments] = useState<any[]>([])
+  const [documentsList, setDocumentsList] = useState<unknown[]>([])
+  const [filteredDocuments, setFilteredDocuments] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [expiringItems, setExpiringItems] = useState<any>(null)
+  const [expiringItems, setExpiringItems] = useState<unknown>(null)
   const [expiryFilter, setExpiryFilter] = useState<string>("all") // all, expiring, expired
   const [isUploading, setIsUploading] = useState(false)
 
@@ -113,7 +113,7 @@ export default function DocumentsPage() {
     setSelectedIds(newSelected)
   }
 
-  const handleView = async (doc: any) => {
+  const handleView = async (doc: unknown) => {
     try {
       const result = await getDocumentUrl(doc.id)
       if (result.error) {
@@ -130,7 +130,7 @@ export default function DocumentsPage() {
     }
   }
 
-  const handleDownload = async (doc: any) => {
+  const handleDownload = async (doc: unknown) => {
     try {
       const result = await getDocumentUrl(doc.id)
       if (result.error) {

@@ -1,20 +1,11 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
-import * as Sentry from "@sentry/nextjs"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
 // Manually create ELD log entry
@@ -33,7 +24,7 @@ export async function createELDLog(formData: {
   odometer_end?: number
   miles_driven?: number
   engine_hours?: number
-  violations?: any
+  violations?: Record<string, unknown> | null
 }) {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
@@ -154,7 +145,7 @@ export async function createELDEvent(formData: {
   description?: string
   event_time: string
   location?: { lat: number; lng: number; address?: string }
-  metadata?: any
+  metadata?: Record<string, unknown> | null
 }) {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()

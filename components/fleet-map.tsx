@@ -26,7 +26,9 @@ interface Geofence {
   center_latitude?: number
   center_longitude?: number
   radius_meters?: number
-  polygon_coordinates?: Array<{ lat: number; lng: number }> | number[][]
+  polygon_coordinates?: Array<
+    { lat?: number; lng?: number; latitude?: number; longitude?: number } | number[]
+  >
   north_bound?: number
   south_bound?: number
   east_bound?: number
@@ -46,9 +48,14 @@ interface FleetMapProps {
   onGeofenceClick?: (geofenceId: string) => void
 }
 
+type GeofenceShape = google.maps.Circle | google.maps.Rectangle | google.maps.Polygon
+type GeofenceShapeWithInfo = GeofenceShape & { infoWindow?: google.maps.InfoWindow }
+type GeofenceCloseHandlerKey = `closeGeofenceInfo_${string}`
+
 declare global {
   interface Window {
-    google: any
+    google: typeof google
+    [key: GeofenceCloseHandlerKey]: (() => void) | undefined
   }
 }
 
@@ -64,9 +71,9 @@ export function FleetMap({
   onGeofenceClick,
 }: FleetMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<any>(null)
-  const markersRef = useRef<Map<string, any>>(new Map())
-  const geofenceShapesRef = useRef<Map<string, any>>(new Map())
+  const mapInstanceRef = useRef<google.maps.Map | null>(null)
+  const markersRef = useRef<Map<string, google.maps.Marker>>(new Map())
+  const geofenceShapesRef = useRef<Map<string, GeofenceShapeWithInfo>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const containerReadyRef = useRef(false)
@@ -481,7 +488,7 @@ export function FleetMap({
         }
 
         // Store info window reference on the circle
-        ;(circle as any).infoWindow = infoWindow
+        ;(circle as GeofenceShapeWithInfo).infoWindow = infoWindow
 
         circle.addListener("click", () => {
           if (onGeofenceClick) {
@@ -491,7 +498,7 @@ export function FleetMap({
           // Close any other open info windows first
           geofenceShapesRef.current.forEach((shape, id) => {
             if (id !== geofence.id) {
-              const storedInfoWindow = (shape as any).infoWindow
+              const storedInfoWindow = shape.infoWindow
               if (storedInfoWindow && storedInfoWindow.getMap()) {
                 storedInfoWindow.close()
               }
@@ -501,12 +508,12 @@ export function FleetMap({
           // Toggle info window - close if already open, open if closed
           if (infoWindow.getMap()) {
             infoWindow.close()
-            ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = undefined
+            window[`closeGeofenceInfo_${geofence.id}`] = undefined
           } else {
             // Set up close function before opening (scoped to this geofence)
-            ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = () => {
+            window[`closeGeofenceInfo_${geofence.id}`] = () => {
               infoWindow.close()
-              ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = undefined
+              window[`closeGeofenceInfo_${geofence.id}`] = undefined
             }
             
             // Set content and open
@@ -585,7 +592,7 @@ export function FleetMap({
           `
         }
 
-        ;(rectangle as any).infoWindow = infoWindow
+        ;(rectangle as GeofenceShapeWithInfo).infoWindow = infoWindow
 
         rectangle.addListener("click", () => {
           if (onGeofenceClick) {
@@ -594,7 +601,7 @@ export function FleetMap({
 
           geofenceShapesRef.current.forEach((shape, id) => {
             if (id !== geofence.id) {
-              const storedInfoWindow = (shape as any).infoWindow
+              const storedInfoWindow = shape.infoWindow
               if (storedInfoWindow && storedInfoWindow.getMap()) {
                 storedInfoWindow.close()
               }
@@ -603,11 +610,11 @@ export function FleetMap({
 
           if (infoWindow.getMap()) {
             infoWindow.close()
-            ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = undefined
+            window[`closeGeofenceInfo_${geofence.id}`] = undefined
           } else {
-            ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = () => {
+            window[`closeGeofenceInfo_${geofence.id}`] = () => {
               infoWindow.close()
-              ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = undefined
+              window[`closeGeofenceInfo_${geofence.id}`] = undefined
             }
 
             const bounds = rectangle.getBounds()
@@ -620,14 +627,19 @@ export function FleetMap({
         geofenceShapesRef.current.set(geofence.id, rectangle)
       } else if (geofence.zone_type === "polygon" && geofence.polygon_coordinates) {
         // Handle both {lat, lng} and [lat, lng] formats
-        const paths = geofence.polygon_coordinates.map((coord: any) => {
+        const paths = geofence.polygon_coordinates
+          .map((coord): google.maps.LatLngLiteral | null => {
           if (typeof coord === 'object' && 'lat' in coord && 'lng' in coord) {
-            return { lat: coord.lat, lng: coord.lng }
+            return {
+              lat: Number(coord.lat),
+              lng: Number(coord.lng),
+            }
           } else if (Array.isArray(coord) && coord.length >= 2) {
-            return { lat: coord[0], lng: coord[1] }
+            return { lat: Number(coord[0]), lng: Number(coord[1]) }
           }
           return null
-        }).filter((p: any) => p !== null)
+        })
+          .filter((p): p is google.maps.LatLngLiteral => p !== null)
         
         if (paths.length === 0) {
           return // Skip invalid polygon
@@ -690,7 +702,7 @@ export function FleetMap({
         }
 
         // Store info window reference on the polygon
-        ;(polygon as any).infoWindow = infoWindow
+        ;(polygon as GeofenceShapeWithInfo).infoWindow = infoWindow
 
         polygon.addListener("click", () => {
           if (onGeofenceClick) {
@@ -700,7 +712,7 @@ export function FleetMap({
           // Close any other open info windows first
           geofenceShapesRef.current.forEach((shape, id) => {
             if (id !== geofence.id) {
-              const storedInfoWindow = (shape as any).infoWindow
+              const storedInfoWindow = shape.infoWindow
               if (storedInfoWindow && storedInfoWindow.getMap()) {
                 storedInfoWindow.close()
               }
@@ -710,20 +722,20 @@ export function FleetMap({
           // Toggle info window - close if already open, open if closed
           if (infoWindow.getMap()) {
             infoWindow.close()
-            ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = undefined
+            window[`closeGeofenceInfo_${geofence.id}`] = undefined
           } else {
             // Set up close function before opening (scoped to this geofence)
-            ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = () => {
+            window[`closeGeofenceInfo_${geofence.id}`] = () => {
               infoWindow.close()
-              ;(window as any)[`closeGeofenceInfo_${geofence.id}`] = undefined
+              window[`closeGeofenceInfo_${geofence.id}`] = undefined
             }
             
             // Get center of polygon for info window
             const bounds = new window.google.maps.LatLngBounds()
-            geofence.polygon_coordinates!.forEach((coord: any) => {
+            geofence.polygon_coordinates!.forEach((coord) => {
               // Handle both {lat, lng} and [lat, lng] formats
-              const lat = coord.lat ?? coord[0] ?? coord.latitude
-              const lng = coord.lng ?? coord[1] ?? coord.longitude
+              const lat = Array.isArray(coord) ? coord[0] : coord.lat ?? coord.latitude
+              const lng = Array.isArray(coord) ? coord[1] : coord.lng ?? coord.longitude
               if (lat != null && lng != null) {
                 bounds.extend({ lat, lng })
               }

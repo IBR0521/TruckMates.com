@@ -5,6 +5,8 @@ import Stripe from "stripe"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { capturePostHogServerEvent } from "@/lib/analytics/posthog-server"
 
+type AdminClient = ReturnType<typeof createAdminClient>
+
 function getStripe() {
   const secretKey = process.env.STRIPE_SECRET_KEY
   if (!secretKey) {
@@ -99,7 +101,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handleCheckoutCompleted(supabase: any, session: Stripe.Checkout.Session) {
+async function handleCheckoutCompleted(supabase: AdminClient, session: Stripe.Checkout.Session) {
   const companyId = session.metadata?.company_id
   const planId = session.metadata?.plan_id
 
@@ -113,7 +115,7 @@ async function handleCheckoutCompleted(supabase: any, session: Stripe.Checkout.S
   console.log(`Checkout completed for company ${companyId}, plan ${planId}`)
 }
 
-async function handleSubscriptionUpdated(supabase: any, subscription: Stripe.Subscription) {
+async function handleSubscriptionUpdated(supabase: AdminClient, subscription: Stripe.Subscription) {
   const companyId = subscription.metadata?.company_id
   const planId = subscription.metadata?.plan_id
 
@@ -145,6 +147,10 @@ async function handleSubscriptionUpdated(supabase: any, subscription: Stripe.Sub
   }
 
   // Upsert subscription
+  const subscriptionWithPeriod = subscription as Stripe.Subscription & {
+    current_period_start?: number
+    current_period_end?: number
+  }
   const subscriptionData = {
     company_id: companyId,
     plan_id: planId,
@@ -156,11 +162,11 @@ async function handleSubscriptionUpdated(supabase: any, subscription: Stripe.Sub
     // Stripe Subscription object has current_period_start and current_period_end as numbers (Unix timestamps)
     // These fields exist on the Subscription type but may not be exposed in older SDK versions
     // Access via type assertion with proper validation
-    current_period_start: (subscription as any).current_period_start 
-      ? new Date((subscription as any).current_period_start * 1000).toISOString()
+    current_period_start: subscriptionWithPeriod.current_period_start
+      ? new Date(subscriptionWithPeriod.current_period_start * 1000).toISOString()
       : new Date().toISOString(),
-    current_period_end: (subscription as any).current_period_end
-      ? new Date((subscription as any).current_period_end * 1000).toISOString()
+    current_period_end: subscriptionWithPeriod.current_period_end
+      ? new Date(subscriptionWithPeriod.current_period_end * 1000).toISOString()
       : new Date().toISOString(),
     cancel_at_period_end: subscription.cancel_at_period_end,
     trial_start: subscription.trial_start
@@ -189,7 +195,7 @@ async function handleSubscriptionUpdated(supabase: any, subscription: Stripe.Sub
   console.log(`Subscription updated for company ${companyId}`)
 }
 
-async function handleSubscriptionDeleted(supabase: any, subscription: Stripe.Subscription) {
+async function handleSubscriptionDeleted(supabase: AdminClient, subscription: Stripe.Subscription) {
   const companyId = subscription.metadata?.company_id
 
   if (!companyId) {
@@ -213,8 +219,9 @@ async function handleSubscriptionDeleted(supabase: any, subscription: Stripe.Sub
   console.log(`Subscription canceled for company ${companyId}`)
 }
 
-async function handleInvoicePaid(supabase: any, invoice: Stripe.Invoice) {
-  const subscriptionId = (invoice as any).subscription as string
+async function handleInvoicePaid(supabase: AdminClient, invoice: Stripe.Invoice) {
+  const subscriptionId =
+    typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id || ""
 
   if (!subscriptionId) {
     return
@@ -270,8 +277,9 @@ async function handleInvoicePaid(supabase: any, invoice: Stripe.Invoice) {
   console.log(`Invoice ${invoice.id} stored for company ${subscription.company_id}`)
 }
 
-async function handleInvoicePaymentFailed(supabase: any, invoice: Stripe.Invoice) {
-  const subscriptionId = (invoice as any).subscription as string
+async function handleInvoicePaymentFailed(supabase: AdminClient, invoice: Stripe.Invoice) {
+  const subscriptionId =
+    typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id || ""
 
   if (!subscriptionId) {
     return

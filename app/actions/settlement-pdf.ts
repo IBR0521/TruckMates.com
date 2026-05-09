@@ -6,6 +6,27 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { escapeHtml } from "@/lib/html-escape"
 import * as Sentry from "@sentry/nextjs"
 
+type SettlementDriver = { name?: string; email?: string; phone?: string }
+type SettlementPayRule = {
+  pay_type?: string
+  base_rate_per_mile?: number
+  base_percentage?: number
+  base_flat_rate?: number
+}
+type SettlementBonus = { description?: string; type?: string; amount?: number }
+type SettlementLoad = { id?: string; shipment_number?: string; date?: string; value?: number }
+type SettlementCalculationDetails = {
+  base_pay?: number
+  miles_used?: number
+  rate_per_mile?: number
+  total_load_value?: number
+  percentage?: number
+  bonuses?: SettlementBonus[]
+  bonus_total?: number
+  minimum_guarantee_applied?: boolean
+  minimum_guarantee_amount?: number
+}
+
 /**
  * Settlement PDF Generation
  * Generates professional PDF settlement statements for drivers
@@ -80,10 +101,10 @@ export async function generateSettlementPDF(settlementId: string): Promise<{
       }).format(amount)
     }
 
-    const driver = settlement.driver as any
-    const payRule = settlement.pay_rule as any
-    const calculationDetails = (settlement.calculation_details as any) || {}
-    const loads = (settlement.loads as any[]) || []
+    const driver = settlement.driver as SettlementDriver
+    const payRule = settlement.pay_rule as SettlementPayRule
+    const calculationDetails = (settlement.calculation_details as SettlementCalculationDetails) || {}
+    const loads = (settlement.loads as SettlementLoad[]) || []
 
     // Generate HTML
     const html = `
@@ -327,7 +348,7 @@ export async function generateSettlementPDF(settlementId: string): Promise<{
             ${calculationDetails.bonuses && calculationDetails.bonuses.length > 0 ? `
             <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
               <div class="calculation-row text-bold">Bonuses:</div>
-              ${calculationDetails.bonuses.map((bonus: any) => `
+              ${calculationDetails.bonuses.map((bonus: SettlementBonus) => `
               <div class="calculation-row bonus-item">
                 <span>${escapeHtml(bonus.description || bonus.type)}</span>
                 <span>${formatCurrency(bonus.amount || 0)}</span>
@@ -362,7 +383,7 @@ export async function generateSettlementPDF(settlementId: string): Promise<{
               </tr>
             </thead>
             <tbody>
-              ${loads.map((load: any) => `
+              ${loads.map((load: SettlementLoad) => `
               <tr>
                 <td>${load.shipment_number || load.id?.substring(0, 8) || "N/A"}</td>
                 <td>${load.date ? formatDate(load.date) : "N/A"}</td>

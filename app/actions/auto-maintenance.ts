@@ -110,7 +110,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
   for (const [serviceType, interval] of Object.entries(maintenanceIntervals)) {
     // Check if this service is already scheduled
     const alreadyScheduled = recentMaintenance?.some(
-      (m: any) => m.service_type === serviceType && (m.status === "scheduled" || m.status === "in_progress")
+      (m: { service_type?: string; status?: string }) => m.service_type === serviceType && (m.status === "scheduled" || m.status === "in_progress")
     )
 
     if (alreadyScheduled) {

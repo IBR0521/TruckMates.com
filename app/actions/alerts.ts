@@ -1,8 +1,9 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
@@ -10,14 +11,6 @@ import { sendNotification } from "./notifications"
 import { handleDbError } from "@/lib/db-helpers"
 import { mapLegacyRole } from "@/lib/roles"
 import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /**
  * Get alert rules
  */
@@ -58,7 +51,7 @@ export async function createAlertRule(formData: {
   name: string
   description?: string
   event_type: string
-  conditions: any
+  conditions: unknown
   send_email?: boolean
   send_sms?: boolean
   send_in_app?: boolean
@@ -131,7 +124,7 @@ export async function updateAlertRule(
     name?: string
     description?: string
     event_type?: string
-    conditions?: any
+    conditions?: unknown
     send_email?: boolean
     send_sms?: boolean
     send_in_app?: boolean
@@ -175,7 +168,7 @@ export async function updateAlertRule(
     return { error: "Alert rule not found", data: null }
   }
 
-  const updateData: any = {}
+  const updateData: Record<string, unknown> = {}
   if (formData.name !== undefined) updateData.name = formData.name
   if (formData.description !== undefined) updateData.description = formData.description || null
   if (formData.event_type !== undefined) updateData.event_type = formData.event_type
@@ -422,7 +415,7 @@ export async function createAlert(formData: {
   route_id?: string
   driver_id?: string
   truck_id?: string
-  metadata?: any
+  metadata?: Record<string, unknown>
 }) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
@@ -510,13 +503,13 @@ export async function createAlert(formData: {
           maintenance_manager: ["maintenance_due", "maintenance_overdue", "dvir_required"],
         }
         
-        const filteredUsers = companyUsers.filter((u: any) => {
+        const filteredUsers = companyUsers.filter((u: { id: string; role?: string | null }) => {
           const role = u.role || "driver"
           const allowedTypes = roleEventTypes[role] || roleEventTypes.driver
           return allowedTypes.includes("*") || allowedTypes.includes(formData.event_type)
         })
         
-        notifyUserIds.push(...filteredUsers.map((u: any) => u.id))
+        notifyUserIds.push(...filteredUsers.map((u: { id: string }) => u.id))
       }
     }
 
@@ -729,7 +722,7 @@ export async function processAlertEscalations() {
       .eq("company_id", rule.company_id)
       .in("role", ["manager", "admin", "owner"])
 
-    const managerIds = managers?.map((u: any) => u.id) || []
+    const managerIds = managers?.map((u: { id: string }) => u.id) || []
     if (managerIds.length === 0) {
       // No managers to escalate to; skip
       continue

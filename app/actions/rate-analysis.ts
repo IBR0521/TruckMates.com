@@ -1,5 +1,6 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * Smart Rate Suggestions
  * Integrates with DAT iQ or Truckstop Rate Analysis API
@@ -7,16 +8,10 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { geocodeAddress } from "./integrations-google-maps"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 
 export interface MarketRateSuggestion {
@@ -405,6 +400,5 @@ function calculateProfitabilityScore(yourRate: number, marketRate: number): numb
   if (ratio >= 0.8) return 40  // 20% below market
   return 20 // More than 20% below market
 }
-
 
 

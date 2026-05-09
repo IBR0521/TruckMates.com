@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { safeDbError } from "@/lib/utils/error"
 import { getCompanySettings } from "./number-formats"
 import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
@@ -211,9 +212,9 @@ export async function sendInvoiceEmail(
 
     if (emailResult.error) {
       Sentry.captureException(emailResult.error)
-      return { 
-        error: `Failed to send email: ${emailResult.error.message || "Unknown error"}`, 
-        data: null 
+      return {
+        error: safeDbError(emailResult.error, "Failed to send email"),
+        data: null
       }
     }
 

@@ -23,6 +23,25 @@ export type AuditLogRow = {
   details: Record<string, unknown>
 }
 
+type AuditLogRaw = {
+  id: string
+  created_at: string
+  action: string
+  resource_type: string
+  resource_id: string | null
+  user_id: string | null
+  ip_address: string | null
+  user_agent: string | null
+  details: unknown
+}
+
+type UserLookupRow = {
+  id?: string | null
+  name?: string | null
+  full_name?: string | null
+  email?: string | null
+}
+
 export async function getAuditLogs(filters?: {
   search?: string
   action?: string
@@ -73,20 +92,21 @@ export async function getAuditLogs(filters?: {
       return { data: null, count: 0, error: "Failed to load audit logs" }
     }
 
-    const userIds = [...new Set((data || []).map((row: any) => row.user_id).filter(Boolean))]
+    const userIds = [...new Set(((data || []) as AuditLogRaw[]).map((row) => row.user_id).filter(Boolean))]
     let userMap: Record<string, string> = {}
     if (userIds.length > 0) {
       const { data: users } = await supabase
         .from("users")
         .select("id, name, full_name, email")
         .in("id", userIds)
-      userMap = (users || []).reduce((acc: Record<string, string>, user: any) => {
+      userMap = ((users || []) as UserLookupRow[]).reduce((acc: Record<string, string>, user) => {
+        if (!user.id) return acc
         acc[user.id] = user.name || user.full_name || user.email || "Unknown user"
         return acc
       }, {})
     }
 
-    const rows: AuditLogRow[] = (data || []).map((row: any) => ({
+    const rows: AuditLogRow[] = ((data || []) as AuditLogRaw[]).map((row) => ({
       id: row.id,
       created_at: row.created_at,
       action: row.action,
@@ -136,13 +156,13 @@ export async function getAuditLogFilterOptions(): Promise<{
     ])
 
     const actions: string[] = Array.from(
-      new Set<string>((logs || []).map((l: any) => l.action).filter(isNonEmptyString)),
+      new Set<string>(((logs || []) as Array<{ action?: string | null }>).map((l) => l.action).filter(isNonEmptyString)),
     ).sort()
     const resourceTypes: string[] = Array.from(
-      new Set<string>((logs || []).map((l: any) => l.resource_type).filter(isNonEmptyString)),
+      new Set<string>(((logs || []) as Array<{ resource_type?: string | null }>).map((l) => l.resource_type).filter(isNonEmptyString)),
     ).sort()
-    const userRows: Array<{ id: string; label: string }> = (users || [])
-      .map((u: any) => {
+    const userRows: Array<{ id: string; label: string }> = ((users || []) as UserLookupRow[])
+      .map((u) => {
         const id = isNonEmptyString(u?.id) ? u.id : ""
         const labelCandidate = u?.name ?? u?.full_name ?? u?.email ?? id
         const label = isNonEmptyString(labelCandidate) ? labelCandidate : id

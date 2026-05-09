@@ -9,9 +9,23 @@ import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/client"
 import { use } from "react"
 
+type TrackedShipment = {
+  status: string
+  shipment_number?: string
+  origin?: string
+  destination?: string
+  load_date?: string
+  estimated_delivery?: string
+  actual_delivery?: string
+  contents?: string
+  weight?: string | number
+  carrier_type?: string
+  company_name?: string
+}
+
 export default function TrackingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const [shipment, setShipment] = useState<any>(null)
+  const [shipment, setShipment] = useState<TrackedShipment | null>(null)
   const [trackingId, setTrackingId] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>("")

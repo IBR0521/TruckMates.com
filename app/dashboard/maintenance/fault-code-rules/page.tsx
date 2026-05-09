@@ -44,6 +44,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+type FaultCodeRuleRow = NonNullable<Awaited<ReturnType<typeof getFaultCodeRules>>["data"]>[number]
+type FaultCodeRuleInput = Parameters<typeof upsertFaultCodeRule>[0]
+
 export default function FaultCodeRulesPage() {
   const router = useRouter()
   const pathname = usePathname()
@@ -54,12 +57,12 @@ export default function FaultCodeRulesPage() {
     }
   }, [pathname, router])
 
-  const [rules, setRules] = useState<any[]>([])
-  const [filteredRules, setFilteredRules] = useState<any[]>([])
+  const [rules, setRules] = useState<FaultCodeRuleRow[]>([])
+  const [filteredRules, setFilteredRules] = useState<FaultCodeRuleRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingRule, setEditingRule] = useState<any>(null)
+  const [editingRule, setEditingRule] = useState<FaultCodeRuleRow | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     fault_code: "",
@@ -102,7 +105,7 @@ export default function FaultCodeRulesPage() {
     setIsLoading(false)
   }
 
-  function openDialog(rule?: any) {
+  function openDialog(rule?: FaultCodeRuleRow) {
     if (rule) {
       setEditingRule(rule)
       setFormData({
@@ -139,12 +142,13 @@ export default function FaultCodeRulesPage() {
       return
     }
 
+    const priority: FaultCodeRuleInput["priority"] = formData.priority
     const result = await upsertFaultCodeRule({
       id: editingRule?.id,
       fault_code: formData.fault_code,
       fault_code_category: formData.fault_code_category || undefined,
       service_type: formData.service_type,
-      priority: formData.priority as any,
+      priority,
       estimated_cost: formData.estimated_cost ? parseFloat(formData.estimated_cost) : undefined,
       estimated_labor_hours: formData.estimated_labor_hours
         ? parseFloat(formData.estimated_labor_hours)

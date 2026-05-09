@@ -181,7 +181,9 @@ export function CommunicationTimeline({
                 <Label>Type</Label>
                 <Select
                   value={logData.type}
-                  onValueChange={(v) => setLogData({ ...logData, type: v as any })}
+                  onValueChange={(v) =>
+                    setLogData({ ...logData, type: v as CommunicationLog["type"] })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />

@@ -3,6 +3,32 @@ import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getMobileAuthContext } from "@/lib/auth/mobile"
 
+type IncomingDefect = {
+  component?: string
+  description?: string
+  severity?: string
+  corrected?: boolean
+}
+
+type IncomingDVIR = {
+  truck_id?: string
+  driver_id?: string
+  inspection_type?: string
+  inspection_date?: string
+  inspection_time?: string
+  location?: string
+  defects?: IncomingDefect[]
+  driver_signature_date?: string
+  driver_signature?: string
+  mileage?: number
+  odometer_reading?: number
+  status?: string
+  defects_found?: boolean
+  safe_to_operate?: boolean
+  notes?: string
+  corrective_action?: string
+}
+
 /**
  * Receive DVIR (Driver Vehicle Inspection Report) entries from mobile app
  * POST /api/eld/mobile/dvirs
@@ -73,9 +99,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Transform and validate DVIRs
-    const dvirsToInsert = dvirs
-      .filter((dvir: any) => dvir.inspection_type && dvir.inspection_date) // Filter invalid DVIRs
-      .map((dvir: any) => {
+    const incomingDvirs = dvirs as IncomingDVIR[]
+    const dvirsToInsert = incomingDvirs
+      .filter((dvir) => dvir.inspection_type && dvir.inspection_date) // Filter invalid DVIRs
+      .map((dvir) => {
         // Use device's truck_id and driver_id if not provided in DVIR
         const truckId = dvir.truck_id || device.truck_id
         const driverId = dvir.driver_id || device.driver_id
@@ -92,7 +119,7 @@ export async function POST(request: NextRequest) {
         // Parse defects (convert to JSONB format)
         let defectsJson = null
         if (dvir.defects && Array.isArray(dvir.defects) && dvir.defects.length > 0) {
-          defectsJson = dvir.defects.map((defect: any) => ({
+          defectsJson = dvir.defects.map((defect) => ({
             component: defect.component || "Unknown",
             description: defect.description || "",
             severity: defect.severity || "minor",
@@ -134,7 +161,7 @@ export async function POST(request: NextRequest) {
           driver_signature_date: driverSignatureDate,
         }
       })
-      .filter((dvir: any) => dvir.driver_id && dvir.truck_id) // Only include DVIRs with valid driver and truck
+      .filter((dvir) => dvir.driver_id && dvir.truck_id) // Only include DVIRs with valid driver and truck
 
     if (dvirsToInsert.length === 0) {
       return NextResponse.json(

@@ -26,10 +26,10 @@ interface AuditLogEntry {
   resource_id: string
   details: {
     field?: string
-    old_value?: any
-    new_value?: any
+    old_value?: unknown
+    new_value?: unknown
     reason?: string
-    [key: string]: any
+    [key: string]: unknown
   }
   created_at: string
   ip_address?: string
@@ -92,7 +92,7 @@ export function AuditTrail({ resourceType, resourceId, trigger, className }: Aud
       const newVal = entry.details.new_value
 
       // Format based on field type
-      const formatValue = (val: any) => {
+      const formatValue = (val: unknown) => {
         if (val === null || val === undefined) return "—"
         if (typeof val === "boolean") return val ? "Yes" : "No"
         if (typeof val === "number" && field.toLowerCase().includes("rate") || field.toLowerCase().includes("price")) {

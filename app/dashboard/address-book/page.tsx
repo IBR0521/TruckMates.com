@@ -74,6 +74,7 @@ import {
 } from "@/app/actions/enhanced-address-book"
 import { exportToExcel } from "@/lib/export-utils"
 import dynamic from "next/dynamic"
+import type { LucideIcon } from "lucide-react"
 
 // Dynamically import AddressBookMap to avoid SSR issues
 const AddressBookMap = dynamic(() => import("@/components/address-book-map"), {
@@ -86,7 +87,7 @@ const AddressBookMap = dynamic(() => import("@/components/address-book-map"), {
   )
 })
 
-const CATEGORY_ICONS: Record<AddressBookCategory, any> = {
+const CATEGORY_ICONS: Record<AddressBookCategory, LucideIcon> = {
   shipper: Package,
   receiver: Package,
   vendor: Store,
@@ -171,7 +172,7 @@ export default function EnhancedAddressBookPage() {
       const result = await getAddressBookEntries({
         search: searchTerm || undefined,
         category: categoryFilter === "all" ? undefined : categoryFilter,
-        geocoding_status: geocodingStatusFilter !== "all" ? geocodingStatusFilter as any : undefined,
+        geocoding_status: geocodingStatusFilter !== "all" ? geocodingStatusFilter as "pending" | "verified" | "failed" : undefined,
       })
 
       if (result.error) {
@@ -578,7 +579,10 @@ export default function EnhancedAddressBookPage() {
               className="pl-10 bg-background border-border"
             />
           </div>
-          <Select value={categoryFilter} onValueChange={(value: any) => setCategoryFilter(value)}>
+          <Select
+            value={categoryFilter}
+            onValueChange={(value: string) => setCategoryFilter(value as AddressBookCategory | "all")}
+          >
             <SelectTrigger className="w-full sm:w-[180px] bg-background border-border">
               <SelectValue placeholder="Category" />
             </SelectTrigger>

@@ -39,13 +39,13 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const router = useRouter()
   const { id } = use(params)
   const aliveRef = useRef(true)
-  const [customer, setCustomer] = useState<any>(null)
-  const [loads, setLoads] = useState<any[]>([])
-  const [invoices, setInvoices] = useState<any[]>([])
-  const [history, setHistory] = useState<any[]>([])
+  const [customer, setCustomer] = useState<unknown>(null)
+  const [loads, setLoads] = useState<unknown[]>([])
+  const [invoices, setInvoices] = useState<unknown[]>([])
+  const [history, setHistory] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"overview" | "loads" | "invoices" | "history" | "documents" | "communications">("overview")
-  const [portalAccess, setPortalAccess] = useState<any>(null)
+  const [portalAccess, setPortalAccess] = useState<unknown>(null)
   const [isPortalDialogOpen, setIsPortalDialogOpen] = useState(false)
   const [portalSettings, setPortalSettings] = useState({
     can_view_location: false,

@@ -9,6 +9,10 @@ export type QuickBooksConnection = {
   sandbox: boolean
 }
 
+type ErrorWithDetails = Error & {
+  details?: unknown
+}
+
 function getBaseUrl(isSandbox: boolean) {
   return isSandbox ? "https://sandbox-quickbooks.api.intuit.com" : "https://quickbooks.api.intuit.com"
 }
@@ -121,7 +125,7 @@ export async function qbFetch(
   if (!res.ok) {
     const msg = json?.Fault?.Error?.[0]?.Message || json?.Fault?.Error?.[0]?.Detail || "QuickBooks API error"
     const err = new Error(msg)
-    ;(err as any).details = json
+    ;(err as ErrorWithDetails).details = json
     throw err
   }
   return json

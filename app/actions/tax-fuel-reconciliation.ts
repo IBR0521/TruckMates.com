@@ -1,19 +1,12 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { sanitizeError } from "@/lib/error-message"
-
 // EXT-009 FIX: Import fuel tax rates from shared source to prevent inconsistencies
 import { STATE_FUEL_TAX_RATES, getFuelTaxRate } from "@/lib/fuel-tax-rates"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 
 const FUEL_PURCHASE_SELECT =
@@ -154,7 +147,7 @@ export async function updateFuelPurchase(
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
-  const updateData: any = {
+  const updateData: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   }
 
@@ -388,7 +381,7 @@ export async function generateIFTAReport(quarter: number, year: number) {
   const stateData: Record<string, { gallons: number; miles: number }> = {}
 
   // Aggregate fuel purchases by state
-  fuelPurchases?.forEach((purchase: { state: string; gallons: number | string | null; [key: string]: any }) => {
+  fuelPurchases?.forEach((purchase: { state: string; gallons: number | string | null }) => {
     const state = purchase.state
     if (!stateData[state]) {
       stateData[state] = { gallons: 0, miles: 0 }
@@ -510,7 +503,7 @@ export async function updateIFTAReportStatus(
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
-  const updateData: any = {
+  const updateData: Record<string, unknown> = {
     status,
     updated_at: new Date().toISOString(),
   }
@@ -563,8 +556,5 @@ export async function deleteIFTAReport(id: string) {
   revalidatePath("/dashboard/accounting/tax-fuel")
   return { data: { success: true }, error: null }
 }
-
-
-
 
 

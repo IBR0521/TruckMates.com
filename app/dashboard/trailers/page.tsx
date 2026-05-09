@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function TrailersPage() {
-  const [trailers, setTrailers] = useState<any[]>([])
+  const [trailers, setTrailers] = useState<unknown[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
 

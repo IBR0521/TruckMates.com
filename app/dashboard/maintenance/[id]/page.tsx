@@ -53,13 +53,42 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 
+type MaintenanceData = NonNullable<Awaited<ReturnType<typeof getMaintenanceById>>["data"]>
+type WorkOrderData = NonNullable<Awaited<ReturnType<typeof getWorkOrders>>["data"]>[number]
+type MaintenanceDocumentData = NonNullable<Awaited<ReturnType<typeof getMaintenanceDocuments>>["data"]>[number]
+type ReservationCheckData = NonNullable<Awaited<ReturnType<typeof checkAndReserveParts>>["data"]>[number]
+
+type TruckSummary = {
+  truck_number?: string | null
+  make?: string | null
+  model?: string | null
+}
+
+type PartsTableRow = {
+  part_number?: string | null
+  name?: string | null
+  quantity?: number | null
+  unit_cost?: number | null
+  total_cost?: number | null
+}
+
+function toTruckSummary(value: unknown): TruckSummary | undefined {
+  if (!value || typeof value !== "object") return undefined
+  return value as TruckSummary
+}
+
+function toPartsTableRows(value: unknown): PartsTableRow[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is PartsTableRow => typeof entry === "object" && entry !== null)
+}
+
 export default function MaintenanceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
   const aliveRef = useRef(true)
-  const [maintenance, setMaintenance] = useState<any>(null)
-  const [workOrders, setWorkOrders] = useState<any[]>([])
-  const [documents, setDocuments] = useState<any[]>([])
+  const [maintenance, setMaintenance] = useState<MaintenanceData | null>(null)
+  const [workOrders, setWorkOrders] = useState<WorkOrderData[]>([])
+  const [documents, setDocuments] = useState<MaintenanceDocumentData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"overview" | "work-orders" | "documents" | "parts">("overview")
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
@@ -166,7 +195,7 @@ export default function MaintenanceDetailPage({ params }: { params: Promise<{ id
     if (result.error) {
       toast.error(result.error)
     } else {
-      const allReserved = result.data?.every((p: any) => p.reserved)
+      const allReserved = result.data?.every((p: ReservationCheckData) => Boolean(p?.reserved))
       if (allReserved) {
         toast.success("All parts reserved successfully")
       } else {
@@ -211,8 +240,8 @@ export default function MaintenanceDetailPage({ params }: { params: Promise<{ id
     )
   }
 
-  const truck = maintenance.truck as any
-  const partsUsed = (maintenance.parts_used as any[]) || []
+  const truck = toTruckSummary(maintenance.truck)
+  const partsUsed = toPartsTableRows(maintenance.parts_used)
   const faultCodeEvent = maintenance.maintenance_id ? null : null // Would need to query eld_events
 
   return (
@@ -249,7 +278,15 @@ export default function MaintenanceDetailPage({ params }: { params: Promise<{ id
       </div>
 
       <div className="p-8">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="max-w-7xl mx-auto">
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => {
+            if (v === "overview" || v === "work-orders" || v === "documents" || v === "parts") {
+              setActiveTab(v)
+            }
+          }}
+          className="max-w-7xl mx-auto"
+        >
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="work-orders">
@@ -434,7 +471,7 @@ export default function MaintenanceDetailPage({ params }: { params: Promise<{ id
               </Card>
             ) : (
               <div className="space-y-4">
-                {workOrders.map((wo: any) => (
+                {workOrders.map((wo) => (
                   <Card key={wo.id} className="border-border p-6">
                     <div className="flex justify-between items-start mb-4">
                       <div>
@@ -473,11 +510,11 @@ export default function MaintenanceDetailPage({ params }: { params: Promise<{ id
                         </p>
                       </div>
                     </div>
-                    {wo.parts_required && (wo.parts_required as any[]).length > 0 && (
+                    {toPartsTableRows(wo.parts_required).length > 0 && (
                       <div className="mb-4">
                         <p className="text-sm text-muted-foreground mb-2">Parts Required</p>
                         <div className="space-y-1">
-                          {(wo.parts_required as any[]).map((part: any, idx: number) => (
+                          {toPartsTableRows(wo.parts_required).map((part, idx) => (
                             <p key={idx} className="text-sm">
                               {part.name || part.part_number} - Qty: {part.quantity}
                             </p>
@@ -576,7 +613,7 @@ export default function MaintenanceDetailPage({ params }: { params: Promise<{ id
               </Card>
             ) : (
               <div className="grid md:grid-cols-2 gap-4">
-                {documents.map((doc: any) => (
+                {documents.map((doc) => (
                   <Card key={doc.id} className="border-border p-4">
                     <div className="flex justify-between items-start mb-2">
                       <div>
@@ -633,7 +670,7 @@ export default function MaintenanceDetailPage({ params }: { params: Promise<{ id
                       </tr>
                     </thead>
                     <tbody>
-                      {partsUsed.map((part: any, idx: number) => (
+                      {partsUsed.map((part, idx) => (
                         <tr key={idx} className="border-b border-border hover:bg-secondary/20">
                           <td className="px-6 py-4">{part.part_number || "N/A"}</td>
                           <td className="px-6 py-4">{part.name || "N/A"}</td>

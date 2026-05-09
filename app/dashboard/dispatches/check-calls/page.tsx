@@ -16,12 +16,12 @@ import { format } from "date-fns"
 import { usePathname, useRouter } from "next/navigation"
 
 export default function CheckCallsPage() {
-  const [checkCalls, setCheckCalls] = useState<any[]>([])
-  const [overdueCalls, setOverdueCalls] = useState<any[]>([])
+  const [checkCalls, setCheckCalls] = useState<unknown[]>([])
+  const [overdueCalls, setOverdueCalls] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState("all") // all, pending, completed, missed, overdue
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [loads, setLoads] = useState<any[]>([])
+  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [loads, setLoads] = useState<unknown[]>([])
 
   const router = useRouter()
   const pathname = usePathname()

@@ -1,31 +1,51 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest"
 
 const mockGetCachedAuthContext = vi.fn()
 const mockCheckCreatePermission = vi.fn()
 const mockRevalidatePath = vi.fn()
 
-type QueryResult = { data?: any; error?: any; count?: number }
+type QueryResult = { data?: unknown; error?: unknown; count?: number }
+type QueryChain = {
+  select: ReturnType<typeof vi.fn>
+  eq: ReturnType<typeof vi.fn>
+  in: ReturnType<typeof vi.fn>
+  gte: ReturnType<typeof vi.fn>
+  lte: ReturnType<typeof vi.fn>
+  order: ReturnType<typeof vi.fn>
+  is: ReturnType<typeof vi.fn>
+  not: ReturnType<typeof vi.fn>
+  delete: ReturnType<typeof vi.fn>
+  insert: ReturnType<typeof vi.fn>
+  single: ReturnType<typeof vi.fn>
+  maybeSingle: ReturnType<typeof vi.fn>
+  then: (resolve: (result: QueryResult) => unknown) => unknown
+}
+type IftaStateBreakdownRow = { state_code: string; taxRate?: number; fuel?: number }
+type IftaReportInsertPayload = {
+  state_breakdown: IftaStateBreakdownRow[]
+  total_miles?: number
+  tax_owed?: number
+}
 
 function makeSupabaseMock(resultsByTable: Record<string, QueryResult>) {
-  const tableChains = new Map<string, any>()
+  const tableChains = new Map<string, QueryChain>()
   const from = vi.fn((table: string) => {
     if (tableChains.has(table)) return tableChains.get(table)
     const result = resultsByTable[table] || { data: null, error: null }
-    const chain: any = {
-      select: vi.fn(() => chain),
-      eq: vi.fn(() => chain),
-      in: vi.fn(() => chain),
-      gte: vi.fn(() => chain),
-      lte: vi.fn(() => chain),
-      order: vi.fn(() => chain),
-      is: vi.fn(() => chain),
-      not: vi.fn(() => chain),
-      delete: vi.fn(() => chain),
-      insert: vi.fn(() => chain),
-      single: vi.fn(async () => result),
-      maybeSingle: vi.fn(async () => result),
-      then: (resolve: any) => resolve(result),
-    }
+    const chain = {} as QueryChain
+    chain.select = vi.fn(() => chain)
+    chain.eq = vi.fn(() => chain)
+    chain.in = vi.fn(() => chain)
+    chain.gte = vi.fn(() => chain)
+    chain.lte = vi.fn(() => chain)
+    chain.order = vi.fn(() => chain)
+    chain.is = vi.fn(() => chain)
+    chain.not = vi.fn(() => chain)
+    chain.delete = vi.fn(() => chain)
+    chain.insert = vi.fn(() => chain)
+    chain.single = vi.fn(async () => result)
+    chain.maybeSingle = vi.fn(async () => result)
+    chain.then = (resolve) => resolve(result)
     tableChains.set(table, chain)
     return chain
   })
@@ -51,7 +71,10 @@ vi.mock("../../app/actions/eld", () => ({
 }))
 vi.mock("@/lib/fuel-tax-rates", () => ({
   STATE_FUEL_TAX_RATES: { TX: 0.2, OK: 0.25 },
-  getFuelTaxRate: (state: string, fallback = 0.25) => ({ TX: 0.2, OK: 0.25 } as any)[state] ?? fallback,
+  getFuelTaxRate: (state: string, fallback = 0.25) => {
+    const ratesByState: Record<string, number> = { TX: 0.2, OK: 0.25 }
+    return ratesByState[state] ?? fallback
+  },
 }), { virtual: true })
 vi.mock("@sentry/nextjs", () => ({
   default: {},
@@ -101,7 +124,7 @@ describe("app/actions/ifta.ts", () => {
       fuel_purchases: { data: [], error: null },
       ifta_reports: { data: { id: "r1" }, error: null },
     })
-    ;(createClient as any).mockResolvedValue(supabase)
+    ;(createClient as unknown as Mock).mockResolvedValue(supabase)
 
     const { createIFTAReport } = await import("../../app/actions/ifta")
     const result = await createIFTAReport({
@@ -113,7 +136,8 @@ describe("app/actions/ifta.ts", () => {
 
     expect(result.error).toBeNull()
     expect(result.data).toBeTruthy()
-    const insertCall = (supabase.tableChains.get("ifta_reports").insert as any).mock.calls[0]?.[0]
+    const insertMock = supabase.tableChains.get("ifta_reports")?.insert
+    const insertCall = (insertMock?.mock.calls[0]?.[0] ?? {}) as IftaReportInsertPayload
     expect(insertCall.state_breakdown).toHaveLength(2)
     expect(insertCall.total_miles).toBe(650)
   })
@@ -125,7 +149,7 @@ describe("app/actions/ifta.ts", () => {
       fuel_purchases: { data: [], error: null },
       ifta_reports: { data: { id: "r2" }, error: null },
     })
-    ;(createClient as any).mockResolvedValue(supabase)
+    ;(createClient as unknown as Mock).mockResolvedValue(supabase)
 
     const { createIFTAReport } = await import("../../app/actions/ifta")
     const result = await createIFTAReport({
@@ -136,9 +160,10 @@ describe("app/actions/ifta.ts", () => {
     })
 
     expect(result.error).toBeNull()
-    const insertCall = (supabase.tableChains.get("ifta_reports").insert as any).mock.calls[0]?.[0]
-    const tx = insertCall.state_breakdown.find((s: any) => s.state_code === "TX")
-    const ok = insertCall.state_breakdown.find((s: any) => s.state_code === "OK")
+    const insertMock = supabase.tableChains.get("ifta_reports")?.insert
+    const insertCall = (insertMock?.mock.calls[0]?.[0] ?? {}) as IftaReportInsertPayload
+    const tx = insertCall.state_breakdown.find((s) => s.state_code === "TX")
+    const ok = insertCall.state_breakdown.find((s) => s.state_code === "OK")
     expect(tx.taxRate).toBe(0.2)
     expect(ok.taxRate).toBe(0.25)
     expect(insertCall.tax_owed).toBeGreaterThan(0)
@@ -151,7 +176,7 @@ describe("app/actions/ifta.ts", () => {
       fuel_purchases: { data: [{ state: "TX", gallons: 15 }], error: null },
       ifta_reports: { data: { id: "r3" }, error: null },
     })
-    ;(createClient as any).mockResolvedValue(supabase)
+    ;(createClient as unknown as Mock).mockResolvedValue(supabase)
 
     const { createIFTAReport } = await import("../../app/actions/ifta")
     const result = await createIFTAReport({
@@ -162,8 +187,9 @@ describe("app/actions/ifta.ts", () => {
     })
 
     expect(result.error).toBeNull()
-    const insertCall = (supabase.tableChains.get("ifta_reports").insert as any).mock.calls[0]?.[0]
-    const tx = insertCall.state_breakdown.find((s: any) => s.state_code === "TX")
+    const insertMock = supabase.tableChains.get("ifta_reports")?.insert
+    const insertCall = (insertMock?.mock.calls[0]?.[0] ?? {}) as IftaReportInsertPayload
+    const tx = insertCall.state_breakdown.find((s) => s.state_code === "TX")
     expect(tx.fuel).toBe(35) // 15 DB + 20 trip sheet gallons
   })
 })

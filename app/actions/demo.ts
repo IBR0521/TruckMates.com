@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { isDevSurfaceBlocked } from "@/lib/security/dev-only"
 import * as Sentry from "@sentry/nextjs"
 
 const DEMO_COMPANY_NAME = "Demo Logistics Company"
@@ -11,6 +12,10 @@ const DEMO_COMPANY_NAME = "Demo Logistics Company"
 // This is called AFTER the user is signed in on the client side
 // Platform is now free - no subscription needed
 export async function setupDemoCompany(userId: string | null) {
+  if (isDevSurfaceBlocked()) {
+    return { error: "Not found", data: null }
+  }
+
   try {
     // Create Supabase client - simplified, no try-catch wrapper
     const supabase = await createClient()

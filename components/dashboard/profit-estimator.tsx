@@ -40,6 +40,7 @@ export function ProfitEstimator() {
     otherExpenses: "",
   }
 
+  type ProfitEstimatorFormData = typeof initialFormData
   const [open, setOpen] = useState(false)
   const [formData, setFormData] = useState(initialFormData)
 
@@ -234,7 +235,12 @@ export function ProfitEstimator() {
                   <Label>Loaded Charge Type</Label>
                   <select
                     value={formData.loadedChargeType}
-                    onChange={(e) => setFormData({ ...formData, loadedChargeType: e.target.value as any })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        loadedChargeType: e.target.value as ProfitEstimatorFormData["loadedChargeType"],
+                      })
+                    }
                     className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
                   >
                     <option value="per-mile">Per Mile</option>
@@ -261,7 +267,12 @@ export function ProfitEstimator() {
                   <Label>Deadhead Charge Type</Label>
                   <select
                     value={formData.deadheadChargeType}
-                    onChange={(e) => setFormData({ ...formData, deadheadChargeType: e.target.value as any })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        deadheadChargeType: e.target.value as ProfitEstimatorFormData["deadheadChargeType"],
+                      })
+                    }
                     className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
                   >
                     <option value="per-mile">Per Mile</option>
@@ -348,7 +359,12 @@ export function ProfitEstimator() {
                   <Label>Driver Pay Type</Label>
                   <select
                     value={formData.driverPayType}
-                    onChange={(e) => setFormData({ ...formData, driverPayType: e.target.value as any })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        driverPayType: e.target.value as ProfitEstimatorFormData["driverPayType"],
+                      })
+                    }
                     className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
                   >
                     <option value="percentage">Percentage of Revenue</option>

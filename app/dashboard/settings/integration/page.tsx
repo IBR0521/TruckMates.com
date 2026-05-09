@@ -17,6 +17,16 @@ import { getGLAccounts } from "@/app/actions/gl-accounts"
 import { useSearchParams } from "next/navigation"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
+type QuickBooksIntegrationSnapshot = {
+  has_quickbooks_connection?: boolean
+  quickbooks_sandbox?: boolean
+  quickbooks_synced_at?: string | null
+  quickbooks_default_income_account_id?: string | null
+  quickbooks_default_item_id?: string | null
+  quickbooks_gl_account_mappings?: Record<string, string>
+  quickbooks_allowed?: boolean
+}
+
 export default function IntegrationSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const searchParams = useSearchParams()
@@ -55,6 +65,7 @@ export default function IntegrationSettingsPage() {
         if (result.error) {
           toast.error(result.error)
         } else if (result.data) {
+          const quickBooks = result.data as QuickBooksIntegrationSnapshot
           setIntegrations({
             google_maps_enabled: result.data.google_maps_enabled !== false, // Default to true
             resend_enabled: result.data.resend_enabled !== false, // Default to true
@@ -62,18 +73,18 @@ export default function IntegrationSettingsPage() {
             stripe_enabled: !!result.data.stripe_enabled,
             paypal_enabled: !!result.data.paypal_enabled,
             has_quickbooks_credentials: !!result.data.has_quickbooks_credentials,
-            has_quickbooks_connection: !!(result.data as any).has_quickbooks_connection,
+            has_quickbooks_connection: !!quickBooks.has_quickbooks_connection,
             has_stripe_api_key: !!result.data.has_stripe_api_key,
             has_paypal_client_id: !!result.data.has_paypal_client_id,
             has_google_maps_api_key: !!result.data.has_google_maps_api_key,
             has_resend_api_key: !!result.data.has_resend_api_key,
-            quickbooks_sandbox: (result.data as any).quickbooks_sandbox !== false,
-            quickbooks_synced_at: (result.data as any).quickbooks_synced_at || null,
+            quickbooks_sandbox: quickBooks.quickbooks_sandbox !== false,
+            quickbooks_synced_at: quickBooks.quickbooks_synced_at || null,
             quickbooks_default_income_account_id:
-              (result.data as any).quickbooks_default_income_account_id || "",
-            quickbooks_default_item_id: (result.data as any).quickbooks_default_item_id || "",
-            quickbooks_gl_account_mappings: (result.data as any).quickbooks_gl_account_mappings || {},
-            quickbooks_allowed: !!(result.data as any).quickbooks_allowed,
+              quickBooks.quickbooks_default_income_account_id || "",
+            quickbooks_default_item_id: quickBooks.quickbooks_default_item_id || "",
+            quickbooks_gl_account_mappings: quickBooks.quickbooks_gl_account_mappings || {},
+            quickbooks_allowed: !!quickBooks.quickbooks_allowed,
           })
         }
         if (!glResult.error && glResult.data) {
@@ -111,12 +122,13 @@ export default function IntegrationSettingsPage() {
       // Refresh UI state
       const result = await getIntegrationSettings()
       if (!result.error && result.data) {
+        const quickBooks = result.data as QuickBooksIntegrationSnapshot
         setIntegrations((prev) => ({
           ...prev,
           quickbooks_enabled: !!result.data.quickbooks_enabled,
           has_quickbooks_credentials: !!result.data.has_quickbooks_credentials,
-          has_quickbooks_connection: !!(result.data as any).has_quickbooks_connection,
-          quickbooks_sandbox: (result.data as any).quickbooks_sandbox !== false,
+          has_quickbooks_connection: !!quickBooks.has_quickbooks_connection,
+          quickbooks_sandbox: quickBooks.quickbooks_sandbox !== false,
         }))
       }
     } catch (e: unknown) {
@@ -151,9 +163,10 @@ export default function IntegrationSettingsPage() {
       toast.success(`Synced ${json?.accounts_count ?? 0} accounts`)
       const result = await getIntegrationSettings()
       if (!result.error && result.data) {
+        const quickBooks = result.data as QuickBooksIntegrationSnapshot
         setIntegrations((prev) => ({
           ...prev,
-          quickbooks_synced_at: (result.data as any).quickbooks_synced_at || null,
+          quickbooks_synced_at: quickBooks.quickbooks_synced_at || null,
         }))
       }
     } catch (e: unknown) {

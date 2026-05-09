@@ -36,16 +36,17 @@ export async function updateSession(request: NextRequest) {
   let user = null
   try {
     const getUserPromise = supabase.auth.getUser()
-    const timeoutPromise = new Promise((resolve) => {
+    const timeoutPromise = new Promise<{ data: { user: null }; timeout: true }>((resolve) => {
       setTimeout(() => {
         resolve({ data: { user: null }, timeout: true })
       }, 5000) // 5 second timeout - more lenient but still fail-closed
     })
     
-    const result = await Promise.race([getUserPromise, timeoutPromise]) as any
+    type GetUserResult = Awaited<ReturnType<typeof supabase.auth.getUser>>
+    const result: GetUserResult | { data: { user: null }; timeout: true } = await Promise.race([getUserPromise, timeoutPromise])
     
     // Only set user if we didn't timeout
-    if (!result.timeout) {
+    if (!("timeout" in result)) {
       user = result?.data?.user || null
     }
     // If timeout occurred, user stays null - we'll redirect to login (fail-closed)

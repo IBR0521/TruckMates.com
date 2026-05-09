@@ -33,9 +33,9 @@ import { createMaintenance } from "@/app/actions/maintenance"
 
 export default function AddMaintenancePage() {
   const router = useRouter()
-  const [trucks, setTrucks] = useState<any[]>([])
-  const [trailers, setTrailers] = useState<any[]>([])
-  const [vendors, setVendors] = useState<any[]>([])
+  const [trucks, setTrucks] = useState<unknown[]>([])
+  const [trailers, setTrailers] = useState<unknown[]>([])
+  const [vendors, setVendors] = useState<unknown[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     asset_type: "truck",

@@ -10,14 +10,21 @@ export interface ConnectionError {
   isRetryable: boolean
 }
 
+type ErrorLike = {
+  message?: string
+  code?: string
+  status?: number
+}
+
 /**
  * Check if error is a connection error
  */
-export function isConnectionError(error: any): boolean {
+export function isConnectionError(error: unknown): boolean {
   if (!error) return false
   
-  const errorMessage = error.message?.toLowerCase() || ''
-  const errorCode = error.code?.toLowerCase() || ''
+  const candidate = error as ErrorLike
+  const errorMessage = candidate.message?.toLowerCase() || ''
+  const errorCode = candidate.code?.toLowerCase() || ''
   
   // Common connection error patterns
   const connectionErrorPatterns = [
@@ -40,17 +47,18 @@ export function isConnectionError(error: any): boolean {
 /**
  * Check if error is retryable
  */
-export function isRetryableError(error: any): boolean {
+export function isRetryableError(error: unknown): boolean {
   if (!error) return false
   
+  const candidate = error as ErrorLike
   // Network errors are usually retryable
   if (isConnectionError(error)) return true
   
   // 5xx errors are retryable
-  if (error.status >= 500 && error.status < 600) return true
+  if (typeof candidate.status === "number" && candidate.status >= 500 && candidate.status < 600) return true
   
   // Rate limit errors are retryable
-  if (error.status === 429) return true
+  if (candidate.status === 429) return true
   
   return false
 }
@@ -63,7 +71,7 @@ export async function retryWithBackoff<T>(
   maxRetries: number = 3,
   initialDelay: number = 1000
 ): Promise<T> {
-  let lastError: any
+  let lastError: unknown
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -100,12 +108,13 @@ export async function retryWithBackoff<T>(
 /**
  * Handle connection errors gracefully
  */
-export function handleConnectionError(error: any): ConnectionError {
+export function handleConnectionError(error: unknown): ConnectionError {
+  const candidate = (error as ErrorLike) || {}
   const isConnection = isConnectionError(error)
   
   return {
-    message: error.message || 'Connection failed',
-    code: error.code || error.status?.toString(),
+    message: candidate.message || 'Connection failed',
+    code: candidate.code || candidate.status?.toString(),
     isRetryable: isConnection && isRetryableError(error),
   }
 }

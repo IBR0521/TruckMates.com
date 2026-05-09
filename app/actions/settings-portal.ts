@@ -1,18 +1,9 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import * as Sentry from "@sentry/nextjs"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 export async function getPortalSettings() {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
@@ -112,7 +103,7 @@ export async function updatePortalSettings(settings: {
   }
 
   // MEDIUM FIX 17: Build explicit updateData object to prevent column injection
-  const updateData: any = {}
+  const updateData: Record<string, unknown> = {}
   if (settings.enabled !== undefined) updateData.enabled = settings.enabled
   if (settings.custom_url !== undefined) updateData.custom_url = settings.custom_url
   if (settings.allow_customer_login !== undefined) updateData.allow_customer_login = settings.allow_customer_login
@@ -162,15 +153,5 @@ export async function updatePortalSettings(settings: {
   revalidatePath("/dashboard/settings/portal")
   return { success: true, error: null }
 }
-
-
-
-
-
-
-
-
-
-
 
 

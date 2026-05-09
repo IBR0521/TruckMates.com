@@ -43,16 +43,23 @@ import {
 } from "@/components/ui/tooltip"
 import { toast } from "sonner"
 
+type RouteRecord = NonNullable<Awaited<ReturnType<typeof getRoute>>["data"]>
+type RouteStop = NonNullable<NonNullable<Awaited<ReturnType<typeof getRouteStops>>["data"]>[number]>
+type RouteSummary = NonNullable<Awaited<ReturnType<typeof getRouteSummary>>["data"]>
+type DriverRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getDrivers>>["data"]>[number]>
+type TruckRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getTrucks>>["data"]>[number]>
+type MapRouteData = { distance?: string; duration?: string }
+
 export default function RouteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
-  const [route, setRoute] = useState<any>(null)
-  const [stops, setStops] = useState<any[]>([])
-  const [summary, setSummary] = useState<any>(null)
-  const [driver, setDriver] = useState<any>(null)
-  const [truck, setTruck] = useState<any>(null)
+  const [route, setRoute] = useState<RouteRecord | null>(null)
+  const [stops, setStops] = useState<RouteStop[]>([])
+  const [summary, setSummary] = useState<RouteSummary | null>(null)
+  const [driver, setDriver] = useState<DriverRecord | null>(null)
+  const [truck, setTruck] = useState<TruckRecord | null>(null)
   const [mapRefreshKey, setMapRefreshKey] = useState(0)
-  const [mapRouteData, setMapRouteData] = useState<any>(null)
+  const [mapRouteData, setMapRouteData] = useState<MapRouteData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -76,13 +83,13 @@ export default function RouteDetailPage({ params }: { params: Promise<{ id: stri
           // Load driver and truck details
           if (routeResult.data.driver_id) {
             const driversResult = await getDrivers()
-            const foundDriver = driversResult.data?.find((d: any) => d.id === routeResult.data.driver_id)
+            const foundDriver = driversResult.data?.find((d: DriverRecord) => d.id === routeResult.data.driver_id)
             setDriver(foundDriver)
           }
 
           if (routeResult.data.truck_id) {
             const trucksResult = await getTrucks()
-            const foundTruck = trucksResult.data?.find((t: any) => t.id === routeResult.data.truck_id)
+            const foundTruck = trucksResult.data?.find((t: TruckRecord) => t.id === routeResult.data.truck_id)
             setTruck(foundTruck)
           }
         }

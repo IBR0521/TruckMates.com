@@ -1,10 +1,18 @@
 import type { EmployeeRole } from "./roles"
 import { isFeatureMasked } from "./feature-permissions"
 
+type FinancialMaskable = {
+  total_rate?: unknown
+  value?: unknown
+  rate?: unknown
+  freight_charges?: unknown
+  amount?: unknown
+}
+
 /**
  * Mask financial data for roles that should only see view-only rates
  */
-export function maskFinancialData(role: EmployeeRole, data: any): any {
+export function maskFinancialData<T extends FinancialMaskable | null | undefined>(role: EmployeeRole, data: T): T {
   if (!data) return data
 
   // Check if accounting/financial features should be masked
@@ -33,7 +41,7 @@ export function maskFinancialData(role: EmployeeRole, data: any): any {
 /**
  * Mask financial fields in an array of items
  */
-export function maskFinancialDataArray(role: EmployeeRole, items: any[]): any[] {
+export function maskFinancialDataArray<T extends FinancialMaskable>(role: EmployeeRole, items: T[]): T[] {
   if (!items || !Array.isArray(items)) return items
 
   return items.map((item) => maskFinancialData(role, item))
@@ -42,7 +50,7 @@ export function maskFinancialDataArray(role: EmployeeRole, items: any[]): any[] 
 /**
  * Format masked financial value for display
  */
-export function formatMaskedValue(value: any): string {
+export function formatMaskedValue(value: unknown): string {
   if (value === "***" || value === null || value === undefined) {
     return "$***"
   }

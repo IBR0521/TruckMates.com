@@ -1,5 +1,6 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * Real-time ETA Updates
  * Compares driver's current POINT with planned route LINESTRING
@@ -7,15 +8,9 @@
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 
 /** `public.eta_updates` — supabase/realtime_eta.sql */

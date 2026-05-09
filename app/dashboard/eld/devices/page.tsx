@@ -58,14 +58,14 @@ import {
 } from "@/components/eld/eld-device-sync-status"
 
 export default function ELDDevicesPage() {
-  const [devices, setDevices] = useState<any[]>([])
-  const [trucks, setTrucks] = useState<any[]>([])
+  const [devices, setDevices] = useState<unknown[]>([])
+  const [trucks, setTrucks] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [selectedDevice, setSelectedDevice] = useState<any>(null)
+  const [selectedDevice, setSelectedDevice] = useState<unknown>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     device_serial_number: "",
@@ -197,7 +197,7 @@ export default function ELDDevicesPage() {
     setSelectedDevice(null)
   }
 
-  function openEditDialog(device: any) {
+  function openEditDialog(device: unknown) {
     setSelectedDevice(device)
     setFormData({
       device_serial_number: device.device_serial_number,

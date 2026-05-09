@@ -43,7 +43,7 @@ export async function createClient() {
           },
         },
       }
-    ) as any
+    ) as ReturnType<typeof createServerClient>
   }
 
   // Validate URL format
@@ -65,7 +65,7 @@ export async function createClient() {
           },
         },
       }
-    ) as any
+    ) as ReturnType<typeof createServerClient>
   }
 
   const cookieStore = await cookies()
@@ -101,16 +101,21 @@ export async function createClient() {
             const response = await fetch(url, {
               ...options,
               signal: controller.signal,
-            }).catch((fetchError: any) => {
+            }).catch((fetchError: unknown) => {
               clearTimeout(timeoutId)
+              const fetchMsg = errorMessage(fetchError)
               // Handle network errors
-              if (fetchError.name === 'AbortError' || fetchError.message?.includes('aborted')) {
+              if ((fetchError instanceof Error && fetchError.name === 'AbortError') || fetchMsg.includes('aborted')) {
                 throw new Error('Connection timeout. Please check your internet connection.')
               }
-              if (fetchError.message?.includes('fetch') || 
-                  fetchError.message?.includes('ECONNREFUSED') ||
-                  fetchError.message?.includes('network') ||
-                  fetchError.code === 'ECONNREFUSED') {
+              const fetchCode =
+                typeof fetchError === "object" && fetchError !== null && "code" in fetchError
+                  ? (fetchError as { code?: unknown }).code
+                  : undefined
+              if (fetchMsg.includes('fetch') || 
+                  fetchMsg.includes('ECONNREFUSED') ||
+                  fetchMsg.includes('network') ||
+                  fetchCode === 'ECONNREFUSED') {
                 throw new Error('Failed to connect to database. Please check your connection and Supabase configuration.')
               }
               throw fetchError

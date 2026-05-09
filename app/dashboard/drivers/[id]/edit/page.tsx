@@ -35,7 +35,7 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [trucks, setTrucks] = useState<any[]>([])
+  const [trucks, setTrucks] = useState<unknown[]>([])
   const [formData, setFormData] = useState({
     name: "",
     email: "",

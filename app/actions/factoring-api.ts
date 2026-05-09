@@ -1,17 +1,12 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { sanitizeError, errorMessage } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { buildInvoicePacketAttachments } from "@/lib/invoice-packet-build"
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
 type FactoringStatus = "pending" | "submitted" | "processing" | "funded" | "rejected" | "failed"
 
 function normalizeFactoringStatus(raw: unknown): FactoringStatus {
@@ -124,7 +119,7 @@ export async function submitInvoiceToTriumphPay(invoiceId: string) {
     })),
   }
 
-  let responseBody: any = null
+  let responseBody: Record<string, unknown> | null = null
   let responseStatus = 0
   try {
     const response = await fetch(`${baseUrl}/invoices`, {
@@ -207,7 +202,7 @@ export async function syncInvoiceFactoringStatus(invoiceId: string) {
   const apiKey = String(config.triumphpay_api_key || "")
   const apiSecret = String(config.triumphpay_api_secret || "")
 
-  let responseBody: any = null
+  let responseBody: Record<string, unknown> | null = null
   let responseStatus = 0
   try {
     const response = await fetch(`${baseUrl}/invoices/${encodeURIComponent(String(invoice.factoring_external_id))}`, {

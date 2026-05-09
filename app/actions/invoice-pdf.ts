@@ -85,7 +85,7 @@ export async function generateInvoicePdfBuffer(invoiceId: string): Promise<{ pdf
     due_date: invoice.due_date ? String(invoice.due_date) : "",
     payment_terms: invoice.payment_terms || "Net 30",
     description: invoice.description,
-    items: (invoice.items as any[]) || [],
+    items: (invoice.items as Array<{ description?: string; quantity?: number; rate?: number; amount?: number }>) || [],
   })
 
   return htmlToPdfBuffer(html)

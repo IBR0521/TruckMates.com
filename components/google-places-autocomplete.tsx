@@ -9,7 +9,7 @@ import { toast } from "sonner"
 
 declare global {
   interface Window {
-    google: any
+    google: typeof google
   }
 }
 
@@ -35,7 +35,7 @@ interface GooglePlacesAutocompleteProps {
   disabled?: boolean
 }
 
-function parsePlaceToAddress(place: any): AddressComponents {
+function parsePlaceToAddress(place: google.maps.places.PlaceResult): AddressComponents {
   const addressComponents: AddressComponents = {
     address_line1: "",
     address_line2: "",
@@ -55,7 +55,7 @@ function parsePlaceToAddress(place: any): AddressComponents {
       : undefined,
   }
 
-  ;(place.address_components || []).forEach((component: any) => {
+  ;(place.address_components || []).forEach((component: google.maps.GeocoderAddressComponent) => {
     const types: string[] = component.types || []
     if (types.includes("street_number")) {
       addressComponents.address_line1 = (addressComponents.address_line1 || "") + component.long_name + " "
@@ -153,7 +153,7 @@ export function GooglePlacesAutocomplete({
 }: GooglePlacesAutocompleteProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [mapsReady, setMapsReady] = useState(false)
-  const [predictions, setPredictions] = useState<any[]>([])
+  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([])
   const [open, setOpen] = useState(false)
   const [loadingPredictions, setLoadingPredictions] = useState(false)
   const debouncedQuery = useDebounce(value, 300)
@@ -190,7 +190,7 @@ export function GooglePlacesAutocomplete({
           return
         }
         const svc = new window.google.maps.places.AutocompleteService()
-        svc.getPlacePredictions({ input: q, types: ["address"] }, (res: any[] | null, status: string) => {
+        svc.getPlacePredictions({ input: q, types: ["address"] }, (res: google.maps.places.AutocompletePrediction[] | null, status: google.maps.places.PlacesServiceStatus) => {
           setLoadingPredictions(false)
           const ok = status === window.google.maps.places.PlacesServiceStatus?.OK || status === "OK"
           if (!ok || !res?.length) {
@@ -227,7 +227,7 @@ export function GooglePlacesAutocomplete({
     return () => document.removeEventListener("mousedown", onDocClick)
   }, [])
 
-  const selectPrediction = (prediction: any) => {
+  const selectPrediction = (prediction: google.maps.places.AutocompletePrediction) => {
     if (!window.google?.maps?.places) return
     void (async () => {
       const gate = await assertPlacesUsageAllowedForSession("details")
@@ -242,7 +242,7 @@ export function GooglePlacesAutocomplete({
           placeId: prediction.place_id,
           fields: ["address_components", "formatted_address", "geometry", "name", "place_id"],
         },
-        (place: any, status: string) => {
+        (place: google.maps.places.PlaceResult | null, status: google.maps.places.PlacesServiceStatus) => {
           const ok = status === window.google.maps.places.PlacesServiceStatus?.OK || status === "OK"
           if (!ok || !place) return
           void recordClientPlacesUsageForSession("details").then((rec) => {

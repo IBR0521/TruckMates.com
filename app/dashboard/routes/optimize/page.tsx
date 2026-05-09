@@ -12,13 +12,41 @@ import { getLoads } from "@/app/actions/loads"
 import { Badge } from "@/components/ui/badge"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
+type RouteItem = {
+  id: string
+  name?: string | null
+  origin?: string | null
+  destination?: string | null
+  waypoints?: unknown[] | null
+}
+
+type LoadItem = {
+  id: string
+  status?: string | null
+}
+
+type RouteSuggestion = {
+  routeId: string
+  routeName: string
+  distance: number
+  efficiency: number
+}
+
+type OptimizationResult = {
+  distance?: number
+  time?: number
+  optimizedStops?: unknown[]
+}
+
+type UpgradeAwareResult = { upgrade?: { required?: boolean } }
+
 export default function RouteOptimizationPage() {
-  const [routes, setRoutes] = useState<any[]>([])
-  const [loads, setLoads] = useState<any[]>([])
+  const [routes, setRoutes] = useState<RouteItem[]>([])
+  const [loads, setLoads] = useState<LoadItem[]>([])
   const [selectedRoute, setSelectedRoute] = useState<string>("")
   const [isOptimizing, setIsOptimizing] = useState(false)
-  const [optimizationResult, setOptimizationResult] = useState<any>(null)
-  const [suggestions, setSuggestions] = useState<any[]>([])
+  const [optimizationResult, setOptimizationResult] = useState<OptimizationResult | null>(null)
+  const [suggestions, setSuggestions] = useState<RouteSuggestion[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
@@ -37,7 +65,7 @@ export default function RouteOptimizationPage() {
       setRoutes(routesResult.data)
     }
     if (loadsResult.data) {
-      const pendingLoads = loadsResult.data.filter((l: any) => l.status === "pending")
+      const pendingLoads = loadsResult.data.filter((l: LoadItem) => l.status === "pending")
       setLoads(pendingLoads)
     }
     setIsLoading(false)
@@ -53,7 +81,7 @@ export default function RouteOptimizationPage() {
     const result = await optimizeMultiStopRoute(selectedRoute)
 
     if (result.error) {
-      if ((result as any)?.upgrade?.required) {
+      if ((result as UpgradeAwareResult)?.upgrade?.required) {
         setShowUpgradeModal(true)
       }
       toast.error(result.error)
@@ -81,7 +109,7 @@ export default function RouteOptimizationPage() {
     const result = await getRouteSuggestions(pendingLoadIds)
 
     if (result.error) {
-      if ((result as any)?.upgrade?.required) {
+      if ((result as UpgradeAwareResult)?.upgrade?.required) {
         setShowUpgradeModal(true)
       }
       toast.error(result.error)

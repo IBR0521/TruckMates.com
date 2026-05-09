@@ -38,8 +38,21 @@ import {
 import { format } from "date-fns"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
+type APIKey = {
+  id: string
+  name: string
+  is_active: boolean
+  key_prefix: string
+  last_used_at?: string | null
+  expires_at?: string | null
+  rate_limit_per_minute?: number | null
+  rate_limit_per_day?: number | null
+}
+
+type UpgradeAwareResult = { upgrade?: { required?: boolean } }
+
 export default function APIKeysPage() {
-  const [keys, setKeys] = useState<any[]>([])
+  const [keys, setKeys] = useState<APIKey[]>([])
   const [apiKeysAllowed, setApiKeysAllowed] = useState(true)
   const [planName, setPlanName] = useState("starter")
   const [loading, setLoading] = useState(true)
@@ -92,7 +105,7 @@ export default function APIKeysPage() {
     try {
       const result = await createAPIKey({ name: newKeyName })
       if (result.error) {
-        if ((result as any)?.upgrade?.required) setShowUpgradeModal(true)
+        if ((result as UpgradeAwareResult)?.upgrade?.required) setShowUpgradeModal(true)
         toast.error(result.error)
       } else {
         setNewKey(result.data?.key || null)
@@ -115,7 +128,7 @@ export default function APIKeysPage() {
     try {
       const result = await revokeAPIKey(id)
       if (result.error) {
-        if ((result as any)?.upgrade?.required) setShowUpgradeModal(true)
+        if ((result as UpgradeAwareResult)?.upgrade?.required) setShowUpgradeModal(true)
         toast.error(result.error)
       } else {
         await loadKeys()
@@ -135,7 +148,7 @@ export default function APIKeysPage() {
     try {
       const result = await updateAPIKey(id, { is_active: !currentStatus })
       if (result.error) {
-        if ((result as any)?.upgrade?.required) setShowUpgradeModal(true)
+        if ((result as UpgradeAwareResult)?.upgrade?.required) setShowUpgradeModal(true)
         toast.error(result.error)
       } else {
         await loadKeys()

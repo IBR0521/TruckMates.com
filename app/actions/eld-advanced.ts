@@ -1,5 +1,6 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -11,16 +12,6 @@ import {
 } from "@/lib/hos/compute-daily-remaining"
 import { mapLegacyRole } from "@/lib/roles"
 import { getDrivers } from "@/app/actions/drivers"
-import * as Sentry from "@sentry/nextjs"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /** `public.eld_logs` — supabase/eld_schema.sql */
 const ELD_LOGS_SELECT =
   "id, company_id, eld_device_id, driver_id, truck_id, log_date, log_type, start_time, end_time, duration_minutes, location_start, location_end, odometer_start, odometer_end, miles_driven, engine_hours, violations, raw_data, created_at, updated_at"
@@ -47,7 +38,7 @@ async function fetchLogsByDriverForHos(
     .limit(25000)
 
   if (error) {
-    throw new Error(error.message)
+    throw new Error(safeDbError(error, "Failed to load ELD logs"))
   }
 
   const map = new Map<string, { today: EldLogLike[]; week: EldLogLike[] }>()
@@ -247,13 +238,13 @@ export async function getFleetHealth() {
   ])
 
   if (devicesRes.error) {
-    return { error: devicesRes.error.message, data: null }
+    return { error: safeDbError(devicesRes.error, "Failed to load ELD devices"), data: null }
   }
   if (violationsRes.error) {
-    return { error: violationsRes.error.message, data: null }
+    return { error: safeDbError(violationsRes.error, "Failed to load HOS violations"), data: null }
   }
   if (driversRes.error) {
-    return { error: driversRes.error.message, data: null }
+    return { error: safeDbError(driversRes.error, "Failed to load active drivers"), data: null }
   }
 
   const devices = devicesRes.data
@@ -349,8 +340,8 @@ export async function getRealtimeLocations() {
   }
 
   // Get most recent location per device
-  const latestByDevice = new Map()
-  locations?.forEach((loc: { eld_device_id: string; timestamp: string; [key: string]: any }) => {
+  const latestByDevice = new Map<string, { eld_device_id: string; timestamp: string }>()
+  locations?.forEach((loc: { eld_device_id: string; timestamp: string }) => {
     const deviceId = loc.eld_device_id
     if (!latestByDevice.has(deviceId) || new Date(loc.timestamp) > new Date(latestByDevice.get(deviceId).timestamp)) {
       latestByDevice.set(deviceId, loc)
@@ -382,7 +373,7 @@ export async function getPredictiveAlerts() {
     return { error: driversError.message, data: null }
   }
 
-  const alerts: any[] = []
+  const alerts: Array<Record<string, unknown>> = []
   const driverIds = (drivers || []).map((d: { id: string }) => d.id)
   const targetDate = calendarDateYmdLocal(new Date())
   const nowMs = Date.now()
@@ -588,17 +579,17 @@ export async function getFleetHOSSnapshot() {
     ])
 
     if (eventsRes.error) {
-      return { error: eventsRes.error.message, data: null }
+      return { error: safeDbError(eventsRes.error, "Failed to load ELD events"), data: null }
     }
     if (trucksRes.error) {
-      return { error: trucksRes.error.message, data: null }
+      return { error: safeDbError(trucksRes.error, "Failed to load trucks"), data: null }
     }
 
     let logsByDriverHos: Map<string, { today: EldLogLike[]; week: EldLogLike[] }>
     try {
       logsByDriverHos = await fetchLogsByDriverForHos(supabase, ctx.companyId, driverIds, targetDate)
     } catch (e: unknown) {
-      return { error: e instanceof Error ? e.message : "Failed to load ELD logs", data: null }
+      return { error: safeDbError(e, "Failed to load ELD logs"), data: null }
     }
 
     const nowMs = Date.now()

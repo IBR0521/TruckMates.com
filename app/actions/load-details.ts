@@ -10,6 +10,43 @@ import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
 
+type LoadAddressBookDetails = {
+  id: string
+  name: string
+  company_name: string | null
+  custom_fields: Record<string, unknown> | null
+  geocoding_status: string | null
+  formatted_address: string | null
+}
+
+type LoadWithOptionalRelations = {
+  broker_id?: string | null
+  customer_id?: string | null
+  special_instructions?: string | null
+  pickup_instructions?: string | null
+  pickup_notes?: string | null
+  delivery_notes?: string | null
+  delivery_instructions?: string | null
+  shipper_address_book?: LoadAddressBookDetails | null
+  consignee_address_book?: LoadAddressBookDetails | null
+}
+
+type LoadNote = {
+  id: string
+  note: string
+  created_at: string
+  created_by: string | null
+}
+
+type EldLogRow = {
+  driver_id: string
+  log_type: string
+  log_date: string
+  start_time: string
+  end_time: string | null
+  created_at: string | null
+}
+
 export interface LoadDetails {
   id: string
   shipment_number: string
@@ -74,7 +111,7 @@ export interface LoadDetails {
     id: string
     name: string
     company_name: string | null
-    custom_fields: Record<string, any> | null
+    custom_fields: Record<string, unknown> | null
     geocoding_status: string | null
     formatted_address: string | null
   } | null
@@ -82,7 +119,7 @@ export interface LoadDetails {
     id: string
     name: string
     company_name: string | null
-    custom_fields: Record<string, any> | null
+    custom_fields: Record<string, unknown> | null
     geocoding_status: string | null
     formatted_address: string | null
   } | null
@@ -143,12 +180,14 @@ export async function getLoadDetails(loadId: string): Promise<{
     let broker = null
     let customer = null
     
-    if (load && (load as any).broker_id) {
+    const loadWithOptionalRelations = load as typeof load & LoadWithOptionalRelations
+
+    if (load && loadWithOptionalRelations.broker_id) {
       try {
         const { data: brokerData } = await supabase
           .from("brokers")
           .select("id, name, phone, email, w9_url, insurance_url")
-          .eq("id", (load as any).broker_id)
+          .eq("id", loadWithOptionalRelations.broker_id)
           .eq("company_id", ctx.companyId) // V3-004: Enforce company ownership for broker
           .maybeSingle()
         if (brokerData) broker = brokerData
@@ -157,12 +196,12 @@ export async function getLoadDetails(loadId: string): Promise<{
       }
     }
     
-    if (load && (load as any).customer_id) {
+    if (load && loadWithOptionalRelations.customer_id) {
       try {
         const { data: customerData } = await supabase
           .from("customers")
           .select("id, name, phone, email")
-          .eq("id", (load as any).customer_id)
+          .eq("id", loadWithOptionalRelations.customer_id)
           .eq("company_id", ctx.companyId) // V3-004: Enforce company ownership for customer
           .maybeSingle()
         if (customerData) customer = customerData
@@ -184,7 +223,7 @@ export async function getLoadDetails(loadId: string): Promise<{
       .order("delivery_number", { ascending: true })
 
     // Get notes (if notes table exists)
-    let notes: any[] = []
+    let notes: LoadNote[] = []
     try {
       const { data: notesData } = await supabase
         .from("load_notes")
@@ -228,12 +267,12 @@ export async function getLoadDetails(loadId: string): Promise<{
           .order("start_time", { ascending: false })
           .limit(50)
 
-        const orderedLogs = [...(latestLogs || [])].sort((a: any, b: any) => {
+        const orderedLogs = [...((latestLogs || []) as EldLogRow[])].sort((a, b) => {
           const byStart = new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
           if (byStart !== 0) return byStart
           return new Date(b.created_at || b.start_time).getTime() - new Date(a.created_at || a.start_time).getTime()
         })
-        const latestLog = orderedLogs.find((log: any) => log.end_time === null) || orderedLogs[0]
+        const latestLog = orderedLogs.find((log) => log.end_time === null) || orderedLogs[0]
         const today = new Date().toISOString().split("T")[0]
         const hasTodayByDriverId = (latestLogs || []).some(
           (log: { driver_id: string; log_date: string }) => log.driver_id === load.driver_id && log.log_date === today
@@ -310,24 +349,24 @@ export async function getLoadDetails(loadId: string): Promise<{
       } : null,
       delivery_points: deliveryPoints || [],
       notes: notes,
-      special_instructions: (load as any).special_instructions || (load as any).pickup_instructions || null,
-      pickup_notes: (load as any).pickup_notes || (load as any).pickup_instructions || null,
-      delivery_notes: (load as any).delivery_notes || (load as any).delivery_instructions || null,
-      shipper_address_book: (load as any).shipper_address_book ? {
-        id: (load as any).shipper_address_book.id,
-        name: (load as any).shipper_address_book.name,
-        company_name: (load as any).shipper_address_book.company_name,
-        custom_fields: (load as any).shipper_address_book.custom_fields || {},
-        geocoding_status: (load as any).shipper_address_book.geocoding_status,
-        formatted_address: (load as any).shipper_address_book.formatted_address,
+      special_instructions: loadWithOptionalRelations.special_instructions || loadWithOptionalRelations.pickup_instructions || null,
+      pickup_notes: loadWithOptionalRelations.pickup_notes || loadWithOptionalRelations.pickup_instructions || null,
+      delivery_notes: loadWithOptionalRelations.delivery_notes || loadWithOptionalRelations.delivery_instructions || null,
+      shipper_address_book: loadWithOptionalRelations.shipper_address_book ? {
+        id: loadWithOptionalRelations.shipper_address_book.id,
+        name: loadWithOptionalRelations.shipper_address_book.name,
+        company_name: loadWithOptionalRelations.shipper_address_book.company_name,
+        custom_fields: loadWithOptionalRelations.shipper_address_book.custom_fields || {},
+        geocoding_status: loadWithOptionalRelations.shipper_address_book.geocoding_status,
+        formatted_address: loadWithOptionalRelations.shipper_address_book.formatted_address,
       } : null,
-      consignee_address_book: (load as any).consignee_address_book ? {
-        id: (load as any).consignee_address_book.id,
-        name: (load as any).consignee_address_book.name,
-        company_name: (load as any).consignee_address_book.company_name,
-        custom_fields: (load as any).consignee_address_book.custom_fields || {},
-        geocoding_status: (load as any).consignee_address_book.geocoding_status,
-        formatted_address: (load as any).consignee_address_book.formatted_address,
+      consignee_address_book: loadWithOptionalRelations.consignee_address_book ? {
+        id: loadWithOptionalRelations.consignee_address_book.id,
+        name: loadWithOptionalRelations.consignee_address_book.name,
+        company_name: loadWithOptionalRelations.consignee_address_book.company_name,
+        custom_fields: loadWithOptionalRelations.consignee_address_book.custom_fields || {},
+        geocoding_status: loadWithOptionalRelations.consignee_address_book.geocoding_status,
+        formatted_address: loadWithOptionalRelations.consignee_address_book.formatted_address,
       } : null,
     }
 

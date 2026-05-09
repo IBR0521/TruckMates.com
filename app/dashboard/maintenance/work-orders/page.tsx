@@ -22,8 +22,8 @@ export default function WorkOrdersPage() {
     }
   }, [pathname, router])
 
-  const [workOrders, setWorkOrders] = useState<any[]>([])
-  const [filteredWorkOrders, setFilteredWorkOrders] = useState<any[]>([])
+  const [workOrders, setWorkOrders] = useState<unknown[]>([])
+  const [filteredWorkOrders, setFilteredWorkOrders] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -152,7 +152,7 @@ export default function WorkOrdersPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {filteredWorkOrders.map((wo: any) => (
+              {filteredWorkOrders.map((wo: unknown) => (
                 <Card key={wo.id} className="border-border p-6 hover:bg-secondary/20 transition">
                   <div className="flex justify-between items-start mb-4">
                     <div>
@@ -179,7 +179,7 @@ export default function WorkOrdersPage() {
                       <div>
                         <p className="text-xs text-muted-foreground">Truck</p>
                         <p className="text-sm font-medium">
-                          {(wo.truck as any)?.truck_number || "N/A"}
+                          {(wo.truck as unknown)?.truck_number || "N/A"}
                         </p>
                       </div>
                     </div>

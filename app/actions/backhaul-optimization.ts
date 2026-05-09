@@ -1,20 +1,15 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * Backhaul Optimization
  * Find return loads when driver is 2 hours from drop-off
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 
 export interface BackhaulOpportunity {
@@ -139,6 +134,5 @@ export async function checkAndNotifyBackhaulOpportunities(routeId: string) {
     return { error: errorMessage(error, "Failed to check backhaul opportunities"), data: null }
   }
 }
-
 
 

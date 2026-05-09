@@ -1,17 +1,8 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import * as Sentry from "@sentry/nextjs"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /**
  * Map provider driver ID to internal driver ID
  * Returns internal driver ID if mapping exists, otherwise returns null
@@ -175,9 +166,5 @@ export async function deleteDriverMapping(mappingId: string) {
 
   return { success: true, error: null }
 }
-
-
-
-
 
 

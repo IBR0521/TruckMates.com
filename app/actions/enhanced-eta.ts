@@ -1,22 +1,17 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * Enhanced AI-Powered Predictive ETA
  * Uses Google Maps API for traffic-aware routing and HOS integration
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getRouteDirections } from "./integrations-google-maps"
 import { decodePolyline } from "@/lib/polyline-utils"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 
 export interface EnhancedETA {
@@ -61,7 +56,7 @@ export async function updateTrafficAwareRoute(routeId: string) {
     // Build waypoints array for Google Maps
     const waypoints: string[] = []
     if (route.waypoints && Array.isArray(route.waypoints)) {
-      route.waypoints.forEach((wp: any) => {
+      route.waypoints.forEach((wp: { address?: string; lat?: number; lng?: number }) => {
         if (wp.address) waypoints.push(wp.address)
         else if (wp.lat && wp.lng) waypoints.push(`${wp.lat},${wp.lng}`)
       })
@@ -88,7 +83,7 @@ export async function updateTrafficAwareRoute(routeId: string) {
     const decodedPoints = decodePolyline(routeData.polyline || "")
 
     // Convert to JSONB array for database
-    const waypointsJsonb = decodedPoints.map((point: any) => ({
+    const waypointsJsonb = decodedPoints.map((point: { lat: number; lng: number }) => ({
       lat: point.lat,
       lng: point.lng
     }))
@@ -201,6 +196,5 @@ export async function updateTrafficRoutesForActiveRoutes() {
     return { error: errorMessage(error, "Failed to update traffic routes"), data: null }
   }
 }
-
 
 

@@ -211,7 +211,7 @@ export async function sendChatMessage(formData: {
   thread_id: string
   message: string
   message_type?: string
-  attachments?: any[]
+  attachments?: unknown[]
 }) {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()

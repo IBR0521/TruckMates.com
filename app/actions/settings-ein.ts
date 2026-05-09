@@ -1,17 +1,10 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /**
  * V3-003 FIX: Remove fake EIN generation - EINs are issued by the IRS, not generated randomly
  * This function is deprecated. Users must enter their real IRS-issued EIN.
@@ -83,7 +76,7 @@ export async function updateEIN(einNumber: string): Promise<{ data: { ein: strin
 /**
  * Get all EIN numbers for the company
  */
-export async function getEINNumbers(): Promise<{ data: any[] | null; error: string | null }> {
+export async function getEINNumbers(): Promise<{ data: Array<Record<string, unknown>> | null; error: string | null }> {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {

@@ -1,19 +1,11 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { monthlyLimitForPlan } from "@/lib/api-usage-plan-limits"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 type PlanRow = {
   id?: string
   name?: string
@@ -42,6 +34,40 @@ type SubscriptionRow = {
   trial_end?: string | null
   created_at?: string
   subscription_plans?: PlanRow | PlanRow[] | null
+}
+
+type BillingSubscriptionView = ReturnType<typeof mapSubscriptionsToBillingView>
+type FreeSubscriptionFallback = {
+  plan_name: string
+  plan_display_name: string
+  status: string
+  billing_cycle: string
+  amount: number
+  currency: string
+  currency_symbol: string
+  auto_renew: boolean
+  features: Record<string, unknown>
+}
+type UsageOverviewRow = {
+  key: string
+  label: string
+  used: number
+  limit: number
+  percent: number
+}
+
+type PaymentMethodWrite = {
+  type: "card" | "ach" | "wire" | "check"
+  card_brand: string | null
+  card_last4: string | null
+  card_exp_month: number | null
+  card_exp_year: number | null
+  cardholder_name: string | null
+  bank_name: string | null
+  account_type: string | null
+  account_last4: string | null
+  external_id: string | null
+  is_default?: boolean
 }
 
 function mapSubscriptionsToBillingView(row: SubscriptionRow) {
@@ -123,7 +149,7 @@ async function ensureFreeSubscriptionRow(companyId: string): Promise<void> {
  * Subscription for billing UI — reads canonical `subscriptions` + `subscription_plans`
  * (same rows Stripe/PayPal webhooks update and limit checks use).
  */
-export async function getSubscription(): Promise<{ data: any | null; error: string | null }> {
+export async function getSubscription(): Promise<{ data: BillingSubscriptionView | FreeSubscriptionFallback | null; error: string | null }> {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -223,7 +249,7 @@ async function countMonthlyUsage(
   return count ?? 0
 }
 
-export async function getMonthlyApiUsageOverview(): Promise<{ data: any[] | null; error: string | null }> {
+export async function getMonthlyApiUsageOverview(): Promise<{ data: UsageOverviewRow[] | null; error: string | null }> {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
@@ -277,7 +303,7 @@ export async function getMonthlyApiUsageOverview(): Promise<{ data: any[] | null
 /**
  * Get payment history
  */
-export async function getPaymentHistory(): Promise<{ data: any[] | null; error: string | null }> {
+export async function getPaymentHistory(): Promise<{ data: Array<Record<string, unknown>> | null; error: string | null }> {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -301,7 +327,7 @@ export async function getPaymentHistory(): Promise<{ data: any[] | null; error: 
 /**
  * Get payment methods
  */
-export async function getPaymentMethods(): Promise<{ data: any[] | null; error: string | null }> {
+export async function getPaymentMethods(): Promise<{ data: Array<Record<string, unknown>> | null; error: string | null }> {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
@@ -340,7 +366,7 @@ export async function savePaymentMethod(paymentMethod: {
   external_id?: string
   is_default?: boolean
   id?: string
-}): Promise<{ data: any | null; error: string | null }> {
+}): Promise<{ data: Record<string, unknown> | null; error: string | null }> {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId || !ctx.userId) {
@@ -386,7 +412,7 @@ export async function savePaymentMethod(paymentMethod: {
 
   if (paymentMethod.id) {
     // Update existing (don't set is_default here, use RPC if needed)
-    const updateData: any = {
+    const updateData: PaymentMethodWrite = {
       type: paymentMethod.type,
       card_brand: paymentMethod.card_brand || null,
       card_last4: paymentMethod.card_last4 || null,
@@ -569,10 +595,5 @@ export async function deletePaymentMethod(id: string): Promise<{ error: string |
 
   return { error: null }
 }
-
-
-
-
-
 
 

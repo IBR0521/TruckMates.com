@@ -136,9 +136,10 @@ export async function flushQueue(token: string, deviceId: string): Promise<void>
   }
 
   const remaining: QueueItem[] = []
-  async function flushTypeWithIsolation(
-    type: QueueItem["type"],
-    payload: ELDLocation[] | ELDLog[] | ELDEvent[] | ELDDvir[]
+  type QueuePayload<T extends QueueItem["type"]> = Extract<QueueItem, { type: T }>["payload"]
+  async function flushTypeWithIsolation<T extends QueueItem["type"]>(
+    type: T,
+    payload: QueuePayload<T>
   ): Promise<void> {
     if (!Array.isArray(payload) || payload.length === 0) return
 
@@ -155,8 +156,8 @@ export async function flushQueue(token: string, deviceId: string): Promise<void>
       }
       // Fast isolation path: split batch only when needed.
       const mid = Math.ceil(payload.length / 2)
-      await flushTypeWithIsolation(type, payload.slice(0, mid) as any)
-      await flushTypeWithIsolation(type, payload.slice(mid) as any)
+      await flushTypeWithIsolation(type, payload.slice(0, mid) as QueuePayload<T>)
+      await flushTypeWithIsolation(type, payload.slice(mid) as QueuePayload<T>)
     }
   }
 

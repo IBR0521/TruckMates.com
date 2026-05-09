@@ -3,6 +3,13 @@ import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getMobileAuthContext } from "@/lib/auth/mobile"
 
+type EldDeviceRow = {
+  id: string
+  device_name: string
+  device_serial_number: string
+  status: string
+}
+
 /**
  * Register mobile app as ELD device
  * POST /api/eld/mobile/register
@@ -89,8 +96,8 @@ export async function POST(request: NextRequest) {
     
     // Write device without requiring DB-level unique constraint on device_serial_number.
     // If a row exists for this company+serial, update it; otherwise insert a new row.
-    let device: any = null
-    let error: any = null
+    let device: EldDeviceRow | null = null
+    let error: { message?: string } | null = null
     if (existingDevice?.id && existingDevice.company_id === companyId) {
       const result = await supabase
         .from("eld_devices")

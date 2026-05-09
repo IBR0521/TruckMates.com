@@ -65,7 +65,7 @@ export async function generateHazmatShippingPaper(loadId: string): Promise<{
           required: true,
           feature: "hazmat",
         },
-      } as any
+      } as { data: null; error: string; upgrade: { required: true; feature: "hazmat" } }
     }
 
     const { data: load, error: loadError } = await supabase

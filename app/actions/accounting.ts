@@ -1,7 +1,8 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
@@ -10,11 +11,22 @@ import { checkCreatePermission, checkEditPermission, checkDeletePermission } fro
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 import { mapLegacyRole } from "@/lib/roles"
 
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
+type LoadValueRow = {
+  id?: string | null
+  shipment_number?: string | null
+  value?: number | string | null
+  miles?: number | string | null
+  load_type?: string | null
+  on_time_delivery?: boolean | null
+  load_date?: string | null
+  pickup_date?: string | null
+  created_at?: string | null
+  actual_delivery?: string | null
+  estimated_delivery?: string | null
 }
 
+type FuelExpenseRow = { amount?: number | string | null }
+type EldLogRow = { log_type?: string | null; miles_driven?: number | string | null }
 export async function getInvoices(filters?: {
   load_id?: string
   status?: string
@@ -95,7 +107,7 @@ export async function getInvoice(id: string) {
       .maybeSingle()
 
     if (error || !invoice) {
-      return { error: error?.message || "Invoice not found", data: null }
+      return { error: error ? safeDbError(error, "Invoice not found") : "Invoice not found", data: null }
     }
 
     if (!invoice) {
@@ -178,7 +190,7 @@ export async function getSettlements() {
     .limit(1000)
 
   if (error || !settlements) {
-    return { error: error?.message || "Settlements not found", data: null }
+    return { error: error ? safeDbError(error, "Settlements not found") : "Settlements not found", data: null }
   }
 
   return { data: settlements, error: null }
@@ -211,7 +223,7 @@ export async function getSettlement(id: string) {
       .maybeSingle()
 
     if (error || !settlement) {
-      return { error: error?.message || "Settlement not found", data: null }
+      return { error: error ? safeDbError(error, "Settlement not found") : "Settlement not found", data: null }
     }
 
     return { data: settlement, error: null }
@@ -249,7 +261,7 @@ export async function markSettlementPaid(id: string, paymentMethod?: string) {
     }
 
     const effectiveMethod = sanitizeString(paymentMethod || settlementRow.payment_method || "", 50).toLowerCase()
-    const updateData: Record<string, any> = {
+    const updateData: Record<string, unknown> = {
       status: "paid",
       paid_date: new Date().toISOString(),
     }
@@ -358,7 +370,7 @@ export async function approveSettlementAsDriver(settlementId: string, approvalMe
       .maybeSingle()
 
     if (error || !data) {
-      return { error: error?.message || "Failed to approve settlement", data: null }
+      return { error: error ? safeDbError(error, "Failed to approve settlement") : "Failed to approve settlement", data: null }
     }
 
     revalidatePath("/dashboard/accounting/settlements")
@@ -379,7 +391,7 @@ export async function updateInvoice(
     due_date?: string
     payment_terms?: string
     description?: string
-    [key: string]: any
+    [key: string]: unknown
   }
 ) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
@@ -419,7 +431,7 @@ export async function updateInvoice(
       .eq("company_id", ctx.companyId)
       .maybeSingle()
 
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (formData.status !== undefined) updateData.status = formData.status
     if (formData.amount !== undefined) updateData.amount = formData.amount
     if (formData.issue_date !== undefined) updateData.issue_date = formData.issue_date
@@ -437,7 +449,7 @@ export async function updateInvoice(
       .maybeSingle()
 
     if (error || !data) {
-      return { error: error?.message || "Invoice not found", data: null }
+      return { error: error ? safeDbError(error, "Invoice not found") : "Invoice not found", data: null }
     }
 
     revalidatePath("/dashboard/accounting/invoices")
@@ -510,7 +522,7 @@ export async function duplicateInvoice(id: string) {
   }
 
   // Create duplicate with new invoice number and reset status
-  const duplicateData: any = { ...originalInvoice }
+  const duplicateData: Record<string, unknown> = { ...originalInvoice }
   delete duplicateData.id
   delete duplicateData.created_at
   delete duplicateData.updated_at
@@ -542,7 +554,7 @@ export async function duplicateInvoice(id: string) {
     .maybeSingle()
 
   if (createError || !newInvoice) {
-    return { error: createError?.message || "Invoice not created", data: null }
+    return { error: createError ? safeDbError(createError, "Invoice not created") : "Invoice not created", data: null }
   }
 
   revalidatePath("/dashboard/accounting/invoices")
@@ -658,7 +670,7 @@ export async function createInvoice(formData: {
   due_date: string
   payment_terms?: string
   description?: string
-  items?: any[]
+  items?: unknown[]
 }) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
@@ -779,7 +791,7 @@ export async function createInvoice(formData: {
     calculatedDueDate = issueDate.toISOString().split('T')[0]
   }
 
-  const invoiceData: any = {
+  const invoiceData: Record<string, unknown> = {
     company_id: ctx.companyId,
     invoice_number: invoiceNumber,
     customer_name: sanitizeString(formData.customer_name, 200),
@@ -808,7 +820,7 @@ export async function createInvoice(formData: {
     .single()
 
   if (error || !data) {
-    return { error: error?.message || "Invoice not created", data: null }
+    return { error: error ? safeDbError(error, "Invoice not created") : "Invoice not created", data: null }
   }
 
   // Auto-send invoice if enabled
@@ -884,7 +896,7 @@ export async function getLoadForInvoice(loadId: string) {
     .maybeSingle()
 
   if (error || !load) {
-    return { error: error?.message || "Load not found", data: null }
+    return { error: error ? safeDbError(error, "Load not found") : "Load not found", data: null }
   }
 
   return { data: load, error: null }
@@ -1014,7 +1026,7 @@ export async function createExpense(formData: {
     const { data: matchingRoute, error: matchingRouteError } = await routeQuery.limit(1).maybeSingle()
 
     if (matchingRouteError) {
-      return { error: matchingRouteError.message, data: null }
+      return { error: safeDbError(matchingRouteError, "Failed to fetch matching route"), data: null }
     }
 
     if (matchingRoute) {
@@ -1038,7 +1050,7 @@ export async function createExpense(formData: {
     const { data: matchingLoad, error: matchingLoadError } = await loadQuery.limit(1).maybeSingle()
 
     if (matchingLoadError) {
-      return { error: matchingLoadError.message, data: null }
+      return { error: safeDbError(matchingLoadError, "Failed to fetch matching load"), data: null }
     }
 
     if (matchingLoad) {
@@ -1169,13 +1181,20 @@ export async function getDriverLoadsForPeriod(driverId: string, periodStart: str
       .order("created_at", { ascending: true })
 
     if (errorWithDate || errorWithoutDate) {
-      return { error: errorWithDate?.message || errorWithoutDate?.message || "Failed to fetch loads", data: null }
+      return {
+        error: errorWithDate
+          ? safeDbError(errorWithDate, "Failed to fetch loads")
+          : errorWithoutDate
+            ? safeDbError(errorWithoutDate, "Failed to fetch loads")
+            : "Failed to fetch loads",
+        data: null,
+      }
     }
 
     // Combine and deduplicate by id
     const loadMap = new Map()
-    ;(loadsWithDate || []).forEach((load: any) => loadMap.set(load.id, load))
-    ;(loadsWithoutDate || []).forEach((load: any) => {
+    ;(loadsWithDate || []).forEach((load: LoadValueRow) => loadMap.set(load.id, load))
+    ;(loadsWithoutDate || []).forEach((load: LoadValueRow) => {
       if (!loadMap.has(load.id)) {
         loadMap.set(load.id, load)
       }
@@ -1217,7 +1236,7 @@ export async function getDriverFuelExpensesForPeriod(driverId: string, periodSta
     return { error: safeDbError(error), data: null, totalFuelExpense: 0 }
   }
 
-  const totalFuelExpense = expenses?.reduce((sum: number, exp: any) => sum + (Number(exp.amount) || 0), 0) || 0
+  const totalFuelExpense = expenses?.reduce((sum: number, exp: FuelExpenseRow) => sum + (Number(exp.amount) || 0), 0) || 0
 
   return { data: expenses || [], totalFuelExpense, error: null }
   } catch (error: unknown) {
@@ -1236,7 +1255,7 @@ function calculateCalendarNightsBetween(pickupRaw: string, deliveryRaw: string):
   return Math.max(0, Math.floor((end.getTime() - start.getTime()) / dayMs))
 }
 
-function calculatePerDiemEligibleNights(loads: Array<any>): number {
+function calculatePerDiemEligibleNights(loads: LoadValueRow[]): number {
   return loads.reduce((total, load) => {
     const pickupRaw = load?.load_date || load?.pickup_date || load?.created_at
     const deliveryRaw = load?.actual_delivery || load?.estimated_delivery || pickupRaw
@@ -1309,7 +1328,7 @@ export async function createSettlement(formData: {
 
   // Calculate gross pay using pay rules engine if not provided
   let grossPay = formData.gross_pay || 0
-  let calculationDetails: any = {}
+  let calculationDetails: Record<string, unknown> = {}
   let payRuleId: string | null = null
 
   if (!formData.gross_pay && loads.length > 0) {
@@ -1346,12 +1365,12 @@ export async function createSettlement(formData: {
 
       const payCalculation = await calculateGrossPayFromRule({
         driverId: formData.driver_id,
-        loads: loads.map((load: any) => ({
+        loads: loads.map((load: LoadValueRow) => ({
           id: load.id,
           value: Number(load.value) || 0,
           miles: Number(load.miles) || undefined,
-          load_type: (load as any).load_type,
-          on_time_delivery: (load as any).on_time_delivery,
+          load_type: load.load_type,
+          on_time_delivery: load.on_time_delivery,
         })),
         totalMiles,
         periodStart: formData.period_start,
@@ -1366,7 +1385,7 @@ export async function createSettlement(formData: {
         payRuleId = payCalculation.data.pay_rule?.id || null
       } else {
         // Fallback: sum load values if pay rule not found
-        grossPay = loads.reduce((sum: number, load: any) => sum + (Number(load.value) || 0), 0)
+        grossPay = loads.reduce((sum: number, load: LoadValueRow) => sum + (Number(load.value) || 0), 0)
         calculationDetails = {
           base_pay: grossPay,
           method: "fallback_load_value_sum",
@@ -1386,7 +1405,7 @@ export async function createSettlement(formData: {
     } catch (error) {
       // Fallback: sum load values if pay rules engine fails
       Sentry.captureException(error)
-      grossPay = loads.reduce((sum: number, load: any) => sum + (Number(load.value) || 0), 0)
+      grossPay = loads.reduce((sum: number, load: LoadValueRow) => sum + (Number(load.value) || 0), 0)
       calculationDetails = {
         base_pay: grossPay,
         method: "fallback_load_value_sum",
@@ -1425,8 +1444,8 @@ export async function createSettlement(formData: {
     if (eldLogsResult.data) {
       // Sum miles from ELD logs
       eldMiles = eldLogsResult.data
-        .filter((log: any) => log.log_type === "driving" && log.miles_driven)
-        .reduce((sum: number, log: any) => sum + (Number(log.miles_driven) || 0), 0)
+        .filter((log: EldLogRow) => log.log_type === "driving" && log.miles_driven)
+        .reduce((sum: number, log: EldLogRow) => sum + (Number(log.miles_driven) || 0), 0)
     }
   } catch (error) {
     // ELD data not available, continue without it
@@ -1476,7 +1495,7 @@ export async function createSettlement(formData: {
   const netPay = grossPay + perDiemAmount - totalDeductions
 
   // Prepare loads data for JSONB
-  const loadsData = loads.map((load: any) => ({
+  const loadsData = loads.map((load: LoadValueRow) => ({
     id: load.id,
     shipment_number: load.shipment_number,
     value: load.value || 0,
@@ -1487,18 +1506,21 @@ export async function createSettlement(formData: {
   if (!calculationDetails || typeof calculationDetails !== "object") {
     calculationDetails = {}
   }
-  if (!Array.isArray(calculationDetails.line_items)) {
-    calculationDetails.line_items = []
+  const detailsWithItems = calculationDetails as Record<string, unknown> & {
+    line_items?: Array<Record<string, unknown>>
+  }
+  if (!Array.isArray(detailsWithItems.line_items)) {
+    detailsWithItems.line_items = []
   }
   if (leaseDeduction > 0) {
-    calculationDetails.line_items.push({
+    detailsWithItems.line_items.push({
       type: "lease_deduction",
       description: "Lease payment deduction",
       amount: -leaseDeduction,
       taxable: false,
     })
-    calculationDetails.lease_deduction = leaseDeduction
-    calculationDetails.lease_remaining_balance = leaseContext?.remainingAfter ?? null
+    detailsWithItems.lease_deduction = leaseDeduction
+    detailsWithItems.lease_remaining_balance = leaseContext?.remainingAfter ?? null
   }
 
   const { data, error } = await supabase
@@ -1523,14 +1545,14 @@ export async function createSettlement(formData: {
       gl_code: formData.gl_code ? sanitizeString(formData.gl_code, 40) : null,
       loads: loadsData,
       pay_rule_id: payRuleId,
-      calculation_details: calculationDetails,
+      calculation_details: detailsWithItems,
     })
     // V3-007 FIX: Replace implicit select() with explicit columns
     .select("id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, lease_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, payment_reference, payment_eta, stripe_transfer_id, stripe_payout_id, gl_code, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at")
     .single()
 
   if (error || !data) {
-    return { error: error?.message || "Settlement not created", data: null }
+    return { error: error ? safeDbError(error, "Settlement not created") : "Settlement not created", data: null }
   }
 
   // Post settlement side effects: payment history + remaining balance update
@@ -1545,7 +1567,7 @@ export async function createSettlement(formData: {
         remaining_balance_after: leaseContext.remainingAfter,
       })
 
-      const leasePatch: Record<string, any> = {
+      const leasePatch: Record<string, unknown> = {
         remaining_balance: leaseContext.remainingAfter,
         updated_at: new Date().toISOString(),
       }

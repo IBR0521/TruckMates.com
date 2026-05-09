@@ -3,6 +3,31 @@ import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getMobileAuthContext } from "@/lib/auth/mobile"
 
+type IncomingEvent = {
+  event_type?: string
+  type?: string
+  severity?: string
+  title?: string
+  name?: string
+  description?: string
+  message?: string
+  event_time?: string
+  timestamp?: string
+  location?: unknown
+  metadata?: Record<string, unknown>
+  additional_data?: unknown
+  driver_id?: string
+  truck_id?: string
+  fault_code?: string
+  faultCode?: string
+  code?: string
+  fault_code_category?: string
+  faultCodeCategory?: string
+  category?: string
+  fault_code_description?: string
+  faultCodeDescription?: string
+}
+
 /**
  * Receive events/violations from mobile app
  * POST /api/eld/mobile/events
@@ -61,9 +86,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Transform and validate events
-    const eventsToInsert = events
-      .filter((event: any) => event.event_type && event.title) // Filter invalid events
-      .map((event: any) => {
+    const incomingEvents = events as IncomingEvent[]
+    const eventsToInsert = incomingEvents
+      .filter((event) => event.event_type && event.title) // Filter invalid events
+      .map((event) => {
         // Extract fault code from metadata or event data
         const faultCode = event.fault_code || event.faultCode || event.code || event.metadata?.fault_code || event.metadata?.faultCode || null
         const faultCodeCategory = event.fault_code_category || event.faultCodeCategory || event.category || event.metadata?.fault_code_category || event.metadata?.category || null

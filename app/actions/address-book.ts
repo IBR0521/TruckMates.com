@@ -17,7 +17,7 @@ export interface AddressBookContact {
   state?: string
   zip?: string
   status?: string
-  metadata?: any // Additional type-specific data
+  metadata?: Record<string, unknown> // Additional type-specific data
 }
 
 // Get all contacts from all sources (unified address book)
@@ -59,7 +59,21 @@ export async function getAddressBookContacts(filters?: {
       const { data: customers, error: customersError } = await customerQuery.limit(1000)
 
       if (!customersError && customers) {
-        customers.forEach((customer: any) => {
+        customers.forEach((customer: {
+          id: string
+          name?: string
+          company_name?: string
+          email?: string
+          phone?: string
+          address_line1?: string
+          address_line2?: string
+          city?: string
+          state?: string
+          zip?: string
+          status?: string
+          customer_type?: string
+          payment_terms?: string
+        }) => {
           const address = [customer.address_line1, customer.address_line2]
             .filter(Boolean)
             .join(", ")
@@ -105,7 +119,21 @@ export async function getAddressBookContacts(filters?: {
       const { data: vendors, error: vendorsError } = await vendorQuery.limit(1000)
 
       if (!vendorsError && vendors) {
-        vendors.forEach((vendor: any) => {
+        vendors.forEach((vendor: {
+          id: string
+          name?: string
+          company_name?: string
+          email?: string
+          phone?: string
+          address_line1?: string
+          address_line2?: string
+          city?: string
+          state?: string
+          zip?: string
+          status?: string
+          vendor_type?: string
+          payment_terms?: string
+        }) => {
           const address = [vendor.address_line1, vendor.address_line2]
             .filter(Boolean)
             .join(", ")
@@ -151,7 +179,19 @@ export async function getAddressBookContacts(filters?: {
       const { data: drivers, error: driversError } = await driverQuery.limit(1000)
 
       if (!driversError && drivers) {
-        drivers.forEach((driver: any) => {
+        drivers.forEach((driver: {
+          id: string
+          name?: string
+          email?: string
+          phone?: string
+          address?: string
+          city?: string
+          state?: string
+          zip?: string
+          status?: string
+          license_number?: string
+          license_expiry?: string
+        }) => {
           allContacts.push({
             id: driver.id,
             type: "driver",
@@ -190,7 +230,13 @@ export async function getAddressBookContacts(filters?: {
       const { data: employees, error: employeesError } = await employeeQuery.limit(1000)
 
       if (!employeesError && employees) {
-        employees.forEach((employee: any) => {
+        employees.forEach((employee: {
+          id: string
+          name?: string
+          email?: string
+          phone?: string
+          role?: string
+        }) => {
           allContacts.push({
             id: employee.id,
             type: "employee",
@@ -259,7 +305,7 @@ export async function getAddressBookContact(
 
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
-    let contact: any = null
+    let contact: AddressBookContact | null = null
 
     switch (type) {
       case "customer": {

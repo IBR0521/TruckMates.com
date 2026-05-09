@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { isDevSurfaceBlocked } from "@/lib/security/dev-only"
 
 /**
  * Test connection endpoint - requires authentication
  * SECURITY: Protected to prevent leaking DB error details publicly
  */
 export async function GET() {
+  if (isDevSurfaceBlocked()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
   const supabase = await createClient()
   
   // Require authentication

@@ -1,17 +1,8 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { sanitizeError } from "@/lib/error-message"
-import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 const COMPANY_SETTINGS_SELECT = `
   id, company_id,
   load_number_format, invoice_number_format, dispatch_number_format, bol_number_format,
@@ -69,7 +60,7 @@ export async function getCompanySettings() {
     .eq("id", ctx.userId)
     .maybeSingle()
   if (currentUserError) {
-    return { error: `Failed to fetch user role: ${currentUserError.message}`, data: null }
+    return { error: safeDbError(currentUserError, "Failed to fetch user role"), data: null }
   }
   
   const userRole = currentUser?.role || 'driver'
@@ -100,13 +91,13 @@ export async function getCompanySettings() {
 
     if (createError) {
       // MEDIUM FIX 16: Return error instead of hardcoded defaults
-      return { error: `Failed to create settings: ${createError.message}`, data: null }
+      return { error: safeDbError(createError, "Failed to create settings"), data: null }
     }
 
     settings = newSettings
   } else if (error) {
     // MEDIUM FIX 16: Return error instead of hardcoded defaults
-    return { error: `Failed to fetch settings: ${error.message}`, data: null }
+    return { error: safeDbError(error, "Failed to fetch settings"), data: null }
   }
 
   // BUG-064 FIX: Filter sensitive fields for non-admin roles
@@ -189,7 +180,7 @@ export async function updateCompanySettings(settings: {
   triumphpay_api_base_url?: string | null
   triumphpay_api_key?: string | null
   triumphpay_api_secret?: string | null
-  // HIGH FIX 3: Removed [key: string]: any to prevent arbitrary column injection
+  // HIGH FIX 3: Removed broad index signatures to prevent arbitrary column injection
 }) {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
@@ -204,8 +195,8 @@ export async function updateCompanySettings(settings: {
     return { error: "Only managers can update company settings", data: null }
   }
 
-  // HIGH FIX 3: Build explicit updateData object to prevent [key: string]: any injection
-  const updateData: any = {}
+  // HIGH FIX 3: Build explicit updateData object to prevent broad index-signature injection
+  const updateData: Record<string, unknown> = {}
   const allowedFields = [
     'load_number_format', 'invoice_number_format', 'dispatch_number_format', 'bol_number_format',
     'timezone', 'date_format', 'time_format', 'currency', 'currency_symbol', 'default_payment_terms',
@@ -225,9 +216,9 @@ export async function updateCompanySettings(settings: {
   ]
   
   for (const field of allowedFields) {
-    const settingsAny = settings as any
-    if (settingsAny[field] !== undefined) {
-      updateData[field] = settingsAny[field]
+    const settingsRecord = settings as Record<string, unknown>
+    if (settingsRecord[field] !== undefined) {
+      updateData[field] = settingsRecord[field]
     }
   }
 
@@ -278,7 +269,7 @@ export async function generateLoadNumber(): Promise<{ data: string | null; error
         data: null 
       }
     }
-    return { error: `Failed to increment sequence: ${rpcError.message}`, data: null }
+    return { error: safeDbError(rpcError, "Failed to increment sequence"), data: null }
   }
   
   if (rpcResult === null || rpcResult === undefined) {
@@ -294,7 +285,7 @@ export async function generateLoadNumber(): Promise<{ data: string | null; error
     .eq("id", ctx.companyId)
     .maybeSingle()
   if (companyError) {
-    return { error: `Failed to fetch company name: ${companyError.message}`, data: null }
+    return { error: safeDbError(companyError, "Failed to fetch company name"), data: null }
   }
 
   // Generate number using the incremented sequence
@@ -333,7 +324,7 @@ export async function generateInvoiceNumber(): Promise<{ data: string | null; er
         data: null 
       }
     }
-    return { error: `Failed to increment sequence: ${rpcError.message}`, data: null }
+    return { error: safeDbError(rpcError, "Failed to increment sequence"), data: null }
   }
   
   if (rpcResult === null || rpcResult === undefined) {
@@ -349,7 +340,7 @@ export async function generateInvoiceNumber(): Promise<{ data: string | null; er
     .maybeSingle()
 
   if (companyError) {
-    return { error: `Failed to fetch company name: ${companyError.message}`, data: null }
+    return { error: safeDbError(companyError, "Failed to fetch company name"), data: null }
   }
 
   const number = generateNumber(format, sequence, company?.name)
@@ -387,7 +378,7 @@ export async function generateDispatchNumber(): Promise<{ data: string | null; e
         data: null 
       }
     }
-    return { error: `Failed to increment sequence: ${rpcError.message}`, data: null }
+    return { error: safeDbError(rpcError, "Failed to increment sequence"), data: null }
   }
   
   if (rpcResult === null || rpcResult === undefined) {
@@ -403,7 +394,7 @@ export async function generateDispatchNumber(): Promise<{ data: string | null; e
     .maybeSingle()
 
   if (companyError) {
-    return { error: `Failed to fetch company name: ${companyError.message}`, data: null }
+    return { error: safeDbError(companyError, "Failed to fetch company name"), data: null }
   }
 
   const number = generateNumber(format, sequence, company?.name)
@@ -441,7 +432,7 @@ export async function generateBOLNumber(): Promise<{ data: string | null; error:
         data: null 
       }
     }
-    return { error: `Failed to increment sequence: ${rpcError.message}`, data: null }
+    return { error: safeDbError(rpcError, "Failed to increment sequence"), data: null }
   }
   
   if (rpcResult === null || rpcResult === undefined) {
@@ -457,15 +448,12 @@ export async function generateBOLNumber(): Promise<{ data: string | null; error:
     .maybeSingle()
 
   if (companyError) {
-    return { error: `Failed to fetch company name: ${companyError.message}`, data: null }
+    return { error: safeDbError(companyError, "Failed to fetch company name"), data: null }
   }
 
   const number = generateNumber(format, sequence, company?.name)
 
   return { data: number, error: null }
 }
-
-
-
 
 

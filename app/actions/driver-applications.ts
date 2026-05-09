@@ -1,22 +1,17 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import React from "react"
 import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { checkCreatePermission, checkDeletePermission, checkEditPermission, checkViewPermission } from "@/lib/server-permissions"
 import { sanitizeEmail, sanitizePhone, sanitizeString } from "@/lib/validation"
 import { revalidatePath } from "next/cache"
 import { createDriver } from "@/app/actions/drivers"
 import { Document, Page, Text, View, StyleSheet, pdf } from "@react-pdf/renderer"
-
 export type DriverApplicationStage = "applied" | "screening" | "interview" | "offer" | "hired" | "rejected"
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 function normalizeStage(value?: string): DriverApplicationStage {
   const v = String(value || "").toLowerCase()

@@ -23,10 +23,10 @@ import { Button } from "@/components/ui/button"
 import { ELDRealtimeMap } from "@/components/eld-realtime-map"
 
 export default function FleetHealthPage() {
-  const [health, setHealth] = useState<any>(null)
-  const [alerts, setAlerts] = useState<any[]>([])
-  const [locations, setLocations] = useState<any[]>([])
-  const [faultEvents, setFaultEvents] = useState<any[]>([])
+  const [health, setHealth] = useState<unknown>(null)
+  const [alerts, setAlerts] = useState<unknown[]>([])
+  const [locations, setLocations] = useState<unknown[]>([])
+  const [faultEvents, setFaultEvents] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [sortKey, setSortKey] = useState<"truck" | "lastSeen" | "odometer" | "engineHours" | "faults">("lastSeen")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
@@ -61,7 +61,7 @@ export default function FleetHealthPage() {
       if (faultsResult?.data) {
         setFaultEvents(
           faultsResult.data.filter(
-            (event: any) => event.fault_code || event.event_type === "device_malfunction"
+            (event: unknown) => event.fault_code || event.event_type === "device_malfunction"
           )
         )
       }

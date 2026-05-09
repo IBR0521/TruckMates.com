@@ -29,8 +29,8 @@ import {
 
 export default function SettlementsPage() {
   const router = useRouter()
-  const [settlements, setSettlements] = useState<any[]>([])
-  const [drivers, setDrivers] = useState<any[]>([])
+  const [settlements, setSettlements] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [payingId, setPayingId] = useState<string | null>(null)

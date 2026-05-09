@@ -37,8 +37,34 @@ import { getExpiringCRMDocuments } from "@/app/actions/crm-documents"
 import { getCustomers } from "@/app/actions/customers"
 import { getVendors } from "@/app/actions/vendors"
 import { CRMSectionHeader } from "@/components/crm/crm-section-header"
-import { getCommunicationTimeline, logCommunication } from "@/app/actions/crm-communication"
+import { getCommunicationTimeline, logCommunication, type CommunicationLog } from "@/app/actions/crm-communication"
 import { getPlanFeatureAccessStatus } from "@/app/actions/plan-feature-access"
+
+type RelationshipInsights = {
+  top_customers: CustomerPerformanceMetrics[]
+  top_vendors: VendorPerformanceMetrics[]
+  slow_payers: CustomerPerformanceMetrics[]
+  low_performers: CustomerPerformanceMetrics[]
+}
+
+type ExpiringDocument = {
+  id: string
+  name: string
+  customer_name?: string | null
+  vendor_name?: string | null
+  document_type: string
+  days_until_expiration: number
+  expiration_date: string
+}
+
+type InactiveCustomer = {
+  customer_id: string
+  name: string
+  days_inactive: number
+  last_load_date?: string | null
+}
+
+type QuickLogType = "email" | "phone" | "sms" | "meeting" | "note"
 
 export default function CRMDashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -48,18 +74,18 @@ export default function CRMDashboardPage() {
   const [vendorCount, setVendorCount] = useState(0)
   const [customerMetrics, setCustomerMetrics] = useState<CustomerPerformanceMetrics[]>([])
   const [vendorMetrics, setVendorMetrics] = useState<VendorPerformanceMetrics[]>([])
-  const [insights, setInsights] = useState<any>(null)
-  const [expiringDocuments, setExpiringDocuments] = useState<any[]>([])
+  const [insights, setInsights] = useState<RelationshipInsights | null>(null)
+  const [expiringDocuments, setExpiringDocuments] = useState<ExpiringDocument[]>([])
   const [revenueSnapshot, setRevenueSnapshot] = useState({ this_month_revenue: 0, outstanding_invoices: 0 })
-  const [inactiveCustomers, setInactiveCustomers] = useState<any[]>([])
-  const [recentCommunications, setRecentCommunications] = useState<any[]>([])
+  const [inactiveCustomers, setInactiveCustomers] = useState<InactiveCustomer[]>([])
+  const [recentCommunications, setRecentCommunications] = useState<CommunicationLog[]>([])
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false)
   const [isSubmittingQuickLog, setIsSubmittingQuickLog] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [quickLog, setQuickLog] = useState({
     customer_id: "",
     customer_name: "",
-    type: "note",
+    type: "note" as QuickLogType,
     direction: "outbound",
     subject: "",
     message: "",
@@ -208,7 +234,7 @@ export default function CRMDashboardPage() {
     setIsSubmittingQuickLog(true)
     const result = await logCommunication({
       customer_id: quickLog.customer_id,
-      type: quickLog.type as any,
+      type: quickLog.type as QuickLogType,
       direction: quickLog.direction as "inbound" | "outbound",
       subject: quickLog.subject || undefined,
       message: quickLog.message || undefined,
@@ -597,7 +623,7 @@ export default function CRMDashboardPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Type</Label>
-                <Select value={quickLog.type} onValueChange={(value) => setQuickLog((prev) => ({ ...prev, type: value }))}>
+                <Select value={quickLog.type} onValueChange={(value: QuickLogType) => setQuickLog((prev) => ({ ...prev, type: value }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

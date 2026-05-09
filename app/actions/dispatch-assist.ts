@@ -146,7 +146,7 @@ export async function getOptimalDriverSuggestions(
           )
 
         if (scores) {
-          scores.forEach((score: any) => {
+          scores.forEach((score: { driver_id: string; overall_score?: number | null }) => {
             driverScores.set(score.driver_id, score.overall_score || 50)
           })
         }
@@ -175,7 +175,7 @@ export async function getOptimalDriverSuggestions(
       .not("status", "in", '("completed","cancelled")')
     
     // Group assignments by driver_id
-    const assignmentsByDriver = new Map<string, any[]>()
+    const assignmentsByDriver = new Map<string, Array<{ type: "load" | "route"; [key: string]: unknown }>>()
     existingAssignments?.forEach((load: { id: string; driver_id: string | null; load_date: string | null; estimated_delivery: string | null; origin: string | null; destination: string | null; shipment_number?: string }) => {
       if (load.driver_id) {
         if (!assignmentsByDriver.has(load.driver_id)) {
@@ -413,7 +413,7 @@ export async function getOptimalDriverSuggestionsForRoute(
 
     // Pick a "primary" load to infer equipment/priority and to find nearby drivers.
     const primaryLoad =
-      routeLoads.find((l: any) => l.status === "pending") || routeLoads[0]
+      routeLoads.find((l: { status?: string | null }) => l.status === "pending") || routeLoads[0]
 
     const requirements: LoadRequirements = {
       load_id: primaryLoad.id,
@@ -451,8 +451,8 @@ export async function getOptimalDriverSuggestionsForRoute(
       .eq("company_id", ctx.companyId)
       .in("id", truckIds)
 
-    const truckMap = new Map<string, any>()
-    allTrucks?.forEach((t: any) => truckMap.set(t.id, t))
+    const truckMap = new Map<string, { id: string; carrier_type: string | null; make: string | null; model: string | null }>()
+    allTrucks?.forEach((t: { id: string; carrier_type: string | null; make: string | null; model: string | null }) => truckMap.set(t.id, t))
 
     const suggestions: DriverSuggestion[] = []
 

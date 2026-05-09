@@ -48,9 +48,9 @@ export default function ELDSimulatorPage() {
   const [deviceName, setDeviceName] = useState("Fake ELD Device")
   const [speed, setSpeed] = useState(60)
   const [updateInterval, setUpdateInterval] = useState(30)
-  const [devices, setDevices] = useState<any[]>([])
-  const [trucks, setTrucks] = useState<any[]>([])
-  const [drivers, setDrivers] = useState<any[]>([])
+  const [devices, setDevices] = useState<unknown[]>([])
+  const [trucks, setTrucks] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<unknown[]>([])
   const [simulatorInterval, setSimulatorInterval] = useState<NodeJS.Timeout | null>(null)
   const [stats, setStats] = useState({
     locationsSent: 0,
@@ -93,7 +93,7 @@ export default function ELDSimulatorPage() {
     ])
 
     if (devicesRes.data) {
-      setDevices(devicesRes.data.filter((d: any) => d.provider === "truckmates_simulator"))
+      setDevices(devicesRes.data.filter((d: unknown) => d.provider === "truckmates_simulator"))
     }
     if (trucksRes.data) {
       setTrucks(trucksRes.data)

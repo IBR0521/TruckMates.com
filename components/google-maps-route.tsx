@@ -23,7 +23,7 @@ interface GoogleMapsRouteProps {
   truckHeight?: number
   contents?: string
   showNavigationButton?: boolean
-  onRouteDataChange?: (routeData: any) => void
+  onRouteDataChange?: (routeData: RouteData) => void
   recommendedFuelStops?: Array<{
     id: string
     rank: number
@@ -37,9 +37,23 @@ interface GoogleMapsRouteProps {
 
 const EMPTY_STOPS: NonNullable<GoogleMapsRouteProps["stops"]> = []
 
+type RouteWaypoint = {
+  name: string
+  type: "origin" | "waypoint" | "destination" | string
+  stop_number?: number
+}
+
+type RouteData = {
+  distance: string
+  distance_meters: number
+  duration: string
+  duration_seconds: number
+  waypoints?: RouteWaypoint[]
+}
+
 declare global {
   interface Window {
-    google: any
+    google: typeof google
     initGoogleMaps: () => void
   }
   
@@ -115,11 +129,11 @@ export function GoogleMapsRoute({
     )
   }, [recommendedFuelStops])
   const mapRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<any>(null)
-  const directionsServiceRef = useRef<any>(null)
-  const directionsRendererRef = useRef<any>(null)
-  const markersRef = useRef<any[]>([])
-  const [routeData, setRouteData] = useState<any>(null)
+  const mapInstanceRef = useRef<google.maps.Map | null>(null)
+  const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null)
+  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null)
+  const markersRef = useRef<google.maps.Marker[]>([])
+  const [routeData, setRouteData] = useState<RouteData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [mapLoaded, setMapLoaded] = useState(false)
@@ -416,7 +430,7 @@ export function GoogleMapsRoute({
         directionsRendererRef.current = directionsRenderer
 
         // Build waypoints array
-        const waypoints: any[] = []
+        const waypoints: google.maps.DirectionsWaypoint[] = []
         if (safeStops.length > 0) {
           for (const stop of safeStops) {
             if (stop.coordinates) {
@@ -448,7 +462,7 @@ export function GoogleMapsRoute({
                   ),
                   stopover: true,
                 })
-              } catch (err) {
+              } catch (err: unknown) {
                 console.warn(`Failed to geocode stop "${stop.address || stop.location_name}":`, err)
                 // Continue without this waypoint
               }
@@ -457,7 +471,7 @@ export function GoogleMapsRoute({
         }
 
         // Request route
-        const request: any = {
+        const request: google.maps.DirectionsRequest = {
           origin: new window.google.maps.LatLng(originCoords.lat, originCoords.lng),
           destination: new window.google.maps.LatLng(destCoords.lat, destCoords.lng),
           travelMode: window.google.maps.TravelMode.DRIVING,
@@ -469,9 +483,9 @@ export function GoogleMapsRoute({
           request.waypoints = waypoints
         }
 
-        directionsService.route(request, (result: any, status: any) => {
+        directionsService.route(request, (result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
           if (cancelled) return
-          if (status === window.google.maps.DirectionsStatus.OK) {
+          if (status === window.google.maps.DirectionsStatus.OK && result) {
             directionsRenderer.setDirections(result)
 
             // Extract route information
@@ -490,11 +504,11 @@ export function GoogleMapsRoute({
             
             const leg = route.legs[0]
             const totalDistance = route.legs.reduce(
-              (sum: number, leg: any) => sum + (leg.distance?.value || 0),
+              (sum: number, leg: google.maps.DirectionsLeg) => sum + (leg.distance?.value || 0),
               0
             )
             const totalDuration = route.legs.reduce(
-              (sum: number, leg: any) => sum + (leg.duration?.value || 0),
+              (sum: number, leg: google.maps.DirectionsLeg) => sum + (leg.duration?.value || 0),
               0
             )
 
@@ -693,7 +707,7 @@ Visit: https://console.cloud.google.com/google/maps-apis`
           {/* Waypoints */}
           <div className="space-y-2 mb-4">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Route Waypoints</p>
-            {(routeData.waypoints ?? []).map((waypoint: any, idx: number) => (
+            {(routeData.waypoints ?? []).map((waypoint: RouteWaypoint, idx: number) => (
               <div key={idx} className="flex gap-3 text-xs">
                 <div className="flex w-3 flex-col items-center">
                   <div

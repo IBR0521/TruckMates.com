@@ -5,6 +5,24 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
+interface PdfPageLike {
+  setContent(html: string, options: { waitUntil: string }): Promise<void>
+  pdf(options: {
+    format: string
+    printBackground: boolean
+    margin: { top: string; right: string; bottom: string; left: string }
+  }): Promise<Buffer>
+}
+
+interface PdfBrowserLike {
+  newPage(): Promise<PdfPageLike>
+  close(): Promise<void>
+}
+
+interface PuppeteerLike {
+  launch(options: { headless: boolean; args: string[] }): Promise<PdfBrowserLike>
+}
+
 /**
  * IFTA Report PDF Generation
  * Generates audit-ready PDF reports for IFTA filing
@@ -51,7 +69,7 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
     }
 
     // Get state breakdown
-    const stateBreakdown = (report.state_breakdown as any[]) || []
+    const stateBreakdown = (report.state_breakdown as Array<Record<string, unknown>>) || []
 
     // Format currency
     const formatCurrency = (amount: number | string): string => {
@@ -366,7 +384,7 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
             <tbody>
               ${stateBreakdown
                 .map(
-                  (state: any) => `
+                  (state: Record<string, unknown>) => `
                 <tr>
                   <td>${escapeHtml(state.state || "N/A")}</td>
                   <td>${state.miles?.toLocaleString() || "0"}</td>
@@ -428,10 +446,18 @@ export async function generateIFTAReportPDF(reportId: string): Promise<{
     // FIXED: Generate actual PDF using Puppeteer instead of returning HTML
     // Note: Puppeteer is optional - if not installed, we return HTML
     try {
-      let puppeteerModule: any = null
+      let puppeteerModule: PuppeteerLike | null = null
       try {
         const puppeteer = await import("puppeteer-core")
-        puppeteerModule = puppeteer.default || puppeteer
+        const candidate = (puppeteer.default || puppeteer) as unknown
+        if (
+          typeof candidate === "object" &&
+          candidate !== null &&
+          "launch" in candidate &&
+          typeof (candidate as { launch?: unknown }).launch === "function"
+        ) {
+          puppeteerModule = candidate as PuppeteerLike
+        }
       } catch (importError) {
         Sentry.captureMessage(
           `[IFTA PDF] Puppeteer not available, returning HTML: ${importError instanceof Error ? importError.message : String(importError)}`,

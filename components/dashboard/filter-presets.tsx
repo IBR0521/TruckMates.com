@@ -42,8 +42,8 @@ import { toast } from "sonner"
 
 interface FilterPresetsProps {
   page: string
-  currentFilters: Record<string, any>
-  onApplyPreset: (filters: Record<string, any>) => void
+  currentFilters: Record<string, unknown>
+  onApplyPreset: (filters: Record<string, unknown>) => void
 }
 
 export function FilterPresets({ page, currentFilters, onApplyPreset }: FilterPresetsProps) {

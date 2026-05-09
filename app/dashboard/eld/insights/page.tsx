@@ -30,15 +30,15 @@ import { Progress } from "@/components/ui/progress"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts"
 
 export default function ELDInsightsPage() {
-  const [insights, setInsights] = useState<any[]>([])
-  const [summary, setSummary] = useState<any>(null)
+  const [insights, setInsights] = useState<unknown[]>([])
+  const [summary, setSummary] = useState<unknown>(null)
   const [driverId, setDriverId] = useState<string>("")
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [recommendations, setRecommendations] = useState<any[]>([])
+  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [recommendations, setRecommendations] = useState<unknown[]>([])
   const [days, setDays] = useState(7)
   const [isLoading, setIsLoading] = useState(true)
-  const [driverScore, setDriverScore] = useState<any>(null)
-  const [allDriverScores, setAllDriverScores] = useState<any>(null)
+  const [driverScore, setDriverScore] = useState<unknown>(null)
+  const [allDriverScores, setAllDriverScores] = useState<unknown>(null)
 
   useEffect(() => {
     loadDrivers()
@@ -401,7 +401,7 @@ export default function ELDInsightsPage() {
                 </Badge>
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {allDriverScores.scores.map((score: any) => (
+                {allDriverScores.scores.map((score: unknown) => (
                   <Card key={score.driver_id} className="border border-border/50 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>

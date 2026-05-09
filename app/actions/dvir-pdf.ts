@@ -11,7 +11,7 @@ import * as Sentry from "@sentry/nextjs"
  * Generate DVIR Audit PDF HTML
  * Returns HTML that can be converted to PDF for audit purposes
  */
-export async function generateDVIRAuditPDF(filters: any) {
+export async function generateDVIRAuditPDF(filters: { start_date?: string; end_date?: string; truck_id?: string } | undefined) {
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
@@ -246,7 +246,7 @@ export async function generateDVIRAuditPDF(filters: any) {
         <div style="text-align: center; padding: 40px;">
           <p>No DVIRs found for the selected criteria.</p>
         </div>
-      ` : dvirs.map((dvir: any) => {
+      ` : dvirs.map((dvir: Record<string, unknown>) => {
         const defectRows = defectsAsRows(dvir)
         const shortId = String(dvir.id ?? "").slice(0, 8).toUpperCase() || "UNKNOWN"
         return `
@@ -307,7 +307,7 @@ export async function generateDVIRAuditPDF(filters: any) {
                   </tr>
                 </thead>
                 <tbody>
-                  ${defectRows.map((defect: any) => `
+                  ${defectRows.map((defect: Record<string, unknown>) => `
                     <tr>
                       <td>${escapeHtml(defect.component || 'N/A')}</td>
                       <td>${escapeHtml(defect.description || 'N/A')}</td>
@@ -471,7 +471,7 @@ export async function generateSingleDVIRPDF(dvirId: string) {
                   <tbody>
                     ${defectRows
                       .map(
-                        (defect: any) => `
+                        (defect: Record<string, unknown>) => `
                       <tr>
                         <td>${escapeHtml(defect.component || "N/A")}</td>
                         <td>${escapeHtml(defect.description || "N/A")}</td>

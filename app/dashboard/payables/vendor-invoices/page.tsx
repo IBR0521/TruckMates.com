@@ -26,7 +26,7 @@ function badgeClass(status: string) {
 }
 
 export default function VendorInvoicesPage() {
-  const [rows, setRows] = useState<any[]>([])
+  const [rows, setRows] = useState<unknown[]>([])
   const [loading, setLoading] = useState(true)
   const [markPaidId, setMarkPaidId] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState("ach")

@@ -21,10 +21,23 @@ import { format } from "date-fns"
 import { getMarketplaceLoads } from "@/app/actions/marketplace"
 import { Logo } from "@/components/logo"
 
+type MarketplaceLoad = {
+  id?: string
+  equipment_type?: string
+  rate?: number
+  rate_type?: string
+  origin?: string
+  destination?: string
+  weight?: string | number
+  contents?: string
+  pickup_date?: string
+  notes?: string
+}
+
 export default function MarketplacePage() {
   const router = useRouter()
   const supabase = createClient()
-  const [loads, setLoads] = useState<any[]>([])
+  const [loads, setLoads] = useState<MarketplaceLoad[]>([])
   const [loading, setLoading] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [companyType, setCompanyType] = useState<string | null>(null)
@@ -76,7 +89,7 @@ export default function MarketplacePage() {
       if (result.error) {
         toast.error(result.error)
       } else {
-        setLoads(result.data || [])
+        setLoads(Array.isArray(result.data) ? (result.data as MarketplaceLoad[]) : [])
       }
     } catch (error) {
       toast.error("Failed to load marketplace loads")

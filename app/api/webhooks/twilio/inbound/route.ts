@@ -3,6 +3,8 @@ import * as Sentry from "@sentry/nextjs"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { mapLegacyRole } from "@/lib/roles"
 
+type CompanyUserRow = { id: string; role: string | null }
+
 function normalizePhone(raw: string | null): string {
   const value = String(raw || "").trim()
   if (!value) return ""
@@ -91,12 +93,12 @@ export async function POST(request: Request) {
       .eq("company_id", driver.company_id)
       .limit(1000)
 
-    const dispatcherUserIds = (companyUsers || [])
-      .filter((u: any) => {
+    const dispatcherUserIds = ((companyUsers || []) as CompanyUserRow[])
+      .filter((u) => {
         const role = mapLegacyRole(String(u?.role || ""))
         return ["super_admin", "operations_manager", "dispatcher", "safety_compliance"].includes(role)
       })
-      .map((u: any) => String(u.id))
+      .map((u) => String(u.id))
 
     const participants = Array.from(new Set([senderUserId, ...dispatcherUserIds]))
 
@@ -128,11 +130,14 @@ export async function POST(request: Request) {
       thread = created.data
     }
 
-    const unreadCount = (thread.unread_count && typeof thread.unread_count === "object") ? { ...thread.unread_count } : {}
+    const unreadCount: Record<string, number> =
+      thread.unread_count && typeof thread.unread_count === "object"
+        ? { ...(thread.unread_count as Record<string, number>) }
+        : {}
     for (const uid of participants) {
       if (uid === senderUserId) continue
-      const current = Number((unreadCount as any)[uid] || 0)
-      ;(unreadCount as any)[uid] = current + 1
+      const current = Number(unreadCount[uid] || 0)
+      unreadCount[uid] = current + 1
     }
 
     const messageInsert = await supabase

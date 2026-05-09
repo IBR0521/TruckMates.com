@@ -85,7 +85,7 @@ export function RouteStopsManager({ stops, onStopsChange }: RouteStopsManagerPro
     }
   }
 
-  const updateStop = (index: number, field: keyof Stop, value: any) => {
+  const updateStop = (index: number, field: keyof Stop, value: Stop[keyof Stop]) => {
     const newStops = [...stops]
     newStops[index] = { ...newStops[index], [field]: value }
     onStopsChange(newStops)

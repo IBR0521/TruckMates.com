@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js"
 import { randomBytes } from "crypto"
 import { errorMessage } from "@/lib/error-message"
 import { createClient as createServerClient } from "@/lib/supabase/server"
+import { isDevSurfaceBlocked } from "@/lib/security/dev-only"
 import * as Sentry from "@sentry/nextjs"
 
 // BUG-068 FIX: Use environment variables instead of hardcoded credentials
@@ -12,6 +13,18 @@ const DEMO_EMAIL = process.env.DEMO_EMAIL || "demo@truckmates.com"
 const DEMO_COMPANY_NAME = process.env.DEMO_COMPANY_NAME || "Demo Logistics Company"
 const SUPABASE_RETRY_ATTEMPTS = 3
 const SUPABASE_RETRY_DELAY_MS = 500
+
+type DemoSetupAdminClient = {
+  from: (table: string) => {
+    update: (values: {
+      setup_complete: boolean
+      setup_completed_at: string
+      setup_data: { is_demo: boolean }
+    }) => {
+      eq: (column: "id", value: string) => Promise<unknown>
+    }
+  }
+}
 
 // Use a server-only password. If DEMO_PASSWORD is not configured, generate an ephemeral password
 // per setup run and apply it with admin APIs before server-side sign-in.
@@ -59,7 +72,7 @@ async function withSupabaseRetry<T>(operationName: string, fn: () => Promise<T>)
 
 // Use a loose type here to avoid tight coupling to Supabase client generics
 // This is an internal helper and we only call methods that exist on any Supabase client instance.
-async function markDemoCompanySetupComplete(adminClient: any, companyId: string) {
+async function markDemoCompanySetupComplete(adminClient: DemoSetupAdminClient, companyId: string) {
   try {
     // Mark setup as complete so demo users are never sent through the onboarding wizard
     await adminClient
@@ -71,7 +84,7 @@ async function markDemoCompanySetupComplete(adminClient: any, companyId: string)
         setup_data: {
           is_demo: true,
         },
-      } as any)
+      })
       .eq("id", companyId)
   } catch (error) {
     Sentry.captureException(error)
@@ -80,6 +93,10 @@ async function markDemoCompanySetupComplete(adminClient: any, companyId: string)
 }
 
 export async function createDemoAndSignIn() {
+  if (isDevSurfaceBlocked()) {
+    return { error: "Not found" }
+  }
+
   try {
     // Use service role key to bypass RLS and create user directly
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -267,7 +284,7 @@ export async function createDemoAndSignIn() {
           new Promise((_, reject) => 
             setTimeout(() => reject(new Error('Demo data population timed out after 30 seconds')), 30000)
           )
-        ]) as Promise<{ data: any; error: any }>
+        ]) as Promise<{ data: unknown; error: unknown }>
         
         // Call the function with timeout
         const { data: populateResult, error: populateError } = await populateWithTimeout
@@ -319,7 +336,7 @@ export async function createDemoAndSignIn() {
           }
           // Log the result with counts
           if (typeof populateResult === 'object' && 'counts' in populateResult) {
-            const counts = populateResult.counts as any
+            const counts = populateResult.counts as Record<string, number | undefined>
             Sentry.captureMessage(
               `Demo data populated: ${JSON.stringify({
                 drivers: counts.drivers || 0,

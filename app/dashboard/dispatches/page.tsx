@@ -73,6 +73,19 @@ import { createClient } from "@/lib/supabase/client"
 import { useRealtimeSubscription } from "@/lib/hooks/use-realtime"
 import { getTerminals } from "@/app/actions/terminals"
 
+type UnassignedLoad = NonNullable<NonNullable<Awaited<ReturnType<typeof getUnassignedLoads>>["data"]>[number]>
+type UnassignedRoute = NonNullable<NonNullable<Awaited<ReturnType<typeof getUnassignedRoutes>>["data"]>[number]>
+type DriverRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getDrivers>>["data"]>[number]>
+type TruckRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getTrucks>>["data"]>[number]>
+type RealtimePayload = {
+  id: string
+  status?: string | null
+  shipment_number?: string | null
+  driver_id?: string | null
+  truck_id?: string | null
+  [key: string]: unknown
+}
+
 export default function DispatchesPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -80,10 +93,10 @@ export default function DispatchesPage() {
   const tabParam = (searchParams.get("tab") || "dispatch").toLowerCase()
   const activeTab = tabParam === "check-calls" ? "check-calls" : "dispatch"
 
-  const [unassignedLoads, setUnassignedLoads] = useState<any[]>([])
-  const [unassignedRoutes, setUnassignedRoutes] = useState<any[]>([])
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [trucks, setTrucks] = useState<any[]>([])
+  const [unassignedLoads, setUnassignedLoads] = useState<UnassignedLoad[]>([])
+  const [unassignedRoutes, setUnassignedRoutes] = useState<UnassignedRoute[]>([])
+  const [drivers, setDrivers] = useState<DriverRecord[]>([])
+  const [trucks, setTrucks] = useState<TruckRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [assigning, setAssigning] = useState<string | null>(null)
   const [nearbyDriversModal, setNearbyDriversModal] = useState<{ open: boolean; loadId: string | null; drivers: NearbyDriver[] }>({
@@ -152,7 +165,7 @@ export default function DispatchesPage() {
   }
 
   // Real-time subscription for loads (Phase 1: Visual Clarity)
-  useRealtimeSubscription<any>(
+  useRealtimeSubscription<RealtimePayload>(
     "loads",
     {
       filter: companyId ? `company_id=eq.${companyId}` : undefined,
@@ -227,7 +240,7 @@ export default function DispatchesPage() {
   )
 
   // Auto-refresh HOS card when new ELD logs arrive (no manual refresh needed).
-  useRealtimeSubscription<any>(
+  useRealtimeSubscription<RealtimePayload>(
     "eld_logs",
     {
       filter: companyId ? `company_id=eq.${companyId}` : undefined,
@@ -257,8 +270,8 @@ export default function DispatchesPage() {
 
       if (loadsResult.data) setUnassignedLoads(loadsResult.data)
       if (routesResult.data) setUnassignedRoutes(routesResult.data)
-      if (driversResult.data) setDrivers(driversResult.data.filter((d: any) => d.status === "active"))
-      if (trucksResult.data) setTrucks(trucksResult.data.filter((t: any) => t.status === "available" || t.status === "in_use"))
+      if (driversResult.data) setDrivers(driversResult.data.filter((d: DriverRecord) => d.status === "active"))
+      if (trucksResult.data) setTrucks(trucksResult.data.filter((t: TruckRecord) => t.status === "available" || t.status === "in_use"))
       const terminalsResult = await getTerminals()
       if (terminalsResult.data) setTerminals(terminalsResult.data)
     } catch (error: unknown) {
@@ -556,7 +569,7 @@ export default function DispatchesPage() {
   )
 
   const planningSidebarLoads = useMemo(() => {
-    const out: any[] = []
+    const out: UnassignedLoad[] = []
     const seen = new Set<string>()
     for (const l of draftLoads) {
       if (l?.id && !seen.has(l.id)) {

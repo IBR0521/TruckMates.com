@@ -13,7 +13,7 @@ interface AddressBookMapProps {
 
 declare global {
   interface Window {
-    google: any
+    google: typeof google
   }
 }
 
@@ -31,9 +31,9 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 function AddressBookMap({ entries }: AddressBookMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<any>(null)
-  const markersRef = useRef<Map<string, any>>(new Map())
-  const infoWindowsRef = useRef<Map<string, any>>(new Map())
+  const mapInstanceRef = useRef<google.maps.Map | null>(null)
+  const markersRef = useRef<Map<string, google.maps.Marker>>(new Map())
+  const infoWindowsRef = useRef<Map<string, google.maps.InfoWindow>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const containerReadyRef = useRef(false)

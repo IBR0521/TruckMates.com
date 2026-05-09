@@ -69,7 +69,7 @@ function EmployeeRegisterForm() {
         role: formData.role,
         companyId: formData.companyId.trim() || undefined,
         invitationCode: formData.invitationCode.trim() || undefined,
-      } as any)
+      })
 
       if (result.error) {
         toast.error(result.error)

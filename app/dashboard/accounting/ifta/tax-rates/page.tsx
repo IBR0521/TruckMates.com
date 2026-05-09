@@ -191,8 +191,9 @@ export default function IFTATaxRatesPage() {
     const input = document.createElement("input")
     input.type = "file"
     input.accept = ".csv"
-    input.onchange = async (e: any) => {
-      const file = e.target.files?.[0]
+    input.onchange = async (e: Event) => {
+      const fileInput = e.target as HTMLInputElement | null
+      const file = fileInput?.files?.[0]
       if (!file) return
 
       try {

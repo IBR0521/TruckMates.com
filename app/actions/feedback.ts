@@ -1,21 +1,14 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { sanitizeString } from "@/lib/validation"
 import { escapeHtml } from "@/lib/html-escape"
 import * as Sentry from "@sentry/nextjs"
 import { getResendClientForCompany } from "@/lib/resend-client"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 async function getResendClient() {
   const ctx = await getCachedAuthContext()
   return getResendClientForCompany(ctx.companyId ?? null)
@@ -124,7 +117,7 @@ async function sendFeedbackEmail(feedbackData: {
 
     if (result.error) {
       Sentry.captureException(result.error)
-      return { sent: false, reason: result.error.message || "Failed to send email" }
+      return { sent: false, reason: safeDbError(result.error, "Failed to send email") }
     }
 
     return { sent: true, email: adminEmail, messageId: result.data?.id }
@@ -351,7 +344,7 @@ export async function updateFeedback(id: string, formData: {
   }
 
   // Build update object
-  const updateData: any = {}
+  const updateData: Record<string, unknown> = {}
 
   if (formData.title !== undefined) {
     const title = sanitizeString(formData.title.trim())

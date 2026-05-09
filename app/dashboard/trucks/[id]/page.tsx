@@ -37,8 +37,8 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const router = useRouter()
   const { id } = use(params)
   const aliveRef = useRef(true)
-  const [truck, setTruck] = useState<any>(null)
-  const [driver, setDriver] = useState<any>(null)
+  const [truck, setTruck] = useState<unknown>(null)
+  const [driver, setDriver] = useState<unknown>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {

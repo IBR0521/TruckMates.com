@@ -2,6 +2,7 @@
 
 import crypto from "crypto"
 import { errorMessage } from "@/lib/error-message"
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { callClaude } from "@/lib/ai/client"
@@ -326,7 +327,7 @@ export async function createRecordFromExtractedData(
         status: asString(source.status) || "active",
       }
       const { data, error } = await supabase.from("drivers").insert(payload).select("id").single()
-      if (error) return { data: null, error: error.message }
+      if (error) return { data: null, error: safeDbError(error, "Failed to create driver record") }
       return { data: { id: String(data.id), type: extractedData.type }, error: null }
     }
 
@@ -344,7 +345,7 @@ export async function createRecordFromExtractedData(
         status: asString(source.status) || "available",
       }
       const { data, error } = await supabase.from("trucks").insert(payload).select("id").single()
-      if (error) return { data: null, error: error.message }
+      if (error) return { data: null, error: safeDbError(error, "Failed to create vehicle record") }
       return { data: { id: String(data.id), type: extractedData.type }, error: null }
     }
 
@@ -366,7 +367,7 @@ export async function createRecordFromExtractedData(
           : null,
       }
       const { data, error } = await supabase.from("routes").insert(payload).select("id").single()
-      if (error) return { data: null, error: error.message }
+      if (error) return { data: null, error: safeDbError(error, "Failed to create route record") }
       return { data: { id: String(data.id), type: extractedData.type }, error: null }
     }
 
@@ -387,7 +388,7 @@ export async function createRecordFromExtractedData(
         estimated_delivery: asDate(source.estimated_delivery || source.delivery_date, nowDate),
       }
       const { data, error } = await supabase.from("loads").insert(payload).select("id").single()
-      if (error) return { data: null, error: error.message }
+      if (error) return { data: null, error: safeDbError(error, "Failed to create load record") }
       return { data: { id: String(data.id), type: extractedData.type }, error: null }
     }
 
@@ -425,7 +426,7 @@ export async function createRecordFromExtractedData(
         items: Array.isArray(source.items) ? source.items : null,
       }
       const { data, error } = await supabase.from("invoices").insert(payload).select("id").single()
-      if (error) return { data: null, error: error.message }
+      if (error) return { data: null, error: safeDbError(error, "Failed to create invoice record") }
       return { data: { id: String(data.id), type: extractedData.type }, error: null }
     }
 
@@ -449,7 +450,7 @@ export async function createRecordFromExtractedData(
         notes: asString(source.notes || source.description),
       }
       const { data, error } = await supabase.from("maintenance").insert(payload).select("id").single()
-      if (error) return { data: null, error: error.message }
+      if (error) return { data: null, error: safeDbError(error, "Failed to create maintenance record") }
       return { data: { id: String(data.id), type: extractedData.type }, error: null }
     }
 
@@ -473,7 +474,7 @@ export async function createRecordFromExtractedData(
         has_receipt: Boolean(asString(source.receipt_url || source.file_url)),
       }
       const { data, error } = await supabase.from("expenses").insert(payload).select("id").single()
-      if (error) return { data: null, error: error.message }
+      if (error) return { data: null, error: safeDbError(error, "Failed to create expense record") }
       return { data: { id: String(data.id), type: extractedData.type }, error: null }
     }
   } catch (error: unknown) {

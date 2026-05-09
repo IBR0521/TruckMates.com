@@ -4,6 +4,9 @@ import { dispatchMorningDigests } from "@/app/actions/notifications"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { runAgentEvaluation } from "@/lib/ai/agent/loop"
 
+type AmountRow = { amount: number | string | null }
+type SettlementRow = { net_pay: number | string | null }
+
 async function triggerCashFlowEvaluations() {
   try {
     const admin = createAdminClient()
@@ -27,10 +30,10 @@ async function triggerCashFlowEvaluations() {
           .limit(10000),
       ])
 
-      const totalArOutstanding = (arRes.data || []).reduce((sum: number, invoice: any) => {
+      const totalArOutstanding = ((arRes.data || []) as AmountRow[]).reduce((sum: number, invoice) => {
         return sum + Number(invoice.amount || 0)
       }, 0)
-      const upcomingSettlementsTotal = (settlementsRes.data || []).reduce((sum: number, settlement: any) => {
+      const upcomingSettlementsTotal = ((settlementsRes.data || []) as SettlementRow[]).reduce((sum: number, settlement) => {
         return sum + Number(settlement.net_pay || 0)
       }, 0)
       const configuredThreshold = 0

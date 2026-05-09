@@ -6,6 +6,16 @@ const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || ""
 const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET || ""
 const PAYPAL_MODE = process.env.PAYPAL_MODE || "sandbox"
 
+type PayPalWebhookBody = {
+  event_type?: string
+  resource?: {
+    id?: string
+    billing_agreement_id?: string
+    [key: string]: unknown
+  }
+  [key: string]: unknown
+}
+
 async function getPayPalAccessToken() {
   const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString("base64")
   const url = PAYPAL_MODE === "live" 
@@ -33,7 +43,7 @@ export async function POST(request: NextRequest) {
   try {
     // Get raw body for signature verification
     const rawBody = await request.text()
-    let body: any
+    let body: PayPalWebhookBody
     try {
       body = JSON.parse(rawBody)
     } catch {

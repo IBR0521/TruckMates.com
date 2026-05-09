@@ -2,6 +2,24 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { sanitizeError } from "@/lib/error-message"
 
+type AuditLogRow = {
+  id: string
+  user_id: string | null
+  action: string
+  resource_type: string
+  resource_id: string
+  details: unknown
+  created_at: string
+  ip_address: string | null
+  user_agent: string | null
+}
+
+type UserRow = {
+  id: string
+  name: string | null
+  email: string | null
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -76,7 +94,8 @@ export async function GET(request: NextRequest) {
     console.log("[Audit Logs API] Found", data?.length || 0, "logs for", resourceType, resourceId)
 
     // Fetch user names separately if we have logs
-    const userIds = [...new Set((data || []).map((log: any) => log.user_id).filter(Boolean))]
+    const auditRows = (data || []) as AuditLogRow[]
+    const userIds = [...new Set(auditRows.map((log) => log.user_id).filter(Boolean))] as string[]
     const userMap: Record<string, { name?: string; email?: string }> = {}
     
     if (userIds.length > 0) {
@@ -86,14 +105,14 @@ export async function GET(request: NextRequest) {
         .in("id", userIds)
       
       if (!usersError && users) {
-        users.forEach((user: any) => {
+        ;(users as UserRow[]).forEach((user) => {
           userMap[user.id] = { name: user.name, email: user.email }
         })
       }
     }
 
     // Format response with user names
-    const logs = (data || []).map((log: any) => ({
+    const logs = auditRows.map((log) => ({
       id: log.id,
       user_id: log.user_id,
       user_name: userMap[log.user_id]?.name || userMap[log.user_id]?.email || "Unknown User",

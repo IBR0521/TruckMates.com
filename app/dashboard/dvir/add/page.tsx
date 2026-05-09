@@ -18,10 +18,14 @@ import { getTrucks } from "@/app/actions/trucks"
 import { createDVIR } from "@/app/actions/dvir"
 import { FirstHoverTooltip } from "@/components/help/first-hover-tooltip"
 
+type DriverOption = { id: string; name: string }
+type TruckOption = { id: string; truck_number?: string | null; make?: string | null; model?: string | null }
+type DefectField = "component" | "description" | "severity" | "corrected"
+
 export default function AddDVIRPage() {
   const router = useRouter()
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [trucks, setTrucks] = useState<any[]>([])
+  const [drivers, setDrivers] = useState<DriverOption[]>([])
+  const [trucks, setTrucks] = useState<TruckOption[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     driver_id: "",
@@ -66,7 +70,7 @@ export default function AddDVIRPage() {
     })
   }
 
-  const handleDefectChange = (index: number, field: string, value: any) => {
+  const handleDefectChange = (index: number, field: DefectField, value: string | boolean) => {
     const updatedDefects = [...formData.defects]
     updatedDefects[index] = { ...updatedDefects[index], [field]: value }
     setFormData({ ...formData, defects: updatedDefects })

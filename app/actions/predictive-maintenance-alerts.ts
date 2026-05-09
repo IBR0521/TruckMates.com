@@ -1,21 +1,16 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * Predictive Maintenance SMS Alerts
  * Send SMS alerts 500 miles before maintenance is due
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { sendSMSNotification } from "./sms"
 import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 
 /**
@@ -80,8 +75,8 @@ export async function checkAndSendMaintenanceAlerts(
     // Send SMS for each pending alert
     let alertsSent = 0
     for (const alert of pendingAlerts || []) {
-      const truck = (alert as any).trucks
-      const manager = (alert as any).users
+      const truck = (alert as { trucks?: { truck_number?: string | null; make?: string | null; model?: string | null } | null }).trucks
+      const manager = (alert as { users?: { id?: string | null; phone?: string | null } | null }).users
 
       if (!manager?.phone) {
         // Update status to failed
@@ -204,6 +199,5 @@ export async function getMaintenanceAlertHistory(filters?: {
     return { error: errorMessage(error, "Failed to get alert history"), data: null }
   }
 }
-
 
 

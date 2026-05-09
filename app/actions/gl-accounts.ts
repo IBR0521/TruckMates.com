@@ -1,17 +1,12 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkCreatePermission, checkViewPermission } from "@/lib/server-permissions"
 import { sanitizeString } from "@/lib/validation"
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
 type GLAccountType = "asset" | "liability" | "revenue" | "expense"
 
 const DEFAULT_TRUCKING_GL: Array<{ code: string; name: string; type: GLAccountType }> = [

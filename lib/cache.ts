@@ -26,7 +26,7 @@ interface CacheEntry<T> {
 }
 
 class SimpleCache {
-  private cache: Map<string, CacheEntry<any>> = new Map()
+  private cache: Map<string, CacheEntry<unknown>> = new Map()
   private defaultTTL: number = 60000 // 60 seconds default (increased for better performance)
   private lastCleanup: number = Date.now()
   private cleanupInterval: number = 10 * 60 * 1000 // 10 minutes (less frequent cleanup)

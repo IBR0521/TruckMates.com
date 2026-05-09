@@ -27,12 +27,27 @@ import { AuditTrail } from "@/components/dashboard/audit-trail"
 import { History } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
+type TruckRow = {
+  id: string
+  truck_number?: string | null
+  make?: string | null
+  model?: string | null
+  year?: number | null
+  status?: string | null
+  license_plate?: string | null
+  vin?: string | null
+  fuel_level?: number | null
+  mileage?: number | null
+  current_location?: string | null
+  [key: string]: unknown
+}
+
 export default function TrucksPage() {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
-  const [trucksList, setTrucksList] = useState<any[]>([])
-  const [filteredTrucks, setFilteredTrucks] = useState<any[]>([])
+  const [deleteDependencies, setDeleteDependencies] = useState<unknown[]>([])
+  const [trucksList, setTrucksList] = useState<TruckRow[]>([])
+  const [filteredTrucks, setFilteredTrucks] = useState<TruckRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -146,7 +161,7 @@ export default function TrucksPage() {
     )
     setFilteredTrucks(updatedFiltered)
 
-    const updateData: any = { [field]: value }
+    const updateData: Record<string, string | number | null> = { [field]: value }
     const result = await updateTruck(truckId, updateData)
     
     if (result.error) {

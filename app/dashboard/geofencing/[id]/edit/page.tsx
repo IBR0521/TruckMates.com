@@ -36,9 +36,9 @@ export default function EditGeofencePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
 
-  const [geofence, setGeofence] = useState<any>(null)
-  const [trucks, setTrucks] = useState<any[]>([])
-  const [routes, setRoutes] = useState<any[]>([])
+  const [geofence, setGeofence] = useState<unknown>(null)
+  const [trucks, setTrucks] = useState<unknown[]>([])
+  const [routes, setRoutes] = useState<unknown[]>([])
 
   const [formData, setFormData] = useState({
     name: "",

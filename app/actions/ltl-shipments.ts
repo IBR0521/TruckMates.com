@@ -1,17 +1,12 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { sanitizeError, errorMessage } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { checkCreatePermission, checkEditPermission, checkViewPermission } from "@/lib/server-permissions"
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
 export async function createShipment(input: {
   shipment_number: string
   shipper_name?: string
@@ -162,8 +157,8 @@ export async function attachShipmentToMovement(input: {
       .eq("company_id", ctx.companyId)
       .eq("movement_id", input.movement_id)
 
-    const usedWeight = (attached || []).reduce((sum: number, row: any) => sum + Number(row.shipments?.total_weight_lbs || 0), 0)
-    const usedCube = (attached || []).reduce((sum: number, row: any) => sum + Number(row.shipments?.total_cube_ft || 0), 0)
+    const usedWeight = (attached || []).reduce((sum: number, row: { shipments?: { total_weight_lbs?: number | string | null } | null }) => sum + Number(row.shipments?.total_weight_lbs || 0), 0)
+    const usedCube = (attached || []).reduce((sum: number, row: { shipments?: { total_cube_ft?: number | string | null } | null }) => sum + Number(row.shipments?.total_cube_ft || 0), 0)
     const incomingWeight = Number(shipment.total_weight_lbs || 0)
     const incomingCube = Number(shipment.total_cube_ft || 0)
 

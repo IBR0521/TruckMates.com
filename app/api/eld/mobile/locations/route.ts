@@ -10,6 +10,30 @@ type StateCrossingCacheEntry = {
   state_code?: string
 }
 
+type IncomingLocation = {
+  driver_id?: string
+  truck_id?: string
+  timestamp?: string
+  latitude?: number | string
+  longitude?: number | string
+  address?: string
+  speed?: number | string
+  heading?: number | string
+  odometer?: number | string
+  engine_status?: string
+}
+
+type GeofenceEvent = {
+  geofence_id?: string
+  type?: string
+  duration_minutes?: number | string
+}
+
+type StateCrossingResult = {
+  error?: string
+  data?: { state_code?: string }
+}
+
 // Throttle repeated state-crossing checks for stationary devices.
 // This reduces the chance of unnecessary reverse-geocoding calls.
 const stateCrossingCache = new Map<string, StateCrossingCacheEntry>()
@@ -94,9 +118,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Transform and validate locations
-    const locationsToInsert = locations
-      .filter((loc: any) => loc.latitude && loc.longitude) // Filter invalid locations
-      .map((loc: any) => ({
+    const incomingLocations = locations as IncomingLocation[]
+    const locationsToInsert = incomingLocations
+      .filter((loc) => loc.latitude && loc.longitude) // Filter invalid locations
+      .map((loc) => ({
         company_id: companyId,
         eld_device_id: device_id,
         driver_id: loc.driver_id || null,
@@ -163,13 +188,13 @@ export async function POST(request: NextRequest) {
           )
         } else {
           // Alerts-only v1: write in-app alerts for entry/exit/dwell events (deduped)
-          const events = (geofenceResult as any)?.events
+          const events = (geofenceResult as { events?: GeofenceEvent[] } | null)?.events
           if (Array.isArray(events) && events.length > 0) {
             const geofenceIds = Array.from(
               new Set(
                 events
-                  .map((e: any) => e?.geofence_id)
-                  .filter((id: any) => typeof id === "string" && id.length > 0)
+                  .map((e) => e?.geofence_id)
+                  .filter((id): id is string => typeof id === "string" && id.length > 0)
               )
             )
 
@@ -357,12 +382,13 @@ export async function POST(request: NextRequest) {
           })
 
           // Cache last known point/state for throttling.
-          if (!res?.error && (res as any)?.data?.state_code) {
+          const stateResult = res as StateCrossingResult | null
+          if (!stateResult?.error && stateResult?.data?.state_code) {
             stateCrossingCache.set(cacheKey, {
               lat: latestLocation.latitude,
               lng: latestLocation.longitude,
               ts: Date.now(),
-              state_code: (res as any).data.state_code,
+              state_code: stateResult.data.state_code,
             })
           } else {
             stateCrossingCache.set(cacheKey, {

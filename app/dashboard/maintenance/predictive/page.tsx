@@ -18,7 +18,7 @@ export default function PredictiveMaintenancePage() {
     }
   }, [pathname, router])
 
-  const [predictions, setPredictions] = useState<any[]>([])
+  const [predictions, setPredictions] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [schedulingId, setSchedulingId] = useState<string | null>(null)
 
@@ -44,7 +44,7 @@ export default function PredictiveMaintenancePage() {
     }
   }
 
-  const handleScheduleMaintenance = async (truck: any, need: any) => {
+  const handleScheduleMaintenance = async (truck: unknown, need: unknown) => {
     setSchedulingId(`${truck.truck_id}-${need.type}`)
     try {
       const result = await createMaintenanceFromPrediction({
@@ -163,7 +163,7 @@ export default function PredictiveMaintenancePage() {
                 {truck.predicted_needs && truck.predicted_needs.length > 0 && (
                   <div className="space-y-3 mt-4 pt-4 border-t">
                     <h4 className="font-semibold text-sm">Predicted Maintenance Needs:</h4>
-                    {truck.predicted_needs.map((need: any, needIndex: number) => (
+                    {truck.predicted_needs.map((need: unknown, needIndex: number) => (
                       <div key={needIndex} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 p-3 bg-secondary rounded-lg">
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2 mb-1">

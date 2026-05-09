@@ -33,6 +33,20 @@ const FEATURE_TARGET_PLAN: Record<UpgradeFeatureKey, PlanName> = {
 
 const MANAGER_ROLES = new Set(["super_admin", "operations_manager"])
 
+type SubscriptionPlanSummary = {
+  name?: string | null
+  display_name?: string | null
+  price_monthly?: number | string | null
+}
+
+type UpgradePlanCandidate = {
+  id?: string | null
+  name?: string | null
+  display_name?: string | null
+  price_monthly?: number | string | null
+  features?: unknown
+}
+
 function planOrder(name: string) {
   if (name === "free") return 0
   if (name === "starter") return 1
@@ -53,9 +67,8 @@ export async function getUpgradeOffer(feature: UpgradeFeatureKey) {
     .maybeSingle()
   if (subError) return { error: subError.message, data: null }
 
-  const currentPlan = Array.isArray((subscription as any)?.subscription_plans)
-    ? (subscription as any)?.subscription_plans?.[0]
-    : (subscription as any)?.subscription_plans
+  const subscriptionPlans = (subscription as { subscription_plans?: SubscriptionPlanSummary | SubscriptionPlanSummary[] | null } | null)?.subscription_plans
+  const currentPlan = Array.isArray(subscriptionPlans) ? subscriptionPlans[0] : subscriptionPlans
   const currentPlanName = String(currentPlan?.name || "free")
   const currentPrice = Number(currentPlan?.price_monthly || 0)
 
@@ -68,12 +81,12 @@ export async function getUpgradeOffer(feature: UpgradeFeatureKey) {
     .order("price_monthly", { ascending: true })
   if (plansError) return { error: plansError.message, data: null }
 
-  const candidates = (plans || []).filter((p: any) => planOrder(String(p.name)) >= planOrder(minTarget))
-  const target = candidates.find((p: any) => planOrder(String(p.name)) > planOrder(currentPlanName)) || candidates[0] || null
+  const candidates = ((plans || []) as UpgradePlanCandidate[]).filter((p) => planOrder(String(p.name)) >= planOrder(minTarget))
+  const target = candidates.find((p) => planOrder(String(p.name)) > planOrder(currentPlanName)) || candidates[0] || null
   if (!target) return { error: "No upgrade plan available", data: null }
 
-  const targetPrice = Number((target as any).price_monthly || 0)
-  const unlocks = Array.isArray((target as any).features) ? (target as any).features.map(String).slice(0, 6) : []
+  const targetPrice = Number(target.price_monthly || 0)
+  const unlocks = Array.isArray(target.features) ? target.features.map(String).slice(0, 6) : []
   return {
     error: null,
     data: {
@@ -84,9 +97,9 @@ export async function getUpgradeOffer(feature: UpgradeFeatureKey) {
         price_monthly: currentPrice,
       },
       target_plan: {
-        id: String((target as any).id),
-        name: String((target as any).name),
-        display_name: String((target as any).display_name || (target as any).name),
+        id: String(target.id),
+        name: String(target.name),
+        display_name: String(target.display_name || target.name),
         price_monthly: targetPrice,
       },
       price_difference_monthly: Math.max(0, targetPrice - currentPrice),

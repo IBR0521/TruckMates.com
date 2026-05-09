@@ -40,9 +40,9 @@ export default function DriverAchievementsPage() {
     }
   }, [pathname, router])
 
-  const [badges, setBadges] = useState<any[]>([])
-  const [performance, setPerformance] = useState<any>(null)
-  const [drivers, setDrivers] = useState<any[]>([])
+  const [badges, setBadges] = useState<unknown[]>([])
+  const [performance, setPerformance] = useState<unknown>(null)
+  const [drivers, setDrivers] = useState<unknown[]>([])
   const [scorecardsAllowed, setScorecardsAllowed] = useState(true)
   const [planName, setPlanName] = useState("starter")
   const [selectedDriverId, setSelectedDriverId] = useState<string>("all")

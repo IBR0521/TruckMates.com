@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/table"
 
 export default function DetentionDashboardPage() {
-  const [analytics, setAnalytics] = useState<any>(null)
+  const [analytics, setAnalytics] = useState<unknown>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [startDate, setStartDate] = useState<string>(() => {
     const date = new Date()
@@ -209,7 +209,7 @@ export default function DetentionDashboardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {analytics.top_customers.map((customer: any, index: number) => (
+                    {analytics.top_customers.map((customer: unknown, index: number) => (
                       <TableRow key={customer.customer_id}>
                         <TableCell>
                           <Badge variant={index === 0 ? "default" : "outline"}>

@@ -18,7 +18,7 @@ export default function EditTrailerPage({ params }: { params: Promise<{ id: stri
   const [uploadingDoc, setUploadingDoc] = useState(false)
   const [docType, setDocType] = useState("registration")
   const [docFile, setDocFile] = useState<File | null>(null)
-  const [formData, setFormData] = useState<any>({
+  const [formData, setFormData] = useState<unknown>({
     trailer_number: "",
     vin: "",
     plate_number: "",

@@ -20,7 +20,7 @@ export function FleetEldPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [events, setEvents] = useState<any[]>([])
+  const [events, setEvents] = useState<unknown[]>([])
 
   useEffect(() => {
     loadData()

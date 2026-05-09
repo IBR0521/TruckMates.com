@@ -1,19 +1,13 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { getCompanySettings } from "./number-formats"
 import { getResendClient } from "./invoice-email"
 import { buildInvoicePacketAttachments, buildInvoicePacketEmailContent } from "@/lib/invoice-packet-build"
-import { sanitizeError } from "@/lib/error-message"
 import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 
 type Attachment = { filename: string; content: Buffer }
@@ -180,7 +174,7 @@ export async function sendInvoiceToFactoring(invoiceId: string) {
 
   if (emailResult.error) {
     return {
-      error: `Failed to send: ${emailResult.error.message || "Unknown error"}`,
+      error: safeDbError(emailResult.error, "Failed to send email"),
       data: null,
     }
   }

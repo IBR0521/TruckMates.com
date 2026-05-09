@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx'
 
-export const exportToExcel = (data: any[], fileName: string, allFields?: boolean) => {
+export const exportToExcel = (data: Array<Record<string, unknown>>, fileName: string, allFields?: boolean) => {
   try {
     // Handle empty data
     if (!data || data.length === 0) {
@@ -10,7 +10,7 @@ export const exportToExcel = (data: any[], fileName: string, allFields?: boolean
     // Convert data to worksheet format
     // Clean up the data - format dates, handle null/undefined values
     const cleanedData = data.map((row) => {
-      const cleanedRow: any = {}
+      const cleanedRow: Record<string, unknown> = {}
       Object.keys(row).forEach((key) => {
         let value = row[key]
         

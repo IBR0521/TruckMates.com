@@ -1,19 +1,12 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import crypto from "crypto"
 import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /** Matches `webhooks` in supabase/webhooks_schema.sql */
 const WEBHOOK_SELECT = "id, company_id, url, events, secret, active, description, created_at, updated_at"
 
@@ -255,7 +248,7 @@ export async function updateWebhook(
     }
   }
 
-  const updateData: any = {
+  const updateData: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   }
 
@@ -313,7 +306,7 @@ function generateWebhookSignature(payload: string, secret: string): string {
 export async function deliverWebhook(
   webhookId: string,
   eventType: WebhookEventType,
-  payload: any
+  payload: unknown
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient()
 
@@ -464,7 +457,7 @@ export async function deliverWebhook(
 export async function triggerWebhook(
   companyId: string,
   eventType: WebhookEventType,
-  payload: any
+  payload: unknown
 ): Promise<void> {
   const supabase = await createClient()
 
@@ -481,7 +474,7 @@ export async function triggerWebhook(
   }
 
   // Deliver to all matching webhooks (async, don't wait)
-  webhooks.forEach((webhook: { id: string; [key: string]: any }) => {
+  webhooks.forEach((webhook: { id: string }) => {
     deliverWebhook(webhook.id, eventType, payload).catch((error) => {
       Sentry.captureException(error)
     })
@@ -551,8 +544,8 @@ export async function retryWebhookDelivery(deliveryId: string) {
   }
 
   // Verify company ownership
-  const webhook = delivery.webhooks as any
-  if (webhook.company_id !== ctx.companyId) {
+  const webhook = delivery.webhooks as { company_id?: string } | null
+  if (!webhook || webhook.company_id !== ctx.companyId) {
     return { error: "Access denied", data: null }
   }
 
@@ -621,8 +614,5 @@ export async function testWebhook(webhookId: string) {
 
   return { data: result_delivery, error: result_delivery.error || null }
 }
-
-
-
 
 

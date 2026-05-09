@@ -166,7 +166,7 @@ export async function updateUserProfile(formData: {
       return { data: null, error: "Not authenticated" }
     }
 
-    const updateData: any = {}
+    const updateData: Record<string, string | null> = {}
     if (formData.full_name !== undefined) updateData.full_name = formData.full_name
     if (formData.phone !== undefined) updateData.phone = formData.phone || null
 

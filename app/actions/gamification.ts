@@ -1,23 +1,15 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * Driver Gamification and Scoring System
  * Performance scoring, badges, and achievements
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
-import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /** `public.driver_badges` — supabase/gamification.sql */
 const DRIVER_BADGES_SELECT =
   "id, company_id, driver_id, badge_type, badge_name, badge_description, earned_date, metadata, created_at"
@@ -44,7 +36,7 @@ export interface DriverBadge {
   badge_name: string
   badge_description: string | null
   earned_date: string
-  metadata: any
+  metadata: unknown
 }
 
 export interface DriverPerformanceScore {

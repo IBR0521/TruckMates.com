@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
+import { safeDbError } from "@/lib/utils/error"
 import type { EmployeeRole } from "@/lib/roles"
 import * as Sentry from "@sentry/nextjs"
 import { headers } from "next/headers"
@@ -29,7 +30,7 @@ export async function checkCompanyName(companyName: string) {
       .maybeSingle()
 
     const exists = result.data !== null && result.data !== undefined
-    const errorMsg = result.error ? String(result.error.message || result.error) : null
+    const errorMsg = result.error ? safeDbError(result.error, "Failed to check company name") : null
 
     if (errorMsg) {
       return { available: false, error: errorMsg.substring(0, 200) }
@@ -87,7 +88,7 @@ export async function registerSuperAdmin(data: {
     })
 
     if (authError || !authData.user) {
-      const errorMsg = authError?.message || String(authError) || "Failed to create user"
+      const errorMsg = safeDbError(authError, "Failed to create user")
       return { data: null, error: errorMsg.substring(0, 200) }
     }
 
@@ -118,7 +119,7 @@ export async function registerSuperAdmin(data: {
     // Handle RPC errors - ensure error is serializable
     // SEC-005 FIX: If company creation fails, delete orphaned auth user to prevent account lockout
     if (rpcResult.error) {
-      const errorMsg = rpcResult.error?.message || String(rpcResult.error) || "Failed to create company"
+      const errorMsg = safeDbError(rpcResult.error, "Failed to create company")
       
       // SEC-005: Delete orphaned auth user if company creation failed
       try {
@@ -317,7 +318,7 @@ export async function registerEmployee(data: {
     })
 
     if (authError || !authData.user) {
-      const errorMsg = authError?.message || String(authError) || "Failed to create user"
+      const errorMsg = safeDbError(authError, "Failed to create user")
       return { data: null, error: errorMsg.substring(0, 200) }
     }
 
@@ -338,7 +339,7 @@ export async function registerEmployee(data: {
 
     // Update user record with admin client so invited employee is reliably attached
     // to the target company even if normal RLS/session propagation is delayed.
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       id: authData.user.id,
       email: data.email.toLowerCase(),
       full_name: data.fullName.trim(),
@@ -355,7 +356,7 @@ export async function registerEmployee(data: {
       .upsert(updateData, { onConflict: "id" })
 
     if (updateError) {
-      const errorMsg = updateError.message || String(updateError) || "Failed to update user"
+      const errorMsg = safeDbError(updateError, "Failed to update user")
       return { data: null, error: errorMsg.substring(0, 200) }
     }
 
@@ -421,7 +422,7 @@ export async function registerEmployee(data: {
         .select("id")
 
       if (acceptError) {
-        return { data: null, error: acceptError.message.substring(0, 200) }
+        return { data: null, error: safeDbError(acceptError, "Failed to accept invitation").substring(0, 200) }
       }
 
       // Fallback: code mismatch (whitespace, copy/paste) but user+company already match invite email
@@ -436,7 +437,7 @@ export async function registerEmployee(data: {
           .select("id")
 
         if (byEmailError) {
-          return { data: null, error: byEmailError.message.substring(0, 200) }
+          return { data: null, error: safeDbError(byEmailError, "Failed to accept invitation").substring(0, 200) }
         }
         if (!byEmail?.length) {
           // Account exists; invitation row may still look "pending" until Manage Users runs reconciliation

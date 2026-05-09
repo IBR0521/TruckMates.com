@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
-const TEMP_DISABLE_PAYMENT_GATE = true
+const TEMP_DISABLE_PAYMENT_GATE = false
 
 function isSafeRelativePath(path: string | null): path is string {
   return !!path && path.startsWith("/") && !path.startsWith("//")
@@ -59,8 +59,9 @@ export async function GET(request: NextRequest) {
       .eq("company_id", companyId)
       .maybeSingle()
 
-    const status = String((subscription as any)?.status || "")
-    const trialEnd = (subscription as any)?.trial_end ? new Date((subscription as any).trial_end) : null
+    const subscriptionRow = subscription as { status?: string | null; trial_end?: string | null } | null
+    const status = String(subscriptionRow?.status || "")
+    const trialEnd = subscriptionRow?.trial_end ? new Date(subscriptionRow.trial_end) : null
     const trialExpired = !!trialEnd && trialEnd.getTime() < Date.now()
 
     const hasSubscriptionAccess =

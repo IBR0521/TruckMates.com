@@ -34,10 +34,10 @@ import {
 } from "@/components/ui/tabs"
 
 export default function FuelEfficiencyReportPage() {
-  const [report, setReport] = useState<any>(null)
+  const [report, setReport] = useState<unknown>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [trucks, setTrucks] = useState<any[]>([])
-  const [drivers, setDrivers] = useState<any[]>([])
+  const [trucks, setTrucks] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<unknown[]>([])
   const [filters, setFilters] = useState({
     start_date: "",
     end_date: "",
@@ -71,7 +71,7 @@ export default function FuelEfficiencyReportPage() {
   async function loadReport() {
     setIsLoading(true)
     try {
-      const reportFilters: any = {}
+      const reportFilters: unknown = {}
       if (filters.start_date) reportFilters.start_date = filters.start_date
       if (filters.end_date) reportFilters.end_date = filters.end_date
       if (filters.truck_id !== "all") reportFilters.truck_id = filters.truck_id
@@ -288,7 +288,7 @@ export default function FuelEfficiencyReportPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {report.by_truck.map((truck: any, index: number) => (
+                        {report.by_truck.map((truck: unknown, index: number) => (
                           <TableRow key={truck.truck_id}>
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
@@ -357,7 +357,7 @@ export default function FuelEfficiencyReportPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {report.by_driver.map((driver: any, index: number) => (
+                        {report.by_driver.map((driver: unknown, index: number) => (
                           <TableRow key={driver.driver_id}>
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">

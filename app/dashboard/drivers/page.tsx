@@ -50,11 +50,24 @@ import DriverAchievementsPage from "./achievements/page"
 import DriverApplicantsPage from "./applicants/page"
 import { useDriversInitialData } from "@/components/dashboard/initial-list-data-contexts"
 
+type DriverRow = {
+  id: string
+  name?: string | null
+  phone?: string | null
+  email?: string | null
+  license_number?: string | null
+  license_expiry?: string | null
+  status?: string | null
+  [key: string]: unknown
+}
+
+type DependencyRow = Record<string, unknown>
+
 function DriversPageContent() {
   const router = useRouter()
   const { initialDrivers, initialCount, initialError } = useDriversInitialData()
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [driversList, setDriversList] = useState<any[]>(() => initialDrivers || [])
+  const [driversList, setDriversList] = useState<DriverRow[]>(() => (initialDrivers || []) as DriverRow[])
   const [isLoading, setIsLoading] = useState(() => !initialDrivers && !initialError)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(() => !!initialDrivers || !!initialError)
   const [searchTerm, setSearchTerm] = useState("")
@@ -63,7 +76,7 @@ function DriversPageContent() {
   const [sortBy, setSortBy] = useState("name")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isBulkMode, setIsBulkMode] = useState(false)
-  const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
+  const [deleteDependencies, setDeleteDependencies] = useState<DependencyRow[]>([])
   const [isImporting, setIsImporting] = useState(false)
   const [totalDriverCount, setTotalDriverCount] = useState(initialCount || 0)
   const [purgePhrase, setPurgePhrase] = useState("")
@@ -101,7 +114,7 @@ function DriversPageContent() {
       setIsLoading(true)
     }
     try {
-      type DriversLoadResult = { data?: any[] | null; error?: string | null; count?: number }
+      type DriversLoadResult = { data?: DriverRow[] | null; error?: string | null; count?: number }
       const result: DriversLoadResult = await Promise.race([
         getDrivers({
           status: statusFilter !== "all" ? statusFilter : undefined,
@@ -221,7 +234,7 @@ function DriversPageContent() {
     setDriversList(updatedDrivers)
 
     // Then save to server silently
-    const updateData: any = { [field]: value }
+    const updateData: Record<string, string | number | null> = { [field]: value }
     const result = await updateDriver(driverId, updateData)
     
     if (result.error) {

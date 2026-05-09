@@ -25,7 +25,7 @@ import {
 
 export default function InvoicesPage() {
   const router = useRouter()
-  const [invoices, setInvoices] = useState<any[]>([])
+  const [invoices, setInvoices] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)

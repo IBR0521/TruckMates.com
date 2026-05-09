@@ -1,18 +1,13 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateTruckData, sanitizeString } from "@/lib/validation"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import * as Sentry from "@sentry/nextjs"
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
 /** Full row: `public.trucks` in supabase/schema.sql + supabase/trucks_schema_extended.sql */
 const TRUCK_FULL_SELECT = `
   id, company_id, truck_number, make, model, year, vin, license_plate, status,
@@ -123,9 +118,9 @@ export async function createTruck(formData: {
   owner_name?: string
   cost?: number
   color?: string
-  documents?: any[]
+  documents?: unknown[]
   terminal_id?: string | null
-  [key: string]: any
+  [key: string]: unknown
 }) {
   // Check permission
   const permission = await checkCreatePermission("vehicles")
@@ -262,7 +257,7 @@ export async function createTruck(formData: {
   }
 
   // Build insert data with professional sanitization
-  const truckData: any = {
+  const truckData: Record<string, unknown> = {
     company_id: ctx.companyId,
     truck_number: sanitizeString(formData.truck_number, 50).toUpperCase(),
     status: formData.status || "available",
@@ -350,8 +345,8 @@ export async function updateTruck(
     owner_name?: string
     cost?: number
     color?: string
-    documents?: any[]
-    [key: string]: any
+    documents?: unknown[]
+    [key: string]: unknown
   }
 ) {
   // Check permission
@@ -379,8 +374,8 @@ export async function updateTruck(
   }
 
   // Build update data and track changes
-  const updateData: any = {}
-  const changes: Array<{ field: string; old_value: any; new_value: any }> = []
+  const updateData: Record<string, unknown> = {}
+  const changes: Array<{ field: string; old_value: unknown; new_value: unknown }> = []
   
   const fieldsToCheck = [
     "truck_number", "make", "model", "year", "vin", "license_plate", "status",
@@ -577,9 +572,9 @@ export async function bulkDeleteTrucks(ids: string[]) {
     .eq("company_id", ctx.companyId)
 
   if (trucksToDelete) {
-    const inUseTrucks = trucksToDelete.filter((t: { status: string; [key: string]: any }) => t.status === "in_use")
+    const inUseTrucks = trucksToDelete.filter((t: { status: string; [key: string]: unknown }) => t.status === "in_use")
     if (inUseTrucks.length > 0) {
-      const truckNumbers = inUseTrucks.map((t: { truck_number: string; [key: string]: any }) => t.truck_number).join(", ")
+      const truckNumbers = inUseTrucks.map((t: { truck_number: string; [key: string]: unknown }) => t.truck_number).join(", ")
       return { 
         error: `Cannot delete trucks that are in use: ${truckNumbers}. Please complete or cancel their active loads first.`,
         data: null 
@@ -596,7 +591,7 @@ export async function bulkDeleteTrucks(ids: string[]) {
     .eq("company_id", ctx.companyId)
 
   if (activeLoads && activeLoads.length > 0) {
-    const blockedTruckIds = [...new Set(activeLoads.map((load: { truck_id: string | null; [key: string]: any }) => load.truck_id))]
+    const blockedTruckIds = [...new Set(activeLoads.map((load: { truck_id: string | null; [key: string]: unknown }) => load.truck_id))]
     const blockedTrucks = await supabase
       .from("trucks")
       .select("id, truck_number")
@@ -604,7 +599,7 @@ export async function bulkDeleteTrucks(ids: string[]) {
       .eq("company_id", ctx.companyId)
 
     if (blockedTrucks.data && blockedTrucks.data.length > 0) {
-      const truckNumbers = blockedTrucks.data.map((t: { truck_number: string; [key: string]: any }) => t.truck_number).join(", ")
+      const truckNumbers = blockedTrucks.data.map((t: { truck_number: string; [key: string]: unknown }) => t.truck_number).join(", ")
       return { 
         error: `Cannot delete trucks with active loads: ${truckNumbers}. Please complete or cancel their loads first.`,
         data: null 

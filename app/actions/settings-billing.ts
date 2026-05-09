@@ -1,18 +1,9 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import * as Sentry from "@sentry/nextjs"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 export async function getBillingInfo() {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
@@ -81,7 +72,7 @@ export async function updateBillingInfo(billing: {
   const result = { company_id: ctx.companyId }
 
   // MEDIUM FIX 17: Build explicit updateData object to prevent column injection
-  const updateData: any = {}
+  const updateData: Record<string, unknown> = {}
   if (billing.billing_company_name !== undefined) updateData.billing_company_name = billing.billing_company_name
   if (billing.billing_email !== undefined) updateData.billing_email = billing.billing_email
   if (billing.billing_phone !== undefined) updateData.billing_phone = billing.billing_phone
@@ -130,15 +121,5 @@ export async function updateBillingInfo(billing: {
   revalidatePath("/dashboard/settings/billing")
   return { success: true, error: null }
 }
-
-
-
-
-
-
-
-
-
-
 
 

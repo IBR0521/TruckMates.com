@@ -18,9 +18,9 @@ export default function VendorDetailPage({ params }: { params: Promise<{ id: str
   const router = useRouter()
   const { id } = use(params)
   const aliveRef = useRef(true)
-  const [vendor, setVendor] = useState<any>(null)
-  const [expenses, setExpenses] = useState<any[]>([])
-  const [maintenance, setMaintenance] = useState<any[]>([])
+  const [vendor, setVendor] = useState<unknown>(null)
+  const [expenses, setExpenses] = useState<unknown[]>([])
+  const [maintenance, setMaintenance] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"overview" | "expenses" | "maintenance" | "documents" | "communications">("overview")
 

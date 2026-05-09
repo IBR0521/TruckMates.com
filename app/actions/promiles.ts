@@ -1,7 +1,7 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { revalidatePath } from "next/cache"
-
 /**
  * ProMiles-equivalent: truck routing (HERE) + planning-time state miles + EIA diesel + HERE toll costs.
  * Google Maps remains used for geocoding and fallback driving directions polyline.
@@ -26,15 +26,6 @@ import {
 import { EIA_US_DIESEL_DUOAREA } from "@/lib/promiles/padd-state-map"
 import { stripStaleEnvKeyWarnings } from "@/lib/promiles/strip-trip-env-warnings"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
-import { sanitizeError } from "@/lib/error-message"
-import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
 
 export type TripPlanningEstimate = {
   computed_at: string

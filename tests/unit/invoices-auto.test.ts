@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest"
 
 const mockGetCachedAuthContext = vi.fn()
 const mockCheckCreatePermission = vi.fn()
@@ -27,26 +27,31 @@ vi.mock("next/cache", () => ({
   revalidatePath: (p: string) => mockRevalidatePath(p),
 }))
 
-function makeSupabaseForInvoices(input: {
-  loads: any[]
-  existingInvoices?: any[]
-  customers?: any[]
-  insertedInvoices?: any[]
-}) {
-  const insertedPayloads: any[] = []
-  const updates: any[] = []
+type LoadRecord = Record<string, unknown>
+type InvoiceRecord = Record<string, unknown>
+type CustomerRecord = Record<string, unknown>
+type UpdatePayload = Record<string, unknown>
 
-  const buildThenable = (result: any) => ({
+function makeSupabaseForInvoices(input: {
+  loads: LoadRecord[]
+  existingInvoices?: InvoiceRecord[]
+  customers?: CustomerRecord[]
+  insertedInvoices?: InvoiceRecord[]
+}) {
+  const insertedPayloads: Record<string, unknown>[] = []
+  const updates: UpdatePayload[] = []
+
+  const buildThenable = (result: { data: unknown; error: unknown }) => ({
     eq: () => buildThenable(result),
     is: () => buildThenable(result),
     not: () => buildThenable(result),
     in: () => buildThenable(result),
     select: () => buildThenable(result),
-    update: (payload: any) => {
+    update: (payload: UpdatePayload) => {
       updates.push(payload)
       return { eq: vi.fn(async () => ({ data: null, error: null })) }
     },
-    insert: (payload: any[]) => {
+    insert: (payload: Array<Record<string, unknown>>) => {
       insertedPayloads.push(...payload)
       return {
         select: vi.fn(async () => ({
@@ -60,7 +65,7 @@ function makeSupabaseForInvoices(input: {
         })),
       }
     },
-    then: (resolve: any) => resolve(result),
+    then: (resolve: (value: { data: unknown; error: unknown }) => unknown) => resolve(result),
   })
 
   const from = vi.fn((table: string) => {
@@ -100,7 +105,7 @@ describe("app/actions/invoices-auto.ts", () => {
       ],
       customers: [{ id: "cust-1", company_name: "Acme Corp", name: "Acme" }],
     })
-    ;(createClient as any).mockResolvedValue(supabase)
+    ;(createClient as unknown as Mock).mockResolvedValue(supabase)
 
     const { autoGenerateInvoicesFromLoads } = await import("../../app/actions/invoices-auto")
     const result = await autoGenerateInvoicesFromLoads()
@@ -127,7 +132,7 @@ describe("app/actions/invoices-auto.ts", () => {
         },
       ],
     })
-    ;(createClient as any).mockResolvedValue(supabase)
+    ;(createClient as unknown as Mock).mockResolvedValue(supabase)
 
     const { autoGenerateInvoicesFromLoads } = await import("../../app/actions/invoices-auto")
     const result = await autoGenerateInvoicesFromLoads()
@@ -153,7 +158,7 @@ describe("app/actions/invoices-auto.ts", () => {
         },
       ],
     })
-    ;(createClient as any).mockResolvedValue(supabase)
+    ;(createClient as unknown as Mock).mockResolvedValue(supabase)
 
     const { autoGenerateInvoicesFromLoads } = await import("../../app/actions/invoices-auto")
     const result = await autoGenerateInvoicesFromLoads()

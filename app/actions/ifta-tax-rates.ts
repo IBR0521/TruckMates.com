@@ -1,20 +1,13 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
 /**
@@ -123,7 +116,7 @@ export async function getIFTATaxRate(
       Sentry.captureException(error)
       // FIXED: Distinguish 'rate not found' (use default, no error) from 'DB error' (return error)
       // For real database failures, return error so callers can alert the user
-      return { data: null, error: `Database error: ${error.message}. Tax rates could not be verified.` }
+      return { data: null, error: safeDbError(error, "Tax rates could not be verified.") }
     }
 
     // If data is null/undefined, rate not found - use default (no error)
@@ -171,8 +164,8 @@ export async function getIFTATaxRatesForQuarter(
     // Convert array to state_code -> rate mapping
     const ratesMap: Record<string, number> = {}
     if (data) {
-      data.forEach((rate: any) => {
-        ratesMap[rate.state_code] = parseFloat(rate.tax_rate_per_gallon)
+      data.forEach((rate: { state_code: string; tax_rate_per_gallon: string | number }) => {
+        ratesMap[rate.state_code] = parseFloat(String(rate.tax_rate_per_gallon))
       })
     }
 

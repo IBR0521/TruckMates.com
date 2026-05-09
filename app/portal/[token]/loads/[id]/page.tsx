@@ -23,13 +23,40 @@ import { getCustomerPortalLoad } from "@/app/actions/customer-portal"
 import { toast } from "sonner"
 import Link from "next/link"
 
+type PortalLoad = {
+  id?: string
+  shipment_number?: string
+  status?: string
+  contents?: string
+  requested_via_portal?: boolean
+  portal_request_status?: string
+  requested_equipment_type?: string
+  portal_request_message?: string
+  origin?: string
+  destination?: string
+  load_date?: string | null
+  estimated_delivery?: string | null
+  weight?: number | string
+  rate?: number | string
+  delivery_date?: string | null
+  driver?: { name?: string; phone?: string }
+  truck?: { truck_number?: string; make?: string; model?: string }
+  driver_location?: {
+    address?: string
+    timestamp?: string
+    latitude?: number
+    longitude?: number
+  }
+  route?: { name?: string; status?: string }
+}
+
 export default function CustomerPortalLoadPage() {
   const params = useParams()
   const router = useRouter()
   const token = params.token as string
   const loadId = params.id as string
   const [isLoading, setIsLoading] = useState(true)
-  const [load, setLoad] = useState<any>(null)
+  const [load, setLoad] = useState<PortalLoad | null>(null)
 
   useEffect(() => {
     async function loadData() {

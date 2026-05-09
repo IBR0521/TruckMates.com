@@ -26,8 +26,17 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { InlineStatusSelect } from "@/components/dashboard/inline-status-select"
 
+type BOLListRow = NonNullable<Awaited<ReturnType<typeof getBOLs>>["data"]>[number]
+type BOLStatus = Parameters<typeof updateBOLStatus>[1]
+
+const BOL_STATUSES: BOLStatus[] = ["draft", "sent", "signed", "delivered", "completed"]
+
+function isBOLStatus(value: string): value is BOLStatus {
+  return BOL_STATUSES.includes(value as BOLStatus)
+}
+
 export default function BOLsPage() {
-  const [bolsList, setBolsList] = useState<any[]>([])
+  const [bolsList, setBolsList] = useState<BOLListRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
@@ -38,7 +47,7 @@ export default function BOLsPage() {
 
   const loadBOLs = async () => {
     setIsLoading(true)
-    const filters: any = {}
+    const filters: NonNullable<Parameters<typeof getBOLs>[0]> = {}
     if (statusFilter !== "all") filters.status = statusFilter
     if (searchTerm) filters.search = searchTerm
 
@@ -93,7 +102,7 @@ export default function BOLsPage() {
     setSelectedIds(checked ? bolsList.map((b) => b.id) : [])
   }
 
-  const handleDownloadPDF = async (bol: any) => {
+  const handleDownloadPDF = async (bol: BOLListRow) => {
     try {
       setDownloadingId(bol.id)
       const result = await generateBOLPDFFile(bol.id)
@@ -130,7 +139,12 @@ export default function BOLsPage() {
   }
 
   const handleStatusChange = async (bolId: string, newStatus: string) => {
-    const result = await updateBOLStatus(bolId, newStatus as any)
+    if (!isBOLStatus(newStatus)) {
+      toast.error("Invalid BOL status")
+      return
+    }
+
+    const result = await updateBOLStatus(bolId, newStatus)
     if (result.error) {
       toast.error(result.error)
       throw new Error(result.error)

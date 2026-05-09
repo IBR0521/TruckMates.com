@@ -1,18 +1,9 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import * as Sentry from "@sentry/nextjs"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /**
  * Saved Filter Presets
  * Allows users to save and reuse filter configurations
@@ -22,7 +13,7 @@ export interface FilterPreset {
   id?: string
   name: string
   page: string // 'loads', 'drivers', 'trucks', 'routes', etc.
-  filters: Record<string, any> // Filter configuration
+  filters: Record<string, unknown> // Filter configuration
   is_default?: boolean
 }
 
@@ -125,7 +116,7 @@ export async function updateFilterPreset(id: string, preset: Partial<FilterPrese
       .neq("id", id)
   }
 
-  const updateData: any = {}
+  const updateData: Record<string, unknown> = {}
   if (preset.name) updateData.name = preset.name
   if (preset.filters) updateData.filters = preset.filters
   if (preset.is_default !== undefined) updateData.is_default = preset.is_default
@@ -210,15 +201,5 @@ export async function getDefaultFilterPreset(page: string) {
 
   return { data, error: null }
 }
-
-
-
-
-
-
-
-
-
-
 
 

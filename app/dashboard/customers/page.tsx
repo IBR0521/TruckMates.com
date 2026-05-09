@@ -34,11 +34,15 @@ import { AuditTrail } from "@/components/dashboard/audit-trail"
 import { History } from "lucide-react"
 import { CRMSectionHeader } from "@/components/crm/crm-section-header"
 
+type CustomerRow = NonNullable<Awaited<ReturnType<typeof getCustomers>>["data"]>[number]
+type CustomerFilters = NonNullable<Parameters<typeof getCustomers>[0]>
+type CustomerUpdateInput = Parameters<typeof updateCustomer>[1]
+
 export default function CustomersPage() {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
-  const [customersList, setCustomersList] = useState<any[]>([])
+  const [deleteDependencies, setDeleteDependencies] = useState<unknown[]>([])
+  const [customersList, setCustomersList] = useState<CustomerRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -46,7 +50,7 @@ export default function CustomersPage() {
 
   const loadCustomers = async () => {
     setIsLoading(true)
-    const filters: any = {}
+    const filters: CustomerFilters = {}
     if (searchTerm) filters.search = searchTerm
     if (statusFilter !== "all") filters.status = statusFilter
     if (typeFilter !== "all") filters.customer_type = typeFilter
@@ -118,7 +122,37 @@ export default function CustomersPage() {
     )
     setCustomersList(updatedCustomers)
 
-    const updateData: any = { [field]: value }
+    const updateData: CustomerUpdateInput = {}
+    if (
+      field === "name" ||
+      field === "company_name" ||
+      field === "email" ||
+      field === "phone" ||
+      field === "website" ||
+      field === "address_line1" ||
+      field === "address_line2" ||
+      field === "city" ||
+      field === "state" ||
+      field === "zip" ||
+      field === "country" ||
+      field === "tax_id" ||
+      field === "payment_terms" ||
+      field === "credit_limit" ||
+      field === "currency" ||
+      field === "customer_type" ||
+      field === "status" ||
+      field === "priority" ||
+      field === "notes" ||
+      field === "primary_contact_name" ||
+      field === "primary_contact_email" ||
+      field === "primary_contact_phone"
+    ) {
+      ;(updateData as Record<string, unknown>)[field] = value
+    } else {
+      await loadCustomers()
+      toast.error("Unsupported field update")
+      return
+    }
     const result = await updateCustomer(customerId, updateData)
     
     if (result.error) {

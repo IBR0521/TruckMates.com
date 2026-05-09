@@ -3,6 +3,29 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { generateSingleDVIRPDF } from "@/app/actions/dvir-pdf"
 
+type PdfPage = {
+  setContent: (html: string, options: { waitUntil: "load" }) => Promise<void>
+  pdf: (options: {
+    format: string
+    printBackground: boolean
+    margin: { top: string; right: string; bottom: string; left: string }
+  }) => Promise<Buffer>
+}
+
+type PdfBrowser = {
+  newPage: () => Promise<PdfPage>
+  close: () => Promise<void>
+}
+
+type PuppeteerLike = {
+  launch: (options: Record<string, unknown>) => Promise<PdfBrowser>
+}
+
+type ChromiumLike = {
+  executablePath: () => Promise<string>
+  args: string[]
+}
+
 export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
   const {
@@ -29,7 +52,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
     }
 
     try {
-      let puppeteer: any
+      let puppeteer: PuppeteerLike | null = null
       let executablePath: string | undefined
       let chromiumArgs: string[] | undefined
 
@@ -38,9 +61,10 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
         const chromiumModule = await import(/* webpackIgnore: true */ "@sparticuz/chromium").catch(() => null)
         const chromium = chromiumModule?.default || chromiumModule
         if (puppeteerCore && chromium) {
-          puppeteer = puppeteerCore
-          executablePath = await (chromium as any).executablePath()
-          chromiumArgs = (chromium as any).args
+          puppeteer = puppeteerCore as unknown as PuppeteerLike
+          const chromiumRuntime = chromium as ChromiumLike
+          executablePath = await chromiumRuntime.executablePath()
+          chromiumArgs = chromiumRuntime.args
         }
       } catch {
         // Ignore and return HTML fallback below when chromium runtime isn't available.

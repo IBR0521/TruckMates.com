@@ -25,9 +25,9 @@ import { FirstHoverTooltip } from "@/components/help/first-hover-tooltip"
 
 export default function AddELDLogPage() {
   const router = useRouter()
-  const [devices, setDevices] = useState<any[]>([])
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [trucks, setTrucks] = useState<any[]>([])
+  const [devices, setDevices] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [trucks, setTrucks] = useState<unknown[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     eld_device_id: "",

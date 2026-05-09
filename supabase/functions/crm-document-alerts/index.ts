@@ -18,6 +18,26 @@ declare const Deno: {
 // BUG-048 FIX: Add CRON_SECRET authentication like daily-reminders-check
 const CRON_SECRET = Deno.env.get("CRON_SECRET")
 
+type ExpiringDocument = {
+  id: string
+  company_id: string
+  name: string
+  document_type: string
+  customer_name?: string | null
+  vendor_name?: string | null
+  expiration_date: string
+  days_until_expiration: number
+  expiration_alert_sent?: boolean
+}
+
+type AlertSummary = {
+  document_id: string
+  company_id: string
+  company_name: string | null | undefined
+  document_name: string
+  days_until_expiration: number
+}
+
 serve(async (req: Request) => {
   // BUG-048 FIX: Require CRON_SECRET authentication
   const authHeader = req.headers.get("Authorization")
@@ -64,8 +84,9 @@ serve(async (req: Request) => {
     }
 
     // Filter to only documents that haven't been alerted yet
-    const documentsToAlert = expiringDocuments.filter(
-      (doc: any) => !doc.expiration_alert_sent && doc.days_until_expiration <= 30
+    const documents = (expiringDocuments as ExpiringDocument[]) || []
+    const documentsToAlert = documents.filter(
+      (doc) => !doc.expiration_alert_sent && doc.days_until_expiration <= 30
     )
 
     if (documentsToAlert.length === 0) {
@@ -79,8 +100,8 @@ serve(async (req: Request) => {
     }
 
     // Get company details and users for each company
-    const companyIds = [...new Set(documentsToAlert.map((doc: any) => doc.company_id))]
-    const alerts: any[] = []
+    const companyIds = [...new Set(documentsToAlert.map((doc) => doc.company_id))]
+    const alerts: AlertSummary[] = []
 
     for (const companyId of companyIds) {
       // BUG-057 FIX: Use actual role values that exist in the schema
@@ -107,7 +128,7 @@ serve(async (req: Request) => {
         .single()
 
       // Get documents for this company
-      const companyDocs = documentsToAlert.filter((doc: any) => doc.company_id === companyId)
+      const companyDocs = documentsToAlert.filter((doc) => doc.company_id === companyId)
 
       for (const doc of companyDocs) {
         // FIXED: Helper function to escape HTML to prevent XSS

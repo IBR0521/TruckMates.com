@@ -8,8 +8,7 @@ import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { use } from "react"
-import { getBOL } from "@/app/actions/bol"
-import * as bolActions from "@/app/actions/bol"
+import { getBOL, markBOLPODReceived, updateBOLSignature } from "@/app/actions/bol"
 import { generateBOLPDFFile } from "@/app/actions/bol-pdf"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
@@ -25,7 +24,8 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
   const { id } = use(params)
   const router = useRouter()
   const aliveRef = useRef(true)
-  const [bol, setBOL] = useState<any>(null)
+  type BOLDetail = NonNullable<Awaited<ReturnType<typeof getBOL>>["data"]>
+  const [bol, setBOL] = useState<BOLDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [signatureDialog, setSignatureDialog] = useState<{
     open: boolean
@@ -61,7 +61,7 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
   }) => {
     if (!signatureDialog.type) return
 
-    const result = await (bolActions as any).updateBOLSignature(id, signatureDialog.type, signatureData)
+    const result = await updateBOLSignature(id, signatureDialog.type, signatureData)
 
     if (result.error) {
       toast.error(result.error)
@@ -134,7 +134,7 @@ export default function BOLDetailPage({ params }: { params: Promise<{ id: string
     const condition = window.prompt("Delivery condition (e.g. good / damaged)") || "good"
     const notes = window.prompt("POD notes (optional)") || undefined
 
-    const result = await (bolActions as any).markBOLPODReceived(id, receivedBy.trim(), condition.trim() || "good", notes)
+    const result = await markBOLPODReceived(id, receivedBy.trim(), condition.trim() || "good", notes)
     if (result.error) {
       toast.error(result.error)
       return

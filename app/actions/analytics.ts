@@ -6,6 +6,25 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 import * as Sentry from "@sentry/nextjs"
 
+type AnalyticsLoadRow = {
+  status?: string | null
+  estimated_delivery?: string | null
+  actual_delivery?: string | null
+}
+
+type AnalyticsInvoiceRow = {
+  amount?: string | number | null
+}
+
+type AnalyticsRevenueLoadRow = {
+  total_rate?: string | number | null
+  value?: string | number | null
+}
+
+type StatusRow = {
+  status?: string | null
+}
+
 /**
  * Get analytics dashboard data
  * FIXED: Server-side aggregation with limited column selection to prevent PII exposure
@@ -99,30 +118,31 @@ export async function getAnalyticsData(dateRange: number = 30) {
 
     // Calculate statistics
     const totalLoads = loadsData?.length || 0
-    const activeLoads = loadsData?.filter((l: any) => l.status === "in_transit" || l.status === "scheduled").length || 0
-    const completedLoads = loadsData?.filter((l: any) => l.status === "delivered").length || 0
+    const typedLoads = (loadsData || []) as AnalyticsLoadRow[]
+    const activeLoads = typedLoads.filter((l) => l.status === "in_transit" || l.status === "scheduled").length || 0
+    const completedLoads = typedLoads.filter((l) => l.status === "delivered").length || 0
     
     // Calculate revenue from ALL invoices (not just paid)
     // V3-013 FIX: Guard parseFloat against NaN
-    let totalRevenue = invoicesData?.reduce((sum: number, inv: any) => {
-      const amount = parseFloat(inv.amount)
+    let totalRevenue = ((invoicesData || []) as AnalyticsInvoiceRow[]).reduce((sum: number, inv) => {
+      const amount = parseFloat(String(inv.amount ?? 0))
       return sum + (isNaN(amount) || !isFinite(amount) ? 0 : amount)
     }, 0) || 0
     
     // Add revenue from loads if invoices are low/empty
     if (totalRevenue === 0 && loadsWithRevenue) {
-      totalRevenue = loadsWithRevenue.reduce((sum: number, load: any) => {
-        const rate = parseFloat(load.total_rate)
-        const value = parseFloat(load.value)
+      totalRevenue = ((loadsWithRevenue || []) as AnalyticsRevenueLoadRow[]).reduce((sum: number, load) => {
+        const rate = parseFloat(String(load.total_rate ?? 0))
+        const value = parseFloat(String(load.value ?? 0))
         const amount = (!isNaN(rate) && isFinite(rate)) ? rate : ((!isNaN(value) && isFinite(value)) ? value : 0)
         return sum + amount
       }, 0)
     }
     
-    const activeTrucks = trucksData?.filter((t: any) => t.status === "in_use").length || 0
-    const activeDrivers = driversData?.filter((d: any) => d.status === "active").length || 0
+    const activeTrucks = ((trucksData || []) as StatusRow[]).filter((t) => t.status === "in_use").length || 0
+    const activeDrivers = ((driversData || []) as StatusRow[]).filter((d) => d.status === "active").length || 0
     
-    const onTimeDeliveries = loadsData?.filter((l: any) => {
+    const onTimeDeliveries = typedLoads.filter((l) => {
       if (!l.estimated_delivery || !l.actual_delivery) return false
       const actualDate = new Date(l.actual_delivery)
       const estimatedDate = new Date(l.estimated_delivery)

@@ -16,6 +16,10 @@ interface AccessGuardProps {
   fallback?: React.ReactNode
 }
 
+type CurrentUserData = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>["data"]> & {
+  employee_role?: string | null
+}
+
 export function AccessGuard({ children, requiredFeature, fallback }: AccessGuardProps) {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -27,7 +31,8 @@ export function AccessGuard({ children, requiredFeature, fallback }: AccessGuard
       try {
         const result = await getCurrentUser()
         if (result?.data) {
-          const employeeRole = (result.data as any).employee_role || result.data.role
+          const userData = result.data as CurrentUserData
+          const employeeRole = userData.employee_role || userData.role
           const mappedRole = mapLegacyRole(employeeRole) as EmployeeRole
           setUserRole(mappedRole)
           const access = canViewFeature(mappedRole, requiredFeature)

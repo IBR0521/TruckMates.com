@@ -33,7 +33,7 @@ export default function EditTruckPage({ params }: { params: Promise<{ id: string
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [drivers, setDrivers] = useState<any[]>([])
+  const [drivers, setDrivers] = useState<unknown[]>([])
   const [formData, setFormData] = useState({
     truckNumber: "",
     make: "",

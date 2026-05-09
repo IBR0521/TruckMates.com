@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 import { errorMessage } from "@/lib/error-message"
+import { safeDbError } from "@/lib/utils/error"
 import { getResendClient } from "./invoice-email"
 
 type Contractor1099Row = {
@@ -176,7 +177,12 @@ export async function getContractor1099Summary(taxYear: number): Promise<{
       totals.set(driverId, existing)
     }
 
-    const data: Contractor1099Row[] = (drivers || []).map((driver: any) => {
+    const data: Contractor1099Row[] = (drivers || []).map((driver: {
+      id: string
+      name?: string | null
+      email?: string | null
+      employee_type?: string | null
+    }) => {
       const total = totals.get(driver.id) || { amount: 0, count: 0 }
       return {
         driverId: driver.id,
@@ -236,7 +242,10 @@ async function generate1099PdfBuffer(driverId: string, taxYear: number): Promise
       return { pdfBuffer: null, filename: "", error: "Failed to load paid settlements" }
     }
 
-    const annualTotal = (settlements || []).reduce((sum: number, row: any) => sum + (Number(row.net_pay) || 0), 0)
+    const annualTotal = (settlements || []).reduce(
+      (sum: number, row: { net_pay?: number | string | null }) => sum + (Number(row.net_pay) || 0),
+      0
+    )
 
     const { data: company } = await supabase
       .from("companies")
@@ -260,7 +269,7 @@ async function generate1099PdfBuffer(driverId: string, taxYear: number): Promise
     const doc = build1099Document({
       taxYear,
       payerName: company?.name || "Carrier",
-      payerEin: (settings as any)?.ein_number || null,
+      payerEin: (settings as { ein_number?: string | null } | null)?.ein_number || null,
       payerAddress,
       recipientName: driver.name || "Driver",
       recipientTin: driver.license_number || null,
@@ -355,7 +364,7 @@ export async function send1099ToDriver(driverId: string, taxYear: number): Promi
     })
 
     if (emailResult.error) {
-      return { data: null, error: `Failed to send email: ${emailResult.error.message || "Unknown error"}` }
+      return { data: null, error: safeDbError(emailResult.error, "Failed to send email") }
     }
 
     return {

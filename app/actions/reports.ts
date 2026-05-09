@@ -1,24 +1,37 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 import { revalidatePath } from "next/cache"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 // Helper to get company ID (uses cached auth)
 async function getCompanyId() {
   const ctx = await getCachedAuthContext()
   return ctx.companyId ?? null
 }
+
+type ReportLoadRow = {
+  id?: string | null
+  customer_id?: string | null
+  total_rate?: number | string | null
+  value?: number | string | null
+  created_at?: string | null
+}
+type ReportCustomerRow = { id: string; name: string; [key: string]: unknown }
+type ReportInvoiceItem = { category?: string | null; amount?: number | string | null }
+type ReportInvoiceRow = {
+  customer_name?: string | null
+  amount?: number | string | null
+  load_id?: string | null
+  items?: ReportInvoiceItem[] | null
+  issue_date?: string | null
+  created_at?: string | null
+}
+type ReportExpenseRow = { category?: string | null; amount?: number | string | null }
+type ReportDriverRow = { id: string; name: string; [key: string]: unknown }
 
 // Revenue Report
 export async function getRevenueReport(startDate?: string, endDate?: string, terminalId?: string) {
@@ -78,7 +91,7 @@ export async function getRevenueReport(startDate?: string, endDate?: string, ter
       .limit(limit)
 
     // Get customers for loads
-    const customerIds = loads?.map((l: { customer_id: string | null; [key: string]: any }) => l.customer_id).filter(Boolean) || []
+    const customerIds = loads?.map((l: { customer_id: string | null; [key: string]: unknown }) => l.customer_id).filter(Boolean) || []
     let customers = null
     if (customerIds.length > 0) {
       const { data } = await supabase
@@ -89,7 +102,7 @@ export async function getRevenueReport(startDate?: string, endDate?: string, ter
     }
 
     const customerMap = new Map<string, string>()
-    customers?.forEach((c: { id: string; name: string; [key: string]: any }) => customerMap.set(c.id, c.name))
+    customers?.forEach((c: ReportCustomerRow) => customerMap.set(c.id, c.name))
 
     // Calculate revenue by customer
     const revenueByCustomer: Record<
@@ -100,9 +113,9 @@ export async function getRevenueReport(startDate?: string, endDate?: string, ter
     // FIXED: Track which loads have invoices to prevent double-counting
     const loadIdsWithInvoices = new Set<string>()
     
-    const allowedLoadIds = new Set((loads || []).map((l: any) => String(l.id)))
+    const allowedLoadIds = new Set((loads || []).map((l: ReportLoadRow) => String(l.id)))
     // Process invoices
-    invoices?.forEach((invoice: { customer_name: string | null; amount: number | string | null; load_id: string | null; [key: string]: any }) => {
+    invoices?.forEach((invoice: ReportInvoiceRow) => {
       if (terminalId && invoice.load_id && !allowedLoadIds.has(String(invoice.load_id))) return
       const customer = invoice.customer_name || "Unknown Customer"
       if (!revenueByCustomer[customer]) {
@@ -124,7 +137,7 @@ export async function getRevenueReport(startDate?: string, endDate?: string, ter
 
     // FIXED: Process loads - only add revenue if no invoice exists for that load
     if (loads) {
-      loads.forEach((load: any) => {
+      loads.forEach((load: ReportLoadRow) => {
         // Skip if this load already has an invoice
         if (load.id && loadIdsWithInvoices.has(load.id)) {
           return
@@ -245,9 +258,9 @@ export async function getProfitLossReport(startDate?: string, endDate?: string, 
     // FIXED: Track which loads have invoices to prevent double-counting
     const loadIdsWithInvoices = new Set<string>()
     
-    const allowedLoadIds = new Set((loads || []).map((l: any) => String(l.id)))
+    const allowedLoadIds = new Set((loads || []).map((l: ReportLoadRow) => String(l.id)))
     // Process invoices and track their load_ids
-    invoices?.forEach((invoice: { load_id: string | null; [key: string]: any }) => {
+    invoices?.forEach((invoice: { load_id: string | null; [key: string]: unknown }) => {
       if (terminalId && invoice.load_id && !allowedLoadIds.has(String(invoice.load_id))) return
       if (invoice.load_id) {
         loadIdsWithInvoices.add(invoice.load_id)
@@ -256,30 +269,30 @@ export async function getProfitLossReport(startDate?: string, endDate?: string, 
     
     // Calculate totals - combine invoices and loads (only loads without invoices)
     let totalRevenue = (invoices || [])
-      .filter((inv: any) => !terminalId || !inv.load_id || allowedLoadIds.has(String(inv.load_id)))
-      .reduce((sum: number, inv: { amount: number | string | null; [key: string]: any }) => sum + (Number(inv.amount) || 0), 0)
+      .filter((inv: ReportInvoiceRow) => !terminalId || !inv.load_id || allowedLoadIds.has(String(inv.load_id)))
+      .reduce((sum: number, inv: { amount: number | string | null; [key: string]: unknown }) => sum + (Number(inv.amount) || 0), 0)
     
     // FIXED: Only add revenue from loads that don't have invoices
     if (loads) {
       const loadRevenue = loads
-        .filter((load: { id: string | null; [key: string]: any }) => !load.id || !loadIdsWithInvoices.has(load.id)) // Only loads without invoices
-        .reduce((sum: number, load: { total_rate: number | string | null; value: number | string | null; [key: string]: any }) => {
+        .filter((load: { id: string | null; [key: string]: unknown }) => !load.id || !loadIdsWithInvoices.has(load.id)) // Only loads without invoices
+        .reduce((sum: number, load: { total_rate: number | string | null; value: number | string | null; [key: string]: unknown }) => {
           return sum + (Number(load.total_rate) || Number(load.value) || 0)
         }, 0)
       totalRevenue += loadRevenue
     }
     
-    const totalExpenses = expenses?.reduce((sum: number, exp: { amount: number | string | null; [key: string]: any }) => sum + (Number(exp.amount) || 0), 0) || 0
+    const totalExpenses = expenses?.reduce((sum: number, exp: { amount: number | string | null; [key: string]: unknown }) => sum + (Number(exp.amount) || 0), 0) || 0
     const netProfit = totalRevenue - totalExpenses
 
     // Revenue breakdown
     const revenueBreakdown: Record<string, number> = {}
     
     // Process invoices
-    invoices?.forEach((invoice: { items: any[] | null; amount: number | string | null; load_id: string | null; [key: string]: any }) => {
-      const items = (invoice.items as any[]) || []
+    invoices?.forEach((invoice: { items: ReportInvoiceItem[] | null; amount: number | string | null; load_id: string | null; [key: string]: unknown }) => {
+      const items = invoice.items || []
       if (items.length > 0) {
-        items.forEach((item: any) => {
+        items.forEach((item: ReportInvoiceItem) => {
           const category = item.category || "Load Revenue"
           revenueBreakdown[category] = (revenueBreakdown[category] || 0) + (Number(item.amount) || 0)
         })
@@ -292,8 +305,8 @@ export async function getProfitLossReport(startDate?: string, endDate?: string, 
     // FIXED: Process loads - only add to breakdown if no invoice exists (avoid double-counting)
     if (loads) {
       const loadRevenue = loads
-        .filter((load: { id: string | null; [key: string]: any }) => !load.id || !loadIdsWithInvoices.has(load.id)) // Only loads without invoices
-        .reduce((sum: number, load: { total_rate: number | string | null; value: number | string | null; [key: string]: any }) => {
+        .filter((load: { id: string | null; [key: string]: unknown }) => !load.id || !loadIdsWithInvoices.has(load.id)) // Only loads without invoices
+        .reduce((sum: number, load: { total_rate: number | string | null; value: number | string | null; [key: string]: unknown }) => {
           return sum + (Number(load.total_rate) || Number(load.value) || 0)
         }, 0)
       if (loadRevenue > 0) {
@@ -303,7 +316,7 @@ export async function getProfitLossReport(startDate?: string, endDate?: string, 
 
     // Expense breakdown by category
     const expenseBreakdown: Record<string, number> = {}
-    expenses?.forEach((expense: { category: string | null; amount: number | string | null; [key: string]: any }) => {
+    expenses?.forEach((expense: { category: string | null; amount: number | string | null; [key: string]: unknown }) => {
       const category = expense.category || "Other"
       expenseBreakdown[category] = (expenseBreakdown[category] || 0) + (Number(expense.amount) || 0)
     })
@@ -375,7 +388,7 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
 
     // Create driver lookup map
     const driverMap = new Map<string, string>()
-    drivers?.forEach((driver: { id: string; name: string; [key: string]: any }) => {
+    drivers?.forEach((driver: ReportDriverRow) => {
       driverMap.set(driver.id, driver.name)
     })
 
@@ -396,7 +409,7 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
 
     // Calculate YTD by driver
     const ytdByDriver: Record<string, number> = {}
-    allYearSettlements?.forEach((settlement: { driver_id: string; net_pay: number | string | null; [key: string]: any }) => {
+    allYearSettlements?.forEach((settlement: { driver_id: string; net_pay: number | string | null; [key: string]: unknown }) => {
       const driverId = settlement.driver_id
       ytdByDriver[driverId] = (ytdByDriver[driverId] || 0) + (Number(settlement.net_pay) || 0)
     })
@@ -414,7 +427,7 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
       }
     > = {}
 
-    settlements?.forEach((settlement: { driver_id: string; net_pay: number | string | null; loads: any[] | null; [key: string]: any }) => {
+    settlements?.forEach((settlement: { driver_id: string; net_pay: number | string | null; loads: unknown[] | null; [key: string]: unknown }) => {
       const driverId = settlement.driver_id
       const driverName = driverMap.get(driverId) || "Unknown Driver"
       const loads = Array.isArray(settlement.loads) ? settlement.loads.length : 0
@@ -439,8 +452,8 @@ export async function getDriverPaymentsReport(startDate?: string, endDate?: stri
       item.avgPerLoad = item.loads > 0 ? item.totalPay / item.loads : 0
     })
 
-    const totalPaid = settlements?.reduce((sum: number, s: { net_pay: number | string | null; [key: string]: any }) => sum + (Number(s.net_pay) || 0), 0) || 0
-    const totalLoads = settlements?.reduce((sum: number, s: { loads: any[] | null; [key: string]: any }) => {
+    const totalPaid = settlements?.reduce((sum: number, s: { net_pay: number | string | null; [key: string]: unknown }) => sum + (Number(s.net_pay) || 0), 0) || 0
+    const totalLoads = settlements?.reduce((sum: number, s: { loads: unknown[] | null; [key: string]: unknown }) => {
       const loads = Array.isArray(s.loads) ? s.loads.length : 0
       return sum + loads
     }, 0) || 0
@@ -519,8 +532,8 @@ export async function getMonthlyRevenueTrend(months = 6, terminalId?: string) {
       `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
 
     // Process invoices first
-    const allowedLoadIds = new Set((loads || []).map((l: any) => String(l.id)))
-    invoices?.forEach((invoice: any) => {
+    const allowedLoadIds = new Set((loads || []).map((l: ReportLoadRow) => String(l.id)))
+    invoices?.forEach((invoice: ReportInvoiceRow) => {
       if (terminalId && invoice.load_id && !allowedLoadIds.has(String(invoice.load_id))) return
       let date: Date | null = null
       if (invoice.issue_date) {
@@ -539,14 +552,14 @@ export async function getMonthlyRevenueTrend(months = 6, terminalId?: string) {
 
     // Track loads that already have invoices so we don't double‑count
     const loadIdsWithInvoices = new Set<string>()
-    invoices?.forEach((invoice: any) => {
+    invoices?.forEach((invoice: ReportInvoiceRow) => {
       if (invoice.load_id) {
         loadIdsWithInvoices.add(invoice.load_id)
       }
     })
 
     // Add load revenue only when there is no invoice for that load
-    loads?.forEach((load: any) => {
+    loads?.forEach((load: ReportLoadRow) => {
       if (!load.created_at) return
       if (load.id && loadIdsWithInvoices.has(load.id)) return
 
@@ -659,7 +672,7 @@ export async function getARAgingReport(terminalId?: string) {
         .eq("company_id", companyId)
         .eq("terminal_id", terminalId)
         .limit(10000)
-      allowedLoadIds = new Set((scopedLoads || []).map((l: any) => String(l.id)))
+      allowedLoadIds = new Set((scopedLoads || []).map((l: ReportLoadRow) => String(l.id)))
     }
 
     if (error) {

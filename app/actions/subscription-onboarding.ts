@@ -123,7 +123,7 @@ export async function startBillingCheckoutSession() {
     redirect("/dashboard")
   }
 
-  const planRaw = (subscription as any)?.subscription_plans
+  const planRaw = (subscription as { subscription_plans?: unknown } | null)?.subscription_plans
   const plan = Array.isArray(planRaw) ? planRaw[0] : planRaw
   const priceId = plan?.stripe_price_id_monthly || plan?.stripe_price_id_yearly
 

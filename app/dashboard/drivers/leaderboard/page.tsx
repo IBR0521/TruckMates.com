@@ -108,6 +108,13 @@ export default function DriverLeaderboardPage() {
     return null
   }
 
+  function getDriverName(score: DriverPerformanceScore | undefined, fallback: string) {
+    const namedScore = score as DriverPerformanceScore & {
+      drivers?: { name?: string | null }
+    }
+    return namedScore.drivers?.name || score?.driver?.name || fallback
+  }
+
   return (
     <div className="w-full">
       {/* Header */}
@@ -119,7 +126,7 @@ export default function DriverLeaderboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={periodType} onValueChange={(value: any) => setPeriodType(value)} disabled={!scorecardsAllowed}>
+          <Select value={periodType} onValueChange={(value: "weekly" | "monthly" | "yearly") => setPeriodType(value)} disabled={!scorecardsAllowed}>
             <SelectTrigger className="w-32">
               <SelectValue />
             </SelectTrigger>
@@ -155,7 +162,7 @@ export default function DriverLeaderboardPage() {
                   <Medal className="w-12 h-12 text-gray-400" />
                 </div>
                 <h3 className="font-bold text-lg text-foreground mb-1">
-                  {(leaderboard[1] as any)?.drivers?.name || "Driver 2"}
+                  {getDriverName(leaderboard[1], "Driver 2")}
                 </h3>
                 <div className="text-3xl font-bold text-gray-400 mb-2">
                   {leaderboard[1]?.overall_score.toFixed(1)}
@@ -169,7 +176,7 @@ export default function DriverLeaderboardPage() {
                   <Trophy className="w-16 h-16 text-yellow-500" />
                 </div>
                 <h3 className="font-bold text-xl text-foreground mb-1">
-                  {(leaderboard[0] as any)?.drivers?.name || "Driver 1"}
+                  {getDriverName(leaderboard[0], "Driver 1")}
                 </h3>
                 <div className="text-4xl font-bold text-yellow-500 mb-2">
                   {leaderboard[0]?.overall_score.toFixed(1)}
@@ -183,7 +190,7 @@ export default function DriverLeaderboardPage() {
                   <Award className="w-12 h-12 text-amber-600" />
                 </div>
                 <h3 className="font-bold text-lg text-foreground mb-1">
-                  {(leaderboard[2] as any)?.drivers?.name || "Driver 3"}
+                  {getDriverName(leaderboard[2], "Driver 3")}
                 </h3>
                 <div className="text-3xl font-bold text-amber-600 mb-2">
                   {leaderboard[2]?.overall_score.toFixed(1)}
@@ -214,7 +221,10 @@ export default function DriverLeaderboardPage() {
               ) : (
                 <div className="space-y-3">
                   {leaderboard.map((score, index) => {
-                    const driver = (score as any)?.drivers
+                    const namedScore = score as DriverPerformanceScore & {
+                      drivers?: { name?: string | null }
+                    }
+                    const driverName = namedScore.drivers?.name || score.driver?.name || "Unknown Driver"
                     return (
                       <Card
                         key={score.id}
@@ -233,7 +243,7 @@ export default function DriverLeaderboardPage() {
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
                                 <h3 className="font-semibold text-foreground">
-                                  {driver?.name || "Unknown Driver"}
+                                  {driverName}
                                 </h3>
                                 {getTierBadge(score.overall_score)}
                               </div>

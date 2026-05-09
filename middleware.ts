@@ -5,7 +5,7 @@ import { canViewFeature, type FeatureCategory } from '@/lib/feature-permissions'
 
 /** Avoid hanging forever when Supabase is unreachable or misconfigured (browser spinner on /dashboard/*). */
 const SUPABASE_MIDDLEWARE_FETCH_MS = 12_000
-const TEMP_DISABLE_PAYMENT_GATE = true
+const TEMP_DISABLE_PAYMENT_GATE = false
 
 function generateCspNonce(): string {
   const bytes = new Uint8Array(16)
@@ -163,6 +163,13 @@ function requiredPlanFeatureForPath(pathname: string): 'route_optimization' | 'g
   if (/^\/dashboard\/crm(\/|$)/.test(pathname)) return 'crm'
   if (/^\/dashboard\/settings\/api-keys(\/|$)/.test(pathname)) return 'api_keys'
   return null
+}
+
+type SubscriptionPlanRow = { name?: string | null }
+type SubscriptionRow = {
+  status?: string | null
+  trial_end?: string | null
+  subscription_plans?: SubscriptionPlanRow | SubscriptionPlanRow[] | null
 }
 
 function fetchWithTimeout(
@@ -341,10 +348,11 @@ export async function middleware(request: NextRequest) {
             .eq('company_id', profile.company_id)
             .maybeSingle()
 
-          const planRaw = (subscription as any)?.subscription_plans
+          const subscriptionRow = subscription as SubscriptionRow | null
+          const planRaw = subscriptionRow?.subscription_plans
           const planName = (Array.isArray(planRaw) ? planRaw[0]?.name : planRaw?.name || 'free') as string
-          const status = String((subscription as any)?.status || '')
-          const trialEnd = (subscription as any)?.trial_end ? new Date((subscription as any).trial_end) : null
+          const status = String(subscriptionRow?.status || '')
+          const trialEnd = subscriptionRow?.trial_end ? new Date(subscriptionRow.trial_end) : null
           const trialExpired = !!trialEnd && trialEnd.getTime() < Date.now()
 
           const hasSubscriptionAccess =

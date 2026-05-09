@@ -1,18 +1,9 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
-import * as Sentry from "@sentry/nextjs"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /**
  * Get user preferences
  */
@@ -57,11 +48,11 @@ export async function getUserPreferences() {
  * Update user preferences
  */
 export async function updateUserPreferences(preferences: {
-  dashboard_layout?: any
+  dashboard_layout?: unknown
   default_view?: string
-  table_columns?: any
-  table_sorting?: any
-  table_filters?: any
+  table_columns?: unknown
+  table_sorting?: unknown
+  table_filters?: unknown
   theme?: string
   compact_mode?: boolean
   sidebar_collapsed?: boolean
@@ -115,18 +106,5 @@ export async function updateUserPreferences(preferences: {
   revalidatePath("/dashboard/settings")
   return { data, error: null }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

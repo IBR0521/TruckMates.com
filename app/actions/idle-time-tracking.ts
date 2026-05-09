@@ -1,21 +1,16 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * Idle Time Tracking
  * Track and report idle time using GPS and engine status data
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { runAgentEvaluation } from "@/lib/ai/agent/loop"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 
 export interface IdleTimeSession {
@@ -206,15 +201,15 @@ export async function getIdleTimeStats(filters?: {
     }
 
     // Calculate statistics
-    const totalMinutes = sessions?.reduce((sum: number, s: { duration_minutes: number | null; [key: string]: any }) => sum + (s.duration_minutes || 0), 0) || 0
+    const totalMinutes = sessions?.reduce((sum: number, s: { duration_minutes: number | null; [key: string]: unknown }) => sum + (s.duration_minutes || 0), 0) || 0
     const totalHours = totalMinutes / 60
-    const totalFuelCost = sessions?.reduce((sum: number, s: { estimated_fuel_cost: number | null; [key: string]: any }) => sum + (s.estimated_fuel_cost || 0), 0) || 0
+    const totalFuelCost = sessions?.reduce((sum: number, s: { estimated_fuel_cost: number | null; [key: string]: unknown }) => sum + (s.estimated_fuel_cost || 0), 0) || 0
     const totalSessions = sessions?.length || 0
     const avgDurationMinutes = totalSessions > 0 ? totalMinutes / totalSessions : 0
 
     // Group by truck
     const byTruck: Record<string, { minutes: number; cost: number; sessions: number }> = {}
-    sessions?.forEach((s: { truck_id: string | null; duration_minutes: number | null; estimated_fuel_cost: number | null; [key: string]: any }) => {
+    sessions?.forEach((s: { truck_id: string | null; duration_minutes: number | null; estimated_fuel_cost: number | null; [key: string]: unknown }) => {
       if (!s.truck_id) return
       if (!byTruck[s.truck_id]) {
         byTruck[s.truck_id] = { minutes: 0, cost: 0, sessions: 0 }
@@ -226,7 +221,7 @@ export async function getIdleTimeStats(filters?: {
 
     // Group by driver
     const byDriver: Record<string, { minutes: number; cost: number; sessions: number }> = {}
-    sessions?.forEach((s: { driver_id: string | null; duration_minutes: number | null; estimated_fuel_cost: number | null; [key: string]: any }) => {
+    sessions?.forEach((s: { driver_id: string | null; duration_minutes: number | null; estimated_fuel_cost: number | null; [key: string]: unknown }) => {
       if (!s.driver_id) return
       if (!byDriver[s.driver_id]) {
         byDriver[s.driver_id] = { minutes: 0, cost: 0, sessions: 0 }
@@ -309,6 +304,5 @@ export async function closeIdleSession(sessionId: string) {
     return { error: errorMessage(error, "Failed to close idle session"), data: null }
   }
 }
-
 
 

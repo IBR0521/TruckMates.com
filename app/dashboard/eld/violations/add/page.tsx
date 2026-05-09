@@ -24,9 +24,9 @@ import { useRouter } from "next/navigation"
 
 export default function AddELDEventPage() {
   const router = useRouter()
-  const [devices, setDevices] = useState<any[]>([])
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [trucks, setTrucks] = useState<any[]>([])
+  const [devices, setDevices] = useState<unknown[]>([])
+  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [trucks, setTrucks] = useState<unknown[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     eld_device_id: "",

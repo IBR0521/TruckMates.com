@@ -30,8 +30,8 @@ import { getDriver } from "@/app/actions/drivers"
 
 export default function DriverOnboardingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const [onboarding, setOnboarding] = useState<any>(null)
-  const [driver, setDriver] = useState<any>(null)
+  const [onboarding, setOnboarding] = useState<unknown>(null)
+  const [driver, setDriver] = useState<unknown>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -112,7 +112,7 @@ export default function DriverOnboardingPage({ params }: { params: Promise<{ id:
   const getDocumentStatus = (docType: string) => {
     if (!onboarding) return false
     const completed = Array.isArray(onboarding.documents_completed) ? onboarding.documents_completed : []
-    return onboarding[`${docType}_uploaded`] || completed.some((doc: any) => doc === docType)
+    return onboarding[`${docType}_uploaded`] || completed.some((doc: unknown) => doc === docType)
   }
 
   if (isLoading) {

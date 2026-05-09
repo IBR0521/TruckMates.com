@@ -16,10 +16,10 @@ import {
 } from "@/app/actions/ltl-shipments"
 
 export default function LtlDispatchPage() {
-  const [shipments, setShipments] = useState<any[]>([])
-  const [movements, setMovements] = useState<any[]>([])
+  const [shipments, setShipments] = useState<unknown[]>([])
+  const [movements, setMovements] = useState<unknown[]>([])
   const [selectedMovement, setSelectedMovement] = useState<string>("")
-  const [movementShipments, setMovementShipments] = useState<any[]>([])
+  const [movementShipments, setMovementShipments] = useState<unknown[]>([])
   const [loading, setLoading] = useState(false)
 
   const [newShipment, setNewShipment] = useState({ shipment_number: "", shipper_name: "", consignee_name: "" })

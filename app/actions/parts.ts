@@ -1,18 +1,11 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /** Matches `parts` in supabase/parts_inventory_schema.sql */
 const PARTS_SELECT = `
   id, company_id, part_number, name, description, category, manufacturer, cost,
@@ -227,7 +220,7 @@ export async function updatePart(
     }
   }
 
-  const updateData: any = {
+  const updateData: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   }
 
@@ -425,7 +418,7 @@ export async function updatePartOrderStatus(
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
-  const updateData: any = {
+  const updateData: Record<string, unknown> = {
     status,
     updated_at: new Date().toISOString(),
   }
@@ -505,8 +498,5 @@ export async function getPartsNeedingReorder() {
 
   return { data, error: null }
 }
-
-
-
 
 

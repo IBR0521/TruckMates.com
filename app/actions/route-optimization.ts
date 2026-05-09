@@ -143,7 +143,11 @@ async function getTollCost(
         if (route.legs && route.legs.length > 0) {
           // Check if route has tolls (Google Maps doesn't provide exact toll costs in free tier)
           // We'll estimate based on distance and typical toll rates
-          const distance = route.legs.reduce((sum: number, leg: any) => sum + (leg.distance?.value || 0), 0) / 1609.34 // miles
+          const distance =
+            route.legs.reduce(
+              (sum: number, leg: { distance?: { value?: number } }) => sum + (leg.distance?.value || 0),
+              0
+            ) / 1609.34 // miles
           // Estimate toll cost: $0.10 per mile on toll roads (average US toll rate)
           return distance * 0.1
         }
@@ -531,7 +535,14 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
   }
 
   // Convert stops to optimization format
-  const stopsForOptimization = stops.map((stop: { id: string; address: string | null; coordinates: { lat: number; lng: number } | null; priority: string | null; time_window_1_open: string | null; time_window_1_close: string | null; [key: string]: any }) => ({
+  const stopsForOptimization = stops.map((stop: {
+    id: string
+    address: string | null
+    coordinates: { lat: number; lng: number } | null
+    priority: string | null
+    time_window_1_open: string | null
+    time_window_1_close: string | null
+  }) => ({
     id: stop.id,
     address: stop.address || "",
     lat: stop.coordinates?.lat,

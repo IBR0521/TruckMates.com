@@ -55,14 +55,14 @@ function DefectsListCell({ dvir }: { dvir: { defects_found?: boolean; defects?: 
 
 export default function DVIRPage() {
   const router = useRouter()
-  const [dvirRecords, setDvirRecords] = useState<any[]>([])
-  const [filteredDvirs, setFilteredDvirs] = useState<any[]>([])
+  const [dvirRecords, setDvirRecords] = useState<unknown[]>([])
+  const [filteredDvirs, setFilteredDvirs] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState("all")
-  const [stats, setStats] = useState<any>(null)
+  const [stats, setStats] = useState<unknown>(null)
   const [openDefectTrucks, setOpenDefectTrucks] = useState<
     Array<{
       truck_id: string
@@ -94,7 +94,7 @@ export default function DVIRPage() {
       let filtered = dvirResult.data
       if (filters?.search) {
         filtered = filtered.filter(
-          (dvir: { drivers?: { name?: string | null } | null; trucks?: { truck_number?: string | null } | null; location?: string | null; [key: string]: any }) =>
+          (dvir: { drivers?: { name?: string | null } | null; trucks?: { truck_number?: string | null } | null; location?: string | null; [key: string]: unknown }) =>
             dvir.drivers?.name?.toLowerCase().includes(filters.search!.toLowerCase()) ||
             dvir.trucks?.truck_number?.toLowerCase().includes(filters.search!.toLowerCase()) ||
             dvir.location?.toLowerCase().includes(filters.search!.toLowerCase())

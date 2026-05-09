@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     // Filter in JavaScript since Supabase doesn't support column comparison in filter
     // This is acceptable for a cron job that runs infrequently
     const filteredDeliveries = (deliveries || []).filter(
-      (delivery: any) => delivery.attempts < delivery.max_attempts
+      (delivery: { attempts: number; max_attempts: number }) => delivery.attempts < delivery.max_attempts
     )
 
     if (!filteredDeliveries || filteredDeliveries.length === 0) {

@@ -18,14 +18,47 @@ import {
 import { toast } from "sonner"
 import Link from "next/link"
 
+type PortalAccess = {
+  customer?: { name?: string; company_name?: string }
+  company?: { name?: string; phone?: string; email?: string }
+  can_submit_loads?: boolean
+}
+
+type PortalLoad = {
+  id?: string
+  shipment_number?: string
+  status?: string
+  contents?: string
+  requested_via_portal?: boolean
+  portal_request_status?: string
+  requested_equipment_type?: string
+  origin?: string
+  destination?: string
+  load_date?: string | null
+  estimated_delivery?: string | null
+  driver?: { name?: string }
+  truck?: { truck_number?: string }
+}
+
+type PortalInvoice = {
+  id?: string
+  invoice_number?: string
+  description?: string
+  status?: string
+  amount?: string | number
+  issue_date?: string | null
+  due_date?: string | null
+  paid_date?: string | null
+}
+
 export default function CustomerPortalPage() {
   const params = useParams()
   const router = useRouter()
   const token = params.token as string
   const [isLoading, setIsLoading] = useState(true)
-  const [portalAccess, setPortalAccess] = useState<any>(null)
-  const [loads, setLoads] = useState<any[]>([])
-  const [invoices, setInvoices] = useState<any[]>([])
+  const [portalAccess, setPortalAccess] = useState<PortalAccess | null>(null)
+  const [loads, setLoads] = useState<PortalLoad[]>([])
+  const [invoices, setInvoices] = useState<PortalInvoice[]>([])
   const [submittingRequest, setSubmittingRequest] = useState(false)
   const [requestForm, setRequestForm] = useState({
     origin: "",

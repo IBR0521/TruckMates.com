@@ -64,7 +64,12 @@ export async function POST(request: NextRequest, ctxRoute: { params: Promise<{ i
 
     const isPaid = balance === 0 && totalAmt > 0
 
-    const updateData: any = {}
+    const updateData: {
+      status?: string
+      paid_amount?: number
+      paid_date?: string
+      payment_method?: string
+    } = {}
     if (isPaid) {
       updateData.status = "paid"
       updateData.paid_amount = totalAmt

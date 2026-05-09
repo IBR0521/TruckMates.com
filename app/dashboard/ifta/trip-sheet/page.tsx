@@ -22,6 +22,10 @@ import { getDrivers } from "@/app/actions/drivers"
 import { createTripSheet, listTripSheets } from "@/app/actions/ifta-trip-sheet"
 import type { TripSheetStateMileRow, TripSheetFuelRow } from "@/app/actions/ifta-trip-sheet"
 
+type TripSheetListItem = NonNullable<Awaited<ReturnType<typeof listTripSheets>>["data"]>[number]
+type TruckListItem = { id: string; truck_number: string }
+type DriverListItem = { id: string; name: string }
+
 const US_STATES = [
   "AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
 ]
@@ -38,7 +42,7 @@ export default function IFTATripSheetPage() {
 
   const [trucks, setTrucks] = useState<Array<{ id: string; truck_number: string }>>([])
   const [drivers, setDrivers] = useState<Array<{ id: string; name: string }>>([])
-  const [recent, setRecent] = useState<any[]>([])
+  const [recent, setRecent] = useState<TripSheetListItem[]>([])
   const [loading, setLoading] = useState(false)
   const [tripDate, setTripDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [driverId, setDriverId] = useState<string>("")
@@ -60,8 +64,8 @@ export default function IFTATripSheetPage() {
         getDrivers({ limit: 100 }),
         listTripSheets(),
       ])
-      if (t.data) setTrucks(t.data.map((x: any) => ({ id: x.id, truck_number: x.truck_number })))
-      if (d.data) setDrivers(d.data.map((x: any) => ({ id: x.id, name: x.name })))
+      if (t.data) setTrucks(t.data.map((x: TruckListItem) => ({ id: x.id, truck_number: x.truck_number })))
+      if (d.data) setDrivers(d.data.map((x: DriverListItem) => ({ id: x.id, name: x.name })))
       if (list.data) setRecent(list.data.slice(0, 15))
     })()
   }, [])

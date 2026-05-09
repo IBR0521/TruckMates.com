@@ -17,10 +17,13 @@ import { getDriverScorecard } from "@/app/actions/eld-advanced"
 import { getDrivers } from "@/app/actions/drivers"
 import { toast } from "sonner"
 
+type DriverRow = NonNullable<Awaited<ReturnType<typeof getDrivers>>["data"]>[number]
+type DriverScorecardData = NonNullable<Awaited<ReturnType<typeof getDriverScorecard>>["data"]>
+
 export function DriverScorecard() {
   const [driverId, setDriverId] = useState("")
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [scorecard, setScorecard] = useState<any>(null)
+  const [drivers, setDrivers] = useState<DriverRow[]>([])
+  const [scorecard, setScorecard] = useState<DriverScorecardData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [startDate, setStartDate] = useState(
     new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -55,7 +58,7 @@ export function DriverScorecard() {
       } else if (result.data) {
         setScorecard(result.data)
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to load scorecard")
     } finally {
       setIsLoading(false)

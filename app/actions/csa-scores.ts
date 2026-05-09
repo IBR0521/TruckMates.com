@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { errorMessage } from "@/lib/error-message"
+import { safeDbError } from "@/lib/utils/error"
 import { checkViewPermission } from "@/lib/server-permissions"
 import { revalidatePath } from "next/cache"
 import { runAgentEvaluation } from "@/lib/ai/agent/loop"
@@ -188,7 +189,7 @@ async function createThresholdAlerts(companyId: string, month: string, scores: R
     .maybeSingle()
 
   const isCrossingThreshold = (category: CSACategoryKey, current: number, threshold: number): boolean => {
-    const previous = Number((previousSnapshot as any)?.[category] ?? 0)
+    const previous = Number((previousSnapshot as Record<string, unknown> | null)?.[category] ?? 0)
     return current >= threshold && previous < threshold
   }
 
@@ -254,7 +255,7 @@ async function createThresholdAlerts(companyId: string, month: string, scores: R
     })
     if (alertInsert.error) continue
 
-    const notificationRows = (users || []).map((u: any) => ({
+    const notificationRows = (users || []).map((u: { id: string }) => ({
       user_id: u.id,
       company_id: companyId,
       type: "violation_alert",
@@ -289,7 +290,7 @@ export async function syncCompanyCSAScores(companyId: string, dotNumber: string)
       },
       { onConflict: "company_id,snapshot_month" },
     )
-  if (upsert.error) return { error: upsert.error.message, data: null }
+  if (upsert.error) return { error: safeDbError(upsert.error, "Failed to sync CSA scores"), data: null }
 
   await createThresholdAlerts(companyId, snapshotMonth, parsed)
   return { data: { snapshot_month: snapshotMonth, ...parsed }, error: null }
@@ -303,7 +304,7 @@ export async function syncAllCompaniesCSAScores() {
       .select("company_id, dot_number")
       .not("dot_number", "is", null)
       .limit(10000)
-    if (error) return { error: error.message, data: null }
+    if (error) return { error: safeDbError(error, "Failed to load company settings"), data: null }
 
     const sourceUrl =
       process.env.FMCSA_SMS_SNAPSHOT_URL ||
@@ -344,7 +345,7 @@ export async function syncAllCompaniesCSAScores() {
           { onConflict: "company_id,snapshot_month" },
         )
       if (upsert.error) {
-        errors.push({ company_id: companyId, error: upsert.error.message })
+        errors.push({ company_id: companyId, error: safeDbError(upsert.error, "Failed to upsert CSA score") })
         continue
       }
       await createThresholdAlerts(companyId, snapshotMonth, parsed)

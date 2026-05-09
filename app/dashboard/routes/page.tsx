@@ -60,6 +60,11 @@ type RouteRow = Record<string, unknown> & {
   loads?: Array<{ id: string; shipment_number: string | null; status: string | null }>
 }
 
+type DriverRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getDrivers>>["data"]>[number]>
+type TruckRecord = NonNullable<NonNullable<Awaited<ReturnType<typeof getTrucks>>["data"]>[number]>
+type RoutePreview = NonNullable<Awaited<ReturnType<typeof getRoute>>["data"]>
+type RouteStop = NonNullable<NonNullable<Awaited<ReturnType<typeof getRouteStops>>["data"]>[number]>
+
 function formatDurationMinutes(minutes: number | null | undefined) {
   if (minutes == null || !Number.isFinite(Number(minutes))) return null
   const n = Math.round(Number(minutes))
@@ -85,7 +90,7 @@ function formatTimeDisplay(route: RouteRow) {
 export default function RoutesPage() {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
+  const [deleteDependencies, setDeleteDependencies] = useState<unknown[]>([])
   const [routesList, setRoutesList] = useState<RouteRow[]>([])
   const [filteredRoutes, setFilteredRoutes] = useState<RouteRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -98,8 +103,8 @@ export default function RoutesPage() {
   const [truckById, setTruckById] = useState<Record<string, { truck_number?: string | null; make?: string | null; model?: string | null }>>({})
 
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
-  const [previewRoute, setPreviewRoute] = useState<any>(null)
-  const [previewStops, setPreviewStops] = useState<any[]>([])
+  const [previewRoute, setPreviewRoute] = useState<RoutePreview | null>(null)
+  const [previewStops, setPreviewStops] = useState<RouteStop[]>([])
   const [previewLoading, setPreviewLoading] = useState(false)
   const [optimizingId, setOptimizingId] = useState<string | null>(null)
 
@@ -132,20 +137,20 @@ export default function RoutesPage() {
 
     if (driversRes.data) {
       const dm: Record<string, { name?: string | null }> = {}
-      for (const d of driversRes.data as any[]) {
+      for (const d of driversRes.data as DriverRecord[]) {
         if (d?.id) dm[d.id] = { name: d.name }
       }
       setDriverById(dm)
     }
     if (trucksRes.data) {
       const tm: Record<string, { truck_number?: string | null; make?: string | null; model?: string | null }> = {}
-      for (const t of trucksRes.data as any[]) {
+      for (const t of trucksRes.data as TruckRecord[]) {
         if (t?.id) tm[t.id] = { truck_number: t.truck_number, make: t.make, model: t.model }
       }
       setTruckById(tm)
     }
 
-    const routesWithMeta: RouteRow[] = result.data.map((route: any) => ({
+    const routesWithMeta: RouteRow[] = (result.data as RouteRow[]).map((route) => ({
       ...route,
       stop_count: stopCounts[route.id] ?? 0,
       loads: loadsByRoute[route.id] || [],
@@ -277,7 +282,7 @@ export default function RoutesPage() {
       toast.error(result.error)
     }
     if (selectedRouteId === id && previewRoute) {
-      setPreviewRoute((r: any) => (r ? { ...r, status } : r))
+      setPreviewRoute((r: RoutePreview | null) => (r ? { ...r, status } : r))
     }
   }
 

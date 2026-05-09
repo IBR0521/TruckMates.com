@@ -6,6 +6,31 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { assertMonthlyGoogleMapsActionAllowed, recordBillableGoogleMapsUsage } from "@/app/actions/api-usage"
 
+type GoogleDirectionsStep = {
+  html_instructions?: string
+  distance?: { text?: string }
+  duration?: { text?: string }
+  start_location?: unknown
+  end_location?: unknown
+}
+
+type GoogleDistanceMatrixRow = {
+  elements?: GoogleDistanceMatrixElement[]
+}
+
+type GoogleDistanceMatrixElement = {
+  distance?: { text?: string; value?: number }
+  duration?: { text?: string; value?: number }
+  status?: string
+}
+
+type GoogleOptimizeLeg = {
+  distance?: { text?: string; value?: number }
+  duration?: { text?: string; value?: number }
+  start_address?: string
+  end_address?: string
+}
+
 /**
  * Google Maps Integration Backend
  * Provides routing, geocoding, and distance calculations
@@ -95,7 +120,7 @@ export async function getRouteDirections(origin: string, destination: string, wa
     const cacheKey = generateCacheKey("google_maps_directions", { origin, destination, waypoints })
     
     // Check cache first
-    const cached = await getCachedApiResult<any>(cacheKey, 3600) // Cache for 1 hour
+    const cached = await getCachedApiResult<unknown>(cacheKey, 3600) // Cache for 1 hour
     if (cached) {
       return { data: cached, error: null }
     }
@@ -179,13 +204,16 @@ export async function getRouteDirections(origin: string, destination: string, wa
       duration: formatDurationText(duration_seconds),
       duration_seconds,
       polyline: route.overview_polyline?.points,
-      steps: allSteps.map((step: any) => ({
-        instruction: step.html_instructions,
-        distance: step.distance.text,
-        duration: step.duration.text,
-        start_location: step.start_location,
-        end_location: step.end_location,
-      })),
+      steps: allSteps.map((step) => {
+        const parsedStep = step as GoogleDirectionsStep
+        return {
+          instruction: parsedStep.html_instructions,
+          distance: parsedStep.distance?.text,
+          duration: parsedStep.duration?.text,
+          start_location: parsedStep.start_location,
+          end_location: parsedStep.end_location,
+        }
+      }),
       bounds: route.bounds,
     }
 
@@ -225,7 +253,7 @@ export async function geocodeAddress(address: string) {
     const cacheKey = generateCacheKey("google_maps_geocode", { address })
     
     // Check cache first (cache for 7 days - addresses don't change often)
-    const cached = await getCachedApiResult<any>(cacheKey, 604800)
+    const cached = await getCachedApiResult<unknown>(cacheKey, 604800)
     if (cached) {
       return { data: cached, error: null }
     }
@@ -337,7 +365,7 @@ export async function calculateDistanceMatrix(origins: string[], destinations: s
     const { generateCacheKey } = await import("@/lib/api-cache-utils")
 
     const cacheKey = generateCacheKey("google_distance_matrix", { origins, destinations })
-    const cached = await getCachedApiResult<any>(cacheKey, 604800)
+    const cached = await getCachedApiResult<unknown>(cacheKey, 604800)
     if (cached) {
       return { data: cached, error: null }
     }
@@ -377,8 +405,8 @@ export async function calculateDistanceMatrix(origins: string[], destinations: s
     }
 
     const payload = {
-      rows: data.rows.map((row: any) => ({
-        elements: row.elements.map((element: any) => ({
+      rows: (data.rows as GoogleDistanceMatrixRow[]).map((row) => ({
+        elements: (row.elements || []).map((element) => ({
           distance: element.distance?.text || "N/A",
           distance_meters: element.distance?.value || 0,
           duration: element.duration?.text || "N/A",
@@ -469,12 +497,12 @@ export async function optimizeRoute(origin: string, destination: string, stops: 
 
     const payload = {
       optimized_stops: optimizedWaypointOrder.map((index: number) => stops[index]),
-      distance: route.legs.reduce((sum: number, leg: any) => sum + leg.distance.value, 0),
-      duration: route.legs.reduce((sum: number, leg: any) => sum + leg.duration.value, 0),
+      distance: (route.legs as GoogleOptimizeLeg[]).reduce((sum: number, leg) => sum + (leg.distance?.value || 0), 0),
+      duration: (route.legs as GoogleOptimizeLeg[]).reduce((sum: number, leg) => sum + (leg.duration?.value || 0), 0),
       polyline: route.overview_polyline?.points,
-      legs: route.legs.map((leg: any) => ({
-        distance: leg.distance.text,
-        duration: leg.duration.text,
+      legs: (route.legs as GoogleOptimizeLeg[]).map((leg) => ({
+        distance: leg.distance?.text || "N/A",
+        duration: leg.duration?.text || "N/A",
         start_address: leg.start_address,
         end_address: leg.end_address,
       })),
@@ -506,7 +534,7 @@ export async function getPlaceDetails(placeId: string) {
     const { checkApiUsage, getCachedApiResult, setCachedApiResult } = await import("@/lib/api-protection")
     const { generateCacheKey } = await import("@/lib/api-cache-utils")
     const cacheKey = generateCacheKey("google_place_details", { placeId })
-    const cached = await getCachedApiResult<any>(cacheKey, 604800)
+    const cached = await getCachedApiResult<unknown>(cacheKey, 604800)
     if (cached) {
       return { data: cached, error: null }
     }

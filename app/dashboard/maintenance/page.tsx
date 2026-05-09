@@ -36,8 +36,8 @@ export default function MaintenancePage() {
     ? tabParam
     : "schedule"
 
-  const [maintenanceRecords, setMaintenanceRecords] = useState<any[]>([])
-  const [filteredMaintenance, setFilteredMaintenance] = useState<any[]>([])
+  const [maintenanceRecords, setMaintenanceRecords] = useState<unknown[]>([])
+  const [filteredMaintenance, setFilteredMaintenance] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")

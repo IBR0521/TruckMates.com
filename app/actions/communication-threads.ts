@@ -1,15 +1,10 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import * as Sentry from "@sentry/nextjs"
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
 export type UnifiedCommunicationEvent = {
   id: string
   occurred_at: string
@@ -25,16 +20,35 @@ export type UnifiedCommunicationEvent = {
   metadata?: Record<string, unknown>
 }
 
-export async function getOrCreateCommunicationThread(input: { driver_id?: string; customer_id?: string }) {
+type CommunicationThreadRow = {
+  id: string
+  company_id: string
+  driver_id: string | null
+  customer_id: string | null
+  title: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" ? (value as Record<string, unknown>) : {}
+
+const asMetadata = (value: unknown, fallback: Record<string, unknown> = {}): Record<string, unknown> =>
+  value && typeof value === "object" ? (value as Record<string, unknown>) : fallback
+
+export async function getOrCreateCommunicationThread(
+  input: { driver_id?: string; customer_id?: string }
+): Promise<{ data: CommunicationThreadRow | null; error: string | null }> {
   try {
     const supabase = await createClient()
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId || !ctx.userId) {
-      return { error: ctx.error || "Not authenticated", data: null as any }
+      return { error: ctx.error || "Not authenticated", data: null }
     }
 
     if (!!input.driver_id === !!input.customer_id) {
-      return { error: "Provide either driver_id or customer_id", data: null as any }
+      return { error: "Provide either driver_id or customer_id", data: null }
     }
 
     let query = supabase
@@ -47,7 +61,7 @@ export async function getOrCreateCommunicationThread(input: { driver_id?: string
     if (input.customer_id) query = query.eq("customer_id", input.customer_id)
 
     const { data: existing, error: existingError } = await query.maybeSingle()
-    if (existingError) return { error: safeDbError(existingError), data: null as any }
+    if (existingError) return { error: safeDbError(existingError), data: null }
     if (existing) return { data: existing, error: null }
 
     const title = input.driver_id ? "Driver communications" : "Customer communications"
@@ -64,11 +78,11 @@ export async function getOrCreateCommunicationThread(input: { driver_id?: string
       .select("id, company_id, driver_id, customer_id, title, created_by, created_at, updated_at")
       .single()
 
-    if (createError || !created) return { error: safeDbError(createError), data: null as any }
+    if (createError || !created) return { error: safeDbError(createError), data: null }
     return { data: created, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    return { error: errorMessage(error, "Failed to create thread"), data: null as any }
+    return { error: errorMessage(error, "Failed to create thread"), data: null }
   }
 }
 
@@ -122,18 +136,19 @@ export async function getUnifiedCommunicationTimeline(input: {
           .limit(limit)
 
         for (const m of msgs || []) {
-          const mt = String((m as any).message_type || "text")
+          const mRec = asRecord(m)
+          const mt = String(mRec.message_type || "text")
           const channel: UnifiedCommunicationEvent["channel"] =
             mt.includes("sms") ? "sms" : mt === "system" ? "system" : "chat"
           const direction: UnifiedCommunicationEvent["direction"] = mt === "sms_inbound" ? "inbound" : "outbound"
           events.push({
-            id: `chat:${String((m as any).id)}`,
-            occurred_at: String((m as any).created_at),
+            id: `chat:${String(mRec.id)}`,
+            occurred_at: String(mRec.created_at),
             channel,
             direction,
-            message: String((m as any).message || ""),
-            source: { table: "chat_messages", id: String((m as any).id) },
-            metadata: { message_type: mt, sender_id: (m as any).sender_id },
+            message: String(mRec.message || ""),
+            source: { table: "chat_messages", id: String(mRec.id) },
+            metadata: { message_type: mt, sender_id: mRec.sender_id },
           })
         }
       }
@@ -150,18 +165,19 @@ export async function getUnifiedCommunicationTimeline(input: {
         .limit(limit)
 
       for (const r of rows || []) {
-        const t = String((r as any).type || "")
+        const rRec = asRecord(r)
+        const t = String(rRec.type || "")
         const channel: UnifiedCommunicationEvent["channel"] =
           t === "sms" ? "sms" : t === "email" || t === "invoice_sent" ? "email" : "note"
         events.push({
-          id: `crm:${String((r as any).id)}`,
-          occurred_at: String((r as any).occurred_at || (r as any).created_at),
+          id: `crm:${String(rRec.id)}`,
+          occurred_at: String(rRec.occurred_at || rRec.created_at),
           channel,
-          direction: (String((r as any).direction || "outbound") as any) === "inbound" ? "inbound" : "outbound",
-          subject: (r as any).subject ?? null,
-          message: (r as any).message ?? null,
-          source: { table: "contact_history", id: String((r as any).id) },
-          metadata: (r as any).metadata || { source: (r as any).source, external_id: (r as any).external_id },
+          direction: String(rRec.direction || "outbound") === "inbound" ? "inbound" : "outbound",
+          subject: (rRec.subject ?? null) as string | null,
+          message: (rRec.message ?? null) as string | null,
+          source: { table: "contact_history", id: String(rRec.id) },
+          metadata: asMetadata(rRec.metadata, { source: rRec.source, external_id: rRec.external_id }),
         })
       }
     }
@@ -176,18 +192,19 @@ export async function getUnifiedCommunicationTimeline(input: {
       .limit(limit)
 
     for (const r of logged || []) {
-      const et = String((r as any).event_type || "")
+      const rRec = asRecord(r)
+      const et = String(rRec.event_type || "")
       const channel: UnifiedCommunicationEvent["channel"] =
         et.includes("sms") ? "sms" : et.includes("email") ? "email" : et.includes("status") ? "system" : "note"
       events.push({
-        id: `log:${String((r as any).id)}`,
-        occurred_at: String((r as any).occurred_at),
+        id: `log:${String(rRec.id)}`,
+        occurred_at: String(rRec.occurred_at),
         channel,
-        direction: (String((r as any).direction || "outbound") as any) === "inbound" ? "inbound" : "outbound",
-        subject: (r as any).subject ?? null,
-        message: (r as any).message ?? null,
-        source: { table: "communication_events", id: String((r as any).id) },
-        metadata: (r as any).metadata || {},
+        direction: String(rRec.direction || "outbound") === "inbound" ? "inbound" : "outbound",
+        subject: (rRec.subject ?? null) as string | null,
+        message: (rRec.message ?? null) as string | null,
+        source: { table: "communication_events", id: String(rRec.id) },
+        metadata: asMetadata(rRec.metadata),
       })
     }
 

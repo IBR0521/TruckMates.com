@@ -4,26 +4,31 @@
 
 import { retryWithBackoff, isConnectionError, handleConnectionError } from '../connection-handler'
 
+type QueryResult<T, E = unknown> = {
+  data: T | null
+  error: E
+}
+
 /**
  * Execute a Supabase query with timeout and retry logic
  */
 export async function executeQuery<T>(
-  queryFn: () => Promise<{ data: T | null; error: any }>,
+  queryFn: () => Promise<QueryResult<T>>,
   options: {
     timeout?: number
     maxRetries?: number
     retryable?: boolean
   } = {}
-): Promise<{ data: T | null; error: any }> {
+): Promise<QueryResult<T>> {
   const { timeout = 5000, maxRetries = 2, retryable = true } = options
 
-  const executeWithTimeout = async (): Promise<{ data: T | null; error: any }> => {
+  const executeWithTimeout = async (): Promise<QueryResult<T>> => {
     const queryPromise = queryFn()
     const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) => {
       setTimeout(() => resolve({ data: null, error: { message: 'Query timeout' } }), timeout)
     })
 
-    return Promise.race([queryPromise, timeoutPromise]) as Promise<{ data: T | null; error: any }>
+    return Promise.race([queryPromise, timeoutPromise]) as Promise<QueryResult<T>>
   }
 
   if (!retryable) {
@@ -50,9 +55,9 @@ export async function executeQuery<T>(
  * Execute multiple queries in parallel with timeout protection
  */
 export async function executeQueriesParallel<T>(
-  queries: Array<() => Promise<{ data: T | null; error: any }>>,
+  queries: Array<() => Promise<QueryResult<T>>>,
   timeout: number = 5000
-): Promise<Array<{ data: T | null; error: any }>> {
+): Promise<Array<QueryResult<T>>> {
   const queryPromises = queries.map((queryFn) => {
     const queryPromise = queryFn()
     const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) => {

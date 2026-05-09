@@ -15,6 +15,15 @@ const TRAILER_FULL_SELECT = `
   reefer_unit_hours, last_reefer_service_date, registration_expiry, created_at, updated_at
 `
 
+type TrailerFormData = {
+  trailer_number?: string
+  vin?: string
+  trailer_type?: string
+  status?: string
+  current_truck_id?: string
+  [key: string]: unknown
+}
+
 export async function getTrailers(filters?: { status?: string; limit?: number; offset?: number }) {
   try {
     const permission = await checkViewPermission("vehicles")
@@ -75,7 +84,7 @@ export async function getTrailer(id: string) {
   }
 }
 
-export async function createTrailer(formData: Record<string, any>) {
+export async function createTrailer(formData: TrailerFormData) {
   const permission = await checkCreatePermission("vehicles")
   if (!permission.allowed) return { error: permission.error || "You don't have permission to create trailers", data: null }
 
@@ -104,7 +113,7 @@ export async function createTrailer(formData: Record<string, any>) {
     .maybeSingle()
   if (existingVin) return { error: "VIN already exists", data: null }
 
-  const payload: Record<string, any> = {
+  const payload: Record<string, unknown> = {
     company_id: ctx.companyId,
     trailer_number: trailerNumber,
     vin,
@@ -145,7 +154,7 @@ export async function createTrailer(formData: Record<string, any>) {
   return { data, error: null }
 }
 
-export async function updateTrailer(id: string, formData: Record<string, any>) {
+export async function updateTrailer(id: string, formData: TrailerFormData) {
   const permission = await checkEditPermission("vehicles")
   if (!permission.allowed) return { error: permission.error || "You don't have permission to edit trailers", data: null }
 
@@ -153,7 +162,7 @@ export async function updateTrailer(id: string, formData: Record<string, any>) {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null }
 
-  const updateData: Record<string, any> = {}
+  const updateData: Record<string, unknown> = {}
   const fields = [
     "trailer_number",
     "vin",

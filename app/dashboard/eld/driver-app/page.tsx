@@ -22,8 +22,8 @@ import { useRouter } from "next/navigation"
 export default function DriverAppPage() {
   const router = useRouter()
   const [driverId, setDriverId] = useState("")
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [hosData, setHosData] = useState<any>(null)
+  const [drivers, setDrivers] = useState<unknown[]>([])
+  const [hosData, setHosData] = useState<unknown>(null)
   const [currentStatus, setCurrentStatus] = useState<string>("off_duty")
   const [isLoading, setIsLoading] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())

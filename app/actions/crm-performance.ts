@@ -1,21 +1,16 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * CRM Performance Metrics Actions
  * Provides real-time performance data for customers and vendors
  */
 
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
 
 
 export interface CustomerPerformanceMetrics {
@@ -144,10 +139,10 @@ export async function getCustomerPerformanceMetrics(filters?: {
     let filteredData = data || []
 
     if (filters?.min_loads) {
-      filteredData = filteredData.filter((d: any) => d.total_loads >= filters.min_loads!)
+      filteredData = filteredData.filter((d: { total_loads: number }) => d.total_loads >= filters.min_loads!)
     }
     if (filters?.min_revenue) {
-      filteredData = filteredData.filter((d: any) => d.total_revenue >= filters.min_revenue!)
+      filteredData = filteredData.filter((d: { total_revenue: number }) => d.total_revenue >= filters.min_revenue!)
     }
 
     return { data: filteredData as CustomerPerformanceMetrics[], error: null }
@@ -291,7 +286,7 @@ export async function getVendorPerformanceMetrics(filters?: {
     let filteredData = data || []
 
     if (filters?.min_transactions) {
-      filteredData = filteredData.filter((d: any) => d.total_expenses >= filters.min_transactions!)
+      filteredData = filteredData.filter((d: { total_expenses: number }) => d.total_expenses >= filters.min_transactions!)
     }
 
     return { data: filteredData as VendorPerformanceMetrics[], error: null }
@@ -565,9 +560,9 @@ export async function getCRMRevenueSnapshot(): Promise<{ data: CRMRevenueSnapsho
     }
 
     const this_month_revenue =
-      (monthInvoices || []).reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0)
+      (monthInvoices || []).reduce((sum: number, inv: { amount: number | string | null }) => sum + (Number(inv.amount) || 0), 0)
     const outstanding_invoices =
-      (outstandingInvoices || []).reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0)
+      (outstandingInvoices || []).reduce((sum: number, inv: { amount: number | string | null }) => sum + (Number(inv.amount) || 0), 0)
 
     return {
       data: {
@@ -628,8 +623,8 @@ export async function getInactiveCustomers(days = 30): Promise<{
 
     const now = new Date().getTime()
     const inactive = (data || [])
-      .filter((c: any) => !c.last_load_date || new Date(c.last_load_date).getTime() < cutoff.getTime())
-      .map((c: any) => {
+      .filter((c: { last_load_date: string | null }) => !c.last_load_date || new Date(c.last_load_date).getTime() < cutoff.getTime())
+      .map((c: { customer_id: string; name: string; company_name: string | null; last_load_date: string | null; total_revenue: number | string | null; total_loads: number | string | null }) => {
         const lastLoadMs = c.last_load_date ? new Date(c.last_load_date).getTime() : 0
         const days_inactive = c.last_load_date ? Math.floor((now - lastLoadMs) / (1000 * 60 * 60 * 24)) : days
         return {

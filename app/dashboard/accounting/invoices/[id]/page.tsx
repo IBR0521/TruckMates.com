@@ -26,7 +26,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params)
   const router = useRouter()
   const aliveRef = useRef(true)
-  const [invoice, setInvoice] = useState<any>(null)
+  const [invoice, setInvoice] = useState<unknown>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showShareMenu, setShowShareMenu] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
@@ -117,7 +117,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     id: invoice.id,
     invoice_number: invoice.invoice_number,
     customer: invoice.customer_name,
-    load: invoice.loads ? (invoice.loads as any).shipment_number : null,
+    load: invoice.loads ? (invoice.loads as unknown).shipment_number : null,
     amount: `$${Number(invoice.amount).toFixed(2)}`,
     status: invoice.status,
     dueDate: invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : "N/A",
@@ -129,7 +129,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
   const handleDownload = () => {
     try {
-      const itemsHtml = invoiceData.items.map((item: any) => `
+      const itemsHtml = invoiceData.items.map((item: unknown) => `
         <tr>
           <td>${item.description || "Item"}</td>
           <td style="text-align: right;">${item.quantity || 1}</td>
@@ -551,9 +551,9 @@ PDF and supporting documents are not attached here. Use TruckMates â†’ Invoice â
               <div>
                 <h3 className="text-sm font-semibold text-muted-foreground mb-2">BILL TO</h3>
                 <p className="text-lg font-bold text-foreground">{invoiceData.customer}</p>
-                {invoice.loads && (invoice.loads as any).shipment_number && (
+                {invoice.loads && (invoice.loads as unknown).shipment_number && (
                   <p className="text-sm text-muted-foreground mt-2">
-                    Related Load: {(invoice.loads as any).shipment_number}
+                    Related Load: {(invoice.loads as unknown).shipment_number}
                   </p>
                 )}
               </div>
@@ -594,7 +594,7 @@ PDF and supporting documents are not attached here. Use TruckMates â†’ Invoice â
                   </tr>
                 </thead>
                 <tbody>
-                  {invoiceData.items.map((item: any, i: number) => (
+                  {invoiceData.items.map((item: unknown, i: number) => (
                     <tr key={i} className="border-b border-border">
                       <td className="py-3 text-foreground">{item.description || "Item"}</td>
                       <td className="text-right py-3 text-foreground">{item.quantity || 1}</td>

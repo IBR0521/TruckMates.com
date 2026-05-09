@@ -293,7 +293,16 @@ export async function exportAccidentRegisterPdfBase64() {
 
     if (error) return { error: "Failed to load accident register data", data: null }
 
-    const rows = (data || []).map((r: any) => ({
+    const rows = (data || []).map((r: {
+      incident_date: string | null
+      location: string | null
+      injuries: boolean | null
+      fatalities: boolean | null
+      hazardous_material_released: boolean | null
+      dot_reportable: boolean | null
+      description: string | null
+      driver?: { name?: string | null } | null
+    }) => ({
       incident_date: String(r.incident_date || ""),
       location: r.location || null,
       driver_name: r.driver?.name || null,

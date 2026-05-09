@@ -1,7 +1,8 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -9,14 +10,6 @@ import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-ses
 import { mapLegacyRole } from "@/lib/roles"
 import { validateRequiredString, validateNonNegativeNumber, validateDate, sanitizeString } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /**
  * DVIR visibility & mutations:
  * - **driver** — Only that user’s own inspections (`drivers.id` for their login). Client cannot widen scope.
@@ -407,7 +400,7 @@ export async function updateDVIR(id: string, formData: {
 
   try {
     // Build update object
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     }
 
@@ -477,7 +470,7 @@ export async function updateDVIR(id: string, formData: {
       }
 
       if (defectsFound && defects && Array.isArray(defects) && defects.length > 0) {
-        const allCorrected = defects.every((d: any) => d.corrected === true)
+        const allCorrected = defects.every((d: { corrected?: boolean }) => d.corrected === true)
         updateData.status = allCorrected ? "defects_corrected" : "failed"
       } else if (!defectsFound) {
         updateData.status = "passed"
@@ -677,9 +670,5 @@ export async function getDVIRStats(filters?: {
     return { error: errorMessage(error, "Failed to get DVIR stats"), data: null }
   }
 }
-
-
-
-
 
 

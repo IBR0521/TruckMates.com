@@ -33,6 +33,8 @@ import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
+type UpgradeAwareResult = { upgrade?: { required?: boolean } }
+
 const parseISODate = (value: string) => {
   if (!value) return undefined
   const [year, month, day] = value.split("-").map(Number)
@@ -189,7 +191,7 @@ export default function AddDriverPage() {
     setIsSubmitting(false)
 
     if (result.error) {
-      if ((result as any)?.upgrade?.required) {
+      if ((result as UpgradeAwareResult)?.upgrade?.required) {
         setShowUpgradeModal(true)
       }
       toast.error(result.error)

@@ -1,7 +1,8 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
@@ -9,14 +10,6 @@ import crypto from "crypto"
 import { handleDbError } from "@/lib/db-helpers"
 import { getResendClientForCompany } from "@/lib/resend-client"
 import { sendNotification } from "./notifications"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 async function getResendClient() {
   const ctx = await getCachedAuthContext()
   return getResendClientForCompany(ctx.companyId ?? null)
@@ -97,7 +90,7 @@ export async function createCustomerPortalAccess(formData: {
 
     if (existingAccess) {
       // Update existing access - preserve token unless explicitly regenerating
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         portal_url: formData.portal_url || null,
         can_view_location: formData.can_view_location || false,
         can_submit_loads: formData.can_submit_loads || false,
@@ -301,7 +294,7 @@ async function sendPortalAccessEmail(data: {
 
     if (result.error) {
       Sentry.captureException(result.error)
-      return { sent: false, reason: result.error.message || "Failed to send email" }
+      return { sent: false, reason: safeDbError(result.error, "Failed to send email") }
     }
 
     return { sent: true, email: data.customerEmail, messageId: result.data?.id }
@@ -755,7 +748,7 @@ export async function reviewPortalLoadRequest(input: {
       return { error: safeDbError(updateError, "Failed to review portal request"), data: null }
     }
 
-    const customerEmail = (load as any)?.customers?.email as string | undefined
+    const customerEmail = (load as { customers?: { email?: string | null } | null })?.customers?.email || undefined
     if (customerEmail) {
       try {
         const resend = await getResendClient()
@@ -851,7 +844,7 @@ export async function getCustomerPortalDocuments(token: string, loadId?: string)
       return { error: "Could not verify customer access", data: null }
     }
 
-    const customerLoadIds = customerLoadsResult.data.map((l: any) => l.id)
+    const customerLoadIds = customerLoadsResult.data.map((l: { id: string }) => l.id)
 
     if (customerLoadIds.length === 0) {
       return { data: [], error: null }

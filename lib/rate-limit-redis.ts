@@ -18,9 +18,24 @@ interface RateLimitResult {
   reset: number // Unix timestamp
 }
 
+type UpstashRatelimitResult = {
+  success: boolean
+  remaining: number
+  reset: number
+}
+
+type UpstashRatelimitInstance = {
+  limit: (identifier: string) => Promise<UpstashRatelimitResult>
+}
+
+type UpstashRatelimitClass = {
+  new (options: { redis: unknown; limiter: unknown; analytics: boolean }): UpstashRatelimitInstance
+  slidingWindow: (limit: number, window: string) => unknown
+}
+
 // Try to import Upstash Redis (optional dependency)
-let redis: any = null
-let Ratelimit: any = null
+let redis: unknown = null
+let Ratelimit: UpstashRatelimitClass | null = null
 
 if (
   process.env.NODE_ENV === "production" &&
@@ -42,7 +57,7 @@ try {
       token: process.env.UPSTASH_REDIS_REST_TOKEN,
     })
     
-    Ratelimit = upstashRatelimit.Ratelimit
+    Ratelimit = upstashRatelimit.Ratelimit as UpstashRatelimitClass
   }
 } catch (error) {
   // Upstash not installed or not configured - will fall back to in-memory

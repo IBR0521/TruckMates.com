@@ -26,8 +26,8 @@ import { getExpenses, deleteExpense } from "@/app/actions/accounting"
 export default function ExpensesPage() {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [expensesList, setExpensesList] = useState<any[]>([])
-  const [filteredExpenses, setFilteredExpenses] = useState<any[]>([])
+  const [expensesList, setExpensesList] = useState<unknown[]>([])
+  const [filteredExpenses, setFilteredExpenses] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")

@@ -1,19 +1,10 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { updateUserProfile, updateUserPassword } from "@/lib/auth/server"
-import { sanitizeError } from "@/lib/error-message"
-import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 export async function getAccountSettings() {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
@@ -60,15 +51,5 @@ export async function changePassword(currentPassword: string, newPassword: strin
 
   return { success: true, error: null }
 }
-
-
-
-
-
-
-
-
-
-
 
 

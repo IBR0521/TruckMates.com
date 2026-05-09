@@ -30,9 +30,9 @@ export default function GeofenceDetailPage() {
   const router = useRouter()
   const aliveRef = useRef(true)
   const geofenceId = params.id as string
-  const [geofence, setGeofence] = useState<any>(null)
-  const [visits, setVisits] = useState<any[]>([])
-  const [states, setStates] = useState<any[]>([])
+  const [geofence, setGeofence] = useState<unknown>(null)
+  const [visits, setVisits] = useState<unknown[]>([])
+  const [states, setStates] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)

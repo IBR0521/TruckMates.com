@@ -1,18 +1,11 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /**
  * Settlement Pay Rules Engine
  * Manages complex pay structures for drivers
@@ -229,7 +222,7 @@ export async function calculateGrossPayFromRule(params: {
     miles?: number
     load_type?: string
     on_time_delivery?: boolean
-    [key: string]: any
+    [key: string]: unknown
   }>
   totalMiles?: number
   periodStart: string
@@ -251,7 +244,7 @@ export async function calculateGrossPayFromRule(params: {
 
   const payRule = payRuleResult.data
   let grossPay = 0
-  const calculationDetails: any = {
+  const calculationDetails: Record<string, unknown> = {
     base_pay: 0,
     bonuses: [],
     bonus_total: 0,
@@ -439,6 +432,5 @@ export async function deletePayRule(ruleId: string) {
     return { error: errorMessage(error, "Failed to delete pay rule"), data: null }
   }
 }
-
 
 

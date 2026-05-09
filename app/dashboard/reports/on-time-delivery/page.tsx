@@ -27,9 +27,9 @@ import {
 } from "@/components/ui/select"
 
 export default function OnTimeDeliveryScorecardPage() {
-  const [analytics, setAnalytics] = useState<any>(null)
+  const [analytics, setAnalytics] = useState<unknown>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [customers, setCustomers] = useState<any[]>([])
+  const [customers, setCustomers] = useState<unknown[]>([])
   const [filters, setFilters] = useState({
     start_date: "",
     end_date: "",
@@ -54,7 +54,7 @@ export default function OnTimeDeliveryScorecardPage() {
   async function loadAnalytics() {
     setIsLoading(true)
     try {
-      const analyticsFilters: any = {}
+      const analyticsFilters: unknown = {}
       if (filters.start_date) analyticsFilters.start_date = filters.start_date
       if (filters.end_date) analyticsFilters.end_date = filters.end_date
       if (filters.customer_id !== "all") analyticsFilters.customer_id = filters.customer_id
@@ -273,7 +273,7 @@ export default function OnTimeDeliveryScorecardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {analytics.customers.map((customer: any, index: number) => (
+                    {analytics.customers.map((customer: unknown, index: number) => (
                       <TableRow key={customer.customer_id}>
                         <TableCell className="font-medium">
                           {customer.customer_name}

@@ -16,9 +16,9 @@ import { getCurrentUser } from "@/lib/auth/server"
 import { mapLegacyRole } from "@/lib/roles"
 
 export default function PayRulesPage() {
-  const [drivers, setDrivers] = useState<any[]>([])
+  const [drivers, setDrivers] = useState<unknown[]>([])
   const [selectedDriverId, setSelectedDriverId] = useState<string>("")
-  const [history, setHistory] = useState<any[]>([])
+  const [history, setHistory] = useState<unknown[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isSavingPerDiem, setIsSavingPerDiem] = useState(false)

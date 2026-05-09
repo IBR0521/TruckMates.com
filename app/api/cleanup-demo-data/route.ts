@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { removeAllDemoData } from "@/app/actions/cleanup-demo-data"
+import { isDevSurfaceBlocked } from "@/lib/security/dev-only"
 
 export async function POST(request: NextRequest) {
+  if (isDevSurfaceBlocked()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
   try {
     const result = await removeAllDemoData()
     

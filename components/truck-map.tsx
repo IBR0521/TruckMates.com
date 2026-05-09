@@ -25,6 +25,21 @@ interface TruckMapProps {
   loadId?: string
 }
 
+type RouteWaypoint = {
+  name: string
+  type: string
+  stop_number?: number
+}
+
+type TruckRouteData = {
+  distance: string
+  duration: string
+  truckFriendly: boolean
+  waypoints: RouteWaypoint[]
+  polyline?: string
+  isEstimated?: boolean
+}
+
 /** Stable default — `stops = []` in params creates a new array every render and breaks useEffect deps. */
 const EMPTY_STOPS: NonNullable<TruckMapProps["stops"]> = []
 
@@ -53,7 +68,7 @@ export function TruckMap({
       })),
     )
   }, [stops])
-  const [route, setRoute] = useState<any>(null)
+  const [route, setRoute] = useState<TruckRouteData | null>(null)
   const [restrictions, setRestrictions] = useState<string[]>([])
 
   useEffect(() => {
@@ -317,7 +332,7 @@ export function TruckMap({
           {/* Waypoints */}
           <div className="space-y-2 mb-4">
             <p className="text-xs font-medium text-muted-foreground">Route Waypoints</p>
-            {(route.waypoints ?? []).map((waypoint: any, idx: number) => (
+            {(route.waypoints ?? []).map((waypoint: RouteWaypoint, idx: number) => (
               <div key={idx} className="flex items-center gap-2 text-xs">
                 <div
                   className={`w-2 h-2 rounded-full ${

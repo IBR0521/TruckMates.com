@@ -1,21 +1,14 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import type { EmployeeRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
 import * as Sentry from "@sentry/nextjs"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
+type CompletedDocumentEntry = string | { type?: string; documentId?: string }
 
 /** Matches `public.driver_onboarding` in supabase/driver_onboarding_schema.sql */
 const DRIVER_ONBOARDING_SELECT = `
@@ -253,7 +246,7 @@ export async function markDocumentUploaded(driverId: string, documentType: strin
     : []
   
   // MEDIUM FIX 12: Check for duplicate documentId (works for both formats)
-  const isDuplicate = existingCompleted.some((doc: any) => {
+  const isDuplicate = existingCompleted.some((doc: CompletedDocumentEntry) => {
     if (typeof doc === 'string') {
       return doc === documentId
     }
@@ -277,7 +270,7 @@ export async function markDocumentUploaded(driverId: string, documentType: strin
     : []
 
   // Update specific document flag
-  const updateData: any = {
+  const updateData: Record<string, unknown> = {
     documents_completed: documentsCompleted,
     documents_missing: documentsMissing,
     updated_at: new Date().toISOString(),
@@ -295,7 +288,7 @@ export async function markDocumentUploaded(driverId: string, documentType: strin
   // Count unique document types completed (handle both old UUID format and new object format)
   const completedTypes = new Set(
     documentsCompleted
-      .map((doc: any) => {
+      .map((doc: CompletedDocumentEntry) => {
         if (typeof doc === 'object' && doc.type) {
           return doc.type // New format: { type, documentId }
         }
@@ -371,7 +364,7 @@ export async function completeDriverOnboarding(driverId: string) {
   // Extract unique document types from completed documents (handle both formats)
   const completedTypes = new Set(
     completedDocs
-      .map((doc: any) => {
+      .map((doc: CompletedDocumentEntry) => {
         if (typeof doc === 'object' && doc.type) {
           return doc.type // New format
         }
@@ -463,8 +456,5 @@ export async function getAllDriverOnboarding(filters?: {
 
   return { data: data || [], error: null }
 }
-
-
-
 
 

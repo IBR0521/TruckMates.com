@@ -35,6 +35,8 @@ const FEATURE_LABEL: Record<UpgradeFeatureKey, string> = {
   route_optimization: "Route optimization",
 }
 
+type UpgradeOffer = NonNullable<Awaited<ReturnType<typeof getUpgradeOffer>>["data"]>
+
 export function UpgradeModal({
   open,
   onOpenChange,
@@ -46,7 +48,7 @@ export function UpgradeModal({
 }) {
   const [isLoading, setIsLoading] = useState(false)
   const [isCheckoutStarting, setIsCheckoutStarting] = useState(false)
-  const [offer, setOffer] = useState<any>(null)
+  const [offer, setOffer] = useState<UpgradeOffer | null>(null)
 
   useEffect(() => {
     let active = true

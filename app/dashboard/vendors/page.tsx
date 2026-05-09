@@ -33,11 +33,30 @@ import { AuditTrail } from "@/components/dashboard/audit-trail"
 import { History } from "lucide-react"
 import { CRMSectionHeader } from "@/components/crm/crm-section-header"
 
+type VendorRow = {
+  id: string
+  name?: string | null
+  email?: string | null
+  company_name?: string | null
+  primary_contact_name?: string | null
+  phone?: string | null
+  vendor_type?: string | null
+  status?: string | null
+  city?: string | null
+  state?: string | null
+  total_spent?: number | string | null
+  total_transactions?: number | null
+  created_at?: string | null
+  [key: string]: unknown
+}
+
+type DependencyRow = Record<string, unknown>
+
 export default function VendorsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [deleteDependencies, setDeleteDependencies] = useState<any[]>([])
-  const [vendorsList, setVendorsList] = useState<any[]>([])
-  const [filteredVendors, setFilteredVendors] = useState<any[]>([])
+  const [deleteDependencies, setDeleteDependencies] = useState<DependencyRow[]>([])
+  const [vendorsList, setVendorsList] = useState<VendorRow[]>([])
+  const [filteredVendors, setFilteredVendors] = useState<VendorRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -46,7 +65,7 @@ export default function VendorsPage() {
 
   const loadVendors = async () => {
     setIsLoading(true)
-    const filters: any = {}
+    const filters: Record<string, string> = {}
     if (searchTerm) filters.search = searchTerm
     if (statusFilter !== "all") filters.status = statusFilter
     if (typeFilter !== "all") filters.vendor_type = typeFilter
@@ -146,7 +165,7 @@ export default function VendorsPage() {
     )
     setFilteredVendors(updatedFiltered)
 
-    const updateData: any = { [field]: value }
+    const updateData: Record<string, string | number | null> = { [field]: value }
     const result = await updateVendor(vendorId, updateData)
     
     if (result.error) {

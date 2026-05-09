@@ -44,16 +44,16 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
   const router = useRouter()
   const { id } = use(params)
   const aliveRef = useRef(true)
-  const [driver, setDriver] = useState<any>(null)
-  const [truck, setTruck] = useState<any>(null)
+  const [driver, setDriver] = useState<unknown>(null)
+  const [truck, setTruck] = useState<unknown>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [inspectionStats, setInspectionStats] = useState<{
     total_inspections: number
     oos_rate: number
     violation_count: number
   } | null>(null)
-  const [activeLease, setActiveLease] = useState<any>(null)
-  const [leasePayments, setLeasePayments] = useState<any[]>([])
+  const [activeLease, setActiveLease] = useState<unknown>(null)
+  const [leasePayments, setLeasePayments] = useState<unknown[]>([])
   const [creatingLease, setCreatingLease] = useState(false)
   const [leaseForm, setLeaseForm] = useState({
     lease_type: "lease-to-own",

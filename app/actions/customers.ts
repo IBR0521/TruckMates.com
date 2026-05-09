@@ -1,18 +1,13 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone, validateRequiredString, stateNameToCode } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
 // Explicit selection lists to reduce `select("*")` over-fetching.
 // Note: `customers`, `contacts`, and `contact_history` are not represented in `lib/supabase/types.ts`,
 // so keep the customer column list aligned with the fields used in this module.
@@ -32,6 +27,9 @@ const LOADS_SELECT =
   "id, company_id, shipment_number, origin, destination, weight, weight_kg, contents, value, carrier_type, status, driver_id, truck_id, route_id, load_date, estimated_delivery, actual_delivery, coordinates, created_at, updated_at"
 const INVOICES_SELECT =
   "id, company_id, invoice_number, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, created_at, updated_at"
+
+type ChangeEntry = { field: string; old_value: unknown; new_value: unknown }
+type IdCreatedRow = { id: string; created_at: string }
 
 // Get all customers
 export async function getCustomers(filters?: {
@@ -367,8 +365,8 @@ export async function updateCustomer(
   }
 
   // Build update data and track changes
-  const updateData: any = {}
-  const changes: Array<{ field: string; old_value: any; new_value: any }> = []
+  const updateData: Record<string, unknown> = {}
+  const changes: ChangeEntry[] = []
   
   const fieldsToCheck = [
     "name", "company_name", "email", "phone", "website", "address_line1", "address_line2",
@@ -431,7 +429,7 @@ export async function updateCustomer(
               old_value: change.old_value,
               new_value: change.new_value,
             },
-          }).catch((err: any) => {
+          }).catch((err: unknown) => {
             Sentry.captureException(err)
             return null
           })
@@ -521,7 +519,7 @@ export async function getCustomerLoads(customerId: string) {
     .eq("customer_id", customerId)
 
   // Also get by company_name if it matches the customer name exactly (sanitized)
-  let loadsByCompanyName: any[] = []
+  let loadsByCompanyName: IdCreatedRow[] = []
   if (customer.name) {
     const sanitizedName = customer.name.trim()
     const { data: loadsByName, error: error2 } = await supabase
@@ -537,7 +535,7 @@ export async function getCustomerLoads(customerId: string) {
   }
 
   // Combine results and remove duplicates
-  const allLoads = [...(loadsByCustomerId || []), ...loadsByCompanyName]
+  const allLoads = [...((loadsByCustomerId || []) as IdCreatedRow[]), ...loadsByCompanyName]
   const uniqueLoads = allLoads.filter((load, index, self) => 
     index === self.findIndex((l) => l.id === load.id)
   )
@@ -587,7 +585,7 @@ export async function getCustomerInvoices(customerId: string) {
     .eq("customer_id", customerId)
 
   // Also get by customer_name if it matches the customer name exactly (sanitized)
-  let invoicesByCustomerName: any[] = []
+  let invoicesByCustomerName: IdCreatedRow[] = []
   if (customer.name) {
     const sanitizedName = customer.name.trim()
     const { data: invoicesByName, error: error2 } = await supabase
@@ -603,7 +601,7 @@ export async function getCustomerInvoices(customerId: string) {
   }
 
   // Combine results and remove duplicates
-  const allInvoices = [...(invoicesByCustomerId || []), ...invoicesByCustomerName]
+  const allInvoices = [...((invoicesByCustomerId || []) as IdCreatedRow[]), ...invoicesByCustomerName]
   const uniqueInvoices = allInvoices.filter((invoice, index, self) => 
     index === self.findIndex((i) => i.id === invoice.id)
   )

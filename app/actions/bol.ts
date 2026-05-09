@@ -1,7 +1,8 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import * as Sentry from "@sentry/nextjs"
@@ -9,13 +10,86 @@ import { generateBOLPDFFile } from "./bol-pdf"
 import { getResendClient } from "./invoice-email"
 import { escapeHtml } from "@/lib/html-escape"
 
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
+type BOLAddressBook = {
+  id: string
+  name: string
+  company_name: string | null
+  contact_name: string | null
+  email: string | null
+  phone: string | null
+  address_line1: string | null
+  address_line2: string | null
+  city: string | null
+  state: string | null
+  zip_code: string | null
 }
 
+type LoadWithAddressBooks = {
+  shipper_name?: string | null
+  shipper_address?: string | null
+  shipper_city?: string | null
+  shipper_state?: string | null
+  shipper_zip?: string | null
+  shipper_contact_phone?: string | null
+  shipper_contact_email?: string | null
+  consignee_name?: string | null
+  consignee_address?: string | null
+  consignee_city?: string | null
+  consignee_state?: string | null
+  consignee_zip?: string | null
+  consignee_contact_phone?: string | null
+  consignee_contact_email?: string | null
+  load_date?: string | null
+  estimated_delivery?: string | null
+  rate?: number | string | null
+  value?: number | string | null
+  total_rate?: number | string | null
+  special_instructions?: string | null
+  pickup_instructions?: string | null
+  delivery_instructions?: string | null
+  shipper_address_book?: BOLAddressBook | null
+  consignee_address_book?: BOLAddressBook | null
+}
 
+type CreateBOLPayload = {
+  load_id: string
+  template_id?: string
+  shipper_name?: string
+  shipper_address?: string
+  shipper_city?: string
+  shipper_state?: string
+  shipper_zip?: string
+  shipper_phone?: string
+  shipper_email?: string
+  consignee_name?: string
+  consignee_address?: string
+  consignee_city?: string
+  consignee_state?: string
+  consignee_zip?: string
+  consignee_phone?: string
+  consignee_email?: string
+  carrier_name?: string
+  carrier_mc_number?: string
+  carrier_dot_number?: string
+  pickup_date?: string
+  delivery_date?: string
+  freight_charges?: number | string
+  payment_terms?: string
+  special_instructions?: string
+}
+
+type CurrentBOLSignatures = {
+  status: "draft" | "sent" | "signed" | "delivered" | "completed" | string
+  shipper_signature?: unknown
+  driver_signature?: unknown
+  consignee_signature?: unknown
+}
+
+type AwaitingBOLRow = {
+  shipper_signature?: unknown
+  driver_signature?: unknown
+  consignee_signature?: unknown
+}
 // Get all BOLs
 export async function getBOLs(filters?: {
   load_id?: string
@@ -186,30 +260,31 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
       .maybeSingle()
 
     if (loadError || !load) {
-      return { error: loadError?.message || "Load not found", data: null }
+      return { error: loadError ? safeDbError(loadError, "Load not found") : "Load not found", data: null }
     }
 
-    const shipperAddressBook = (load as any).shipper_address_book
-    const consigneeAddressBook = (load as any).consignee_address_book
+    const loadWithAddressBooks = load as typeof load & LoadWithAddressBooks
+    const shipperAddressBook = loadWithAddressBooks.shipper_address_book
+    const consigneeAddressBook = loadWithAddressBooks.consignee_address_book
 
     const shipperData = {
-      shipper_name: shipperAddressBook?.company_name || shipperAddressBook?.name || load.shipper_name || "",
-      shipper_address: shipperAddressBook?.address_line1 || load.shipper_address || undefined,
-      shipper_city: shipperAddressBook?.city || load.shipper_city || undefined,
-      shipper_state: shipperAddressBook?.state || load.shipper_state || undefined,
-      shipper_zip: shipperAddressBook?.zip_code || load.shipper_zip || undefined,
-      shipper_phone: shipperAddressBook?.phone || load.shipper_contact_phone || undefined,
-      shipper_email: shipperAddressBook?.email || load.shipper_contact_email || undefined,
+      shipper_name: shipperAddressBook?.company_name || shipperAddressBook?.name || loadWithAddressBooks.shipper_name || "",
+      shipper_address: shipperAddressBook?.address_line1 || loadWithAddressBooks.shipper_address || undefined,
+      shipper_city: shipperAddressBook?.city || loadWithAddressBooks.shipper_city || undefined,
+      shipper_state: shipperAddressBook?.state || loadWithAddressBooks.shipper_state || undefined,
+      shipper_zip: shipperAddressBook?.zip_code || loadWithAddressBooks.shipper_zip || undefined,
+      shipper_phone: shipperAddressBook?.phone || loadWithAddressBooks.shipper_contact_phone || undefined,
+      shipper_email: shipperAddressBook?.email || loadWithAddressBooks.shipper_contact_email || undefined,
     }
 
     const consigneeData = {
-      consignee_name: consigneeAddressBook?.company_name || consigneeAddressBook?.name || load.consignee_name || "",
-      consignee_address: consigneeAddressBook?.address_line1 || load.consignee_address || undefined,
-      consignee_city: consigneeAddressBook?.city || load.consignee_city || undefined,
-      consignee_state: consigneeAddressBook?.state || load.consignee_state || undefined,
-      consignee_zip: consigneeAddressBook?.zip_code || load.consignee_zip || undefined,
-      consignee_phone: consigneeAddressBook?.phone || load.consignee_contact_phone || undefined,
-      consignee_email: consigneeAddressBook?.email || load.consignee_contact_email || undefined,
+      consignee_name: consigneeAddressBook?.company_name || consigneeAddressBook?.name || loadWithAddressBooks.consignee_name || "",
+      consignee_address: consigneeAddressBook?.address_line1 || loadWithAddressBooks.consignee_address || undefined,
+      consignee_city: consigneeAddressBook?.city || loadWithAddressBooks.consignee_city || undefined,
+      consignee_state: consigneeAddressBook?.state || loadWithAddressBooks.consignee_state || undefined,
+      consignee_zip: consigneeAddressBook?.zip_code || loadWithAddressBooks.consignee_zip || undefined,
+      consignee_phone: consigneeAddressBook?.phone || loadWithAddressBooks.consignee_contact_phone || undefined,
+      consignee_email: consigneeAddressBook?.email || loadWithAddressBooks.consignee_contact_email || undefined,
     }
 
     // Optionally fetch carrier info (kept for future use)
@@ -223,16 +298,19 @@ export async function getBOLDataFromLoad(loadId: string): Promise<{
       data: {
         ...shipperData,
         ...consigneeData,
-        pickup_date: load.load_date || undefined,
-        delivery_date: load.estimated_delivery || undefined,
+        pickup_date: loadWithAddressBooks.load_date || undefined,
+        delivery_date: loadWithAddressBooks.estimated_delivery || undefined,
         freight_charges: (() => {
-          const rate = load.rate || load.value || load.total_rate
+          const rate = loadWithAddressBooks.rate || loadWithAddressBooks.value || loadWithAddressBooks.total_rate
           if (!rate) return undefined
           const parsed = typeof rate === "number" ? rate : parseFloat(String(rate))
           return isNaN(parsed) || !isFinite(parsed) ? undefined : parsed
         })(),
         special_instructions:
-          load.special_instructions || load.pickup_instructions || load.delivery_instructions || undefined,
+          loadWithAddressBooks.special_instructions ||
+          loadWithAddressBooks.pickup_instructions ||
+          loadWithAddressBooks.delivery_instructions ||
+          undefined,
       },
       error: null,
     }
@@ -286,7 +364,7 @@ export async function createBOL(formData: {
     // Auto-populate from load if requested or if fields are missing
     // LOW FIX 3: Destructure auto_populate before merging to prevent leak
     const { auto_populate, ...restFormData } = formData
-    let bolData: any = { ...restFormData }
+    let bolData: CreateBOLPayload = { ...restFormData }
     if (auto_populate || !restFormData.shipper_name || !restFormData.consignee_name) {
       const loadData = await getBOLDataFromLoad(restFormData.load_id)
       if (loadData.data) {
@@ -433,27 +511,28 @@ export async function updateBOLSignature(
     }
 
     // HIGH FIX 3: Enforce signature order - shipper before driver, driver before consignee
-    if (signatureType === "driver" && !(currentBOL as any).shipper_signature) {
+    const bolSignatureState = currentBOL as CurrentBOLSignatures
+    if (signatureType === "driver" && !bolSignatureState.shipper_signature) {
       return { error: "Shipper must sign before driver", data: null }
     }
-    if (signatureType === "consignee" && !(currentBOL as any).driver_signature) {
+    if (signatureType === "consignee" && !bolSignatureState.driver_signature) {
       return { error: "Driver must sign before consignee", data: null }
     }
 
     // Reject if BOL is already delivered or completed
-    if (["delivered", "completed"].includes((currentBOL as any).status)) {
-      return { error: `Cannot update signature on ${(currentBOL as any).status} BOL`, data: null }
+    if (["delivered", "completed"].includes(bolSignatureState.status)) {
+      return { error: `Cannot update signature on ${bolSignatureState.status} BOL`, data: null }
     }
 
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       [signatureField]: signatureData,
     }
 
     // Check if we should update status to 'signed'
     // At minimum, driver signature should be required
-    const hasDriverSignature = signatureType === "driver" || (currentBOL as any).driver_signature
+    const hasDriverSignature = signatureType === "driver" || !!bolSignatureState.driver_signature
 
-    if (hasDriverSignature && (currentBOL as any).status === "draft") {
+    if (hasDriverSignature && bolSignatureState.status === "draft") {
       updateData.status = "signed"
     }
 
@@ -520,7 +599,7 @@ export async function updateBOLPOD(
       return { error: ctx.error || "Not authenticated", data: null }
     }
 
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (podData.pod_photos !== undefined) updateData.pod_photos = podData.pod_photos
     if (podData.pod_notes !== undefined) updateData.pod_notes = podData.pod_notes
     if (podData.pod_received_by !== undefined) updateData.pod_received_by = podData.pod_received_by
@@ -554,7 +633,8 @@ export async function updateBOLPOD(
     }
 
     // Auto-store PDF if BOL is completed (has consignee signature)
-    if (data && (data as any).consignee_signature) {
+    const updatedBol = data as { consignee_signature?: unknown; load_id?: string; pod_received_date?: string | null; pod_received_by?: string | null }
+    if (updatedBol && updatedBol.consignee_signature) {
       try {
         const { autoStoreBOLPDFOnCompletion } = await import("./bol-enhanced")
         await autoStoreBOLPDFOnCompletion(bolId, ctx.companyId).catch((err) => {
@@ -575,10 +655,10 @@ export async function updateBOLPOD(
 
     // Trigger invoice automation once POD is captured.
     // This is idempotent: autoGenerateInvoiceOnPOD returns existing invoice if already created.
-    if (data && (data as any).load_id && ((data as any).pod_received_date || (data as any).pod_received_by)) {
+    if (updatedBol && updatedBol.load_id && (updatedBol.pod_received_date || updatedBol.pod_received_by)) {
       try {
         const { autoGenerateInvoiceOnPOD } = await import("./auto-invoice")
-        const invoiceResult = await autoGenerateInvoiceOnPOD((data as any).load_id)
+        const invoiceResult = await autoGenerateInvoiceOnPOD(updatedBol.load_id)
         if (invoiceResult.error) {
           invoiceAutomation = {
             triggered: true,
@@ -603,7 +683,7 @@ export async function updateBOLPOD(
 
     revalidatePath("/dashboard/bols")
     revalidatePath(`/dashboard/bols/${bolId}`)
-    return { data: { ...(data as any), _invoice_automation: invoiceAutomation }, error: null }
+    return { data: { ...(data as Record<string, unknown>), _invoice_automation: invoiceAutomation }, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
     return { error: errorMessage(error, "An unexpected error occurred"), data: null }
@@ -646,7 +726,7 @@ export async function createBOLTemplate(formData: {
   description?: string
   is_default?: boolean
   template_html?: string
-  template_fields?: any
+  template_fields?: unknown
 }) {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
@@ -741,7 +821,7 @@ export async function getBOLStats() {
     ])
 
     const awaitingSignature = (awaitingRows || []).filter(
-      (b: any) => !b.shipper_signature || !b.driver_signature || !b.consignee_signature
+      (b: AwaitingBOLRow) => !b.shipper_signature || !b.driver_signature || !b.consignee_signature
     ).length
 
     return {
@@ -772,7 +852,7 @@ export async function sendBOLEmail(bolId: string, options?: { subject?: string; 
       .eq("company_id", ctx.companyId)
       .maybeSingle()
 
-    if (error || !bol) return { error: error?.message || "BOL not found", data: null }
+    if (error || !bol) return { error: error ? safeDbError(error, "BOL not found") : "BOL not found", data: null }
     if (!bol.consignee_email || !String(bol.consignee_email).includes("@")) {
       return { error: "Consignee email is missing on this BOL", data: null }
     }
@@ -803,7 +883,7 @@ export async function sendBOLEmail(bolId: string, options?: { subject?: string; 
       ],
     })
 
-    if (emailResult.error) return { error: emailResult.error.message || "Failed to send email", data: null }
+    if (emailResult.error) return { error: safeDbError(emailResult.error, "Failed to send email"), data: null }
 
     if (bol.load_id) {
       try {

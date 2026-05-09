@@ -1,18 +1,9 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
-import * as Sentry from "@sentry/nextjs"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 export type ExternalBrokerProvider = "dat" | "truckstop" | "123loadboard"
 
 type IntegrationRow = {
@@ -36,7 +27,7 @@ type IntegrationRow = {
   loadboard123_username?: string | null
   loadboard123_password?: string | null
   loadboard123_sync_enabled?: boolean | null
-  sync_filters?: any
+  sync_filters?: Record<string, unknown>
   max_loads_per_sync?: number | null
   last_sync_status?: string | null
   last_sync_error?: string | null
@@ -112,7 +103,7 @@ export async function upsertExternalBrokerIntegration(
   const roleCheck = await requireManagerRole()
   if (!roleCheck.ok) return { data: null, error: roleCheck.error }
 
-  const updateData: Record<string, any> = {
+  const updateData: Record<string, unknown> = {
     company_id: ctx.companyId,
     provider,
     sync_filters: updates.sync_filters ?? {},
@@ -204,11 +195,19 @@ export async function testTruckstopConnection(opts?: { environment?: "prod" | "i
     return { ok: false, error: `Truckstop auth failed (${res.status}). ${text || "Check credentials"}` }
   }
 
-  const json = (await res.json().catch(() => ({}))) as any
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  const expiresInRaw = json.expires_in
+  const expiresIn =
+    typeof expiresInRaw === "number"
+      ? expiresInRaw
+      : typeof expiresInRaw === "string"
+        ? Number(expiresInRaw)
+        : undefined
+
   return {
     ok: true,
     error: null,
-    details: { claims: json?.claims, expires_in: json?.expires_in },
+    details: { claims: json.claims, expires_in: Number.isFinite(expiresIn) ? expiresIn : undefined },
   }
 }
 

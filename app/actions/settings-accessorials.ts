@@ -1,17 +1,8 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import * as Sentry from "@sentry/nextjs"
-import { sanitizeError } from "@/lib/error-message"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 export interface Accessorial {
   id?: string
   name: string
@@ -150,7 +141,7 @@ export async function updateAccessorial(id: string, accessorial: Partial<Accesso
     return { error: "Accessorial not found or access denied", data: null }
   }
 
-  const updateData: any = {}
+  const updateData: Record<string, unknown> = {}
   if (accessorial.name !== undefined) updateData.name = accessorial.name.trim()
   if (accessorial.code !== undefined) updateData.code = accessorial.code?.trim() || null
   if (accessorial.description !== undefined) updateData.description = accessorial.description?.trim() || null
@@ -231,10 +222,5 @@ export async function deleteAccessorial(id: string): Promise<{ error: string | n
 
   return { error: null }
 }
-
-
-
-
-
 
 

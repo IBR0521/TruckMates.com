@@ -1,22 +1,14 @@
 "use server"
 
+import { safeDbError } from "@/lib/utils/error"
 /**
  * Automated Load Status Updates
  * Auto-update load status when driver enters/exits geofences
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { errorMessage, sanitizeError } from "@/lib/error-message"
+import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import * as Sentry from "@sentry/nextjs"
-
-
-function safeDbError(error: unknown, fallback = "Database operation failed"): string {
-  Sentry.captureException(error)
-  return sanitizeError(error, { fallback })
-}
-
-
 /**
  * Auto-update load status from geofence entry/exit
  * This is called by the geofence trigger, but can also be called manually
@@ -101,7 +93,7 @@ export async function updateGeofenceStatusMapping(
   }
 
   try {
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     
     if (settings.auto_update_load_status !== undefined) {
       updateData.auto_update_load_status = settings.auto_update_load_status
@@ -130,6 +122,5 @@ export async function updateGeofenceStatusMapping(
     return { error: errorMessage(error, "Failed to update geofence status mapping"), data: null }
   }
 }
-
 
 

@@ -108,7 +108,7 @@ function mergeClusterLogs(
 /** Shared by dispatcher UI and `GET /api/dispatch/hos` so numbers always match. */
 export async function computeDriversHOSStatusWithCompany(
   companyId: string,
-  clientFactory: () => Promise<any> | any
+  clientFactory: () => Promise<{ from: (table: string) => any }> | { from: (table: string) => any }
 ): Promise<{ data: DriverHOSStatus[] | null; error: string | null }> {
   const supabase = await clientFactory()
   // Get all active drivers

@@ -8,9 +8,9 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 
 interface ResponsiveTableProps {
   headers: Array<{ key: string; label: string; className?: string }>
-  data: Array<Record<string, any>>
-  renderCell?: (key: string, value: any, row: Record<string, any>) => React.ReactNode
-  renderMobileCard?: (row: Record<string, any>) => React.ReactNode
+  data: Array<Record<string, unknown>>
+  renderCell?: (key: string, value: unknown, row: Record<string, unknown>) => React.ReactNode
+  renderMobileCard?: (row: Record<string, unknown>) => React.ReactNode
   className?: string
   emptyMessage?: string
 }
