@@ -186,7 +186,7 @@ export async function getDVIRWorkOrders(
 
     const workOrderIds = ((dvir.work_orders_created as Array<{ work_order_id?: string }> | null) || [])
       .map((wo) => wo.work_order_id)
-      .filter((id: string) => id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0)
 
     if (workOrderIds.length === 0) {
       return { data: [], error: null }
