@@ -60,11 +60,9 @@ export function validateEnv(): { valid: boolean; errors: string[]; warnings: str
     }
     if (!String(process.env.SUPABASE_POOLER_URL || "").trim()) {
       const poolerMsg =
-        "SUPABASE_POOLER_URL is not configured — server traffic uses direct DB connections (~30 concurrent users). Set the pooler URL (Transaction mode) from Supabase → Database → Connection string."
+        "SUPABASE_POOLER_URL is not configured. Direct Postgres operations are unavailable, but the Supabase JS client will work normally via NEXT_PUBLIC_SUPABASE_URL."
       warnings.push(poolerMsg)
-      console.warn(
-        "WARNING: SUPABASE_POOLER_URL is not configured. The platform will fall back to direct connections, which limits concurrent capacity to ~30 users. Configure the pooler URL from Supabase dashboard to handle production load.",
-      )
+      console.warn(`WARNING: ${poolerMsg}`)
     }
   }
 

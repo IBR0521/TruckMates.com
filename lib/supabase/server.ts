@@ -5,9 +5,6 @@ import { cookies } from 'next/headers'
 export async function createClient() {
   // Validate environment variables - handle gracefully
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabasePoolerUrl = process.env.SUPABASE_POOLER_URL
-  /** Pooler host (transaction mode) when set; same anon key and JWT validation as direct API. */
-  const resolvedSupabaseUrl: string = (supabasePoolerUrl || supabaseUrl) as string
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   // Check for missing or placeholder values
@@ -51,9 +48,9 @@ export async function createClient() {
 
   // Validate URL format
   try {
-    new URL(resolvedSupabaseUrl || "")
+    new URL(supabaseUrl || "")
   } catch {
-    console.warn(`Invalid Supabase URL format: ${resolvedSupabaseUrl || supabaseUrl}`)
+    console.warn(`Invalid Supabase URL format: ${supabaseUrl || ""}`)
     const cookieStore = await cookies()
     return createServerClient(
       'https://placeholder.supabase.co',
@@ -73,9 +70,8 @@ export async function createClient() {
 
   const cookieStore = await cookies()
 
-  // Create client with timeout and connection settings (pooler URL when set)
   return createServerClient(
-    resolvedSupabaseUrl,
+    supabaseUrl,
     supabaseAnonKey,
     {
       cookies: {
