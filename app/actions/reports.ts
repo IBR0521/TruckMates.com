@@ -4,6 +4,7 @@ import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
+import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
 import { revalidatePath } from "next/cache"
@@ -513,17 +514,25 @@ export async function getMonthlyRevenueTrend(months = 6, terminalId?: string) {
       .order("created_at", { ascending: true })
 
     // Loads (fallback revenue source)
-    let loadsQuery = supabase
-      .from("loads")
-      .select("id, created_at, value, total_rate")
-      .eq("company_id", companyId)
-      .gte("created_at", startDate.toISOString())
-      .lte("created_at", endDate.toISOString())
-      .limit(10000)
-    if (terminalId) {
-      loadsQuery = loadsQuery.eq("terminal_id", terminalId)
+    const { rows: loads, error: loadsError } = await fetchAllRowsByIdCursor<ReportLoadRow & { id: string }>(
+      async ({ lastId, pageSize }) => {
+        let q = supabase
+          .from("loads")
+          .select("id, created_at, value, total_rate")
+          .eq("company_id", companyId)
+          .gte("created_at", startDate.toISOString())
+          .lte("created_at", endDate.toISOString())
+          .order("id", { ascending: true })
+          .limit(pageSize)
+        if (terminalId) q = q.eq("terminal_id", terminalId)
+        if (lastId) q = q.gt("id", lastId)
+        return q
+      },
+      { warnLabel: "reports.monthly_revenue_trend_loads" },
+    )
+    if (loadsError) {
+      return { error: safeDbError(new Error(loadsError), "Failed to load loads for revenue trend"), data: [] }
     }
-    const { data: loads } = await loadsQuery
 
     const monthlyData: Record<string, number> = {}
 
@@ -559,7 +568,7 @@ export async function getMonthlyRevenueTrend(months = 6, terminalId?: string) {
     })
 
     // Add load revenue only when there is no invoice for that load
-    loads?.forEach((load: ReportLoadRow) => {
+    loads.forEach((load: ReportLoadRow) => {
       if (!load.created_at) return
       if (load.id && loadIdsWithInvoices.has(load.id)) return
 
@@ -656,27 +665,55 @@ export async function getARAgingReport(terminalId?: string) {
     if (!companyId) return { error: "Not authenticated", data: null }
 
     const supabase = await createClient()
-    const { data: invoices, error } = await supabase
-      .from("invoices")
-      .select("id, invoice_number, customer_name, due_date, amount, paid_amount, status, load_id")
-      .eq("company_id", companyId)
-      .not("status", "eq", "paid")
-      .not("status", "eq", "cancelled")
-      .order("due_date", { ascending: true })
-      .limit(10000)
+    const { rows: invoices, error: invoicesError } = await fetchAllRowsByIdCursor<{
+      id: string
+      invoice_number?: string | null
+      customer_name?: string | null
+      due_date?: string | null
+      amount?: number | string | null
+      paid_amount?: number | string | null
+      status?: string | null
+      load_id?: string | null
+    }>(
+      async ({ lastId, pageSize }) => {
+        let q = supabase
+          .from("invoices")
+          .select("id, invoice_number, customer_name, due_date, amount, paid_amount, status, load_id")
+          .eq("company_id", companyId)
+          .not("status", "eq", "paid")
+          .not("status", "eq", "cancelled")
+          .order("id", { ascending: true })
+          .limit(pageSize)
+        if (lastId) q = q.gt("id", lastId)
+        return q
+      },
+      { warnLabel: "reports.ar_aging_open_invoices" },
+    )
+
     let allowedLoadIds: Set<string> | null = null
     if (terminalId) {
-      const { data: scopedLoads } = await supabase
-        .from("loads")
-        .select("id")
-        .eq("company_id", companyId)
-        .eq("terminal_id", terminalId)
-        .limit(10000)
-      allowedLoadIds = new Set((scopedLoads || []).map((l: ReportLoadRow) => String(l.id)))
+      const { rows: scopedLoads, error: scopedLoadsError } = await fetchAllRowsByIdCursor<{ id: string }>(
+        async ({ lastId, pageSize }) => {
+          let q = supabase
+            .from("loads")
+            .select("id")
+            .eq("company_id", companyId)
+            .eq("terminal_id", terminalId)
+            .order("id", { ascending: true })
+            .limit(pageSize)
+          if (lastId) q = q.gt("id", lastId)
+          return q
+        },
+        { warnLabel: "reports.ar_aging_terminal_load_ids" },
+      )
+      if (scopedLoadsError) {
+        return { error: safeDbError(new Error(scopedLoadsError), "Failed to load terminal loads for AR aging"), data: null }
+      }
+      allowedLoadIds = new Set(scopedLoads.map((l) => String(l.id)))
     }
 
-    if (error) {
-      return { error: "Failed to load AR aging data", data: null }
+    if (invoicesError) {
+      return { error: safeDbError(new Error(invoicesError), "Failed to load AR aging data"), data: null }
     }
 
     const now = new Date()
@@ -689,7 +726,7 @@ export async function getARAgingReport(terminalId?: string) {
       "90+": { key: "90+", label: "90+ days", total_outstanding: 0, invoice_count: 0, customers: [], invoices: [] },
     }
 
-    for (const inv of invoices || []) {
+    for (const inv of invoices) {
       if (allowedLoadIds && inv.load_id && !allowedLoadIds.has(String(inv.load_id))) continue
       const due = inv.due_date ? new Date(inv.due_date) : null
       if (!due || Number.isNaN(due.getTime())) continue
@@ -708,7 +745,7 @@ export async function getARAgingReport(terminalId?: string) {
         id: inv.id,
         invoice_number: inv.invoice_number || inv.id,
         customer_name: inv.customer_name || "Unknown Customer",
-        due_date: inv.due_date,
+        due_date: inv.due_date ?? due.toISOString().split("T")[0],
         amount,
         paid_amount: paid,
         outstanding_amount: outstanding,
@@ -773,16 +810,32 @@ export async function sendARAgingBucketReminders(bucket: ARAgingBucketKey) {
     }
 
     const supabase = await createClient()
-    const { data: invoices, error } = await supabase
-      .from("invoices")
-      .select("id, invoice_number, customer_name, due_date, amount, paid_amount, status")
-      .eq("company_id", ctx.companyId)
-      .not("status", "eq", "paid")
-      .not("status", "eq", "cancelled")
-      .limit(10000)
+    const { rows: invoices, error: invoicesError } = await fetchAllRowsByIdCursor<{
+      id: string
+      invoice_number?: string | null
+      customer_name?: string | null
+      due_date?: string | null
+      amount?: number | string | null
+      paid_amount?: number | string | null
+      status?: string | null
+    }>(
+      async ({ lastId, pageSize }) => {
+        let q = supabase
+          .from("invoices")
+          .select("id, invoice_number, customer_name, due_date, amount, paid_amount, status")
+          .eq("company_id", ctx.companyId)
+          .not("status", "eq", "paid")
+          .not("status", "eq", "cancelled")
+          .order("id", { ascending: true })
+          .limit(pageSize)
+        if (lastId) q = q.gt("id", lastId)
+        return q
+      },
+      { warnLabel: "reports.ar_aging_reminder_invoices" },
+    )
 
-    if (error) {
-      return { error: "Failed to load invoices for reminders", data: null }
+    if (invoicesError) {
+      return { error: safeDbError(new Error(invoicesError), "Failed to load invoices for reminders"), data: null }
     }
 
     const now = new Date()
@@ -795,7 +848,7 @@ export async function sendARAgingBucketReminders(bucket: ARAgingBucketKey) {
       customer_name: string
       due_date: string
       days_outstanding: number
-    }> = (invoices || []).flatMap((inv: {
+    }> = invoices.flatMap((inv: {
       id: string
       invoice_number?: string | null
       customer_name?: string | null
@@ -820,7 +873,7 @@ export async function sendARAgingBucketReminders(bucket: ARAgingBucketKey) {
           id: inv.id,
           invoice_number: inv.invoice_number || inv.id,
           customer_name: inv.customer_name || "Unknown Customer",
-          due_date: inv.due_date,
+          due_date: inv.due_date ?? due.toISOString().split("T")[0],
           days_outstanding: daysOutstanding,
         },
       ]

@@ -8,6 +8,8 @@ import { escapeHtml } from "@/lib/html-escape"
 import { htmlToPdfBuffer } from "@/lib/html-to-pdf-server"
 import { checkCreatePermission, checkDeletePermission, checkEditPermission, checkViewPermission } from "@/lib/server-permissions"
 import { createClient } from "@/lib/supabase/server"
+import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
+import { safeDbError } from "@/lib/utils/error"
 import { sanitizeString } from "@/lib/validation"
 
 type IncidentType = "accident" | "citation" | "cargo_damage" | "near_miss"
@@ -282,18 +284,8 @@ export async function exportAccidentRegisterPdfBase64() {
     start.setFullYear(start.getFullYear() - 3)
     const startDate = start.toISOString().slice(0, 10)
 
-    const { data, error } = await supabase
-      .from("incidents")
-      .select("incident_date, location, injuries, fatalities, hazardous_material_released, dot_reportable, description, driver:drivers(name)")
-      .eq("company_id", ctx.companyId)
-      .eq("type", "accident")
-      .gte("incident_date", startDate)
-      .order("incident_date", { ascending: false })
-      .limit(10000)
-
-    if (error) return { error: "Failed to load accident register data", data: null }
-
-    const rows = (data || []).map((r: {
+    type AccidentRegisterRow = {
+      id: string
       incident_date: string | null
       location: string | null
       injuries: boolean | null
@@ -302,7 +294,37 @@ export async function exportAccidentRegisterPdfBase64() {
       dot_reportable: boolean | null
       description: string | null
       driver?: { name?: string | null } | null
-    }) => ({
+    }
+
+    const { rows: incidentRows, error: incidentsError } = await fetchAllRowsByIdCursor<AccidentRegisterRow>(
+      async ({ lastId, pageSize }) => {
+        let q = supabase
+          .from("incidents")
+          .select(
+            "id, incident_date, location, injuries, fatalities, hazardous_material_released, dot_reportable, description, driver:drivers(name)",
+          )
+          .eq("company_id", ctx.companyId)
+          .eq("type", "accident")
+          .gte("incident_date", startDate)
+          .order("id", { ascending: true })
+          .limit(pageSize)
+        if (lastId) q = q.gt("id", lastId)
+        return q
+      },
+      { warnLabel: "incidents.accident_register_export" },
+    )
+
+    if (incidentsError) {
+      return { error: safeDbError(new Error(incidentsError), "Failed to load accident register data"), data: null }
+    }
+
+    const sorted = [...incidentRows].sort((a, b) => {
+      const da = a.incident_date || ""
+      const db = b.incident_date || ""
+      return db.localeCompare(da)
+    })
+
+    const rows = sorted.map((r) => ({
       incident_date: String(r.incident_date || ""),
       location: r.location || null,
       driver_name: r.driver?.name || null,

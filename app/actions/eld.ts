@@ -4,6 +4,7 @@ import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
+import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { ensureDriverIdForUser } from "@/lib/eld/ensure-driver"
 import { resolveTruckIdForDriver } from "@/lib/eld/resolve-driver-truck"
@@ -567,32 +568,51 @@ export async function getELDMileageData(filters: {
     }
   }
 
-  // Get mileage data from ELD logs for the specified trucks and date range
-  // V3-007 FIX: Add LIMIT to prevent OOM on large datasets
-  const { data: logs, error } = await supabase
-    .from("eld_logs")
-    .select("truck_id, miles_driven, log_date, location_start, location_end")
-    .eq("company_id", ctx.companyId)
-    .in("truck_id", truckIds)
-    .gte("log_date", filters.start_date)
-    .lte("log_date", filters.end_date)
-    .eq("log_type", "driving")
-    .not("miles_driven", "is", null)
-    .limit(10000) // V3-007: Limit to 10k records to prevent OOM
+  // Get mileage data from ELD logs for the specified trucks and date range (paginated by id)
+  type EldMileageLogRow = {
+    id: string
+    truck_id: string | null
+    miles_driven: number | string | null
+    log_date: string | null
+    location_start: unknown
+    location_end: unknown
+  }
 
-  if (error) {
-    return { error: safeDbError(error), data: null }
+  const { rows: logs, error: logsError } = await fetchAllRowsByIdCursor<EldMileageLogRow>(
+    async ({ lastId, pageSize }) => {
+      let q = supabase
+        .from("eld_logs")
+        .select("id, truck_id, miles_driven, log_date, location_start, location_end")
+        .eq("company_id", ctx.companyId)
+        .in("truck_id", truckIds)
+        .gte("log_date", filters.start_date)
+        .lte("log_date", filters.end_date)
+        .eq("log_type", "driving")
+        .not("miles_driven", "is", null)
+        .order("id", { ascending: true })
+        .limit(pageSize)
+      if (lastId) q = q.gt("id", lastId)
+      return await q
+    },
+    { warnLabel: "eld.records_aggregation" },
+  )
+
+  if (logsError) {
+    return { error: safeDbError(new Error(logsError), "ELD mileage logs"), data: null }
   }
 
   // Aggregate mileage by truck
   const mileageByTruck: Record<string, number> = {}
-  logs?.forEach((log: { truck_id: string | null; miles_driven: number | string | null; [key: string]: unknown }) => {
+  logs.forEach((log: { truck_id: string | null; miles_driven: number | string | null; [key: string]: unknown }) => {
     if (log.truck_id && log.miles_driven) {
       mileageByTruck[log.truck_id] = (mileageByTruck[log.truck_id] || 0) + Number(log.miles_driven)
     }
   })
 
-  return { data: { logs, mileageByTruck, totalMiles: Object.values(mileageByTruck).reduce((a, b) => a + b, 0) }, error: null }
+  return {
+    data: { logs, mileageByTruck, totalMiles: Object.values(mileageByTruck).reduce((a, b) => a + b, 0) },
+    error: null,
+  }
 }
 
 // Resolve ELD event

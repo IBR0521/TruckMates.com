@@ -8,6 +8,8 @@ import { canViewFeature, isFeatureMasked } from "@/lib/feature-permissions"
 import { getDriverDashboardSnapshot } from "@/app/actions/driver-dashboard"
 import type { DriverDashboardSnapshot } from "@/lib/types/driver-dashboard"
 import { cacheKeys } from "@/lib/cache"
+import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
+import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import type {
   DashboardCardDriverRow,
@@ -565,53 +567,121 @@ export async function getDashboardStats(): Promise<{ data: DashboardStats; error
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
     
     const financialPromise = Promise.all([
-      supabase.from("invoices").select("amount, status, issue_date, created_at").eq("company_id", companyId).gte("created_at", twelveMonthsAgo.toISOString()).limit(10000),
-      supabase.from("expenses").select("amount, date").eq("company_id", companyId).gte("date", twelveMonthsAgo.toISOString().split('T')[0]).limit(10000),
-      supabase.from("invoices").select("amount, status, due_date").eq("company_id", companyId).in("status", ["sent", "overdue"]).limit(1000),
-      supabase.from("loads").select("total_rate, value, created_at").eq("company_id", companyId).gte("created_at", twelveMonthsAgo.toISOString()).limit(10000),
+      (async () => {
+        const { rows, error } = await fetchAllRowsByIdCursor<InvoiceAmountRow & { id: string; status?: string | null }>(
+          async ({ lastId, pageSize }) => {
+            let q = supabase
+              .from("invoices")
+              .select("id, amount, status, issue_date, created_at")
+              .eq("company_id", companyId)
+              .gte("created_at", twelveMonthsAgo.toISOString())
+              .order("id", { ascending: true })
+              .limit(pageSize)
+            if (lastId) q = q.gt("id", lastId)
+            return await q
+          },
+          { warnLabel: "dashboard.invoices_12m" },
+        )
+        if (error) return { data: null, fetchError: safeDbError(new Error(error), "Failed to load dashboard invoices") }
+        return { data: rows, fetchError: null as string | null }
+      })(),
+      (async () => {
+        const { rows, error } = await fetchAllRowsByIdCursor<ExpenseAmountRow & { id: string }>(
+          async ({ lastId, pageSize }) => {
+            let q = supabase
+              .from("expenses")
+              .select("id, amount, date")
+              .eq("company_id", companyId)
+              .gte("date", twelveMonthsAgo.toISOString().split("T")[0])
+              .order("id", { ascending: true })
+              .limit(pageSize)
+            if (lastId) q = q.gt("id", lastId)
+            return await q
+          },
+          { warnLabel: "dashboard.expenses_12m" },
+        )
+        if (error) return { data: null, fetchError: safeDbError(new Error(error), "Failed to load dashboard expenses") }
+        return { data: rows, fetchError: null as string | null }
+      })(),
+      (async () => {
+        const { data, error } = await supabase
+          .from("invoices")
+          .select("id, amount, status, due_date")
+          .eq("company_id", companyId)
+          .in("status", ["sent", "overdue"])
+          .limit(1000)
+        if (error) return { data: null, fetchError: safeDbError(error, "Failed to load pending invoices") }
+        return { data: data || [], fetchError: null as string | null }
+      })(),
+      (async () => {
+        const { rows, error } = await fetchAllRowsByIdCursor<LoadRevenueRow & { id: string }>(
+          async ({ lastId, pageSize }) => {
+            let q = supabase
+              .from("loads")
+              .select("id, total_rate, value, created_at")
+              .eq("company_id", companyId)
+              .gte("created_at", twelveMonthsAgo.toISOString())
+              .order("id", { ascending: true })
+              .limit(pageSize)
+            if (lastId) q = q.gt("id", lastId)
+            return await q
+          },
+          { warnLabel: "dashboard.loads_12m" },
+        )
+        if (error) return { data: null, fetchError: safeDbError(new Error(error), "Failed to load dashboard loads") }
+        return { data: rows, fetchError: null as string | null }
+      })(),
     ]).catch(() => {
       return [
-        { data: [] },
-        { data: [] },
-        { data: [] },
-        { data: [] },
+        { data: [], fetchError: null as string | null },
+        { data: [], fetchError: null as string | null },
+        { data: [], fetchError: null as string | null },
+        { data: [], fetchError: null as string | null },
       ]
     })
 
     const financialTimeout = new Promise((resolve) => {
       setTimeout(() => {
         resolve([
-          { data: [] },
-          { data: [] },
-          { data: [] },
-          { data: [] },
+          { data: [], fetchError: null as string | null },
+          { data: [], fetchError: null as string | null },
+          { data: [], fetchError: null as string | null },
+          { data: [], fetchError: null as string | null },
         ])
       }, 2000) // Reduced to 2 seconds for faster failure
     })
 
-    const financialOutcome = (await Promise.race([financialPromise, financialTimeout])) as [
-      { data: InvoiceAmountRow[] | null },
-      { data: ExpenseAmountRow[] | null },
-      { data: InvoiceAmountRow[] | null },
-      { data: LoadRevenueRow[] | null },
-    ]
-    const [{ data: allInvoices }, { data: expenses }, { data: pendingInvoices }, { data: loads }] = financialOutcome
+    const financialOutcomeRaw = (await Promise.race([financialPromise, financialTimeout])) as Array<{
+      data: InvoiceAmountRow[] | ExpenseAmountRow[] | LoadRevenueRow[] | null
+      fetchError: string | null
+    }>
+    const financialFetchError =
+      financialOutcomeRaw[0]?.fetchError ||
+      financialOutcomeRaw[1]?.fetchError ||
+      financialOutcomeRaw[2]?.fetchError ||
+      financialOutcomeRaw[3]?.fetchError ||
+      null
+    const allInvoices = (financialOutcomeRaw[0]?.data as InvoiceAmountRow[] | null) ?? []
+    const expenses = (financialOutcomeRaw[1]?.data as ExpenseAmountRow[] | null) ?? []
+    const pendingInvoices = (financialOutcomeRaw[2]?.data as InvoiceAmountRow[] | null) ?? []
+    const loads = (financialOutcomeRaw[3]?.data as LoadRevenueRow[] | null) ?? []
 
     // Calculate financial metrics - combine invoices and loads
-    let totalRevenue = allInvoices?.reduce((sum: number, inv: InvoiceAmountRow) => sum + (Number(inv.amount) || 0), 0) || 0
-    
+    let totalRevenue = allInvoices.reduce((sum: number, inv: InvoiceAmountRow) => sum + (Number(inv.amount) || 0), 0)
+
     // Add revenue from loads
-    if (loads) {
-      const loadRevenue = loads.reduce((sum: number, load: LoadRevenueRow) => {
-        return sum + (Number(load.total_rate) || Number(load.value) || 0)
-      }, 0)
-      totalRevenue += loadRevenue
-    }
-    
-    const totalExpenses = expenses?.reduce((sum: number, exp: ExpenseAmountRow) => sum + (Number(exp.amount) || 0), 0) || 0
+    const loadRevenue = loads.reduce((sum: number, load: LoadRevenueRow) => {
+      return sum + (Number(load.total_rate) || Number(load.value) || 0)
+    }, 0)
+    totalRevenue += loadRevenue
+
+    const totalExpenses = expenses.reduce((sum: number, exp: ExpenseAmountRow) => sum + (Number(exp.amount) || 0), 0)
     const netProfit = totalRevenue - totalExpenses
-    const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100) : 0
-    const outstandingInvoices = pendingInvoices?.reduce((sum: number, inv: InvoiceAmountRow) => sum + (Number(inv.amount) || 0), 0) || 0
+    const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0
+    const outstandingInvoices = pendingInvoices.reduce(
+      (sum: number, inv: InvoiceAmountRow) => sum + (Number(inv.amount) || 0),
+      0,
+    )
 
     // Get revenue trend data (last 7 days) - match chart title
     let revenueTrendData: Array<{ date: string; amount: number }> = []
@@ -708,20 +778,34 @@ export async function getDashboardStats(): Promise<{ data: DashboardStats; error
       }
     }
 
-    // MEDIUM FIX: Add limit to prevent unbounded query
-    // Get load status distribution
+    // Load status distribution — paginate by id (avoid single 10k row fetch)
     let allLoads: LoadStatusRow[] = []
+    let statusDistributionError: string | null = null
     try {
-      const loadStatusResult = await supabase
-        .from("loads")
-        .select("status")
-        .eq("company_id", companyId)
-        .limit(10000) // Reasonable limit for status distribution
-        
-      allLoads = loadStatusResult.data || []
+      const { rows, error: statusDistError } = await fetchAllRowsByIdCursor<LoadStatusRow & { id: string }>(
+        async ({ lastId, pageSize }) => {
+          let q = supabase
+            .from("loads")
+            .select("id, status")
+            .eq("company_id", companyId)
+            .order("id", { ascending: true })
+            .limit(pageSize)
+          if (lastId) q = q.gt("id", lastId)
+          return await q
+        },
+        { warnLabel: "dashboard.status_distribution" },
+      )
+      if (statusDistError) {
+        statusDistributionError = safeDbError(new Error(statusDistError), "dashboard status distribution")
+        if (process.env.NODE_ENV === "development") {
+          Sentry.captureMessage(statusDistributionError, "warning")
+        }
+        allLoads = []
+      } else {
+        allLoads = rows
+      }
     } catch (error) {
-      // Only log in development
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === "development") {
         Sentry.captureException(error)
       }
       allLoads = []
@@ -813,7 +897,7 @@ export async function getDashboardStats(): Promise<{ data: DashboardStats; error
 
     return {
       data: dashboardData,
-      error: null,
+      error: financialFetchError || statusDistributionError,
     }
   } catch (error: unknown) {
     // Only log in development
