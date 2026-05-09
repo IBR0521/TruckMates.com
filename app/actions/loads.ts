@@ -117,11 +117,17 @@ async function sendNotificationsForLoadUpdate(loadData: LoadUpdateNotificationPa
       await Promise.all(
         relevantUsers.map(async (relevantUser: { id: string; role: string }) => {
           try {
+            const shipmentNumber =
+              typeof loadData.shipment_number === "string" ? loadData.shipment_number : undefined
+            const status = typeof loadData.status === "string" ? loadData.status : undefined
+            const origin = typeof loadData.origin === "string" ? loadData.origin : undefined
+            const destination =
+              typeof loadData.destination === "string" ? loadData.destination : undefined
             await sendNotification(relevantUser.id, "load_update", {
-              shipmentNumber: loadData.shipment_number,
-              status: loadData.status,
-              origin: loadData.origin,
-              destination: loadData.destination,
+              shipmentNumber,
+              status,
+              origin,
+              destination,
             })
           } catch (error) {
             // Silently fail - don't block the main operation
