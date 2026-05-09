@@ -343,7 +343,8 @@ export async function getRealtimeLocations() {
   const latestByDevice = new Map<string, { eld_device_id: string; timestamp: string }>()
   locations?.forEach((loc: { eld_device_id: string; timestamp: string }) => {
     const deviceId = loc.eld_device_id
-    if (!latestByDevice.has(deviceId) || new Date(loc.timestamp) > new Date(latestByDevice.get(deviceId).timestamp)) {
+    const existing = latestByDevice.get(deviceId)
+    if (!existing || new Date(loc.timestamp) > new Date(existing.timestamp)) {
       latestByDevice.set(deviceId, loc)
     }
   })
