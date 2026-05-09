@@ -325,10 +325,10 @@ export async function generateDVIRAuditPDF(filters: { start_date?: string; end_d
                 <tbody>
                   ${defectRows.map((defect: Record<string, unknown>) => `
                     <tr>
-                      <td>${escapeHtml(defect.component || 'N/A')}</td>
-                      <td>${escapeHtml(defect.description || 'N/A')}</td>
+                      <td>${escapeHtml(asDisplayString(defect.component))}</td>
+                      <td>${escapeHtml(asDisplayString(defect.description))}</td>
                       <td class="severity-${defect.severity || 'minor'}">
-                        ${escapeHtml((defect.severity || 'minor').toUpperCase())}
+                        ${escapeHtml(asDisplayString(defect.severity, "minor").toUpperCase())}
                       </td>
                       <td>${defect.corrected ? 'Yes' : 'No'}</td>
                     </tr>
@@ -489,9 +489,9 @@ export async function generateSingleDVIRPDF(dvirId: string) {
                       .map(
                         (defect: Record<string, unknown>) => `
                       <tr>
-                        <td>${escapeHtml(defect.component || "N/A")}</td>
-                        <td>${escapeHtml(defect.description || "N/A")}</td>
-                        <td>${escapeHtml((defect.severity || "minor").toUpperCase())}</td>
+                        <td>${escapeHtml(asDisplayString(defect.component))}</td>
+                        <td>${escapeHtml(asDisplayString(defect.description))}</td>
+                        <td>${escapeHtml(asDisplayString(defect.severity, "minor").toUpperCase())}</td>
                         <td>${defect.corrected ? "Yes" : "No"}</td>
                       </tr>
                     `
