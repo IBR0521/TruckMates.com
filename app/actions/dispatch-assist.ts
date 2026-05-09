@@ -204,11 +204,18 @@ export async function getOptimalDriverSuggestions(
       const conflicts: string[] = []
       const loadDate = load.load_date ? new Date(load.load_date) : new Date()
       const deliveryDate = load.estimated_delivery ? new Date(load.estimated_delivery) : new Date(loadDate.getTime() + 24 * 60 * 60 * 1000)
+      const asDate = (value: unknown, fallback: Date): Date =>
+        typeof value === "string" || typeof value === "number" || value instanceof Date
+          ? new Date(value)
+          : fallback
       
       driverAssignments.forEach(assignment => {
         if (assignment.type === 'load') {
-          const assignLoadDate = assignment.load_date ? new Date(assignment.load_date) : new Date()
-          const assignDeliveryDate = assignment.estimated_delivery ? new Date(assignment.estimated_delivery) : new Date(assignLoadDate.getTime() + 24 * 60 * 60 * 1000)
+          const assignLoadDate = asDate(assignment.load_date, new Date())
+          const assignDeliveryDate = asDate(
+            assignment.estimated_delivery,
+            new Date(assignLoadDate.getTime() + 24 * 60 * 60 * 1000),
+          )
           
           // Check for time overlap
           if ((loadDate >= assignLoadDate && loadDate <= assignDeliveryDate) ||
