@@ -421,6 +421,8 @@ export async function generateSingleDVIRPDF(dvirId: string) {
 
     const defectRows = Array.isArray(dvir.defects) ? dvir.defects : []
     const shortId = String(dvir.id ?? "").slice(0, 8).toUpperCase() || "UNKNOWN"
+    const asDisplayString = (value: unknown, fallback = "N/A") =>
+      typeof value === "string" && value.trim().length > 0 ? value : fallback
     const formatDate = (date: string | Date) =>
       new Date(date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
     const formatDateTime = (value: string | null | undefined) =>
