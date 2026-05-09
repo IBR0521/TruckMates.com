@@ -116,6 +116,28 @@ type ExtractedAddressData = {
   delivery_notes?: string
 }
 
+type GeocodePayload = {
+  lat: number
+  lng: number
+  formatted_address?: string
+  place_id?: string
+}
+
+function asGeocodePayload(value: unknown): GeocodePayload | null {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+  const lat = obj.lat
+  const lng = obj.lng
+  if (typeof lat !== "number" || typeof lng !== "number") return null
+
+  return {
+    lat,
+    lng,
+    formatted_address: typeof obj.formatted_address === "string" ? obj.formatted_address : undefined,
+    place_id: typeof obj.place_id === "string" ? obj.place_id : undefined,
+  }
+}
+
 /**
  * Create a new address book entry with optional geocoding
  */
@@ -162,10 +184,11 @@ export async function createAddressBookEntry(
         if (fullAddress.trim().length >= 10) {
           const geocodeResult = await geocodeAddress(fullAddress)
           
-          if (geocodeResult.data) {
+          const geo = asGeocodePayload(geocodeResult.data)
+          if (geo) {
             // LOW FIX: Validate coordinate bounds before storing
-            const lat = geocodeResult.data.lat
-            const lng = geocodeResult.data.lng
+            const lat = geo.lat
+            const lng = geo.lng
             
             if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
               geocoding_status = "failed"
@@ -176,8 +199,8 @@ export async function createAddressBookEntry(
             } else {
               coordinates = { lat, lng }
               geocoding_status = "verified"
-              formatted_address = geocodeResult.data.formatted_address
-              place_id = geocodeResult.data.place_id
+              formatted_address = geo.formatted_address
+              place_id = geo.place_id
               geocoded_at = new Date().toISOString()
             }
           } else {
@@ -585,8 +608,9 @@ export async function geocodeAddressBookEntry(
     }
 
     const geocodeResult = await geocodeAddress(fullAddress)
+    const geo = asGeocodePayload(geocodeResult.data)
 
-    if (!geocodeResult.data) {
+    if (!geo) {
       // Update status to failed
       await supabase
         .from("address_book")
@@ -598,8 +622,8 @@ export async function geocodeAddressBookEntry(
     }
 
     // LOW FIX: Validate coordinate bounds before storing
-    const lat = geocodeResult.data.lat
-    const lng = geocodeResult.data.lng
+    const lat = geo.lat
+    const lng = geo.lng
     
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
       await supabase
@@ -623,8 +647,8 @@ export async function geocodeAddressBookEntry(
       .update({
         coordinates: coordinatesString,
         geocoding_status: "verified",
-        formatted_address: geocodeResult.data.formatted_address,
-        place_id: geocodeResult.data.place_id,
+        formatted_address: geo.formatted_address,
+        place_id: geo.place_id,
         geocoded_at: new Date().toISOString(),
       })
       .eq("id", entryId)
@@ -671,8 +695,8 @@ export async function geocodeAddressBookEntry(
 
     // Convert coordinates for response
     let entryCoordinates: { lat: number; lng: number } | null = {
-      lat: geocodeResult.data.lat,
-      lng: geocodeResult.data.lng,
+      lat: geo.lat,
+      lng: geo.lng,
     }
 
     return {
@@ -840,11 +864,12 @@ export async function updateAddressBookEntry(
             .join(", ")
 
           const geocodeResult = await geocodeAddress(fullAddress)
-          if (geocodeResult.data) {
-            updateData.coordinates = `POINT(${geocodeResult.data.lng} ${geocodeResult.data.lat})`
+          const geo = asGeocodePayload(geocodeResult.data)
+          if (geo) {
+            updateData.coordinates = `POINT(${geo.lng} ${geo.lat})`
             updateData.geocoding_status = "verified"
-            updateData.formatted_address = geocodeResult.data.formatted_address
-            updateData.place_id = geocodeResult.data.place_id
+            updateData.formatted_address = geo.formatted_address
+            updateData.place_id = geo.place_id
             updateData.geocoded_at = new Date().toISOString()
           } else {
             updateData.geocoding_status = "failed"
