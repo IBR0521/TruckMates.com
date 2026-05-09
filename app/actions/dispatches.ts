@@ -233,6 +233,11 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
   }
 
   if (truckId && currentLoad?.load_date) {
+    const toValidDate = (value: unknown): Date | null => {
+      if (!(typeof value === "string" || typeof value === "number" || value instanceof Date)) return null
+      const parsed = new Date(value)
+      return Number.isNaN(parsed.getTime()) ? null : parsed
+    }
     const incomingStart = new Date(currentLoad.load_date)
     const incomingEnd = new Date(currentLoad.estimated_delivery || currentLoad.load_date)
     if (!Number.isNaN(incomingStart.getTime()) && !Number.isNaN(incomingEnd.getTime()) && incomingEnd > incomingStart) {
@@ -246,9 +251,9 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
       if (overlapError) return { error: safeDbError(overlapError), data: null }
 
       const conflict = ((overlaps || []) as OverlapLoadRow[]).find((row) => {
-        const rowStart = new Date(row.load_date || row.estimated_delivery)
-        const rowEnd = new Date(row.estimated_delivery || row.load_date)
-        if (Number.isNaN(rowStart.getTime()) || Number.isNaN(rowEnd.getTime())) return false
+        const rowStart = toValidDate(row.load_date ?? row.estimated_delivery)
+        const rowEnd = toValidDate(row.estimated_delivery ?? row.load_date)
+        if (!rowStart || !rowEnd) return false
         return rowStart < incomingEnd && rowEnd > incomingStart
       })
       if (conflict) {
