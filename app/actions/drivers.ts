@@ -759,22 +759,51 @@ export async function updateDriver(
   updateField("notes", formData.notes)
   
   // Sanitize string fields
-  if (updateData.name) updateData.name = sanitizeString(updateData.name, 100)
-  if (updateData.email) updateData.email = sanitizeEmail(updateData.email)
-  if (updateData.phone) updateData.phone = sanitizePhone(updateData.phone)
-  if (updateData.phone) updateData.normalized_phone = toNormalizedPhone(updateData.phone)
-  if (updateData.license_number) updateData.license_number = sanitizeString(updateData.license_number, 20).toUpperCase()
-  if (updateData.driver_id) updateData.driver_id = sanitizeString(updateData.driver_id, 50)
-  if (updateData.address) updateData.address = sanitizeString(updateData.address, 200)
-  if (updateData.city) updateData.city = sanitizeString(updateData.city, 100)
-  if (updateData.state) updateData.state = sanitizeString(updateData.state, 2).toUpperCase()
-  if (updateData.zip) updateData.zip = sanitizeString(updateData.zip, 10)
-  if (updateData.license_state) updateData.license_state = sanitizeString(updateData.license_state, 2).toUpperCase()
-  if (updateData.license_endorsements) updateData.license_endorsements = sanitizeString(updateData.license_endorsements, 200)
-  if (updateData.emergency_contact_name) updateData.emergency_contact_name = sanitizeString(updateData.emergency_contact_name, 100)
-  if (updateData.emergency_contact_phone) updateData.emergency_contact_phone = sanitizePhone(updateData.emergency_contact_phone)
-  if (updateData.emergency_contact_relationship) updateData.emergency_contact_relationship = sanitizeString(updateData.emergency_contact_relationship, 50)
-  if (updateData.notes) updateData.notes = sanitizeString(updateData.notes, 1000)
+  if (typeof updateData.name === "string" && updateData.name) updateData.name = sanitizeString(updateData.name, 100)
+  if (typeof updateData.email === "string" && updateData.email) updateData.email = sanitizeEmail(updateData.email)
+  if (typeof updateData.phone === "string" && updateData.phone) {
+    updateData.phone = sanitizePhone(updateData.phone)
+    updateData.normalized_phone = toNormalizedPhone(updateData.phone)
+  }
+  if (typeof updateData.license_number === "string" && updateData.license_number) {
+    updateData.license_number = sanitizeString(updateData.license_number, 20).toUpperCase()
+  }
+  if (typeof updateData.driver_id === "string" && updateData.driver_id) {
+    updateData.driver_id = sanitizeString(updateData.driver_id, 50)
+  }
+  if (typeof updateData.address === "string" && updateData.address) {
+    updateData.address = sanitizeString(updateData.address, 200)
+  }
+  if (typeof updateData.city === "string" && updateData.city) {
+    updateData.city = sanitizeString(updateData.city, 100)
+  }
+  if (typeof updateData.state === "string" && updateData.state) {
+    updateData.state = sanitizeString(updateData.state, 2).toUpperCase()
+  }
+  if (typeof updateData.zip === "string" && updateData.zip) {
+    updateData.zip = sanitizeString(updateData.zip, 10)
+  }
+  if (typeof updateData.license_state === "string" && updateData.license_state) {
+    updateData.license_state = sanitizeString(updateData.license_state, 2).toUpperCase()
+  }
+  if (typeof updateData.license_endorsements === "string" && updateData.license_endorsements) {
+    updateData.license_endorsements = sanitizeString(updateData.license_endorsements, 200)
+  }
+  if (typeof updateData.emergency_contact_name === "string" && updateData.emergency_contact_name) {
+    updateData.emergency_contact_name = sanitizeString(updateData.emergency_contact_name, 100)
+  }
+  if (typeof updateData.emergency_contact_phone === "string" && updateData.emergency_contact_phone) {
+    updateData.emergency_contact_phone = sanitizePhone(updateData.emergency_contact_phone)
+  }
+  if (
+    typeof updateData.emergency_contact_relationship === "string" &&
+    updateData.emergency_contact_relationship
+  ) {
+    updateData.emergency_contact_relationship = sanitizeString(updateData.emergency_contact_relationship, 50)
+  }
+  if (typeof updateData.notes === "string" && updateData.notes) {
+    updateData.notes = sanitizeString(updateData.notes, 1000)
+  }
 
   // If no changes, return early
   if (Object.keys(updateData).length === 0) {
