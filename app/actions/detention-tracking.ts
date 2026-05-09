@@ -644,8 +644,16 @@ export async function getDetentionAnalytics(filters?: {
 
       const customerId = customer.id
       const customerName = customer.name || customer.company_name || "Unknown Customer"
-      const fee = parseFloat(detention.total_fee) || 0
-      const minutes = parseInt(detention.detention_minutes) || 0
+      const feeRaw = detention.total_fee
+      const minutesRaw = detention.detention_minutes
+      const fee =
+        typeof feeRaw === "number"
+          ? feeRaw
+          : Number.parseFloat(typeof feeRaw === "string" ? feeRaw : "0") || 0
+      const minutes =
+        typeof minutesRaw === "number"
+          ? minutesRaw
+          : Number.parseInt(typeof minutesRaw === "string" ? minutesRaw : "0", 10) || 0
 
       if (customerMap.has(customerId)) {
         const existing = customerMap.get(customerId)!
