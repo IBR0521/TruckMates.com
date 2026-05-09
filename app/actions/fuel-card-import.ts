@@ -742,11 +742,13 @@ export async function syncFuelCardTransactions(provider: LiveFuelProvider, fromD
       await supabase.from("fuel_purchases").insert(row)
 
       const sourceTxn = transactionRows.find((t) => `${provider.toUpperCase()}-${t.external_transaction_id}` === row.receipt_number)
-      const productType =
-        (sourceTxn?.raw_payload?.product_type as string | undefined) ||
-        (sourceTxn?.raw_payload?.fuel_type as string | undefined) ||
-        (sourceTxn?.raw_payload?.product as string | undefined) ||
-        "unknown"
+      const sourcePayload = asProviderRow(sourceTxn?.raw_payload)
+      const productTypeCandidate = [
+        sourcePayload.product_type,
+        sourcePayload.fuel_type,
+        sourcePayload.product,
+      ].find((value): value is string => typeof value === "string" && value.trim().length > 0)
+      const productType = productTypeCandidate || "unknown"
       const driverId = row.driver_id || null
       const driverAvgTransaction = await getDriverAvgTransaction(driverId)
       const amount = Number(row.total_cost || 0)
