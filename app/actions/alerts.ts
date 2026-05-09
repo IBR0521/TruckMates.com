@@ -542,6 +542,11 @@ export async function createAlert(formData: {
     const smsNotificationType =
       notificationType === "reminder_due" ? "payment_reminder" : notificationType
     const adminForNotifications = createAdminClient()
+    const meta = formData.metadata ?? {}
+    const metaString = (key: string): string | undefined => {
+      const value = meta[key]
+      return typeof value === "string" && value.trim().length > 0 ? value : undefined
+    }
 
     // Send notifications
     for (const userId of notifyUserIds) {
@@ -574,10 +579,10 @@ export async function createAlert(formData: {
         await sendSMSNotification(userId, smsNotificationType, {
           title: formData.title,
           message: formData.message,
-          shipmentNumber: formData.metadata?.shipment_number,
-          truckNumber: formData.metadata?.truck_number,
-          driverName: formData.metadata?.driver_name,
-          serviceType: formData.metadata?.service_type,
+          shipmentNumber: metaString("shipment_number"),
+          truckNumber: metaString("truck_number"),
+          driverName: metaString("driver_name"),
+          serviceType: metaString("service_type"),
         }).catch(() => {
           // SMS might fail, continue with other channels
         })
@@ -589,15 +594,15 @@ export async function createAlert(formData: {
         await sendNotification(userId, notificationType, {
           title: formData.title,
           message: formData.message,
-          shipmentNumber: formData.metadata?.shipment_number,
-          routeName: formData.metadata?.route_name,
-          truckNumber: formData.metadata?.truck_number,
-          driverName: formData.metadata?.driver_name,
-          serviceType: formData.metadata?.service_type,
-          scheduledDate: formData.metadata?.scheduled_date,
-          status: formData.metadata?.status,
-          origin: formData.metadata?.origin,
-          destination: formData.metadata?.destination,
+          shipmentNumber: metaString("shipment_number"),
+          routeName: metaString("route_name"),
+          truckNumber: metaString("truck_number"),
+          driverName: metaString("driver_name"),
+          serviceType: metaString("service_type"),
+          scheduledDate: metaString("scheduled_date"),
+          status: metaString("status"),
+          origin: metaString("origin"),
+          destination: metaString("destination"),
         }).catch(() => {
           // Email might fail, continue
         })
