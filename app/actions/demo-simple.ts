@@ -324,8 +324,12 @@ export async function createDemoAndSignIn() {
         // Check if result indicates success
         if (populateResult) {
           if (typeof populateResult === 'object' && 'success' in populateResult && !populateResult.success) {
+            const populateResultError =
+              "error" in populateResult
+                ? errorMessage((populateResult as { error?: unknown }).error, "Unknown error")
+                : "Unknown error"
             return {
-              error: `Demo data population failed: ${populateResult.error || 'Unknown error'}`,
+              error: `Demo data population failed: ${populateResultError}`,
               userId,
               companyId
             }
