@@ -515,23 +515,45 @@ export async function createDriver(formData: {
   if (formData.truck_id) driverData.truck_id = formData.truck_id
   
   // Extended fields
-  if (formData.driver_id) driverData.driver_id = sanitizeString(formData.driver_id, 50)
+  if (typeof formData.driver_id === "string" && formData.driver_id) {
+    driverData.driver_id = sanitizeString(formData.driver_id, 50)
+  }
   if (formData.employee_type) driverData.employee_type = formData.employee_type
   if (formData.date_of_birth) driverData.date_of_birth = formData.date_of_birth
-  if (formData.address) driverData.address = sanitizeString(formData.address, 200)
-  if (formData.city) driverData.city = sanitizeString(formData.city, 100)
-  if (formData.state) driverData.state = sanitizeString(formData.state, 2).toUpperCase()
-  if (formData.zip) driverData.zip = sanitizeString(formData.zip, 10)
-  if (formData.license_state) driverData.license_state = sanitizeString(formData.license_state, 2).toUpperCase()
+  if (typeof formData.address === "string" && formData.address) {
+    driverData.address = sanitizeString(formData.address, 200)
+  }
+  if (typeof formData.city === "string" && formData.city) {
+    driverData.city = sanitizeString(formData.city, 100)
+  }
+  if (typeof formData.state === "string" && formData.state) {
+    driverData.state = sanitizeString(formData.state, 2).toUpperCase()
+  }
+  if (typeof formData.zip === "string" && formData.zip) {
+    driverData.zip = sanitizeString(formData.zip, 10)
+  }
+  if (typeof formData.license_state === "string" && formData.license_state) {
+    driverData.license_state = sanitizeString(formData.license_state, 2).toUpperCase()
+  }
   if (formData.license_type) driverData.license_type = formData.license_type
-  if (formData.license_endorsements) driverData.license_endorsements = sanitizeString(formData.license_endorsements, 200)
+  if (typeof formData.license_endorsements === "string" && formData.license_endorsements) {
+    driverData.license_endorsements = sanitizeString(formData.license_endorsements, 200)
+  }
   if (formData.hire_date) driverData.hire_date = formData.hire_date
   if (formData.pay_rate_type) driverData.pay_rate_type = formData.pay_rate_type
   if (formData.pay_rate !== undefined && formData.pay_rate !== null) driverData.pay_rate = Number.parseFloat(String(formData.pay_rate))
-  if (formData.emergency_contact_name) driverData.emergency_contact_name = sanitizeString(formData.emergency_contact_name, 100)
-  if (formData.emergency_contact_phone) driverData.emergency_contact_phone = sanitizePhone(formData.emergency_contact_phone)
-  if (formData.emergency_contact_relationship) driverData.emergency_contact_relationship = sanitizeString(formData.emergency_contact_relationship, 50)
-  if (formData.notes) driverData.notes = sanitizeString(formData.notes, 1000)
+  if (typeof formData.emergency_contact_name === "string" && formData.emergency_contact_name) {
+    driverData.emergency_contact_name = sanitizeString(formData.emergency_contact_name, 100)
+  }
+  if (typeof formData.emergency_contact_phone === "string" && formData.emergency_contact_phone) {
+    driverData.emergency_contact_phone = sanitizePhone(formData.emergency_contact_phone)
+  }
+  if (typeof formData.emergency_contact_relationship === "string" && formData.emergency_contact_relationship) {
+    driverData.emergency_contact_relationship = sanitizeString(formData.emergency_contact_relationship, 50)
+  }
+  if (typeof formData.notes === "string" && formData.notes) {
+    driverData.notes = sanitizeString(formData.notes, 1000)
+  }
   if (formData.custom_fields && typeof formData.custom_fields === "object" && !Array.isArray(formData.custom_fields)) {
     driverData.custom_fields = formData.custom_fields
   }
