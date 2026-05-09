@@ -12,6 +12,48 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { generateBOLPDF } from "./bol-pdf"
 
+type ChromiumLike = {
+  executablePath: () => Promise<string>
+  args: string[]
+}
+
+type PuppeteerPageLike = {
+  setContent: (html: string, options?: { waitUntil?: string }) => Promise<void>
+  pdf: (options: {
+    format: "Letter"
+    printBackground: boolean
+    margin: { top: string; right: string; bottom: string; left: string }
+  }) => Promise<Uint8Array | Buffer>
+}
+
+type PuppeteerBrowserLike = {
+  newPage: () => Promise<PuppeteerPageLike>
+  close: () => Promise<void>
+}
+
+type PuppeteerLike = {
+  launch: (options: {
+    headless: boolean
+    args: string[]
+    executablePath?: string
+  }) => Promise<PuppeteerBrowserLike>
+}
+
+function asPuppeteerLike(value: unknown): PuppeteerLike | null {
+  if (!value || typeof value !== "object") return null
+  if (!("launch" in value)) return null
+  const launch = (value as { launch?: unknown }).launch
+  return typeof launch === "function" ? (value as PuppeteerLike) : null
+}
+
+function asChromiumLike(value: unknown): ChromiumLike | null {
+  if (!value || typeof value !== "object") return null
+  const chromium = value as { executablePath?: unknown; args?: unknown }
+  if (typeof chromium.executablePath !== "function") return null
+  if (!Array.isArray(chromium.args) || !chromium.args.every((arg) => typeof arg === "string")) return null
+  return chromium as ChromiumLike
+}
+
 /**
  * Store signed BOL PDF in Supabase Storage
  */
@@ -93,23 +135,7 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
     
     try {
       // Try puppeteer-core first (for serverless/Vercel)
-      let puppeteer: {
-        launch: (options: {
-          headless: boolean
-          args: string[]
-          executablePath?: string
-        }) => Promise<{
-          newPage: () => Promise<{
-            setContent: (html: string, options: { waitUntil: "networkidle0" }) => Promise<void>
-            pdf: (options: {
-              format: "Letter"
-              printBackground: boolean
-              margin: { top: string; right: string; bottom: string; left: string }
-            }) => Promise<Buffer>
-          }>
-          close: () => Promise<void>
-        }>
-      } | null = null
+      let puppeteer: PuppeteerLike | null = null
       let executablePath: string | undefined
       let chromiumArgs: string[] | undefined
 
@@ -118,16 +144,19 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
         const chromiumModule = await import(/* webpackIgnore: true */ "@sparticuz/chromium").catch(() => null)
         
         if (puppeteerCore && chromiumModule) {
-          puppeteer = puppeteerCore
+          puppeteer = asPuppeteerLike(puppeteerCore)
           // @sparticuz/chromium may export as default or named export
-          const chromium = chromiumModule.default || chromiumModule
-          executablePath = await chromium.executablePath()
-          chromiumArgs = chromium.args
+          const chromium = asChromiumLike(chromiumModule.default || chromiumModule)
+          if (chromium) {
+            executablePath = await chromium.executablePath()
+            chromiumArgs = chromium.args
+          }
         }
       } catch {
         // Fallback: full `puppeteer` is optional (dev); production uses puppeteer-core + chromium
         // @ts-expect-error — `puppeteer` may not be installed; optional fallback for local dev
-        puppeteer = await import(/* webpackIgnore: true */ "puppeteer").catch(() => null)
+        const puppeteerModule = await import(/* webpackIgnore: true */ "puppeteer").catch(() => null)
+        puppeteer = asPuppeteerLike(puppeteerModule)
       }
       
       if (puppeteer) {
@@ -142,7 +171,7 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
           await page.setContent(pdfResult.html, { waitUntil: 'networkidle0' })
           
           // Generate PDF
-          pdfBuffer = await page.pdf({
+          const generatedPdf = await page.pdf({
             format: 'Letter',
             printBackground: true,
             margin: {
@@ -152,6 +181,7 @@ export async function storeSignedBOLPDF(bolId: string, companyId?: string): Prom
               left: '0.5in',
             },
           })
+          pdfBuffer = Buffer.from(generatedPdf)
         } finally {
           await browser.close()
         }
