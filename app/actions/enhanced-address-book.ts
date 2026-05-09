@@ -742,39 +742,53 @@ export async function extractAddressesFromRateCon(
 
     // Extract shipper and receiver addresses from load/route data
     const extractedData = extracted.data as ExtractedAddressData
-    const shipper: CreateAddressBookEntryInput | undefined = extracted.type === "load" || extracted.type === "route_and_load"
-      ? {
-          name: extractedData.shipper_name || "Shipper",
-          company_name: extractedData.shipper_company,
-          address_line1: extractedData.origin_address || extractedData.origin,
-          city: extractedData.origin_city,
-          state: extractedData.origin_state,
-          zip_code: extractedData.origin_zip,
-          category: "shipper",
-          custom_fields: {
-            pickup_notes: extractedData.pickup_notes,
-            special_instructions: extractedData.special_instructions,
-          },
-          auto_geocode: true,
-        }
-      : undefined
+    const isLoadDocument = extracted.type === "load" || extracted.type === "route_and_load"
+    const shipperAddress = extractedData.origin_address || extractedData.origin
+    const receiverAddress = extractedData.destination_address || extractedData.destination
 
-    const receiver: CreateAddressBookEntryInput | undefined = extracted.type === "load" || extracted.type === "route_and_load"
-      ? {
-          name: extractedData.receiver_name || "Receiver",
-          company_name: extractedData.receiver_company,
-          address_line1: extractedData.destination_address || extractedData.destination,
-          city: extractedData.destination_city,
-          state: extractedData.destination_state,
-          zip_code: extractedData.destination_zip,
-          category: "receiver",
-          custom_fields: {
-            delivery_notes: extractedData.delivery_notes,
-            special_instructions: extractedData.special_instructions,
-          },
-          auto_geocode: true,
-        }
-      : undefined
+    const shipper: CreateAddressBookEntryInput | undefined =
+      isLoadDocument &&
+      shipperAddress &&
+      extractedData.origin_city &&
+      extractedData.origin_state &&
+      extractedData.origin_zip
+        ? {
+            name: extractedData.shipper_name || "Shipper",
+            company_name: extractedData.shipper_company,
+            address_line1: shipperAddress,
+            city: extractedData.origin_city,
+            state: extractedData.origin_state,
+            zip_code: extractedData.origin_zip,
+            category: "shipper",
+            custom_fields: {
+              pickup_notes: extractedData.pickup_notes,
+              special_instructions: extractedData.special_instructions,
+            },
+            auto_geocode: true,
+          }
+        : undefined
+
+    const receiver: CreateAddressBookEntryInput | undefined =
+      isLoadDocument &&
+      receiverAddress &&
+      extractedData.destination_city &&
+      extractedData.destination_state &&
+      extractedData.destination_zip
+        ? {
+            name: extractedData.receiver_name || "Receiver",
+            company_name: extractedData.receiver_company,
+            address_line1: receiverAddress,
+            city: extractedData.destination_city,
+            state: extractedData.destination_state,
+            zip_code: extractedData.destination_zip,
+            category: "receiver",
+            custom_fields: {
+              delivery_notes: extractedData.delivery_notes,
+              special_instructions: extractedData.special_instructions,
+            },
+            auto_geocode: true,
+          }
+        : undefined
 
     return {
       data: {
