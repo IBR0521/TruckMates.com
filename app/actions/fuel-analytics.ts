@@ -485,7 +485,7 @@ export async function getFuelEfficiencyReport(filters?: {
       truckEfficiency[truckId].total_cost += parseFloat(String(expense.amount)) || 0
 
       if (expense.gallons) {
-        truckEfficiency[truckId].total_gallons += parseFloat(expense.gallons)
+        truckEfficiency[truckId].total_gallons += parseFloat(String(expense.gallons))
       }
     })
 
@@ -509,7 +509,7 @@ export async function getFuelEfficiencyReport(filters?: {
       driverEfficiency[driverId].total_cost += parseFloat(String(expense.amount)) || 0
 
       if (expense.gallons) {
-        driverEfficiency[driverId].total_gallons += parseFloat(expense.gallons)
+        driverEfficiency[driverId].total_gallons += parseFloat(String(expense.gallons))
       }
     })
 
