@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { errorMessage } from "@/lib/error-message"
 import { safeDbError } from "@/lib/utils/error"
+import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
 import { checkViewPermission } from "@/lib/server-permissions"
 import { revalidatePath } from "next/cache"
 import { runAgentEvaluation } from "@/lib/ai/agent/loop"
@@ -299,12 +300,24 @@ export async function syncCompanyCSAScores(companyId: string, dotNumber: string)
 export async function syncAllCompaniesCSAScores() {
   try {
     const admin = createAdminClient()
-    const { data: settings, error } = await admin
-      .from("company_settings")
-      .select("company_id, dot_number")
-      .not("dot_number", "is", null)
-      .limit(10000)
-    if (error) return { error: safeDbError(error, "Failed to load company settings"), data: null }
+    const { rows: settings, error } = await fetchAllRowsByIdCursor<{
+      id: string
+      company_id: string
+      dot_number: string | null
+    }>(
+      async ({ lastId, pageSize }) => {
+        let q = admin
+          .from("company_settings")
+          .select("id, company_id, dot_number")
+          .not("dot_number", "is", null)
+          .order("id", { ascending: true })
+          .limit(pageSize)
+        if (lastId) q = q.gt("id", lastId)
+        return await q
+      },
+      { warnLabel: "syncAllCompaniesCSAScores company_settings" },
+    )
+    if (error) return { error: safeDbError(new Error(error), "Failed to load company settings"), data: null }
 
     const sourceUrl =
       process.env.FMCSA_SMS_SNAPSHOT_URL ||

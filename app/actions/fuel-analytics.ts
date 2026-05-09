@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 
@@ -74,30 +75,43 @@ export async function getFuelAnalytics(filters?: {
   }
 
   try {
-    // Build query for fuel expenses with pagination/limit to prevent OOM
-    let fuelQuery = supabase
-      .from("expenses")
-      .select("id, amount, date, mileage, truck_id, description, gallons, price_per_gallon")
-      .eq("company_id", ctx.companyId)
-      .eq("category", "fuel")
-      .order("date", { ascending: false })
-      .limit(10000) // Cap at 10k rows to prevent memory exhaustion
+    const { rows: fuelExpenses, error: fuelFetchError } = await fetchAllRowsByIdCursor<{
+      id: string
+      amount: string | number
+      date: string
+      mileage: number | null
+      truck_id: string | null
+      description: string | null
+      gallons: number | string | null
+      price_per_gallon: number | string | null
+    }>(
+      async ({ lastId, pageSize }) => {
+        let q = supabase
+          .from("expenses")
+          .select("id, amount, date, mileage, truck_id, description, gallons, price_per_gallon")
+          .eq("company_id", ctx.companyId)
+          .eq("category", "fuel")
+          .order("id", { ascending: true })
+          .limit(pageSize)
+        if (filters?.truck_id) {
+          q = q.eq("truck_id", filters.truck_id)
+        }
+        if (filters?.start_date) {
+          q = q.gte("date", filters.start_date)
+        }
+        if (filters?.end_date) {
+          q = q.lte("date", filters.end_date)
+        }
+        if (lastId) {
+          q = q.gt("id", lastId)
+        }
+        return await q
+      },
+      { warnLabel: "fuel-analytics expenses" },
+    )
 
-    // Apply filters
-    if (filters?.truck_id) {
-      fuelQuery = fuelQuery.eq("truck_id", filters.truck_id)
-    }
-    if (filters?.start_date) {
-      fuelQuery = fuelQuery.gte("date", filters.start_date)
-    }
-    if (filters?.end_date) {
-      fuelQuery = fuelQuery.lte("date", filters.end_date)
-    }
-
-    const { data: fuelExpenses, error: fuelError } = await fuelQuery
-
-    if (fuelError) {
-      return { error: fuelError.message, data: null }
+    if (fuelFetchError) {
+      return { error: fuelFetchError, data: null }
     }
 
     // Get trucks for reference
@@ -154,7 +168,7 @@ export async function getFuelAnalytics(filters?: {
           continue
         }
 
-        const miles = currentMileage - previousMileage
+        const miles = Number(currentMileage) - Number(previousMileage)
 
         // Only calculate if miles are positive and reasonable (between 0 and 10000 miles)
         if (miles <= 0 || miles > 10000) {
@@ -162,16 +176,17 @@ export async function getFuelAnalytics(filters?: {
         }
 
         // Get gallons from actual data (if available) or calculate from cost and price
-        const previousFuelCost = parseFloat(previous.amount) || 0
+        const previousFuelCost = parseFloat(String(previous.amount)) || 0
         let gallons = 0
         
         // Use real gallons if available
-        if (previous.gallons && previous.gallons > 0) {
-          gallons = parseFloat(previous.gallons)
+        const prevGal = Number(previous.gallons)
+        if (prevGal > 0) {
+          gallons = prevGal
         } 
         // Otherwise, calculate from price_per_gallon if available
-        else if (previous.price_per_gallon && previous.price_per_gallon > 0) {
-          gallons = previousFuelCost / parseFloat(previous.price_per_gallon)
+        else if (Number(previous.price_per_gallon) > 0) {
+          gallons = previousFuelCost / Number(previous.price_per_gallon)
         }
         // Fallback: use estimated price (only if no real data available)
         else if (previousFuelCost > 0) {

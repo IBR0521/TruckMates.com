@@ -3,6 +3,7 @@
 import { safeDbError } from "@/lib/utils/error"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/server"
+import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { calendarDateYmdLocal } from "@/lib/eld/hos-calendar-date"
 import {
@@ -116,19 +117,32 @@ export async function getDriverScorecard(driverId: string, startDate?: string, e
   const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   const end = endDate || new Date().toISOString().split('T')[0]
 
-  // Get logs
-  // V3-007 FIX: Add LIMIT to prevent OOM on large date ranges
-  const { data: logs, error: logsError } = await supabase
-    .from("eld_logs")
-    .select(ELD_LOGS_SELECT)
-    .eq("driver_id", driverId)
-    .eq("company_id", ctx.companyId)
-    .gte("log_date", start)
-    .lte("log_date", end)
-    .limit(10000) // V3-007: Limit to 10k records to prevent OOM
+  const { rows: logs, error: logsError } = await fetchAllRowsByIdCursor<{
+    id: string
+    log_type: string
+    duration_minutes: number | null
+    miles_driven: number | string | null
+  }>(
+    async ({ lastId, pageSize }) => {
+      let q = supabase
+        .from("eld_logs")
+        .select(ELD_LOGS_SELECT)
+        .eq("driver_id", driverId)
+        .eq("company_id", ctx.companyId)
+        .gte("log_date", start)
+        .lte("log_date", end)
+        .order("id", { ascending: true })
+        .limit(pageSize)
+      if (lastId) {
+        q = q.gt("id", lastId)
+      }
+      return await q
+    },
+    { warnLabel: "eld-advanced driver scorecard logs" },
+  )
 
   if (logsError) {
-    return { error: logsError.message, data: null }
+    return { error: logsError, data: null }
   }
 
   // Get violations

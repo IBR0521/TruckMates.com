@@ -4,6 +4,7 @@ import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
+import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
@@ -625,29 +626,43 @@ export async function getDVIRStats(filters?: {
     if (error) {
       // Fallback to client-side calculation if RPC doesn't exist
       Sentry.captureMessage(`get_dvir_stats RPC error, using fallback: ${error.message}`, "warning")
-      let query = supabase
-        .from("dvir")
-        .select("id, status, defects_found, safe_to_operate, inspection_type")
-        .eq("company_id", ctx.companyId)
-        .limit(10000) // Cap at 10k to prevent memory issues
+      const { rows: dvirs, error: queryError } = await fetchAllRowsByIdCursor<{
+        id: string
+        status: string
+        defects_found: boolean | null
+        safe_to_operate: boolean | null
+        inspection_type: string | null
+      }>(
+        async ({ lastId, pageSize }) => {
+          let query = supabase
+            .from("dvir")
+            .select("id, status, defects_found, safe_to_operate, inspection_type")
+            .eq("company_id", ctx.companyId)
 
-      if (scopedDriverId) {
-        query = query.eq("driver_id", scopedDriverId)
-      }
-      if (scopedTruckId) {
-        query = query.eq("truck_id", scopedTruckId)
-      }
-      if (filters?.start_date) {
-        query = query.gte("inspection_date", filters.start_date)
-      }
-      if (filters?.end_date) {
-        query = query.lte("inspection_date", filters.end_date)
-      }
+          if (scopedDriverId) {
+            query = query.eq("driver_id", scopedDriverId)
+          }
+          if (scopedTruckId) {
+            query = query.eq("truck_id", scopedTruckId)
+          }
+          if (filters?.start_date) {
+            query = query.gte("inspection_date", filters.start_date)
+          }
+          if (filters?.end_date) {
+            query = query.lte("inspection_date", filters.end_date)
+          }
 
-      const { data: dvirs, error: queryError } = await query
+          query = query.order("id", { ascending: true }).limit(pageSize)
+          if (lastId) {
+            query = query.gt("id", lastId)
+          }
+          return await query
+        },
+        { warnLabel: "dvir stats fallback" },
+      )
 
       if (queryError) {
-        return { error: queryError.message, data: null }
+        return { error: queryError, data: null }
       }
 
       const fallbackStats = {

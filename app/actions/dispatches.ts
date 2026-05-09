@@ -171,6 +171,9 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
+  if (!ctx.userId) {
+    return { error: "Not authenticated", data: null }
+  }
 
   // ERROR HANDLING FIX: Use maybeSingle() when checking if record exists (might not exist)
   // Get current load to check status and company
@@ -295,11 +298,26 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
     updateData.status = "scheduled"
   }
 
+  const { error: rpcAssignError } = await supabase.rpc("assign_load_transactional", {
+    p_load_id: loadId,
+    p_company_id: ctx.companyId,
+    p_truck_id: truckId ?? null,
+    p_trailer_id: null,
+    p_driver_id: driverId ?? null,
+    p_assigned_by: ctx.userId,
+    p_update_driver: driverId !== undefined,
+    p_update_truck: truckId !== undefined,
+    p_update_trailer: false,
+    p_set_status: updateData.status !== undefined,
+    p_new_status: updateData.status ?? null,
+  })
+
+  if (rpcAssignError) {
+    return { error: safeDbError(rpcAssignError), data: null }
+  }
+
   const { data, error } = await supabase
     .from("loads")
-    .update(updateData)
-    .eq("id", loadId)
-    .eq("company_id", ctx.companyId)
     .select(`
       id,
       shipment_number,
@@ -309,6 +327,8 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
       driver_id,
       truck_id
     `)
+    .eq("id", loadId)
+    .eq("company_id", ctx.companyId)
     .single()
 
   if (error) {

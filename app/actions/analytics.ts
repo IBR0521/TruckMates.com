@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
@@ -52,18 +53,23 @@ export async function getAnalyticsData(dateRange: number = 30) {
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - dateRange)
 
-    // FIXED: Select only necessary columns, not all columns (prevents PII exposure)
-    // V3-007 FIX: Add LIMIT to prevent unbounded queries
-    // Get loads statistics - only count and status fields
-    const { data: loadsData, error: loadsError } = await supabase
-      .from("loads")
-      .select("id, status, estimated_delivery, actual_delivery, created_at")
-      .eq("company_id", ctx.companyId)
-      .gte("created_at", startDate.toISOString())
-      .limit(10000)
+    const { rows: loadsData, error: loadsError } = await fetchAllRowsByIdCursor<AnalyticsLoadRow & { id: string; created_at: string }>(
+      async ({ lastId, pageSize }) => {
+        let q = supabase
+          .from("loads")
+          .select("id, status, estimated_delivery, actual_delivery, created_at")
+          .eq("company_id", ctx.companyId)
+          .gte("created_at", startDate.toISOString())
+          .order("id", { ascending: true })
+          .limit(pageSize)
+        if (lastId) q = q.gt("id", lastId)
+        return await q
+      },
+      { warnLabel: "analytics loads" },
+    )
 
     if (loadsError) {
-      return { error: loadsError.message, data: null }
+      return { error: loadsError, data: null }
     }
 
     // FIXED: Get trucks statistics - only count and status fields
@@ -90,30 +96,52 @@ export async function getAnalyticsData(dateRange: number = 30) {
       return { error: driversError.message, data: null }
     }
 
-    // Get invoices for revenue
-    // V3-007 FIX: Add LIMIT to prevent unbounded queries
-    const { data: invoicesData, error: invoicesError } = await supabase
-      .from("invoices")
-      .select("amount, status, created_at")
-      .eq("company_id", ctx.companyId)
-      .gte("created_at", startDate.toISOString())
-      .limit(10000)
+    const { rows: invoicesData, error: invoicesError } = await fetchAllRowsByIdCursor<{
+      id: string
+      amount?: string | number | null
+      status?: string | null
+      created_at?: string
+    }>(
+      async ({ lastId, pageSize }) => {
+        let q = supabase
+          .from("invoices")
+          .select("id, amount, status, created_at")
+          .eq("company_id", ctx.companyId)
+          .gte("created_at", startDate.toISOString())
+          .order("id", { ascending: true })
+          .limit(pageSize)
+        if (lastId) q = q.gt("id", lastId)
+        return await q
+      },
+      { warnLabel: "analytics invoices" },
+    )
 
     if (invoicesError) {
-      return { error: invoicesError.message, data: null }
+      return { error: invoicesError, data: null }
     }
 
-    // MEDIUM FIX: Add limit to prevent unbounded queries
-    // Get revenue from loads as fallback
-    const { data: loadsWithRevenue, error: loadsRevenueError } = await supabase
-      .from("loads")
-      .select("total_rate, value, created_at")
-      .eq("company_id", ctx.companyId)
-      .gte("created_at", startDate.toISOString())
-      .limit(10000) // Reasonable limit for analytics
+    const { rows: loadsWithRevenue, error: loadsRevenueError } = await fetchAllRowsByIdCursor<{
+      id: string
+      total_rate?: string | number | null
+      value?: string | number | null
+      created_at?: string
+    }>(
+      async ({ lastId, pageSize }) => {
+        let q = supabase
+          .from("loads")
+          .select("id, total_rate, value, created_at")
+          .eq("company_id", ctx.companyId)
+          .gte("created_at", startDate.toISOString())
+          .order("id", { ascending: true })
+          .limit(pageSize)
+        if (lastId) q = q.gt("id", lastId)
+        return await q
+      },
+      { warnLabel: "analytics loads revenue fallback" },
+    )
 
     if (loadsRevenueError) {
-      return { error: loadsRevenueError.message, data: null }
+      return { error: loadsRevenueError, data: null }
     }
 
     // Calculate statistics

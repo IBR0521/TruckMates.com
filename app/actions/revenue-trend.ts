@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
@@ -110,19 +111,29 @@ export async function getRevenueTrend(period: Period = 'weekly') {
       }
     })
     
-    // MEDIUM FIX: Add limit to prevent unbounded queries even with date range
-    // Fetch loads as fallback (only for loads without invoices)
-    const { data: loads, error: loadsError } = await supabase
-      .from("loads")
-      .select("id, created_at, total_rate, value")
-      .eq("company_id", companyId)
-      .gte("created_at", startDate.toISOString())
-      .lte("created_at", endDate.toISOString())
-      .order("created_at", { ascending: true })
-      .limit(10000) // Reasonable limit for trend analysis
+    const { rows: loads, error: loadsCursorError } = await fetchAllRowsByIdCursor<{
+      id: string
+      created_at: string
+      total_rate?: string | number | null
+      value?: string | number | null
+    }>(
+      async ({ lastId, pageSize }) => {
+        let q = supabase
+          .from("loads")
+          .select("id, created_at, total_rate, value")
+          .eq("company_id", companyId)
+          .gte("created_at", startDate.toISOString())
+          .lte("created_at", endDate.toISOString())
+          .order("id", { ascending: true })
+          .limit(pageSize)
+        if (lastId) q = q.gt("id", lastId)
+        return await q
+      },
+      { warnLabel: "revenue-trend loads" },
+    )
 
-    if (loadsError) {
-      Sentry.captureException(loadsError)
+    if (loadsCursorError) {
+      Sentry.captureException(new Error(loadsCursorError))
     }
 
     // Group revenue by period
@@ -160,7 +171,7 @@ export async function getRevenueTrend(period: Period = 'weekly') {
 
     // FIXED: Process loads - only add if no invoice exists for that load (no 0.5 factor)
     if (loads && loads.length > 0) {
-      loads.forEach((load: { id: string | null; created_at: string | null; total_rate: number | string | null; value: number | string | null }) => {
+      loads.forEach((load) => {
         if (!load.created_at) return
         // Skip if this load already has an invoice
         if (load.id && loadIdsWithInvoices.has(load.id)) {

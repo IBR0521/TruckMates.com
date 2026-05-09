@@ -796,36 +796,65 @@ export async function createInvoice(formData: {
     calculatedDueDate = issueDate.toISOString().split('T')[0]
   }
 
-  const invoiceData: Record<string, unknown> = {
-    company_id: ctx.companyId,
-    invoice_number: invoiceNumber,
-    customer_name: sanitizeString(formData.customer_name, 200),
-    load_id: formData.load_id || null,
-    amount: finalAmount,
-    status: "pending",
-    issue_date: formData.issue_date,
-    due_date: calculatedDueDate,
-    payment_terms: sanitizeString(paymentTerms, 50),
-    description: formData.description ? sanitizeString(formData.description, 2000) : null,
-    items: formData.items || null,
+  let data: {
+    id: string
+    invoice_number?: string
+    amount?: number
+    [key: string]: unknown
+  } | null = null
+
+  try {
+    const { data: rpcInvoice, error: rpcInvoiceError } = await supabase.rpc("create_invoice_transactional", {
+      p_company_id: ctx.companyId,
+      p_load_id: formData.load_id || null,
+      p_invoice_number: invoiceNumber,
+      p_invoice_date: formData.issue_date,
+      p_due_date: calculatedDueDate,
+      p_subtotal: subtotal,
+      p_fuel_surcharge: 0,
+      p_accessorials: 0,
+      p_tax_amount: taxAmount,
+      p_total_amount: finalAmount,
+      p_status: "pending",
+      p_line_items: (formData.items ?? null) as unknown,
+      p_customer_name: sanitizeString(formData.customer_name, 200),
+      p_payment_terms: sanitizeString(paymentTerms, 50),
+      p_description: formData.description ? sanitizeString(formData.description, 2000) : null,
+      p_tax_rate: settings.tax_enabled && settings.default_tax_rate ? settings.default_tax_rate : null,
+    })
+    if (rpcInvoiceError) {
+      return { data: null, error: safeDbError(rpcInvoiceError, "Invoice not created") }
+    }
+    const invoiceId =
+      rpcInvoice &&
+      typeof rpcInvoice === "object" &&
+      "invoice_id" in rpcInvoice &&
+      (rpcInvoice as { invoice_id?: string }).invoice_id
+        ? String((rpcInvoice as { invoice_id: string }).invoice_id)
+        : null
+    if (!invoiceId) {
+      return { data: null, error: "Invoice not created" }
+    }
+    const { data: invRow, error: invFetchError } = await supabase
+      .from("invoices")
+      .select(
+        "id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, created_at, updated_at",
+      )
+      .eq("id", invoiceId)
+      .single()
+    if (invFetchError || !invRow) {
+      return {
+        data: null,
+        error: invFetchError ? safeDbError(invFetchError, "Invoice not created") : "Invoice not created",
+      }
+    }
+    data = invRow
+  } catch (error: unknown) {
+    return { data: null, error: safeDbError(error, "Invoice not created") }
   }
 
-  // Add tax information if tax is enabled
-  if (settings.tax_enabled) {
-    invoiceData.tax_amount = taxAmount
-    invoiceData.tax_rate = settings.default_tax_rate
-    invoiceData.subtotal = subtotal
-  }
-
-  // V3-007 FIX: Replace implicit select() with explicit columns
-  const { data, error } = await supabase
-    .from("invoices")
-    .insert(invoiceData)
-    .select("id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items, paid_amount, paid_date, payment_method, notes, tax_amount, tax_rate, subtotal, created_at, updated_at")
-    .single()
-
-  if (error || !data) {
-    return { error: error ? safeDbError(error, "Invoice not created") : "Invoice not created", data: null }
+  if (!data) {
+    return { data: null, error: "Invoice not created" }
   }
 
   // Auto-send invoice if enabled
@@ -1528,66 +1557,63 @@ export async function createSettlement(formData: {
     detailsWithItems.lease_remaining_balance = leaseContext?.remainingAfter ?? null
   }
 
-  const { data, error } = await supabase
-    .from("settlements")
-    .insert({
-      company_id: ctx.companyId,
-      driver_id: formData.driver_id,
-      period_start: formData.period_start,
-      period_end: formData.period_end,
-      gross_pay: grossPay,
-      fuel_deduction: fuelDeduction,
-      advance_deduction: advanceDeduction,
-      lease_deduction: leaseDeduction,
-      other_deductions: otherDeductions,
-      total_deductions: totalDeductions,
-      per_diem_eligible_nights: perDiemEligibleNights,
-      per_diem_rate_used: perDiemRate,
-      per_diem_amount: perDiemAmount,
-      net_pay: netPay,
-      status: "pending",
-      payment_method: formData.payment_method || null,
-      gl_code: formData.gl_code ? sanitizeString(formData.gl_code, 40) : null,
-      loads: loadsData,
-      pay_rule_id: payRuleId,
-      calculation_details: detailsWithItems,
+  let data: { id: string } | null = null
+  try {
+    const { data: rpcResult, error: rpcError } = await supabase.rpc("create_settlement_transactional", {
+      p_company_id: ctx.companyId,
+      p_driver_id: formData.driver_id,
+      p_period_start: formData.period_start,
+      p_period_end: formData.period_end,
+      p_gross_pay: grossPay,
+      p_fuel_deduction: fuelDeduction,
+      p_advance_deduction: advanceDeduction,
+      p_other_deductions: otherDeductions,
+      p_total_deductions: totalDeductions,
+      p_per_diem_eligible_nights: perDiemEligibleNights,
+      p_per_diem_rate_used: perDiemRate,
+      p_per_diem_amount: perDiemAmount,
+      p_lease_deduction: leaseDeduction,
+      p_net_pay: netPay,
+      p_status: "pending",
+      p_payment_method: formData.payment_method || null,
+      p_gl_code: formData.gl_code ? sanitizeString(formData.gl_code, 40) : null,
+      p_loads: loadsData,
+      p_pay_rule_id: payRuleId,
+      p_calculation_details: detailsWithItems,
+      p_lease_agreement_id: leaseContext?.leaseId ?? null,
+      p_lease_remaining_after: leaseContext?.remainingAfter ?? null,
     })
-    // V3-007 FIX: Replace implicit select() with explicit columns
-    .select("id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, lease_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, payment_reference, payment_eta, stripe_transfer_id, stripe_payout_id, gl_code, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at")
-    .single()
-
-  if (error || !data) {
-    return { error: error ? safeDbError(error, "Settlement not created") : "Settlement not created", data: null }
-  }
-
-  // Post settlement side effects: payment history + remaining balance update
-  if (leaseDeduction > 0 && leaseContext?.leaseId) {
-    try {
-      await supabase.from("lease_payments").insert({
-        company_id: ctx.companyId,
-        lease_agreement_id: leaseContext.leaseId,
-        settlement_id: data.id,
-        payment_date: formData.period_end,
-        amount: leaseDeduction,
-        remaining_balance_after: leaseContext.remainingAfter,
-      })
-
-      const leasePatch: Record<string, unknown> = {
-        remaining_balance: leaseContext.remainingAfter,
-        updated_at: new Date().toISOString(),
-      }
-      if (leaseContext.remainingAfter <= 0) {
-        leasePatch.is_active = false
-      }
-
-      await supabase
-        .from("lease_agreements")
-        .update(leasePatch)
-        .eq("id", leaseContext.leaseId)
-        .eq("company_id", ctx.companyId)
-    } catch (error) {
-      Sentry.captureException(error)
+    if (rpcError) {
+      return { data: null, error: safeDbError(rpcError, "Failed to create settlement") }
     }
+    const settlementId =
+      rpcResult &&
+      typeof rpcResult === "object" &&
+      "settlement_id" in rpcResult &&
+      (rpcResult as { settlement_id?: string }).settlement_id
+        ? String((rpcResult as { settlement_id: string }).settlement_id)
+        : null
+    if (!settlementId) {
+      return { data: null, error: "Settlement not created" }
+    }
+    const fetchRow = await supabase
+      .from("settlements")
+      .select(
+        "id, company_id, driver_id, period_start, period_end, gross_pay, fuel_deduction, advance_deduction, lease_deduction, other_deductions, total_deductions, per_diem_eligible_nights, per_diem_rate_used, per_diem_amount, net_pay, status, paid_date, payment_method, payment_reference, payment_eta, stripe_transfer_id, stripe_payout_id, gl_code, loads, pay_rule_id, calculation_details, pdf_url, driver_approved, driver_approved_at, driver_approval_method, created_at, updated_at",
+      )
+      .eq("id", settlementId)
+      .single()
+    if (fetchRow.error || !fetchRow.data) {
+      return {
+        data: null,
+        error: fetchRow.error
+          ? safeDbError(fetchRow.error, "Settlement not created")
+          : "Settlement not created",
+      }
+    }
+    data = fetchRow.data as { id: string }
+  } catch (error: unknown) {
+    return { data: null, error: safeDbError(error, "Failed to create settlement") }
   }
 
   // Generate PDF automatically (non-blocking)

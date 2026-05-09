@@ -8,6 +8,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { sanitizeString } from "@/lib/validation"
+import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
 export type VendorInvoiceStatus = "draft" | "approved" | "paid" | "overdue"
 type APAgingBucketKey = "0-30" | "31-60" | "61-90" | "90+"
 
@@ -53,6 +54,8 @@ export async function getVendorInvoices(filters?: {
   search?: string
   limit?: number
   offset?: number
+  keyset?: boolean
+  cursor?: string
 }) {
   const permission = await checkViewPermission("accounting")
   if (!permission.allowed) return { error: permission.error || "You don't have permission to view payables", data: null, count: 0 }
@@ -61,6 +64,53 @@ export async function getVendorInvoices(filters?: {
     const supabase = await createClient()
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null, count: 0 }
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const mapRows = (rows: VendorInvoiceRow[]) =>
+      rows.map((row) => {
+        const due = row.due_date ? new Date(row.due_date) : null
+        const isOverdue = !!due && due.getTime() < today.getTime() && normalizeStatus(row.status) !== "paid"
+        return {
+          ...row,
+          status: isOverdue ? "overdue" : normalizeStatus(row.status),
+        }
+      })
+
+    if (filters?.keyset === true) {
+      const limit = Math.min(filters?.limit ?? 50, 100)
+      let q = supabase
+        .from("vendor_invoices")
+        .select(`
+        id, company_id, vendor_id, invoice_number, invoice_date, due_date, amount, status,
+        payment_method, paid_date, gl_code, created_at,
+        vendors:vendor_id ( id, name, company_name )
+      `)
+        .eq("company_id", ctx.companyId)
+        .order("id", { ascending: false })
+        .limit(limit + 1)
+
+      if (filters?.status) q = q.eq("status", filters.status)
+      if (filters?.vendor_id) q = q.eq("vendor_id", filters.vendor_id)
+      if (filters?.search) {
+        const s = sanitizeString(filters.search, 120).trim()
+        if (s.length > 0) {
+          q = q.or(`invoice_number.ilike.%${s}%,gl_code.ilike.%${s}%`)
+        }
+      }
+      if (filters?.cursor) {
+        q = q.lt("id", filters.cursor)
+      }
+
+      const { data, error } = await q
+      if (error) return { error: safeDbError(error), data: null, count: 0 }
+      const raw = (data || []) as VendorInvoiceRow[]
+      const hasMore = raw.length > limit
+      const slice = hasMore ? raw.slice(0, limit) : raw
+      const nextCursor = hasMore && slice.length > 0 ? slice[slice.length - 1].id : null
+      return { data: mapRows(slice), error: null, count: slice.length, nextCursor }
+    }
 
     let query = supabase
       .from("vendor_invoices")
@@ -88,18 +138,9 @@ export async function getVendorInvoices(filters?: {
 
     if (error) return { error: safeDbError(error), data: null, count: 0 }
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const mapped = ((data || []) as VendorInvoiceRow[]).map((row) => {
-      const due = row.due_date ? new Date(row.due_date) : null
-      const isOverdue = !!due && due.getTime() < today.getTime() && normalizeStatus(row.status) !== "paid"
-      return {
-        ...row,
-        status: isOverdue ? "overdue" : normalizeStatus(row.status),
-      }
-    })
+    const mapped = mapRows((data || []) as VendorInvoiceRow[])
 
-    return { data: mapped, error: null, count: count || 0 }
+    return { data: mapped, error: null, count: count || 0, nextCursor: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
     return { error: errorMessage(error, "Failed to load vendor invoices"), data: null, count: 0 }
@@ -232,18 +273,33 @@ export async function getAPAgingReport() {
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null }
 
-    const { data, error } = await supabase
-      .from("vendor_invoices")
-      .select(`
+    const { rows: data, error: apFetchError } = await fetchAllRowsByIdCursor<{
+      id: string
+      vendor_id: string
+      invoice_number: string | null
+      due_date: string
+      amount: number | null
+      status: string
+      vendors?: { name?: string | null; company_name?: string | null } | null
+    }>(
+      async ({ lastId, pageSize }) => {
+        let q = supabase
+          .from("vendor_invoices")
+          .select(`
         id, vendor_id, invoice_number, due_date, amount, status,
         vendors:vendor_id ( name, company_name )
       `)
-      .eq("company_id", ctx.companyId)
-      .neq("status", "paid")
-      .order("due_date", { ascending: true })
-      .limit(10000)
+          .eq("company_id", ctx.companyId)
+          .neq("status", "paid")
+          .order("id", { ascending: true })
+          .limit(pageSize)
+        if (lastId) q = q.gt("id", lastId)
+        return await q
+      },
+      { warnLabel: "AP aging vendor_invoices" },
+    )
 
-    if (error) return { error: safeDbError(error), data: null }
+    if (apFetchError) return { error: safeDbError(new Error(apFetchError), "Failed to load AP aging"), data: null }
 
     const now = new Date()
     now.setHours(0, 0, 0, 0)

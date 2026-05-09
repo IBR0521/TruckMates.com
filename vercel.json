@@ -38,7 +38,7 @@
     },
     {
       "path": "/api/cron/sync-factoring-status",
-      "schedule": "*/30 * * * *"
+      "schedule": "*/35 * * * *"
     }
   ],
   "functions": {

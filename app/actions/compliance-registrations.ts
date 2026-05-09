@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { sanitizeString } from "@/lib/validation"
 import { sendNotification } from "./notifications"
+import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
 
 export type ComplianceRegistrationType = "ucr" | "irp" | "mcs150" | "operating_authority"
 export type ComplianceRegistrationStatus = "active" | "pending_renewal" | "expired" | "inactive"
@@ -22,6 +23,10 @@ export async function getComplianceRegistrations(filters?: {
   status?: ComplianceRegistrationStatus
   limit?: number
   offset?: number
+  /** When true, use keyset pagination (`cursor` / `nextCursor`) instead of offset */
+  keyset?: boolean
+  /** Previous page last id — only with `keyset: true` */
+  cursor?: string
 }) {
   try {
     const permission = await checkViewPermission("ifta")
@@ -31,6 +36,32 @@ export async function getComplianceRegistrations(filters?: {
     if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null, count: 0 }
 
     const supabase = await createClient()
+    const useKeyset = filters?.keyset === true
+
+    if (useKeyset) {
+      const limit = Math.min(filters?.limit ?? 50, 100)
+      let q = supabase
+        .from("compliance_registrations")
+        .select(REGISTRATION_SELECT)
+        .eq("company_id", ctx.companyId)
+        .order("id", { ascending: false })
+        .limit(limit + 1)
+
+      if (filters?.type) q = q.eq("type", filters.type)
+      if (filters?.status) q = q.eq("status", filters.status)
+      if (filters?.cursor) {
+        q = q.lt("id", filters.cursor)
+      }
+
+      const { data, error } = await q
+      if (error) return { error: "Failed to load compliance registrations", data: null, count: 0 }
+      const rows = data || []
+      const hasMore = rows.length > limit
+      const items = hasMore ? rows.slice(0, limit) : rows
+      const nextCursor = hasMore && items.length > 0 ? items[items.length - 1].id : null
+      return { data: items, error: null, count: items.length, nextCursor }
+    }
+
     let query = supabase
       .from("compliance_registrations")
       .select(REGISTRATION_SELECT, { count: "exact" })
@@ -46,7 +77,7 @@ export async function getComplianceRegistrations(filters?: {
 
     const { data, error, count } = await query
     if (error) return { error: "Failed to load compliance registrations", data: null, count: 0 }
-    return { data: data || [], error: null, count: count || 0 }
+    return { data: data || [], error: null, count: count || 0, nextCursor: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
     return { error: errorMessage(error, "Failed to load compliance registrations"), data: null, count: 0 }
@@ -175,14 +206,33 @@ function registrationEventType(type: ComplianceRegistrationType): string {
 export async function processComplianceRegistrationExpiryAlerts() {
   try {
     const admin = createAdminClient()
-    const { data: registrations, error } = await admin
-      .from("compliance_registrations")
-      .select(REGISTRATION_SELECT)
-      .in("status", ["active", "pending_renewal"])
-      .not("expiry_date", "is", null)
-      .limit(10000)
+    const { rows: registrations, error: regFetchError } = await fetchAllRowsByIdCursor<{
+      id: string
+      company_id: string
+      type: string
+      status: string
+      filed_date: string | null
+      expiry_date: string
+      state: string | null
+      notes: string | null
+      created_at: string
+      updated_at: string
+    }>(
+      async ({ lastId, pageSize }) => {
+        let q = admin
+          .from("compliance_registrations")
+          .select(REGISTRATION_SELECT)
+          .in("status", ["active", "pending_renewal"])
+          .not("expiry_date", "is", null)
+          .order("id", { ascending: true })
+          .limit(pageSize)
+        if (lastId) q = q.gt("id", lastId)
+        return await q
+      },
+      { warnLabel: "compliance registration expiry alerts" },
+    )
 
-    if (error) return { error: "Failed to load compliance registrations", data: null }
+    if (regFetchError) return { error: regFetchError, data: null }
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)

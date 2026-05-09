@@ -58,6 +58,14 @@ export function validateEnv(): { valid: boolean; errors: string[]; warnings: str
         errors.push(`Missing required production environment variable: ${key}`)
       }
     }
+    if (!String(process.env.SUPABASE_POOLER_URL || "").trim()) {
+      const poolerMsg =
+        "SUPABASE_POOLER_URL is not configured — server traffic uses direct DB connections (~30 concurrent users). Set the pooler URL (Transaction mode) from Supabase → Database → Connection string."
+      warnings.push(poolerMsg)
+      console.warn(
+        "WARNING: SUPABASE_POOLER_URL is not configured. The platform will fall back to direct connections, which limits concurrent capacity to ~30 users. Configure the pooler URL from Supabase dashboard to handle production load.",
+      )
+    }
   }
 
   // Check optional but recommended variables
