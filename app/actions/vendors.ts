@@ -7,6 +7,8 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateRequiredString, validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
 import * as Sentry from "@sentry/nextjs"
+import { checkResourceLimit } from "@/lib/plan-enforcement"
+import { formatLimitErrorMessage, getPlanLimits, nextPlanTier } from "@/lib/plan-limits"
 /** `public.vendors` — supabase/crm_schema_complete.sql */
 const VENDOR_FULL_SELECT = `
   id, company_id, name, company_name, email, phone, website,
@@ -148,6 +150,21 @@ export async function createVendor(formData: {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const vendorLimit = await checkResourceLimit({ companyId: ctx.companyId, resourceType: "vendors" })
+  if (!vendorLimit.allowed) {
+    const nt = nextPlanTier(vendorLimit.tier)
+    return {
+      error: formatLimitErrorMessage({
+        tier: vendorLimit.tier,
+        resourceLabel: "vendors",
+        limit: vendorLimit.limit,
+        nextTier: nt,
+        nextTierLimit: nt ? getPlanLimits(nt).vendors : undefined,
+      }),
+      data: null,
+    }
   }
 
   // Professional validation

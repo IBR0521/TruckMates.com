@@ -43,7 +43,10 @@ async function reverseGeocodeCoordinates(latitude: number, longitude: number): P
 
     const apiKey = process.env.GOOGLE_MAPS_API_KEY || ""
     if (!apiKey) {
-      throw new Error("Google Maps API key not configured. Please contact support.")
+      return {
+        data: null,
+        error: "Map data unavailable. State crossing requires Google Maps API.",
+      }
     }
 
     const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}&result_type=administrative_area_level_1`
@@ -144,10 +147,11 @@ export async function detectStateCrossing(params: {
     const geocodeResult = await reverseGeocodeCoordinates(params.latitude, params.longitude)
 
     if (geocodeResult.error || !geocodeResult.data) {
-      // If reverse geocoding fails, we can't detect state crossing
-      // Log error but don't fail (location is still saved)
       Sentry.captureMessage(`[IFTA State Crossing] Failed to get state: ${geocodeResult.error}`, "warning")
-      return { error: geocodeResult.error, data: null }
+      return {
+        error: geocodeResult.error || "Geocoding failed",
+        data: { crossings: [] },
+      }
     }
 
     const { state_code, state_name, address } = geocodeResult.data

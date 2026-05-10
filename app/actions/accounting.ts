@@ -10,6 +10,7 @@ import { validatePricingData, validateNonNegativeNumber, sanitizeString, validat
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 import { mapLegacyRole } from "@/lib/roles"
+import { evaluateCustomerCreditGate } from "@/lib/credit-check"
 
 type LoadValueRow = {
   id?: string | null
@@ -233,7 +234,7 @@ export async function getSettlement(id: string) {
   }
 }
 
-export async function markSettlementPaid(id: string, paymentMethod?: string) {
+export async function markSettlementPaid(id: string, paymentMethod?: string, paymentReference?: string) {
   try {
     const supabase = await createClient()
 
@@ -268,21 +269,9 @@ export async function markSettlementPaid(id: string, paymentMethod?: string) {
     if (effectiveMethod) {
       updateData.payment_method = effectiveMethod
     }
-
-    if (effectiveMethod === "ach_stripe") {
-      const { executeSettlementAchTransfer } = await import("./settlement-ach")
-      const ach = await executeSettlementAchTransfer({
-        settlementId: id,
-        driverId: settlementRow.driver_id,
-        amount: Number(settlementRow.net_pay || 0),
-      })
-      if (ach.error || !ach.data) {
-        return { error: ach.error || "ACH transfer failed", data: null }
-      }
-      updateData.payment_reference = ach.data.paymentReference
-      updateData.payment_eta = ach.data.eta || null
-      updateData.stripe_transfer_id = ach.data.transferId
-      updateData.stripe_payout_id = ach.data.payoutId
+    const ref = sanitizeString(paymentReference || "", 120)
+    if (ref) {
+      updateData.payment_reference = ref
     }
 
     const { data, error } = await supabase
@@ -802,6 +791,31 @@ export async function createInvoice(formData: {
     amount?: number
     [key: string]: unknown
   } | null = null
+
+  const customerNameForCredit = sanitizeString(formData.customer_name, 200)
+  const { data: invoiceCustomerMatch } = await supabase
+    .from("customers")
+    .select("id, name")
+    .eq("company_id", ctx.companyId)
+    .ilike("name", customerNameForCredit)
+    .limit(1)
+    .maybeSingle()
+
+  if (invoiceCustomerMatch?.id) {
+    const invoiceCredit = await evaluateCustomerCreditGate({
+      companyId: ctx.companyId,
+      customerId: invoiceCustomerMatch.id,
+      customerName: String(invoiceCustomerMatch.name || customerNameForCredit),
+      additionalAmount: finalAmount,
+      userRole: ctx.user?.role,
+      userId: ctx.userId,
+      auditAction: "invoice_created_over_credit",
+      overrideAuditMessage: "Created invoice over credit limit",
+    })
+    if (!invoiceCredit.allowed) {
+      return { data: null, error: invoiceCredit.error || "Credit check failed" }
+    }
+  }
 
   try {
     const { data: rpcInvoice, error: rpcInvoiceError } = await supabase.rpc("create_invoice_transactional", {

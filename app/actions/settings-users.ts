@@ -7,6 +7,8 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getUserRole } from "@/lib/server-permissions"
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
+import { checkResourceLimit } from "@/lib/plan-enforcement"
+import { formatLimitErrorMessage, getPlanLimits, nextPlanTier } from "@/lib/plan-limits"
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import * as Sentry from "@sentry/nextjs"
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
@@ -368,38 +370,19 @@ export async function inviteUser(data: {
     return { error: "An invitation has already been sent to this email address", data: null }
   }
 
-  // BUG-061 FIX: Check subscription plan limits before inviting user
-  const { data: subscription, error: subscriptionError } = await supabase
-    .from("subscriptions")
-    .select(`
-      plan_id,
-      subscription_plans!inner(max_users)
-    `)
-    .eq("company_id", ctx.companyId)
-    .in("status", ["active", "trialing"])
-    .maybeSingle()
-
-  if (subscriptionError) {
-    return { error: subscriptionError.message, data: null }
-  }
-
-  if (subscription?.subscription_plans?.max_users) {
-    // Count all company users; inactive/null employee_status should still consume a seat
-    // unless explicitly removed from the company.
-    const { count: currentUserCount } = await supabase
-      .from("users")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", ctx.companyId)
-
-    if (currentUserCount !== null && currentUserCount >= subscription.subscription_plans.max_users) {
-      return {
-        error: `User limit reached. Your plan allows ${subscription.subscription_plans.max_users} users. Please upgrade your subscription to invite more users.`,
-        data: null,
-        upgrade: {
-          required: true,
-          feature: "users_limit",
-        },
-      }
+  const seatCheck = await checkResourceLimit({ companyId: ctx.companyId, resourceType: "user_seats" })
+  if (!seatCheck.allowed) {
+    const nt = nextPlanTier(seatCheck.tier)
+    return {
+      error: formatLimitErrorMessage({
+        tier: seatCheck.tier,
+        resourceLabel: "user seats",
+        limit: seatCheck.limit,
+        nextTier: nt,
+        nextTierLimit: nt ? getPlanLimits(nt).user_seats : undefined,
+      }),
+      data: null,
+      upgrade: { required: true, feature: "users_limit" },
     }
   }
 

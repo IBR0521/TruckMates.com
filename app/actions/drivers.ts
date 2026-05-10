@@ -11,6 +11,8 @@ import { validateDriverData, sanitizeString, sanitizeEmail, sanitizePhone } from
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { mapLegacyRole } from "@/lib/roles"
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
+import { checkResourceLimit } from "@/lib/plan-enforcement"
+import { formatLimitErrorMessage, getPlanLimits, nextPlanTier } from "@/lib/plan-limits"
 import { capturePostHogServerEvent } from "@/lib/analytics/posthog-server"
 import {
   collapseDuplicateDriversByEmail,
@@ -372,38 +374,22 @@ export async function createDriver(formData: {
     return { error: subscriptionAccess.error || "Subscription inactive", data: null }
   }
 
-  // BUG-061 FIX: Check subscription plan limits before creating driver
-  const { data: subscription, error: subscriptionError } = await supabase
-    .from("subscriptions")
-    .select(`
-      plan_id,
-      subscription_plans!inner(max_drivers)
-    `)
-    .eq("company_id", ctx.companyId)
-    .in("status", ["active", "trialing"])
-    .maybeSingle()
-
-  if (subscriptionError) {
-    return { error: subscriptionError.message, data: null }
-  }
-
-  if (subscription?.subscription_plans?.max_drivers) {
-    // Count current active drivers
-    const { count: currentDriverCount } = await supabase
-      .from("drivers")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", ctx.companyId)
-      .eq("status", "active")
-
-    if (currentDriverCount !== null && currentDriverCount >= subscription.subscription_plans.max_drivers) {
-      return {
-        error: `Driver limit reached. Your plan allows ${subscription.subscription_plans.max_drivers} drivers. Please upgrade your subscription to add more drivers.`,
-        data: null,
-        upgrade: {
-          required: true,
-          feature: "drivers_limit",
-        },
-      }
+  const driverLimit = await checkResourceLimit({
+    companyId: ctx.companyId,
+    resourceType: "drivers",
+  })
+  if (!driverLimit.allowed) {
+    const nt = nextPlanTier(driverLimit.tier)
+    return {
+      error: formatLimitErrorMessage({
+        tier: driverLimit.tier,
+        resourceLabel: "active drivers",
+        limit: driverLimit.limit,
+        nextTier: nt,
+        nextTierLimit: nt ? getPlanLimits(nt).drivers : undefined,
+      }),
+      data: null,
+      upgrade: { required: true, feature: "drivers_limit" },
     }
   }
 

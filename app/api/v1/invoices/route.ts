@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { authenticateApiKey, enforceApiRateLimit, recordApiUsage } from "@/lib/api/v1/auth"
+import { requirePublicApiFeature } from "@/lib/api/v1/public-api-plan"
 
 const createInvoiceSchema = z.object({
   invoice_number: z.string().min(1),
@@ -19,6 +20,8 @@ export async function GET(request: NextRequest) {
   const startedAt = Date.now()
   const auth = await authenticateApiKey(request, "read")
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const planBlock = await requirePublicApiFeature(auth.companyId)
+  if (planBlock) return planBlock
   const rl = await enforceApiRateLimit(request, "invoices:get")
   if (!rl.allowed) return NextResponse.json({ error: rl.error }, { status: rl.status })
   const url = new URL(request.url)
@@ -78,6 +81,8 @@ export async function POST(request: NextRequest) {
   const startedAt = Date.now()
   const auth = await authenticateApiKey(request, "write")
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const planBlockW = await requirePublicApiFeature(auth.companyId)
+  if (planBlockW) return planBlockW
   const rl = await enforceApiRateLimit(request, "invoices:post", 60, 60)
   if (!rl.allowed) return NextResponse.json({ error: rl.error }, { status: rl.status })
   const body = await request.json().catch(() => ({}))

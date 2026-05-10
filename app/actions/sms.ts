@@ -18,6 +18,7 @@ import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
 import { rateLimitRedis } from "@/lib/rate-limit-redis"
+import { checkMonthlyUsage } from "@/lib/plan-enforcement"
 
 type SmsTemplateData = {
   routeName?: string
@@ -58,12 +59,46 @@ async function getTwilioClient() {
 }
 
 // Send SMS notification
-export async function sendSMS(phoneNumber: string, message: string) {
+export async function sendSMS(
+  phoneNumber: string,
+  message: string,
+  context?: { companyId?: string; driverId?: string },
+) {
   const globalRateLimit = await rateLimitRedis(`sms:send:${phoneNumber.trim()}`, { limit: 20, window: 60 })
   if (!globalRateLimit.success) {
     return {
       sent: false,
       error: "Too many SMS attempts. Please retry in a minute.",
+    }
+  }
+
+  const companyId = context?.companyId
+  if (companyId) {
+    const usage = await checkMonthlyUsage({ companyId, usageType: "sms" })
+    if (usage.hardCap) {
+      console.warn("[SMS] Monthly SMS quota exceeded; skipping send", { companyId })
+      try {
+        const admin = createAdminClient()
+        await admin.from("sms_logs").insert({
+          company_id: companyId,
+          direction: "outbound",
+          status: "blocked_quota",
+          body: String(message || "").slice(0, 2000),
+          driver_id: context?.driverId || null,
+          phone_hint: phoneNumber.trim().slice(-4) || null,
+        })
+      } catch (e) {
+        Sentry.captureException(e)
+      }
+      return { sent: false, error: null }
+    }
+    if (usage.warningThreshold) {
+      console.warn("[SMS] Monthly SMS quota warning threshold reached", {
+        companyId,
+        used: usage.used,
+        limit: usage.limit,
+        percentUsed: usage.percentUsed,
+      })
     }
   }
 
@@ -127,6 +162,22 @@ export async function sendSMS(phoneNumber: string, message: string) {
       from: fromNumber,
       to: normalizedPhone,
     })
+
+    if (companyId) {
+      try {
+        const admin = createAdminClient()
+        await admin.from("sms_logs").insert({
+          company_id: companyId,
+          direction: "outbound",
+          status: "sent",
+          body: String(message || "").slice(0, 2000),
+          driver_id: context?.driverId || null,
+          phone_hint: normalizedPhone.slice(-4),
+        })
+      } catch (e) {
+        Sentry.captureException(e)
+      }
+    }
 
     return {
       sent: true,
@@ -197,7 +248,7 @@ export async function sendSMSNotification(
   // Get user phone number
   const { data: userData, error: userDataError } = await supabase
     .from("users")
-    .select("phone")
+    .select("phone, company_id")
     .eq("id", userId)
     .maybeSingle()
 
@@ -212,8 +263,8 @@ export async function sendSMSNotification(
   // Generate SMS message based on type
   const message = generateSMSMessage(type, data)
 
-  // Send SMS
-  const result = await sendSMS(userData.phone, message)
+  const companyForSms = (userData as { phone?: string | null; company_id?: string | null }).company_id || null
+  const result = await sendSMS(userData.phone, message, companyForSms ? { companyId: companyForSms } : undefined)
 
   return {
     sent: result.sent,
@@ -282,7 +333,7 @@ export async function sendSMSToDriver(
     return { sent: false, error: "Too many SMS attempts for this driver. Please retry shortly." }
   }
 
-  const sendResult = await sendSMS(driver.phone, message)
+  const sendResult = await sendSMS(driver.phone, message, { companyId: ctx.companyId, driverId: driver.id })
 
   // Write outbound SMS to the driver's chat thread so it appears in unified timeline.
   if (sendResult.sent && ctx.userId && driver?.id) {
@@ -403,7 +454,7 @@ export async function sendSMSToDriverForCompanyAutomation(
     return { sent: false, error: "Driver phone number not found" }
   }
 
-  const sendResult = await sendSMS(phone, text)
+  const sendResult = await sendSMS(phone, text, { companyId: cid, driverId: did })
   return { sent: Boolean(sendResult.sent), error: sendResult.error ?? null }
 }
 

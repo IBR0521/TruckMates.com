@@ -45,6 +45,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
+import { cancelPaddleBillingSubscription, getCompanyPlanUsageSnapshot } from "@/app/actions/plan-usage"
 
 type BillingSubscription = {
   plan_display_name?: string | null
@@ -74,6 +75,8 @@ type PaymentHistoryRow = {
   payment_method_last4?: string | null
   invoice_number?: string | null
 }
+
+type PlanUsageSnapshot = NonNullable<Awaited<ReturnType<typeof getCompanyPlanUsageSnapshot>>["data"]>
 
 type PaymentMethodRow = {
   id?: string
@@ -161,6 +164,9 @@ export default function BillingSettingsPage() {
   const [upgradeFeature, setUpgradeFeature] = useState<
     "route_optimization" | "geofencing" | "crm" | "api_keys" | null
   >(null)
+  const [planUsage, setPlanUsage] = useState<PlanUsageSnapshot | null>(null)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelBusy, setCancelBusy] = useState(false)
 
   useEffect(() => {
     if (!requestedUpgrade) return
@@ -179,12 +185,14 @@ export default function BillingSettingsPage() {
     async function loadSettings() {
       setIsLoading(true)
       try {
-        const [billingResult, subscriptionResult, historyResult, methodsResult, usageResult] = await Promise.all([
+        const [billingResult, subscriptionResult, historyResult, methodsResult, usageResult, planUsageResult] =
+          await Promise.all([
           getBillingInfo(),
           getSubscription(),
           getPaymentHistory(),
           getPaymentMethods(),
           getMonthlyApiUsageOverview(),
+          getCompanyPlanUsageSnapshot(),
         ])
 
         if (billingResult.error) {
@@ -220,6 +228,9 @@ export default function BillingSettingsPage() {
         }
         if (usageResult.data) {
           setUsageRows(usageResult.data)
+        }
+        if (planUsageResult.data) {
+          setPlanUsage(planUsageResult.data)
         }
       } catch (error) {
         toast.error("Failed to load billing settings")
@@ -363,6 +374,84 @@ export default function BillingSettingsPage() {
             </Button>
           </div>
         </Card>
+
+        {planUsage && (
+          <Card className="p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Plan usage</h2>
+                <p className="text-sm text-muted-foreground">
+                  Current TruckMates plan: <strong>{planUsage.tierLabel}</strong>
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  onClick={() => {
+                    setUpgradeFeature("route_optimization")
+                    setShowUpgradeModal(true)
+                  }}
+                >
+                  Change plan
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setCancelOpen(true)}>
+                  Cancel subscription
+                </Button>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              {(
+                [
+                  ["Loads (month)", planUsage.metered.loads.used, planUsage.metered.loads.limit],
+                  ["SMS (month)", planUsage.metered.sms.used, planUsage.metered.sms.limit],
+                  ["AI calls (month)", planUsage.metered.ai.used, planUsage.metered.ai.limit],
+                ] as const
+              ).map(([label, used, limit]) => (
+                <div key={label} className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span>{label}</span>
+                    <span className="text-muted-foreground">
+                      {limit < 0 ? `${used}` : `${used} / ${limit}`}
+                    </span>
+                  </div>
+                  {limit > 0 ? (
+                    <Progress value={Math.min(100, Math.round((used / limit) * 100))} />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Unlimited</p>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 text-sm">
+              <p>
+                Trucks: {planUsage.resources.trucks.current} /{" "}
+                {planUsage.resources.trucks.limit < 0 ? "∞" : planUsage.resources.trucks.limit}
+              </p>
+              <p>
+                Trailers: {planUsage.resources.trailers.current} /{" "}
+                {planUsage.resources.trailers.limit < 0 ? "∞" : planUsage.resources.trailers.limit}
+              </p>
+              <p>
+                Drivers: {planUsage.resources.drivers.current} /{" "}
+                {planUsage.resources.drivers.limit < 0 ? "∞" : planUsage.resources.drivers.limit}
+              </p>
+              <p>
+                Seats: {planUsage.resources.user_seats.current} /{" "}
+                {planUsage.resources.user_seats.limit < 0 ? "∞" : planUsage.resources.user_seats.limit}
+              </p>
+              <p>
+                Customers: {planUsage.resources.customers.current} /{" "}
+                {planUsage.resources.customers.limit < 0 ? "∞" : planUsage.resources.customers.limit}
+              </p>
+              <p>
+                Vendors: {planUsage.resources.vendors.current} /{" "}
+                {planUsage.resources.vendors.limit < 0 ? "∞" : planUsage.resources.vendors.limit}
+              </p>
+            </div>
+          </Card>
+        )}
 
         {/* Subscription */}
         <Card className="p-6">
@@ -734,9 +823,46 @@ export default function BillingSettingsPage() {
         </DialogContent>
       </Dialog>
     </div>
-    {upgradeFeature && (
-      <UpgradeModal open={showUpgradeModal} onOpenChange={setShowUpgradeModal} feature={upgradeFeature} />
-    )}
+
+      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel subscription?</DialogTitle>
+            <DialogDescription>
+              Cancels at the end of the current Paddle billing period. You can resubscribe any time from this page.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => setCancelOpen(false)}>
+              Keep subscription
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={cancelBusy}
+              onClick={async () => {
+                setCancelBusy(true)
+                const r = await cancelPaddleBillingSubscription()
+                setCancelBusy(false)
+                if (!r.success) {
+                  toast.error(r.error || "Could not cancel")
+                  return
+                }
+                toast.success("Cancellation scheduled with Paddle.")
+                setCancelOpen(false)
+              }}
+            >
+              {cancelBusy ? "Working…" : "Confirm cancel"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <UpgradeModal
+        open={showUpgradeModal}
+        onOpenChange={setShowUpgradeModal}
+        feature={upgradeFeature ?? "route_optimization"}
+      />
     </>
   )
 }

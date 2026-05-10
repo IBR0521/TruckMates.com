@@ -2,6 +2,8 @@
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { ArrowLeft, CheckCircle2, Download, UserCheck } from "lucide-react"
 import Link from "next/link"
 import { use } from "react"
@@ -30,6 +32,7 @@ export default function SettlementDetailPage({ params }: { params: Promise<{ id:
   const [isPaying, setIsPaying] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
   const [isDriverUser, setIsDriverUser] = useState(false)
+  const [paymentReference, setPaymentReference] = useState("")
 
   useEffect(() => {
     if (id === "create") {
@@ -78,7 +81,11 @@ export default function SettlementDetailPage({ params }: { params: Promise<{ id:
   const handleMarkPaid = async () => {
     if (!settlement?.id || isPaid) return
     setIsPaying(true)
-    const result = await markSettlementPaid(settlement.id, settlement.payment_method || undefined)
+    const result = await markSettlementPaid(
+      settlement.id,
+      settlement.payment_method || undefined,
+      paymentReference.trim() || undefined,
+    )
     if (result.error) {
       toast.error(result.error)
     } else {
@@ -197,6 +204,24 @@ export default function SettlementDetailPage({ params }: { params: Promise<{ id:
 
       <div className="p-8">
         <div className="max-w-4xl mx-auto space-y-6">
+          {!isPaid && !isDriverUser && (
+            <Card className="border-amber-500/40 bg-amber-500/5 p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-2">Pay driver manually (ACH / wire)</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Automated ACH via Stripe is not available. Send payment from your bank, then record the reference below and
+                click <strong>Mark as Paid</strong>.
+              </p>
+              <div className="space-y-2 max-w-md">
+                <Label htmlFor="pay-ref">Payment reference (optional)</Label>
+                <Input
+                  id="pay-ref"
+                  placeholder="Bank confirmation # or memo"
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                />
+              </div>
+            </Card>
+          )}
           <div className="grid md:grid-cols-3 gap-6">
             <Card className="border-border p-6">
               <p className="text-muted-foreground text-sm mb-2">Gross Pay</p>

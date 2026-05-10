@@ -78,64 +78,10 @@ export async function createDriverStripeOnboardingLink(params?: { returnUrl?: st
   }
 }
 
-export async function executeSettlementAchTransfer(params: { settlementId: string; driverId: string; amount: number }) {
-  try {
-    const supabase = await createClient()
-    const ctx = await getCachedAuthContext()
-    if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null }
-    const stripe = await getStripeClient()
-
-    const { data: driver, error: driverError } = await supabase
-      .from("drivers")
-      .select("id, stripe_account_id")
-      .eq("id", params.driverId)
-      .eq("company_id", ctx.companyId)
-      .maybeSingle()
-    if (driverError || !driver) return { error: "Driver not found", data: null }
-    if (!driver.stripe_account_id) return { error: "Driver has not connected a bank account via Stripe", data: null }
-
-    const amountCents = Math.round(Math.max(0, Number(params.amount || 0)) * 100)
-    if (amountCents <= 0) return { error: "Settlement amount must be greater than zero", data: null }
-
-    const transfer = await stripe.transfers.create({
-      amount: amountCents,
-      currency: "usd",
-      destination: driver.stripe_account_id,
-      metadata: {
-        company_id: ctx.companyId,
-        driver_id: params.driverId,
-        settlement_id: params.settlementId,
-      },
-      description: `Settlement ${params.settlementId}`,
-    })
-
-    const payout = await stripe.payouts.create(
-      {
-        amount: amountCents,
-        currency: "usd",
-        method: "standard",
-        metadata: {
-          company_id: ctx.companyId,
-          driver_id: params.driverId,
-          settlement_id: params.settlementId,
-          transfer_id: transfer.id,
-        },
-      },
-      { stripeAccount: driver.stripe_account_id },
-    )
-
-    const eta = payout.arrival_date ? new Date(payout.arrival_date * 1000).toISOString().slice(0, 10) : null
-    return {
-      data: {
-        transferId: transfer.id as string,
-        payoutId: payout.id as string,
-        paymentReference: (payout.id || transfer.id) as string,
-        eta,
-      },
-      error: null,
-    }
-  } catch (error: unknown) {
-    Sentry.captureException(error)
-    return { error: errorMessage(error, "Failed to execute ACH transfer"), data: null }
+export async function executeSettlementAchTransfer(_params: { settlementId: string; driverId: string; amount: number }) {
+  return {
+    data: null,
+    error:
+      "Automated ACH transfers are not currently supported. Please process payment through your bank and mark settlement as paid manually.",
   }
 }

@@ -330,6 +330,54 @@ export async function runAgentEvaluation(params: RunAgentEvaluationParams): Prom
     return { decision, executed: false, pendingApprovalId: approvalId }
   }
 
+  if (config.level === "autonomous") {
+    const { checkFeatureAccess } = await import("@/lib/plan-enforcement")
+    const { allowed } = await checkFeatureAccess({ companyId: params.companyId, feature: "ai_autonomous_agent" })
+    if (!allowed) {
+      const approvalResult = await createPendingApproval({
+        companyId: params.companyId,
+        automationType: params.trigger,
+        description: `${decision.action!.type}: ${decision.reasoning} (autonomous requires Professional+)`,
+        confidence: decision.confidence,
+        reasoning: decision.reasoning,
+        actionPayload: {
+          action: decision.action,
+          trigger: params.trigger,
+          triggerData: params.triggerData,
+        },
+      })
+      const approvalId = approvalResult.data?.id || null
+      await sendPushToCompanyRoles(params.companyId, ["operations_manager"], {
+        title: "AI action awaiting approval",
+        body: decision.reasoning,
+        data: {
+          type: "ai_pending_approval",
+          approvalId: approvalId || "",
+          approveUrl: `/api/ai/approve?approvalId=${approvalId || ""}&approved=true`,
+          rejectUrl: `/api/ai/approve?approvalId=${approvalId || ""}&approved=false`,
+        },
+      })
+      await logAutomationEvent({
+        companyId: params.companyId,
+        automationType: params.trigger,
+        level: "approval",
+        triggered: true,
+        confidence: decision.confidence,
+        reasoning: decision.reasoning,
+        actionTaken: "pending_approval",
+        actionPayload: {
+          action: decision.action,
+          approvalId,
+          triggerData: params.triggerData,
+          downgradedFromAutonomous: true,
+        },
+        approved: null,
+        reversedAt: null,
+      })
+      return { decision, executed: false, pendingApprovalId: approvalId }
+    }
+  }
+
   const execution = await executeAgentAction(decision.action)
   await logAutomationEvent({
     companyId: params.companyId,

@@ -8,6 +8,8 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateEmail, validatePhone, validateAddress, sanitizeString, sanitizeEmail, sanitizePhone, validateRequiredString, stateNameToCode } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+import { checkResourceLimit } from "@/lib/plan-enforcement"
+import { formatLimitErrorMessage, getPlanLimits, nextPlanTier } from "@/lib/plan-limits"
 // Explicit selection lists to reduce `select("*")` over-fetching.
 // Note: `customers`, `contacts`, and `contact_history` are not represented in `lib/supabase/types.ts`,
 // so keep the customer column list aligned with the fields used in this module.
@@ -187,6 +189,21 @@ export async function createCustomer(formData: {
     const loadsPermission = await checkCreatePermission("loads")
     if (!loadsPermission.allowed) {
       return { error: crmPermission.error || "You don't have permission to create customers", data: null }
+    }
+  }
+
+  const customerLimit = await checkResourceLimit({ companyId: ctx.companyId, resourceType: "customers" })
+  if (!customerLimit.allowed) {
+    const nt = nextPlanTier(customerLimit.tier)
+    return {
+      error: formatLimitErrorMessage({
+        tier: customerLimit.tier,
+        resourceLabel: "customers",
+        limit: customerLimit.limit,
+        nextTier: nt,
+        nextTierLimit: nt ? getPlanLimits(nt).customers : undefined,
+      }),
+      data: null,
     }
   }
 

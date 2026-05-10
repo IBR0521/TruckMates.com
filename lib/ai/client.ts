@@ -1,5 +1,6 @@
 import type { AiModel, AiResponse } from "@/lib/ai/types"
 import { calculateCallCost, logAiUsage } from "@/lib/ai/usage"
+import { checkMonthlyUsage } from "@/lib/plan-enforcement"
 
 type CallClaudeOptions = {
   maxTokens?: number
@@ -159,6 +160,18 @@ export async function callClaude<T = string>(
     return { data: null, error: "AI unavailable" }
   }
 
+  let quotaWarning = false
+  if (options.companyId) {
+    const aiUsage = await checkMonthlyUsage({ companyId: options.companyId, usageType: "ai_calls" })
+    if (aiUsage.hardCap) {
+      return {
+        data: null,
+        error: "AI quota exceeded for this month. Upgrade to continue.",
+      }
+    }
+    quotaWarning = aiUsage.warningThreshold
+  }
+
   const startedAt = Date.now()
   const routedModel = MODEL_MAP[options.model || "sonnet"]
   const shouldCacheSystemPrompt = options.cacheSystemPrompt !== false
@@ -214,7 +227,7 @@ export async function callClaude<T = string>(
         payload.error?.message ||
         `Anthropic request failed (${response.status})`
 
-      return { data: null, error: errorMessage }
+      return { data: null, error: errorMessage, quotaWarning }
     }
 
     const text = extractTextContent(payload)
@@ -268,6 +281,7 @@ export async function callClaude<T = string>(
           error: "Failed to parse JSON response",
           tokensUsed,
           model: payload.model || routedModel,
+          quotaWarning,
         }
       }
 
@@ -276,6 +290,7 @@ export async function callClaude<T = string>(
         error: null,
         tokensUsed,
         model: payload.model || routedModel,
+        quotaWarning,
       }
     }
 
@@ -284,6 +299,7 @@ export async function callClaude<T = string>(
       error: null,
       tokensUsed,
       model: payload.model || routedModel,
+      quotaWarning,
     }
   } catch (error: unknown) {
     return { data: null, error: toErrorMessage(error) }

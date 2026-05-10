@@ -14,6 +14,9 @@ import { validateLoadData, validatePricingData, sanitizeString, sanitizeEmail, s
 import { ALL_LOAD_STATUSES, getAllowedNextLoadStatuses, normalizeLoadStatus, parseLoadStatus } from "@/lib/load-status"
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 import { capturePostHogServerEvent } from "@/lib/analytics/posthog-server"
+import { checkMonthlyUsage, getCompanyTier } from "@/lib/plan-enforcement"
+import { formatLimitErrorMessage, getPlanLimits, nextPlanTier } from "@/lib/plan-limits"
+import { evaluateCustomerCreditGate } from "@/lib/credit-check"
 
 /** Subset of load fields used for background notifications after updates */
 type LoadUpdateNotificationPayload = {
@@ -924,6 +927,57 @@ export async function createLoad(formData: {
   if (formData.shipper_address_book_id) loadData.shipper_address_book_id = formData.shipper_address_book_id
   if (formData.consignee_address_book_id) loadData.consignee_address_book_id = formData.consignee_address_book_id
 
+  const loadUsage = await checkMonthlyUsage({ companyId: ctx.companyId, usageType: "loads" })
+  if (loadUsage.hardCap) {
+    const tier = await getCompanyTier(ctx.companyId)
+    const nt = nextPlanTier(tier)
+    return {
+      error: formatLimitErrorMessage({
+        tier,
+        resourceLabel: "loads this month",
+        limit: loadUsage.limit,
+        nextTier: nt,
+        nextTierLimit: nt ? getPlanLimits(nt).loads_per_month : undefined,
+      }),
+      data: null,
+    }
+  }
+  let loadQuotaWarning: string | undefined
+  if (loadUsage.warningThreshold && !loadUsage.hardCap) {
+    loadQuotaWarning = `You've used ${loadUsage.percentUsed}% of your monthly load limit. Consider upgrading to Professional.`
+  }
+
+  if (formData.customer_id) {
+    const estimatedLoadValue = Math.max(
+      0,
+      Number(loadData.total_rate) ||
+        Number(loadData.value) ||
+        Number(formData.total_rate) ||
+        Number(formData.value) ||
+        Number(formData.estimated_revenue) ||
+        0
+    )
+    const { data: creditCustomer } = await supabase
+      .from("customers")
+      .select("id, name")
+      .eq("id", formData.customer_id)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+    const creditCheck = await evaluateCustomerCreditGate({
+      companyId: ctx.companyId,
+      customerId: formData.customer_id,
+      customerName: String(creditCustomer?.name || ""),
+      additionalAmount: estimatedLoadValue,
+      userRole: ctx.user?.role,
+      userId: ctx.userId,
+      auditAction: "load_created_over_credit",
+      overrideAuditMessage: "Created load over credit limit",
+    })
+    if (!creditCheck.allowed) {
+      return { error: creditCheck.error || "Credit check failed", data: null }
+    }
+  }
+
   // SECURITY: Generate public tracking token for secure public tracking
   // This prevents enumeration attacks by requiring a unique token per load
   const crypto = await import("crypto")
@@ -1039,7 +1093,7 @@ export async function createLoad(formData: {
     }).catch((err) => console.error("[Agent]", err))
   }
   
-  return { data, error: null }
+  return { data, error: null, warning: loadQuotaWarning }
 }
 
 export async function updateLoad(

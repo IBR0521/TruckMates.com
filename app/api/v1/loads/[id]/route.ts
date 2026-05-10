@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { authenticateApiKey, enforceApiRateLimit, recordApiUsage } from "@/lib/api/v1/auth"
+import { requirePublicApiFeature } from "@/lib/api/v1/public-api-plan"
 
 const patchLoadSchema = z
   .object({
@@ -21,6 +22,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const startedAt = Date.now()
   const auth = await authenticateApiKey(request, "read")
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const planBlock = await requirePublicApiFeature(auth.companyId)
+  if (planBlock) return planBlock
   const rl = await enforceApiRateLimit(request, "loads:id:get")
   if (!rl.allowed) return NextResponse.json({ error: rl.error }, { status: rl.status })
   const { id } = await params
@@ -52,6 +55,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const startedAt = Date.now()
   const auth = await authenticateApiKey(request, "write")
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const planBlockW = await requirePublicApiFeature(auth.companyId)
+  if (planBlockW) return planBlockW
   const rl = await enforceApiRateLimit(request, "loads:id:patch", 60, 60)
   if (!rl.allowed) return NextResponse.json({ error: rl.error }, { status: rl.status })
   const { id } = await params

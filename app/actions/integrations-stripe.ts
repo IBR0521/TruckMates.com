@@ -11,16 +11,18 @@ import * as Sentry from "@sentry/nextjs"
  * Processes payments for invoices
  */
 
+const STRIPE_DISABLED_MESSAGE = "Stripe integration is disabled. Billing is handled through Paddle."
+
 // Get Stripe client (using environment variables or integration settings)
-async function getStripeClient() {
+async function getStripeClient(): Promise<{ stripe: import("stripe").default; error: null } | { stripe: null; error: string }> {
   const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || ""
-  
+  const Stripe = (await import("stripe")).default
+
   if (!STRIPE_SECRET_KEY) {
-    // Try to get from integration settings
     const supabase = await createClient()
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) {
-      throw new Error(ctx.error || "Not authenticated")
+      return { stripe: null, error: ctx.error || "Not authenticated" }
     }
 
     const { data: integrations, error: integrationsError } = await supabase
@@ -30,22 +32,17 @@ async function getStripeClient() {
       .maybeSingle()
 
     if (integrationsError) {
-      throw new Error(integrationsError.message)
+      return { stripe: null, error: integrationsError.message }
     }
 
     if (!integrations?.stripe_enabled || !integrations.stripe_api_key) {
-      throw new Error("Stripe integration is not enabled or configured")
+      return { stripe: null, error: STRIPE_DISABLED_MESSAGE }
     }
 
-    // Dynamically import Stripe
-    const stripe = (await import("stripe")).default
-    // Omit apiVersion so the SDK uses its bundled default (matches Stripe.LatestApiVersion for the installed stripe package).
-    return new stripe(integrations.stripe_api_key)
+    return { stripe: new Stripe(integrations.stripe_api_key), error: null }
   }
 
-  // Use environment variable
-  const stripe = (await import("stripe")).default
-  return new stripe(STRIPE_SECRET_KEY)
+  return { stripe: new Stripe(STRIPE_SECRET_KEY), error: null }
 }
 
 /**
@@ -77,7 +74,10 @@ export async function createInvoicePayment(invoiceId: string, amount?: number) {
   }
 
   try {
-    const stripe = await getStripeClient()
+    const { stripe, error: stripeInitError } = await getStripeClient()
+    if (!stripe) {
+      return { data: null, error: stripeInitError || STRIPE_DISABLED_MESSAGE }
+    }
     const paymentAmount = amount || invoice.amount
 
     // Create payment intent
@@ -124,7 +124,10 @@ export async function confirmInvoicePayment(invoiceId: string, paymentIntentId: 
   }
 
   try {
-    const stripe = await getStripeClient()
+    const { stripe, error: stripeInitError } = await getStripeClient()
+    if (!stripe) {
+      return { data: null, error: stripeInitError || STRIPE_DISABLED_MESSAGE }
+    }
 
     // Retrieve payment intent
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)

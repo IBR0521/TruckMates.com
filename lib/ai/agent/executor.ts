@@ -471,6 +471,205 @@ async function executeCreditHold(payload: Record<string, unknown>): Promise<Exec
   }
 }
 
+async function executeCashFlowAlert(payload: Record<string, unknown>): Promise<ExecutionResult> {
+  const companyId = asString(payload.companyId || payload.company_id)
+  if (!companyId) return { success: false, result: "", error: "companyId is required" }
+
+  const projection = Number(payload.projectedCashPosition14Days ?? payload.projected_cash_position_14_days ?? 0)
+  const ar = Number(payload.totalArOutstanding ?? payload.total_ar_outstanding ?? 0)
+  const settlements = Number(payload.upcomingSettlementsTotal ?? payload.upcoming_settlements_total ?? 0)
+  const body = `Projected cash position $${projection.toFixed(2)} over next 14 days. AR outstanding: $${ar.toFixed(2)}. Upcoming settlements: $${settlements.toFixed(2)}.`
+  const priority = projection < 0 ? "critical" : "warning"
+
+  try {
+    const { sendPushToCompanyRoles } = await import("@/app/actions/push-notifications")
+    await sendPushToCompanyRoles(companyId, ["super_admin", "operations_manager"], {
+      title: "Cash flow alert",
+      body,
+      data: { type: "cash_flow_alert" },
+    })
+  } catch (e: unknown) {
+    console.error("[executeCashFlowAlert] push", e)
+  }
+
+  try {
+    const admin = createAdminClient()
+    await admin.from("alerts").insert({
+      company_id: companyId,
+      title: "Cash flow alert",
+      message: body,
+      event_type: "cash_flow_alert",
+      priority,
+      status: "active",
+      metadata: { source: "automation", projectedCashPosition14Days: projection },
+    })
+  } catch (e: unknown) {
+    console.error("[executeCashFlowAlert] alerts insert", e)
+  }
+
+  return { success: true, result: "Cash flow alert dispatched", error: null }
+}
+
+async function executeCsaThresholdAlert(payload: Record<string, unknown>): Promise<ExecutionResult> {
+  const companyId = asString(payload.companyId || payload.company_id)
+  if (!companyId) return { success: false, result: "", error: "companyId is required" }
+
+  const category = asString(payload.basicCategory || payload.basic_category || "BASIC")
+  const score = Number(payload.score ?? 0)
+  const threshold = Number(payload.threshold ?? 55)
+  const levelWord = threshold >= 65 ? "intervention" : "warning"
+  const body = `[${category}] score reached ${score}%. ${levelWord} threshold crossed.`
+  const priority = threshold >= 65 ? "critical" : "warning"
+
+  try {
+    const { sendPushToCompanyRoles } = await import("@/app/actions/push-notifications")
+    await sendPushToCompanyRoles(companyId, ["super_admin", "operations_manager", "safety_compliance"], {
+      title: "CSA threshold alert",
+      body,
+      data: { type: "csa_threshold_alert" },
+    })
+  } catch (e: unknown) {
+    console.error("[executeCsaThresholdAlert] push", e)
+  }
+
+  try {
+    const admin = createAdminClient()
+    await admin.from("alerts").insert({
+      company_id: companyId,
+      title: "CSA threshold alert",
+      message: body,
+      event_type: "csa_threshold_alert",
+      priority,
+      status: "active",
+      metadata: { category, score, threshold },
+    })
+  } catch (e: unknown) {
+    console.error("[executeCsaThresholdAlert] alerts insert", e)
+  }
+
+  return { success: true, result: "CSA alert dispatched", error: null }
+}
+
+async function executeFuelAnomaly(payload: Record<string, unknown>): Promise<ExecutionResult> {
+  const companyId = asString(payload.companyId || payload.company_id)
+  if (!companyId) return { success: false, result: "", error: "companyId is required" }
+
+  const amount = Number(payload.amount ?? 0)
+  const location = asString(payload.location || "Unknown location")
+  const product = asString(payload.productType || payload.product_type || "Fuel")
+  const driverId = asString(payload.driverId || payload.driver_id || "")
+  const truckId = asString(payload.truckId || payload.truck_id || "")
+  const transactionId = asString(payload.transactionId || payload.transaction_id || "")
+
+  let driverName = "Driver"
+  let truckNumber = "Truck"
+  try {
+    const admin = createAdminClient()
+    if (driverId) {
+      const { data: d } = await admin.from("drivers").select("name").eq("id", driverId).maybeSingle()
+      driverName = String((d as { name?: string } | null)?.name || driverName)
+    }
+    if (truckId) {
+      const { data: t } = await admin.from("trucks").select("truck_number").eq("id", truckId).maybeSingle()
+      truckNumber = String((t as { truck_number?: string } | null)?.truck_number || truckNumber)
+    }
+    if (transactionId) {
+      const { error: flagErr } = await admin
+        .from("fuel_card_transactions")
+        .update({ is_flagged: true } as never)
+        .eq("id", transactionId)
+        .eq("company_id", companyId)
+      if (flagErr) {
+        /* column may be missing in older DBs */
+      }
+    }
+  } catch (e: unknown) {
+    console.error("[executeFuelAnomaly] lookups", e)
+  }
+
+  const body = `Anomalous fuel transaction: $${amount.toFixed(2)} at ${location} for ${product}. Driver: ${driverName}. Truck: ${truckNumber}.`
+  try {
+    const { sendPushToCompanyRoles } = await import("@/app/actions/push-notifications")
+    await sendPushToCompanyRoles(companyId, ["operations_manager", "dispatcher"], {
+      title: "Fuel anomaly",
+      body,
+      data: { type: "fuel_anomaly", transactionId },
+    })
+  } catch (e: unknown) {
+    console.error("[executeFuelAnomaly] push", e)
+  }
+
+  try {
+    const admin = createAdminClient()
+    await admin.from("alerts").insert({
+      company_id: companyId,
+      title: "Fuel anomaly",
+      message: body,
+      event_type: "fuel_anomaly",
+      priority: "warning",
+      status: "active",
+      truck_id: truckId || null,
+      driver_id: driverId || null,
+      metadata: { transactionId, source: "automation" },
+    })
+  } catch (e: unknown) {
+    console.error("[executeFuelAnomaly] alerts insert", e)
+  }
+
+  return { success: true, result: "Fuel anomaly alert dispatched", error: null }
+}
+
+async function executeIdleTimeAlert(payload: Record<string, unknown>): Promise<ExecutionResult> {
+  const companyId = asString(payload.companyId || payload.company_id)
+  const driverId = asString(payload.driverId || payload.driver_id || "")
+  const idleMinutes = Number(payload.idleMinutes ?? payload.idle_minutes ?? 0)
+  if (!companyId || !driverId) {
+    return { success: false, result: "", error: "companyId and driverId are required" }
+  }
+  if (idleMinutes < 20) {
+    return { success: true, result: "Skipped idle alert below 20 minutes", error: null }
+  }
+
+  const priority = idleMinutes >= 30 ? "warning" : "normal"
+  const smsBody = `TruckMates: Engine has been idling ${Math.round(idleMinutes)} minutes. Please shut off engine to save fuel.`
+
+  try {
+    const { sendSMSToDriverForCompanyAutomation } = await import("@/app/actions/sms")
+    await sendSMSToDriverForCompanyAutomation(companyId, driverId, smsBody)
+  } catch (e: unknown) {
+    console.error("[executeIdleTimeAlert] sms", e)
+  }
+
+  try {
+    const { sendPushToCompanyRoles } = await import("@/app/actions/push-notifications")
+    await sendPushToCompanyRoles(companyId, ["operations_manager", "dispatcher"], {
+      title: "Excessive idle time",
+      body: `Driver idle ~${Math.round(idleMinutes)} minutes.`,
+      data: { type: "idle_time_alert", driverId },
+    })
+  } catch (e: unknown) {
+    console.error("[executeIdleTimeAlert] push", e)
+  }
+
+  try {
+    const admin = createAdminClient()
+    await admin.from("alerts").insert({
+      company_id: companyId,
+      title: "Idle time alert",
+      message: smsBody,
+      event_type: "idle_time_alert",
+      priority,
+      status: "active",
+      driver_id: driverId,
+      metadata: { idleMinutes, source: "automation" },
+    })
+  } catch (e: unknown) {
+    console.error("[executeIdleTimeAlert] alerts insert", e)
+  }
+
+  return { success: true, result: "Idle time alert dispatched", error: null }
+}
+
 export async function executeAgentAction(
   action: AgentAction
 ): Promise<{ success: boolean; result: string; error: string | null }> {
@@ -509,9 +708,29 @@ export async function executeAgentAction(
     case "hos_violation_prevention":
       execution = await executeHosViolationPrevention(payloadWithCompany)
       break
+    case "cash_flow_alert":
+      execution = await executeCashFlowAlert(payloadWithCompany)
+      break
+    case "csa_threshold_alert":
+      execution = await executeCsaThresholdAlert(payloadWithCompany)
+      break
+    case "fuel_anomaly":
+      execution = await executeFuelAnomaly(payloadWithCompany)
+      break
+    case "idle_time_alert":
+      execution = await executeIdleTimeAlert(payloadWithCompany)
+      break
     default:
       if (action.triggeredBy === "hos_violation_prevention") {
         execution = await executeHosViolationPrevention(payloadWithCompany)
+      } else if (action.triggeredBy === "cash_flow_alert") {
+        execution = await executeCashFlowAlert(payloadWithCompany)
+      } else if (action.triggeredBy === "csa_threshold_alert") {
+        execution = await executeCsaThresholdAlert(payloadWithCompany)
+      } else if (action.triggeredBy === "fuel_anomaly") {
+        execution = await executeFuelAnomaly(payloadWithCompany)
+      } else if (action.triggeredBy === "idle_time_alert") {
+        execution = await executeIdleTimeAlert(payloadWithCompany)
       } else {
         execution = {
           success: false,

@@ -7,6 +7,8 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { validateTruckData, sanitizeString } from "@/lib/validation"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+import { checkResourceLimit } from "@/lib/plan-enforcement"
+import { formatLimitErrorMessage, getPlanLimits, nextPlanTier } from "@/lib/plan-limits"
 import * as Sentry from "@sentry/nextjs"
 /** Full row: `public.trucks` in supabase/schema.sql + supabase/trucks_schema_extended.sql */
 const TRUCK_FULL_SELECT = `
@@ -134,38 +136,22 @@ export async function createTruck(formData: {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
-  // BUG-061 FIX: Check subscription plan limits before creating truck
-  const { data: subscription, error: subscriptionError } = await supabase
-    .from("subscriptions")
-    .select(`
-      plan_id,
-      subscription_plans!inner(max_vehicles)
-    `)
-    .eq("company_id", ctx.companyId)
-    .in("status", ["active", "trialing"])
-    .maybeSingle()
-
-  if (subscriptionError) {
-    return { error: subscriptionError.message, data: null }
-  }
-
-  if (subscription?.subscription_plans?.max_vehicles) {
-    // Count current active trucks
-    const { count: currentTruckCount } = await supabase
-      .from("trucks")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", ctx.companyId)
-      .eq("status", "active")
-
-    if (currentTruckCount !== null && currentTruckCount >= subscription.subscription_plans.max_vehicles) {
-      return {
-        error: `Vehicle limit reached. Your plan allows ${subscription.subscription_plans.max_vehicles} vehicles. Please upgrade your subscription to add more vehicles.`,
-        data: null,
-        upgrade: {
-          required: true,
-          feature: "vehicles_limit",
-        },
-      }
+  const truckLimit = await checkResourceLimit({
+    companyId: ctx.companyId,
+    resourceType: "trucks",
+  })
+  if (!truckLimit.allowed) {
+    const nt = nextPlanTier(truckLimit.tier)
+    return {
+      error: formatLimitErrorMessage({
+        tier: truckLimit.tier,
+        resourceLabel: "active trucks",
+        limit: truckLimit.limit,
+        nextTier: nt,
+        nextTierLimit: nt ? getPlanLimits(nt).trucks : undefined,
+      }),
+      data: null,
+      upgrade: { required: true, feature: "vehicles_limit" },
     }
   }
 

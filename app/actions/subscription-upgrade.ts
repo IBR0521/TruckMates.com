@@ -2,6 +2,8 @@
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { createCheckout } from "@/lib/billing"
+import type { PlanTier } from "@/lib/plan-limits"
 
 type UpgradeFeatureKey =
   | "drivers_limit"
@@ -108,6 +110,12 @@ export async function getUpgradeOffer(feature: UpgradeFeatureKey) {
   }
 }
 
+const PLAN_NAME_TO_TIER: Record<PlanName, PlanTier> = {
+  starter: "starter",
+  professional: "professional",
+  enterprise: "enterprise",
+}
+
 export async function createUpgradeCheckoutSession(feature: UpgradeFeatureKey, targetPlanName?: PlanName) {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId || !ctx.user) return { error: ctx.error || "Not authenticated", data: null }
@@ -116,69 +124,17 @@ export async function createUpgradeCheckoutSession(feature: UpgradeFeatureKey, t
   }
 
   const requestedPlan = targetPlanName || FEATURE_TARGET_PLAN[feature]
-  const admin = createAdminClient()
-  const { data: plan, error: planError } = await admin
-    .from("subscription_plans")
-    .select("id, name, stripe_price_id_monthly")
-    .eq("name", requestedPlan)
-    .eq("is_active", true)
-    .maybeSingle()
-  if (planError || !plan?.id || !plan.stripe_price_id_monthly) {
-    return { error: "Target plan is unavailable for checkout.", data: null }
-  }
+  const tier: PlanTier = PLAN_NAME_TO_TIER[requestedPlan] ?? "professional"
 
-  const { data: subscription } = await admin
-    .from("subscriptions")
-    .select("id, stripe_customer_id")
-    .eq("company_id", ctx.companyId)
-    .maybeSingle()
-
-  const stripeKey = process.env.STRIPE_SECRET_KEY
-  if (!stripeKey) return { error: "Stripe is not configured.", data: null }
-  const stripe = (await import("stripe")).default
-  const stripeClient = new stripe(stripeKey)
-
-  let customerId = subscription?.stripe_customer_id || null
-  if (!customerId) {
-    const customer = await stripeClient.customers.create({
-      email: ctx.user.email || undefined,
-      metadata: { company_id: ctx.companyId, user_id: ctx.userId || "" },
-    })
-    customerId = customer.id
-  }
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-  const session = await stripeClient.checkout.sessions.create({
-    mode: "subscription",
-    customer: customerId || undefined,
-    line_items: [{ price: String(plan.stripe_price_id_monthly), quantity: 1 }],
-    success_url: `${appUrl}/dashboard/settings/billing?checkout=success`,
-    cancel_url: `${appUrl}/dashboard/settings/billing?canceled=1`,
-    metadata: {
-      company_id: ctx.companyId,
-      plan_id: plan.id,
-      feature,
-    },
-    subscription_data: {
-      metadata: {
-        company_id: ctx.companyId,
-        plan_id: plan.id,
-        feature,
-      },
-    },
+  const checkout = await createCheckout({
+    companyId: ctx.companyId,
+    tier,
+    billingCycle: "monthly",
   })
 
-  if (!session.url) return { error: "Failed to start checkout.", data: null }
+  if (checkout.error || !checkout.checkoutUrl) {
+    return { error: checkout.error || "Checkout unavailable", data: null }
+  }
 
-  await admin.from("subscriptions").upsert(
-    {
-      company_id: ctx.companyId,
-      plan_id: plan.id,
-      stripe_customer_id: customerId,
-      status: "incomplete",
-    },
-    { onConflict: "company_id" },
-  )
-
-  return { error: null, data: { checkout_url: session.url } }
+  return { error: null, data: { checkout_url: checkout.checkoutUrl } }
 }

@@ -8,6 +8,7 @@ export type AiResponse<T> = {
   error: string | null
   tokensUsed?: number
   model?: string
+  quotaWarning?: boolean
 }
 
 export type AiModel = "haiku" | "sonnet"

@@ -6,6 +6,8 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { sanitizeString } from "@/lib/validation"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
+import { checkResourceLimit } from "@/lib/plan-enforcement"
+import { formatLimitErrorMessage, getPlanLimits, nextPlanTier } from "@/lib/plan-limits"
 import * as Sentry from "@sentry/nextjs"
 
 const TRAILER_FULL_SELECT = `
@@ -91,6 +93,21 @@ export async function createTrailer(formData: TrailerFormData) {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null }
+
+  const trailerLimit = await checkResourceLimit({ companyId: ctx.companyId, resourceType: "trailers" })
+  if (!trailerLimit.allowed) {
+    const nt = nextPlanTier(trailerLimit.tier)
+    return {
+      error: formatLimitErrorMessage({
+        tier: trailerLimit.tier,
+        resourceLabel: "trailers",
+        limit: trailerLimit.limit,
+        nextTier: nt,
+        nextTierLimit: nt ? getPlanLimits(nt).trailers : undefined,
+      }),
+      data: null,
+    }
+  }
 
   const trailerNumber = sanitizeString(formData.trailer_number, 50).toUpperCase()
   const vin = sanitizeString(formData.vin, 17).toUpperCase()
