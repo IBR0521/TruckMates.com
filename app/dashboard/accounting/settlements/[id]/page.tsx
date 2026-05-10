@@ -15,7 +15,8 @@ import { approveSettlementAsDriver, getSettlement, markSettlementPaid } from "@/
 import { errorMessage } from "@/lib/error-message"
 import { getCurrentUser } from "@/lib/auth/server"
 import { mapLegacyRole } from "@/lib/roles"
-import { ACH_DISABLED_MESSAGE, createDriverStripeOnboardingLink } from "@/app/actions/settlement-ach"
+import { createDriverStripeOnboardingLink } from "@/app/actions/settlement-ach"
+import { ACH_DISABLED_MESSAGE } from "@/lib/settlement-ach-constants"
 
 type SettlementLoad = {
   id?: string

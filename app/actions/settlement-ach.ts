@@ -5,10 +5,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { errorMessage } from "@/lib/error-message"
 import * as Sentry from "@sentry/nextjs"
 import { mapLegacyRole } from "@/lib/roles"
-
-/** Shown when Stripe is not configured; keeps Connect code paths for future US rollout. */
-export const ACH_DISABLED_MESSAGE =
-  "Automated ACH transfers are not currently available. Please process payment through your bank and mark the settlement as paid manually."
+import { ACH_DISABLED_MESSAGE } from "@/lib/settlement-ach-constants"
 
 type StripeLike = Record<string, unknown>
 
