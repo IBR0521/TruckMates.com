@@ -203,7 +203,7 @@ export async function runAgentEvaluation(params: RunAgentEvaluationParams): Prom
         type: normalized.suggestedAction || params.trigger,
         companyId: params.companyId,
         triggeredBy: params.trigger,
-        payload: normalized.actionPayload,
+        payload: { ...toRecord(params.triggerData), ...normalized.actionPayload },
         confidence: normalized.confidence,
         reasoning: normalized.reasoning,
         automationLevel: config.level,

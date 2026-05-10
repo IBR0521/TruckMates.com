@@ -1,3 +1,5 @@
+-- Migration: reapplies populate_demo_data_for_company with idempotent demo eld_logs
+-- inserts (unique_violation on idx_eld_logs_unique_log / eld_device key). See STEP 15.
 -- ============================================================================
 -- Automated Demo Data Population Function
 -- ============================================================================

@@ -5,6 +5,14 @@
       "schedule": "*/30 * * * *"
     },
     {
+      "path": "/api/cron/scan-hos-violations",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/scan-detention",
+      "schedule": "7,22,37,52 * * * *"
+    },
+    {
       "path": "/api/cron/alert-escalations",
       "schedule": "0 0 * * *"
     },

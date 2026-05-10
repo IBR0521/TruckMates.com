@@ -13,6 +13,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
@@ -366,6 +367,44 @@ export async function sendSMSToDriver(
   }
 
   return sendResult
+}
+
+/**
+ * Automated HOS/cron SMS: no dispatcher session. Same Twilio pipeline as manual sends;
+ * enforces driver belongs to `companyId` before using phone number.
+ */
+export async function sendSMSToDriverForCompanyAutomation(
+  companyId: string,
+  driverId: string,
+  message: string,
+): Promise<{ sent: boolean; error: string | null }> {
+  const cid = String(companyId || "").trim()
+  const did = String(driverId || "").trim()
+  const text = String(message || "").trim()
+  if (!cid || !did || !text) {
+    return { sent: false, error: "companyId, driverId, and message are required" }
+  }
+
+  const driverRateLimit = await rateLimitRedis(`sms:auto:${cid}:${did}`, { limit: 8, window: 60 })
+  if (!driverRateLimit.success) {
+    return { sent: false, error: "SMS rate limited for this driver" }
+  }
+
+  const admin = createAdminClient()
+  const { data: driver } = await admin
+    .from("drivers")
+    .select("id, phone, company_id")
+    .eq("id", did)
+    .eq("company_id", cid)
+    .maybeSingle()
+
+  const phone = String((driver as { phone?: string | null } | null)?.phone || "").trim()
+  if (!phone) {
+    return { sent: false, error: "Driver phone number not found" }
+  }
+
+  const sendResult = await sendSMS(phone, text)
+  return { sent: Boolean(sendResult.sent), error: sendResult.error ?? null }
 }
 
 // Check SMS configuration

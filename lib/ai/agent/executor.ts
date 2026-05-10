@@ -1,9 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import { errorMessage } from "@/lib/error-message"
 import { callClaude } from "@/lib/ai/client"
 import { getFleetContext, getLoadContext } from "@/lib/ai/context"
 import { logAutomationEvent } from "@/lib/ai/agent/settings"
 import { LOGISTICS_SYSTEM_PROMPT } from "@/lib/ai/prompts/system"
 import type { AgentAction } from "@/lib/ai/types"
+import { sendSMSToDriverForCompanyAutomation } from "@/app/actions/sms"
 
 type ExecutionResult = {
   success: boolean
@@ -304,6 +306,134 @@ async function executeNotification(payload: Record<string, unknown>): Promise<Ex
   }
 }
 
+async function executeHosViolationPrevention(payload: Record<string, unknown>): Promise<ExecutionResult> {
+  const companyId = asString(payload.companyId || payload.company_id)
+  const driverId = asString(payload.driverId || payload.driver_id)
+  const driverName = asString(payload.driverName || payload.driver_name || "Driver")
+  const severityRaw = asString(payload.severity || "").toLowerCase()
+  const severity = severityRaw === "critical" || severityRaw === "high" || severityRaw === "medium" ? severityRaw : "medium"
+
+  if (!companyId || !driverId) {
+    return { success: false, result: "", error: "companyId and driverId are required for HOS prevention actions" }
+  }
+
+  const remainingDrive =
+    Number(payload.remainingDriveHours ?? payload.remaining_drive_hours ?? payload.remainingDriving ?? 0)
+  const remainingOnDuty =
+    Number(payload.remainingOnDutyHours ?? payload.remaining_on_duty_hours ?? payload.remainingShift ?? 0)
+  const location = asString(payload.currentLocation || payload.current_location || "").trim()
+  const loadId = asString(payload.currentLoadId || payload.load_id || "")
+  const destination = asString(payload.currentLoadDestination || payload.destination || "").trim()
+
+  const truckStopHint =
+    asString(payload.truckStopSuggestion || payload.nearest_rest || "").trim() ||
+    "Locate the nearest safe truck parking / rest area — do not operate past zero on your drive clock."
+
+  const smsBody = [
+    `TruckMates HOS ${severity.toUpperCase()}`,
+    `${driverName}, ~${remainingDrive.toFixed(1)}h driving and ~${remainingOnDuty.toFixed(1)}h on-duty remaining.`,
+    location ? `Last known: ${location}.` : "",
+    truckStopHint,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .slice(0, 1500)
+
+  const parts: string[] = []
+
+  const smsResult = await sendSMSToDriverForCompanyAutomation(companyId, driverId, smsBody)
+  if (smsResult.sent) {
+    parts.push("SMS queued to driver")
+  } else if (smsResult.error) {
+    parts.push(`SMS skipped: ${smsResult.error}`)
+  }
+
+  try {
+    const { sendPushToCompanyRoles } = await import("@/app/actions/push-notifications")
+    const dispatchBody = [
+      `${driverName}: ~${remainingDrive.toFixed(1)}h drive / ~${remainingOnDuty.toFixed(1)}h on-duty.`,
+      severity === "critical" ? "URGENT — potential violation imminent." : "Plan rest before limits.",
+    ].join(" ")
+    const pushRoles = ["operations_manager", "dispatcher", "safety_compliance"] as const
+    const push = await sendPushToCompanyRoles(companyId, [...pushRoles], {
+      title: `HOS warning (${severity})`,
+      body: dispatchBody.slice(0, 400),
+      data: {
+        type: "hos_violation_prevention",
+        driverId,
+        ...(loadId ? { loadId, link: `/dashboard/loads/${loadId}` } : { link: "/dashboard/dispatches" }),
+      },
+    })
+    parts.push(push.sent ? `Push to fleet roles (${push.sent})` : "Push unavailable")
+  } catch (pushErr: unknown) {
+    parts.push(`Push error: ${errorMessage(pushErr, "notify failed")}`)
+  }
+
+  if (loadId) {
+    try {
+      const admin = createAdminClient()
+      const bumpMinutes =
+        severity === "critical" ? 45 : severity === "high" ? 35 : 20
+      const { data: loadRow } = await admin
+        .from("loads")
+        .select("estimated_delivery")
+        .eq("id", loadId)
+        .eq("company_id", companyId)
+        .maybeSingle()
+
+      const existing = loadRow?.estimated_delivery as string | null | undefined
+      if (existing) {
+        const d = new Date(existing)
+        if (!Number.isNaN(d.getTime())) {
+          d.setUTCMinutes(d.getUTCMinutes() + bumpMinutes)
+          const { error: etaErr } = await admin
+            .from("loads")
+            .update({ estimated_delivery: d.toISOString() })
+            .eq("id", loadId)
+            .eq("company_id", companyId)
+          if (!etaErr) parts.push(`Load ETA buffered +${bumpMinutes}m`)
+          else parts.push(`ETA update skipped: ${etaErr.message}`)
+        }
+      } else {
+        parts.push("No existing ETA — skipped ETA bump")
+      }
+    } catch (etaCatch: unknown) {
+      parts.push(`ETA update error: ${errorMessage(etaCatch, "")}`)
+    }
+  }
+
+  try {
+    const admin = createAdminClient()
+    const priority = severity === "critical" ? "critical" : severity === "high" ? "high" : "normal"
+    await admin.from("alerts").insert({
+      company_id: companyId,
+      title: `HOS preventive alert (${severity})`,
+      message: `${driverName} has limited HOS (${remainingDrive.toFixed(
+        2,
+      )}h drive). ${destination ? `Destination: ${destination}` : location ? `Near: ${location}` : ""}`.slice(
+        0,
+        2000,
+      ),
+      event_type: "hos_alert",
+      priority,
+      driver_id: driverId,
+      load_id: loadId || null,
+      status: "active",
+      metadata: {
+        severity,
+        remainingDriveHours: remainingDrive,
+        remainingOnDutyHours: remainingOnDuty,
+        source: "hos_violation_prevention_automation",
+      },
+    })
+    parts.push("Alert logged")
+  } catch (alertErr: unknown) {
+    parts.push(`Alert insert error: ${errorMessage(alertErr, "")}`)
+  }
+
+  return { success: true, result: parts.join("; "), error: null }
+}
+
 async function executeCreditHold(payload: Record<string, unknown>): Promise<ExecutionResult> {
   try {
     const companyId = asString(payload.companyId || payload.company_id)
@@ -376,11 +506,18 @@ export async function executeAgentAction(
     case "notification":
       execution = await executeNotification(payloadWithCompany)
       break
+    case "hos_violation_prevention":
+      execution = await executeHosViolationPrevention(payloadWithCompany)
+      break
     default:
-      execution = {
-        success: false,
-        result: "",
-        error: `Unsupported agent action type: ${action.type}`,
+      if (action.triggeredBy === "hos_violation_prevention") {
+        execution = await executeHosViolationPrevention(payloadWithCompany)
+      } else {
+        execution = {
+          success: false,
+          result: "",
+          error: `Unsupported agent action type: ${action.type}`,
+        }
       }
       break
   }
@@ -389,7 +526,7 @@ export async function executeAgentAction(
 
   await logAutomationEvent({
     companyId: action.companyId,
-    automationType: action.type,
+    automationType: action.triggeredBy || action.type,
     level: action.automationLevel,
     triggered: execution.success,
     confidence: action.confidence,

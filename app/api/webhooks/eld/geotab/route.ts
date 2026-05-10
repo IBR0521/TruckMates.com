@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import crypto from "crypto"
 import { errorMessage } from "@/lib/error-message"
+import { detectIdleTime } from "@/app/actions/idle-time-tracking"
+
+/** Cap sequential idle RPCs per webhook request (inserts still proceed for every point). */
+const MAX_IDLE_DETECTIONS_PER_REQUEST = 48
 
 type InsertClient = {
   from: (table: "eld_logs" | "eld_locations" | "eld_violations" | "eld_events") => {
@@ -15,6 +19,7 @@ type ELDDevice = {
 }
 
 type GeotabEntity = {
+  locations?: GeotabEntity[]
   type?: string
   device?: { id?: string }
   driver?: { id?: string }
@@ -87,6 +92,64 @@ function verifyGeotabSignature(
     return false
   }
   return crypto.timingSafeEqual(sigBuffer, expectedBuffer)
+}
+
+function expandGeotabLocationEntities(root: GeotabWebhookData): GeotabEntity[] {
+  const primary = root.entity ?? root
+  if (Array.isArray(primary.locations) && primary.locations.length > 0) return primary.locations
+  return [primary]
+}
+
+function mergeGeotabEntity(parent: GeotabEntity, child: GeotabEntity): GeotabEntity {
+  return {
+    ...parent,
+    ...child,
+    locations: undefined,
+    device: child.device ?? parent.device,
+    driver: child.driver ?? parent.driver,
+    driverId: child.driverId ?? parent.driverId,
+  }
+}
+
+function idleDetectionTimestampGeotab(row: GeotabEntity): string | null {
+  const raw = row.dateTime ?? row.timestamp
+  if (raw === undefined || raw === null) return null
+  const s = String(raw).trim()
+  if (!s) return null
+  const parsed = Date.parse(s)
+  if (!Number.isFinite(parsed)) return null
+  return new Date(parsed).toISOString()
+}
+
+async function invokeIdleDetectionGeotab(opts: {
+  truckId: string | null | undefined
+  row: GeotabEntity
+  idleBudget: { remaining: number }
+}) {
+  const truckId = String(opts.truckId ?? "").trim()
+  const latNum = typeof opts.row.latitude === "number" ? opts.row.latitude : Number(opts.row.latitude ?? opts.row.lat)
+  const lngNum =
+    typeof opts.row.longitude === "number"
+      ? opts.row.longitude
+      : Number(opts.row.longitude ?? opts.row.lng)
+  const ts = idleDetectionTimestampGeotab(opts.row)
+  if (!truckId || !ts || !Number.isFinite(latNum) || !Number.isFinite(lngNum)) return
+  if (opts.idleBudget.remaining <= 0) return
+  opts.idleBudget.remaining -= 1
+
+  const spd = opts.row.speed
+  const speedParsed = spd !== null && spd !== undefined ? Number(spd) : NaN
+  const driverId = opts.row.driver?.id || opts.row.driverId
+
+  await detectIdleTime(
+    truckId,
+    latNum,
+    lngNum,
+    ts,
+    Number.isFinite(speedParsed) ? speedParsed : undefined,
+    undefined,
+    driverId ? String(driverId) : undefined,
+  ).catch((err: unknown) => console.error("[Geotab] detectIdleTime failed", err))
 }
 
 export async function POST(request: NextRequest) {
@@ -221,31 +284,55 @@ async function processLocation(
   device: ELDDevice,
   supabase: InsertClient
 ) {
-  const locationData = data.entity || data
-  
-  const location = {
-    truck_id: device.truck_id,
-    latitude: locationData.latitude || locationData.lat,
-    longitude: locationData.longitude || locationData.lng,
-    speed: locationData.speed || null,
-    heading: locationData.heading || locationData.bearing || null,
-    timestamp: locationData.dateTime || locationData.timestamp || new Date().toISOString(),
+  const baseEntity = data.entity || data
+
+  const rows = expandGeotabLocationEntities(data)
+    .map((row) => mergeGeotabEntity(baseEntity, row))
+    .sort((a, b) => {
+      const ta = Date.parse(String(a.dateTime ?? a.timestamp ?? "")) || 0
+      const tb = Date.parse(String(b.dateTime ?? b.timestamp ?? "")) || 0
+      return ta - tb
+    })
+
+  const idleBudget = { remaining: MAX_IDLE_DETECTIONS_PER_REQUEST }
+
+  for (const merged of rows) {
+    const location = {
+      truck_id: device.truck_id,
+      latitude: merged.latitude ?? merged.lat,
+      longitude: merged.longitude ?? merged.lng,
+      speed: merged.speed ?? null,
+      heading: merged.heading ?? merged.bearing ?? null,
+      timestamp: merged.dateTime ?? merged.timestamp ?? new Date().toISOString(),
+    }
+
+    // Insert into eld_locations
+    const { error } = await supabase.from("eld_locations").insert({
+      company_id: device.company_id,
+      truck_id: location.truck_id,
+      eld_device_id: device.id,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      speed: location.speed,
+      heading: location.heading,
+      timestamp: location.timestamp,
+    })
+
+    if (error) {
+      console.error("[Geotab Webhook] Error inserting location:", error)
+    }
+
+    await invokeIdleDetectionGeotab({
+      truckId: location.truck_id,
+      row: merged,
+      idleBudget,
+    })
   }
-  
-  // Insert into eld_locations
-  const { error } = await supabase.from("eld_locations").insert({
-    company_id: device.company_id,
-    truck_id: location.truck_id,
-    eld_device_id: device.id,
-    latitude: location.latitude,
-    longitude: location.longitude,
-    speed: location.speed,
-    heading: location.heading,
-    timestamp: location.timestamp,
-  })
-  
-  if (error) {
-    console.error("[Geotab Webhook] Error inserting location:", error)
+
+  if (rows.length > MAX_IDLE_DETECTIONS_PER_REQUEST) {
+    console.warn(
+      `[Geotab Webhook] detectIdleTime capped at ${MAX_IDLE_DETECTIONS_PER_REQUEST} sequential call(s); extra location(s) ingested without idle scan`,
+    )
   }
 }
 

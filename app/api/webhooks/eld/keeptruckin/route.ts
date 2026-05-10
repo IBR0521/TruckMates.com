@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
+import { detectIdleTime } from "@/app/actions/idle-time-tracking"
 import crypto from "crypto"
+
+/** Cap sequential idle RPCs per webhook response (inserts still proceed for every point). */
+const MAX_IDLE_DETECTIONS_PER_REQUEST = 48
 
 type InsertClient = {
   from: (table: "eld_logs" | "eld_locations" | "eld_violations" | "eld_events") => {
@@ -15,6 +19,7 @@ type ELDDevice = {
 }
 
 type KeepTruckinWebhookData = {
+  locations?: KeepTruckinWebhookData[]
   device_id?: string
   device_serial?: string
   event_type?: string
@@ -75,6 +80,58 @@ function verifyKeepTruckinSignature(
   }
   
   return crypto.timingSafeEqual(sigBuffer, expectedBuffer)
+}
+
+function expandKeepTruckinLocationPayloads(data: KeepTruckinWebhookData): KeepTruckinWebhookData[] {
+  if (Array.isArray(data.locations) && data.locations.length > 0) return data.locations
+  return [data]
+}
+
+function mergeKeepTruckinLocationRow(
+  envelope: KeepTruckinWebhookData,
+  row: KeepTruckinWebhookData,
+): KeepTruckinWebhookData {
+  return { ...envelope, ...row }
+}
+
+function idleDetectionTimestampFromRow(row: KeepTruckinWebhookData): string | null {
+  const raw = row.timestamp ?? row.time
+  if (raw === undefined || raw === null) return null
+  const s = String(raw).trim()
+  if (!s) return null
+  const parsed = Date.parse(s)
+  if (!Number.isFinite(parsed)) return null
+  return new Date(parsed).toISOString()
+}
+
+async function invokeIdleDetectionKeepTruckin(opts: {
+  truckId: string | null | undefined
+  row: KeepTruckinWebhookData
+  idleBudget: { remaining: number }
+}) {
+  const truckId = String(opts.truckId ?? "").trim()
+  const latNum = typeof opts.row.latitude === "number" ? opts.row.latitude : Number(opts.row.latitude ?? opts.row.lat)
+  const lngNum =
+    typeof opts.row.longitude === "number" ? opts.row.longitude : Number(opts.row.longitude ?? opts.row.lng)
+  const ts = idleDetectionTimestampFromRow(opts.row)
+  if (!truckId || !ts || !Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+    return
+  }
+  if (opts.idleBudget.remaining <= 0) return
+  opts.idleBudget.remaining -= 1
+
+  const speedRaw = opts.row.speed
+  const speedParsed = speedRaw !== null && speedRaw !== undefined ? Number(speedRaw) : NaN
+
+  await detectIdleTime(
+    truckId,
+    latNum,
+    lngNum,
+    ts,
+    Number.isFinite(speedParsed) ? speedParsed : undefined,
+    undefined,
+    opts.row.driver_id ? String(opts.row.driver_id) : undefined,
+  ).catch((err: unknown) => console.error("[KeepTruckin] detectIdleTime failed", err))
 }
 
 export async function POST(request: NextRequest) {
@@ -210,29 +267,53 @@ async function processLocation(
   device: ELDDevice,
   supabase: InsertClient
 ) {
-  const location = {
-    truck_id: device.truck_id,
-    latitude: data.latitude || data.lat,
-    longitude: data.longitude || data.lng,
-    speed: data.speed || null,
-    heading: data.heading || data.bearing || null,
-    timestamp: data.timestamp || data.time || new Date().toISOString(),
+  const rows = expandKeepTruckinLocationPayloads(data)
+    .map((row) => mergeKeepTruckinLocationRow(data, row))
+    .sort((a, b) => {
+      const ta = Date.parse(String(a.timestamp ?? a.time ?? "")) || 0
+      const tb = Date.parse(String(b.timestamp ?? b.time ?? "")) || 0
+      return ta - tb
+    })
+
+  const idleBudget = { remaining: MAX_IDLE_DETECTIONS_PER_REQUEST }
+
+  for (const row of rows) {
+    const location = {
+      truck_id: device.truck_id,
+      latitude: row.latitude ?? row.lat,
+      longitude: row.longitude ?? row.lng,
+      speed: row.speed ?? null,
+      heading: row.heading ?? row.bearing ?? null,
+      timestamp: row.timestamp ?? row.time ?? new Date().toISOString(),
+    }
+
+    // Insert into eld_locations
+    const { error } = await supabase.from("eld_locations").insert({
+      company_id: device.company_id,
+      truck_id: location.truck_id,
+      eld_device_id: device.id,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      speed: location.speed,
+      heading: location.heading,
+      timestamp: location.timestamp,
+    })
+
+    if (error) {
+      console.error("[KeepTruckin Webhook] Error inserting location:", error)
+    }
+
+    await invokeIdleDetectionKeepTruckin({
+      truckId: location.truck_id,
+      row,
+      idleBudget,
+    })
   }
-  
-  // Insert into eld_locations
-  const { error } = await supabase.from("eld_locations").insert({
-    company_id: device.company_id,
-    truck_id: location.truck_id,
-    eld_device_id: device.id,
-    latitude: location.latitude,
-    longitude: location.longitude,
-    speed: location.speed,
-    heading: location.heading,
-    timestamp: location.timestamp,
-  })
-  
-  if (error) {
-    console.error("[KeepTruckin Webhook] Error inserting location:", error)
+
+  if (rows.length > MAX_IDLE_DETECTIONS_PER_REQUEST) {
+    console.warn(
+      `[KeepTruckin Webhook] detectIdleTime capped at ${MAX_IDLE_DETECTIONS_PER_REQUEST} sequential call(s); extra location(s) ingested without idle scan`,
+    )
   }
 }
 

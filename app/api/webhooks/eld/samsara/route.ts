@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
+import { detectIdleTime } from "@/app/actions/idle-time-tracking"
 import crypto from "crypto"
+
+/** Cap sequential idle RPCs per webhook response (inserts still proceed for every point). */
+const MAX_IDLE_DETECTIONS_PER_REQUEST = 48
 
 type InsertClient = {
   from: (table: "eld_logs" | "eld_locations" | "eld_violations" | "eld_events") => {
@@ -47,7 +51,12 @@ type SamsaraLocation = {
   time?: string
 }
 
-type SamsaraWebhookData = SamsaraLocation & {
+type SamsaraWebhookDataRoot = {
+  locations?: SamsaraLocation[]
+  gpsLocations?: SamsaraLocation[]
+}
+
+type SamsaraWebhookData = SamsaraLocation & SamsaraWebhookDataRoot & {
   vehicle?: { id?: string }
   vehicle_id?: string
   eventType?: string
@@ -90,6 +99,61 @@ function verifySamsaraSignature(
   }
 
   return crypto.timingSafeEqual(signatureBuffer, expectedBuffer)
+}
+
+function expandSamsaraLocationPayloads(data: SamsaraWebhookData): SamsaraLocation[] {
+  const root = data as SamsaraWebhookData & SamsaraWebhookDataRoot
+  if (Array.isArray(root.locations) && root.locations.length > 0) return root.locations
+  if (Array.isArray(root.gpsLocations) && root.gpsLocations.length > 0) return root.gpsLocations
+  const nested = data.location || data.gpsLocation
+  if (nested && typeof nested === "object") return [nested]
+  return [data]
+}
+
+function idleDetectionTimestamp(location: SamsaraLocation): string | null {
+  const raw = location.timestamp ?? location.time
+  if (raw === undefined || raw === null) return null
+  const s = String(raw).trim()
+  if (!s) return null
+  const parsed = Date.parse(s)
+  if (!Number.isFinite(parsed)) return null
+  return new Date(parsed).toISOString()
+}
+
+async function invokeIdleDetectionAfterLocation(opts: {
+  truckId: string | null | undefined
+  latitude: unknown
+  longitude: unknown
+  timestampIso?: string | null
+  speed: unknown
+  driverId?: string | null
+  idleBudget: { remaining: number }
+  providerLabel: string
+}) {
+  const truckId = String(opts.truckId ?? "").trim()
+  const latNum = typeof opts.latitude === "number" ? opts.latitude : Number(opts.latitude)
+  const lngNum = typeof opts.longitude === "number" ? opts.longitude : Number(opts.longitude)
+  if (!truckId || !opts.timestampIso || !Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+    return
+  }
+  if (opts.idleBudget.remaining <= 0) {
+    return
+  }
+
+  opts.idleBudget.remaining -= 1
+
+  const speedParsed =
+    opts.speed !== null && opts.speed !== undefined ? Number(opts.speed) : NaN
+
+  await detectIdleTime(
+    truckId,
+    latNum,
+    lngNum,
+    opts.timestampIso,
+    Number.isFinite(speedParsed) ? speedParsed : undefined,
+    undefined,
+    opts.driverId ? String(opts.driverId) : undefined,
+  ).catch((err: unknown) => console.error(opts.providerLabel, "detectIdleTime failed", err))
 }
 
 export async function POST(request: NextRequest) {
@@ -231,31 +295,57 @@ async function processLocation(
   device: ELDDevice,
   supabase: InsertClient
 ) {
-  const location = data.location || data.gpsLocation || data
-  
-  const locationData = {
-    truck_id: device.truck_id,
-    latitude: location.latitude || location.lat,
-    longitude: location.longitude || location.lng,
-    speed: location.speed || null,
-    heading: location.heading || location.bearing || null,
-    timestamp: location.timestamp || location.time || new Date().toISOString(),
-  }
-  
-  // Insert into eld_locations
-  const { error } = await supabase.from("eld_locations").insert({
-    company_id: device.company_id,
-    truck_id: locationData.truck_id,
-    eld_device_id: device.id,
-    latitude: locationData.latitude,
-    longitude: locationData.longitude,
-    speed: locationData.speed,
-    heading: locationData.heading,
-    timestamp: locationData.timestamp,
+  const payloads = expandSamsaraLocationPayloads(data).sort((a, b) => {
+    const ta = Date.parse(String(a.timestamp ?? a.time ?? "")) || 0
+    const tb = Date.parse(String(b.timestamp ?? b.time ?? "")) || 0
+    return ta - tb
   })
-  
-  if (error) {
-    console.error("[Samsara Webhook] Error inserting location:", error)
+
+  const idleBudget = { remaining: MAX_IDLE_DETECTIONS_PER_REQUEST }
+
+  for (const rawLocation of payloads) {
+    const location = rawLocation
+    const locationData = {
+      truck_id: device.truck_id,
+      latitude: location.latitude ?? location.lat,
+      longitude: location.longitude ?? location.lng,
+      speed: location.speed ?? null,
+      heading: location.heading ?? location.bearing ?? null,
+      timestamp: location.timestamp ?? location.time ?? new Date().toISOString(),
+    }
+
+    // Insert into eld_locations
+    const { error } = await supabase.from("eld_locations").insert({
+      company_id: device.company_id,
+      truck_id: locationData.truck_id,
+      eld_device_id: device.id,
+      latitude: locationData.latitude,
+      longitude: locationData.longitude,
+      speed: locationData.speed,
+      heading: locationData.heading,
+      timestamp: locationData.timestamp,
+    })
+
+    if (error) {
+      console.error("[Samsara Webhook] Error inserting location:", error)
+    }
+
+    await invokeIdleDetectionAfterLocation({
+      truckId: locationData.truck_id,
+      latitude: locationData.latitude,
+      longitude: locationData.longitude,
+      timestampIso: idleDetectionTimestamp(location),
+      speed: location.speed ?? locationData.speed,
+      driverId: data.driver?.id || data.driverId || null,
+      idleBudget,
+      providerLabel: "[Samsara]",
+    })
+  }
+
+  if (payloads.length > MAX_IDLE_DETECTIONS_PER_REQUEST) {
+    console.warn(
+      `[Samsara Webhook] detectIdleTime capped at ${MAX_IDLE_DETECTIONS_PER_REQUEST} sequential call(s); extra location(s) ingested without idle scan`,
+    )
   }
 }
 
