@@ -37,14 +37,8 @@ type UpstashRatelimitClass = {
 let redis: unknown = null
 let Ratelimit: UpstashRatelimitClass | null = null
 
-if (
-  process.env.NODE_ENV === "production" &&
-  (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN)
-) {
-  throw new Error(
-    "UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required in production for rate limiting.",
-  )
-}
+// Do not throw at import time: `next build` uses NODE_ENV=production without Vercel secrets,
+// which would fail Collecting page data. Missing Upstash falls back to in-memory (see rateLimitRedis).
 
 try {
   // Dynamic import to prevent build errors if package isn't installed
