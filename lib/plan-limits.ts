@@ -155,8 +155,11 @@ const BASELINE_FALSE: Omit<PlanFeatures, never> = {
   priority_email_support: false,
 }
 
+/** Feature gates match published five-tier matrices (Owner-Op → Enterprise). */
 export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
-  owner_operator: { ...BASELINE_FALSE },
+  owner_operator: {
+    ...BASELINE_FALSE,
+  },
   starter: {
     ...BASELINE_FALSE,
     ai_document_extraction: true,
@@ -204,7 +207,8 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
   enterprise: Object.fromEntries(Object.keys(BASELINE_FALSE).map((k) => [k, true])) as unknown as PlanFeatures,
 }
 
-const TIER_ORDER: PlanTier[] = [
+/** Public pricing / upgrade UI order (low → high). */
+export const PLAN_TIER_ORDER: PlanTier[] = [
   "owner_operator",
   "starter",
   "professional",
@@ -236,6 +240,23 @@ export function hasFeatureAccess(tier: PlanTier, feature: keyof PlanFeatures): b
   return Boolean(getPlanFeatures(tier)[feature])
 }
 
+/** Lowest tier that includes `feature` (for upgrade CTAs). */
+export function minimumTierForFeature(feature: keyof PlanFeatures): PlanTier {
+  for (const tier of PLAN_TIER_ORDER) {
+    if (PLAN_FEATURES[tier][feature]) return tier
+  }
+  return "enterprise"
+}
+
+export function tierRank(tier: PlanTier): number {
+  const i = PLAN_TIER_ORDER.indexOf(tier)
+  return i < 0 ? 0 : i
+}
+
+export function tierAtLeast(current: PlanTier, required: PlanTier): boolean {
+  return tierRank(current) >= tierRank(required)
+}
+
 export function normalizePlanTier(raw: string | null | undefined): PlanTier {
   const k = String(raw || "")
     .trim()
@@ -246,9 +267,9 @@ export function normalizePlanTier(raw: string | null | undefined): PlanTier {
 }
 
 export function nextPlanTier(tier: PlanTier): PlanTier | null {
-  const i = TIER_ORDER.indexOf(tier)
-  if (i < 0 || i >= TIER_ORDER.length - 1) return null
-  return TIER_ORDER[i + 1]
+  const i = PLAN_TIER_ORDER.indexOf(tier)
+  if (i < 0 || i >= PLAN_TIER_ORDER.length - 1) return null
+  return PLAN_TIER_ORDER[i + 1]
 }
 
 export function planTierLabel(tier: PlanTier): string {

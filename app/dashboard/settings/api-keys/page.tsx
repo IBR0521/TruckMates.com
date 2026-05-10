@@ -30,13 +30,12 @@ import { Plus, Copy, Trash2, Eye, EyeOff, Key, Calendar, Activity } from "lucide
 import { toast } from "sonner"
 import {
   getAPIKeys,
-  getAPIKeysAccessStatus,
   createAPIKey,
   revokeAPIKey,
   updateAPIKey,
 } from "@/app/actions/enterprise-api-keys"
 import { format } from "date-fns"
-import { UpgradeModal } from "@/components/billing/upgrade-modal"
+import { FeatureLock } from "@/components/billing/feature-lock"
 
 type APIKey = {
   id: string
@@ -49,18 +48,13 @@ type APIKey = {
   rate_limit_per_day?: number | null
 }
 
-type UpgradeAwareResult = { upgrade?: { required?: boolean } }
-
-export default function APIKeysPage() {
+function APIKeysPageContent() {
   const [keys, setKeys] = useState<APIKey[]>([])
-  const [apiKeysAllowed, setApiKeysAllowed] = useState(true)
-  const [planName, setPlanName] = useState("starter")
   const [loading, setLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newKeyName, setNewKeyName] = useState("")
   const [newKey, setNewKey] = useState<string | null>(null)
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null)
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   useEffect(() => {
     loadKeys()
@@ -69,20 +63,11 @@ export default function APIKeysPage() {
   async function loadKeys() {
     setLoading(true)
     try {
-      const access = await getAPIKeysAccessStatus()
-      const allowed = !!access.data?.allowed
-      setApiKeysAllowed(allowed)
-      setPlanName(String(access.data?.plan_name || "starter"))
-
-      if (!allowed) {
-        setKeys([])
+      const result = await getAPIKeys()
+      if (result.error) {
+        toast.error(result.error)
       } else {
-        const result = await getAPIKeys()
-        if (result.error) {
-          toast.error(result.error)
-        } else {
-          setKeys(result.data || [])
-        }
+        setKeys(result.data || [])
       }
     } catch (error: unknown) {
       toast.error(errorMessage(error, "Failed to load API keys"))
@@ -92,11 +77,6 @@ export default function APIKeysPage() {
   }
 
   async function handleCreateKey() {
-    if (!apiKeysAllowed) {
-      setShowUpgradeModal(true)
-      toast.error("API keys are available on Fleet and Enterprise plans.")
-      return
-    }
     if (!newKeyName.trim()) {
       toast.error("Please enter a name for the API key")
       return
@@ -105,7 +85,6 @@ export default function APIKeysPage() {
     try {
       const result = await createAPIKey({ name: newKeyName })
       if (result.error) {
-        if ((result as UpgradeAwareResult)?.upgrade?.required) setShowUpgradeModal(true)
         toast.error(result.error)
       } else {
         setNewKey(result.data?.key || null)
@@ -120,15 +99,9 @@ export default function APIKeysPage() {
   }
 
   async function handleRevokeKey(id: string) {
-    if (!apiKeysAllowed) {
-      setShowUpgradeModal(true)
-      toast.error("API keys are available on Fleet and Enterprise plans.")
-      return
-    }
     try {
       const result = await revokeAPIKey(id)
       if (result.error) {
-        if ((result as UpgradeAwareResult)?.upgrade?.required) setShowUpgradeModal(true)
         toast.error(result.error)
       } else {
         await loadKeys()
@@ -140,15 +113,9 @@ export default function APIKeysPage() {
   }
 
   async function handleToggleActive(id: string, currentStatus: boolean) {
-    if (!apiKeysAllowed) {
-      setShowUpgradeModal(true)
-      toast.error("API keys are available on Fleet and Enterprise plans.")
-      return
-    }
     try {
       const result = await updateAPIKey(id, { is_active: !currentStatus })
       if (result.error) {
-        if ((result as UpgradeAwareResult)?.upgrade?.required) setShowUpgradeModal(true)
         toast.error(result.error)
       } else {
         await loadKeys()
@@ -177,7 +144,6 @@ export default function APIKeysPage() {
   }
 
   return (
-    <>
     <div className="w-full">
       <div className="border-b border-border bg-card/50 backdrop-blur px-4 md:px-8 py-4 md:py-6">
         <div className="flex items-center justify-between">
@@ -189,7 +155,7 @@ export default function APIKeysPage() {
           </div>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button disabled={!apiKeysAllowed}>
+              <Button>
                 <Plus className="w-4 h-4 mr-2" />
                 Create API Key
               </Button>
@@ -222,20 +188,6 @@ export default function APIKeysPage() {
           </Dialog>
         </div>
       </div>
-
-      {!apiKeysAllowed && (
-        <div className="p-8 pb-0">
-          <Card className="p-4 border-amber-500/40 bg-amber-500/5">
-            <p className="text-sm text-amber-400">
-              API keys are available on Fleet and Enterprise plans. Your current plan is{" "}
-              <span className="font-semibold capitalize">{planName}</span>.
-            </p>
-            <Button className="mt-3" size="sm" onClick={() => setShowUpgradeModal(true)}>
-              Upgrade now
-            </Button>
-          </Card>
-        </div>
-      )}
 
       {/* Show new key once */}
       {newKey && (
@@ -282,7 +234,7 @@ export default function APIKeysPage() {
             <p className="text-muted-foreground mb-6">
               Create your first API key to enable programmatic access to your data.
             </p>
-            <Button onClick={() => setIsCreateDialogOpen(true)} disabled={!apiKeysAllowed}>
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Create API Key
             </Button>
@@ -371,8 +323,18 @@ export default function APIKeysPage() {
         )}
       </div>
     </div>
-    <UpgradeModal open={showUpgradeModal} onOpenChange={setShowUpgradeModal} feature="api_keys" />
-    </>
+  )
+}
+
+export default function APIKeysPage() {
+  return (
+    <FeatureLock
+      featureKey="public_api"
+      title="Public REST API"
+      description="Ship integrations with partners and warehouse systems using Fleet-tier API quotas and centralized key rotation."
+    >
+      <APIKeysPageContent />
+    </FeatureLock>
   )
 }
 

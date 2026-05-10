@@ -336,6 +336,15 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               {userRole && canViewFeature(userRole, "dispatch") && (
                 <NavItem href="/dashboard/dispatches" icon={Radio} label="Dispatch Board" isCollapsed={shouldShowCollapsed} />
               )}
+              {userRole && canViewFeature(userRole, "dispatch") && (
+                <NavItem
+                  href="/dashboard/dispatches/ltl"
+                  icon={Package}
+                  label="LTL movements"
+                  planBadge="Fleet"
+                  isCollapsed={shouldShowCollapsed}
+                />
+              )}
               {userRole && canViewFeature(userRole, "routes") && (
                 <DropdownItem 
                   icon={BarChart3} 
@@ -408,6 +417,15 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               {userRole && canViewFeature(userRole, "ifta") && (
                 <NavItem href="/dashboard/compliance" icon={Shield} label="Compliance" isCollapsed={shouldShowCollapsed} />
               )}
+              {userRole && canViewFeature(userRole, "ifta") && (
+                <NavItem href="/dashboard/edi" icon={Upload} label="EDI" planBadge="Fleet" isCollapsed={shouldShowCollapsed} />
+              )}
+              {userRole && canViewFeature(userRole, "ifta") && (
+                <NavItem href="/dashboard/hazmat" icon={Shield} label="HAZMAT" planBadge="Fleet" isCollapsed={shouldShowCollapsed} />
+              )}
+              {userRole && canViewFeature(userRole, "ifta") && (
+                <NavItem href="/dashboard/permits" icon={FileCheck} label="Permits" planBadge="Fleet" isCollapsed={shouldShowCollapsed} />
+              )}
               {userRole && canViewFeature(userRole, "accounting") && (
                 <DropdownItem
                   icon={DollarSign}
@@ -432,7 +450,20 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
                   onToggle={() => setPayablesOpen(!payablesOpen)}
                   isCollapsed={shouldShowCollapsed}
                 >
-                  <NavItem href="/dashboard/payables/vendor-invoices" label="Vendor Invoices" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem
+                    href="/dashboard/payables/vendor-invoices"
+                    label="Vendor Invoices"
+                    planBadge="Pro"
+                    isSubitem
+                    isCollapsed={shouldShowCollapsed}
+                  />
+                  <NavItem
+                    href="/dashboard/payables/reconcile"
+                    label="Bank reconciliation"
+                    planBadge="Pro"
+                    isSubitem
+                    isCollapsed={shouldShowCollapsed}
+                  />
                   <NavItem href="/dashboard/payables/ap-aging" label="AP Aging" isSubitem isCollapsed={shouldShowCollapsed} />
                 </DropdownItem>
               )}
@@ -483,6 +514,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
                     icon={Sparkles}
                     label="AI Automation"
                     badgeCount={pendingApprovalsCount}
+                    planBadge="Pro"
                     isCollapsed={shouldShowCollapsed}
                   />
                 </>
@@ -520,7 +552,8 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               <NavItem href="/dashboard/settings/alerts" label="Alerts" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/audit-logs" label="Audit Logs" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/webhooks" label="Webhooks" isSubitem isCollapsed={shouldShowCollapsed} />
-              <NavItem href="/dashboard/settings/api-keys" label="API Keys" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/multi-terminal" label="Multi-terminal" planBadge="Fleet" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/api-keys" label="API Keys" planBadge="Fleet" isSubitem isCollapsed={shouldShowCollapsed} />
             </DropdownItem>
           )}
         </div>
@@ -534,6 +567,8 @@ interface NavItemProps {
   icon?: LucideIcon
   label: string
   badgeCount?: number
+  /** Optional plan hint (Fleet, Pro, …) for gated features—navigation still works. */
+  planBadge?: string | null
   isSubitem?: boolean
   isCollapsed?: boolean
 }
@@ -550,7 +585,8 @@ function NavSectionLabel({ label, isCollapsed }: { label: string; isCollapsed?: 
   )
 }
 
-function NavItem({ href, icon: Icon, label, badgeCount, isSubitem, isCollapsed }: NavItemProps) {
+function NavItem({ href, icon: Icon, label, badgeCount, planBadge, isSubitem, isCollapsed }: NavItemProps) {
+  const badgeLabel = planBadge ? `🔒 ${planBadge}` : ""
   const content = (
     <div
       className={`flex items-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition font-medium ${
@@ -561,7 +597,12 @@ function NavItem({ href, icon: Icon, label, badgeCount, isSubitem, isCollapsed }
       role={isSubitem ? "menuitem" : undefined}
     >
       {Icon && <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />}
-      {!isCollapsed && <span className="flex-1">{label}</span>}
+      {!isCollapsed && <span className="flex-1 min-w-0">{label}</span>}
+      {!isCollapsed && planBadge ? (
+        <span className="inline-flex shrink-0 rounded-md border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-100">
+          {badgeLabel}
+        </span>
+      ) : null}
       {!isCollapsed && typeof badgeCount === "number" && badgeCount > 0 ? (
         <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold text-white">
           {badgeCount > 99 ? "99+" : badgeCount}
@@ -578,9 +619,14 @@ function NavItem({ href, icon: Icon, label, badgeCount, isSubitem, isCollapsed }
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <Link href={href} aria-label={label} prefetch={false}>{content}</Link>
+          <Link href={href} aria-label={`${label}${planBadge ? ` (${planBadge})` : ""}`} prefetch={false}>
+            {content}
+          </Link>
         </TooltipTrigger>
-        <TooltipContent side="right">{label}</TooltipContent>
+        <TooltipContent side="right">
+          {label}
+          {planBadge ? ` — ${planBadge}` : ""}
+        </TooltipContent>
       </Tooltip>
     )
   }

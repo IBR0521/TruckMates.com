@@ -1,4 +1,6 @@
-/** Soft monthly caps per strategy doc (Operator/Fleet/Enterprise ↔ starter/professional/enterprise). Enterprise = effectively unlimited for Google Maps meters. */
+/** Google Maps / TollGuru monthly caps by TruckMates plan tier (aligns with `lib/plan-limits`). */
+
+import type { PlanTier } from "@/lib/plan-limits"
 
 export type GoogleUsageCategory =
   | "directions"
@@ -9,17 +11,23 @@ export type GoogleUsageCategory =
 
 const UNLIMITED = 9_999_999
 
-/** Maps subscription_plans.name → monthly usage limits per tracked API category. */
-export const API_MONTHLY_LIMITS: Record<
-  string,
-  Record<GoogleUsageCategory, number>
-> = {
+type ApiLimitsRow = Record<GoogleUsageCategory, number>
+
+/** Keys include legacy `free` for older subscription_plans naming. */
+export const API_MONTHLY_LIMITS: Record<string, ApiLimitsRow> = {
   free: {
     directions: 200,
     geocoding: 200,
     distance_matrix: 200,
     places: 200,
     toll_routing: 100,
+  },
+  owner_operator: {
+    directions: 400,
+    geocoding: 350,
+    distance_matrix: 500,
+    places: 280,
+    toll_routing: 180,
   },
   starter: {
     directions: 500,
@@ -34,6 +42,13 @@ export const API_MONTHLY_LIMITS: Record<
     distance_matrix: 2500,
     places: 1200,
     toll_routing: 1500,
+  },
+  fleet: {
+    directions: 8000,
+    geocoding: 4000,
+    distance_matrix: 7000,
+    places: 3500,
+    toll_routing: 4000,
   },
   enterprise: {
     directions: UNLIMITED,
@@ -73,8 +88,16 @@ export function mapBillableUsageToCategory(
   return mapUsageActionToCategory(action)
 }
 
+const DEFAULT_ROW = API_MONTHLY_LIMITS.starter
+
+export function monthlyLimitForPlanTier(tier: PlanTier, category: GoogleUsageCategory): number {
+  const row = API_MONTHLY_LIMITS[tier] || DEFAULT_ROW
+  return row[category] ?? DEFAULT_ROW[category]
+}
+
+/** @deprecated Prefer `monthlyLimitForPlanTier` with company `subscription_tier`. */
 export function monthlyLimitForPlan(planName: string | null | undefined, category: GoogleUsageCategory): number {
-  const key = (planName || "starter").toLowerCase()
-  const row = API_MONTHLY_LIMITS[key] || API_MONTHLY_LIMITS.starter
-  return row[category] ?? API_MONTHLY_LIMITS.starter[category]
+  const key = (planName || "starter").toLowerCase().replace(/-/g, "_")
+  const row = API_MONTHLY_LIMITS[key] || DEFAULT_ROW
+  return row[category] ?? DEFAULT_ROW[category]
 }

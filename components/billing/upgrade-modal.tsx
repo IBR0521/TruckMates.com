@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils"
 import {
   PLAN_LIMITS,
   PLAN_FEATURES,
+  PLAN_TIER_ORDER,
   type PlanFeatures,
   type PlanTier,
   isUnlimited,
@@ -50,8 +51,6 @@ const FEATURE_LABEL: Record<UpgradeFeatureKey, string> = {
   driver_scorecards: "Driver scorecards",
   route_optimization: "Route optimization",
 }
-
-const TIER_ORDER: PlanTier[] = ["owner_operator", "starter", "professional", "fleet", "enterprise"]
 
 const COMPARE_KEYS: (keyof PlanFeatures)[] = [
   "ai_document_extraction",
@@ -169,7 +168,7 @@ export function UpgradeModal({
           <p className="text-sm text-muted-foreground">Loading your plan…</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {TIER_ORDER.map((tier) => {
+            {PLAN_TIER_ORDER.map((tier) => {
               const lim = PLAN_LIMITS[tier]
               const isCurrent = currentTier === tier
               return (
@@ -219,7 +218,7 @@ export function UpgradeModal({
               <div key={k} className="flex flex-col rounded border p-2">
                 <span className="text-muted-foreground">{k.replace(/_/g, " ")}</span>
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {TIER_ORDER.map((t) => (
+                  {PLAN_TIER_ORDER.map((t) => (
                     <Badge key={t} variant={PLAN_FEATURES[t][k] ? "default" : "secondary"} className="text-[10px]">
                       {planTierLabel(t)}: {PLAN_FEATURES[t][k] ? "Yes" : "—"}
                     </Badge>

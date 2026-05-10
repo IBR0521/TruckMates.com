@@ -327,7 +327,10 @@ export async function importComdataFuelData(
                 driverAvgTransaction,
               },
               contextTypes: ["fleet", "driver"],
-            }).catch((err) => console.error("[Agent]", err))
+            }).catch((err) => {
+              console.error("[Agent]", err)
+              Sentry.captureException(err, { tags: { source: "agent", file: "fuel-card-import.ts" } })
+            })
           }
         }
       } catch (error: unknown) {
@@ -771,7 +774,10 @@ export async function syncFuelCardTransactions(provider: LiveFuelProvider, fromD
             driverAvgTransaction,
           },
           contextTypes: ["fleet", "driver"],
-        }).catch((err) => console.error("[Agent]", err))
+        }).catch((err) => {
+              console.error("[Agent]", err)
+              Sentry.captureException(err, { tags: { source: "agent", file: "fuel-card-import.ts" } })
+            })
       }
     }
 

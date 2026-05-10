@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { safeDbError } from "@/lib/utils/error"
 /**
  * Automated Detention Tracking
@@ -280,7 +281,10 @@ export async function checkAndCreateDetentions() {
               driverId: detention.driver_id || null,
             },
             contextTypes: ["load", "driver"],
-          }).catch((err) => console.error("[Agent]", err))
+          }).catch((err) => {
+            console.error("[Agent]", err)
+            Sentry.captureException(err, { tags: { source: "agent", file: "detention-tracking.ts" } })
+          })
         }
 
         // Check if detention already exists

@@ -139,24 +139,29 @@ export default function LandingPageBelowFold() {
         </div>
       </section>
 
-      {/* Free plan */}
+      {/* Owner-Operator tier highlight */}
       <section
-        id="free-plan"
+        id="owner-operator"
         className="relative isolate overflow-hidden border-y border-primary/15 bg-gradient-to-br from-primary/[0.07] via-primary/[0.03] to-transparent py-16 dark:from-primary/10 dark:via-primary/5"
       >
         <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,var(--primary)_0%,transparent_55%)] opacity-[0.09] dark:opacity-[0.14]" />
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl rounded-3xl border border-border/80 bg-card/80 p-8 text-center shadow-lg shadow-black/5 backdrop-blur-md dark:border-border/60 dark:bg-card/50 md:p-10">
-            <h2 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">What&apos;s included in Free</h2>
+            <h2 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+              Built for fleets of every stage — Owner-Operator to Enterprise
+            </h2>
             <p className="mt-4 text-muted-foreground leading-relaxed">
-              The free tier is meant to be usable — not a bait-and-switch. Typical inclusions: up to{" "}
-              <strong className="text-foreground">2 trucks</strong>, GPS and dispatch, ELD compliance tooling, IFTA, and
-              invoicing, with <strong className="text-foreground">one user</strong> and fair-use limits. Higher tiers add
-              users, AI, API access, and more. Details can change —{" "}
+              New accounts spin up with a <strong className="text-foreground">14-day Starter trial</strong> (no card needed).
+              If you upgrade after trial we bill through Paddle; if not, limits relax to the Owner-Operator tier caps (for
+              example <strong className="text-foreground">2 trucks</strong> / <strong className="text-foreground">30 loads</strong> /
+              {" "}
+              <strong className="text-foreground">2 team seats</strong>) so crews never get hard-locked outside the TMS. See the
+              refreshed five-plan lineup starting at{" "}
+              <strong className="text-foreground">$49/month</strong> —{" "}
               <Link href="/pricing" className="font-medium text-primary underline decoration-primary/30 underline-offset-4">
-                read live pricing
-              </Link>{" "}
-              before you commit.
+                TruckMates live pricing &amp; feature matrix
+              </Link>
+              .
             </p>
             <Link href="/register" className="mt-8 inline-block">
               <Button size="lg" className="h-12 rounded-xl px-8 font-semibold shadow-md shadow-primary/20">
@@ -287,7 +292,7 @@ export default function LandingPageBelowFold() {
                 </li>
                 <li>
                   <Link href="/pricing" className="text-foreground/90 transition hover:text-primary">
-                    Free plan details
+                    Plans & trial details
                   </Link>
                 </li>
               </ul>

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { CheckCircle2, Plus, Trash2 } from "lucide-react"
 import { deleteVendorInvoice, getVendorInvoices, markVendorInvoicePaid } from "@/app/actions/vendor-invoices"
+import { FeatureLock } from "@/components/billing/feature-lock"
 
 type VendorInvoiceRow = {
   id: string
@@ -45,7 +46,7 @@ function badgeClass(status?: string | null) {
   return "bg-slate-500/20 text-slate-300 border-slate-500/30"
 }
 
-export default function VendorInvoicesPage() {
+function VendorInvoicesPageContent() {
   const [rows, setRows] = useState<VendorInvoiceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [markPaidId, setMarkPaidId] = useState<string | null>(null)
@@ -251,5 +252,17 @@ export default function VendorInvoicesPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function VendorInvoicesPage() {
+  return (
+    <FeatureLock
+      featureKey="ap_vendor_invoicing"
+      title="Vendor invoices (accounts payable)"
+      description="Operational AP without spreadsheets — capture approvals, payment status, and GL coding in one place."
+    >
+      <VendorInvoicesPageContent />
+    </FeatureLock>
   )
 }

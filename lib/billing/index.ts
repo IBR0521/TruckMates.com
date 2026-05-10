@@ -49,3 +49,16 @@ export async function changePlan(params: {
   }
   return { success: false, error: "Stripe plan change not enabled in billing index." }
 }
+
+export async function createCustomerPortalSession(params: {
+  customerId: string
+  subscriptionIds?: string[]
+}) {
+  if (provider() === "paddle") {
+    return paddle.createPaddleCustomerPortalSession(params)
+  }
+  return {
+    portalUrl: null as string | null,
+    error: "Customer portal is only wired for Paddle billing.",
+  }
+}

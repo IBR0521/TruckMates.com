@@ -1,13 +1,12 @@
-import { PlanGateLayout } from "@/components/billing/plan-gate-layout"
+import { FeatureLock } from "@/components/billing/feature-lock"
 import { Card } from "@/components/ui/card"
 
-export default async function MultiTerminalSettingsPage() {
+export default function MultiTerminalSettingsPage() {
   return (
-    <PlanGateLayout
-      feature="multi_terminal"
+    <FeatureLock
+      featureKey="multi_terminal"
       title="Multi-terminal operations"
-      description="Run dispatch, accounting, and reporting separately per terminal or yard."
-      requiredPlanLabel="Multi-terminal is included starting on the Fleet plan."
+      description="Run dispatch and reporting per yard or division without duplicating carriers — critical as you add satellite terminals."
     >
       <div className="p-8 max-w-4xl mx-auto space-y-4">
         <h1 className="text-2xl font-bold">Multi-terminal</h1>
@@ -17,6 +16,6 @@ export default async function MultiTerminalSettingsPage() {
           </p>
         </Card>
       </div>
-    </PlanGateLayout>
+    </FeatureLock>
   )
 }

@@ -12,6 +12,7 @@ import Link from "next/link"
 import { getVendors } from "@/app/actions/vendors"
 import { createVendorInvoice } from "@/app/actions/vendor-invoices"
 import { getGLAccounts } from "@/app/actions/gl-accounts"
+import { FeatureLock } from "@/components/billing/feature-lock"
 
 type VendorOption = {
   id: string
@@ -26,7 +27,7 @@ const asVendorOption = (value: unknown): VendorOption | null => {
   return obj as unknown as VendorOption
 }
 
-export default function CreateVendorInvoicePage() {
+function CreateVendorInvoicePageContent() {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [vendors, setVendors] = useState<VendorOption[]>([])
@@ -200,5 +201,17 @@ export default function CreateVendorInvoicePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function CreateVendorInvoicePage() {
+  return (
+    <FeatureLock
+      featureKey="ap_vendor_invoicing"
+      title="Create vendor invoice"
+      description="Start an AP voucher with attachments and routing for approval workflows your Professional plan supports."
+    >
+      <CreateVendorInvoicePageContent />
+    </FeatureLock>
   )
 }

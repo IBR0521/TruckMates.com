@@ -1,5 +1,6 @@
 "use server"
 
+import * as Sentry from "@sentry/nextjs"
 import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
@@ -213,7 +214,10 @@ export async function predictMaintenanceNeeds(truckId?: string) {
         ),
       },
       contextTypes: ["maintenance", "fleet"],
-    }).catch((err) => console.error("[Agent]", err))
+    }).catch((err) => {
+      console.error("[Agent]", err)
+      Sentry.captureException(err, { tags: { source: "agent", file: "maintenance-predictive.ts" } })
+    })
   }
 
   return { data: predictions, error: null }

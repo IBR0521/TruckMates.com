@@ -1,13 +1,12 @@
-import { PlanGateLayout } from "@/components/billing/plan-gate-layout"
+import { FeatureLock } from "@/components/billing/feature-lock"
 import { Card } from "@/components/ui/card"
 
-export default async function PermitsPage() {
+export default function PermitsPage() {
   return (
-    <PlanGateLayout
-      feature="permit_management"
+    <FeatureLock
+      featureKey="permit_management"
       title="Permit management"
-      description="Track oversize/overweight and trip permits with renewals and document storage."
-      requiredPlanLabel="Advanced permit workflows are included starting on the Fleet plan."
+      description="Centralize oversized and trip permits with renewals, attachments, and load linkage so roadside exposure drops."
     >
       <div className="p-8 max-w-4xl mx-auto space-y-4">
         <h1 className="text-2xl font-bold">Permits</h1>
@@ -17,6 +16,6 @@ export default async function PermitsPage() {
           </p>
         </Card>
       </div>
-    </PlanGateLayout>
+    </FeatureLock>
   )
 }

@@ -47,10 +47,14 @@ async function triggerInvoiceAgingEvaluations(companyId: string, supabase: Await
           bucketLabel: bucket.bucketLabel,
         },
         contextTypes: ["financial"],
-      }).catch((err) => console.error("[Agent]", err))
+      }).catch((err) => {
+        console.error("[Agent]", err)
+        Sentry.captureException(err, { tags: { source: "agent", file: "invoices-auto.ts" } })
+      })
     }
   } catch (err) {
     console.error("[Agent]", err)
+    Sentry.captureException(err, { tags: { source: "agent", file: "invoices-auto.ts" } })
   }
 }
 
@@ -232,7 +236,10 @@ export async function autoGenerateInvoicesFromLoads() {
 
     revalidatePath("/dashboard/accounting/invoices")
     revalidatePath("/dashboard/loads")
-    triggerInvoiceAgingEvaluations(ctx.companyId, supabase).catch((err) => console.error("[Agent]", err))
+    triggerInvoiceAgingEvaluations(ctx.companyId, supabase).catch((err) => {
+      console.error("[Agent]", err)
+      Sentry.captureException(err, { tags: { source: "agent", file: "invoices-auto.ts" } })
+    })
 
     return {
       data: {

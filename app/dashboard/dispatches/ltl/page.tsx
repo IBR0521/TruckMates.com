@@ -14,6 +14,7 @@ import {
   getShipments,
   getTruckMovements,
 } from "@/app/actions/ltl-shipments"
+import { FeatureLock } from "@/components/billing/feature-lock"
 
 type ShipmentRow = {
   id: string
@@ -59,7 +60,7 @@ const asMovementShipmentRow = (value: unknown): MovementShipmentRow | null => {
   return { ...(obj as MovementShipmentRow), shipments: shipment }
 }
 
-export default function LtlDispatchPage() {
+function LtlDispatchPageContent() {
   const [shipments, setShipments] = useState<ShipmentRow[]>([])
   const [movements, setMovements] = useState<MovementRow[]>([])
   const [selectedMovement, setSelectedMovement] = useState<string>("")
@@ -259,5 +260,17 @@ export default function LtlDispatchPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function LtlDispatchPage() {
+  return (
+    <FeatureLock
+      featureKey="ltl_shipments"
+      title="LTL movements"
+      description="Combine shipments into equipment moves so pool freight stays organized and invoicing aligns with dock activity."
+    >
+      <LtlDispatchPageContent />
+    </FeatureLock>
   )
 }

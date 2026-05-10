@@ -207,7 +207,10 @@ async function createThresholdAlerts(companyId: string, month: string, scores: R
         severity: "warning",
       },
       contextTypes: ["compliance"],
-    }).catch((err) => console.error("[Agent]", err))
+    }).catch((err) => {
+      console.error("[Agent]", err)
+      Sentry.captureException(err, { tags: { source: "agent", file: "csa-scores.ts" } })
+    })
 
     if (isCrossingThreshold(key, value, 65)) {
       runAgentEvaluation({
@@ -220,7 +223,10 @@ async function createThresholdAlerts(companyId: string, month: string, scores: R
           severity: "critical",
         },
         contextTypes: ["compliance"],
-      }).catch((err) => console.error("[Agent]", err))
+      }).catch((err) => {
+        console.error("[Agent]", err)
+        Sentry.captureException(err, { tags: { source: "agent", file: "csa-scores.ts" } })
+      })
     }
   }
 

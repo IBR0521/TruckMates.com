@@ -5,7 +5,8 @@ import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { monthlyLimitForPlan } from "@/lib/api-usage-plan-limits"
+import { monthlyLimitForPlanTier } from "@/lib/api-usage-plan-limits"
+import { getCompanyTier } from "@/lib/plan-enforcement"
 type PlanRow = {
   id?: string
   name?: string
@@ -255,8 +256,7 @@ export async function getMonthlyApiUsageOverview(): Promise<{ data: UsageOvervie
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
-  const subscription = await getSubscription()
-  const planName = String(subscription.data?.plan_name || "free").toLowerCase()
+  const tier = await getCompanyTier(ctx.companyId!)
 
   const categories = [
     { key: "directions", label: "Directions", actions: ["directions", "optimize_route"] },
@@ -268,7 +268,7 @@ export async function getMonthlyApiUsageOverview(): Promise<{ data: UsageOvervie
   const usageRows = await Promise.all(
     categories.map(async (cat) => {
       const used = await countMonthlyUsage(ctx.companyId!, [...cat.actions], "google_maps")
-      const limit = monthlyLimitForPlan(planName, cat.key)
+      const limit = monthlyLimitForPlanTier(tier, cat.key)
       const percent = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
       return {
         key: cat.key,
@@ -281,7 +281,7 @@ export async function getMonthlyApiUsageOverview(): Promise<{ data: UsageOvervie
   )
 
   const tollRoutingCalls = await countMonthlyUsage(ctx.companyId, ["toll_cost_estimate"], "tollguru")
-  const tollLimit = monthlyLimitForPlan(planName, "toll_routing")
+  const tollLimit = monthlyLimitForPlanTier(tier, "toll_routing")
   const tollPercent =
     tollLimit > 0 ? Math.min(100, Math.round((tollRoutingCalls / tollLimit) * 100)) : 0
 

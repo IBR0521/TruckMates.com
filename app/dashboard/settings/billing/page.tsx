@@ -45,7 +45,14 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
-import { cancelPaddleBillingSubscription, getCompanyPlanUsageSnapshot } from "@/app/actions/plan-usage"
+import {
+  cancelPaddleBillingSubscription,
+  getBillingPlanContext,
+  getCompanyPlanUsageSnapshot,
+  openPaddleBillingPortal,
+} from "@/app/actions/plan-usage"
+import { cn } from "@/lib/utils"
+import type { PlanTier } from "@/lib/plan-limits"
 
 type BillingSubscription = {
   plan_display_name?: string | null
@@ -77,6 +84,8 @@ type PaymentHistoryRow = {
 }
 
 type PlanUsageSnapshot = NonNullable<Awaited<ReturnType<typeof getCompanyPlanUsageSnapshot>>["data"]>
+
+type BillingPlanContext = NonNullable<Awaited<ReturnType<typeof getBillingPlanContext>>["data"]>
 
 type PaymentMethodRow = {
   id?: string
@@ -129,6 +138,37 @@ const asPaymentMethodRow = (value: unknown): PaymentMethodRow | null => {
 const parsePaymentMethods = (rows: unknown[]): PaymentMethodRow[] =>
   rows.map(asPaymentMethodRow).filter((row): row is PaymentMethodRow => !!row)
 
+function tierBadgeAccentClass(tier: PlanTier): string {
+  switch (tier) {
+    case "owner_operator":
+      return "border-border bg-muted text-muted-foreground"
+    case "starter":
+      return "border-teal-500/35 bg-teal-500/15 text-teal-900 dark:text-teal-100"
+    case "professional":
+      return "border-primary/55 bg-primary/15 text-primary"
+    case "fleet":
+      return "border-violet-500/45 bg-violet-500/12 text-violet-950 dark:text-violet-100"
+    default:
+      return "border-amber-600/45 bg-amber-600/12 text-amber-950 dark:text-amber-100"
+  }
+}
+
+function meterProgressIndicatorToneClass(rawPct: number): string | undefined {
+  const pct = Math.max(0, Math.min(100, Number(rawPct) || 0))
+  if (pct >= 100) return "[&_[data-slot=progress-indicator]]:!bg-destructive [&_[data-slot=progress]]:!bg-destructive/25"
+  if (pct >= 80)
+    return "[&_[data-slot=progress-indicator]]:!bg-amber-600 [&_[data-slot=progress]]:!bg-amber-600/25 dark:[&_[data-slot=progress-indicator]]:!bg-amber-400 dark:[&_[data-slot=progress]]:!bg-amber-400/20"
+  return undefined
+}
+
+function resourceUsageTextClass(current: number, limit: number): string | undefined {
+  if (limit <= 0) return undefined
+  const pct = Math.min(100, Math.round((current / limit) * 100))
+  if (pct >= 100) return "text-destructive font-semibold"
+  if (pct >= 80) return "text-amber-700 dark:text-amber-300 font-medium"
+  return undefined
+}
+
 export default function BillingSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -165,8 +205,10 @@ export default function BillingSettingsPage() {
     "route_optimization" | "geofencing" | "crm" | "api_keys" | null
   >(null)
   const [planUsage, setPlanUsage] = useState<PlanUsageSnapshot | null>(null)
+  const [billingCtx, setBillingCtx] = useState<BillingPlanContext | null>(null)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [cancelBusy, setCancelBusy] = useState(false)
+  const [portalBusy, setPortalBusy] = useState(false)
 
   useEffect(() => {
     if (!requestedUpgrade) return
@@ -185,7 +227,15 @@ export default function BillingSettingsPage() {
     async function loadSettings() {
       setIsLoading(true)
       try {
-        const [billingResult, subscriptionResult, historyResult, methodsResult, usageResult, planUsageResult] =
+        const [
+          billingResult,
+          subscriptionResult,
+          historyResult,
+          methodsResult,
+          usageResult,
+          planUsageResult,
+          paddleCtxResult,
+        ] =
           await Promise.all([
           getBillingInfo(),
           getSubscription(),
@@ -193,6 +243,7 @@ export default function BillingSettingsPage() {
           getPaymentMethods(),
           getMonthlyApiUsageOverview(),
           getCompanyPlanUsageSnapshot(),
+          getBillingPlanContext(),
         ])
 
         if (billingResult.error) {
@@ -231,6 +282,9 @@ export default function BillingSettingsPage() {
         }
         if (planUsageResult.data) {
           setPlanUsage(planUsageResult.data)
+        }
+        if (paddleCtxResult.data) {
+          setBillingCtx(paddleCtxResult.data)
         }
       } catch (error) {
         toast.error("Failed to load billing settings")
@@ -278,11 +332,13 @@ export default function BillingSettingsPage() {
             Billing Settings
           </h1>
           <p className="text-muted-foreground mt-2">
-            Manage your subscription and billing information
+            TruckMates plans and renewals run through Paddle. Update company billing details below; upgrades open a secure
+            Paddle checkout.
           </p>
           {paymentRequired && (
             <p className="mt-2 text-sm text-destructive">
-              Billing is required before access can continue. Add payment to activate your subscription.
+              Billing is required before access can continue. Choose a plan and complete Paddle checkout from Plan usage →
+              Change plan.
             </p>
           )}
         </div>
@@ -378,13 +434,26 @@ export default function BillingSettingsPage() {
         {planUsage && (
           <Card className="p-6 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold">Plan usage</h2>
-                <p className="text-sm text-muted-foreground">
-                  Current TruckMates plan: <strong>{planUsage.tierLabel}</strong>
-                </p>
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold flex flex-wrap items-center gap-2">
+                  Plan usage
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "font-normal capitalize",
+                      tierBadgeAccentClass(planUsage.tier),
+                    )}
+                  >
+                    {planUsage.tierLabel}
+                  </Badge>
+                  {!billingCtx ? null : billingCtx.billing_cycle === "annual" ? (
+                    <span className="text-xs font-normal text-muted-foreground">Annual billing cycle</span>
+                  ) : (
+                    <span className="text-xs font-normal text-muted-foreground">Monthly billing cycle</span>
+                  )}
+                </h2>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="default"
@@ -395,6 +464,27 @@ export default function BillingSettingsPage() {
                   }}
                 >
                   Change plan
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={portalBusy}
+                  onClick={async () => {
+                    setPortalBusy(true)
+                    try {
+                      const r = await openPaddleBillingPortal()
+                      if (r.error || !r.portalUrl) {
+                        toast.error(r.error || "Could not open Paddle customer portal")
+                        return
+                      }
+                      window.location.href = r.portalUrl
+                    } finally {
+                      setPortalBusy(false)
+                    }
+                  }}
+                >
+                  {portalBusy ? "Opening portal…" : "Manage billing"}
                 </Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => setCancelOpen(true)}>
                   Cancel subscription
@@ -412,12 +502,20 @@ export default function BillingSettingsPage() {
                 <div key={label} className="space-y-1">
                   <div className="flex justify-between text-sm">
                     <span>{label}</span>
-                    <span className="text-muted-foreground">
+                    <span
+                      className={cn(
+                        "text-muted-foreground",
+                        limit > 0 && resourceUsageTextClass(used, limit),
+                      )}
+                    >
                       {limit < 0 ? `${used}` : `${used} / ${limit}`}
                     </span>
                   </div>
                   {limit > 0 ? (
-                    <Progress value={Math.min(100, Math.round((used / limit) * 100))} />
+                    <Progress
+                      className={meterProgressIndicatorToneClass(Math.min(100, Math.round((used / limit) * 100)))}
+                      value={Math.min(100, Math.round((used / limit) * 100))}
+                    />
                   ) : (
                     <p className="text-xs text-muted-foreground">Unlimited</p>
                   )}
@@ -425,98 +523,140 @@ export default function BillingSettingsPage() {
               ))}
             </div>
             <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 text-sm">
-              <p>
-                Trucks: {planUsage.resources.trucks.current} /{" "}
-                {planUsage.resources.trucks.limit < 0 ? "∞" : planUsage.resources.trucks.limit}
-              </p>
-              <p>
-                Trailers: {planUsage.resources.trailers.current} /{" "}
-                {planUsage.resources.trailers.limit < 0 ? "∞" : planUsage.resources.trailers.limit}
-              </p>
-              <p>
-                Drivers: {planUsage.resources.drivers.current} /{" "}
-                {planUsage.resources.drivers.limit < 0 ? "∞" : planUsage.resources.drivers.limit}
-              </p>
-              <p>
-                Seats: {planUsage.resources.user_seats.current} /{" "}
-                {planUsage.resources.user_seats.limit < 0 ? "∞" : planUsage.resources.user_seats.limit}
-              </p>
-              <p>
-                Customers: {planUsage.resources.customers.current} /{" "}
-                {planUsage.resources.customers.limit < 0 ? "∞" : planUsage.resources.customers.limit}
-              </p>
-              <p>
-                Vendors: {planUsage.resources.vendors.current} /{" "}
-                {planUsage.resources.vendors.limit < 0 ? "∞" : planUsage.resources.vendors.limit}
-              </p>
+              {(
+                [
+                  ["Trucks", planUsage.resources.trucks.current, planUsage.resources.trucks.limit],
+                  ["Trailers", planUsage.resources.trailers.current, planUsage.resources.trailers.limit],
+                  ["Drivers", planUsage.resources.drivers.current, planUsage.resources.drivers.limit],
+                  ["Seats", planUsage.resources.user_seats.current, planUsage.resources.user_seats.limit],
+                  ["Customers", planUsage.resources.customers.current, planUsage.resources.customers.limit],
+                  ["Vendors", planUsage.resources.vendors.current, planUsage.resources.vendors.limit],
+                ] as const
+              ).map(([label, current, lim]) => (
+                <p key={label} className={resourceUsageTextClass(current, lim)}>
+                  {label}: {current} / {lim < 0 ? "∞" : lim}
+                </p>
+              ))}
             </div>
           </Card>
         )}
 
-        {/* Subscription */}
+        {/* Subscription (Paddle + company tier — source of truth) */}
         <Card className="p-6">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <CreditCard className="w-5 h-5" />
-            Subscription
+            Subscription (Paddle)
           </h2>
-          
-          {subscription ? (
+
+          {billingCtx ? (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{subscription.plan_display_name || subscription.plan_name || "Free"}</p>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className={cn("capitalize", tierBadgeAccentClass(billingCtx.tier))}>
+                      {billingCtx.tierLabel}
+                    </Badge>
+                    <Badge
+                      variant={
+                        billingCtx.subscription_status === "active" || billingCtx.subscription_status === "trial"
+                          ? "default"
+                          : "secondary"
+                      }
+                      className="capitalize"
+                    >
+                      {billingCtx.subscription_status?.replace(/_/g, " ") || "—"}
+                    </Badge>
+                  </div>
                   <p className="text-sm text-muted-foreground">
-                    {subscription.plan_name === "free" || subscription.amount === 0
-                      ? "Free plan — upgrade for higher limits and team size."
-                      : `${subscription.billing_cycle === "monthly" ? "Monthly" : "Yearly"} billing`}
+                    {billingCtx.billing_cycle === "annual" ? "Annual" : "Monthly"} billing cadence • Payments via Paddle
                   </p>
+                  {billingCtx.subscription_status === "trial" && billingCtx.trial_ends_at ? (
+                    (() => {
+                      const ms = new Date(billingCtx.trial_ends_at).getTime() - Date.now()
+                      const days = Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)))
+                      return ms > 0 ? (
+                        <p className="text-sm font-medium text-primary">
+                          Trial ends in {days} day{days === 1 ? "" : "s"} — add a payment method to keep Starter-tier
+                          access.
+                        </p>
+                      ) : null
+                    })()
+                  ) : billingCtx.subscription_ends_at && billingCtx.subscription_status === "active" ? (
+                    <p className="text-sm text-muted-foreground">
+                      Next renewal: {new Date(billingCtx.subscription_ends_at).toLocaleDateString()}
+                    </p>
+                  ) : null}
                 </div>
-                <Badge variant={subscription.status === "active" ? "default" : "secondary"}>
-                  {subscription.status === "active" ? "Active" : subscription.status}
-                </Badge>
               </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-muted-foreground">Amount</p>
-                  <p className="font-medium">
-                    {subscription.amount === 0 
-                      ? "Free" 
-                      : `${subscription.currency_symbol || "$"}${(subscription.amount || 0).toFixed(2)}`}
+                  <p className="text-muted-foreground">Paddle subscription</p>
+                  <p className="font-medium">{billingCtx.paddle_subscription_id ? "Linked" : "Not linked yet"}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Use <strong>Change plan</strong> above to subscribe or upgrade.
                   </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">
-                    {subscription.plan_name === "free" || subscription.amount === 0 ? "Status" : "Next Billing"}
+                    {billingCtx.subscription_status === "trial" ? "Trial ends" : "Current period ends"}
                   </p>
                   <p className="font-medium">
-                    {subscription.plan_name === "free" || subscription.amount === 0
-                      ? "No payment required"
-                      : subscription.end_date 
-                        ? new Date(subscription.end_date).toLocaleDateString() 
-                        : "N/A"}
+                    {billingCtx.subscription_status === "trial" && billingCtx.trial_ends_at
+                      ? new Date(billingCtx.trial_ends_at).toLocaleString()
+                      : billingCtx.subscription_ends_at
+                        ? new Date(billingCtx.subscription_ends_at).toLocaleDateString()
+                        : "—"}
                   </p>
                 </div>
               </div>
-              {(subscription.plan_name === "free" || subscription.amount === 0) && (
-                <div className="pt-2">
-                  <Button variant="outline" size="sm" className="rounded-lg" asChild>
-                    <Link href="/pricing">View plans & pricing</Link>
-                  </Button>
-                </div>
-              )}
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" className="rounded-lg" asChild>
+                  <Link href="/pricing">Public pricing page</Link>
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="rounded-lg"
+                  disabled={portalBusy}
+                  onClick={async () => {
+                    setPortalBusy(true)
+                    try {
+                      const r = await openPaddleBillingPortal()
+                      if (r.error || !r.portalUrl) {
+                        toast.error(r.error || "Could not open Paddle customer portal")
+                        return
+                      }
+                      window.location.href = r.portalUrl
+                    } finally {
+                      setPortalBusy(false)
+                    }
+                  }}
+                >
+                  {portalBusy ? "Opening portal…" : "Manage billing (Paddle)"}
+                </Button>
+              </div>
             </div>
           ) : (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Could not load subscription details.</p>
-              <p className="text-xs text-muted-foreground">
-                If this persists, confirm your database has <code className="text-xs">subscriptions</code> and{" "}
-                <code className="text-xs">subscription_plans</code> (run the subscription migration).
-              </p>
-              <Button variant="outline" size="sm" className="rounded-lg mt-2" asChild>
-                <Link href="/pricing">View plans & pricing</Link>
-              </Button>
-            </div>
+            <p className="text-sm text-muted-foreground">Could not load Paddle billing context.</p>
           )}
+
+          {/* Legacy Stripe subscription row (if present) */}
+          {subscription &&
+            subscription.plan_name !== "free" &&
+            subscription.amount !== 0 &&
+            subscription.status === "active" && (
+              <div className="mt-6 pt-4 border-t border-border space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Legacy Stripe record
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {subscription.plan_display_name || subscription.plan_name} —{" "}
+                  {(subscription.currency_symbol || "$") + (subscription.amount || 0).toFixed(2)} (
+                  {subscription.billing_cycle === "monthly" ? "Monthly" : "Yearly"})
+                </p>
+              </div>
+            )}
         </Card>
 
         {/* Usage */}
@@ -530,12 +670,26 @@ export default function BillingSettingsPage() {
                 <div key={row.key} className="space-y-1.5">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">{row.label}</span>
-                    <span className="text-muted-foreground">
+                    <span
+                      className={cn(
+                        "text-muted-foreground",
+                        row.limit != null &&
+                          (row.percent ?? 0) >= 100 &&
+                          "text-destructive font-semibold",
+                        row.limit != null &&
+                          (row.percent ?? 0) >= 80 &&
+                          (row.percent ?? 0) < 100 &&
+                          "text-amber-700 dark:text-amber-300 font-medium",
+                      )}
+                    >
                       {row.limit == null ? `${row.used} calls` : `${row.used} / ${row.limit}`}
                     </span>
                   </div>
                   {row.limit != null ? (
-                    <Progress value={row.percent || 0} />
+                    <Progress
+                      className={meterProgressIndicatorToneClass(row.percent || 0)}
+                      value={row.percent || 0}
+                    />
                   ) : (
                     <p className="text-xs text-muted-foreground">
                       Tracking only (no plan cap configured yet).
@@ -591,7 +745,7 @@ export default function BillingSettingsPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <CreditCard className="w-5 h-5" />
-              Manage Credit Card
+              Payment methods (TMS)
             </h2>
             <Button
               variant="outline"
@@ -614,9 +768,13 @@ export default function BillingSettingsPage() {
             </Button>
           </div>
           
+          <p className="text-xs text-muted-foreground mb-4 rounded-md border border-border bg-muted/40 p-3">
+            <strong>Subscription charges</strong> use Paddle at checkout — not the cards stored here. This section is for
+            optional on-file methods for other workflows (e.g. freight billing records).
+          </p>
           {paymentMethods.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No payment methods saved. Add a credit card to use for automatic payments.
+              No optional payment methods saved for TMS workflows.
             </p>
           ) : (
             <div className="space-y-2">

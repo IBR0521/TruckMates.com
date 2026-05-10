@@ -1,13 +1,12 @@
-import { PlanGateLayout } from "@/components/billing/plan-gate-layout"
+import { FeatureLock } from "@/components/billing/feature-lock"
 import { Card } from "@/components/ui/card"
 
-export default async function EdiPage() {
+export default function EdiPage() {
   return (
-    <PlanGateLayout
-      feature="edi_receiving"
+    <FeatureLock
+      featureKey="edi_receiving"
       title="EDI receiving"
-      description="Import and process EDI documents from brokers and shippers."
-      requiredPlanLabel="This capability is included starting on the Fleet plan."
+      description="Import broker and shipper EDI inbound — eliminate manual entry and reconcile loads faster across terminals."
     >
       <div className="p-8 max-w-4xl mx-auto space-y-4">
         <h1 className="text-2xl font-bold">EDI</h1>
@@ -18,6 +17,6 @@ export default async function EdiPage() {
           </p>
         </Card>
       </div>
-    </PlanGateLayout>
+    </FeatureLock>
   )
 }

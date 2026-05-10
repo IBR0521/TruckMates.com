@@ -7,12 +7,41 @@ import type { EmployeeRole } from "@/lib/roles"
 import * as Sentry from "@sentry/nextjs"
 import { headers } from "next/headers"
 import { rateLimitRedis } from "@/lib/rate-limit-redis"
+import { isSafeRelativeLoginNext, resolvePostLoginRedirect } from "@/lib/auth/post-login-redirect"
 
 async function enforceAuthRateLimit(bucket: string, identifier: string, limit: number, windowSeconds: number) {
   const hdrs = await headers()
   const ip = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
   const rl = await rateLimitRedis(`${bucket}:${identifier}:${ip}`, { limit, window: windowSeconds })
   return rl.success
+}
+
+/**
+ * Password sign-in with server-side rate limiting (credential-stuffing mitigation).
+ */
+export async function signInWithCredentials(params: {
+  email: string
+  password: string
+  next?: string | null
+}): Promise<{ data: { redirectTo: string } | null; error: string | null }> {
+  const email = params.email.trim()
+  const password = params.password
+
+  const allowed = await enforceAuthRateLimit("auth:login", email.toLowerCase(), 10, 60)
+  if (!allowed) {
+    return { data: null, error: "Too many login attempts. Please wait and try again." }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  if (error) {
+    return { data: null, error: error.message || "Login failed" }
+  }
+
+  const rawNext = params.next?.trim() || null
+  const safeNext = isSafeRelativeLoginNext(rawNext) ? rawNext : "/dashboard"
+  const redirectTo = await resolvePostLoginRedirect(supabase, safeNext)
+  return { data: { redirectTo }, error: null }
 }
 
 /**

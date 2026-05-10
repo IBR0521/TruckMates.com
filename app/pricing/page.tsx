@@ -5,98 +5,103 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Check, X, ArrowRight } from "lucide-react"
+import { Check, ArrowRight } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { createClient } from "@/lib/supabase/client"
-import { startPlanTrial } from "@/app/actions/subscription-onboarding"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+import {
+  PLAN_FEATURES,
+  PLAN_LIMITS,
+  PLAN_TIER_ORDER,
+  isUnlimited,
+  planTierLabel,
+  type PlanFeatures,
+  type PlanTier,
+} from "@/lib/plan-limits"
+import { startPlanCheckout } from "@/app/actions/plan-usage"
 
-type PlanInternalName = "starter" | "professional" | "enterprise"
+const TIER_SUMMARY: Record<PlanTier, string> = {
+  owner_operator: "Designed for owner-operators and 1–2 trucks — TMS core loads, invoices, dispatch, limits without premium AI integrations.",
+  starter: "3–10 trucks: core TMS plus essential AI assistants (documents, dispatch, morning briefing); no live ELD vendor feeds.",
+  professional: "11–35 trucks: live ELD integrations, conversational & autonomous AI, AP, reconciliation, predictive maintenance.",
+  fleet: "36–100 trucks: public API + EDI, multi-terminal, HAZMAT/LTL tooling, leases, permits, priority phone support.",
+  enterprise: "100+ carriers: custom SLAs, SSO/white-label, dedicated success, bespoke AI tuning on your corpus.",
+}
 
-const PLANS = [
-  {
-    name: "Operator",
-    internalName: "starter",
-    description: "Owner-operators needing full ops + compliance from day one",
-    priceMonthly: 89,
-    priceYearly: 828,
-    limits: "Up to 5 trucks · 2 users",
-    included: [
-      "Loads, dispatch, BOLs, invoicing, settlements",
-      "IFTA, ELD logs, DVIR, maintenance, reminders",
-      "Revenue, P&L, and fuel analytics",
-      "2 users included",
-    ],
-    excluded: [
-      "QuickBooks sync",
-      "Driver scorecards",
-      "API & webhooks",
-      "Predictive maintenance",
-      "Geofencing & route optimizer",
-    ],
-    cta: "Choose plan",
-    href: "/register",
-    highlighted: false,
-  },
-  {
-    name: "Fleet",
-    internalName: "professional",
-    description: "Growing fleets needing accounting depth and team coordination",
-    priceMonthly: 219,
-    priceYearly: 2148,
-    limits: "Up to 20 trucks · 8 users",
-    included: [
-      "Everything in Operator",
-      "Full six-role team permissions (Fleet tier)",
-      "IFTA reporting + PDF",
-      "QuickBooks sync + advanced reporting",
-      "Driver scorecards",
-      "Predictive maintenance + geofencing + route optimizer",
-      "CRM, detention/on-time reports, factoring integration",
-      "API & webhooks",
-      "8 users included",
-    ],
-    excluded: [],
-    cta: "Choose plan",
-    href: "/register",
-    highlighted: true,
-  },
-  {
-    name: "Enterprise",
-    internalName: "enterprise",
-    description: "Large operations needing full control",
-    priceMonthly: 429,
-    priceYearly: 4188,
-    limits: "Unlimited trucks",
-    included: [
-      "Everything in Fleet",
-      "Unlimited users",
-      "Multi-company RBAC",
-      "Audit logs",
-      "Custom Integrations",
-      "Receipt OCR (AI) — coming soon",
-      "White-label portal",
-      "Dedicated support",
-    ],
-    excluded: [],
-    cta: "Contact us",
-    href: "/register",
-    highlighted: false,
-  },
+const FEATURE_SHOWCASE: { key: keyof PlanFeatures; label: string }[] = [
+  { key: "ai_document_extraction", label: "AI document extraction" },
+  { key: "ai_dispatch_suggestions", label: "AI dispatch suggestions" },
+  { key: "ai_morning_briefing", label: "AI morning briefing" },
+  { key: "ai_conversational", label: "Conversational AI" },
+  { key: "ai_autonomous_agent", label: "Autonomous AI agent" },
+  { key: "eld_live_integrations", label: "ELD live integrations" },
+  { key: "ap_vendor_invoicing", label: "AP vendor invoicing" },
+  { key: "bank_reconciliation", label: "Bank reconciliation" },
+  { key: "gl_quickbooks_sync", label: "GL & QuickBooks sync" },
+  { key: "factoring_api", label: "Factoring API integration" },
+  { key: "predictive_maintenance", label: "Predictive maintenance AI" },
+  { key: "public_api", label: "Public REST API" },
+  { key: "edi_receiving", label: "EDI receiving" },
+  { key: "multi_terminal", label: "Multi-terminal management" },
+  { key: "hazmat_module", label: "HAZMAT module" },
+  { key: "ltl_shipments", label: "LTL linehaul tooling" },
+  { key: "lease_management", label: "Lease management" },
+  { key: "permit_management", label: "Permit management" },
+  { key: "custom_ai_training", label: "Custom AI training on your docs" },
+  { key: "white_label", label: "White-label customer portal" },
+  { key: "sso", label: "Enterprise SSO (SAML/OIDC)" },
+  { key: "dedicated_account_manager", label: "Dedicated account director" },
+  { key: "custom_sla", label: "Custom SLA" },
 ]
 
+function tierFeatureBullets(tier: PlanTier, lim: (typeof PLAN_LIMITS)[PlanTier], maxItems = 5): string[] {
+  if (tier === "enterprise") {
+    return [
+      ...FEATURE_SHOWCASE.filter((row) => PLAN_FEATURES.enterprise[row.key]).slice(0, maxItems).map((r) => r.label),
+    ].slice(0, maxItems)
+  }
+  const feats = PLAN_FEATURES[tier]
+  const lines: string[] = []
+  for (const row of FEATURE_SHOWCASE) {
+    if (feats[row.key]) {
+      lines.push(row.label)
+    }
+    if (lines.length >= maxItems) return lines
+  }
+  const capLines = [
+    `Up to ${isUnlimited(lim.trucks) ? "∞" : lim.trucks} active trucks`,
+    `${isUnlimited(lim.loads_per_month) ? "Unlimited" : lim.loads_per_month.toLocaleString()} loads / month`,
+    `${isUnlimited(lim.ai_calls_per_month) ? "Unlimited" : lim.ai_calls_per_month.toLocaleString()} AI calls / month`,
+    `${isUnlimited(lim.storage_gb) ? "Unlimited" : lim.storage_gb} GB documents`,
+    `${isUnlimited(lim.api_requests_per_day) ? "Unlimited daily" : lim.api_requests_per_day.toLocaleString()} API reqs / day`,
+  ]
+  for (const extra of capLines) {
+    if (lines.includes(extra)) continue
+    lines.push(extra)
+    if (lines.length >= maxItems) break
+  }
+  return lines.slice(0, maxItems)
+}
+
+function planCtaLabel(tier: PlanTier, isAuthenticated: boolean, checkoutTier: PlanTier | null): string {
+  if (tier === "enterprise") return "Contact sales"
+  if (checkoutTier === tier) return "Opening…"
+  if (isAuthenticated) return "Upgrade now"
+  if (tier === "starter") return "Start free trial"
+  return "Subscribe now"
+}
+
 const ADDONS = [
-  { name: "Extra trucks", description: "Overage beyond plan truck limit without full tier upgrade", price: "$8 / truck / mo" },
-  { name: "ELD hardware sync", description: "Samsara, Motive, or Geotab webhook integration", price: "$24 / mo" },
-  { name: "Toll routing", description: "Commercial toll lookups and route costing via TollGuru", price: "$19 / mo" },
-  { name: "Portal branding", description: "Custom logo and colors on customer-facing portal", price: "$39 / mo" },
+  { name: "Extra trucks", description: "Overage beyond plan truck limit without full tier upgrade", price: "Contact sales" },
+  { name: "Toll routing", description: "Commercial toll lookups via TollGuru", price: "Add at checkout" },
+  { name: "Portal branding", description: "Custom logo and colors on customer portal", price: "Fleet tier+" },
 ]
 
 export default function PricingPage() {
-  const [billingAnnual, setBillingAnnual] = useState(true)
+  const [billingAnnual, setBillingAnnual] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [isChoosingPlan, setIsChoosingPlan] = useState<string | null>(null)
+  const [checkoutTier, setCheckoutTier] = useState<PlanTier | null>(null)
   const [onboarding, setOnboarding] = useState(false)
   const router = useRouter()
 
@@ -113,24 +118,39 @@ export default function PricingPage() {
     void loadUser()
   }, [])
 
-  const handlePlanChoose = async (planInternalName: PlanInternalName) => {
-    if (!isAuthenticated) {
-      router.push("/register")
+  const handlePlanChoose = async (tier: PlanTier) => {
+    if (tier === "enterprise") {
+      window.location.href =
+        "mailto:sales@truckmates.com?subject=TruckMates%20Enterprise%20plan"
       return
     }
-    setIsChoosingPlan(planInternalName)
+    if (!isAuthenticated) {
+      router.push(`/register?tier=${encodeURIComponent(tier)}`)
+      return
+    }
+
+    setCheckoutTier(tier)
     try {
-      const result = await startPlanTrial(planInternalName)
-      if (result.error) {
-        toast.error(result.error)
+      const result = await startPlanCheckout({
+        tier,
+        billingCycle: billingAnnual ? "annual" : "monthly",
+      })
+      if (result.error || !result.data?.checkout_url) {
+        toast.error(result.error || "Checkout unavailable.")
         return
       }
-      toast.success("Plan selected", {
-        description: "Complete billing setup to activate your subscription.",
-      })
-      router.push("/billing/activate?step=payment")
+      const popup = window.open(
+        result.data.checkout_url,
+        "truckmates-checkout",
+        "popup=yes,width=1120,height=860",
+      )
+      if (!popup) {
+        toast.error("Popup blocked. Allow popups for checkout or open Settings → Billing.")
+        return
+      }
+      toast.success("Checkout opened — complete payment in the new window.")
     } finally {
-      setIsChoosingPlan(null)
+      setCheckoutTier(null)
     }
   }
 
@@ -152,16 +172,20 @@ export default function PricingPage() {
         </div>
       </header>
 
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
         {onboarding && (
           <p className="mb-4 text-sm text-primary font-medium">
-            Choose your plan, then complete billing to activate access.
+            Choose your plan — billing runs securely through Paddle.
           </p>
         )}
-        <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
-          Simple, transparent pricing
+        <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
+          Plans built for every carrier size
         </h1>
-        <div className="flex items-center justify-center gap-3 mb-2">
+        <p className="text-muted-foreground max-w-2xl mx-auto mb-6">
+          Same core TMS on every tier — AI, integrations, and scale unlock as you grow. Annual pricing is about 20% off
+          the monthly rate.
+        </p>
+        <div className="flex items-center justify-center gap-3 mb-10">
           <span className={`text-sm font-medium ${!billingAnnual ? "text-foreground" : "text-muted-foreground"}`}>
             Monthly
           </span>
@@ -181,69 +205,82 @@ export default function PricingPage() {
           <span className={`text-sm font-medium ${billingAnnual ? "text-foreground" : "text-muted-foreground"}`}>
             Annual
           </span>
-          <span className="text-xs text-muted-foreground ml-1">Save 2 months</span>
+          <Badge variant="secondary" className="text-xs">
+            ~20% savings
+          </Badge>
         </div>
       </section>
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {PLANS.map((plan) => {
-            const effectiveMonthly =
-              billingAnnual && plan.priceYearly > 0
-                ? Math.round(plan.priceYearly / 12)
-                : plan.priceMonthly
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {PLAN_TIER_ORDER.map((tier) => {
+            const lim = PLAN_LIMITS[tier]
+            const isEnterprise = tier === "enterprise"
+            const monthlyPrice = isEnterprise ? null : lim.price_monthly
+            const annualPrice = isEnterprise ? null : lim.price_annual
+            const highlighted = tier === "professional"
+
             return (
               <Card
-                key={plan.name}
-                className={`p-6 flex flex-col ${
-                  plan.highlighted ? "border-primary shadow-lg ring-2 ring-primary/20" : "border-border"
+                key={tier}
+                className={`p-5 flex flex-col ${
+                  highlighted ? "border-primary shadow-lg ring-2 ring-primary/20 xl:scale-[1.02]" : "border-border"
                 }`}
               >
-                {plan.highlighted && (
-                  <Badge className="w-fit mb-3">Most popular</Badge>
-                )}
-                <h2 className="text-lg font-bold text-foreground">{plan.name}</h2>
-                <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
-                <p className="text-xs text-muted-foreground mt-2">{plan.limits}</p>
-                <div className="mt-4 mb-4">
-                  {plan.priceMonthly === 0 ? (
-                    <span className="text-2xl font-bold text-foreground">$0</span>
-                  ) : (
-                    <>
-                      <span className="text-2xl font-bold text-foreground">${effectiveMonthly}</span>
-                      <span className="text-muted-foreground text-sm"> per month</span>
-                      {billingAnnual && plan.priceYearly > 0 && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          billed annually (${plan.priceYearly.toLocaleString()}/year)
+                {highlighted && <Badge className="w-fit mb-2">Most popular</Badge>}
+                <h2 className="text-lg font-bold text-foreground">{planTierLabel(tier)}</h2>
+                <p className="text-xs text-muted-foreground mt-1 min-h-[2.5rem]">{TIER_SUMMARY[tier]}</p>
+                <div className="mt-4 mb-3">
+                  {!isEnterprise &&
+                    (!billingAnnual ? (
+                      <>
+                        <span className="text-2xl font-bold text-foreground">${monthlyPrice}</span>
+                        <span className="text-muted-foreground text-sm"> /mo</span>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          or{" "}
+                          <span className="font-semibold text-foreground">
+                            ${annualPrice}/mo billed annually (~20% off)
+                          </span>
                         </p>
-                      )}
-                    </>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-2xl font-bold text-foreground">${annualPrice}</span>
+                        <span className="text-muted-foreground text-sm"> /mo</span>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Billed annually • compared with ${monthlyPrice}/mo month‑to‑month
+                        </p>
+                      </>
+                    ))}
+                  {isEnterprise && (
+                    <p className="text-2xl font-bold text-foreground pt-1">Custom</p>
                   )}
-                  {plan.priceMonthly === 0 && <p className="text-xs text-muted-foreground mt-0.5">forever free</p>}
                 </div>
-                <ul className="space-y-2 flex-1 text-sm">
-                  {plan.included.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-muted-foreground">
-                      <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                      {f}
+                <ul className="space-y-1.5 flex-1 text-xs text-left text-muted-foreground">
+                  {tierFeatureBullets(tier, lim, 5).map((line) => (
+                    <li key={line} className="flex gap-2">
+                      <Check className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                      {line}
                     </li>
                   ))}
-                  {plan.excluded.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-muted-foreground/70">
-                      <X className="w-4 h-4 shrink-0 mt-0.5" />
-                      {f}
-                    </li>
-                  ))}
+                  <li className="flex gap-2 pt-1 border-t border-border/60 mt-2">
+                    <Check className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                    <span>
+                      Capacity: {isUnlimited(lim.trucks) ? "∞" : lim.trucks} trucks ·{" "}
+                      {isUnlimited(lim.loads_per_month) ? "∞" : lim.loads_per_month.toLocaleString()} loads/mo ·{" "}
+                      {isUnlimited(lim.user_seats) ? "∞" : lim.user_seats} seats
+                    </span>
+                  </li>
                 </ul>
-                <div className="mt-6 block">
+                <div className="mt-5">
                   <Button
                     className="w-full"
-                    variant={plan.highlighted ? "default" : "outline"}
+                    variant={highlighted ? "default" : "outline"}
                     size="sm"
-                    disabled={isChoosingPlan !== null}
-                    onClick={() => handlePlanChoose(plan.internalName as PlanInternalName)}
+                    disabled={checkoutTier !== null}
+                    onClick={() => handlePlanChoose(tier)}
                   >
-                    {plan.cta}
+                    {planCtaLabel(tier, isAuthenticated, checkoutTier)}
                     <ArrowRight className="ml-2 w-3 h-3" />
                   </Button>
                 </div>
@@ -252,8 +289,12 @@ export default function PricingPage() {
           })}
         </div>
 
+        <p className="text-center text-xs text-muted-foreground mt-8 max-w-3xl mx-auto">
+          Subscription and tax receipts are handled by Paddle. Manage or cancel anytime from Settings → Billing.
+        </p>
+
         <div className="mt-16">
-          <h2 className="text-xl font-bold text-foreground mb-4">ADD-ONS</h2>
+          <h2 className="text-xl font-bold text-foreground mb-4">Add-ons</h2>
           <div className="grid md:grid-cols-3 gap-4">
             {ADDONS.map((addon) => (
               <Card key={addon.name} className="p-4 border-border">
@@ -270,10 +311,18 @@ export default function PricingPage() {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <Logo size="sm" />
           <div className="flex gap-6">
-            <Link href="/" className="text-sm text-muted-foreground hover:text-primary">Home</Link>
-            <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary">Terms</Link>
-            <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary">Privacy</Link>
-            <Link href="/refund-policy" className="text-sm text-muted-foreground hover:text-primary">Refund Policy</Link>
+            <Link href="/" className="text-sm text-muted-foreground hover:text-primary">
+              Home
+            </Link>
+            <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary">
+              Terms
+            </Link>
+            <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary">
+              Privacy
+            </Link>
+            <Link href="/refund-policy" className="text-sm text-muted-foreground hover:text-primary">
+              Refund Policy
+            </Link>
           </div>
         </div>
       </footer>

@@ -17,6 +17,7 @@ import {
   manuallyMatchBankTransaction,
   setBankTransactionStatus,
 } from "@/app/actions/bank-reconciliation"
+import { FeatureLock } from "@/components/billing/feature-lock"
 
 type ImportRow = {
   id: string
@@ -76,7 +77,7 @@ function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount || 0)
 }
 
-export default function BankReconciliationPage() {
+function BankReconciliationPageContent() {
   const [loading, setLoading] = useState(true)
   const [imports, setImports] = useState<ImportRow[]>([])
   const [transactions, setTransactions] = useState<TransactionRow[]>([])
@@ -358,5 +359,17 @@ export default function BankReconciliationPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function BankReconciliationPage() {
+  return (
+    <FeatureLock
+      featureKey="bank_reconciliation"
+      title="Bank reconciliation"
+      description="Match statement lines to bills and payouts so QuickBooks-ready exports reconcile without month-end archaeology."
+    >
+      <BankReconciliationPageContent />
+    </FeatureLock>
   )
 }

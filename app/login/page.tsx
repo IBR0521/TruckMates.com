@@ -9,76 +9,38 @@ import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Logo } from "@/components/logo"
-import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
+import { signInWithCredentials } from "@/app/actions/auth"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
-  const supabase = createClient()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
     try {
-      const rlRes = await fetch("/api/auth/rate-limit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bucket: "auth:login",
-          identifier: email.trim().toLowerCase(),
-          limit: 10,
-          window: 60,
-        }),
-      })
-      const rlData = await rlRes.json().catch(() => ({ allowed: true }))
-      if (!rlData.allowed) {
-        toast.error("Too many login attempts. Please wait and try again.")
+      const nextParam =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("next")
+          : null
+      const safeNext = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null
+
+      const result = await signInWithCredentials({ email, password, next: safeNext })
+
+      if (result.error) {
+        toast.error(result.error)
         setIsLoading(false)
         return
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error) {
-        toast.error(error.message || "Login failed")
-        setIsLoading(false)
-        return
-      }
-
-      if (data.user) {
-        toast.success("Login successful")
-        router.refresh()
-        const nextParam =
-          typeof window !== "undefined"
-            ? new URLSearchParams(window.location.search).get("next")
-            : null
-        const safeNext = nextParam && nextParam.startsWith("/") ? nextParam : "/dashboard"
-
-        try {
-          const response = await fetch(`/api/auth/post-login-route?next=${encodeURIComponent(safeNext)}`, {
-            method: "GET",
-            cache: "no-store",
-          })
-          if (!response.ok) {
-            router.push(safeNext)
-            return
-          }
-          const result = await response.json()
-          const target = typeof result?.redirectTo === "string" && result.redirectTo.startsWith("/")
-            ? result.redirectTo
-            : safeNext
-          router.push(target)
-        } catch {
-          router.push(safeNext)
-        }
-      }
+      toast.success("Login successful")
+      router.refresh()
+      router.push(result.data!.redirectTo)
+      setIsLoading(false)
     } catch (error: unknown) {
       toast.error(errorMessage(error, "An error occurred. Please try again."))
       setIsLoading(false)

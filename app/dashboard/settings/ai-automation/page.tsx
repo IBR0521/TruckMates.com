@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { mapLegacyRole } from "@/lib/roles"
+import { FeatureLock } from "@/components/billing/feature-lock"
 import { AiAutomationClientPage } from "./ui-client"
 
 export default async function AiAutomationSettingsPage() {
@@ -14,5 +15,13 @@ export default async function AiAutomationSettingsPage() {
     redirect("/dashboard")
   }
 
-  return <AiAutomationClientPage companyId={ctx.companyId} />
+  return (
+    <FeatureLock
+      featureKey="ai_autonomous_agent"
+      title="Autonomous AI agent"
+      description="Delegate repetitive dispatch and inbox triage to an audited agent loop — fewer surprise gaps between chat and executed work."
+    >
+      <AiAutomationClientPage companyId={ctx.companyId} />
+    </FeatureLock>
+  )
 }

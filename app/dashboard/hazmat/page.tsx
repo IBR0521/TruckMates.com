@@ -1,13 +1,12 @@
-import { PlanGateLayout } from "@/components/billing/plan-gate-layout"
+import { FeatureLock } from "@/components/billing/feature-lock"
 import { Card } from "@/components/ui/card"
 
-export default async function HazmatPage() {
+export default function HazmatPage() {
   return (
-    <PlanGateLayout
-      feature="hazmat_module"
+    <FeatureLock
+      featureKey="hazmat_module"
       title="HAZMAT"
-      description="Dedicated hazmat workflows, segregation checks, and shipping paper tools."
-      requiredPlanLabel="The hazmat module unlocks on the Fleet plan."
+      description="Segregation checks, endorsement validation, and shipping-paper tooling designed for placarded freight."
     >
       <div className="p-8 max-w-4xl mx-auto space-y-4">
         <h1 className="text-2xl font-bold">HAZMAT hub</h1>
@@ -18,6 +17,6 @@ export default async function HazmatPage() {
           </p>
         </Card>
       </div>
-    </PlanGateLayout>
+    </FeatureLock>
   )
 }

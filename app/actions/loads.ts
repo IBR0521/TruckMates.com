@@ -1103,7 +1103,10 @@ export async function createLoad(formData: {
         weight: data.weight_kg || data.weight || null,
       },
       contextTypes: ["load", "driver", "fleet"],
-    }).catch((err) => console.error("[Agent]", err))
+    }).catch((err) => {
+      console.error("[Agent]", err)
+      Sentry.captureException(err, { tags: { source: "agent", file: "loads.ts" } })
+    })
   }
   
   return { data, error: null, warning: loadQuotaWarning }
@@ -1454,7 +1457,10 @@ export async function updateLoad(
         truckId: data.truck_id || null,
       },
       contextTypes: ["load", "driver"],
-    }).catch((err) => console.error("[Agent]", err))
+    }).catch((err) => {
+      console.error("[Agent]", err)
+      Sentry.captureException(err, { tags: { source: "agent", file: "loads.ts" } })
+    })
   }
 
   // Auto-generate invoice when load status changes to "delivered"
@@ -1568,7 +1574,10 @@ export async function updateLoad(
         accessorials: data.accessorial_charges || null,
       },
       contextTypes: ["load", "financial"],
-    }).catch((err) => console.error("[Agent]", err))
+    }).catch((err) => {
+      console.error("[Agent]", err)
+      Sentry.captureException(err, { tags: { source: "agent", file: "loads.ts" } })
+    })
   }
 
   // Auto-generate rate confirmation when load status changes to confirmed

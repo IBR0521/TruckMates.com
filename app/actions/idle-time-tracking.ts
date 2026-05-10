@@ -89,7 +89,10 @@ export async function detectIdleTime(
             estimatedFuelWasted: Number(session.estimated_fuel_cost || 0),
           },
           contextTypes: ["fleet", "driver"],
-        }).catch((err) => console.error("[Agent]", err))
+        }).catch((err) => {
+          console.error("[Agent]", err)
+          Sentry.captureException(err, { tags: { source: "agent", file: "idle-time-tracking.ts" } })
+        })
       }
     }
 

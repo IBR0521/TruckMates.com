@@ -13,6 +13,8 @@ import { NotificationsCenter } from "@/components/notifications-center"
 import { FirstLoginTour } from "@/components/onboarding/first-login-tour"
 import { FcmTokenRegistrar } from "@/components/notifications/fcm-token-registrar"
 import { DemoSessionBanner } from "@/components/dashboard/demo-session-banner"
+import { DashboardBillingBanners } from "@/components/billing/dashboard-billing-banners"
+import { TrialHeaderBadge } from "@/components/billing/trial-header-badge"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -103,6 +105,7 @@ export default function DashboardLayoutClient({
             </button>
           </div>
           <div className="flex items-center gap-2">
+            <TrialHeaderBadge />
             <NotificationsCenter />
             <ThemeToggle />
             <Button 
@@ -141,6 +144,7 @@ export default function DashboardLayoutClient({
         </header>
 
         <DemoSessionBanner />
+        <DashboardBillingBanners />
 
         {/* Page Content */}
         <main id="main-content" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-background" role="main" tabIndex={-1}>

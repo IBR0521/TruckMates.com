@@ -155,3 +155,72 @@ export async function changePaddlePlan(params: {
     return { success: false, error: e instanceof Error ? e.message : "Plan change failed" }
   }
 }
+
+function paddleRestBase(): string {
+  return String(process.env.PADDLE_ENVIRONMENT || "sandbox").toLowerCase() === "production"
+    ? "https://api.paddle.com"
+    : "https://sandbox-api.paddle.com"
+}
+
+function firstPortalUrlFromPayload(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null
+  const urls = (data as { urls?: unknown }).urls
+  if (!urls || typeof urls !== "object") return null
+  const u = urls as Record<string, unknown>
+  const general = u.general
+  if (typeof general === "string" && general.startsWith("http")) return general
+  if (general && typeof general === "object") {
+    for (const v of Object.values(general as Record<string, unknown>)) {
+      if (typeof v === "string" && v.startsWith("http")) return v
+    }
+  }
+  const subs = u.subscriptions
+  if (Array.isArray(subs)) {
+    for (const item of subs) {
+      if (item && typeof item === "object") {
+        for (const v of Object.values(item as Record<string, unknown>)) {
+          if (typeof v === "string" && v.startsWith("http")) return v
+        }
+      }
+    }
+  }
+  return null
+}
+
+/** Authenticated Paddle customer portal URL (short-lived). */
+export async function createPaddleCustomerPortalSession(params: {
+  customerId: string
+  subscriptionIds?: string[]
+}): Promise<{ portalUrl: string | null; error: string | null }> {
+  const apiKey = String(process.env.PADDLE_API_KEY || "").trim()
+  if (!apiKey) {
+    return { portalUrl: null, error: "Paddle billing is not configured. Set PADDLE_API_KEY." }
+  }
+  const base = paddleRestBase()
+  try {
+    const body: { subscription_ids?: string[] } = {}
+    if (params.subscriptionIds?.length) {
+      body.subscription_ids = params.subscriptionIds
+    }
+    const res = await fetch(`${base}/customers/${encodeURIComponent(params.customerId)}/portal-sessions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    })
+    const json = (await res.json()) as {
+      data?: unknown
+      error?: { detail?: string; message?: string }
+    }
+    if (!res.ok) {
+      const msg = json?.error?.detail || json?.error?.message || `HTTP ${res.status}`
+      return { portalUrl: null, error: typeof msg === "string" ? msg : "Portal session failed" }
+    }
+    const url = firstPortalUrlFromPayload(json.data)
+    return url ? { portalUrl: url, error: null } : { portalUrl: null, error: "Paddle did not return a portal URL" }
+  } catch (e: unknown) {
+    return { portalUrl: null, error: e instanceof Error ? e.message : "Portal session failed" }
+  }
+}

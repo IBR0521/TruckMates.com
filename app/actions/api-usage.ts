@@ -6,10 +6,11 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import {
   mapBillableUsageToCategory,
   mapUsageActionToCategory,
-  monthlyLimitForPlan,
+  monthlyLimitForPlanTier,
   type GoogleUsageCategory,
 } from "@/lib/api-usage-plan-limits"
 import { isDemoCompanyById } from "@/lib/demo-company"
+import { getCompanyTier } from "@/lib/plan-enforcement"
 
 function monthKey(d = new Date()) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`
@@ -29,23 +30,6 @@ function actionsForCategory(category: GoogleUsageCategory): string[] {
       return ["toll_cost_estimate"]
     default:
       return []
-  }
-}
-
-async function activePlanNameForCompany(companyId: string): Promise<string | null> {
-  try {
-    const admin = createAdminClient()
-    const { data } = await admin
-      .from("subscriptions")
-      .select(`plan_id, subscription_plans!inner(name)`)
-      .eq("company_id", companyId)
-      .in("status", ["active", "trialing"])
-      .maybeSingle()
-
-    const row = data as { subscription_plans?: { name?: string } | null } | null
-    return row?.subscription_plans?.name?.toLowerCase() ?? null
-  } catch {
-    return null
   }
 }
 
@@ -156,8 +140,8 @@ async function maybeNotifyQuota(companyId: string, action: string, apiName?: str
     : mapUsageActionToCategory(action)
   if (!category) return
 
-  const plan = await activePlanNameForCompany(companyId)
-  const limit = monthlyLimitForPlan(plan, category)
+  const tier = await getCompanyTier(companyId)
+  const limit = monthlyLimitForPlanTier(tier, category)
   if (limit >= 9_000_000) return
 
   const used = await countMonthUsage(companyId, category)
@@ -199,8 +183,8 @@ export async function assertMonthlyGoogleMapsActionAllowed(
   const category = mapUsageActionToCategory(action)
   if (!category || category === "toll_routing") return { allowed: true }
 
-  const plan = await activePlanNameForCompany(companyId)
-  const limit = monthlyLimitForPlan(plan, category)
+  const tier = await getCompanyTier(companyId)
+  const limit = monthlyLimitForPlanTier(tier, category)
   if (limit >= UNLIMITED_THRESHOLD) return { allowed: true }
 
   const used = await countMonthUsage(companyId, category)
@@ -226,8 +210,8 @@ export async function assertMonthlyTollRoutingAllowed(
   }
 
   const category: GoogleUsageCategory = "toll_routing"
-  const plan = await activePlanNameForCompany(companyId)
-  const limit = monthlyLimitForPlan(plan, category)
+  const tier = await getCompanyTier(companyId)
+  const limit = monthlyLimitForPlanTier(tier, category)
   if (limit >= UNLIMITED_THRESHOLD) return { allowed: true }
 
   const used = await countMonthUsage(companyId, category)
