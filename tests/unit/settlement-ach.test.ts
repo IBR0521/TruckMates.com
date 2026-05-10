@@ -82,16 +82,7 @@ describe("app/actions/settlement-ach.ts", () => {
     mockGetCachedAuthContext.mockResolvedValue({ companyId: "c1", userId: "u1", error: null })
   })
 
-  it("executes Stripe transfer + payout for valid ACH settlement", async () => {
-    const { createClient } = await import("@/lib/supabase/server")
-    ;(createClient as unknown as Mock).mockResolvedValue(makeSupabaseMock({ id: "d1", stripe_account_id: "acct_1" }))
-
-    mockStripeClient.transfers.create.mockResolvedValue({ id: "tr_123" })
-    mockStripeClient.payouts.create.mockResolvedValue({
-      id: "po_123",
-      arrival_date: 1760000000,
-    })
-
+  it("returns structured error — ACH automation disabled (manual bank + mark paid)", async () => {
     const { executeSettlementAchTransfer } = await import("../../app/actions/settlement-ach")
     const result = await executeSettlementAchTransfer({
       settlementId: "set_1",
@@ -99,22 +90,13 @@ describe("app/actions/settlement-ach.ts", () => {
       amount: 125.5,
     })
 
-    expect(result.error).toBeNull()
-    expect(result.data?.transferId).toBe("tr_123")
-    expect(result.data?.payoutId).toBe("po_123")
-    expect(mockStripeClient.transfers.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        amount: 12550,
-        destination: "acct_1",
-      })
-    )
-    expect(mockStripeClient.payouts.create).toHaveBeenCalled()
+    expect(result.data).toBeNull()
+    expect(result.error).toMatch(/Automated ACH transfers are not currently supported/i)
+    expect(mockStripeClient.transfers.create).not.toHaveBeenCalled()
+    expect(mockStripeClient.payouts.create).not.toHaveBeenCalled()
   })
 
-  it("rejects ACH transfer when driver has no connected Stripe account", async () => {
-    const { createClient } = await import("@/lib/supabase/server")
-    ;(createClient as unknown as Mock).mockResolvedValue(makeSupabaseMock({ id: "d1", stripe_account_id: null }))
-
+  it("does not call Stripe for ACH when automation is disabled", async () => {
     const { executeSettlementAchTransfer } = await import("../../app/actions/settlement-ach")
     const result = await executeSettlementAchTransfer({
       settlementId: "set_2",
@@ -123,7 +105,7 @@ describe("app/actions/settlement-ach.ts", () => {
     })
 
     expect(result.data).toBeNull()
-    expect(result.error).toMatch(/not connected a bank account/i)
+    expect(result.error).toMatch(/process payment through your bank/i)
     expect(mockStripeClient.transfers.create).not.toHaveBeenCalled()
   })
 })

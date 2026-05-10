@@ -33,12 +33,11 @@ export async function POST(req: NextRequest) {
     req.headers.get("paddle-signature") || req.headers.get("Paddle-Signature") || ""
   const rawBody = await req.text()
 
-  let event: { eventType?: string; data?: Record<string, unknown> }
+  type PaddleWebhookEvent = { eventType?: string; data?: Record<string, unknown> }
+  let event: PaddleWebhookEvent
   try {
-    event = (await paddle.webhooks.unmarshal(rawBody, secret, signature)) as {
-      eventType?: string
-      data?: Record<string, unknown>
-    }
+    const unmarshaled = await paddle.webhooks.unmarshal(rawBody, secret, signature)
+    event = unmarshaled as unknown as PaddleWebhookEvent
   } catch {
     return NextResponse.json({ error: "Invalid webhook signature" }, { status: 400 })
   }
@@ -67,7 +66,8 @@ export async function POST(req: NextRequest) {
         if (customerId) patch.paddle_customer_id = customerId
         if (eventType === "subscription.canceled") {
           patch.subscription_status = "canceled"
-          const periodEnd = data.currentBillingPeriod?.endsAt
+          const billingPeriod = data.currentBillingPeriod as { endsAt?: string } | undefined
+          const periodEnd = billingPeriod?.endsAt
           if (typeof periodEnd === "string") patch.subscription_ends_at = periodEnd
         } else if (tier) {
           patch.subscription_tier = tier

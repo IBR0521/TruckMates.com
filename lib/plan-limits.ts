@@ -201,9 +201,7 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     permit_management: true,
     phone_support: true,
   },
-  enterprise: Object.fromEntries(
-    Object.keys(BASELINE_FALSE).map((k) => [k, true]),
-  ) as PlanFeatures,
+  enterprise: Object.fromEntries(Object.keys(BASELINE_FALSE).map((k) => [k, true])) as unknown as PlanFeatures,
 }
 
 const TIER_ORDER: PlanTier[] = [
