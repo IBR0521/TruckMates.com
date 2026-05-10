@@ -263,7 +263,17 @@ export function normalizePlanTier(raw: string | null | undefined): PlanTier {
     .toLowerCase()
     .replace(/-/g, "_") as PlanTier
   if (k in PLAN_LIMITS) return k
-  return "starter"
+
+  const original = String(raw || "").trim()
+  if (original && typeof window === "undefined") {
+    void import("@sentry/nextjs")
+      .then((S) =>
+        S.captureMessage(`Unrecognized plan tier encountered: ${original}`, "warning"),
+      )
+      .catch(() => {})
+  }
+
+  return "owner_operator"
 }
 
 export function nextPlanTier(tier: PlanTier): PlanTier | null {

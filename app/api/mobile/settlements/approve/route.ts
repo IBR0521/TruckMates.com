@@ -100,13 +100,11 @@ export async function POST(request: NextRequest) {
 
       const driverName = driverData?.name || `Driver ${driver.id.substring(0, 8)}`
 
-      // Send SMS to first admin who opted in (if phone exists)
+      // Send SMS to first admin who opted in (if phone exists). Omit net pay in body for privacy.
       if (admins && admins.length > 0 && admins[0].phone) {
-        await sendSMS(
-          admins[0].phone, 
-          `${driverName} approved settlement ${settlement_id.substring(0, 8)}. Status: ${updatedSettlement.status}`
-          // Don't include net pay amount in SMS for privacy
-        ).catch((err) => console.error("SMS notification error:", err))
+        await sendSMS(admins[0].phone, `${driverName} approved settlement ${settlement_id.substring(0, 8)}. Status: ${updatedSettlement.status}`, {
+          companyId,
+        }).catch((err) => console.error("SMS notification error:", err))
       }
     } catch (notificationError) {
       // Don't fail approval if notification fails

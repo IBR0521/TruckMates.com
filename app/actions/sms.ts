@@ -20,6 +20,15 @@ import * as Sentry from "@sentry/nextjs"
 import { rateLimitRedis } from "@/lib/rate-limit-redis"
 import { checkMonthlyUsage } from "@/lib/plan-enforcement"
 
+export type SendSMSResult = {
+  sent: boolean
+  success: boolean
+  error: string | null
+  messageId?: string
+  /** True when outbound SMS blocked by monthly SMS plan cap — callers may fall back or warn. */
+  quotaBlocked?: boolean
+}
+
 type SmsTemplateData = {
   routeName?: string
   status?: string
@@ -63,11 +72,12 @@ export async function sendSMS(
   phoneNumber: string,
   message: string,
   context?: { companyId?: string; driverId?: string },
-) {
+): Promise<SendSMSResult> {
   const globalRateLimit = await rateLimitRedis(`sms:send:${phoneNumber.trim()}`, { limit: 20, window: 60 })
   if (!globalRateLimit.success) {
     return {
       sent: false,
+      success: false,
       error: "Too many SMS attempts. Please retry in a minute.",
     }
   }
@@ -90,7 +100,12 @@ export async function sendSMS(
       } catch (e) {
         Sentry.captureException(e)
       }
-      return { sent: false, error: null }
+      return {
+        sent: false,
+        success: false,
+        error: "SMS quota exceeded. Upgrade your plan to send more messages.",
+        quotaBlocked: true,
+      }
     }
     if (usage.warningThreshold) {
       console.warn("[SMS] Monthly SMS quota warning threshold reached", {
@@ -107,7 +122,9 @@ export async function sendSMS(
   if (!twilio) {
     return {
       sent: false,
-      error: "SMS service not configured. Please add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER to environment variables.",
+      success: false,
+      error:
+        "SMS service not configured. Please add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER to environment variables.",
     }
   }
 
@@ -116,6 +133,7 @@ export async function sendSMS(
   if (!fromNumber) {
     return {
       sent: false,
+      success: false,
       error: "TWILIO_PHONE_NUMBER not configured",
     }
   }
@@ -141,6 +159,7 @@ export async function sendSMS(
         // Invalid format - return error instead of silently failing
         return {
           sent: false,
+          success: false,
           error: `Invalid phone number format: ${phoneNumber}. Phone numbers must include country code (e.g., +1234567890 for US, +447911123456 for UK).`,
         }
       }
@@ -150,6 +169,7 @@ export async function sendSMS(
       if (!e164Pattern.test(normalizedPhone.replace(/\s/g, ""))) {
         return {
           sent: false,
+          success: false,
           error: `Invalid phone number format: ${phoneNumber}. Must be in E.164 format (e.g., +1234567890).`,
         }
       }
@@ -181,6 +201,7 @@ export async function sendSMS(
 
     return {
       sent: true,
+      success: true,
       messageId: result.sid,
       error: null,
     }
@@ -188,6 +209,7 @@ export async function sendSMS(
     Sentry.captureException(error)
     return {
       sent: false,
+      success: false,
       error: errorMessage(error, "Failed to send SMS"),
     }
   }
@@ -270,6 +292,7 @@ export async function sendSMSNotification(
     sent: result.sent,
     messageId: result.messageId,
     error: result.error,
+    quotaBlocked: result.quotaBlocked === true,
     reason: result.error || (result.sent ? null : "Failed to send SMS"),
   }
 }
@@ -308,12 +331,12 @@ function generateSMSMessage(
 export async function sendSMSToDriver(
   driverId: string,
   message: string
-) {
+): Promise<SendSMSResult> {
   const supabase = await createClient()
   // EXT-005: Get authenticated user's company_id first
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
-    return { sent: false, error: ctx.error || "Not authenticated" }
+    return { sent: false, success: false, error: ctx.error || "Not authenticated" }
   }
 
   // EXT-005: Verify driver belongs to user's company before accessing phone number
@@ -325,12 +348,16 @@ export async function sendSMSToDriver(
     .maybeSingle()
 
   if (!driver?.phone) {
-    return { sent: false, error: "Driver phone number not found or access denied" }
+    return { sent: false, success: false, error: "Driver phone number not found or access denied" }
   }
 
   const driverRateLimit = await rateLimitRedis(`sms:driver:${ctx.companyId}:${driverId}`, { limit: 12, window: 60 })
   if (!driverRateLimit.success) {
-    return { sent: false, error: "Too many SMS attempts for this driver. Please retry shortly." }
+    return {
+      sent: false,
+      success: false,
+      error: "Too many SMS attempts for this driver. Please retry shortly.",
+    }
   }
 
   const sendResult = await sendSMS(driver.phone, message, { companyId: ctx.companyId, driverId: driver.id })
@@ -428,17 +455,21 @@ export async function sendSMSToDriverForCompanyAutomation(
   companyId: string,
   driverId: string,
   message: string,
-): Promise<{ sent: boolean; error: string | null }> {
+): Promise<SendSMSResult> {
   const cid = String(companyId || "").trim()
   const did = String(driverId || "").trim()
   const text = String(message || "").trim()
   if (!cid || !did || !text) {
-    return { sent: false, error: "companyId, driverId, and message are required" }
+    return {
+      sent: false,
+      success: false,
+      error: "companyId, driverId, and message are required",
+    }
   }
 
   const driverRateLimit = await rateLimitRedis(`sms:auto:${cid}:${did}`, { limit: 8, window: 60 })
   if (!driverRateLimit.success) {
-    return { sent: false, error: "SMS rate limited for this driver" }
+    return { sent: false, success: false, error: "SMS rate limited for this driver" }
   }
 
   const admin = createAdminClient()
@@ -451,11 +482,17 @@ export async function sendSMSToDriverForCompanyAutomation(
 
   const phone = String((driver as { phone?: string | null } | null)?.phone || "").trim()
   if (!phone) {
-    return { sent: false, error: "Driver phone number not found" }
+    return { sent: false, success: false, error: "Driver phone number not found" }
   }
 
   const sendResult = await sendSMS(phone, text, { companyId: cid, driverId: did })
-  return { sent: Boolean(sendResult.sent), error: sendResult.error ?? null }
+  if (sendResult.quotaBlocked) {
+    Sentry.captureMessage("[SMS] Automation blocked by monthly SMS quota", {
+      level: "warning",
+      extra: { companyId: cid, driverId: did },
+    })
+  }
+  return sendResult
 }
 
 // Check SMS configuration

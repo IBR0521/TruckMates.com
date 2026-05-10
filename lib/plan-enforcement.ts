@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs"
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   type PlanFeatures,
@@ -54,35 +55,42 @@ export async function checkResourceLimit(params: {
       .eq("status", "active")
     current = count ?? 0
   } else if (params.resourceType === "trailers") {
+    // Exclude retired trailers (Schema: trailers.status IN available, in_use, maintenance, out_of_service, retired)
     const { count } = await admin
       .from("trailers")
       .select("id", { count: "exact", head: true })
       .eq("company_id", params.companyId)
+      .neq("status", "retired")
     current = count ?? 0
   } else if (params.resourceType === "drivers") {
+    // Workforce drivers only — not inactive / on_leave (see app/dashboard/drivers filters)
     const { count } = await admin
       .from("drivers")
       .select("id", { count: "exact", head: true })
       .eq("company_id", params.companyId)
-      .eq("status", "active")
+      .in("status", ["active", "on_route", "off_duty"])
     current = count ?? 0
   } else if (params.resourceType === "user_seats") {
+    // Drivers / mobile-only legacy `user` rows do not consume office seats.
     const { count } = await admin
       .from("users")
       .select("id", { count: "exact", head: true })
       .eq("company_id", params.companyId)
+      .not("role", "in", '("driver","user")')
     current = count ?? 0
   } else if (params.resourceType === "customers") {
     const { count } = await admin
       .from("customers")
       .select("id", { count: "exact", head: true })
       .eq("company_id", params.companyId)
+      .eq("status", "active")
     current = count ?? 0
   } else if (params.resourceType === "vendors") {
     const { count } = await admin
       .from("vendors")
       .select("id", { count: "exact", head: true })
       .eq("company_id", params.companyId)
+      .eq("status", "active")
     current = count ?? 0
   }
 
@@ -180,6 +188,79 @@ export async function checkFeatureAccess(params: {
   return {
     allowed: hasFeatureAccess(tier, params.feature),
     currentTier: tier,
+  }
+}
+
+/** Enforces company document storage vs plan `storage_gb` (documents.file_size bytes). Graceful no-op if unmeasurable. */
+export async function checkStorageLimit(params: {
+  companyId: string
+  additionalBytes: number
+}): Promise<{
+  allowed: boolean
+  currentBytes: number
+  limitBytes: number
+  tier: PlanTier
+  percentUsed: number
+  skippedMeasurement?: boolean
+}> {
+  const tier = await getCompanyTier(params.companyId)
+  const limits = getPlanLimits(tier)
+  const limitGB = limits.storage_gb
+
+  const additionalBytes = Math.max(0, Math.floor(Number(params.additionalBytes) || 0))
+
+  if (isUnlimited(limitGB)) {
+    return {
+      allowed: true,
+      currentBytes: 0,
+      limitBytes: -1,
+      tier,
+      percentUsed: 0,
+    }
+  }
+
+  const limitBytes = limitGB * 1024 * 1024 * 1024
+
+  const admin = createAdminClient()
+
+  try {
+    const { data, error } = await admin.from("documents").select("file_size").eq("company_id", params.companyId)
+
+    if (error) {
+      Sentry.captureMessage(`checkStorageLimit: documents aggregation skipped (${error.message})`, "warning")
+      return {
+        allowed: true,
+        currentBytes: 0,
+        limitBytes,
+        tier,
+        percentUsed: 0,
+        skippedMeasurement: true,
+      }
+    }
+
+    const usageBeforeBytes = (data || []).reduce((sum, row) => sum + (Number((row as { file_size?: unknown }).file_size) || 0), 0)
+    const projectedBytes = usageBeforeBytes + additionalBytes
+    const percentUsed =
+      limitBytes > 0 ? Math.min(100, Math.round((projectedBytes / limitBytes) * 100)) : 0
+
+    return {
+      allowed: projectedBytes <= limitBytes,
+      /** Total bytes after hypothetical upload — matches enforcement decision. */
+      currentBytes: projectedBytes,
+      limitBytes,
+      tier,
+      percentUsed,
+    }
+  } catch (e: unknown) {
+    Sentry.captureException(e)
+    return {
+      allowed: true,
+      currentBytes: 0,
+      limitBytes,
+      tier,
+      percentUsed: 0,
+      skippedMeasurement: true,
+    }
   }
 }
 

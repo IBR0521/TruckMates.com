@@ -335,15 +335,20 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
     return { error: safeDbError(error), data: null }
   }
 
+  let smsWarning: string | undefined
   // Send SMS notification to driver if assigned (non-blocking)
   if (driverId && data) {
     try {
       const { sendSMSToDriver } = await import("./sms")
       const loadInfo = `${data.origin} → ${data.destination}`
-      await sendSMSToDriver(
+      const smsResult = await sendSMSToDriver(
         driverId,
         `TruckMates: New dispatch assigned! Load: ${data.shipment_number}, Route: ${loadInfo}`
       )
+      if (smsResult.quotaBlocked) {
+        smsWarning =
+          "SMS to driver was not sent — monthly quota exceeded. Driver notified via push notification instead."
+      }
     } catch (error) {
       // Silently fail - don't block assignment
       Sentry.captureException(error)
@@ -390,7 +395,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
     }
   }
   
-  return { data, error: null }
+  return { data, error: null, ...(smsWarning ? { smsWarning } : {}) }
 }
 
 /**
@@ -516,17 +521,46 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
     return { error: safeDbError(error), data: null }
   }
 
+  let smsWarning: string | undefined
   // Send SMS notification to driver if assigned (non-blocking)
   if (driverId && data) {
     try {
       const { sendSMSToDriver } = await import("./sms")
       const routeInfo = `${data.origin} → ${data.destination}`
-      await sendSMSToDriver(
+      const smsResult = await sendSMSToDriver(
         driverId,
         `TruckMates: New route assigned! Route: ${data.name || "Route"}, ${routeInfo}`
       )
+      if (smsResult.quotaBlocked) {
+        smsWarning =
+          "SMS to driver was not sent — monthly quota exceeded. Driver notified via push notification instead."
+      }
     } catch (error) {
       // Silently fail - don't block assignment
+      Sentry.captureException(error)
+    }
+    try {
+      const { data: driverUser } = await supabase
+        .from("drivers")
+        .select("user_id")
+        .eq("id", driverId)
+        .eq("company_id", userData.company_id)
+        .maybeSingle()
+      type DriverUid = { user_id?: string | null }
+      const du = driverUser as DriverUid | null
+      if (du?.user_id) {
+        const { sendPushToUser } = await import("./push-notifications")
+        await sendPushToUser(String(du.user_id), {
+          title: "New route assigned",
+          body: `${data.name || "Route"}: ${data.origin || "Origin"} -> ${data.destination || "Destination"}`,
+          data: {
+            type: "dispatch_assigned",
+            routeId: String(routeId),
+            link: `/dashboard/routes/${routeId}`,
+          },
+        })
+      }
+    } catch (error) {
       Sentry.captureException(error)
     }
   }
@@ -548,7 +582,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
     }
   }
   
-  return { data, error: null }
+  return { data, error: null, ...(smsWarning ? { smsWarning } : {}) }
 }
 
 export type DispatchPlanningLoadRow = {

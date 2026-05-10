@@ -10,13 +10,16 @@ import {
 } from "@/lib/plan-enforcement"
 import {
   getPlanLimits,
+  isUnlimited,
   minimumTierForFeature,
+  nextPlanTier,
   normalizePlanTier,
   planTierLabel,
   type PlanFeatures,
   type PlanTier,
 } from "@/lib/plan-limits"
 import { createCheckout, createCustomerPortalSession } from "@/lib/billing"
+import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 
 export async function getBillingPlanContext() {
   const ctx = await getCachedAuthContext()
@@ -93,6 +96,52 @@ export async function getCompanyPlanUsageSnapshot() {
 }
 
 const MANAGER_ROLES = new Set(["super_admin", "operations_manager"])
+
+const AI_QUOTA_BANNER_ROLES = new Set<EmployeeRole>(["super_admin", "operations_manager"])
+
+/** Dashboard AI quota banners: operations + super admins only (not dispatchers/drivers). */
+export async function getAiQuotaBannerContext() {
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const role = mapLegacyRole(ctx.user?.role)
+  if (!AI_QUOTA_BANNER_ROLES.has(role)) {
+    return {
+      error: null,
+      data: { eligible: false as const },
+    }
+  }
+
+  const companyId = ctx.companyId
+  const tier = await getCompanyTier(companyId)
+  const limits = getPlanLimits(tier)
+  if (isUnlimited(limits.ai_calls_per_month)) {
+    return { error: null, data: { eligible: false as const } }
+  }
+
+  const ai = await checkMonthlyUsage({ companyId, usageType: "ai_calls" })
+  const nextTier = nextPlanTier(tier)
+  let nextAiCalls: number | null = null
+  if (nextTier) {
+    const nl = getPlanLimits(nextTier).ai_calls_per_month
+    nextAiCalls = typeof nl === "number" && nl > 0 && !isUnlimited(nl) ? nl : null
+  }
+
+  return {
+    error: null,
+    data: {
+      eligible: true as const,
+      tier,
+      tierLabel: planTierLabel(tier),
+      nextTier,
+      nextTierLabel: nextTier ? planTierLabel(nextTier) : null,
+      nextTierAiCalls: nextAiCalls,
+      ai,
+    },
+  }
+}
 
 export async function startPlanCheckout(params: { tier: PlanTier; billingCycle: "monthly" | "annual" }) {
   const ctx = await getCachedAuthContext()

@@ -434,6 +434,9 @@ export default function DispatchesPage() {
         toast.error(result.error)
       } else {
         toast.success("Load assigned successfully")
+        if ("smsWarning" in result && result.smsWarning) {
+          toast.warning(result.smsWarning, { duration: 9000 })
+        }
         setLoadAssignments((prev) => {
           const next = { ...prev }
           delete next[loadId]
@@ -465,6 +468,9 @@ export default function DispatchesPage() {
         toast.error(result.error)
       } else {
         toast.success("Route assigned successfully")
+        if ("smsWarning" in result && result.smsWarning) {
+          toast.warning(result.smsWarning, { duration: 9000 })
+        }
         setRouteAssignments((prev) => {
           const next = { ...prev }
           delete next[routeId]
@@ -517,6 +523,9 @@ export default function DispatchesPage() {
         toast.error(result.error)
       } else {
         toast.success("Load assigned successfully")
+        if ("smsWarning" in result && result.smsWarning) {
+          toast.warning(result.smsWarning, { duration: 9000 })
+        }
         await loadData()
       }
     } catch (error: unknown) {

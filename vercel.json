@@ -47,6 +47,10 @@
     {
       "path": "/api/cron/sync-factoring-status",
       "schedule": "*/35 * * * *"
+    },
+    {
+      "path": "/api/cron/expire-trials",
+      "schedule": "20 * * * *"
     }
   ],
   "functions": {

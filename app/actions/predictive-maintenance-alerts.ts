@@ -9,7 +9,6 @@ import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { sendSMSNotification } from "./sms"
 import * as Sentry from "@sentry/nextjs"
 
 
@@ -99,7 +98,13 @@ export async function checkAndSendMaintenanceAlerts(
       // Send SMS
       try {
         const { sendSMS } = await import("./sms")
-        const smsResult = await sendSMS(manager.phone, message)
+        const smsResult = await sendSMS(manager.phone, message, { companyId: targetCompanyId })
+        if (smsResult.quotaBlocked) {
+          Sentry.captureMessage("[Maintenance alert] SMS blocked by monthly quota", {
+            level: "warning",
+            extra: { companyId: targetCompanyId, truckId },
+          })
+        }
 
         // Update alert status
         await supabase

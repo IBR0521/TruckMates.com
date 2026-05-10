@@ -80,6 +80,9 @@ export function DispatchAssist({ loadId, onAssigned, onClose }: DispatchAssistPr
         toast.error(result.error)
       } else {
         toast.success(`Assigned to ${suggestion.driver_name}`)
+        if ("smsWarning" in result && result.smsWarning) {
+          toast.warning(result.smsWarning, { duration: 9000 })
+        }
         onAssigned?.()
       }
     } catch (error: unknown) {

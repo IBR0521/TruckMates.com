@@ -9,6 +9,8 @@ import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-ses
 import { mapLegacyRole } from "@/lib/roles"
 import { checkViewPermission, checkCreatePermission, checkDeletePermission } from "@/lib/server-permissions"
 import { validateFileMagicBytes } from "@/lib/file-signature"
+import { checkStorageLimit } from "@/lib/plan-enforcement"
+import { getPlanLimits } from "@/lib/plan-limits"
 import * as Sentry from "@sentry/nextjs"
 /**
  * Documents:
@@ -410,6 +412,17 @@ export async function uploadDocument(
           `File content does not match declared type. Declared: ${magicValidation.normalizedDeclaredType || "unknown"}, ` +
           `detected: ${magicValidation.detectedType || "unknown"}.`,
         data: null,
+      }
+    }
+
+    const storageCheck = await checkStorageLimit({
+      companyId: ctx.companyId,
+      additionalBytes: file.size,
+    })
+    if (!storageCheck.allowed) {
+      return {
+        data: null,
+        error: `Storage limit reached (${getPlanLimits(storageCheck.tier).storage_gb} GB). Upgrade your plan for more storage.`,
       }
     }
 

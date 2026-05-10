@@ -6,6 +6,7 @@ import { logAutomationEvent } from "@/lib/ai/agent/settings"
 import { LOGISTICS_SYSTEM_PROMPT } from "@/lib/ai/prompts/system"
 import type { AgentAction } from "@/lib/ai/types"
 import { sendSMSToDriverForCompanyAutomation } from "@/app/actions/sms"
+import * as Sentry from "@sentry/nextjs"
 
 type ExecutionResult = {
   success: boolean
@@ -342,6 +343,12 @@ async function executeHosViolationPrevention(payload: Record<string, unknown>): 
   const parts: string[] = []
 
   const smsResult = await sendSMSToDriverForCompanyAutomation(companyId, driverId, smsBody)
+  if (smsResult.quotaBlocked) {
+    Sentry.captureMessage("[AI agent] SMS blocked by quota (HOS alert)", {
+      level: "warning",
+      extra: { companyId, driverId },
+    })
+  }
   if (smsResult.sent) {
     parts.push("SMS queued to driver")
   } else if (smsResult.error) {
@@ -635,7 +642,13 @@ async function executeIdleTimeAlert(payload: Record<string, unknown>): Promise<E
 
   try {
     const { sendSMSToDriverForCompanyAutomation } = await import("@/app/actions/sms")
-    await sendSMSToDriverForCompanyAutomation(companyId, driverId, smsBody)
+    const smsRes = await sendSMSToDriverForCompanyAutomation(companyId, driverId, smsBody)
+    if (smsRes.quotaBlocked) {
+      Sentry.captureMessage("[AI agent] SMS blocked by quota (idle alert)", {
+        level: "warning",
+        extra: { companyId, driverId },
+      })
+    }
   } catch (e: unknown) {
     console.error("[executeIdleTimeAlert] sms", e)
   }

@@ -283,6 +283,12 @@ export async function sendNotification(
       const { sendSMSNotification } = await import("./sms")
       // Type assertion: sendSMSNotification may not support all notification types
       const smsResult = await sendSMSNotification(userId, type as "route_update" | "load_update" | "maintenance_alert" | "payment_reminder" | "dispatch_assigned" | "violation_alert", data)
+      if (smsResult.quotaBlocked) {
+        Sentry.captureMessage("[Notification] SMS blocked by company monthly quota", {
+          level: "warning",
+          extra: { userId, type },
+        })
+      }
       results.sms = smsResult
     } catch (error: unknown) {
       Sentry.captureException(error)

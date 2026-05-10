@@ -577,15 +577,24 @@ export async function createAlert(formData: {
       if (sendSMS && alertRule.send_sms) {
         const { sendSMSNotification } = await import("./sms")
         // FIXED: Use correct notification type instead of hardcoded "load_update"
-        await sendSMSNotification(userId, smsNotificationType, {
+        void sendSMSNotification(userId, smsNotificationType, {
           title: formData.title,
           shipmentNumber: metaString("shipment_number"),
           truckNumber: metaString("truck_number"),
           driverName: metaString("driver_name"),
           serviceType: metaString("service_type"),
-        }).catch(() => {
-          // SMS might fail, continue with other channels
         })
+          .then((smsRes) => {
+            if (smsRes.quotaBlocked) {
+              Sentry.captureMessage("[Alert rule] SMS blocked by monthly quota", {
+                level: "warning",
+                extra: { userId },
+              })
+            }
+          })
+          .catch(() => {
+            // SMS might fail, continue with other channels
+          })
       }
       
       // Email (all except low priority)

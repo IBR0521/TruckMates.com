@@ -14,6 +14,7 @@ import { FirstLoginTour } from "@/components/onboarding/first-login-tour"
 import { FcmTokenRegistrar } from "@/components/notifications/fcm-token-registrar"
 import { DemoSessionBanner } from "@/components/dashboard/demo-session-banner"
 import { DashboardBillingBanners } from "@/components/billing/dashboard-billing-banners"
+import { AiQuotaBanner } from "@/components/billing/ai-quota-banner"
 import { TrialHeaderBadge } from "@/components/billing/trial-header-badge"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
@@ -145,6 +146,7 @@ export default function DashboardLayoutClient({
 
         <DemoSessionBanner />
         <DashboardBillingBanners />
+        <AiQuotaBanner />
 
         {/* Page Content */}
         <main id="main-content" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-background" role="main" tabIndex={-1}>
