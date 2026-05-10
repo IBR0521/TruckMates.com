@@ -10,7 +10,11 @@ import { validatePricingData, validateNonNegativeNumber, sanitizeString, validat
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 import { mapLegacyRole } from "@/lib/roles"
-import { evaluateCustomerCreditGate } from "@/lib/credit-check"
+import {
+  evaluateCustomerCreditGate,
+  insertCreditLimitOverrideAudit,
+  type DeferredCreditOverrideAudit,
+} from "@/lib/credit-check"
 
 type LoadValueRow = {
   id?: string | null
@@ -792,6 +796,8 @@ export async function createInvoice(formData: {
     [key: string]: unknown
   } | null = null
 
+  let deferredInvoiceCreditOverride: DeferredCreditOverrideAudit | null = null
+
   const customerNameForCredit = sanitizeString(formData.customer_name, 200)
   const { data: invoiceCustomerMatch } = await supabase
     .from("customers")
@@ -809,11 +815,13 @@ export async function createInvoice(formData: {
       additionalAmount: finalAmount,
       userRole: ctx.user?.role,
       userId: ctx.userId,
-      auditAction: "invoice_created_over_credit",
-      overrideAuditMessage: "Created invoice over credit limit",
+      overrideResourceType: "invoice",
     })
     if (!invoiceCredit.allowed) {
       return { data: null, error: invoiceCredit.error || "Credit check failed" }
+    }
+    if (invoiceCredit.deferredOverrideAudit) {
+      deferredInvoiceCreditOverride = invoiceCredit.deferredOverrideAudit
     }
   }
 
@@ -869,6 +877,17 @@ export async function createInvoice(formData: {
 
   if (!data) {
     return { data: null, error: "Invoice not created" }
+  }
+
+  if (deferredInvoiceCreditOverride) {
+    try {
+      await insertCreditLimitOverrideAudit({
+        ...deferredInvoiceCreditOverride,
+        resourceId: data.id,
+      })
+    } catch (auditErr) {
+      Sentry.captureException(auditErr)
+    }
   }
 
   // Auto-send invoice if enabled

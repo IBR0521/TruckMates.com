@@ -29,6 +29,12 @@ type ReverseGeocodeResult = {
   error: string | null
 }
 
+const MAP_KEY_FALLBACK_WARNING =
+  "State crossing detection requires Google Maps API. IFTA report will continue without state-by-state breakdown."
+
+const GEOCODE_FALLBACK_WARNING =
+  "Reverse geocoding failed. State crossings could not be determined for this trip."
+
 async function reverseGeocodeCoordinates(latitude: number, longitude: number): Promise<ReverseGeocodeResult> {
   try {
     const roundedKey = `${Math.round(latitude / GEOCODE_CACHE_PRECISION)}_${Math.round(longitude / GEOCODE_CACHE_PRECISION)}`
@@ -45,7 +51,7 @@ async function reverseGeocodeCoordinates(latitude: number, longitude: number): P
     if (!apiKey) {
       return {
         data: null,
-        error: "Map data unavailable. State crossing requires Google Maps API.",
+        error: MAP_KEY_FALLBACK_WARNING,
       }
     }
 
@@ -59,7 +65,7 @@ async function reverseGeocodeCoordinates(latitude: number, longitude: number): P
     })
 
     if (!response.ok) {
-      throw new Error("Failed to reverse geocode coordinates")
+      return { data: null, error: GEOCODE_FALLBACK_WARNING }
     }
 
     const data = await response.json()
@@ -181,7 +187,10 @@ export async function detectStateCrossing(params: {
 
     if (previousCrossingError) {
       Sentry.captureException(previousCrossingError)
-      return { error: previousCrossingError.message, data: null }
+      return {
+        error: previousCrossingError.message || "Could not load previous crossing.",
+        data: { crossings: [] },
+      }
     }
 
     // Check if state has changed
@@ -267,7 +276,7 @@ export async function detectStateCrossing(params: {
 
     if (crossingError) {
       Sentry.captureException(crossingError)
-      return { error: crossingError.message, data: null }
+      return { error: crossingError.message, data: { crossings: [] } }
     }
 
     return {
@@ -284,7 +293,7 @@ export async function detectStateCrossing(params: {
   } catch (error: unknown) {
     Sentry.captureException(error)
     const message = error instanceof Error ? errorMessage(error) : "Failed to detect state crossing"
-    return { error: message, data: null }
+    return { error: message, data: { crossings: [] } }
   }
 }
 
@@ -300,7 +309,7 @@ export async function getStateMileageBreakdown(params: {
 
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
-    return { error: ctx.error || "Not authenticated", data: null }
+    return { error: ctx.error || "Not authenticated", data: [] }
   }
 
   try {
@@ -317,14 +326,17 @@ export async function getStateMileageBreakdown(params: {
 
     if (error) {
       Sentry.captureException(error)
-      return { error: safeDbError(error), data: null }
+      return {
+        error: safeDbError(error),
+        data: [],
+      }
     }
 
     return { data: stateMileage || [], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
     const message = error instanceof Error ? errorMessage(error) : "Failed to get state mileage breakdown"
-    return { error: message, data: null }
+    return { error: message, data: [] }
   }
 }
 
@@ -342,7 +354,7 @@ export async function getStateCrossings(params: {
 
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
-    return { error: ctx.error || "Not authenticated", data: null }
+    return { error: ctx.error || "Not authenticated", data: [] }
   }
 
   try {
@@ -378,14 +390,14 @@ export async function getStateCrossings(params: {
 
     if (error) {
       Sentry.captureException(error)
-      return { error: safeDbError(error), data: null }
+      return { error: safeDbError(error), data: [] }
     }
 
     return { data: crossings || [], error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
     const message = error instanceof Error ? errorMessage(error) : "Failed to get state crossings"
-    return { error: message, data: null }
+    return { error: message, data: [] }
   }
 }
 

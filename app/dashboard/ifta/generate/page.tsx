@@ -66,6 +66,9 @@ export default function GenerateIFTAPage() {
       if (result.error) {
         toast.error(result.error)
       } else {
+        if (result.warning) {
+          toast.warning(result.warning)
+        }
         toast.success("IFTA report generated successfully")
         router.push("/dashboard/ifta")
       }

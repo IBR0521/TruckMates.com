@@ -16,7 +16,11 @@ import { requireActiveSubscriptionForWrite } from "@/lib/subscription-access"
 import { capturePostHogServerEvent } from "@/lib/analytics/posthog-server"
 import { checkMonthlyUsage, getCompanyTier } from "@/lib/plan-enforcement"
 import { formatLimitErrorMessage, getPlanLimits, nextPlanTier } from "@/lib/plan-limits"
-import { evaluateCustomerCreditGate } from "@/lib/credit-check"
+import {
+  evaluateCustomerCreditGate,
+  insertCreditLimitOverrideAudit,
+  type DeferredCreditOverrideAudit,
+} from "@/lib/credit-check"
 
 /** Subset of load fields used for background notifications after updates */
 type LoadUpdateNotificationPayload = {
@@ -557,6 +561,8 @@ export async function createLoad(formData: {
     // with error code 23505 (unique violation), which should be handled in the insert below
   }
 
+  let deferredLoadCreditOverride: DeferredCreditOverrideAudit | null = null
+
   let routeId = formData.route_id || null
 
   // If no route is assigned, automatically create one if setting is enabled (skip for multi-delivery with "Multiple Locations")
@@ -957,24 +963,20 @@ export async function createLoad(formData: {
         Number(formData.estimated_revenue) ||
         0
     )
-    const { data: creditCustomer } = await supabase
-      .from("customers")
-      .select("id, name")
-      .eq("id", formData.customer_id)
-      .eq("company_id", ctx.companyId)
-      .maybeSingle()
     const creditCheck = await evaluateCustomerCreditGate({
       companyId: ctx.companyId,
       customerId: formData.customer_id,
-      customerName: String(creditCustomer?.name || ""),
+      customerName: "",
       additionalAmount: estimatedLoadValue,
       userRole: ctx.user?.role,
       userId: ctx.userId,
-      auditAction: "load_created_over_credit",
-      overrideAuditMessage: "Created load over credit limit",
+      overrideResourceType: "load",
     })
     if (!creditCheck.allowed) {
       return { error: creditCheck.error || "Credit check failed", data: null }
+    }
+    if (creditCheck.deferredOverrideAudit) {
+      deferredLoadCreditOverride = creditCheck.deferredOverrideAudit
     }
   }
 
@@ -992,6 +994,17 @@ export async function createLoad(formData: {
 
   if (error || !data) {
     return { error: error?.message || "Failed to create load", data: null }
+  }
+
+  if (deferredLoadCreditOverride) {
+    try {
+      await insertCreditLimitOverrideAudit({
+        ...deferredLoadCreditOverride,
+        resourceId: data.id,
+      })
+    } catch (auditErr) {
+      Sentry.captureException(auditErr)
+    }
   }
 
   // DAT-001 FIX: Update truck status to "in_use" when load is created with truck_id

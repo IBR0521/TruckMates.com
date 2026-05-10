@@ -10,7 +10,7 @@ import Link from "next/link"
 import { useState, useEffect, useMemo } from "react"
 import { approveSettlementAsDriver, getSettlements, deleteSettlement, markSettlementPaid } from "@/app/actions/accounting"
 import { getDrivers } from "@/app/actions/drivers"
-import { createDriverStripeOnboardingLink } from "@/app/actions/settlement-ach"
+import { ACH_DISABLED_MESSAGE, createDriverStripeOnboardingLink } from "@/app/actions/settlement-ach"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -148,7 +148,12 @@ export default function SettlementsPage() {
   const handleConnectBank = async () => {
     const result = await createDriverStripeOnboardingLink()
     if (result.error || !result.data?.url) {
-      toast.error(result.error || "Failed to start bank onboarding")
+      const msg = result.error || "Failed to start bank onboarding"
+      if (msg === ACH_DISABLED_MESSAGE) {
+        toast.warning(msg)
+      } else {
+        toast.error(msg)
+      }
       return
     }
     window.open(result.data.url, "_blank", "noopener,noreferrer")

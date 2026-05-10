@@ -141,6 +141,9 @@ export async function createIFTAReport(formData: {
   if (formData.period_start) periodStart = formData.period_start
   if (formData.period_end) periodEnd = formData.period_end
 
+  /** Non-fatal: e.g. DB RPC unavailable; report can still use trip sheets / ELD / routes fallback. */
+  let iftaGpsMileageWarning: string | null = null
+
   // State mileage: GPS/ELD state crossings + manual IFTA trip sheets (no ELD required)
   const { getStateMileageBreakdown } = await import("./ifta-state-crossing")
   const { getTripSheetAggregatesForIFTA } = await import("./ifta-trip-sheet")
@@ -150,6 +153,10 @@ export async function createIFTAReport(formData: {
     start_date: periodStart,
     end_date: periodEnd,
   })
+  if (stateMileageResult.error) {
+    iftaGpsMileageWarning = stateMileageResult.error
+    Sentry.captureMessage(`[IFTA] State mileage breakdown: ${stateMileageResult.error}`, "warning")
+  }
 
   const tripSheetAgg = await getTripSheetAggregatesForIFTA({
     truck_ids: validTruckIds,
@@ -415,6 +422,6 @@ Options:
   })
 
   revalidatePath("/dashboard/ifta")
-  return { data, error: null }
+  return { data, error: null, warning: iftaGpsMileageWarning }
 }
 

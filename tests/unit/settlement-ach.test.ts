@@ -12,6 +12,44 @@ const mockStripeClient = {
   },
 }
 
+/** Minimal chain for getStripeClient + executeSettlementAchTransfer when Stripe env is unset. */
+function createSupabaseSettlementMock(driver: { id: string; stripe_account_id: string | null } | null) {
+  return {
+    from: vi.fn((table: string) => {
+      if (table === "company_integrations") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(async () => ({ data: null, error: null })),
+            })),
+          })),
+        }
+      }
+      if (table === "drivers") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                maybeSingle: vi.fn(async () => ({ data: driver, error: null })),
+              })),
+            })),
+          })),
+        }
+      }
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(async () => ({ data: null, error: null })),
+            })),
+            maybeSingle: vi.fn(async () => ({ data: null, error: null })),
+          })),
+        })),
+      }
+    }),
+  }
+}
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }))
@@ -40,49 +78,28 @@ vi.mock("stripe", () => ({
   },
 }))
 
-function makeSupabaseMock(driver: { id: string; stripe_account_id: string | null } | null) {
-  return {
-    from: vi.fn((table: string) => {
-      if (table === "drivers") {
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                maybeSingle: vi.fn(async () => ({ data: driver, error: null })),
-              })),
-            })),
-          })),
-        }
-      }
-      if (table === "company_integrations") {
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              maybeSingle: vi.fn(async () => ({ data: null, error: null })),
-            })),
-          })),
-        }
-      }
-      return {
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            maybeSingle: vi.fn(async () => ({ data: null, error: null })),
-          })),
-        })),
-      }
-    }),
-  }
-}
-
 describe("app/actions/settlement-ach.ts", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
-    process.env.STRIPE_SECRET_KEY = "sk_test_123"
-    mockGetCachedAuthContext.mockResolvedValue({ companyId: "c1", userId: "u1", error: null })
+    delete process.env.STRIPE_SECRET_KEY
+
+    mockGetCachedAuthContext.mockResolvedValue({
+      companyId: "c1",
+      userId: "u1",
+      error: null,
+      user: { role: "driver", id: "u1" },
+    })
+
+    const { createClient } = await import("@/lib/supabase/server")
+    const supabaseMock = createSupabaseSettlementMock({
+      id: "d1",
+      stripe_account_id: null,
+    })
+    ;(createClient as unknown as Mock).mockResolvedValue(supabaseMock)
   })
 
-  it("returns structured error — ACH automation disabled (manual bank + mark paid)", async () => {
+  it("returns structured error when Stripe is not configured (ACH disabled)", async () => {
     const { executeSettlementAchTransfer } = await import("../../app/actions/settlement-ach")
     const result = await executeSettlementAchTransfer({
       settlementId: "set_1",
@@ -91,12 +108,12 @@ describe("app/actions/settlement-ach.ts", () => {
     })
 
     expect(result.data).toBeNull()
-    expect(result.error).toMatch(/Automated ACH transfers are not currently supported/i)
+    expect(result.error).toMatch(/Automated ACH transfers are not currently available/i)
     expect(mockStripeClient.transfers.create).not.toHaveBeenCalled()
     expect(mockStripeClient.payouts.create).not.toHaveBeenCalled()
   })
 
-  it("does not call Stripe for ACH when automation is disabled", async () => {
+  it("mentions manual bank payment when ACH is unavailable", async () => {
     const { executeSettlementAchTransfer } = await import("../../app/actions/settlement-ach")
     const result = await executeSettlementAchTransfer({
       settlementId: "set_2",
@@ -109,4 +126,3 @@ describe("app/actions/settlement-ach.ts", () => {
     expect(mockStripeClient.transfers.create).not.toHaveBeenCalled()
   })
 })
-
