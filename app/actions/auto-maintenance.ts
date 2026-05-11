@@ -1,17 +1,21 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
-import { createMaintenance } from "./maintenance"
+import { createMaintenance, createMaintenanceAdmin } from "./maintenance"
 
 /**
  * Auto-schedule maintenance based on mileage thresholds
  * This runs automatically when truck mileage is updated
  */
-export async function autoScheduleMaintenanceFromMileage(truckId: string): Promise<{
+export async function autoScheduleMaintenanceFromMileage(
+  truckId: string,
+  cron?: { companyId: string },
+): Promise<{
   data: { scheduled: number; skipped: number } | null
   error: string | null
 }> {
@@ -22,11 +26,17 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
       return { error: "Invalid truck ID", data: null }
     }
 
-    const supabase = await createClient()
-  const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
-    return { error: ctx.error || "Not authenticated", data: null }
-  }
+    const cronCompanyId = cron?.companyId ? String(cron.companyId).trim() : ""
+    const supabase = cronCompanyId ? createAdminClient() : await createClient()
+    const ctx = cronCompanyId
+      ? { error: null as string | null, companyId: cronCompanyId }
+      : await getCachedAuthContext()
+    if (!cronCompanyId && (ctx.error || !ctx.companyId)) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
+    if (!ctx.companyId) {
+      return { error: "Not authenticated", data: null }
+    }
 
   // Get truck with current mileage
   const { data: truck, error: truckError } = await supabase
@@ -168,7 +178,7 @@ export async function autoScheduleMaintenanceFromMileage(truckId: string): Promi
   // Check and send predictive maintenance alerts (500 miles before service)
   try {
     const { checkAndSendMaintenanceAlerts } = await import("./predictive-maintenance-alerts")
-    await checkAndSendMaintenanceAlerts(truckId, currentMileage)
+    await checkAndSendMaintenanceAlerts(truckId, currentMileage, ctx.companyId)
   } catch (error) {
     Sentry.captureException(error)
     // Don't fail the function if alert check fails
@@ -196,51 +206,100 @@ export async function autoScheduleMaintenanceForAllTrucks(): Promise<{
   try {
     const supabase = await createClient()
 
-  const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
-    return { error: ctx.error || "Not authenticated", data: null }
-  }
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { error: ctx.error || "Not authenticated", data: null }
+    }
 
-  // Get all active trucks
-  // V3-007 FIX: Add LIMIT to prevent unbounded queries
-  const { data: trucks, error: trucksError } = await supabase
-    .from("trucks")
-    .select("id")
-    .eq("company_id", ctx.companyId)
-    .eq("status", "active")
-    .limit(1000)
+    // Get all active trucks
+    // V3-007 FIX: Add LIMIT to prevent unbounded queries
+    const { data: trucks, error: trucksError } = await supabase
+      .from("trucks")
+      .select("id")
+      .eq("company_id", ctx.companyId)
+      .eq("status", "active")
+      .limit(1000)
 
-  if (trucksError) {
-    return { error: trucksError.message, data: null }
-  }
+    if (trucksError) {
+      return { error: trucksError.message, data: null }
+    }
 
-  if (!trucks || trucks.length === 0) {
+    if (!trucks || trucks.length === 0) {
+      return {
+        data: { trucks_processed: 0, total_scheduled: 0, total_skipped: 0 },
+        error: null,
+      }
+    }
+
+    let totalScheduled = 0
+    let totalSkipped = 0
+
+    // Process each truck
+    for (const truck of trucks) {
+      const result = await autoScheduleMaintenanceFromMileage(truck.id)
+      if (result.data) {
+        totalScheduled += result.data.scheduled
+        totalSkipped += result.data.skipped
+      }
+    }
+
     return {
-      data: { trucks_processed: 0, total_scheduled: 0, total_skipped: 0 },
+      data: {
+        trucks_processed: trucks.length,
+        total_scheduled: totalScheduled,
+        total_skipped: totalSkipped,
+      },
       error: null,
     }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
   }
+}
 
-  let totalScheduled = 0
-  let totalSkipped = 0
+/** Cron: active trucks across all companies — no session. */
+export async function autoScheduleMaintenanceForAllTrucksForCron(): Promise<{
+  data: { trucks_processed: number; total_scheduled: number; total_skipped: number } | null
+  error: string | null
+}> {
+  try {
+    const admin = createAdminClient()
+    const { data: trucks, error: trucksError } = await admin
+      .from("trucks")
+      .select("id, company_id")
+      .eq("status", "active")
+      .limit(5000)
 
-  // Process each truck
-  for (const truck of trucks) {
-    const result = await autoScheduleMaintenanceFromMileage(truck.id)
-    if (result.data) {
-      totalScheduled += result.data.scheduled
-      totalSkipped += result.data.skipped
+    if (trucksError) {
+      return { error: trucksError.message, data: null }
     }
-  }
 
-  return {
-    data: {
-      trucks_processed: trucks.length,
-      total_scheduled: totalScheduled,
-      total_skipped: totalSkipped,
-    },
-    error: null,
-  }
+    if (!trucks || trucks.length === 0) {
+      return { data: { trucks_processed: 0, total_scheduled: 0, total_skipped: 0 }, error: null }
+    }
+
+    let totalScheduled = 0
+    let totalSkipped = 0
+
+    for (const row of trucks) {
+      const id = String((row as { id?: string }).id || "")
+      const companyId = String((row as { company_id?: string }).company_id || "")
+      if (!id || !companyId) continue
+      const result = await autoScheduleMaintenanceFromMileage(id, { companyId })
+      if (result.data) {
+        totalScheduled += result.data.scheduled
+        totalSkipped += result.data.skipped
+      }
+    }
+
+    return {
+      data: {
+        trucks_processed: trucks.length,
+        total_scheduled: totalScheduled,
+        total_skipped: totalSkipped,
+      },
+      error: null,
+    }
   } catch (error: unknown) {
     Sentry.captureException(error)
     return { error: errorMessage(error, "An unexpected error occurred"), data: null }

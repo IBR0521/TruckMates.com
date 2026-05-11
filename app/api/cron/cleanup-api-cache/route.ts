@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { errorMessage, sanitizeError } from "@/lib/error-message"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getAdminClientForCron } from "@/lib/cron/admin-context"
 
 /** Delete expired rows from api_cache (Google/EIA/HERE response cache). Vercel Cron + CRON_SECRET. */
 export async function GET(request: Request) {
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const admin = createAdminClient()
+    const admin = getAdminClientForCron()
     const now = new Date().toISOString()
 
     const { data: deleted, error } = await admin.from("api_cache").delete().lt("expires_at", now).select("id")

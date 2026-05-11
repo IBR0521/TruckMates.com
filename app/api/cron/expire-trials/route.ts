@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getAdminClientForCron } from "@/lib/cron/admin-context"
 import * as Sentry from "@sentry/nextjs"
 
 /**
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const admin = createAdminClient()
+    const admin = getAdminClientForCron()
     const { data, error } = await admin.rpc("apply_expired_trial_downgrades")
 
     if (error) {

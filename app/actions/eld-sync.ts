@@ -2099,33 +2099,132 @@ function calculateDuration(start: string, end: string): number | null {
   }
 }
 
+/** Map `eld_devices` row (admin fetch) into the shape used by provider sync functions. */
+function eldDeviceRowToSyncRow(row: Record<string, unknown>): EldDeviceSyncRow {
+  return {
+    id: String(row.id ?? ""),
+    company_id: String(row.company_id ?? ""),
+    truck_id: (row.truck_id as string | null | undefined) ?? null,
+    driver_id: (row.driver_id as string | null | undefined) ?? undefined,
+    api_key: (row.api_key as string | null | undefined) ?? undefined,
+    api_secret: (row.api_secret as string | null | undefined) ?? undefined,
+    api_endpoint: (row.api_endpoint as string | null | undefined) ?? undefined,
+    provider_device_id: String(row.provider_device_id ?? "").trim(),
+    provider: (row.provider as string | null | undefined) ?? null,
+    status: (row.status as string | null | undefined) ?? null,
+    device_name: (row.device_name as string | null | undefined) ?? null,
+    last_sync_at: (row.last_sync_at as string | null | undefined) ?? null,
+    lastSyncAt: (row.lastSyncAt as string | null | undefined) ?? undefined,
+  }
+}
+
+/**
+ * Sync one device using service role (no user session). Used by Vercel/pg cron only.
+ * `syncKeepTruckinData` / `syncSamsaraData` / `syncGeotabData` already use `createAdminClient()` for writes.
+ */
+async function syncELDDeviceAdmin(device: EldDeviceSyncRow): Promise<{ data: unknown; error: string | null }> {
+  if (!device.id || !device.company_id) {
+    return { data: null, error: "Invalid device row (missing id or company_id)" }
+  }
+
+  const safetyBufferMs = 5 * 60 * 1000
+  const lastSyncAt = device.last_sync_at || device.lastSyncAt
+  const sinceMs = lastSyncAt
+    ? Math.max(0, new Date(lastSyncAt).getTime() - safetyBufferMs)
+    : Date.now() - 24 * 60 * 60 * 1000
+
+  const provider = String(device.provider || "").trim().toLowerCase()
+  switch (provider) {
+    case "keeptruckin":
+      return await syncKeepTruckinData(device, sinceMs)
+    case "samsara":
+      return await syncSamsaraData(device, sinceMs)
+    case "geotab":
+      return await syncGeotabData(device, sinceMs)
+    default:
+      return {
+        data: null,
+        error: `Provider ${device.provider || "(unknown)"} not yet supported`,
+      }
+  }
+}
+
+/**
+ * Cron: all active ELD devices across tenants — no `getCachedAuthContext()`.
+ */
+export async function syncAllELDDevicesForCron(): Promise<{
+  data: { synced: number; failed: number; companies: number } | null
+  error: string | null
+}> {
+  const admin = createAdminClient()
+
+  const { data: rows, error } = await admin
+    .from("eld_devices")
+    .select(
+      "id, company_id, truck_id, device_name, provider, status, last_sync_at, provider_device_id, api_key, api_secret, api_endpoint",
+    )
+    .eq("status", "active")
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+
+  if (!rows || rows.length === 0) {
+    return { data: { synced: 0, failed: 0, companies: 0 }, error: null }
+  }
+
+  const companyIds = new Set<string>()
+  let synced = 0
+  let failed = 0
+
+  for (const raw of rows) {
+    const row = raw as Record<string, unknown>
+    const cid = String(row.company_id || "")
+    if (cid) companyIds.add(cid)
+
+    const device = eldDeviceRowToSyncRow(row)
+    try {
+      const result = await syncELDDeviceAdmin(device)
+      if (result.error) {
+        failed += 1
+        console.warn(`[Cron sync-eld] Device ${device.id} failed: ${result.error}`)
+      } else {
+        synced += 1
+      }
+    } catch (err) {
+      failed += 1
+      console.error(`[Cron sync-eld] Device ${device.id} threw:`, err)
+    }
+  }
+
+  return {
+    data: { synced, failed, companies: companyIds.size },
+    error: null,
+  }
+}
+
+/** UI / server actions: shape returned after a successful provider sync (counts vary by provider). */
+export type ELDDeviceSyncActionResult = {
+  error: string | null
+  data: {
+    logs?: number
+    locations?: number
+    events?: number
+    clocks?: number
+    dvirs?: number
+  } | null
+}
+
 // Main sync function - syncs a single device
-export async function syncELDDevice(deviceId: string) {
+export async function syncELDDevice(deviceId: string): Promise<ELDDeviceSyncActionResult> {
   const deviceResult = await getELDDevice(deviceId)
   
   if (deviceResult.error || !deviceResult.data) {
     return { error: deviceResult.error || "Device not found", data: null }
   }
 
-  const device = deviceResult.data
-  // Prevent unbounded `eld_locations` growth by only inserting provider data
-  // newer than the last successful sync (with a small safety buffer).
-  const safetyBufferMs = 5 * 60 * 1000 // 5 minutes
-  const lastSyncAt = device.last_sync_at || device.lastSyncAt
-  const sinceMs = lastSyncAt
-    ? Math.max(0, new Date(lastSyncAt).getTime() - safetyBufferMs)
-    : Date.now() - 24 * 60 * 60 * 1000 // fallback: last 24 hours
-
-  switch (device.provider) {
-    case 'keeptruckin':
-      return await syncKeepTruckinData(device, sinceMs)
-    case 'samsara':
-      return await syncSamsaraData(device, sinceMs)
-    case 'geotab':
-      return await syncGeotabData(device, sinceMs)
-    default:
-      return { error: `Provider ${device.provider} not yet supported`, data: null }
-  }
+  const device = deviceResult.data as EldDeviceSyncRow
+  return (await syncELDDeviceAdmin(device)) as ELDDeviceSyncActionResult
 }
 
 // Sync all active devices for a company

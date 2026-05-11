@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
-import { autoScheduleMaintenanceForAllTrucks } from "@/app/actions/auto-maintenance"
+import { autoScheduleMaintenanceForAllTrucksForCron } from "@/app/actions/auto-maintenance"
 
 // Cron endpoint to auto-schedule maintenance for all trucks
 // Can be called by Vercel Cron or external cron service
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await autoScheduleMaintenanceForAllTrucks()
+    const result = await autoScheduleMaintenanceForAllTrucksForCron()
 
     if (result.error) {
       return NextResponse.json(

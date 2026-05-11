@@ -6,6 +6,7 @@ import { safeDbError } from "@/lib/utils/error"
  * Send SMS alerts 500 miles before maintenance is due
  */
 
+import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -23,8 +24,8 @@ export async function checkAndSendMaintenanceAlerts(
 ) {
   // FIXED: Remove auth requirement - this function is called from background triggers
   // Get company_id from truck record (works for both authenticated and background calls)
-  const supabase = await createClient()
-  
+  const supabase = createAdminClient()
+
   const { data: truckData, error: truckError } = await supabase
     .from("trucks")
     .select("company_id")

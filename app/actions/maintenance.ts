@@ -4,6 +4,7 @@ import { safeDbError } from "@/lib/utils/error"
 import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { sanitizeString, validateRequiredString, validateDate, validatePositiveNumber } from "@/lib/validation"
@@ -183,6 +184,129 @@ export async function createMaintenance(formData: {
       Sentry.captureException(error)
     }
     
+    return { data, error: null }
+  } catch (error: unknown) {
+    Sentry.captureException(error)
+    return { error: errorMessage(error, "An unexpected error occurred"), data: null }
+  }
+}
+
+/** Service-role insert for cron / background jobs. Validates asset belongs to `companyId`. */
+export async function createMaintenanceAdmin(
+  companyId: string,
+  formData: {
+    truck_id?: string
+    trailer_id?: string
+    service_type: string
+    scheduled_date: string
+    current_mileage?: number
+    priority?: string
+    estimated_cost?: number
+    notes?: string
+    vendor?: string
+  },
+) {
+  try {
+    const admin = createAdminClient()
+    const cid = String(companyId || "").trim()
+    if (!cid) return { error: "companyId is required", data: null }
+
+    if (!formData.truck_id && !formData.trailer_id) {
+      return { error: "Truck or trailer is required", data: null }
+    }
+    if (formData.truck_id && formData.trailer_id) {
+      return { error: "Maintenance can target either a truck or trailer, not both", data: null }
+    }
+
+    if (formData.truck_id) {
+      const { data: truck, error: truckError } = await admin
+        .from("trucks")
+        .select("id")
+        .eq("id", formData.truck_id)
+        .eq("company_id", cid)
+        .maybeSingle()
+      if (truckError || !truck) {
+        return { error: "Truck not found or does not belong to company", data: null }
+      }
+    }
+
+    if (formData.trailer_id) {
+      const { data: trailer, error: trailerError } = await admin
+        .from("trailers")
+        .select("id")
+        .eq("id", formData.trailer_id)
+        .eq("company_id", cid)
+        .maybeSingle()
+      if (trailerError || !trailer) {
+        return { error: "Trailer not found or does not belong to company", data: null }
+      }
+    }
+
+    if (formData.truck_id && !validateRequiredString(formData.truck_id, 1, 100)) {
+      return { error: "Truck ID is invalid", data: null }
+    }
+    if (formData.trailer_id && !validateRequiredString(formData.trailer_id, 1, 100)) {
+      return { error: "Trailer ID is invalid", data: null }
+    }
+    if (!validateRequiredString(formData.service_type, 1, 100)) {
+      return { error: "Service type is required and must be between 1 and 100 characters", data: null }
+    }
+    if (!validateDate(formData.scheduled_date)) {
+      return { error: "Invalid scheduled date format (use YYYY-MM-DD)", data: null }
+    }
+
+    const sanitizedServiceType = sanitizeString(formData.service_type, 100)
+    const sanitizedPriority = formData.priority ? sanitizeString(formData.priority, 20) : "normal"
+    const sanitizedNotes = formData.notes ? sanitizeString(formData.notes, 2000) : null
+    const sanitizedVendor = formData.vendor ? sanitizeString(formData.vendor, 200) : null
+
+    if (formData.current_mileage !== undefined && formData.current_mileage !== null) {
+      if (!validatePositiveNumber(formData.current_mileage)) {
+        return { error: "Current mileage must be a positive number", data: null }
+      }
+    }
+    if (formData.estimated_cost !== undefined && formData.estimated_cost !== null) {
+      if (!validatePositiveNumber(formData.estimated_cost)) {
+        return { error: "Estimated cost must be a positive number", data: null }
+      }
+    }
+
+    const { data, error } = await admin
+      .from("maintenance")
+      .insert({
+        company_id: cid,
+        truck_id: formData.truck_id ? sanitizeString(formData.truck_id, 100) : null,
+        trailer_id: formData.trailer_id ? sanitizeString(formData.trailer_id, 100) : null,
+        service_type: sanitizedServiceType,
+        scheduled_date: formData.scheduled_date,
+        mileage: formData.current_mileage ? Number(formData.current_mileage) : null,
+        priority: sanitizedPriority,
+        estimated_cost: formData.estimated_cost ? Number(formData.estimated_cost) : null,
+        notes: sanitizedNotes,
+        vendor: sanitizedVendor,
+        status: "scheduled",
+      })
+      .select()
+      .single()
+
+    if (error) {
+      return { error: safeDbError(error), data: null }
+    }
+
+    revalidatePath("/dashboard/maintenance")
+    try {
+      const { triggerWebhook } = await import("./webhooks")
+      await triggerWebhook(cid, "maintenance.scheduled", {
+        maintenance_id: data.id,
+        truck_id: formData.truck_id || null,
+        trailer_id: formData.trailer_id || null,
+        service_type: formData.service_type,
+        scheduled_date: formData.scheduled_date,
+      })
+    } catch (error) {
+      Sentry.captureException(error)
+    }
+
     return { data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)

@@ -667,9 +667,9 @@ export async function createAlert(formData: {
 export async function processAlertEscalations() {
   // EXT-010 FIX: Add try-catch to prevent unhandled exceptions
   try {
-    // Use regular server client; RLS on alerts/alert_rules already scoped by company_id
-    const supabase = await createClient()
-    const adminForNotifications = createAdminClient()
+    // Cron has no user session — service role required to read/update rules and alerts across tenants.
+    const supabase = createAdminClient()
+    const adminForNotifications = supabase
 
   // 1) Get all rules with escalation enabled
   const { data: rules, error: rulesError } = await supabase
@@ -734,7 +734,15 @@ export async function processAlertEscalations() {
       .from("users")
       .select("id, role")
       .eq("company_id", rule.company_id)
-      .in("role", ["manager", "admin", "owner"])
+      .in("role", [
+        "super_admin",
+        "operations_manager",
+        "manager",
+        "admin",
+        "owner",
+        "financial_controller",
+        "safety_compliance",
+      ])
 
     const managerIds = managers?.map((u: { id: string }) => u.id) || []
     if (managerIds.length === 0) {

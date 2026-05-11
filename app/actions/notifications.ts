@@ -154,7 +154,8 @@ export async function sendNotification(
   type: NotificationType,
   data: NotificationData
 ) {
-  const supabase = await createClient()
+  // Service role: callers include cron (no session) and server actions targeting another user's prefs.
+  const supabase = createAdminClient()
 
   // Get user's notification preferences
   const { data: preferences } = await supabase

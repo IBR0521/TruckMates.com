@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
 import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { runAgentEvaluation } from "@/lib/ai/agent/loop"
@@ -590,10 +591,13 @@ function normalizeLiveTxnsLegacy(payload: unknown): NormalizedFuelTxn[] {
     .filter(Boolean) as NormalizedFuelTxn[]
 }
 
-async function getLiveProviderConfig(provider: LiveFuelProvider) {
-  const supabase = await createClient()
-  const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null }
+async function getLiveProviderConfig(provider: LiveFuelProvider, forCompanyId?: string | null) {
+  const companyId = forCompanyId ? String(forCompanyId).trim() : null
+  const supabase = companyId ? createAdminClient() : await createClient()
+  const ctx = companyId ? { error: null as string | null, companyId } : await getCachedAuthContext()
+  if (!companyId && (ctx.error || !ctx.companyId)) return { error: ctx.error || "Not authenticated", data: null }
+  const cid = companyId || ctx.companyId
+  if (!cid) return { error: "Not authenticated", data: null }
 
   const { data, error } = await supabase
     .from("company_integrations")
@@ -602,7 +606,7 @@ async function getLiveProviderConfig(provider: LiveFuelProvider) {
       wex_enabled, wex_api_base_url, wex_api_key, wex_api_secret,
       efs_enabled, efs_api_base_url, efs_api_key, efs_api_secret
     `)
-    .eq("company_id", ctx.companyId)
+    .eq("company_id", cid)
     .maybeSingle()
   if (error || !data) return { error: "Fuel-card integration is not configured", data: null }
   const configRow = data as ProviderIntegrationConfigRow
@@ -633,13 +637,19 @@ async function getLiveProviderConfig(provider: LiveFuelProvider) {
   if (!providerConfig.base_url || !providerConfig.api_key || !providerConfig.api_secret) {
     return { error: `${provider.toUpperCase()} API credentials are incomplete`, data: null }
   }
-  return { error: null, data: { ...providerConfig, companyId: ctx.companyId } }
+  return { error: null, data: { ...providerConfig, companyId: cid } }
 }
 
-export async function syncFuelCardTransactions(provider: LiveFuelProvider, fromDate?: string, toDate?: string) {
+export async function syncFuelCardTransactions(
+  provider: LiveFuelProvider,
+  fromDate?: string,
+  toDate?: string,
+  forCompanyId?: string | null,
+) {
   try {
-    const supabase = await createClient()
-    const cfg = await getLiveProviderConfig(provider)
+    const cronCompanyId = forCompanyId ? String(forCompanyId).trim() : ""
+    const supabase = cronCompanyId ? createAdminClient() : await createClient()
+    const cfg = await getLiveProviderConfig(provider, cronCompanyId || null)
     if (cfg.error || !cfg.data) return { error: cfg.error, data: null }
 
     const query = new URLSearchParams()
@@ -795,12 +805,43 @@ export async function syncFuelCardTransactions(provider: LiveFuelProvider, fromD
 }
 
 export async function syncAllEnabledFuelCardProviders() {
-  const providers: LiveFuelProvider[] = ["comdata", "wex", "efs"]
-  const out: Array<{ provider: LiveFuelProvider; success: boolean; error?: string; inserted?: number }> = []
-  for (const provider of providers) {
-    const result = await syncFuelCardTransactions(provider)
-    out.push({ provider, success: !result.error, error: result.error || undefined, inserted: result.data?.inserted || 0 })
+  const admin = createAdminClient()
+  const { data: integrationRows, error: listError } = await admin
+    .from("company_integrations")
+    .select("company_id")
+    .limit(3000)
+
+  if (listError) {
+    return { data: null, error: safeDbError(listError, "Failed to list companies for fuel sync") }
   }
+
+  const companyIds = [...new Set((integrationRows || []).map((r) => String((r as { company_id?: string }).company_id || "")).filter(Boolean))]
+
+  const providers: LiveFuelProvider[] = ["comdata", "wex", "efs"]
+  const out: Array<{
+    provider: LiveFuelProvider
+    company_id: string
+    success: boolean
+    error?: string
+    inserted?: number
+  }> = []
+
+  for (const companyId of companyIds) {
+    for (const provider of providers) {
+      const probe = await getLiveProviderConfig(provider, companyId)
+      if (probe.error || !probe.data) continue
+
+      const result = await syncFuelCardTransactions(provider, undefined, undefined, companyId)
+      out.push({
+        provider,
+        company_id: companyId,
+        success: !result.error,
+        error: result.error || undefined,
+        inserted: result.data?.inserted || 0,
+      })
+    }
+  }
+
   return { data: out, error: null }
 }
 
