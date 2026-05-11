@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { Paddle, Environment } from "@paddle/paddle-node-sdk"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { normalizePlanTier, type PlanTier } from "@/lib/plan-limits"
+import * as Sentry from "@sentry/nextjs"
 
 function paddleSdk(): Paddle | null {
   const apiKey = String(process.env.PADDLE_API_KEY || "").trim()
@@ -13,9 +14,29 @@ function paddleSdk(): Paddle | null {
   return new Paddle(apiKey, { environment: env })
 }
 
+/** Paddle may send camelCase or snake_case on webhook entities. */
+function readCustomData(data: Record<string, unknown>): Record<string, unknown> | undefined {
+  const raw = data.customData ?? data.custom_data
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>
+  }
+  return undefined
+}
+
+function getStringField(obj: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const k of keys) {
+    const v = obj[k]
+    if (typeof v === "string" && v.trim()) return v.trim()
+  }
+  return null
+}
+
 function tierFromPayload(data: Record<string, unknown>): PlanTier | null {
-  const custom = data.customData as Record<string, unknown> | undefined
-  const fromCustom = custom?.target_tier ?? custom?.subscription_tier
+  const custom = readCustomData(data)
+  const fromCustom =
+    custom?.target_tier ??
+    custom?.subscription_tier ??
+    (typeof custom?.targetTier === "string" ? custom.targetTier : undefined)
   if (typeof fromCustom === "string" && fromCustom.trim()) {
     return normalizePlanTier(fromCustom)
   }
@@ -48,8 +69,8 @@ export async function POST(req: NextRequest) {
 
   try {
     if (eventType.startsWith("subscription.")) {
-      const subId = String(data.id ?? "")
-      const customerId = typeof data.customerId === "string" ? data.customerId : null
+      const subId = String(getStringField(data, "id", "subscription_id") ?? "")
+      const customerId = getStringField(data, "customerId", "customer_id")
       const companyRow = customerId
         ? await admin
             .from("companies")
@@ -64,10 +85,12 @@ export async function POST(req: NextRequest) {
         const patch: Record<string, unknown> = {}
         if (subId) patch.paddle_subscription_id = subId
         if (customerId) patch.paddle_customer_id = customerId
-        if (eventType === "subscription.canceled") {
+        if (eventType === "subscription.canceled" || eventType === "subscription.cancelled") {
           patch.subscription_status = "canceled"
-          const billingPeriod = data.currentBillingPeriod as { endsAt?: string } | undefined
-          const periodEnd = billingPeriod?.endsAt
+          const billingPeriod = (data.currentBillingPeriod ?? data.current_billing_period) as
+            | { endsAt?: string; ends_at?: string }
+            | undefined
+          const periodEnd = billingPeriod?.endsAt ?? billingPeriod?.ends_at
           if (typeof periodEnd === "string") patch.subscription_ends_at = periodEnd
         } else if (tier) {
           patch.subscription_tier = tier
@@ -76,22 +99,29 @@ export async function POST(req: NextRequest) {
           patch.subscription_status = "active"
         }
         if (Object.keys(patch).length > 0) {
-          await admin.from("companies").update(patch as never).eq("id", companyId)
+          const { error: upErr } = await admin.from("companies").update(patch).eq("id", companyId)
+          if (upErr) {
+            Sentry.captureMessage(`[paddle webhook] company update failed: ${upErr.message}`, {
+              level: "error",
+              extra: { companyId, eventType },
+            })
+          }
         }
       }
     }
 
     if (eventType === "transaction.completed") {
-      const cid = (data.customData as Record<string, unknown> | undefined)?.company_id
-      const companyId = typeof cid === "string" ? cid : null
+      const custom = readCustomData(data)
+      const companyIdRaw = custom?.company_id ?? custom?.companyId
+      const companyId = typeof companyIdRaw === "string" ? companyIdRaw.trim() : null
+      const details = data.details && typeof data.details === "object" ? (data.details as Record<string, unknown>) : null
+      const totals = details?.totals && typeof details.totals === "object" ? (details.totals as Record<string, unknown>) : null
       const amount =
-        typeof data.details === "object" && data.details !== null
-          ? Number((data.details as { totals?: { total?: string } }).totals?.total || 0)
-          : Number((data as { amount?: string }).amount || 0)
-      const txId = String(data.id || "")
+        Number(totals?.total ?? totals?.grand_total ?? data.grand_total ?? data.amount ?? data.total) || 0
+      const txId = String(getStringField(data, "id", "transaction_id") ?? "")
       if (companyId && txId) {
         const paymentDate = new Date().toISOString().slice(0, 10)
-        await admin.from("company_payment_history").insert({
+        const { error: payInsErr } = await admin.from("company_payment_history").insert({
           company_id: companyId,
           amount: amount || 0,
           currency: "USD",
@@ -101,15 +131,28 @@ export async function POST(req: NextRequest) {
           payment_date: paymentDate,
           processed_at: new Date().toISOString(),
           metadata: { source: "paddle_webhook", event_type: eventType },
-        } as never)
+        })
+        if (payInsErr) {
+          Sentry.captureException(payInsErr, { tags: { cron: "paddle-webhook" }, extra: { companyId, txId } })
+        }
       }
     }
 
     if (eventType === "transaction.payment_failed") {
-      const cid = (data.customData as Record<string, unknown> | undefined)?.company_id
-      const companyId = typeof cid === "string" ? cid : null
+      const custom = readCustomData(data)
+      const companyIdRaw = custom?.company_id ?? custom?.companyId
+      const companyId = typeof companyIdRaw === "string" ? companyIdRaw.trim() : null
       if (companyId) {
-        await admin.from("companies").update({ subscription_status: "past_due" } as never).eq("id", companyId)
+        const { error: pdErr } = await admin
+          .from("companies")
+          .update({ subscription_status: "past_due" })
+          .eq("id", companyId)
+        if (pdErr) {
+          Sentry.captureMessage(`[paddle webhook] past_due update failed: ${pdErr.message}`, {
+            level: "warning",
+            extra: { companyId },
+          })
+        }
       }
       try {
         const { sendPushToCompanyRoles } = await import("@/app/actions/push-notifications")

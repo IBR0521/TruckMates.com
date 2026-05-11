@@ -73,10 +73,16 @@ export async function createPaddleCheckout(params: {
         customData: { company_id: params.companyId },
       })
       customerId = cust.id
-      await admin
+      const { error: saveCustErr } = await admin
         .from("companies")
-        .update({ paddle_customer_id: customerId } as never)
+        .update({ paddle_customer_id: customerId })
         .eq("id", params.companyId)
+      if (saveCustErr) {
+        return {
+          checkoutUrl: null,
+          error: `Paddle customer created but failed to save on company: ${saveCustErr.message}`,
+        }
+      }
     } catch (e: unknown) {
       return {
         checkoutUrl: null,

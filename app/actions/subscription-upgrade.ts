@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { createCheckout } from "@/lib/billing"
 import type { PlanTier } from "@/lib/plan-limits"
+import { mapLegacyRole } from "@/lib/roles"
 
 type UpgradeFeatureKey =
   | "drivers_limit"
@@ -119,7 +120,7 @@ const PLAN_NAME_TO_TIER: Record<PlanName, PlanTier> = {
 export async function createUpgradeCheckoutSession(feature: UpgradeFeatureKey, targetPlanName?: PlanName) {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId || !ctx.user) return { error: ctx.error || "Not authenticated", data: null }
-  if (!MANAGER_ROLES.has(String(ctx.user.role || ""))) {
+  if (!MANAGER_ROLES.has(mapLegacyRole(ctx.user.role))) {
     return { error: "Only managers can upgrade plans.", data: null }
   }
 

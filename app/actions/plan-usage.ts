@@ -148,7 +148,8 @@ export async function startPlanCheckout(params: { tier: PlanTier; billingCycle: 
   if (ctx.error || !ctx.companyId || !ctx.user) {
     return { error: ctx.error || "Not authenticated", data: null as { checkout_url: string } | null }
   }
-  if (!MANAGER_ROLES.has(String(ctx.user.role || ""))) {
+  const mappedRole = mapLegacyRole(ctx.user.role)
+  if (!MANAGER_ROLES.has(mappedRole)) {
     return { error: "Only managers can change plans.", data: null }
   }
   const res = await createCheckout({
@@ -184,7 +185,8 @@ export async function openPaddleBillingPortal(): Promise<{ portalUrl: string | n
   if (ctx.error || !ctx.companyId || !ctx.user) {
     return { portalUrl: null, error: ctx.error || "Not authenticated" }
   }
-  if (!MANAGER_ROLES.has(String(ctx.user.role || ""))) {
+  const portalRole = mapLegacyRole(ctx.user.role)
+  if (!MANAGER_ROLES.has(portalRole)) {
     return { portalUrl: null, error: "Only managers can manage billing." }
   }
   const admin = createAdminClient()
@@ -213,8 +215,8 @@ export async function cancelPaddleBillingSubscription() {
   if (ctx.error || !ctx.companyId) {
     return { success: false, error: ctx.error || "Not authenticated" }
   }
-  const role = String(ctx.user?.role || "")
-  if (!["super_admin", "operations_manager"].includes(role)) {
+  const cancelRole = mapLegacyRole(ctx.user?.role)
+  if (!MANAGER_ROLES.has(cancelRole)) {
     return { success: false, error: "Only managers can cancel the subscription." }
   }
   const admin = createAdminClient()

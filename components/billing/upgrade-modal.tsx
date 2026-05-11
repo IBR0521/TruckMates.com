@@ -104,20 +104,14 @@ export function UpgradeModal({
     }
     setCheckoutTier(tier)
     const result = await startPlanCheckout({ tier, billingCycle })
-    setCheckoutTier(null)
-
     if (result.error || !result.data?.checkout_url) {
+      setCheckoutTier(null)
       toast.error(result.error || "Could not start checkout")
       return
     }
 
-    const popup = window.open(result.data.checkout_url, "truckmates-upgrade", "popup=yes,width=1120,height=860")
-    if (!popup) {
-      toast.error("Popup blocked. Allow popups or try again.")
-      return
-    }
-
-    toast.success("Checkout opened in a new window.")
+    toast.success("Redirecting to secure checkout…")
+    window.location.href = result.data.checkout_url
   }
 
   const formatPrice = (tier: PlanTier) => {
@@ -125,7 +119,8 @@ export function UpgradeModal({
     if (tier === "enterprise") return "Custom"
     const v = billingCycle === "annual" ? row.price_annual : row.price_monthly
     if (v < 0) return "Custom"
-    return `$${v}/mo`
+    // PLAN_LIMITS.price_* matches public list prices; annual is effective monthly on annual billing.
+    return billingCycle === "annual" ? `$${v}/mo (annual)` : `$${v}/mo`
   }
 
   return (
