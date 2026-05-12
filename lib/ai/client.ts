@@ -10,6 +10,8 @@ type CallClaudeOptions = {
   companyId?: string
   cacheSystemPrompt?: boolean
   cacheContext?: string
+  /** Prior turns (user/assistant only). Latest user turn is `userPrompt`. Max ~10 recommended. */
+  history?: Array<{ role: "user" | "assistant"; content: string }>
 }
 
 type AnthropicMessageResponse = {
@@ -135,6 +137,7 @@ export async function callClaude(
     companyId?: string
     cacheSystemPrompt?: boolean
     cacheContext?: string
+    history?: Array<{ role: "user" | "assistant"; content: string }>
   }
 ): Promise<AiResponse<string>>
 export async function callClaude<T = Record<string, unknown>>(
@@ -148,6 +151,7 @@ export async function callClaude<T = Record<string, unknown>>(
     companyId?: string
     cacheSystemPrompt?: boolean
     cacheContext?: string
+    history?: Array<{ role: "user" | "assistant"; content: string }>
   }
 ): Promise<AiResponse<T>>
 export async function callClaude<T = string>(
@@ -178,6 +182,18 @@ export async function callClaude<T = string>(
   const cacheContext = String(options.cacheContext || "").trim()
   const feature = String(options.feature || "unknown")
   const companyId = options.companyId ?? null
+
+  const historyMessages = (Array.isArray(options.history) ? options.history : [])
+    .filter(
+      (m): m is { role: "user" | "assistant"; content: string } =>
+        (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim().length > 0,
+    )
+    .map((m) => ({ role: m.role, content: m.content.trim() }))
+
+  const anthropicMessages: Array<{ role: "user" | "assistant"; content: string }> = [
+    ...historyMessages,
+    { role: "user", content: userPrompt },
+  ]
 
   const systemPayload = shouldCacheSystemPrompt
     ? ([
@@ -211,12 +227,7 @@ export async function callClaude<T = string>(
         system: systemPayload,
         max_tokens: options.maxTokens ?? 1024,
         temperature: 0,
-        messages: [
-          {
-            role: "user",
-            content: userPrompt,
-          },
-        ],
+        messages: anthropicMessages,
       }),
     })
 

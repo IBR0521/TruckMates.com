@@ -117,6 +117,7 @@ function applySecurityHeaders(response: NextResponse, nonce: string) {
 }
 
 const DASHBOARD_ROUTE_FEATURES: Array<{ pattern: RegExp; feature: FeatureCategory }> = [
+  { pattern: /^\/dashboard\/ai-assistant(\/|$)/, feature: 'dashboard' },
   { pattern: /^\/dashboard\/settings\/account(\/|$)/, feature: 'dashboard' },
   { pattern: /^\/dashboard\/drivers(\/|$)/, feature: 'drivers' },
   { pattern: /^\/dashboard\/trucks(\/|$)/, feature: 'vehicles' },

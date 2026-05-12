@@ -26,6 +26,12 @@ export interface PlanFeatures {
   ai_dispatch_suggestions: boolean
   ai_morning_briefing: boolean
   ai_conversational: boolean
+  /** Starter+ — floating AI assistant & fleet Q&A (Phase B). */
+  ai_chat: boolean
+  /** Professional+ — higher conversation limits / retention (enforcement TBD). */
+  ai_chat_unlimited: boolean
+  /** Professional+ — future tool-calling / actions from chat (enforcement TBD). */
+  ai_advanced_actions: boolean
   ai_autonomous_agent: boolean
   eld_live_integrations: boolean
   ap_vendor_invoicing: boolean
@@ -132,6 +138,9 @@ const BASELINE_FALSE: Omit<PlanFeatures, never> = {
   ai_dispatch_suggestions: false,
   ai_morning_briefing: false,
   ai_conversational: false,
+  ai_chat: false,
+  ai_chat_unlimited: false,
+  ai_advanced_actions: false,
   ai_autonomous_agent: false,
   eld_live_integrations: false,
   ap_vendor_invoicing: false,
@@ -165,6 +174,7 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     ai_document_extraction: true,
     ai_dispatch_suggestions: true,
     ai_morning_briefing: true,
+    ai_chat: true,
   },
   professional: {
     ...BASELINE_FALSE,
@@ -172,6 +182,9 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     ai_dispatch_suggestions: true,
     ai_morning_briefing: true,
     ai_conversational: true,
+    ai_chat: true,
+    ai_chat_unlimited: true,
+    ai_advanced_actions: true,
     ai_autonomous_agent: true,
     eld_live_integrations: true,
     ap_vendor_invoicing: true,
@@ -187,6 +200,9 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     ai_dispatch_suggestions: true,
     ai_morning_briefing: true,
     ai_conversational: true,
+    ai_chat: true,
+    ai_chat_unlimited: true,
+    ai_advanced_actions: true,
     ai_autonomous_agent: true,
     eld_live_integrations: true,
     ap_vendor_invoicing: true,

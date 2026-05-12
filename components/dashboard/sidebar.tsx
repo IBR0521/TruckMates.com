@@ -32,6 +32,7 @@ import {
   Calendar,
   MessageSquare,
   Sparkles,
+  Bot,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import Link from "next/link"
@@ -304,6 +305,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
           {userRole === "driver" ? (
             <>
               <NavItem href="/dashboard" icon={BarChart3} label="Dashboard" isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/ai-assistant" icon={Bot} label="AI Assistant" planBadge="Starter" isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/loads" icon={Package} label="My load" isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/eld" icon={Shield} label="ELD / HOS" isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/dvir" icon={FileCheck} label="DVIR" isCollapsed={shouldShowCollapsed} />
@@ -315,6 +317,9 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
             <>
               <NavSectionLabel label="Overview" isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard" icon={BarChart3} label="Dashboard" isCollapsed={shouldShowCollapsed} />
+              {userRole && canViewFeature(userRole, "dashboard") && (
+                <NavItem href="/dashboard/ai-assistant" icon={Bot} label="AI Assistant" planBadge="Starter" isCollapsed={shouldShowCollapsed} />
+              )}
 
               <NavSectionLabel label="Operations" isCollapsed={shouldShowCollapsed} />
 

@@ -15,6 +15,7 @@ import { FcmTokenRegistrar } from "@/components/notifications/fcm-token-registra
 import { DemoSessionBanner } from "@/components/dashboard/demo-session-banner"
 import { DashboardBillingBanners } from "@/components/billing/dashboard-billing-banners"
 import { AiQuotaBanner } from "@/components/billing/ai-quota-banner"
+import { AiChatWidget } from "@/components/ai/chat-widget"
 import { TrialHeaderBadge } from "@/components/billing/trial-header-badge"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
@@ -158,6 +159,7 @@ export default function DashboardLayoutClient({
       <FeedbackWidget />
       <FirstLoginTour />
       <FcmTokenRegistrar />
+      <AiChatWidget />
     </div>
   )
 }

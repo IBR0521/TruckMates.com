@@ -28,8 +28,8 @@ function upgradeFeatureForPlanFeature(feature: keyof PlanFeatures): UpgradeFeatu
   if (feature === "ap_vendor_invoicing" || feature === "bank_reconciliation" || feature === "gl_quickbooks_sync") {
     return "quickbooks"
   }
-  if (feature === "ai_conversational" || feature === "ai_autonomous_agent") {
-    return "driver_scorecards"
+  if (feature === "ai_chat" || feature === "ai_chat_unlimited" || feature === "ai_advanced_actions") {
+    return "drivers_limit"
   }
   return "api_keys"
 }
