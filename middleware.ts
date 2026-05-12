@@ -58,6 +58,8 @@ function buildConnectSrc(): string {
     sources.add('https://*.paddle.com')
     sources.add('https://checkout-service.paddle.com')
     sources.add('https://sandbox-checkout-service.paddle.com')
+    sources.add('https://public.profitwell.com')
+    sources.add('https://*.profitwell.com')
 
     // Explicitly include approved external providers.
     sources.add('https://api.resend.com')
@@ -76,8 +78,8 @@ function buildCsp(nonce: string): string {
   // NOTE: During login/bootstrap we must allow inline runtime chunks rendered by Next.js.
   // Using both nonce + unsafe-inline can cause unsafe-inline to be ignored by browsers.
   const scriptSrc = isProduction
-    ? `script-src 'self' 'unsafe-inline' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com https://*.paddle.com https://cdn.paddle.com https://buy.paddle.com https://sandbox-buy.paddle.com https://va.vercel-scripts.com`
-    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com https://*.paddle.com https://cdn.paddle.com https://buy.paddle.com https://sandbox-buy.paddle.com https://va.vercel-scripts.com`
+    ? `script-src 'self' 'unsafe-inline' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com https://*.paddle.com https://cdn.paddle.com https://buy.paddle.com https://sandbox-buy.paddle.com https://va.vercel-scripts.com https://public.profitwell.com https://*.profitwell.com`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com https://*.paddle.com https://cdn.paddle.com https://buy.paddle.com https://sandbox-buy.paddle.com https://va.vercel-scripts.com https://public.profitwell.com https://*.profitwell.com`
 
   const styleSrc = isProduction
     ? `style-src 'self' 'unsafe-inline' https: https://*.paddle.com`
