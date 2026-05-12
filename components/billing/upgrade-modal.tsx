@@ -137,6 +137,7 @@ export function UpgradeModal({
           successUrl: `${window.location.origin}/dashboard/settings/billing?upgraded=1`,
         },
       })
+      onOpenChange(false)
     } catch (err) {
       setCheckoutTier(null)
       toast.error("Failed to open checkout. Please try again.")

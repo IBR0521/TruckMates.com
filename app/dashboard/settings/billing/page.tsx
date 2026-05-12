@@ -215,12 +215,15 @@ export default function BillingSettingsPage() {
     toast.success("Subscription updated! Your new plan is active.")
     const url = new URL(window.location.href)
     url.searchParams.delete("upgraded")
+    url.searchParams.delete("upgrade")
+    url.searchParams.delete("payment_required")
     const qs = url.searchParams.toString()
     window.history.replaceState({}, "", `${url.pathname}${qs ? `?${qs}` : ""}`)
   }, [searchParams])
 
   useEffect(() => {
     if (!requestedUpgrade) return
+    if (searchParams.get("upgraded") === "1") return
     if (
       requestedUpgrade === "route_optimization" ||
       requestedUpgrade === "geofencing" ||
@@ -230,7 +233,11 @@ export default function BillingSettingsPage() {
       setUpgradeFeature(requestedUpgrade)
       setShowUpgradeModal(true)
     }
-  }, [requestedUpgrade])
+    const url = new URL(window.location.href)
+    url.searchParams.delete("upgrade")
+    const qs = url.searchParams.toString()
+    window.history.replaceState({}, "", `${url.pathname}${qs ? `?${qs}` : ""}`)
+  }, [requestedUpgrade, searchParams])
 
   useEffect(() => {
     async function loadSettings() {

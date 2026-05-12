@@ -1,6 +1,6 @@
 "use client"
 
-import { initializePaddle, type Paddle } from "@paddle/paddle-js"
+import { CheckoutEventNames, initializePaddle, type Paddle } from "@paddle/paddle-js"
 
 let paddleInstance: Paddle | undefined
 
@@ -21,6 +21,10 @@ export async function getPaddleClient(): Promise<Paddle | null> {
       token: clientToken,
       environment,
       eventCallback: (event) => {
+        if (event.name === CheckoutEventNames.CHECKOUT_CLOSED) {
+          console.log("[Paddle.js] checkout closed (no redirect here; successUrl handles completion)")
+          return
+        }
         console.log("[Paddle.js event]", event.name, event.data)
       },
     })
