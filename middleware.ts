@@ -50,10 +50,14 @@ function buildConnectSrc(): string {
     sources.add('https://maps.googleapis.com')
     sources.add('https://*.googleapis.com')
     sources.add('https://*.gstatic.com')
+    sources.add('https://va.vercel-scripts.com')
     sources.add('https://api.stripe.com')
     sources.add('https://js.stripe.com')
     sources.add('https://r.stripe.com')
     sources.add('https://m.stripe.network')
+    sources.add('https://*.paddle.com')
+    sources.add('https://checkout-service.paddle.com')
+    sources.add('https://sandbox-checkout-service.paddle.com')
 
     // Explicitly include approved external providers.
     sources.add('https://api.resend.com')
@@ -72,20 +76,21 @@ function buildCsp(nonce: string): string {
   // NOTE: During login/bootstrap we must allow inline runtime chunks rendered by Next.js.
   // Using both nonce + unsafe-inline can cause unsafe-inline to be ignored by browsers.
   const scriptSrc = isProduction
-    ? `script-src 'self' 'unsafe-inline' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com`
-    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com`
+    ? `script-src 'self' 'unsafe-inline' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com https://*.paddle.com https://cdn.paddle.com https://buy.paddle.com https://sandbox-buy.paddle.com https://va.vercel-scripts.com`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com https://*.paddle.com https://cdn.paddle.com https://buy.paddle.com https://sandbox-buy.paddle.com https://va.vercel-scripts.com`
 
   const styleSrc = isProduction
-    ? `style-src 'self' 'unsafe-inline' https:`
-    : `style-src 'self' 'unsafe-inline' https:`
+    ? `style-src 'self' 'unsafe-inline' https: https://*.paddle.com`
+    : `style-src 'self' 'unsafe-inline' https: https://*.paddle.com`
 
   return [
     "default-src 'self'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    "img-src 'self' data: blob: https:",
+    "img-src 'self' data: blob: https: https://*.paddle.com",
     "font-src 'self' data: https:",
+    "frame-src 'self' https://*.paddle.com https://buy.paddle.com https://sandbox-buy.paddle.com",
     buildConnectSrc(),
     "worker-src 'self' blob:",
     scriptSrc,
