@@ -20,6 +20,7 @@ import {
   type PlanTier,
 } from "@/lib/plan-limits"
 import { startPlanCheckout } from "@/app/actions/plan-usage"
+import { getPaddleClient } from "@/lib/billing/paddle-client"
 
 const TIER_SUMMARY: Record<PlanTier, string> = {
   owner_operator: "Designed for owner-operators and 1–2 trucks — TMS core loads, invoices, dispatch, limits without premium AI integrations.",
@@ -135,22 +136,38 @@ export default function PricingPage() {
         tier,
         billingCycle: billingAnnual ? "annual" : "monthly",
       })
-      if (result.error || !result.data?.checkout_url) {
+      if (result.error || !result.data) {
         toast.error(result.error || "Checkout unavailable.")
         return
       }
-      const popup = window.open(
-        result.data.checkout_url,
-        "truckmates-checkout",
-        "popup=yes,width=1120,height=860",
-      )
-      if (!popup) {
-        toast.error("Popup blocked. Allow popups for checkout or open Settings → Billing.")
+
+      const paddle = await getPaddleClient()
+      if (!paddle) {
+        toast.error("Payment system not available. Please refresh and try again.")
         return
       }
-      toast.success("Checkout opened — complete payment in the new window.")
+
+      paddle.Checkout.open({
+        items: [{ priceId: result.data.priceId, quantity: 1 }],
+        customer: result.data.customerId
+          ? { id: result.data.customerId }
+          : result.data.customerEmail
+            ? { email: result.data.customerEmail }
+            : undefined,
+        customData: result.data.customData,
+        settings: {
+          displayMode: "overlay",
+          theme: "dark",
+          locale: "en",
+          successUrl: `${window.location.origin}/dashboard/settings/billing?upgraded=1`,
+        },
+      })
+      toast.success("Secure checkout opened — complete payment in the window above.")
+    } catch (e) {
+      console.error(e)
+      toast.error("Failed to open checkout. Please try again.")
     } finally {
-      setCheckoutTier(null)
+      setTimeout(() => setCheckoutTier(null), 1000)
     }
   }
 

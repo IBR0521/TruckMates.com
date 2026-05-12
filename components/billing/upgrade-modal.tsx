@@ -24,6 +24,7 @@ import {
   planTierLabel,
 } from "@/lib/plan-limits"
 import { getBillingPlanContext, startPlanCheckout } from "@/app/actions/plan-usage"
+import { getPaddleClient } from "@/lib/billing/paddle-client"
 
 type UpgradeFeatureKey =
   | "drivers_limit"
@@ -102,16 +103,48 @@ export function UpgradeModal({
       window.location.href = "mailto:sales@truckmates.com?subject=TruckMates%20Enterprise%20plan"
       return
     }
+
     setCheckoutTier(tier)
+
     const result = await startPlanCheckout({ tier, billingCycle })
-    if (result.error || !result.data?.checkout_url) {
+
+    if (result.error || !result.data) {
       setCheckoutTier(null)
       toast.error(result.error || "Could not start checkout")
       return
     }
 
-    toast.success("Redirecting to secure checkout…")
-    window.location.href = result.data.checkout_url
+    const paddle = await getPaddleClient()
+    if (!paddle) {
+      setCheckoutTier(null)
+      toast.error("Payment system not available. Please refresh and try again.")
+      return
+    }
+
+    try {
+      paddle.Checkout.open({
+        items: [{ priceId: result.data.priceId, quantity: 1 }],
+        customer: result.data.customerId
+          ? { id: result.data.customerId }
+          : result.data.customerEmail
+            ? { email: result.data.customerEmail }
+            : undefined,
+        customData: result.data.customData,
+        settings: {
+          displayMode: "overlay",
+          theme: "dark",
+          locale: "en",
+          successUrl: `${window.location.origin}/dashboard/settings/billing?upgraded=1`,
+        },
+      })
+    } catch (err) {
+      setCheckoutTier(null)
+      toast.error("Failed to open checkout. Please try again.")
+      console.error("[Paddle checkout] Failed to open", err)
+      return
+    }
+
+    setTimeout(() => setCheckoutTier(null), 1000)
   }
 
   const formatPrice = (tier: PlanTier) => {

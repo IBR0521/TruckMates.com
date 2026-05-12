@@ -211,6 +211,15 @@ export default function BillingSettingsPage() {
   const [portalBusy, setPortalBusy] = useState(false)
 
   useEffect(() => {
+    if (searchParams.get("upgraded") !== "1") return
+    toast.success("Subscription updated! Your new plan is active.")
+    const url = new URL(window.location.href)
+    url.searchParams.delete("upgraded")
+    const qs = url.searchParams.toString()
+    window.history.replaceState({}, "", `${url.pathname}${qs ? `?${qs}` : ""}`)
+  }, [searchParams])
+
+  useEffect(() => {
     if (!requestedUpgrade) return
     if (
       requestedUpgrade === "route_optimization" ||

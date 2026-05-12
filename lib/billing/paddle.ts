@@ -21,6 +21,11 @@ function priceIdForTier(tier: PlanTier, billingCycle: "monthly" | "annual"): str
   return fallback && String(fallback).trim() ? String(fallback).trim() : null
 }
 
+/**
+ * @deprecated Use Paddle.js client-side checkout instead.
+ * See `components/billing/upgrade-modal.tsx` and `lib/billing/paddle-client.ts`.
+ * Preserved for any server-side flows that may still rely on it.
+ */
 export async function createPaddleCheckout(params: {
   companyId: string
   tier: PlanTier

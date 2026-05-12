@@ -18,7 +18,7 @@ import {
   type PlanFeatures,
   type PlanTier,
 } from "@/lib/plan-limits"
-import { createCheckout, createCustomerPortalSession } from "@/lib/billing"
+import { createCustomerPortalSession } from "@/lib/billing"
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 
 export async function getBillingPlanContext() {
@@ -143,24 +143,55 @@ export async function getAiQuotaBannerContext() {
   }
 }
 
-export async function startPlanCheckout(params: { tier: PlanTier; billingCycle: "monthly" | "annual" }) {
+export async function startPlanCheckout(params: {
+  tier: PlanTier
+  billingCycle: "monthly" | "annual"
+}): Promise<{
+  data: {
+    priceId: string
+    customerId: string | null
+    customerEmail: string | null
+    customData: Record<string, string>
+  } | null
+  error: string | null
+}> {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId || !ctx.user) {
-    return { error: ctx.error || "Not authenticated", data: null as { checkout_url: string } | null }
+    return { error: ctx.error || "Not authenticated", data: null }
   }
   const mappedRole = mapLegacyRole(ctx.user.role)
   if (!MANAGER_ROLES.has(mappedRole)) {
     return { error: "Only managers can change plans.", data: null }
   }
-  const res = await createCheckout({
-    companyId: ctx.companyId,
-    tier: params.tier,
-    billingCycle: params.billingCycle,
-  })
-  if (res.error || !res.checkoutUrl) {
-    return { error: res.error || "Checkout unavailable", data: null }
+
+  const { getPaddlePriceId, getOrCreatePaddleCustomer } = await import("@/lib/billing/paddle-customer")
+
+  const priceId = getPaddlePriceId(params.tier, params.billingCycle)
+  if (!priceId) {
+    return {
+      error: `Pricing not configured for ${params.tier} ${params.billingCycle}`,
+      data: null,
+    }
   }
-  return { error: null, data: { checkout_url: res.checkoutUrl } }
+
+  const customerResult = await getOrCreatePaddleCustomer(ctx.companyId)
+  if (customerResult.error) {
+    return { error: customerResult.error, data: null }
+  }
+
+  return {
+    error: null,
+    data: {
+      priceId,
+      customerId: customerResult.customerId,
+      customerEmail: customerResult.customerEmail,
+      customData: {
+        company_id: ctx.companyId,
+        target_tier: params.tier,
+        billing_cycle: params.billingCycle,
+      },
+    },
+  }
 }
 
 export async function getPlanFeatureGate(feature: keyof PlanFeatures) {
