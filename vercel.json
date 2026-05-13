@@ -21,6 +21,10 @@
       "schedule": "0 12 * * *"
     },
     {
+      "path": "/api/cron/generate-briefings",
+      "schedule": "0 11 * * *"
+    },
+    {
       "path": "/api/cron/cleanup-api-cache",
       "schedule": "15 3 * * *"
     },
@@ -54,6 +58,10 @@
     }
   ],
   "functions": {
+    "app/api/cron/generate-briefings/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
     "app/api/**/*.ts": {
       "maxDuration": 30,
       "memory": 1024
