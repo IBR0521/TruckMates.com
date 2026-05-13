@@ -7,9 +7,11 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
 import { mapLegacyRole } from "@/lib/roles"
+import { hasFeatureAccess, normalizePlanTier, type PlanTier } from "@/lib/plan-limits"
+import { aiPriorityRank, effectiveAiPriority } from "@/lib/notifications/smart-ui"
 /** `public.notifications` — supabase/notifications_table.sql */
 const NOTIFICATIONS_LIST_SELECT =
-  "id, user_id, company_id, type, title, message, priority, metadata, read, read_at, created_at, updated_at"
+  "id, user_id, company_id, type, title, message, priority, metadata, read, read_at, created_at, updated_at, ai_priority, ai_cluster_id, ai_reasoning, ai_suppressed, source"
 
 /** `public.alerts` — supabase/trucklogics_features_schema.sql */
 const ALERTS_LIST_SELECT =
@@ -23,6 +25,11 @@ type NotificationRow = {
   read?: boolean | null
   created_at: string
   metadata?: Record<string, unknown> | null
+  ai_priority?: string | null
+  ai_cluster_id?: string | null
+  ai_reasoning?: string | null
+  ai_suppressed?: boolean | null
+  source?: string | null
 }
 
 type AlertRow = {
@@ -42,6 +49,11 @@ type AlertRow = {
 /**
  * Get all unified notifications (system notifications + alerts)
  */
+function parseEventSource(raw: string | null | undefined): "event" | "ai_proactive" | "ai_cluster_parent" {
+  if (raw === "ai_proactive" || raw === "ai_cluster_parent") return raw
+  return "event"
+}
+
 export async function getUnifiedNotifications(filters?: {
   type?: "all" | "notifications" | "alerts"
   read?: boolean
@@ -49,17 +61,48 @@ export async function getUnifiedNotifications(filters?: {
   limit?: number
   offset?: number
   search?: string // FIXED: Add search parameter
+  /** When smart UI is on, omit suppressed unless true. */
+  includeSuppressed?: boolean
 }) {
   const supabase = await createClient()
 
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId || !ctx.userId) {
-    return { error: ctx.error || "Not authenticated", data: null, count: 0 }
+    return { error: ctx.error || "Not authenticated", data: null, count: 0, meta: null }
   }
 
   try {
     const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
     const myDriverId = await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
+
+    const [{ data: companyRow }, { data: userRow }] = await Promise.all([
+      ctx.companyId
+        ? supabase.from("companies").select("subscription_tier").eq("id", ctx.companyId).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase.from("users").select("notification_smart_mode").eq("id", ctx.userId ?? "").maybeSingle(),
+    ])
+
+    const tier: PlanTier = normalizePlanTier(
+      (companyRow as { subscription_tier?: string | null } | null)?.subscription_tier ?? undefined,
+    )
+    const planAllowsSmart = hasFeatureAccess(tier, "ai_smart_notifications")
+    const userSmart = Boolean((userRow as { notification_smart_mode?: boolean } | null)?.notification_smart_mode)
+    const smartUi = planAllowsSmart && userSmart
+
+    let suppressedCount = 0
+    if (
+      smartUi &&
+      ctx.userId &&
+      !filters?.includeSuppressed &&
+      (!filters?.type || filters.type === "all" || filters.type === "notifications")
+    ) {
+      const { count } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", ctx.userId)
+        .eq("ai_suppressed", true)
+      suppressedCount = count ?? 0
+    }
 
     let loadIdsForDriver: string[] = []
     if (role === "driver" && myDriverId) {
@@ -83,6 +126,13 @@ export async function getUnifiedNotifications(filters?: {
       created_at: string
       status?: string | null
       metadata: Record<string, unknown>
+      ai_priority: string | null
+      ai_cluster_id: string | null
+      ai_reasoning: string | null
+      ai_suppressed: boolean
+      event_source: "event" | "ai_proactive" | "ai_cluster_parent"
+      /** Raw DB `notifications.priority` / `alerts.priority` for filtering and AI fallback. */
+      legacy_priority: string
     }> = []
 
     // Get system notifications
@@ -110,16 +160,28 @@ export async function getUnifiedNotifications(filters?: {
 
       if (!notifError && notifications) {
         notifications.forEach((notif: NotificationRow) => {
+          const legacyP = notif.priority || "normal"
+          const displayPriority = smartUi ? effectiveAiPriority(notif.ai_priority, legacyP) : legacyP
+          const suppressed = Boolean(notif.ai_suppressed)
+          if (smartUi && suppressed && !filters?.includeSuppressed) {
+            return
+          }
           unifiedNotifications.push({
             id: notif.id,
             type: "notification",
             source: "system",
             title: notif.title,
             message: notif.message,
-            priority: notif.priority || "normal",
+            priority: displayPriority,
             read: Boolean(notif.read),
             created_at: notif.created_at,
             metadata: notif.metadata || {},
+            ai_priority: notif.ai_priority ?? null,
+            ai_cluster_id: notif.ai_cluster_id ?? null,
+            ai_reasoning: notif.ai_reasoning ?? null,
+            ai_suppressed: suppressed,
+            event_source: parseEventSource(notif.source),
+            legacy_priority: legacyP,
           })
         })
       }
@@ -182,13 +244,14 @@ export async function getUnifiedNotifications(filters?: {
           )
         }
         alertRows.forEach((alert: AlertRow) => {
+          const legacyA = alert.priority || "normal"
           unifiedNotifications.push({
             id: alert.id,
             type: "alert",
             source: "alerts",
             title: alert.title,
             message: alert.message,
-            priority: alert.priority || "normal",
+            priority: legacyA,
             read: alert.status === "resolved" || alert.status === "acknowledged",
             status: alert.status,
             created_at: alert.created_at,
@@ -199,32 +262,67 @@ export async function getUnifiedNotifications(filters?: {
               driver_id: alert.driver_id,
               truck_id: alert.truck_id,
             },
+            ai_priority: null,
+            ai_cluster_id: null,
+            ai_reasoning: null,
+            ai_suppressed: false,
+            event_source: "event",
+            legacy_priority: legacyA,
           })
         })
       }
     }
     }
 
-    // Sort by created_at (newest first)
+    const filterP = filters?.priority
     unifiedNotifications.sort((a, b) => {
+      if (smartUi) {
+        const diff =
+          aiPriorityRank(effectiveAiPriority(a.ai_priority, a.legacy_priority)) -
+          aiPriorityRank(effectiveAiPriority(b.ai_priority, b.legacy_priority))
+        if (diff !== 0) return -diff
+      }
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })
 
-    // FIXED: Apply read filter before pagination (not after)
-    let filtered = unifiedNotifications
-    if (filters?.read !== undefined) {
-      filtered = unifiedNotifications.filter((n) => n.read === filters.read)
+    let priorityFiltered = unifiedNotifications
+    if (filterP && filterP !== "all") {
+      priorityFiltered = unifiedNotifications.filter((n) => {
+        if (n.type === "alert") {
+          return n.legacy_priority === filterP
+        }
+        if (!smartUi) {
+          return n.legacy_priority === filterP
+        }
+        const eff = effectiveAiPriority(n.ai_priority, n.legacy_priority)
+        if (filterP === "normal") {
+          return eff === "medium" || n.legacy_priority === "normal"
+        }
+        if (filterP === "medium" || filterP === "critical" || filterP === "high" || filterP === "low") {
+          return eff === filterP
+        }
+        return n.legacy_priority === filterP
+      })
     }
 
-    // FIXED: Remove double pagination - pagination is already applied in DB queries
-    // Just return the filtered results (already paginated from DB)
+    let filtered = priorityFiltered
+    if (filters?.read !== undefined) {
+      filtered = priorityFiltered.filter((n) => n.read === filters.read)
+    }
+
     return {
       data: filtered,
       error: null,
       count: filtered.length,
+      meta: {
+        smartUi,
+        planAllowsSmart,
+        userSmart,
+        suppressedCount,
+      },
     }
   } catch (error: unknown) {
-    return { error: errorMessage(error, "Failed to get unified notifications"), data: null, count: 0 }
+    return { error: errorMessage(error, "Failed to get unified notifications"), data: null, count: 0, meta: null }
   }
 }
 

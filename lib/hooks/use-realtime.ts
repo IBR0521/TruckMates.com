@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js"
+import { aiPriorityRank, effectiveAiPriority } from "@/lib/notifications/smart-ui"
 
 const NOTIFICATIONS_SELECT =
-  "id, user_id, company_id, type, title, message, priority, metadata, read, read_at, created_at, updated_at"
+  "id, user_id, company_id, type, title, message, priority, metadata, read, read_at, created_at, updated_at, ai_priority, ai_cluster_id, ai_reasoning, ai_suppressed, source"
 
 type RecordWithId = {
   id?: unknown
@@ -16,7 +17,39 @@ type NotificationLike = {
   user_id?: string
   read?: boolean
   read_at?: string
+  ai_priority?: string | null
+  ai_suppressed?: boolean | null
+  priority?: string | null
+  created_at?: string
+  source?: string | null
 } & Record<string, unknown>
+
+function sortNotificationsClient(list: NotificationLike[], smartUi: boolean): NotificationLike[] {
+  const copy = [...list]
+  if (!smartUi) {
+    return copy.sort(
+      (a, b) =>
+        new Date(String(b.created_at || 0)).getTime() - new Date(String(a.created_at || 0)).getTime(),
+    )
+  }
+  return copy.sort((a, b) => {
+    const diff =
+      aiPriorityRank(
+        effectiveAiPriority(
+          typeof a.ai_priority === "string" ? a.ai_priority : null,
+          typeof a.priority === "string" ? a.priority : null,
+        ),
+      ) -
+      aiPriorityRank(
+        effectiveAiPriority(
+          typeof b.ai_priority === "string" ? b.ai_priority : null,
+          typeof b.priority === "string" ? b.priority : null,
+        ),
+      )
+    if (diff !== 0) return -diff
+    return new Date(String(b.created_at || 0)).getTime() - new Date(String(a.created_at || 0)).getTime()
+  })
+}
 
 /**
  * Hook for real-time subscriptions to Supabase tables
@@ -179,8 +212,14 @@ export function useRealtimeNotifications() {
   const [notifications, setNotifications] = useState<NotificationLike[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [userId, setUserId] = useState<string | null>(null)
+  const [smartUi, setSmartUi] = useState(false)
+  const smartUiRef = useRef(false)
   // FIXED: Memoize supabase client to avoid dependency issues
   const supabase = useMemo(() => createClient(), [])
+
+  useEffect(() => {
+    smartUiRef.current = smartUi
+  }, [smartUi])
 
   // Load existing notifications and get user ID
   useEffect(() => {
@@ -192,6 +231,10 @@ export function useRealtimeNotifications() {
         if (!user) return
 
         setUserId(user.id)
+
+        const display = await import("@/app/actions/user-preferences").then((m) => m.getNotificationSmartDisplayState())
+        const ui = display.data?.smartUi ?? false
+        setSmartUi(ui)
 
         // MEDIUM FIX 13: Use efficient COUNT query instead of fetching all records
         const { getUnreadNotificationCount } = await import("@/app/actions/notifications")
@@ -215,7 +258,9 @@ export function useRealtimeNotifications() {
         }
 
         if (data) {
-          setNotifications(data)
+          const rows = data as NotificationLike[]
+          const visible = ui ? rows.filter((n) => !n.ai_suppressed) : rows
+          setNotifications(sortNotificationsClient(visible, ui))
         }
       } catch (error) {
         // Silently fail if notifications table doesn't exist
@@ -237,19 +282,36 @@ export function useRealtimeNotifications() {
         .on(
           "postgres_changes",
           {
-            event: "INSERT",
+            event: "*",
             schema: "public",
             table: "notifications",
             filter: `user_id=eq.${userId}`, // FIXED: Filter by user_id
           },
           (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
-            const notification = payload.new as NotificationLike
-            // Only add if it's for this user
-            if (notification.user_id === userId) {
-              setNotifications((prev) => [notification, ...prev])
-              // MEDIUM FIX 13: Update count efficiently
-              if (!notification.read) {
-                setUnreadCount((prev) => prev + 1)
+            const ui = smartUiRef.current
+            if (payload.eventType === "INSERT") {
+              const notification = payload.new as NotificationLike
+              if (notification.user_id === userId) {
+                setNotifications((prev) => {
+                  if (ui && notification.ai_suppressed) return prev
+                  return sortNotificationsClient([notification, ...prev], ui).slice(0, 50)
+                })
+                if (!notification.read) {
+                  setUnreadCount((prev) => prev + 1)
+                }
+              }
+            } else if (payload.eventType === "UPDATE") {
+              const notification = payload.new as NotificationLike
+              if (notification.user_id !== userId) return
+              setNotifications((prev) => {
+                const merged = prev.map((n) => (String(n.id) === String(notification.id) ? { ...n, ...notification } : n))
+                const visible = ui ? merged.filter((n) => !n.ai_suppressed) : merged
+                return sortNotificationsClient(visible, ui).slice(0, 50)
+              })
+            } else if (payload.eventType === "DELETE") {
+              const oldRow = payload.old as { id?: string }
+              if (oldRow?.id) {
+                setNotifications((prev) => prev.filter((n) => String(n.id) !== String(oldRow.id)))
               }
             }
           }
@@ -321,6 +383,7 @@ export function useRealtimeNotifications() {
     unreadCount,
     markAsRead,
     markAllAsRead,
+    smartUi,
   }
 }
 

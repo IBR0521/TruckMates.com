@@ -4,6 +4,7 @@ import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
+import { hasFeatureAccess, normalizePlanTier, type PlanTier } from "@/lib/plan-limits"
 /**
  * Get user preferences
  */
@@ -107,4 +108,60 @@ export async function updateUserPreferences(preferences: {
   return { data, error: null }
 }
 
+/**
+ * In-app notification smart UI (Pro+ plan + per-user toggle on `users.notification_smart_mode`).
+ */
+export async function updateNotificationSmartMode(enabled: boolean): Promise<{
+  data: { enabled: boolean } | null
+  error: string | null
+}> {
+  const supabase = await createClient()
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.userId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
+  }
 
+  const { error } = await supabase
+    .from("users")
+    .update({ notification_smart_mode: enabled })
+    .eq("id", ctx.userId)
+
+  if (error) {
+    return { data: null, error: safeDbError(error) }
+  }
+
+  revalidatePath("/dashboard/settings")
+  revalidatePath("/dashboard/notifications")
+  return { data: { enabled }, error: null }
+}
+
+export async function getNotificationSmartDisplayState(): Promise<{
+  data: { smartUi: boolean; planAllowsSmart: boolean; userSmart: boolean } | null
+  error: string | null
+}> {
+  const supabase = await createClient()
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
+  }
+
+  const [{ data: companyRow }, { data: userRow }] = await Promise.all([
+    supabase.from("companies").select("subscription_tier").eq("id", ctx.companyId).maybeSingle(),
+    supabase.from("users").select("notification_smart_mode").eq("id", ctx.userId).maybeSingle(),
+  ])
+
+  const tier: PlanTier = normalizePlanTier(
+    (companyRow as { subscription_tier?: string | null } | null)?.subscription_tier ?? undefined,
+  )
+  const planAllowsSmart = hasFeatureAccess(tier, "ai_smart_notifications")
+  const userSmart = Boolean((userRow as { notification_smart_mode?: boolean } | null)?.notification_smart_mode)
+
+  return {
+    data: {
+      smartUi: planAllowsSmart && userSmart,
+      planAllowsSmart,
+      userSmart,
+    },
+    error: null,
+  }
+}

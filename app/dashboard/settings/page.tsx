@@ -28,6 +28,7 @@ import { useEffect, useState } from "react"
 import { getCompany, updateCompany } from "@/app/actions/company"
 import { getCurrentUser, updateUserProfile, updateUserPassword } from "@/lib/auth/server"
 import { getNotificationPreferences, updateNotificationPreferences, sendTestEmail, checkEmailConfiguration } from "@/app/actions/notifications"
+import { getNotificationSmartDisplayState, updateNotificationSmartMode } from "@/app/actions/user-preferences"
 import Link from "next/link"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -59,6 +60,8 @@ export default function SettingsPage() {
     full_name: "",
     phone: "",
   })
+  const [notificationSmartMode, setNotificationSmartMode] = useState(true)
+  const [planAllowsSmartNotifications, setPlanAllowsSmartNotifications] = useState(false)
   const [notificationSettings, setNotificationSettings] = useState({
     email_alerts: true,
     sms_alerts: true,
@@ -81,11 +84,12 @@ export default function SettingsPage() {
 
   useEffect(() => {
     async function loadData() {
-      const [companyResult, userResult, notificationResult, emailConfigResult] = await Promise.all([
+      const [companyResult, userResult, notificationResult, emailConfigResult, smartNotifResult] = await Promise.all([
         getCompany(),
         getCurrentUser(),
         getNotificationPreferences(),
         checkEmailConfiguration(),
+        getNotificationSmartDisplayState(),
       ])
       
       if (companyResult.error) {
@@ -132,6 +136,11 @@ export default function SettingsPage() {
 
       if (emailConfigResult) {
         setEmailConfig(emailConfigResult)
+      }
+
+      if (smartNotifResult.data) {
+        setNotificationSmartMode(smartNotifResult.data.userSmart)
+        setPlanAllowsSmartNotifications(smartNotifResult.data.planAllowsSmart)
       }
       
       setIsLoading(false)
@@ -609,7 +618,31 @@ export default function SettingsPage() {
                   }
                 />
               </div>
-              <Button 
+              <div className="flex items-center justify-between p-4 bg-secondary/50 rounded-lg">
+                <div>
+                  <p className="text-foreground font-medium">Use AI to prioritize my notifications</p>
+                  <p className="text-sm text-muted-foreground">
+                    {planAllowsSmartNotifications
+                      ? "When enabled, TruckMates sorts, clusters, and can hide duplicate in-app notifications using AI (Professional+ plans)."
+                      : "Available on Professional and Fleet plans. You can still turn this on for when your company upgrades."}
+                  </p>
+                </div>
+                <Switch
+                  checked={notificationSmartMode}
+                  onCheckedChange={async (checked) => {
+                    const prev = notificationSmartMode
+                    setNotificationSmartMode(checked)
+                    const result = await updateNotificationSmartMode(checked)
+                    if (result.error) {
+                      setNotificationSmartMode(prev)
+                      toast.error(result.error)
+                    } else {
+                      toast.success(checked ? "Smart notifications on" : "Smart notifications off")
+                    }
+                  }}
+                />
+              </div>
+              <Button
                 onClick={async () => {
                   const result = await updateNotificationPreferences(notificationSettings)
                   if (result.success) {

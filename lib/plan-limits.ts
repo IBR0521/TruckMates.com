@@ -32,6 +32,8 @@ export interface PlanFeatures {
   ai_chat_unlimited: boolean
   /** Professional+ — future tool-calling / actions from chat (enforcement TBD). */
   ai_advanced_actions: boolean
+  /** Professional+ — AI prioritization, clustering, proactive in-app notifications (cron). */
+  ai_smart_notifications: boolean
   ai_autonomous_agent: boolean
   eld_live_integrations: boolean
   ap_vendor_invoicing: boolean
@@ -141,6 +143,7 @@ const BASELINE_FALSE: Omit<PlanFeatures, never> = {
   ai_chat: false,
   ai_chat_unlimited: false,
   ai_advanced_actions: false,
+  ai_smart_notifications: false,
   ai_autonomous_agent: false,
   eld_live_integrations: false,
   ap_vendor_invoicing: false,
@@ -185,6 +188,7 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     ai_chat: true,
     ai_chat_unlimited: true,
     ai_advanced_actions: true,
+    ai_smart_notifications: true,
     ai_autonomous_agent: true,
     eld_live_integrations: true,
     ap_vendor_invoicing: true,
@@ -203,6 +207,7 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     ai_chat: true,
     ai_chat_unlimited: true,
     ai_advanced_actions: true,
+    ai_smart_notifications: true,
     ai_autonomous_agent: true,
     eld_live_integrations: true,
     ap_vendor_invoicing: true,
