@@ -2,7 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { checkFeatureAccess } from "@/lib/plan-enforcement"
+import { checkFeatureAccess, checkMonthlyUsage } from "@/lib/plan-enforcement"
 import { safeDbError } from "@/lib/utils/error"
 import {
   handleChatMessage,
@@ -24,7 +24,7 @@ function isChatRole(value: string): value is ChatRole {
 }
 
 async function assertAiChatAllowed(companyId: string): Promise<
-  | { ok: true; enableTools: boolean; companyTier: PlanTier }
+  | { ok: true; enableTools: boolean; companyTier: PlanTier; remainingAiCalls: number }
   | { ok: false; error: string }
 > {
   const chat = await checkFeatureAccess({ companyId, feature: "ai_chat" })
@@ -32,7 +32,9 @@ async function assertAiChatAllowed(companyId: string): Promise<
     return { ok: false, error: "AI assistant is not available on your current plan." }
   }
   const actions = await checkFeatureAccess({ companyId, feature: "ai_advanced_actions" })
-  return { ok: true, enableTools: actions.allowed, companyTier: actions.currentTier }
+  const usage = await checkMonthlyUsage({ companyId, usageType: "ai_calls" })
+  const remainingAiCalls = usage.limit === -1 ? -1 : Math.max(0, usage.limit - usage.used)
+  return { ok: true, enableTools: actions.allowed, companyTier: actions.currentTier, remainingAiCalls }
 }
 
 function coerceToolCalls(raw: unknown): PersistedToolCall[] | null {
@@ -424,6 +426,7 @@ export async function sendChatMessage(params: {
     userMessage: text,
     conversationHistory,
     enableTools: gate.enableTools,
+    remainingAiCalls: gate.remainingAiCalls,
   })
 
   if (ai.error || !ai.data) {
@@ -603,6 +606,8 @@ export async function confirmToolExecution(params: {
     conversationHistory: historyReloaded,
     enableTools: gate.enableTools,
     companyTier: gate.companyTier,
+    userRole,
+    remainingAiCalls: gate.remainingAiCalls,
   })
 
   if (resume.error || resume.data === null) {

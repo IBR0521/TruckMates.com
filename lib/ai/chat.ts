@@ -23,7 +23,7 @@ import {
 } from "@/lib/ai/tools/registry"
 import type { AppRole } from "@/lib/ai/tools/types"
 import type { PlanTier } from "@/lib/plan-limits"
-import { hasFeatureAccess } from "@/lib/plan-limits"
+import { hasFeatureAccess, planTierLabel } from "@/lib/plan-limits"
 
 export type AiChatContextType = "fleet" | "driver" | "load" | "financial" | "compliance" | "maintenance"
 
@@ -56,7 +56,7 @@ const MAX_DESTRUCTIVE_PER_TURN = 3
 /** Billing: tool turns log multiple `ai_chat_tools` rows (schema + tool_result blocks); expect roughly $0.05–$0.15 USD per user turn on Sonnet when tools run. */
 
 const TOOL_LOOP_GUIDANCE = `
-Tool-use rules (Professional+ only):
+Tool-use rules (when action tools are enabled for this request):
 - Prefer ONE mutation tool per turn unless the user explicitly requested multiple steps.
 - Read-only tools (find_best_truck_for_load, find_available_drivers_near_location, get_load_profitability_analysis, get_driver_performance_summary) never require confirmation.
 - Mutation tools may return pending_user_confirmation payloads until approved in the UI — acknowledge that plainly.
@@ -187,12 +187,71 @@ async function gatherContextBlocks(
   return { text: parts.join("\n\n"), used }
 }
 
-function buildSystemBlocks(enableTools: boolean, cacheContext: string) {
-  const mergedPrompt = [LOGISTICS_SYSTEM_PROMPT.trim(), enableTools ? TOOL_LOOP_GUIDANCE : ""].filter(Boolean).join("\n\n")
+type ClaudeSystemBlock = {
+  type: "text"
+  text: string
+  cache_control?: { type: "ephemeral" }
+}
+
+function buildTierContextBlock(params: {
+  tier: PlanTier
+  toolsActiveThisRequest: boolean
+  planSupportsActionTools: boolean
+  hasSmartNotifications: boolean
+  remainingCalls: number
+}): string {
+  const tierName = planTierLabel(params.tier)
+  const toolsLine = params.toolsActiveThisRequest
+    ? "yes (Professional+ unlocked)"
+    : params.planSupportsActionTools
+      ? "no (Professional+: action tools are turned off in assistant settings, not available for your role, or not active this request)"
+      : "no (upgrade to Professional to unlock)"
+  const smartLine = params.hasSmartNotifications
+    ? "active"
+    : "inactive (Professional+ unlocks)"
+  const callsLine = params.remainingCalls === -1 ? "unlimited" : String(params.remainingCalls)
+
   return [
-    { type: "text" as const, text: mergedPrompt, cache_control: { type: "ephemeral" as const } },
-    { type: "text" as const, text: cacheContext, cache_control: { type: "ephemeral" as const } },
+    "Current user context:",
+    `- Subscription tier: ${tierName}`,
+    `- AI action tools available: ${toolsLine}`,
+    `- Smart notifications: ${smartLine}`,
+    `- AI calls remaining this month: ${callsLine}`,
+    "",
+    "When answering questions about what you can do, refer to this context. Do not invent capabilities or limitations.",
+  ].join("\n")
+}
+
+/**
+ * System blocks: stable prompts cached; tier + grounding vary per request/company.
+ * Order: LOGISTICS (cached) → tool loop guidance if tools active (cached) → tier context (NOT cached) → company cache (cached).
+ */
+function buildSystemBlocks(params: {
+  includeToolLoopGuidance: boolean
+  cacheContext: string
+  tier: PlanTier
+  toolsActiveThisRequest: boolean
+  remainingCalls: number
+}): ClaudeSystemBlock[] {
+  const hasSmart = hasFeatureAccess(params.tier, "ai_smart_notifications")
+  const planSupportsActionTools = hasAdvancedActionsTier(params.tier)
+  const tierText = buildTierContextBlock({
+    tier: params.tier,
+    toolsActiveThisRequest: params.toolsActiveThisRequest,
+    planSupportsActionTools,
+    hasSmartNotifications: hasSmart,
+    remainingCalls: params.remainingCalls,
+  })
+
+  const blocks: ClaudeSystemBlock[] = [
+    { type: "text", text: LOGISTICS_SYSTEM_PROMPT.trim(), cache_control: { type: "ephemeral" } },
   ]
+  if (params.includeToolLoopGuidance) {
+    blocks.push({ type: "text", text: TOOL_LOOP_GUIDANCE, cache_control: { type: "ephemeral" } })
+  }
+  blocks.push({ type: "text", text: tierText })
+  blocks.push({ type: "text", text: params.cacheContext, cache_control: { type: "ephemeral" } })
+  return blocks
 }
 
 function hasAdvancedActionsTier(tier: PlanTier): boolean {
@@ -208,6 +267,8 @@ export async function handleChatMessage(params: {
   userMessage: string
   conversationHistory: AiChatHistoryRow[]
   enableTools: boolean
+  /** Monthly AI call budget remaining (-1 = unlimited). */
+  remainingAiCalls: number
 }): Promise<
   AiResponse<{
     responseText: string
@@ -261,7 +322,13 @@ export async function handleChatMessage(params: {
     ? anthropicToolsFromRegistry(getAvailableTools({ userRole: params.userRole, companyTier: params.companyTier }))
     : undefined
 
-  const systemBlocks = buildSystemBlocks(Boolean(toolsDefs?.length), cacheContext)
+  const systemBlocks = buildSystemBlocks({
+    includeToolLoopGuidance: Boolean(toolsDefs?.length),
+    cacheContext,
+    tier: params.companyTier,
+    toolsActiveThisRequest: Boolean(toolsDefs?.length),
+    remainingCalls: params.remainingAiCalls,
+  })
 
   let iterations = 0
   let quotaWarning = false
@@ -421,6 +488,8 @@ export async function resumeAssistantAfterToolResolution(params: {
   conversationHistory: AiChatHistoryRow[]
   enableTools: boolean
   companyTier: PlanTier
+  userRole: AppRole
+  remainingAiCalls: number
 }): Promise<AiResponse<{ responseText: string }>> {
   const cacheContext = [
     "=== Grounding context (this company) ===",
@@ -428,10 +497,18 @@ export async function resumeAssistantAfterToolResolution(params: {
       "(no structured context available for the selected domains)",
   ].join("\n")
 
-  const systemBlocks = buildSystemBlocks(
-    params.enableTools && hasAdvancedActionsTier(params.companyTier),
+  const toolsEligible =
+    params.enableTools &&
+    hasAdvancedActionsTier(params.companyTier) &&
+    getAvailableTools({ userRole: params.userRole, companyTier: params.companyTier }).length > 0
+
+  const systemBlocks = buildSystemBlocks({
+    includeToolLoopGuidance: toolsEligible,
     cacheContext,
-  )
+    tier: params.companyTier,
+    toolsActiveThisRequest: toolsEligible,
+    remainingCalls: params.remainingAiCalls,
+  })
 
   const loopMessages = buildClaudeThread(params.conversationHistory)
 
