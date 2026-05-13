@@ -316,3 +316,10 @@ export async function callClaude<T = string>(
     return { data: null, error: toErrorMessage(error) }
   }
 }
+
+export { callClaudeMessages } from "@/lib/ai/client-messages"
+export type {
+  ClaudeContentPart,
+  ClaudeMessage,
+  ClaudeToolDefinition,
+} from "@/lib/ai/client-messages"

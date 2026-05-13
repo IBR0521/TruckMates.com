@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Bot, ChevronDown, Loader2, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -21,11 +21,36 @@ import {
   sendChatMessage,
 } from "@/app/actions/ai-chat"
 import { ChatMarkdown } from "@/components/ai/chat-markdown"
+import type { PersistedToolCall, PersistedToolResult } from "@/lib/ai/chat"
+import {
+  derivePendingFromMessages,
+  PendingConfirmationsPanel,
+  ToolCallsBadges,
+  ToolResultsPreview,
+} from "@/components/ai/ai-chat-tool-ui"
 
 type UiMessage = {
   id: string
   role: "user" | "assistant"
   content: string
+  toolCalls: PersistedToolCall[] | null
+  toolResults: PersistedToolResult[] | null
+}
+
+function mapApiMessage(m: {
+  id: string
+  role: "user" | "assistant"
+  content: string
+  toolCalls?: PersistedToolCall[] | null
+  toolResults?: PersistedToolResult[] | null
+}): UiMessage {
+  return {
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    toolCalls: m.toolCalls ?? null,
+    toolResults: m.toolResults ?? null,
+  }
 }
 
 export function AiChatWidget() {
@@ -36,9 +61,12 @@ export function AiChatWidget() {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [title, setTitle] = useState("New conversation")
   const [messages, setMessages] = useState<UiMessage[]>([])
+  const [enableToolsMode, setEnableToolsMode] = useState(false)
   const [input, setInput] = useState("")
   const [recent, setRecent] = useState<Array<{ id: string; title: string }>>([])
   const bottomRef = useRef<HTMLDivElement | null>(null)
+
+  const pendingDerived = useMemo(() => derivePendingFromMessages(messages), [messages])
 
   useEffect(() => {
     let active = true
@@ -63,6 +91,18 @@ export function AiChatWidget() {
     scrollToBottom()
   }, [messages, open, scrollToBottom])
 
+  const refreshConversation = useCallback(async () => {
+    if (!conversationId) return
+    const conv = await getConversation(conversationId)
+    if (conv.error || !conv.data) {
+      toast.error(conv.error || "Could not refresh conversation")
+      return
+    }
+    setTitle(conv.data.title)
+    setEnableToolsMode(Boolean(conv.meta?.enableTools))
+    setMessages(conv.data.messages.map(mapApiMessage))
+  }, [conversationId])
+
   const bootstrapConversation = useCallback(async () => {
     setBusy(true)
     try {
@@ -82,13 +122,8 @@ export function AiChatWidget() {
           toast.error(conv.error || "Could not load conversation")
           return
         }
-        setMessages(
-          conv.data.messages.map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-          })),
-        )
+        setEnableToolsMode(Boolean(conv.meta?.enableTools))
+        setMessages(conv.data.messages.map(mapApiMessage))
         return
       }
       const created = await createConversation()
@@ -96,10 +131,18 @@ export function AiChatWidget() {
         toast.error(created.error || "Could not start a conversation")
         return
       }
-      setConversationId(created.data.id)
+      const newId = created.data.id
+      setConversationId(newId)
       setTitle("New conversation")
-      setMessages([])
-      setRecent([{ id: created.data.id, title: "New conversation" }])
+      setRecent([{ id: newId, title: "New conversation" }])
+      const conv = await getConversation(newId)
+      if (conv.data) {
+        setEnableToolsMode(Boolean(conv.meta?.enableTools))
+        setMessages(conv.data.messages.map(mapApiMessage))
+      } else {
+        setMessages([])
+        setEnableToolsMode(false)
+      }
     } finally {
       setBusy(false)
     }
@@ -121,8 +164,14 @@ export function AiChatWidget() {
       const newId = created.data.id
       setConversationId(newId)
       setTitle("New conversation")
-      setMessages([])
       setRecent((prev) => [{ id: newId, title: "New conversation" }, ...prev.filter((p) => p.id !== newId)])
+      const conv = await getConversation(newId)
+      if (conv.data) {
+        setEnableToolsMode(Boolean(conv.meta?.enableTools))
+        setMessages(conv.data.messages.map(mapApiMessage))
+      } else {
+        setMessages([])
+      }
     } finally {
       setBusy(false)
     }
@@ -138,13 +187,8 @@ export function AiChatWidget() {
         return
       }
       setTitle(conv.data.title)
-      setMessages(
-        conv.data.messages.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-        })),
-      )
+      setEnableToolsMode(Boolean(conv.meta?.enableTools))
+      setMessages(conv.data.messages.map(mapApiMessage))
     } finally {
       setBusy(false)
     }
@@ -159,32 +203,14 @@ export function AiChatWidget() {
       const res = await sendChatMessage({ conversationId, message: text })
       if (res.error || !res.data) {
         toast.error(res.error || "Send failed")
-        const partial = await getConversation(conversationId)
-        if (partial.data) {
-          setMessages(
-            partial.data.messages.map((m) => ({
-              id: m.id,
-              role: m.role,
-              content: m.content,
-            })),
-          )
-        }
+        await refreshConversation()
         return
       }
       if (res.quotaWarning) {
         toast.message("You are approaching your monthly AI usage limit.")
       }
-      const refreshed = await getConversation(conversationId)
-      if (refreshed.data) {
-        setTitle(refreshed.data.title)
-        setMessages(
-          refreshed.data.messages.map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-          })),
-        )
-      }
+      setEnableToolsMode(Boolean(res.data.enableTools))
+      await refreshConversation()
       const again = await getConversations()
       if (again.data) {
         setRecent(again.data.map((r) => ({ id: r.id, title: r.title })))
@@ -219,6 +245,12 @@ export function AiChatWidget() {
             <div className="flex items-start justify-between gap-2 pr-8">
               <SheetTitle className="text-left text-base leading-tight line-clamp-2">{title}</SheetTitle>
             </div>
+            <p className="text-[11px] text-muted-foreground pt-1">
+              Mode:{" "}
+              <span className={enableToolsMode ? "text-emerald-600 dark:text-emerald-400 font-medium" : ""}>
+                {enableToolsMode ? "Actions enabled (Pro+)" : "Read-only answers (Starter)"}
+              </span>
+            </p>
             <div className="flex flex-wrap gap-2 pt-2">
               <Button type="button" size="sm" variant="outline" onClick={() => void startNewConversation()} disabled={busy}>
                 <Plus className="h-4 w-4 mr-1" aria-hidden />
@@ -259,29 +291,45 @@ export function AiChatWidget() {
                       : "mr-6 rounded-lg border border-border bg-card px-3 py-2 text-sm"
                   }
                 >
-                  {m.role === "assistant" ? <ChatMarkdown content={m.content} /> : <p className="whitespace-pre-wrap">{m.content}</p>}
+                  {m.role === "assistant" ? (
+                    <>
+                      {m.content.trim() ? <ChatMarkdown content={m.content} /> : null}
+                      {m.toolCalls?.length ? <ToolCallsBadges calls={m.toolCalls} /> : null}
+                      {m.toolResults?.length ? <ToolResultsPreview results={m.toolResults} /> : null}
+                    </>
+                  ) : (
+                    <p className="whitespace-pre-wrap">{m.content}</p>
+                  )}
                 </div>
               ))}
               <div ref={bottomRef} />
             </div>
           </ScrollArea>
 
-          <div className="border-t border-border p-3 shrink-0 flex gap-2">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about loads, drivers, HOS, billing…"
-              disabled={sending || busy || !conversationId}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault()
-                  void handleSend()
-                }
-              }}
+          <div className="border-t border-border px-4 pt-3 shrink-0 space-y-3">
+            <PendingConfirmationsPanel
+              conversationId={conversationId}
+              pending={pendingDerived}
+              disabled={busy || sending}
+              onResolved={refreshConversation}
             />
-            <Button type="button" onClick={() => void handleSend()} disabled={sending || busy || !conversationId}>
-              {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Send"}
-            </Button>
+            <div className="flex gap-2 pb-3">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask about loads, drivers, HOS, billing…"
+                disabled={sending || busy || !conversationId}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault()
+                    void handleSend()
+                  }
+                }}
+              />
+              <Button type="button" onClick={() => void handleSend()} disabled={sending || busy || !conversationId}>
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Send"}
+              </Button>
+            </div>
           </div>
         </SheetContent>
       </Sheet>

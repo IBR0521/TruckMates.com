@@ -431,6 +431,15 @@ export async function updateInvoice(
     if (formData.due_date !== undefined) updateData.due_date = formData.due_date
     if (formData.payment_terms !== undefined) updateData.payment_terms = formData.payment_terms
     if (formData.description !== undefined) updateData.description = formData.description
+    if (formData.paid_date !== undefined) {
+      const pd = formData.paid_date
+      if (pd !== null && pd !== "" && !validateDate(String(pd))) {
+        return { error: "Invalid paid_date format (use YYYY-MM-DD)", data: null }
+      }
+      updateData.paid_date = pd === "" ? null : pd
+    }
+    if (formData.payment_method !== undefined)
+      updateData.payment_method = formData.payment_method ? sanitizeString(String(formData.payment_method), 80) : null
 
     // V3-007 FIX: Replace implicit select() with explicit columns
     const { data, error } = await supabase

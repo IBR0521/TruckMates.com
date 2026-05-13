@@ -4,9 +4,18 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkFeatureAccess } from "@/lib/plan-enforcement"
 import { safeDbError } from "@/lib/utils/error"
-import type { AiMessage } from "@/lib/ai/types"
-import { handleChatMessage } from "@/lib/ai/chat"
+import {
+  handleChatMessage,
+  resumeAssistantAfterToolResolution,
+  type AiChatHistoryRow,
+  type PersistedToolCall,
+  type PersistedToolResult,
+} from "@/lib/ai/chat"
 import { callClaude } from "@/lib/ai/client"
+import { confirmTool, rejectTool } from "@/lib/ai/tools/executor"
+import { mapLegacyRole } from "@/lib/roles"
+import type { AppRole } from "@/lib/ai/tools/types"
+import type { PlanTier } from "@/lib/plan-limits"
 
 type ChatRole = "user" | "assistant"
 
@@ -14,11 +23,126 @@ function isChatRole(value: string): value is ChatRole {
   return value === "user" || value === "assistant"
 }
 
-async function assertAiChatAllowed(companyId: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const gate = await checkFeatureAccess({ companyId, feature: "ai_chat" })
-  if (!gate.allowed) {
+async function assertAiChatAllowed(companyId: string): Promise<
+  | { ok: true; enableTools: boolean; companyTier: PlanTier }
+  | { ok: false; error: string }
+> {
+  const chat = await checkFeatureAccess({ companyId, feature: "ai_chat" })
+  if (!chat.allowed) {
     return { ok: false, error: "AI assistant is not available on your current plan." }
   }
+  const actions = await checkFeatureAccess({ companyId, feature: "ai_advanced_actions" })
+  return { ok: true, enableTools: actions.allowed, companyTier: actions.currentTier }
+}
+
+function coerceToolCalls(raw: unknown): PersistedToolCall[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null
+  const out: PersistedToolCall[] = []
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue
+    const o = entry as Record<string, unknown>
+    if (typeof o.id !== "string" || typeof o.name !== "string") continue
+    const input =
+      o.input && typeof o.input === "object" && !Array.isArray(o.input) ? (o.input as Record<string, unknown>) : {}
+    out.push({ id: o.id, name: o.name, input })
+  }
+  return out.length > 0 ? out : null
+}
+
+function coerceToolResults(raw: unknown): PersistedToolResult[] {
+  if (!Array.isArray(raw)) return []
+  const out: PersistedToolResult[] = []
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue
+    const o = entry as Record<string, unknown>
+    if (typeof o.tool_use_id !== "string" || typeof o.content !== "string") continue
+    out.push({
+      tool_use_id: o.tool_use_id,
+      content: o.content,
+      is_error: Boolean(o.is_error),
+    })
+  }
+  return out
+}
+
+async function loadConversationHistory(
+  admin: ReturnType<typeof createAdminClient>,
+  conversationId: string,
+  companyId: string,
+): Promise<AiChatHistoryRow[]> {
+  const { data, error } = await admin
+    .from("ai_chat_messages")
+    .select("role, content, tool_calls, tool_results")
+    .eq("conversation_id", conversationId)
+    .eq("company_id", companyId)
+    .in("role", ["user", "assistant"])
+    .order("created_at", { ascending: true })
+
+  if (error) return []
+
+  const rows = (data || []) as Array<{ role: string; content: string; tool_calls?: unknown; tool_results?: unknown }>
+  return rows
+    .filter((r) => isChatRole(r.role))
+    .map((r) => {
+      const toolResults = coerceToolResults(r.tool_results)
+      return {
+        role: r.role as ChatRole,
+        content: String(r.content || ""),
+        tool_calls: coerceToolCalls(r.tool_calls),
+        tool_results: toolResults.length > 0 ? toolResults : null,
+      }
+    })
+}
+
+async function patchAssistantToolResultsByAudit(params: {
+  admin: ReturnType<typeof createAdminClient>
+  assistantMessageId: string
+  auditId: string
+  approved: boolean
+  result?: unknown
+  rejectReason?: string
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data, error } = await params.admin
+    .from("ai_chat_messages")
+    .select("tool_results")
+    .eq("id", params.assistantMessageId)
+    .maybeSingle()
+
+  if (error) return { ok: false, error: safeDbError(error) }
+
+  const list = coerceToolResults((data as { tool_results?: unknown } | null)?.tool_results)
+  if (!list.length) return { ok: false, error: "Could not patch tool results." }
+
+  const next = list.map((entry) => {
+    try {
+      const parsed = JSON.parse(entry.content) as Record<string, unknown>
+      if (parsed.pending_user_confirmation === true && String(parsed.audit_id) === params.auditId) {
+        if (params.approved) {
+          return {
+            ...entry,
+            content: JSON.stringify({ ok: true, data: params.result }),
+            is_error: false,
+          }
+        }
+        return {
+          ...entry,
+          content: JSON.stringify({
+            ok: false,
+            rejected: true,
+            error: params.rejectReason || "User cancelled.",
+          }),
+          is_error: true,
+        }
+      }
+    } catch {
+      /* keep */
+    }
+    return entry
+  })
+
+  const { error: upErr } = await params.admin.from("ai_chat_messages").update({ tool_results: next }).eq("id", params.assistantMessageId)
+
+  if (upErr) return { ok: false, error: safeDbError(upErr) }
   return { ok: true }
 }
 
@@ -84,10 +208,7 @@ export async function getConversations(): Promise<{
   const ids = rows.map((r) => r.id).filter(Boolean)
   const counts = new Map<string, number>()
   if (ids.length > 0) {
-    const { data: countRows, error: countError } = await admin
-      .from("ai_chat_messages")
-      .select("conversation_id")
-      .in("conversation_id", ids)
+    const { data: countRows, error: countError } = await admin.from("ai_chat_messages").select("conversation_id").in("conversation_id", ids)
 
     if (countError) {
       return { data: null, error: safeDbError(countError) }
@@ -119,9 +240,13 @@ export async function getConversation(conversationId: string): Promise<{
       role: ChatRole
       content: string
       createdAt: string
+      toolCalls: PersistedToolCall[] | null
+      toolResults: PersistedToolResult[] | null
+      pendingToolUseId: string | null
     }>
   } | null
   error: string | null
+  meta?: { enableTools: boolean }
 }> {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId || !ctx.userId) {
@@ -138,11 +263,7 @@ export async function getConversation(conversationId: string): Promise<{
   if (!access.ok) return { data: null, error: access.error }
 
   const admin = createAdminClient()
-  const { data: conv, error: convError } = await admin
-    .from("ai_conversations")
-    .select("id, title")
-    .eq("id", conversationId)
-    .maybeSingle()
+  const { data: conv, error: convError } = await admin.from("ai_conversations").select("id, title").eq("id", conversationId).maybeSingle()
 
   if (convError) {
     return { data: null, error: safeDbError(convError) }
@@ -154,7 +275,7 @@ export async function getConversation(conversationId: string): Promise<{
 
   const { data: msgs, error: msgError } = await admin
     .from("ai_chat_messages")
-    .select("id, role, content, created_at")
+    .select("id, role, content, created_at, tool_calls, tool_results, pending_tool_use_id")
     .eq("conversation_id", conversationId)
     .eq("company_id", ctx.companyId)
     .in("role", ["user", "assistant"])
@@ -164,17 +285,32 @@ export async function getConversation(conversationId: string): Promise<{
     return { data: null, error: safeDbError(msgError) }
   }
 
-  const messages = ((msgs || []) as Array<{ id: string; role: string; content: string; created_at: string }>)
+  const messages = ((msgs || []) as Array<{
+    id: string
+    role: string
+    content: string
+    created_at: string
+    tool_calls?: unknown
+    tool_results?: unknown
+    pending_tool_use_id?: string | null
+  }>)
     .filter((m) => isChatRole(m.role))
-    .map((m) => ({
-      id: m.id,
-      role: m.role as ChatRole,
-      content: m.content,
-      createdAt: m.created_at,
-    }))
+    .map((m) => {
+      const toolResults = coerceToolResults(m.tool_results)
+      return {
+        id: m.id,
+        role: m.role as ChatRole,
+        content: m.content,
+        createdAt: m.created_at,
+        toolCalls: coerceToolCalls(m.tool_calls),
+        toolResults: toolResults.length > 0 ? toolResults : null,
+        pendingToolUseId: typeof m.pending_tool_use_id === "string" ? m.pending_tool_use_id : null,
+      }
+    })
 
   return {
     error: null,
+    meta: { enableTools: gate.enableTools },
     data: {
       id: convRow.id,
       title: String(convRow.title || "New conversation"),
@@ -223,12 +359,20 @@ export async function sendChatMessage(params: {
     assistantMessageId: string
     assistantContent: string
     contextUsed: string[]
+    pendingConfirmations: Array<{
+      auditId: string
+      toolName: string
+      toolUseId: string
+      summary: string
+      affected: Array<{ type: string; id: string; label: string }>
+    }>
+    enableTools: boolean
   } | null
   error: string | null
   quotaWarning?: boolean
 }> {
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId || !ctx.userId) {
+  if (ctx.error || !ctx.companyId || !ctx.userId || !ctx.user) {
     return { data: null, error: ctx.error || "Not authenticated" }
   }
   const gate = await assertAiChatAllowed(ctx.companyId)
@@ -248,23 +392,7 @@ export async function sendChatMessage(params: {
 
   const admin = createAdminClient()
 
-  const { data: priorRows, error: priorError } = await admin
-    .from("ai_chat_messages")
-    .select("role, content")
-    .eq("conversation_id", params.conversationId)
-    .eq("company_id", ctx.companyId)
-    .in("role", ["user", "assistant"])
-    .order("created_at", { ascending: false })
-    .limit(10)
-
-  if (priorError) {
-    return { data: null, error: safeDbError(priorError) }
-  }
-
-  const priorChronological = ((priorRows || []) as Array<{ role: string; content: string }>)
-    .filter((r) => isChatRole(r.role))
-    .reverse()
-    .map((r) => ({ role: r.role as ChatRole, content: r.content }))
+  const conversationHistory = await loadConversationHistory(admin, params.conversationId, ctx.companyId)
 
   const { data: userInsert, error: userErr } = await admin
     .from("ai_chat_messages")
@@ -285,14 +413,17 @@ export async function sendChatMessage(params: {
   }
   const userMessageId = String((userInsert as { id: string }).id)
 
-  const priorForModel: AiMessage[] = priorChronological
+  const userRole = mapLegacyRole(ctx.user.role) as AppRole
 
   const ai = await handleChatMessage({
     companyId: ctx.companyId,
     userId: ctx.userId,
+    userRole,
+    companyTier: gate.companyTier,
     conversationId: params.conversationId,
     userMessage: text,
-    previousMessages: priorForModel,
+    conversationHistory,
+    enableTools: gate.enableTools,
   })
 
   if (ai.error || !ai.data) {
@@ -313,12 +444,28 @@ export async function sendChatMessage(params: {
       tokens_used: tokensUsed,
       cost_usd: 0,
       model,
+      tool_calls: ai.data.mergedToolCalls.length > 0 ? ai.data.mergedToolCalls : [],
+      tool_results: ai.data.mergedToolResults.length > 0 ? ai.data.mergedToolResults : [],
+      pending_tool_use_id: ai.data.firstPendingToolUseId,
     })
     .select("id")
     .single()
 
   if (asstErr || !asstInsert) {
     return { data: null, error: safeDbError(asstErr), quotaWarning: ai.quotaWarning }
+  }
+
+  const assistantMessageId = String((asstInsert as { id: string }).id)
+
+  if (ai.data.auditIdsForMessageLink.length > 0) {
+    const { error: auditLinkErr } = await admin
+      .from("ai_action_audit")
+      .update({ message_id: assistantMessageId })
+      .in("id", ai.data.auditIdsForMessageLink)
+
+    if (auditLinkErr) {
+      return { data: null, error: safeDbError(auditLinkErr), quotaWarning: ai.quotaWarning }
+    }
   }
 
   const now = new Date().toISOString()
@@ -333,7 +480,8 @@ export async function sendChatMessage(params: {
     return { data: null, error: safeDbError(convErr), quotaWarning: ai.quotaWarning }
   }
 
-  if (priorChronological.length === 0) {
+  const priorLen = conversationHistory.filter((r) => r.role === "user").length
+  if (priorLen === 0) {
     await generateConversationTitle({ conversationId: params.conversationId })
   }
 
@@ -342,10 +490,158 @@ export async function sendChatMessage(params: {
     quotaWarning: ai.quotaWarning,
     data: {
       userMessageId,
-      assistantMessageId: String((asstInsert as { id: string }).id),
+      assistantMessageId,
       assistantContent: ai.data.responseText,
       contextUsed: ai.data.contextUsed,
+      pendingConfirmations: ai.data.pendingConfirmations,
+      enableTools: gate.enableTools,
     },
+  }
+}
+
+export async function confirmToolExecution(params: {
+  conversationId: string
+  auditId: string
+  approve: boolean
+  rejectReason?: string
+}): Promise<{ data: { responseText: string } | null; error: string | null; quotaWarning?: boolean }> {
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId || !ctx.user) {
+    return { data: null, error: ctx.error || "Not authenticated" }
+  }
+
+  const gate = await assertAiChatAllowed(ctx.companyId)
+  if (!gate.ok) return { data: null, error: gate.error }
+  if (!gate.enableTools) {
+    return { data: null, error: "AI actions require Professional or higher." }
+  }
+
+  const access = await assertConversationOwner({
+    conversationId: params.conversationId,
+    companyId: ctx.companyId,
+    userId: ctx.userId,
+  })
+  if (!access.ok) return { data: null, error: access.error }
+
+  const admin = createAdminClient()
+  const { data: auditRow, error: auditErr } = await admin
+    .from("ai_action_audit")
+    .select("id, conversation_id, company_id, user_id, status, message_id")
+    .eq("id", params.auditId)
+    .maybeSingle()
+
+  if (auditErr || !auditRow) {
+    return { data: null, error: safeDbError(auditErr) || "Audit record not found." }
+  }
+
+  const audit = auditRow as {
+    conversation_id: string | null
+    company_id: string
+    user_id: string
+    status: string
+    message_id: string | null
+  }
+
+  if (audit.conversation_id !== params.conversationId || audit.company_id !== ctx.companyId || audit.user_id !== ctx.userId) {
+    return { data: null, error: "You cannot resolve this action." }
+  }
+
+  if (audit.status !== "pending_confirmation") {
+    return { data: null, error: "This action is not awaiting confirmation." }
+  }
+
+  const assistantMessageId = audit.message_id
+  if (!assistantMessageId) {
+    return { data: null, error: "Assistant message link missing; retry from a new chat turn." }
+  }
+
+  const userRole = mapLegacyRole(ctx.user.role) as AppRole
+
+  let execResult: unknown = null
+  if (params.approve) {
+    const exec = await confirmTool({
+      auditId: params.auditId,
+      companyId: ctx.companyId,
+      userId: ctx.userId,
+      userRole,
+    })
+    if (!exec.ok) {
+      return { data: null, error: exec.error }
+    }
+    execResult = exec.result
+    const patched = await patchAssistantToolResultsByAudit({
+      admin,
+      assistantMessageId,
+      auditId: params.auditId,
+      approved: true,
+      result: execResult,
+    })
+    if (!patched.ok) return { data: null, error: patched.error }
+  } else {
+    const rej = await rejectTool(params.auditId, {
+      companyId: ctx.companyId,
+      userId: ctx.userId,
+      reason: params.rejectReason?.trim() || "User cancelled.",
+    })
+    if (!rej.ok) return { data: null, error: rej.error }
+    const patched = await patchAssistantToolResultsByAudit({
+      admin,
+      assistantMessageId,
+      auditId: params.auditId,
+      approved: false,
+      rejectReason: params.rejectReason?.trim() || "User cancelled.",
+    })
+    if (!patched.ok) return { data: null, error: patched.error }
+  }
+
+  await admin.from("ai_chat_messages").update({ pending_tool_use_id: null }).eq("id", assistantMessageId)
+
+  const historyReloaded = await loadConversationHistory(admin, params.conversationId, ctx.companyId)
+
+  const resume = await resumeAssistantAfterToolResolution({
+    companyId: ctx.companyId,
+    conversationHistory: historyReloaded,
+    enableTools: gate.enableTools,
+    companyTier: gate.companyTier,
+  })
+
+  if (resume.error || resume.data === null) {
+    return { data: null, error: resume.error || "Follow-up reply failed.", quotaWarning: resume.quotaWarning }
+  }
+
+  const resumeTokens = typeof resume.tokensUsed === "number" ? resume.tokensUsed : 0
+  const resumeModel = typeof resume.model === "string" ? resume.model : null
+
+  const { error: followErr } = await admin.from("ai_chat_messages").insert({
+    conversation_id: params.conversationId,
+    company_id: ctx.companyId,
+    role: "assistant",
+    content: resume.data.responseText,
+    context_used: [],
+    tokens_used: resumeTokens,
+    cost_usd: 0,
+    model: resumeModel,
+    tool_calls: [],
+    tool_results: [],
+    pending_tool_use_id: null,
+  })
+
+  if (followErr) {
+    return { data: null, error: safeDbError(followErr), quotaWarning: resume.quotaWarning }
+  }
+
+  const ts = new Date().toISOString()
+  await admin
+    .from("ai_conversations")
+    .update({ last_message_at: ts, updated_at: ts })
+    .eq("id", params.conversationId)
+    .eq("company_id", ctx.companyId)
+    .eq("user_id", ctx.userId)
+
+  return {
+    data: { responseText: resume.data.responseText },
+    error: null,
+    quotaWarning: resume.quotaWarning,
   }
 }
 

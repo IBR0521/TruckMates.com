@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Bot, Loader2, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -14,11 +14,36 @@ import {
   sendChatMessage,
 } from "@/app/actions/ai-chat"
 import { ChatMarkdown } from "@/components/ai/chat-markdown"
+import type { PersistedToolCall, PersistedToolResult } from "@/lib/ai/chat"
+import {
+  derivePendingFromMessages,
+  PendingConfirmationsPanel,
+  ToolCallsBadges,
+  ToolResultsPreview,
+} from "@/components/ai/ai-chat-tool-ui"
 
 type UiMessage = {
   id: string
   role: "user" | "assistant"
   content: string
+  toolCalls: PersistedToolCall[] | null
+  toolResults: PersistedToolResult[] | null
+}
+
+function mapApiMessage(m: {
+  id: string
+  role: "user" | "assistant"
+  content: string
+  toolCalls?: PersistedToolCall[] | null
+  toolResults?: PersistedToolResult[] | null
+}): UiMessage {
+  return {
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    toolCalls: m.toolCalls ?? null,
+    toolResults: m.toolResults ?? null,
+  }
 }
 
 export function AiAssistantClient() {
@@ -27,10 +52,13 @@ export function AiAssistantClient() {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [title, setTitle] = useState("New conversation")
   const [messages, setMessages] = useState<UiMessage[]>([])
+  const [enableToolsMode, setEnableToolsMode] = useState(false)
   const [input, setInput] = useState("")
   const [sidebar, setSidebar] = useState<Array<{ id: string; title: string; lastMessageAt: string }>>([])
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
+
+  const pendingDerived = useMemo(() => derivePendingFromMessages(messages), [messages])
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -39,6 +67,18 @@ export function AiAssistantClient() {
   useEffect(() => {
     scrollToBottom()
   }, [messages, scrollToBottom])
+
+  const refreshConversation = useCallback(async () => {
+    if (!conversationId) return
+    const conv = await getConversation(conversationId)
+    if (conv.error || !conv.data) {
+      toast.error(conv.error || "Could not refresh conversation")
+      return
+    }
+    setTitle(conv.data.title)
+    setEnableToolsMode(Boolean(conv.meta?.enableTools))
+    setMessages(conv.data.messages.map(mapApiMessage))
+  }, [conversationId])
 
   const loadSidebar = useCallback(async () => {
     const list = await getConversations()
@@ -65,13 +105,8 @@ export function AiAssistantClient() {
         return
       }
       setTitle(conv.data.title)
-      setMessages(
-        conv.data.messages.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-        })),
-      )
+      setEnableToolsMode(Boolean(conv.meta?.enableTools))
+      setMessages(conv.data.messages.map(mapApiMessage))
     } finally {
       setBusy(false)
     }
@@ -101,10 +136,17 @@ export function AiAssistantClient() {
         setBusy(false)
         return
       }
-      setConversationId(created.data.id)
+      const newId = created.data.id
+      setConversationId(newId)
       setTitle("New conversation")
-      setMessages([])
-      setSidebar([{ id: created.data.id, title: "New conversation", lastMessageAt: new Date().toISOString() }])
+      setSidebar([{ id: newId, title: "New conversation", lastMessageAt: new Date().toISOString() }])
+      const conv = await getConversation(newId)
+      if (conv.data) {
+        setEnableToolsMode(Boolean(conv.meta?.enableTools))
+        setMessages(conv.data.messages.map(mapApiMessage))
+      } else {
+        setMessages([])
+      }
       setBusy(false)
     }
     void init()
@@ -135,12 +177,18 @@ export function AiAssistantClient() {
       const newId = created.data.id
       setConversationId(newId)
       setTitle("New conversation")
-      setMessages([])
       await loadSidebar()
       setSidebar((prev) => [
         { id: newId, title: "New conversation", lastMessageAt: new Date().toISOString() },
         ...prev.filter((p) => p.id !== newId),
       ])
+      const conv = await getConversation(newId)
+      if (conv.data) {
+        setEnableToolsMode(Boolean(conv.meta?.enableTools))
+        setMessages(conv.data.messages.map(mapApiMessage))
+      } else {
+        setMessages([])
+      }
     } finally {
       setBusy(false)
     }
@@ -155,32 +203,14 @@ export function AiAssistantClient() {
       const res = await sendChatMessage({ conversationId, message: text })
       if (res.error || !res.data) {
         toast.error(res.error || "Send failed")
-        const partial = await getConversation(conversationId)
-        if (partial.data) {
-          setMessages(
-            partial.data.messages.map((m) => ({
-              id: m.id,
-              role: m.role,
-              content: m.content,
-            })),
-          )
-        }
+        await refreshConversation()
         return
       }
       if (res.quotaWarning) {
         toast.message("You are approaching your monthly AI usage limit.")
       }
-      const refreshed = await getConversation(conversationId)
-      if (refreshed.data) {
-        setTitle(refreshed.data.title)
-        setMessages(
-          refreshed.data.messages.map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-          })),
-        )
-      }
+      setEnableToolsMode(Boolean(res.data.enableTools))
+      await refreshConversation()
       await loadSidebar()
     } finally {
       setSending(false)
@@ -223,6 +253,12 @@ export function AiAssistantClient() {
           <div className="min-w-0">
             <h1 className="text-lg font-semibold leading-tight truncate">{title}</h1>
             <p className="text-xs text-muted-foreground">Press ⌘K (Ctrl+K) to focus the input</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Mode:{" "}
+              <span className={enableToolsMode ? "text-emerald-600 dark:text-emerald-400 font-medium" : ""}>
+                {enableToolsMode ? "Actions enabled (Pro+)" : "Read-only answers (Starter)"}
+              </span>
+            </p>
           </div>
         </header>
 
@@ -243,30 +279,46 @@ export function AiAssistantClient() {
                     : "mr-8 rounded-lg border border-border bg-background px-3 py-2 text-sm"
                 }
               >
-                {m.role === "assistant" ? <ChatMarkdown content={m.content} /> : <p className="whitespace-pre-wrap">{m.content}</p>}
+                {m.role === "assistant" ? (
+                  <>
+                    {m.content.trim() ? <ChatMarkdown content={m.content} /> : null}
+                    {m.toolCalls?.length ? <ToolCallsBadges calls={m.toolCalls} /> : null}
+                    {m.toolResults?.length ? <ToolResultsPreview results={m.toolResults} /> : null}
+                  </>
+                ) : (
+                  <p className="whitespace-pre-wrap">{m.content}</p>
+                )}
               </div>
             ))}
             <div ref={bottomRef} />
           </div>
         </ScrollArea>
 
-        <div className="shrink-0 border-t border-border p-3 flex gap-2">
-          <Input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question…"
-            disabled={sending || busy || !conversationId}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault()
-                void handleSend()
-              }
-            }}
+        <div className="shrink-0 border-t border-border p-3 space-y-3">
+          <PendingConfirmationsPanel
+            conversationId={conversationId}
+            pending={pendingDerived}
+            disabled={busy || sending}
+            onResolved={refreshConversation}
           />
-          <Button type="button" onClick={() => void handleSend()} disabled={sending || busy || !conversationId}>
-            {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Send"}
-          </Button>
+          <div className="flex gap-2">
+            <Input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask a question…"
+              disabled={sending || busy || !conversationId}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault()
+                  void handleSend()
+                }
+              }}
+            />
+            <Button type="button" onClick={() => void handleSend()} disabled={sending || busy || !conversationId}>
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Send"}
+            </Button>
+          </div>
         </div>
       </section>
     </div>
