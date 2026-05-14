@@ -139,6 +139,11 @@ const IdleTimeWidget = dynamic(
   { loading: () => <div className="h-40 animate-pulse bg-muted rounded-lg" aria-label="Loading idle time" />, ssr: false },
 )
 
+const ScorecardWidget = dynamic(
+  () => import("@/components/eld/scorecard-widget").then((mod) => ({ default: mod.ScorecardWidget })),
+  { loading: () => <div className="h-40 animate-pulse bg-muted rounded-lg" aria-label="Loading scorecards" />, ssr: false },
+)
+
 function TimeAgo({ timestamp }: { timestamp: string | null | undefined }) {
   const [timeAgo, setTimeAgo] = useState<string>("")
   
@@ -565,12 +570,15 @@ export default function FleetDashboardPage({
             />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <Suspense fallback={<div className="h-40 animate-pulse bg-muted rounded-lg" />}>
               <HarshEventsWidget />
             </Suspense>
             <Suspense fallback={<div className="h-40 animate-pulse bg-muted rounded-lg" />}>
               <IdleTimeWidget />
+            </Suspense>
+            <Suspense fallback={<div className="h-40 animate-pulse bg-muted rounded-lg" />}>
+              <ScorecardWidget />
             </Suspense>
           </div>
 

@@ -218,6 +218,18 @@ export async function resolveProactiveAlertsForCompany(
       if (rem?.id) shouldResolve = true
     }
 
+    if (row.alert_type === "coaching_follow_up_due") {
+      const sid = typeof details.coaching_session_id === "string" ? details.coaching_session_id : null
+      if (sid) {
+        const { data: sess } = await admin
+          .from("driver_coaching_sessions")
+          .select("follow_up_completed")
+          .eq("id", sid)
+          .maybeSingle()
+        if ((sess as { follow_up_completed?: boolean } | null)?.follow_up_completed) shouldResolve = true
+      }
+    }
+
     if (shouldResolve) {
       await admin
         .from("ai_proactive_alerts")

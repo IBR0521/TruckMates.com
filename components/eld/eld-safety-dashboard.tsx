@@ -163,7 +163,11 @@ export function EldSafetyDashboard() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">ELD safety events</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Harsh driving events from connected providers. Open an event for map coordinates and coaching notes.
+          Harsh driving events from connected providers. Open an event for map coordinates and coaching notes.{" "}
+          <Link href="/dashboard/eld/scorecards" className="font-medium text-primary hover:underline">
+            Driver safety scorecards
+          </Link>{" "}
+          summarize fleet performance from the same telemetry.
         </p>
       </div>
 

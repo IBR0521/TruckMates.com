@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import { hasFeatureAccess, normalizePlanTier, type PlanTier } from "@/lib/plan-limits"
 
 export type ProactiveAlert = {
   alert_type: string
@@ -277,6 +278,46 @@ export async function detectIdleAssets(companyId: string): Promise<ProactiveAler
   return out
 }
 
+export async function detectCoachingFollowUps(companyId: string): Promise<ProactiveAlert[]> {
+  const admin = createAdminClient()
+  const { data: co } = await admin
+    .from("companies")
+    .select("subscription_tier")
+    .eq("id", companyId)
+    .maybeSingle()
+  const tier: PlanTier = normalizePlanTier((co as { subscription_tier?: string | null } | null)?.subscription_tier)
+  if (!hasFeatureAccess(tier, "driver_safety_scorecards")) return []
+
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: sessions, error } = await admin
+    .from("driver_coaching_sessions")
+    .select("id, driver_id, follow_up_date")
+    .eq("company_id", companyId)
+    .eq("follow_up_date", today)
+    .eq("follow_up_completed", false)
+    .limit(80)
+
+  if (error || !sessions?.length) return []
+
+  const ids = [...new Set((sessions as Array<{ driver_id: string }>).map((s) => s.driver_id))]
+  const { data: drivers } = await admin.from("drivers").select("id, name").in("id", ids)
+  const names = new Map((drivers || []).map((d: { id: string; name: string | null }) => [d.id, d.name || "Driver"]))
+
+  return (sessions as Array<{ id: string; driver_id: string }>).map((s) => {
+    const label = names.get(s.driver_id) || "Driver"
+    return {
+      alert_type: "coaching_follow_up_due",
+      alert_key: `coaching_session_${s.id}`,
+      priority: "medium" as const,
+      title: "Coaching follow-up due",
+      body: `${label} has a coaching follow-up scheduled for today. When you have completed the check-in, mark the follow-up complete on the driver Safety tab.`,
+      details: { coaching_session_id: s.id, driver_id: s.driver_id, follow_up_date: today },
+      affected_resource_type: "driver",
+      affected_resource_id: s.driver_id,
+    }
+  })
+}
+
 export async function detectComplianceTimebomb(companyId: string): Promise<ProactiveAlert[]> {
   const admin = createAdminClient()
   const start = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
@@ -334,6 +375,7 @@ export async function generateProactiveAlerts(params: { companyId: string }): Pr
       detectStaleQuotes(params.companyId),
       detectIdleAssets(params.companyId),
       detectComplianceTimebomb(params.companyId),
+      detectCoachingFollowUps(params.companyId),
     ])
     const merged = chunks.flat()
     return { data: merged, error: null, tokensUsed: 0, costUsd: 0 }

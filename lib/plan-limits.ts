@@ -37,6 +37,8 @@ export interface PlanFeatures {
   ai_autonomous_agent: boolean
   /** Professional+ — sync harsh driving events from connected ELDs (Samsara / Motive / Geotab). */
   eld_harsh_events: boolean
+  /** Professional+ — driver safety scorecards, coaching workflow, fleet leaderboard (Phase C-2). */
+  driver_safety_scorecards: boolean
   /** Professional+ — estimated idle sessions + fuel waste from ELD telemetry. */
   eld_idle_tracking: boolean
   eld_live_integrations: boolean
@@ -150,6 +152,7 @@ const BASELINE_FALSE: Omit<PlanFeatures, never> = {
   ai_smart_notifications: false,
   ai_autonomous_agent: false,
   eld_harsh_events: false,
+  driver_safety_scorecards: false,
   eld_idle_tracking: false,
   eld_live_integrations: false,
   ap_vendor_invoicing: false,
@@ -197,6 +200,7 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     ai_smart_notifications: true,
     ai_autonomous_agent: true,
     eld_harsh_events: true,
+    driver_safety_scorecards: true,
     eld_idle_tracking: true,
     eld_live_integrations: true,
     ap_vendor_invoicing: true,
@@ -218,6 +222,7 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     ai_smart_notifications: true,
     ai_autonomous_agent: true,
     eld_harsh_events: true,
+    driver_safety_scorecards: true,
     eld_idle_tracking: true,
     eld_live_integrations: true,
     ap_vendor_invoicing: true,
