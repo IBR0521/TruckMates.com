@@ -15,6 +15,7 @@ import ELDInsightsPage from "@/app/dashboard/eld/insights/page"
 import { EldLogsTab } from "@/components/eld/eld-logs-tab"
 import ELDViolationsPage from "@/app/dashboard/eld/violations/page"
 import { FleetHosDashboard } from "@/components/eld/fleet-hos-dashboard"
+import { EldSafetyDashboard } from "@/components/eld/eld-safety-dashboard"
 
 export function FleetEldPage() {
   const router = useRouter()
@@ -27,7 +28,7 @@ export function FleetEldPage() {
   }, [])
 
   const tabParam = (searchParams.get("tab") || "overview").toLowerCase()
-  const activeTab = ["overview", "devices", "logs", "violations", "health", "insights"].includes(tabParam)
+  const activeTab = ["overview", "devices", "logs", "violations", "health", "insights", "safety"].includes(tabParam)
     ? tabParam
     : "overview"
 
@@ -79,6 +80,9 @@ export function FleetEldPage() {
           </TabsTrigger>
           <TabsTrigger value="insights" className="shrink-0">
             Insights
+          </TabsTrigger>
+          <TabsTrigger value="safety" className="shrink-0">
+            Safety
           </TabsTrigger>
         </TabsList>
 
@@ -140,6 +144,11 @@ export function FleetEldPage() {
         <TabsContent value="insights">
           <div className="w-full bg-background">
             <ELDInsightsPage />
+          </div>
+        </TabsContent>
+        <TabsContent value="safety">
+          <div className="w-full bg-background">
+            <EldSafetyDashboard />
           </div>
         </TabsContent>
       </Tabs>

@@ -39,6 +39,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { UnifiedCommunicationsThread } from "@/components/communications/unified-communications-thread"
+import { DriverSafetyEventsSection } from "@/components/eld/driver-safety-events-section"
 
 type DriverDetail = {
   id: string
@@ -446,6 +447,8 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
         >
           <UnifiedCommunicationsThread driverId={id} title="Driver unified thread" />
         </DetailSection>
+
+        <DriverSafetyEventsSection driverId={id} />
 
         <DetailSection title="Profile Information" icon={<User className="w-5 h-5" />} className="border-border/70 bg-card/80">
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">

@@ -4,27 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { databaseErrorMessage, errorMessage } from "@/lib/error-message"
 import { hasFeatureAccess, normalizePlanTier, type PlanTier } from "@/lib/plan-limits"
 import { processSmartNotificationsForCompany } from "@/lib/ai/notifications/process-company-smart"
+import { mapWithConcurrency } from "@/lib/utils/map-with-concurrency"
 
 export const maxDuration = 300
 
 type CompanyRow = { id: string; subscription_tier: string | null; subscription_status: string | null }
-
-async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const ret: R[] = new Array(items.length)
-  let cursor = 0
-
-  async function worker(): Promise<void> {
-    while (true) {
-      const idx = cursor++
-      if (idx >= items.length) break
-      ret[idx] = await fn(items[idx]!)
-    }
-  }
-
-  const n = Math.min(Math.max(1, concurrency), Math.max(1, items.length))
-  await Promise.all(Array.from({ length: n }, () => worker()))
-  return ret
-}
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization")

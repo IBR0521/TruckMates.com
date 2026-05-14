@@ -16,6 +16,7 @@ type UpgradeFeatureKey = ComponentProps<typeof UpgradeModal>["feature"]
 function upgradeFeatureForPlanFeature(feature: keyof PlanFeatures): UpgradeFeatureKey {
   if (feature === "edi_receiving") return "edi"
   if (feature === "hazmat_module") return "hazmat"
+  if (feature === "eld_harsh_events" || feature === "eld_idle_tracking") return "driver_scorecards"
   if (
     feature === "public_api" ||
     feature === "multi_terminal" ||

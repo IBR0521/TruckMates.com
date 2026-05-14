@@ -27,7 +27,7 @@ function parseEiaV2Price(value: unknown): number | null {
 /**
  * Latest weekly No. 2 diesel retail ($/gal) for a duoarea (e.g. R1Y = PADD 1B Central Atlantic, NUS = U.S.).
  */
-async function fetchLatestGndWeeklyDiesel(
+export async function fetchLatestGndWeeklyDiesel(
   apiKey: string,
   duoarea: string,
 ): Promise<{ price: number | null; seriesId: string | null; error: string | null }> {
@@ -79,6 +79,36 @@ async function fetchLatestGndWeeklyDiesel(
 export async function fetchLatestUsDieselPrice(apiKey: string): Promise<{ price: number | null; error: string | null }> {
   const { price, error } = await fetchLatestGndWeeklyDiesel(apiKey, EIA_US_DIESEL_DUOAREA)
   return { price, error }
+}
+
+const DEFAULT_DIESEL_USD_PER_GAL = 3.85
+
+/**
+ * Best-effort weekly diesel $/gal for idle fuel cost: PADD by truck registration state, else U.S., else static default.
+ */
+export async function fetchDieselPriceForTruckContext(params: {
+  apiKey: string | null | undefined
+  registrationState: string | null | undefined
+}): Promise<{ pricePerGallon: number; source: "eia_region" | "eia_us" | "default" }> {
+  const key = String(params.apiKey || "").trim()
+  if (!key) {
+    return { pricePerGallon: DEFAULT_DIESEL_USD_PER_GAL, source: "default" }
+  }
+  const st = String(params.registrationState || "")
+    .trim()
+    .toUpperCase()
+  if (st.length === 2) {
+    const duo = stateCodeToEiaGndDuoarea(st)
+    const regional = await fetchLatestGndWeeklyDiesel(key, duo)
+    if (regional.price != null) {
+      return { pricePerGallon: regional.price, source: "eia_region" }
+    }
+  }
+  const us = await fetchLatestGndWeeklyDiesel(key, EIA_US_DIESEL_DUOAREA)
+  if (us.price != null) {
+    return { pricePerGallon: us.price, source: "eia_us" }
+  }
+  return { pricePerGallon: DEFAULT_DIESEL_USD_PER_GAL, source: "default" }
 }
 
 /**

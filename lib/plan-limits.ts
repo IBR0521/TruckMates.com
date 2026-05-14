@@ -35,6 +35,10 @@ export interface PlanFeatures {
   /** Professional+ — AI prioritization, clustering, proactive in-app notifications (cron). */
   ai_smart_notifications: boolean
   ai_autonomous_agent: boolean
+  /** Professional+ — sync harsh driving events from connected ELDs (Samsara / Motive / Geotab). */
+  eld_harsh_events: boolean
+  /** Professional+ — estimated idle sessions + fuel waste from ELD telemetry. */
+  eld_idle_tracking: boolean
   eld_live_integrations: boolean
   ap_vendor_invoicing: boolean
   bank_reconciliation: boolean
@@ -145,6 +149,8 @@ const BASELINE_FALSE: Omit<PlanFeatures, never> = {
   ai_advanced_actions: false,
   ai_smart_notifications: false,
   ai_autonomous_agent: false,
+  eld_harsh_events: false,
+  eld_idle_tracking: false,
   eld_live_integrations: false,
   ap_vendor_invoicing: false,
   bank_reconciliation: false,
@@ -190,6 +196,8 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     ai_advanced_actions: true,
     ai_smart_notifications: true,
     ai_autonomous_agent: true,
+    eld_harsh_events: true,
+    eld_idle_tracking: true,
     eld_live_integrations: true,
     ap_vendor_invoicing: true,
     bank_reconciliation: true,
@@ -209,6 +217,8 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     ai_advanced_actions: true,
     ai_smart_notifications: true,
     ai_autonomous_agent: true,
+    eld_harsh_events: true,
+    eld_idle_tracking: true,
     eld_live_integrations: true,
     ap_vendor_invoicing: true,
     bank_reconciliation: true,

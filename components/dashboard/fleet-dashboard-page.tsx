@@ -129,6 +129,16 @@ const PerformanceMetrics = dynamic(() => import("@/components/dashboard/performa
   ssr: false
 })
 
+const HarshEventsWidget = dynamic(
+  () => import("@/components/eld/harsh-events-widget").then((mod) => ({ default: mod.HarshEventsWidget })),
+  { loading: () => <div className="h-40 animate-pulse bg-muted rounded-lg" aria-label="Loading harsh events" />, ssr: false },
+)
+
+const IdleTimeWidget = dynamic(
+  () => import("@/components/eld/idle-time-widget").then((mod) => ({ default: mod.IdleTimeWidget })),
+  { loading: () => <div className="h-40 animate-pulse bg-muted rounded-lg" aria-label="Loading idle time" />, ssr: false },
+)
+
 function TimeAgo({ timestamp }: { timestamp: string | null | undefined }) {
   const [timeAgo, setTimeAgo] = useState<string>("")
   
@@ -553,6 +563,15 @@ export default function FleetDashboardPage({
                 { label: "Routes", value: isLoading ? "..." : `${stats.activeRoutes}/${stats.totalRoutes}` },
               ]}
             />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Suspense fallback={<div className="h-40 animate-pulse bg-muted rounded-lg" />}>
+              <HarshEventsWidget />
+            </Suspense>
+            <Suspense fallback={<div className="h-40 animate-pulse bg-muted rounded-lg" />}>
+              <IdleTimeWidget />
+            </Suspense>
           </div>
 
           <Card className="border-border/70 bg-card/40 p-4 shadow-sm md:p-6">
