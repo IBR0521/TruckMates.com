@@ -301,7 +301,9 @@ export async function getDriverScorecard(params: {
     .order("snapshot_date", { ascending: false })
     .limit(120)
   if (hErr) return { data: null, error: safeDbError(hErr) }
-  const allHist = (histRaw || []).map(asScorecard).filter((r): r is DriverSafetyScorecard => !!r)
+  const allHist = ((histRaw ?? []) as unknown[])
+    .map(asScorecard)
+    .filter((r: DriverSafetyScorecard | null): r is DriverSafetyScorecard => r != null)
   const history = pickWeeklyHistory(allHist, 12)
 
   const from = new Date()
@@ -322,7 +324,7 @@ export async function getDriverScorecard(params: {
     .limit(40)
   if (eErr) return { data: null, error: safeDbError(eErr) }
 
-  const recent_events: HarshEvent[] = (evs || []).map((r) => {
+  const recent_events: HarshEvent[] = ((evs ?? []) as unknown[]).map((r: unknown) => {
     const o = r as Record<string, unknown>
     return {
       id: String(o.id),
@@ -360,7 +362,7 @@ export async function getDriverScorecard(params: {
     .limit(25)
   if (coErr) return { data: null, error: safeDbError(coErr) }
 
-  const recent_coaching: DriverCoachingSession[] = (coachRaw || []).map((row) => {
+  const recent_coaching: DriverCoachingSession[] = ((coachRaw ?? []) as unknown[]).map((row: unknown) => {
     const o = row as Record<string, unknown>
     return {
       id: String(o.id),
@@ -517,6 +519,13 @@ export async function getScorecardSnapshotDates(): Promise<{ data: string[] | nu
     .limit(400)
 
   if (error) return { data: null, error: safeDbError(error) }
-  const dates = [...new Set((rows || []).map((r: { snapshot_date: string }) => r.snapshot_date).filter(Boolean))]
+  const rowList = (rows ?? []) as Array<{ snapshot_date?: unknown }>
+  const dates: string[] = [
+    ...new Set(
+      rowList
+        .map((r) => (typeof r.snapshot_date === "string" ? r.snapshot_date : ""))
+        .filter((s) => s.length > 0),
+    ),
+  ]
   return { data: dates, error: null }
 }

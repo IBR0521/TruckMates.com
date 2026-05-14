@@ -199,25 +199,24 @@ async function applyFleetRanks(
 
   const list = rows as Array<{ id: string; score: number }>
   const total = list.length
-  let rank = 0
-  const updates: Promise<unknown>[] = []
-  for (const r of list) {
-    rank += 1
-    const percentile =
-      total <= 1 ? 100 : Math.round(((total - rank + 1) / total) * 10000) / 100
-    updates.push(
-      admin
-        .from("driver_safety_scorecards")
-        .update({
-          fleet_rank: rank,
-          fleet_total: total,
-          fleet_percentile: percentile,
-        })
-        .eq("id", r.id),
-    )
-  }
   const BATCH = 25
-  for (let i = 0; i < updates.length; i += BATCH) {
-    await Promise.all(updates.slice(i, i + BATCH))
+  for (let i = 0; i < list.length; i += BATCH) {
+    const slice = list.slice(i, i + BATCH)
+    await Promise.all(
+      slice.map(async (r, j) => {
+        const rank = i + j + 1
+        const percentile =
+          total <= 1 ? 100 : Math.round(((total - rank + 1) / total) * 10000) / 100
+        const { error: upErr } = await admin
+          .from("driver_safety_scorecards")
+          .update({
+            fleet_rank: rank,
+            fleet_total: total,
+            fleet_percentile: percentile,
+          })
+          .eq("id", r.id)
+        if (upErr) throw upErr
+      }),
+    )
   }
 }
