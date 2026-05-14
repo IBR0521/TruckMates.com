@@ -67,6 +67,14 @@
     {
       "path": "/api/cron/generate-scorecards",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/sync-eld-telemetry",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/generate-trip-summaries",
+      "schedule": "30 8 * * *"
     }
   ],
   "functions": {
@@ -83,6 +91,14 @@
       "memory": 1024
     },
     "app/api/cron/generate-scorecards/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "app/api/cron/sync-eld-telemetry/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "app/api/cron/generate-trip-summaries/route.ts": {
       "maxDuration": 300,
       "memory": 1024
     },

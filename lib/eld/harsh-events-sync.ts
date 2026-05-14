@@ -396,7 +396,7 @@ export async function syncGeotabHarshEvents(
   return { events, httpStatus: 200, error: null, softSkip: false }
 }
 
-async function resolveTruckId(
+export async function resolveTruckId(
   admin: ReturnType<typeof createAdminClient>,
   companyId: string,
   device: EldDeviceSyncRow,
@@ -419,7 +419,7 @@ async function resolveTruckId(
   return tid ?? device.truck_id ?? null
 }
 
-async function resolveDriverId(
+export async function resolveDriverId(
   admin: ReturnType<typeof createAdminClient>,
   device: EldDeviceSyncRow,
   driverExternalId: string | null,

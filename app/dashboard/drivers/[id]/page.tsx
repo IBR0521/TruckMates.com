@@ -41,6 +41,7 @@ import {
 import { UnifiedCommunicationsThread } from "@/components/communications/unified-communications-thread"
 import { DriverSafetyEventsSection } from "@/components/eld/driver-safety-events-section"
 import { DriverScorecardDetail } from "@/components/eld/driver-scorecard-detail"
+import { DriverTripHistorySection } from "@/components/trips/driver-trip-history"
 
 type DriverDetail = {
   id: string
@@ -452,6 +453,8 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
         <DriverSafetyEventsSection driverId={id} />
 
         <DriverScorecardDetail driverId={id} driverName={driver.name} />
+
+        <DriverTripHistorySection driverId={id} />
 
         <DetailSection title="Profile Information" icon={<User className="w-5 h-5" />} className="border-border/70 bg-card/80">
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">

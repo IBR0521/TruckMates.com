@@ -19,7 +19,8 @@ function upgradeFeatureForPlanFeature(feature: keyof PlanFeatures): UpgradeFeatu
   if (
     feature === "eld_harsh_events" ||
     feature === "eld_idle_tracking" ||
-    feature === "driver_safety_scorecards"
+    feature === "driver_safety_scorecards" ||
+    feature === "trip_replay"
   ) {
     return "driver_scorecards"
   }

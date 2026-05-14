@@ -41,6 +41,8 @@ export interface PlanFeatures {
   driver_safety_scorecards: boolean
   /** Professional+ — estimated idle sessions + fuel waste from ELD telemetry. */
   eld_idle_tracking: boolean
+  /** Professional+ — completed-load route replay, telemetry-backed trip reports (Phase C-3). */
+  trip_replay: boolean
   eld_live_integrations: boolean
   ap_vendor_invoicing: boolean
   bank_reconciliation: boolean
@@ -154,6 +156,7 @@ const BASELINE_FALSE: Omit<PlanFeatures, never> = {
   eld_harsh_events: false,
   driver_safety_scorecards: false,
   eld_idle_tracking: false,
+  trip_replay: false,
   eld_live_integrations: false,
   ap_vendor_invoicing: false,
   bank_reconciliation: false,
@@ -202,6 +205,7 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     eld_harsh_events: true,
     driver_safety_scorecards: true,
     eld_idle_tracking: true,
+    trip_replay: true,
     eld_live_integrations: true,
     ap_vendor_invoicing: true,
     bank_reconciliation: true,
@@ -224,6 +228,7 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     eld_harsh_events: true,
     driver_safety_scorecards: true,
     eld_idle_tracking: true,
+    trip_replay: true,
     eld_live_integrations: true,
     ap_vendor_invoicing: true,
     bank_reconciliation: true,

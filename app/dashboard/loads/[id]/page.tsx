@@ -43,6 +43,7 @@ import {
   StatusBadge,
 } from "@/components/dashboard/detail-page-layout"
 import { LoadTripPlanningEstimate } from "@/components/load-trip-planning-estimate"
+import { TripSummaryCard } from "@/components/trips/trip-summary-card"
 import type { TripPlanningEstimate } from "@/app/actions/promiles"
 import { getLastStopRoutingAddress, getOrderedDeliveryStopAddresses } from "@/lib/load-routing-from-stops"
 import { createCustomerPortalAccess, reviewPortalLoadRequest } from "@/app/actions/customer-portal"
@@ -1143,6 +1144,8 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         </DetailSection>
         <div className="border-t border-border/60" />
+
+        <TripSummaryCard loadId={id} loadStatus={load.status ?? ""} />
 
           <div id="trip-planning-promiles">
             <LoadTripPlanningEstimate

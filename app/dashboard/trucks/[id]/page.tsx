@@ -33,6 +33,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { TruckSafetyEventsSection } from "@/components/eld/truck-safety-events-section"
+import { TruckTripHistorySection } from "@/components/trips/truck-trip-history"
 
 type TruckDetail = {
   id: string
@@ -440,6 +441,8 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           </DetailSection>
 
           <TruckSafetyEventsSection truckId={id} />
+
+          <TruckTripHistorySection truckId={id} />
 
           {truck.notes && (
             <DetailSection title="Notes" icon={<FileText className="w-5 h-5" />} className="border-border/70 bg-card/80">
