@@ -91,6 +91,11 @@ function pickWeeklyHistory(rows: DriverSafetyScorecard[], maxWeeks: number): Dri
   return picked.sort((a, b) => new Date(a.snapshot_date).getTime() - new Date(b.snapshot_date).getTime())
 }
 
+function normalizeDataConfidence(raw: unknown): DriverSafetyScorecard["data_confidence"] {
+  if (raw === "low" || raw === "high" || raw === "medium") return raw
+  return "medium"
+}
+
 function asScorecard(row: unknown): DriverSafetyScorecard | null {
   if (!row || typeof row !== "object") return null
   const o = row as Record<string, unknown>
@@ -120,10 +125,7 @@ function asScorecard(row: unknown): DriverSafetyScorecard | null {
     fleet_rank: o.fleet_rank == null ? null : Number(o.fleet_rank),
     fleet_total: o.fleet_total == null ? null : Number(o.fleet_total),
     fleet_percentile: o.fleet_percentile == null ? null : Number(o.fleet_percentile),
-    data_confidence:
-      o.data_confidence === "low" || o.data_confidence === "high" || o.data_confidence === "medium"
-        ? o.data_confidence
-        : "medium",
+    data_confidence: normalizeDataConfidence(o.data_confidence),
     created_at: String(o.created_at ?? ""),
   }
 }
@@ -225,10 +227,7 @@ export async function getFleetScorecards(params: {
       r.speeding_count +
       r.hos_violation_count,
     snapshot_date: r.snapshot_date,
-    data_confidence:
-      r.data_confidence === "low" || r.data_confidence === "high" || r.data_confidence === "medium"
-        ? r.data_confidence
-        : "medium",
+    data_confidence: normalizeDataConfidence(r.data_confidence),
   }))
 
   const sortBy = params.sortBy ?? "rank"
