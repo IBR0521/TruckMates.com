@@ -199,7 +199,14 @@ export async function getFleetScorecards(params: {
   const driverIds = [...new Set(rows.map((r) => r.driver_id))]
   const { data: drivers, error: dErr } = await supabase.from("drivers").select("id, name").in("id", driverIds)
   if (dErr) return { data: null, error: safeDbError(dErr) }
-  const nameById = new Map((drivers || []).map((d: { id: string; name: string | null }) => [d.id, d.name || "Driver"]))
+  const nameById = new Map<string, string>()
+  for (const d of drivers ?? []) {
+    const row = d as Record<string, unknown>
+    const id = typeof row.id === "string" ? row.id : ""
+    const raw = row.name
+    const label = typeof raw === "string" && raw.trim().length > 0 ? raw : "Driver"
+    if (id) nameById.set(id, label)
+  }
 
   const lim = Math.min(Math.max(1, params.limit ?? 500), 500)
   let list = rows.map((r) => ({
