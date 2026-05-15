@@ -7,11 +7,10 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { validateRequiredString, sanitizeString } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
-import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 import * as Sentry from "@sentry/nextjs"
 /** `public.geofences` — geofencing_schema.sql + PostGIS columns from postgis_migration.sql */
 const GEOFENCE_FULL_SELECT =
-  "id, company_id, name, description, zone_type, center_latitude, center_longitude, radius_meters, polygon_coordinates, north_bound, south_bound, east_bound, west_bound, is_active, alert_on_entry, alert_on_exit, alert_on_dwell, dwell_time_minutes, assigned_trucks, assigned_routes, address, city, state, zip_code, created_at, updated_at, center_geography, polygon_geography"
+  "id, company_id, name, description, zone_type, geofence_type, center_latitude, center_longitude, radius_meters, polygon_coordinates, north_bound, south_bound, east_bound, west_bound, is_active, alert_on_entry, alert_on_exit, alert_on_dwell, dwell_time_minutes, assigned_trucks, assigned_routes, address, city, state, zip_code, created_at, updated_at, center_geography, polygon_geography, related_customer_id, auto_update_load_status, entry_load_status, exit_load_status, detention_enabled, detention_threshold_minutes, detention_hourly_rate, detention_auto_bill"
 
 /** `public.zone_visits` — supabase/geofencing_schema.sql */
 const ZONE_VISITS_SELECT =
@@ -31,12 +30,17 @@ type ZoneVisitLite = {
 }
 
 async function ensureGeofencingAccess() {
-  const access = await getCurrentCompanyFeatureAccess("geofencing")
-  if (access.error) {
-    return { allowed: false, error: access.error }
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { allowed: false, error: ctx.error || "Not authenticated" }
   }
-  if (!access.allowed) {
-    return { allowed: false, error: "Geofencing is available on Fleet and Enterprise plans" }
+  const { checkFeatureAccess } = await import("@/lib/plan-enforcement")
+  const gate = await checkFeatureAccess({ companyId: ctx.companyId, feature: "geofencing_automation" })
+  if (!gate.allowed) {
+    return {
+      allowed: false,
+      error: "Geofencing is available on Starter plans and higher. Upgrade to manage zones and automation.",
+    }
   }
   return { allowed: true as const, error: null as string | null }
 }
@@ -266,6 +270,8 @@ export async function createGeofence(formData: {
   auto_update_load_status?: boolean
   entry_load_status?: string
   exit_load_status?: string
+  geofence_type?: string
+  related_customer_id?: string | null
 }) {
   const access = await ensureGeofencingAccess()
   if (!access.allowed) {
@@ -343,6 +349,20 @@ export async function createGeofence(formData: {
         city: formData.city ? sanitizeString(formData.city, 100) : null,
         state: formData.state ? sanitizeString(formData.state, 50) : null,
         zip_code: formData.zip_code ? sanitizeString(formData.zip_code, 20) : null,
+        geofence_type:
+          formData.geofence_type &&
+          [
+            "customer",
+            "pickup",
+            "delivery",
+            "yard",
+            "fuel_stop",
+            "rest_area",
+            "other",
+          ].includes(formData.geofence_type)
+            ? formData.geofence_type
+            : "yard",
+        related_customer_id: formData.related_customer_id || null,
       })
       .select()
       .single()
@@ -352,6 +372,7 @@ export async function createGeofence(formData: {
     }
 
     revalidatePath("/dashboard/geofencing")
+    revalidatePath("/dashboard/eld/geofences")
     return { data: geofence, error: null }
   } catch (error: unknown) {
     return { error: errorMessage(error, "Failed to create geofence"), data: null }
@@ -365,6 +386,9 @@ export async function updateGeofence(id: string, formData: Partial<{
   name: string
   description: string
   is_active: boolean
+  center_latitude: number
+  center_longitude: number
+  radius_meters: number
   alert_on_entry: boolean
   alert_on_exit: boolean
   alert_on_dwell: boolean
@@ -378,6 +402,8 @@ export async function updateGeofence(id: string, formData: Partial<{
   auto_update_load_status?: boolean
   entry_load_status?: string
   exit_load_status?: string
+  geofence_type?: string
+  related_customer_id?: string | null
 }>) {
   const access = await ensureGeofencingAccess()
   if (!access.allowed) {
@@ -410,6 +436,15 @@ export async function updateGeofence(id: string, formData: Partial<{
     }
     if (formData.is_active !== undefined) {
       updateData.is_active = formData.is_active
+    }
+    if (formData.center_latitude !== undefined) {
+      updateData.center_latitude = formData.center_latitude
+    }
+    if (formData.center_longitude !== undefined) {
+      updateData.center_longitude = formData.center_longitude
+    }
+    if (formData.radius_meters !== undefined) {
+      updateData.radius_meters = formData.radius_meters
     }
     if (formData.alert_on_entry !== undefined) {
       updateData.alert_on_entry = formData.alert_on_entry
@@ -450,6 +485,25 @@ export async function updateGeofence(id: string, formData: Partial<{
     if (formData.exit_load_status !== undefined) {
       updateData.exit_load_status = formData.exit_load_status || null
     }
+    if (formData.geofence_type !== undefined) {
+      const gt = formData.geofence_type
+      if (
+        [
+          "customer",
+          "pickup",
+          "delivery",
+          "yard",
+          "fuel_stop",
+          "rest_area",
+          "other",
+        ].includes(gt)
+      ) {
+        updateData.geofence_type = gt
+      }
+    }
+    if (formData.related_customer_id !== undefined) {
+      updateData.related_customer_id = formData.related_customer_id || null
+    }
 
     const { data: geofence, error } = await supabase
       .from("geofences")
@@ -464,6 +518,7 @@ export async function updateGeofence(id: string, formData: Partial<{
     }
 
     revalidatePath("/dashboard/geofencing")
+    revalidatePath("/dashboard/eld/geofences")
     revalidatePath(`/dashboard/geofencing/${id}`)
     return { data: geofence, error: null }
   } catch (error: unknown) {
@@ -512,6 +567,7 @@ export async function deleteGeofence(id: string) {
     }
 
     revalidatePath("/dashboard/geofencing")
+    revalidatePath("/dashboard/eld/geofences")
     return { data: { success: true }, error: null }
   } catch (error: unknown) {
     return { error: errorMessage(error, "Failed to delete geofence"), data: null }

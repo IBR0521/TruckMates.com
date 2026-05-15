@@ -29,7 +29,7 @@ const PLAN_FEATURES: Record<PlanName, Record<PlanFeature, boolean>> = {
     edi: false,
     hazmat: false,
     route_optimization: false,
-    geofencing: false,
+    geofencing: true,
     driver_scorecards: false,
     crm: false,
   },

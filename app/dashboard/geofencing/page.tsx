@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { getGeofences, deleteGeofence } from "@/app/actions/geofencing"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { getPlanFeatureAccessStatus } from "@/app/actions/plan-feature-access"
+import { getPlanFeatureGate } from "@/app/actions/plan-usage"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 type GeofenceRow = {
@@ -82,7 +82,7 @@ export default function GeofencingPage() {
 
   async function loadGeofences() {
     setIsLoading(true)
-    const access = await getPlanFeatureAccessStatus("geofencing")
+    const access = await getPlanFeatureGate("geofencing_automation")
     if (access.error) {
       toast.error(access.error)
       setIsLoading(false)
@@ -90,7 +90,7 @@ export default function GeofencingPage() {
     }
     const allowed = !!access.data?.allowed
     setGeofencingAllowed(allowed)
-    setPlanName(String(access.data?.plan_name || "starter"))
+    setPlanName(String(access.data?.currentTier || "starter"))
     if (!allowed) {
       setGeofences([])
       setFilteredGeofences([])

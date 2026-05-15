@@ -75,6 +75,10 @@
     {
       "path": "/api/cron/generate-trip-summaries",
       "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/process-geofences",
+      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {
@@ -99,6 +103,10 @@
       "memory": 1024
     },
     "app/api/cron/generate-trip-summaries/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "app/api/cron/process-geofences/route.ts": {
       "maxDuration": 300,
       "memory": 1024
     },

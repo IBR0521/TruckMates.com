@@ -116,6 +116,21 @@ export function FleetEldPage() {
                 )}
 
                 <FleetHosDashboard />
+
+                <Card className="border-border/70 p-4">
+                  <h3 className="font-semibold text-foreground">Geofences</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Configure zones and review telemetry enter/exit for dwell and automation.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href="/dashboard/eld/geofences">Manage geofences</Link>
+                    </Button>
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link href="/dashboard/eld/geofences/events">Events</Link>
+                    </Button>
+                  </div>
+                </Card>
               </div>
             </div>
           </div>

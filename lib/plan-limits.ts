@@ -43,6 +43,10 @@ export interface PlanFeatures {
   eld_idle_tracking: boolean
   /** Professional+ — completed-load route replay, telemetry-backed trip reports (Phase C-3). */
   trip_replay: boolean
+  /** Starter+ — geofence zones, telemetry events, alerts; cron runs for eligible fleets (Phase C-4). */
+  geofencing_automation: boolean
+  /** Professional+ — auto-update load status from geofence telemetry (Starter manages zones without auto status). */
+  geofencing_load_automation: boolean
   eld_live_integrations: boolean
   ap_vendor_invoicing: boolean
   bank_reconciliation: boolean
@@ -157,6 +161,8 @@ const BASELINE_FALSE: Omit<PlanFeatures, never> = {
   driver_safety_scorecards: false,
   eld_idle_tracking: false,
   trip_replay: false,
+  geofencing_automation: false,
+  geofencing_load_automation: false,
   eld_live_integrations: false,
   ap_vendor_invoicing: false,
   bank_reconciliation: false,
@@ -190,6 +196,8 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     ai_dispatch_suggestions: true,
     ai_morning_briefing: true,
     ai_chat: true,
+    geofencing_automation: true,
+    geofencing_load_automation: false,
   },
   professional: {
     ...BASELINE_FALSE,
@@ -206,6 +214,8 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     driver_safety_scorecards: true,
     eld_idle_tracking: true,
     trip_replay: true,
+    geofencing_automation: true,
+    geofencing_load_automation: true,
     eld_live_integrations: true,
     ap_vendor_invoicing: true,
     bank_reconciliation: true,
@@ -229,6 +239,8 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     driver_safety_scorecards: true,
     eld_idle_tracking: true,
     trip_replay: true,
+    geofencing_automation: true,
+    geofencing_load_automation: true,
     eld_live_integrations: true,
     ap_vendor_invoicing: true,
     bank_reconciliation: true,

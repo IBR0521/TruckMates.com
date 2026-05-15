@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import dynamic from "next/dynamic"
 import { MorningBriefingCard } from "@/components/ai/morning-briefing-card"
+import { DwellTimeWidget } from "@/components/eld/dwell-time-widget"
 import { checkEmailServiceConfigured } from "@/app/actions/settings-integration"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { LucideIcon } from "lucide-react"
@@ -441,6 +442,8 @@ export default function FleetDashboardPage({
       <div className="p-4 md:p-8">
         <div className="mx-auto w-full max-w-[1800px] space-y-6">
           <MorningBriefingCard />
+
+          <DwellTimeWidget />
 
           {emailServiceStatus?.isManager && !emailServiceStatus.configured && !dismissedEmailBanner && (
             <Alert className="border-yellow-500/50 bg-yellow-500/10">

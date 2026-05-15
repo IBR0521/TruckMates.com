@@ -20,7 +20,9 @@ function upgradeFeatureForPlanFeature(feature: keyof PlanFeatures): UpgradeFeatu
     feature === "eld_harsh_events" ||
     feature === "eld_idle_tracking" ||
     feature === "driver_safety_scorecards" ||
-    feature === "trip_replay"
+    feature === "trip_replay" ||
+    feature === "geofencing_automation" ||
+    feature === "geofencing_load_automation"
   ) {
     return "driver_scorecards"
   }
