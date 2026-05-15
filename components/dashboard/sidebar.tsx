@@ -33,6 +33,7 @@ import {
   MessageSquare,
   Sparkles,
   Bot,
+  Clock,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import Link from "next/link"
@@ -131,6 +132,15 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
       setEldOpen(false)
     }
   }, [shouldShowCollapsed])
+
+  useEffect(() => {
+    if (pathname.startsWith("/dashboard/eld")) {
+      setEldOpen(true)
+    }
+    if (pathname.startsWith("/dashboard/reports")) {
+      setReportsOpen(true)
+    }
+  }, [pathname])
 
   useEffect(() => {
     let isMounted = true
@@ -414,7 +424,53 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
                 <NavItem href="/dashboard/dvir" icon={FileCheck} label="DVIR Reports" isCollapsed={shouldShowCollapsed} />
               )}
               {userRole && canViewFeature(userRole, "eld") && (
-                <NavItem href="/dashboard/eld" icon={Shield} label="ELD" isCollapsed={shouldShowCollapsed} />
+                <DropdownItem
+                  icon={Shield}
+                  label="ELD"
+                  href="/dashboard/eld"
+                  isOpen={eldOpen}
+                  onToggle={() => setEldOpen(!eldOpen)}
+                  isCollapsed={shouldShowCollapsed}
+                >
+                  <NavItem href="/dashboard/eld" label="ELD overview" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem
+                    href="/dashboard/eld/safety"
+                    label="Safety Events"
+                    planBadge="Pro"
+                    isSubitem
+                    isCollapsed={shouldShowCollapsed}
+                  />
+                  <NavItem
+                    href="/dashboard/eld/scorecards"
+                    label="Safety Scorecards"
+                    planBadge="Pro"
+                    isSubitem
+                    isCollapsed={shouldShowCollapsed}
+                  />
+                  <NavItem
+                    href="/dashboard/eld/geofences"
+                    label="Geofences"
+                    planBadge="Starter"
+                    isSubitem
+                    isCollapsed={shouldShowCollapsed}
+                  />
+                  <NavItem
+                    href="/dashboard/eld/geofences/events"
+                    label="Geofence Events"
+                    planBadge="Starter"
+                    isSubitem
+                    isCollapsed={shouldShowCollapsed}
+                  />
+                </DropdownItem>
+              )}
+              {userRole && canViewFeature(userRole, "accounting") && (
+                <NavItem
+                  href="/dashboard/billing/detention-candidates"
+                  icon={Clock}
+                  label="Detention Candidates"
+                  planBadge="Pro"
+                  isCollapsed={shouldShowCollapsed}
+                />
               )}
               {userRole && canViewFeature(userRole, "ifta") && (
                 <NavItem href="/dashboard/ifta" icon={Receipt} label="IFTA" isCollapsed={shouldShowCollapsed} />
@@ -498,7 +554,23 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
                 <NavItem href="/dashboard/address-book" icon={Contact} label="Address Book" isCollapsed={shouldShowCollapsed} />
               )}
               {userRole && canViewFeature(userRole, "reports") && (
-                <NavItem href="/dashboard/reports" icon={BarChart3} label="Reports" isCollapsed={shouldShowCollapsed} />
+                <DropdownItem
+                  icon={BarChart3}
+                  label="Reports"
+                  href="/dashboard/reports"
+                  isOpen={reportsOpen}
+                  onToggle={() => setReportsOpen(!reportsOpen)}
+                  isCollapsed={shouldShowCollapsed}
+                >
+                  <NavItem href="/dashboard/reports" label="All reports" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem
+                    href="/dashboard/reports/detention"
+                    label="Detention Report"
+                    planBadge="Pro"
+                    isSubitem
+                    isCollapsed={shouldShowCollapsed}
+                  />
+                </DropdownItem>
               )}
               {userRole && canViewFeature(userRole, "documents") && (
                 <NavItem href="/dashboard/documents" icon={FolderOpen} label="Documents" isCollapsed={shouldShowCollapsed} />
