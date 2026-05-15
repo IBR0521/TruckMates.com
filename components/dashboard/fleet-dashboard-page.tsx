@@ -34,6 +34,7 @@ import dynamic from "next/dynamic"
 import { MorningBriefingCard } from "@/components/ai/morning-briefing-card"
 import { DwellTimeWidget } from "@/components/eld/dwell-time-widget"
 import { FaultCodesWidget } from "@/components/eld/fault-codes-widget"
+import { NoEldBanner } from "@/components/eld/no-eld-banner"
 import { checkEmailServiceConfigured } from "@/app/actions/settings-integration"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { LucideIcon } from "lucide-react"
@@ -442,6 +443,8 @@ export default function FleetDashboardPage({
 
       <div className="p-4 md:p-8">
         <div className="mx-auto w-full max-w-[1800px] space-y-6">
+          <NoEldBanner />
+
           <MorningBriefingCard />
 
           <DwellTimeWidget />

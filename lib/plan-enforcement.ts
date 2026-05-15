@@ -22,7 +22,14 @@ async function getCompanyTier(companyId: string): Promise<PlanTier> {
 
 export async function checkResourceLimit(params: {
   companyId: string
-  resourceType: "trucks" | "trailers" | "drivers" | "user_seats" | "customers" | "vendors"
+  resourceType:
+    | "trucks"
+    | "trailers"
+    | "drivers"
+    | "user_seats"
+    | "customers"
+    | "vendors"
+    | "eld_devices"
 }): Promise<{
   allowed: boolean
   current: number
@@ -37,7 +44,7 @@ export async function checkResourceLimit(params: {
     limits[
       params.resourceType as keyof Pick<
         typeof limits,
-        "trucks" | "trailers" | "drivers" | "user_seats" | "customers" | "vendors"
+        "trucks" | "trailers" | "drivers" | "user_seats" | "customers" | "vendors" | "eld_devices"
       >
     ]
   if (isUnlimited(limit)) {
@@ -91,6 +98,13 @@ export async function checkResourceLimit(params: {
       .select("id", { count: "exact", head: true })
       .eq("company_id", params.companyId)
       .eq("status", "active")
+    current = count ?? 0
+  } else if (params.resourceType === "eld_devices") {
+    const { count } = await admin
+      .from("eld_devices")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", params.companyId)
+      .neq("status", "disconnected")
     current = count ?? 0
   }
 

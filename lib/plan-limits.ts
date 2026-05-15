@@ -19,6 +19,8 @@ export interface PlanLimits {
   ai_calls_per_month: number
   storage_gb: number
   api_requests_per_day: number
+  /** Connected ELD provider integrations (fleet API connections). */
+  eld_devices: number
 }
 
 export interface PlanFeatures {
@@ -88,6 +90,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     ai_calls_per_month: 100,
     storage_gb: 2,
     api_requests_per_day: 0,
+    eld_devices: 1,
   },
   starter: {
     price_monthly: 149,
@@ -103,6 +106,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     ai_calls_per_month: 800,
     storage_gb: 15,
     api_requests_per_day: 0,
+    eld_devices: 3,
   },
   professional: {
     price_monthly: 399,
@@ -118,6 +122,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     ai_calls_per_month: 5000,
     storage_gb: 100,
     api_requests_per_day: 2000,
+    eld_devices: 25,
   },
   fleet: {
     price_monthly: 899,
@@ -133,6 +138,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     ai_calls_per_month: 20000,
     storage_gb: 500,
     api_requests_per_day: 20000,
+    eld_devices: -1,
   },
   enterprise: {
     price_monthly: -1,
@@ -148,6 +154,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     ai_calls_per_month: -1,
     storage_gb: -1,
     api_requests_per_day: 200000,
+    eld_devices: -1,
   },
 }
 

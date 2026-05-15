@@ -40,7 +40,9 @@ import {
   RefreshCw,
   Search,
   Truck,
-  Cpu
+  Cpu,
+  PlugZap,
+  HeartPulse,
 } from "lucide-react"
 import { 
   getELDDevices, 
@@ -48,6 +50,7 @@ import {
   updateELDDevice, 
   deleteELDDevice
 } from "@/app/actions/eld"
+import { runEldHealthCheck } from "@/app/actions/eld-wizard"
 import { getTrucks } from "@/app/actions/trucks"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -72,6 +75,11 @@ type EldDeviceRow = {
   notes?: string | null
   last_sync_at?: string | null
   lastSyncAt?: string | null
+  health_status?: string | null
+  health_message?: string | null
+  setup_completed_at?: string | null
+  mapped_vehicle_count?: number | null
+  auto_discovered_vehicle_count?: number | null
   trucks?: {
     id?: string | null
     truck_number?: string | null
@@ -277,6 +285,43 @@ export default function ELDDevicesPage() {
     return provider || "Other"
   }
 
+  function healthBadge(device: EldDeviceRow) {
+    const status = (device.health_status || "unknown").toLowerCase()
+    if (status === "healthy") {
+      return (
+        <Badge className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600">
+          <HeartPulse className="mr-1 h-3 w-3" />
+          Healthy
+        </Badge>
+      )
+    }
+    if (status === "degraded") {
+      return (
+        <Badge className="border-amber-500/30 bg-amber-500/10 text-amber-700" title={device.health_message || undefined}>
+          Degraded
+        </Badge>
+      )
+    }
+    if (status === "auth_failed") {
+      return (
+        <Badge className="border-red-500/30 bg-red-500/10 text-red-600">
+          Auth failed
+        </Badge>
+      )
+    }
+    return <Badge variant="outline">Unknown</Badge>
+  }
+
+  async function handleHealthCheck(deviceId: string) {
+    const result = await runEldHealthCheck(deviceId)
+    if (result.error) {
+      toast.error(result.error)
+      return
+    }
+    toast.success(result.data?.message || "Health check complete")
+    await loadData()
+  }
+
   function syncLine(sync: ReturnType<typeof getEldSyncVisual>) {
     if (sync.urgency === "fresh") return { text: `Last synced ${sync.detail.split(" · ")[0]}`, cls: "text-emerald-500" }
     if (sync.urgency === "warn") return { text: `Last synced ${sync.detail.split(" · ")[0]}`, cls: "text-amber-500" }
@@ -307,13 +352,19 @@ export default function ELDDevicesPage() {
           <h1 className="text-2xl font-bold text-foreground">ELD Devices</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage your Electronic Logging Devices</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Link href="/dashboard/eld">
             <Button variant="outline">Back to ELD</Button>
           </Link>
-          <Button onClick={() => setShowAddDialog(true)}>
+          <Link href="/dashboard/eld/connect">
+            <Button>
+              <PlugZap className="w-4 h-4 mr-2" />
+              Add ELD Provider
+            </Button>
+          </Link>
+          <Button variant="secondary" onClick={() => setShowAddDialog(true)}>
             <Plus className="w-4 h-4 mr-2" />
-            Add Device
+            Manual device
           </Button>
         </div>
       </div>
@@ -348,6 +399,7 @@ export default function ELDDevicesPage() {
                     <p className="truncate text-xs text-muted-foreground">{device.device_serial_number}</p>
                   </div>
                   <div className="flex flex-col items-end gap-2">
+                    {healthBadge(device)}
                     <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
                       <Cpu className="mr-1 h-3.5 w-3.5" />
                       {providerLabel(device.provider)}
@@ -367,43 +419,69 @@ export default function ELDDevicesPage() {
 
                 <div className="mb-4 space-y-2 text-sm">
                   <p className={cn("text-xs font-medium", syncLine(sync).cls)}>{syncLine(sync).text}</p>
+                  {device.health_message && device.health_status !== "healthy" ? (
+                    <p className="text-xs text-muted-foreground">{device.health_message}</p>
+                  ) : null}
+                  {(device.mapped_vehicle_count ?? 0) > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      {device.mapped_vehicle_count} vehicle(s) mapped
+                    </p>
+                  ) : null}
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Truck className="h-4 w-4" />
                     <span>Truck {device.trucks?.truck_number || "Unassigned"}</span>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSync(device.id)}
-                    className="justify-start"
-                  >
-                    <RefreshCw className="mr-1 h-3.5 w-3.5" />
-                    Sync
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openEditDialog(device)}
-                    className="justify-start"
-                  >
-                    <Edit2 className="mr-1 h-3.5 w-3.5" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedDevice(device)
-                      setShowDeleteDialog(true)
-                    }}
-                    className="justify-start"
-                  >
-                    <Trash2 className="mr-1 h-3.5 w-3.5" />
-                    Delete
-                  </Button>
+                <div className="flex flex-col gap-2">
+                  {device.health_status === "auth_failed" ? (
+                    <Link href="/dashboard/eld/connect">
+                      <Button size="sm" className="w-full">
+                        Re-authenticate
+                      </Button>
+                    </Link>
+                  ) : null}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSync(device.id)}
+                      className="justify-start"
+                    >
+                      <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                      Sync
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleHealthCheck(device.id)}
+                      className="justify-start"
+                    >
+                      <HeartPulse className="mr-1 h-3.5 w-3.5" />
+                      Test
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openEditDialog(device)}
+                      className="justify-start"
+                    >
+                      <Edit2 className="mr-1 h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedDevice(device)
+                        setShowDeleteDialog(true)
+                      }}
+                      className="justify-start"
+                    >
+                      <Trash2 className="mr-1 h-3.5 w-3.5" />
+                      Delete
+                    </Button>
+                  </div>
                 </div>
               </Card>
               )
@@ -414,10 +492,18 @@ export default function ELDDevicesPage() {
             <Card className="p-12 text-center bg-card border-border">
               <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">No ELD devices found</p>
-              <Button onClick={() => setShowAddDialog(true)} className="mt-4">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Your First Device
-              </Button>
+              <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-center">
+                <Link href="/dashboard/eld/connect">
+                  <Button>
+                    <PlugZap className="w-4 h-4 mr-2" />
+                    Connect Samsara, Motive, or Geotab
+                  </Button>
+                </Link>
+                <Button variant="outline" onClick={() => setShowAddDialog(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Manual device
+                </Button>
+              </div>
             </Card>
           )}
         </div>

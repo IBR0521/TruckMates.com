@@ -34,6 +34,7 @@ import {
   Sparkles,
   Bot,
   Clock,
+  PlugZap,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import Link from "next/link"
@@ -49,6 +50,7 @@ import {
 } from "@/components/ui/tooltip"
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import { canViewFeature, canCreateFeature } from "@/lib/feature-permissions"
+import { getEldConnectionCount } from "@/app/actions/eld-wizard"
 
 interface SidebarProps {
   isOpen: boolean
@@ -84,6 +86,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
   const [userRole, setUserRole] = useState<EmployeeRole | null>(null)
   const [managerCompanyId, setManagerCompanyId] = useState<string | null>(null)
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0)
+  const [showEldConnectHint, setShowEldConnectHint] = useState(false)
   const LAST_ROLE_KEY = "tm:lastKnownUserRole"
 
   // Check if we're on desktop (lg breakpoint = 1024px) - client only
@@ -233,6 +236,21 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
       isMounted = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!userRole || !canViewFeature(userRole, "eld")) {
+      setShowEldConnectHint(false)
+      return
+    }
+    let active = true
+    void getEldConnectionCount().then((r) => {
+      if (!active || !r.data) return
+      setShowEldConnectHint(r.data.count === 0)
+    })
+    return () => {
+      active = false
+    }
+  }, [userRole])
 
   useEffect(() => {
     if (!isManager || !managerCompanyId) {
@@ -432,6 +450,15 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
                   onToggle={() => setEldOpen(!eldOpen)}
                   isCollapsed={shouldShowCollapsed}
                 >
+                  <NavItem
+                    href="/dashboard/eld/connect"
+                    icon={PlugZap}
+                    label="Connect ELD"
+                    connectHint={showEldConnectHint}
+                    isSubitem
+                    isCollapsed={shouldShowCollapsed}
+                  />
+                  <NavItem href="/dashboard/eld/devices" label="ELD Devices" isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem href="/dashboard/eld" label="ELD overview" isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem
                     href="/dashboard/eld/safety"
@@ -651,6 +678,8 @@ interface NavItemProps {
   icon?: LucideIcon
   label: string
   badgeCount?: number
+  /** Green + when no ELD connected yet */
+  connectHint?: boolean
   /** Optional plan hint (Fleet, Pro, …) for gated features—navigation still works. */
   planBadge?: string | null
   isSubitem?: boolean
@@ -669,7 +698,7 @@ function NavSectionLabel({ label, isCollapsed }: { label: string; isCollapsed?: 
   )
 }
 
-function NavItem({ href, icon: Icon, label, badgeCount, planBadge, isSubitem, isCollapsed }: NavItemProps) {
+function NavItem({ href, icon: Icon, label, badgeCount, connectHint, planBadge, isSubitem, isCollapsed }: NavItemProps) {
   const badgeLabel = planBadge ? `🔒 ${planBadge}` : ""
   const content = (
     <div
@@ -685,6 +714,11 @@ function NavItem({ href, icon: Icon, label, badgeCount, planBadge, isSubitem, is
       {!isCollapsed && planBadge ? (
         <span className="inline-flex shrink-0 rounded-md border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-100">
           {badgeLabel}
+        </span>
+      ) : null}
+      {!isCollapsed && connectHint ? (
+        <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[11px] font-semibold text-white">
+          +
         </span>
       ) : null}
       {!isCollapsed && typeof badgeCount === "number" && badgeCount > 0 ? (
