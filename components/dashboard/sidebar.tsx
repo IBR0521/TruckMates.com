@@ -461,6 +461,13 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
                     isSubitem
                     isCollapsed={shouldShowCollapsed}
                   />
+                  <NavItem
+                    href="/dashboard/eld/health"
+                    label="Vehicle Health"
+                    planBadge="Starter"
+                    isSubitem
+                    isCollapsed={shouldShowCollapsed}
+                  />
                 </DropdownItem>
               )}
               {userRole && canViewFeature(userRole, "accounting") && (

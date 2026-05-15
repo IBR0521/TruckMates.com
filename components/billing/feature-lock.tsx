@@ -22,7 +22,9 @@ function upgradeFeatureForPlanFeature(feature: keyof PlanFeatures): UpgradeFeatu
     feature === "driver_safety_scorecards" ||
     feature === "trip_replay" ||
     feature === "geofencing_automation" ||
-    feature === "geofencing_load_automation"
+    feature === "geofencing_load_automation" ||
+    feature === "eld_fault_codes_basic" ||
+    feature === "eld_fault_codes_advanced"
   ) {
     return "driver_scorecards"
   }

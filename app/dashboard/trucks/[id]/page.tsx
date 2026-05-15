@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { TruckSafetyEventsSection } from "@/components/eld/truck-safety-events-section"
 import { TruckTripHistorySection } from "@/components/trips/truck-trip-history"
+import { TruckFaultCodesSection } from "@/components/eld/truck-fault-codes-section"
 
 type TruckDetail = {
   id: string
@@ -441,6 +442,8 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           </DetailSection>
 
           <TruckSafetyEventsSection truckId={id} />
+
+          <TruckFaultCodesSection truckId={id} />
 
           <TruckTripHistorySection truckId={id} />
 

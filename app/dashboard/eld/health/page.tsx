@@ -21,6 +21,7 @@ import { toast } from "sonner"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ELDRealtimeMap } from "@/components/eld-realtime-map"
+import { FleetFaultCodesDashboard } from "@/components/eld/fleet-fault-codes-dashboard"
 
 type FleetHealth = {
   complianceScore?: number
@@ -220,7 +221,9 @@ export default function FleetHealthPage() {
       {/* Content */}
       <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
-          {/* Key Metrics */}
+          <FleetFaultCodesDashboard />
+
+          {/* Key Metrics — fleet HOS / device overview */}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
             <Card className="border-border p-4">
               <div className="mb-2 flex items-center justify-between">

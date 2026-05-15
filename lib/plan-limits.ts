@@ -47,6 +47,10 @@ export interface PlanFeatures {
   geofencing_automation: boolean
   /** Professional+ — auto-update load status from geofence telemetry (Starter manages zones without auto status). */
   geofencing_load_automation: boolean
+  /** Starter+ — raw ECM fault code visibility (codes without plain-English translations). */
+  eld_fault_codes_basic: boolean
+  /** Professional+ — DTC translations, recommended actions, auto-maintenance for critical codes. */
+  eld_fault_codes_advanced: boolean
   eld_live_integrations: boolean
   ap_vendor_invoicing: boolean
   bank_reconciliation: boolean
@@ -163,6 +167,8 @@ const BASELINE_FALSE: Omit<PlanFeatures, never> = {
   trip_replay: false,
   geofencing_automation: false,
   geofencing_load_automation: false,
+  eld_fault_codes_basic: false,
+  eld_fault_codes_advanced: false,
   eld_live_integrations: false,
   ap_vendor_invoicing: false,
   bank_reconciliation: false,
@@ -198,6 +204,8 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     ai_chat: true,
     geofencing_automation: true,
     geofencing_load_automation: false,
+    eld_fault_codes_basic: true,
+    eld_fault_codes_advanced: false,
   },
   professional: {
     ...BASELINE_FALSE,
@@ -216,6 +224,8 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     trip_replay: true,
     geofencing_automation: true,
     geofencing_load_automation: true,
+    eld_fault_codes_basic: true,
+    eld_fault_codes_advanced: true,
     eld_live_integrations: true,
     ap_vendor_invoicing: true,
     bank_reconciliation: true,
@@ -241,6 +251,8 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     trip_replay: true,
     geofencing_automation: true,
     geofencing_load_automation: true,
+    eld_fault_codes_basic: true,
+    eld_fault_codes_advanced: true,
     eld_live_integrations: true,
     ap_vendor_invoicing: true,
     bank_reconciliation: true,
