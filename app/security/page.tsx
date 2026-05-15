@@ -1,37 +1,27 @@
 import Link from "next/link"
-import { ArrowLeft, Shield, Lock, Database, Users } from "lucide-react"
+import { Shield, Lock, Database, Users } from "lucide-react"
+import { MarketingPageHeader } from "@/components/marketing/marketing-page-header"
+import { MarketingSiteFooter } from "@/components/marketing/marketing-site-footer"
 
 export default function SecurityPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-      <div className="border-b border-border bg-card/50 backdrop-blur">
-        <div className="container mx-auto px-4 py-16">
-          <Link href="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Home
-          </Link>
-          <div className="max-w-3xl">
-            <div className="flex items-center gap-3 mb-4">
-              <Shield className="w-8 h-8 text-primary" />
-              <h1 className="text-4xl md:text-5xl font-bold text-foreground">Security</h1>
-            </div>
-            <p className="text-xl text-muted-foreground">
-              How TruckMates handles data today — accurate, not marketing certifications we don&apos;t hold.
-            </p>
-          </div>
-        </div>
-      </div>
+      <MarketingPageHeader
+        icon={Shield}
+        title="Security"
+        subtitle="How TruckMates handles data today — accurate, not marketing certifications we don't hold."
+      />
 
       <div className="container mx-auto px-4 py-16">
-        <div className="max-w-4xl mx-auto space-y-8">
-          <div className="p-8 rounded-lg border border-border bg-card">
+        <div className="mx-auto max-w-4xl space-y-8">
+          <div className="rounded-lg border border-border bg-card p-8">
             <div className="flex items-start gap-4">
-              <div className="p-3 rounded-lg bg-primary/10">
-                <Database className="w-6 h-6 text-primary" />
+              <div className="rounded-lg bg-primary/10 p-3">
+                <Database className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h2 className="text-2xl font-semibold text-foreground mb-2">Infrastructure (Supabase)</h2>
-                <p className="text-muted-foreground mb-4">
+                <h2 className="mb-2 text-2xl font-semibold text-foreground">Infrastructure (Supabase)</h2>
+                <p className="text-muted-foreground">
                   Application data is stored in{" "}
                   <a
                     href="https://supabase.com/security"
@@ -49,32 +39,36 @@ export default function SecurityPage() {
             </div>
           </div>
 
-          <div className="p-8 rounded-lg border border-border bg-card">
+          <div className="rounded-lg border border-border bg-card p-8">
             <div className="flex items-start gap-4">
-              <div className="p-3 rounded-lg bg-primary/10">
-                <Lock className="w-6 h-6 text-primary" />
+              <div className="rounded-lg bg-primary/10 p-3">
+                <Lock className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h2 className="text-2xl font-semibold text-foreground mb-2">Access & authentication</h2>
-                <ul className="space-y-2 text-muted-foreground list-disc pl-5">
+                <h2 className="mb-2 text-2xl font-semibold text-foreground">Access & authentication</h2>
+                <ul className="list-disc space-y-2 pl-5 text-muted-foreground">
                   <li>Sign-in is handled through Supabase Auth (email/password and supported providers you enable).</li>
                   <li>Sessions use secure cookies in the browser as implemented by the framework and Supabase client.</li>
                   <li>
-                    <strong className="text-foreground">Role-based access</strong> in the app limits what each user can see
-                    and do (fleet vs driver, etc.).
+                    <strong className="text-foreground">Role-based access</strong> limits what each user can see and do
+                    (fleet vs driver, etc.).
+                  </li>
+                  <li>
+                    ELD provider API keys and passwords are stored to enable sync; they are not written to application logs
+                    or client-side error reports.
                   </li>
                 </ul>
               </div>
             </div>
           </div>
 
-          <div className="p-8 rounded-lg border border-border bg-card">
+          <div className="rounded-lg border border-border bg-card p-8">
             <div className="flex items-start gap-4">
-              <div className="p-3 rounded-lg bg-primary/10">
-                <Users className="w-6 h-6 text-primary" />
+              <div className="rounded-lg bg-primary/10 p-3">
+                <Users className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h2 className="text-2xl font-semibold text-foreground mb-2">Row-level security (RLS)</h2>
+                <h2 className="mb-2 text-2xl font-semibold text-foreground">Row-level security (RLS)</h2>
                 <p className="text-muted-foreground">
                   Database access is designed around PostgreSQL row-level security so tenant and user data are separated
                   according to the policies we ship with the product. This is application-enforced data isolation, not a
@@ -84,8 +78,8 @@ export default function SecurityPage() {
             </div>
           </div>
 
-          <div className="p-8 rounded-lg border border-amber-500/30 bg-amber-500/5">
-            <h2 className="text-lg font-semibold text-foreground mb-2">What we don&apos;t claim</h2>
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-8">
+            <h2 className="mb-2 text-lg font-semibold text-foreground">What we don&apos;t claim</h2>
             <p className="text-sm text-muted-foreground">
               TruckMates does <strong className="text-foreground">not</strong> advertise SOC 2 Type II, ISO 27001
               certification, a public bug bounty, 24/7 dedicated security operations center, or penetration-test reports
@@ -95,6 +89,8 @@ export default function SecurityPage() {
           </div>
         </div>
       </div>
+
+      <MarketingSiteFooter />
     </div>
   )
 }

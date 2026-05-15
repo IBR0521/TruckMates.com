@@ -25,8 +25,8 @@ export default function DemoPage() {
         <Card className="bg-card border-border p-8">
           <h1 className="text-3xl font-bold text-foreground mb-2 text-center">Try the interactive demo</h1>
           <p className="text-center text-muted-foreground mb-6">
-            Browse a realistic, pre-populated fleet workspace — dashboards, loads, drivers, trucks, billing, and
-            more. No signup required to explore the UI.
+            Browse a realistic, pre-populated fleet workspace — dispatch, loads, AI assistant screens, ELD and
+            geofencing areas, safety scorecards, billing, and more. No signup required to explore the UI.
           </p>
           <p className="text-center text-xs text-muted-foreground border border-border/70 rounded-lg py-3 px-4 mb-10 bg-muted/30">
             Uses a shared read-focused demo tenant. Sensitive paid actions stay disabled unless you{" "}

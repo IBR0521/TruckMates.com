@@ -21,6 +21,7 @@ import {
 } from "@/lib/plan-limits"
 import { startPlanCheckout } from "@/app/actions/plan-usage"
 import { getPaddleClient } from "@/lib/billing/paddle-client"
+import { MarketingSiteFooter } from "@/components/marketing/marketing-site-footer"
 
 const TIER_SUMMARY: Record<PlanTier, string> = {
   owner_operator: "Designed for owner-operators and 1–2 trucks — TMS core loads, invoices, dispatch, limits without premium AI integrations.",
@@ -335,25 +336,7 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <footer className="border-t border-border py-8 px-4 mt-12">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <Logo size="sm" />
-          <div className="flex gap-6">
-            <Link href="/" className="text-sm text-muted-foreground hover:text-primary">
-              Home
-            </Link>
-            <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary">
-              Terms
-            </Link>
-            <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary">
-              Privacy
-            </Link>
-            <Link href="/refund-policy" className="text-sm text-muted-foreground hover:text-primary">
-              Refund Policy
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <MarketingSiteFooter />
     </div>
   )
 }

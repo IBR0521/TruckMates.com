@@ -1,22 +1,26 @@
 import Link from "next/link"
-import { ArrowLeft, FileCheck, Shield, CheckCircle2 } from "lucide-react"
+import { FileCheck, Shield, CheckCircle2 } from "lucide-react"
+import { MarketingPageHeader } from "@/components/marketing/marketing-page-header"
+import { MarketingSiteFooter } from "@/components/marketing/marketing-site-footer"
 
 export default function CompliancePage() {
   const complianceAreas = [
     {
       title: "Operational tools (FMCSA-style workflows)",
       description:
-        "The app includes features that help you run HOS, DVIR, IFTA, and related workflows. You remain responsible for compliance with FMCSA and state rules; TruckMates provides software — not legal advice.",
+        "The app includes features that help you run HOS, DVIR, IFTA, and related workflows. When you connect an ELD, supported telemetry can feed logs, safety events, geofencing, and trip records. You remain responsible for compliance with FMCSA and state rules; TruckMates provides software — not legal advice.",
       items: [
-        "ELD / HOS tooling in the product where applicable to your operation",
+        "ELD setup wizard and HOS tooling where applicable to your operation",
         "IFTA fuel tax reporting features",
+        "Geofencing, dwell, and detention support for operational records",
+        "Driver safety scorecards and trip replay on eligible plans",
         "Records and exports intended to support your audits and processes",
       ],
     },
     {
       title: "Data handling",
       description:
-        "We take data protection seriously at the product level: hosted infrastructure (Supabase), HTTPS, authentication, and access controls. This is not the same as a formal GDPR certification or SOC 2 report issued to TruckMates as a vendor.",
+        "We take data protection seriously at the product level: hosted infrastructure (Supabase), HTTPS, authentication, and access controls. ELD API credentials are stored for sync and are not logged in application error output. This is not the same as a formal GDPR certification or SOC 2 report issued to TruckMates as a vendor.",
       items: [
         "Encryption in transit (HTTPS) for the web application",
         "Access controlled by accounts and roles in the app",
@@ -33,37 +37,25 @@ export default function CompliancePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-      <div className="border-b border-border bg-card/50 backdrop-blur">
-        <div className="container mx-auto px-4 py-16">
-          <Link href="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Home
-          </Link>
-          <div className="max-w-3xl">
-            <div className="flex items-center gap-3 mb-4">
-              <FileCheck className="w-8 h-8 text-primary" />
-              <h1 className="text-4xl md:text-5xl font-bold text-foreground">Compliance &amp; regulations</h1>
-            </div>
-            <p className="text-xl text-muted-foreground">
-              What the software helps you with — and what we don&apos;t claim on your behalf.
-            </p>
-          </div>
-        </div>
-      </div>
+      <MarketingPageHeader
+        icon={FileCheck}
+        title="Compliance & regulations"
+        subtitle="What the software helps you with — and what we don't claim on your behalf."
+      />
 
       <div className="container mx-auto px-4 py-16">
-        <div className="max-w-4xl mx-auto space-y-8">
+        <div className="mx-auto max-w-4xl space-y-8">
           {complianceAreas.map((area) => (
-            <div key={area.title} className="p-8 rounded-lg border border-border bg-card">
-              <div className="flex items-center gap-3 mb-4">
-                <Shield className="w-6 h-6 text-primary" />
+            <div key={area.title} className="rounded-lg border border-border bg-card p-8">
+              <div className="mb-4 flex items-center gap-3">
+                <Shield className="h-6 w-6 text-primary" />
                 <h2 className="text-2xl font-semibold text-foreground">{area.title}</h2>
               </div>
-              <p className="text-muted-foreground mb-4">{area.description}</p>
+              <p className="mb-4 text-muted-foreground">{area.description}</p>
               <ul className="space-y-2">
                 {area.items.map((item) => (
                   <li key={item} className="flex items-center gap-2 text-muted-foreground">
-                    <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
                     {item}
                   </li>
                 ))}
@@ -71,18 +63,24 @@ export default function CompliancePage() {
             </div>
           ))}
 
-          <div className="p-8 rounded-lg border border-border bg-muted/30">
+          <div className="rounded-lg border border-border bg-muted/30 p-8">
             <p className="text-sm text-muted-foreground">
-              For questions about how your data is secured, see{" "}
+              For how your data is secured, see{" "}
               <Link href="/security" className="text-primary hover:underline">
                 Security
               </Link>
-              . We do not host a separate &quot;data residency policy&quot; or compliance PDF here unless we publish one;
-              ask directly if your legal team needs something specific.
+              . For ELD and AI connections, see{" "}
+              <Link href="/integrations" className="text-primary hover:underline">
+                Integrations
+              </Link>
+              . We do not host a separate data residency policy PDF here unless we publish one; ask directly if your legal
+              team needs something specific.
             </p>
           </div>
         </div>
       </div>
+
+      <MarketingSiteFooter />
     </div>
   )
 }
