@@ -18,6 +18,8 @@ import {
   Play,
   FileText,
   Package,
+  Bot,
+  AlertTriangle,
 } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
@@ -119,21 +121,80 @@ export default function LandingPageBelowFold() {
             />
             <FeatureCard
               icon={Shield}
-              title="ELD & HOS (dashboard)"
-              desc="HOS and ELD data in the product for many workflows. We are not a certified hardware partner of Motive, Samsara, etc."
-              bullets={["Log review in app", "Violations / alerts where supported", "No DOT device vendor claim"]}
+              title="ELD & telematics"
+              desc="Connect your existing Samsara, Motive, or Geotab — we read HOS, GPS, safety events, idle time, and fault codes. We are not a certified hardware partner; we work alongside your provider."
+              bullets={[
+                "Connect via setup wizard (no new hardware)",
+                "Log review in app",
+                "Violations and alerts where supported",
+                "Telemetry-driven analytics",
+              ]}
             />
             <FeatureCard
               icon={MapPin}
-              title="Fleet map & GPS"
-              desc="See vehicle positions when tracking data is available."
-              bullets={["Live map", "History where configured", "Geofencing in product"]}
+              title="Fleet map & geofencing"
+              desc="See vehicle positions when tracking data is available. Define geofences around customers and yards; auto-detect arrivals, departures, and dwell time for detention discussions."
+              bullets={[
+                "Live map",
+                "Geofence definitions",
+                "Auto arrival / departure detection",
+                "Dwell time tracking",
+              ]}
             />
             <FeatureCard
               icon={BarChart3}
               title="Reports & analytics"
-              desc="Built-in dashboards and reports — not a blank-slate custom report builder unless your plan includes it."
-              bullets={["Dashboard KPIs", "Standard reports", "Export where available"]}
+              desc="Built-in dashboards covering operations, finance, safety, and detention. Exports available where supported."
+              bullets={[
+                "Operations & financial KPIs",
+                "Driver safety reports",
+                "Detention reports",
+                "Standard exports",
+              ]}
+            />
+            <FeatureCard
+              icon={Bot}
+              title="AI Assistant"
+              desc="An AI built into the platform that answers questions about your fleet, writes a morning briefing each day, and on higher plans can take actions like creating loads or sending invoices on your approval."
+              bullets={[
+                "Read-only chat (Starter+)",
+                "Daily morning briefing (Starter+)",
+                "Action tools — create, assign, send (Professional+)",
+                "Smart notification prioritization (Professional+)",
+              ]}
+            />
+            <FeatureCard
+              icon={Users}
+              title="Driver safety"
+              desc="Safety scorecards computed from harsh events, speeding, and HOS compliance. Coaching workflow with follow-up tracking. Helps with insurance discussions and driver development."
+              bullets={[
+                "Per-driver 0-100 score",
+                "Fleet leaderboard with trends",
+                "Coaching session records",
+                "Harsh event detection from ELD",
+              ]}
+            />
+            <FeatureCard
+              icon={Route}
+              title="Trip replay"
+              desc="Replay any completed load on a map — see the route taken, where stops occurred, harsh events along the way, and on-time performance. Useful for dispute resolution and customer conversations."
+              bullets={[
+                "Route visualization",
+                "Stop and idle detection",
+                "Event overlay",
+                "On-time pickup / delivery tracking",
+              ]}
+            />
+            <FeatureCard
+              icon={AlertTriangle}
+              title="Vehicle health"
+              desc="Engine fault codes translated into plain English with severity classification and recommended next steps. Critical codes can auto-schedule maintenance."
+              bullets={[
+                "DTC code translation",
+                "Severity-based prioritization",
+                "Auto-maintenance for critical codes",
+                "Resolution tracking",
+              ]}
             />
           </div>
         </div>
@@ -190,7 +251,7 @@ export default function LandingPageBelowFold() {
               {
                 num: "2",
                 title: "Connect data",
-                desc: "Bring in ELD or GPS data the way your operation already works — imports, APIs, or provider exports where supported.",
+                desc: "Run the ELD setup wizard to link your Samsara, Motive, or Geotab. The platform handles the API plumbing — you copy one credential, we test it, and pull vehicles automatically.",
               },
               {
                 num: "3",
@@ -262,13 +323,14 @@ export default function LandingPageBelowFold() {
             <div className="lg:col-span-1">
               <Logo size="sm" />
               <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
-                Fleet operations for small carriers — honest scope, no fake enterprise claims.
+                Fleet operations for carriers from 1 to 100 trucks — honest scope, no fake enterprise claims.
               </p>
             </div>
             <div>
               <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Product</h4>
               <ul className="mt-4 space-y-3 text-sm">
                 {[
+                  ["Features", "/#features"],
                   ["Pricing", "/pricing"],
                   ["Demo", "/demo"],
                   ["Start free", "/register"],

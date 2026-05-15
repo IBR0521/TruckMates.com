@@ -77,7 +77,7 @@ export default function LandingPage() {
           <h1 className="text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl md:text-5xl lg:text-[2.75rem] lg:leading-[1.12]">
             Dispatch, IFTA, invoicing, and driver compliance —{" "}
             <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-              one platform for fleets under 20 trucks.
+              the complete TMS for fleets from 1 to 100 trucks. AI-powered, with ELD integration to Samsara, Motive, and Geotab built in.
             </span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
@@ -85,7 +85,7 @@ export default function LandingPage() {
             <Link href="/demo" className="font-medium text-primary underline decoration-primary/30 underline-offset-4 transition hover:decoration-primary">
               interactive demo
             </Link>{" "}
-            or open a free account — real screens, not slide decks.
+            or open a free account — real screens, AI, and ELD integration in one place.
           </p>
           <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground/90">
             No made-up savings figures — try the demo or see{" "}
