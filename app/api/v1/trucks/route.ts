@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient()
   let query = supabase
     .from("trucks")
-    .select("id, truck_number, make, model, year, vin, license_plate, status, driver_id, created_at, updated_at")
+    .select("id, truck_number, make, model, year, vin, license_plate, status, current_driver_id, created_at, updated_at")
     .eq("company_id", auth.companyId)
     .order("id", { ascending: true })
     .limit(perPage + 1)
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       company_id: auth.companyId,
       ...parsed.data,
     })
-    .select("id, truck_number, make, model, year, vin, license_plate, status, driver_id, created_at")
+    .select("id, truck_number, make, model, year, vin, license_plate, status, current_driver_id, created_at")
     .single()
 
   const status = error ? 500 : 201
