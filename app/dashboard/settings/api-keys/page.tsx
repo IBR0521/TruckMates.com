@@ -53,6 +53,7 @@ function APIKeysPageContent() {
   const [loading, setLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newKeyName, setNewKeyName] = useState("")
+  const [newKeyScopes, setNewKeyScopes] = useState<string[]>(["read"])
   const [newKey, setNewKey] = useState<string | null>(null)
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null)
 
@@ -83,12 +84,13 @@ function APIKeysPageContent() {
     }
 
     try {
-      const result = await createAPIKey({ name: newKeyName })
+      const result = await createAPIKey({ name: newKeyName, scopes: newKeyScopes })
       if (result.error) {
         toast.error(result.error)
       } else {
         setNewKey(result.data?.key || null)
         setNewKeyName("")
+        setNewKeyScopes(["read"])
         setIsCreateDialogOpen(false)
         await loadKeys()
         toast.success("API key created successfully")
@@ -176,6 +178,31 @@ function APIKeysPageContent() {
                     onChange={(e) => setNewKeyName(e.target.value)}
                     placeholder="e.g., Production API Key"
                   />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Scopes</Label>
+                  <div className="flex flex-col gap-2">
+                    {["read", "write", "admin"].map((scope) => (
+                      <label key={scope} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={newKeyScopes.includes(scope)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setNewKeyScopes((prev) => [...prev, scope])
+                            } else {
+                              setNewKeyScopes((prev) => prev.filter((s) => s !== scope))
+                            }
+                          }}
+                          className="h-4 w-4"
+                        />
+                        <span className="capitalize text-sm">{scope}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Read: GET endpoints. Write: POST/PATCH/DELETE. Admin: all operations.
+                  </p>
                 </div>
               </div>
               <DialogFooter>
