@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import {
   AlertTriangle,
+  ChevronDown,
   DollarSign,
   Loader2,
   RefreshCw,
@@ -72,8 +73,10 @@ export function MorningBriefingCard() {
   const [refreshing, setRefreshing] = useState(false)
   const [briefing, setBriefing] = useState<Awaited<ReturnType<typeof getTodaysBriefing>>["data"]>(null)
   const [actioned, setActioned] = useState<Set<string>>(new Set())
+  const [isExpanded, setIsExpanded] = useState(false)
 
   useEffect(() => {
+    if (!isExpanded) return
     let active = true
     getPlanFeatureGate("ai_morning_briefing")
       .then((res) => {
@@ -86,7 +89,7 @@ export function MorningBriefingCard() {
     return () => {
       active = false
     }
-  }, [])
+  }, [isExpanded])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -110,8 +113,9 @@ export function MorningBriefingCard() {
 
   useEffect(() => {
     if (eligible !== true) return
+    if (!isExpanded) return
     void load()
-  }, [eligible, load])
+  }, [eligible, load, isExpanded])
 
   const handleDismiss = async () => {
     if (!briefing?.id) return
@@ -226,6 +230,17 @@ export function MorningBriefingCard() {
   return (
     <Card className="relative overflow-hidden border-primary/25 bg-gradient-to-br from-card via-card to-primary/5 shadow-md">
       <div className="absolute right-2 top-2 flex items-center gap-1">
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8"
+          aria-label={isExpanded ? "Collapse briefing" : "Expand briefing"}
+          aria-expanded={isExpanded}
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          <ChevronDown className={cn("h-4 w-4 transition-transform duration-200", isExpanded && "rotate-180")} aria-hidden />
+        </Button>
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button type="button" size="icon" variant="ghost" className="h-8 w-8" aria-label="Refresh briefing" disabled={refreshing}>
@@ -259,11 +274,14 @@ export function MorningBriefingCard() {
           </div>
           <div className="min-w-0">
             <h2 className="text-lg font-semibold tracking-tight text-foreground">Good morning! Here&apos;s your briefing for {formattedDay}</h2>
-            <p className="mt-1 text-sm text-muted-foreground leading-relaxed">{briefing.summary}</p>
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
+        {isExpanded && (
+          <>
+            <p className="text-sm text-muted-foreground leading-relaxed">{briefing.summary}</p>
+
+            <div className="grid gap-4 lg:grid-cols-3">
           <div className="rounded-lg border border-border/80 bg-background/60 p-4 space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <AlertTriangle className="h-4 w-4 text-rose-500" aria-hidden />
@@ -403,6 +421,8 @@ export function MorningBriefingCard() {
             </ul>
           </div>
         ) : null}
+          </>
+        )}
       </div>
     </Card>
   )

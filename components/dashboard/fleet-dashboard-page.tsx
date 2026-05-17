@@ -445,8 +445,6 @@ export default function FleetDashboardPage({
         <div className="mx-auto w-full max-w-[1800px] space-y-6">
           <NoEldBanner />
 
-          <MorningBriefingCard />
-
           <DwellTimeWidget />
 
           <FaultCodesWidget />
@@ -578,6 +576,8 @@ export default function FleetDashboardPage({
               ]}
             />
           </div>
+
+          <MorningBriefingCard />
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <Suspense fallback={<div className="h-40 animate-pulse bg-muted rounded-lg" />}>
