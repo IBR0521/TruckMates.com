@@ -3,6 +3,7 @@ import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { authenticateApiKey, enforceApiRateLimit, recordApiUsage } from "@/lib/api/v1/auth"
 import { requirePublicApiFeature } from "@/lib/api/v1/public-api-plan"
+import { TRUCK_SELECT_FIELDS, TRUCK_SELECT_FIELDS_BRIEF, mapTruckWritePayload } from "@/lib/api/v1/truck-payload"
 
 const createTruckSchema = z.object({
   truck_number: z.string().min(1),
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient()
   let query = supabase
     .from("trucks")
-    .select("id, truck_number, make, model, year, vin, license_plate, status, current_driver_id, created_at, updated_at")
+    .select(TRUCK_SELECT_FIELDS)
     .eq("company_id", auth.companyId)
     .order("id", { ascending: true })
     .limit(perPage + 1)
@@ -94,9 +95,9 @@ export async function POST(request: NextRequest) {
     .from("trucks")
     .insert({
       company_id: auth.companyId,
-      ...parsed.data,
+      ...mapTruckWritePayload(parsed.data),
     })
-    .select("id, truck_number, make, model, year, vin, license_plate, status, current_driver_id, created_at")
+    .select(TRUCK_SELECT_FIELDS_BRIEF)
     .single()
 
   const status = error ? 500 : 201

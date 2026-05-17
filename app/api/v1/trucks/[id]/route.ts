@@ -3,6 +3,7 @@ import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { authenticateApiKey, enforceApiRateLimit, recordApiUsage } from "@/lib/api/v1/auth"
 import { requirePublicApiFeature } from "@/lib/api/v1/public-api-plan"
+import { TRUCK_SELECT_FIELDS, TRUCK_SELECT_FIELDS_BRIEF, mapTruckWritePayload } from "@/lib/api/v1/truck-payload"
 
 const patchTruckSchema = z
   .object({
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from("trucks")
-    .select("id, truck_number, make, model, year, vin, plate_number, status, driver_id, created_at, updated_at")
+    .select(TRUCK_SELECT_FIELDS)
     .eq("id", id)
     .eq("company_id", auth.companyId)
     .maybeSingle()
@@ -66,10 +67,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from("trucks")
-    .update(parsed.data)
+    .update(mapTruckWritePayload(parsed.data))
     .eq("id", id)
     .eq("company_id", auth.companyId)
-    .select("id, truck_number, make, model, year, vin, plate_number, status, driver_id, updated_at")
+    .select(TRUCK_SELECT_FIELDS_BRIEF)
     .maybeSingle()
 
   const status = error ? 500 : data ? 200 : 404
