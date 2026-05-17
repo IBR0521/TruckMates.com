@@ -69,7 +69,7 @@ function ActionLink({ href, label }: { href: string; label: string }) {
 
 export function MorningBriefingCard() {
   const [eligible, setEligible] = useState<boolean | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [briefing, setBriefing] = useState<Awaited<ReturnType<typeof getTodaysBriefing>>["data"]>(null)
   const [actioned, setActioned] = useState<Set<string>>(new Set())
@@ -160,8 +160,70 @@ export function MorningBriefingCard() {
     }
   }
 
-  if (eligible !== true) {
+  const todayLabel = new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  })
+
+  if (!isExpanded) {
+    return (
+      <Card className="relative overflow-hidden border-primary/25 bg-gradient-to-br from-card via-card to-primary/5 shadow-md">
+        <div className="absolute right-2 top-2 flex items-center gap-1">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            aria-label="Expand briefing"
+            aria-expanded={false}
+            onClick={() => setIsExpanded(true)}
+          >
+            <ChevronDown className="h-4 w-4 transition-transform duration-200" aria-hidden />
+          </Button>
+        </div>
+        <div className="p-4 md:p-6 pr-24">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg border border-primary/30 bg-primary/10 p-2 shrink-0">
+              <Sparkles className="h-5 w-5 text-primary" aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                Good morning! Here&apos;s your briefing for {todayLabel}
+              </h2>
+            </div>
+          </div>
+        </div>
+      </Card>
+    )
+  }
+
+  if (eligible === false) {
     return null
+  }
+
+  if (eligible !== true) {
+    return (
+      <Card className="relative overflow-hidden border-primary/25 bg-gradient-to-br from-card via-card to-primary/5 shadow-md">
+        <div className="p-4 md:p-6 pr-24">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg border border-primary/30 bg-primary/10 p-2 shrink-0">
+              <Sparkles className="h-5 w-5 text-primary" aria-hidden />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                Good morning! Here&apos;s your briefing for {todayLabel}
+              </h2>
+              <p className="mt-2 text-sm text-muted-foreground flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+                Loading briefing…
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
+    )
   }
 
   if (loading) {
