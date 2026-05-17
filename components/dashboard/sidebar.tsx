@@ -79,6 +79,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
   const [crmOpen, setCrmOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [eldOpen, setEldOpen] = useState(false)
+  const [complianceOpen, setComplianceOpen] = useState(false)
   const [isManager, setIsManager] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isDesktop, setIsDesktop] = useState(true)
@@ -133,6 +134,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
       setCrmOpen(false)
       setSettingsOpen(false)
       setEldOpen(false)
+      setComplianceOpen(false)
     }
   }, [shouldShowCollapsed])
 
@@ -435,12 +437,11 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               )}
 
               <NavSectionLabel label="Compliance & Finance" isCollapsed={shouldShowCollapsed} />
+
               {userRole && canViewFeature(userRole, "maintenance") && (
                 <NavItem href="/dashboard/maintenance" icon={Wrench} label="Maintenance" isCollapsed={shouldShowCollapsed} />
               )}
-              {userRole && canViewFeature(userRole, "dvir") && (
-                <NavItem href="/dashboard/dvir" icon={FileCheck} label="DVIR Reports" isCollapsed={shouldShowCollapsed} />
-              )}
+
               {userRole && canViewFeature(userRole, "eld") && (
                 <DropdownItem
                   icon={Shield}
@@ -450,77 +451,38 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
                   onToggle={() => setEldOpen(!eldOpen)}
                   isCollapsed={shouldShowCollapsed}
                 >
-                  <NavItem
-                    href="/dashboard/eld/connect"
-                    icon={PlugZap}
-                    label="Connect ELD"
-                    connectHint={showEldConnectHint}
-                    isSubitem
-                    isCollapsed={shouldShowCollapsed}
-                  />
+                  <NavItem href="/dashboard/eld/connect" icon={PlugZap} label="Connect ELD" connectHint={showEldConnectHint} isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem href="/dashboard/eld/devices" label="ELD Devices" isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem href="/dashboard/eld" label="ELD overview" isSubitem isCollapsed={shouldShowCollapsed} />
-                  <NavItem
-                    href="/dashboard/eld/safety"
-                    label="Safety Events"
-                    planBadge="Pro"
-                    isSubitem
-                    isCollapsed={shouldShowCollapsed}
-                  />
-                  <NavItem
-                    href="/dashboard/eld/scorecards"
-                    label="Safety Scorecards"
-                    planBadge="Pro"
-                    isSubitem
-                    isCollapsed={shouldShowCollapsed}
-                  />
-                  <NavItem
-                    href="/dashboard/eld/geofences"
-                    label="Geofences"
-                    planBadge="Starter"
-                    isSubitem
-                    isCollapsed={shouldShowCollapsed}
-                  />
-                  <NavItem
-                    href="/dashboard/eld/geofences/events"
-                    label="Geofence Events"
-                    planBadge="Starter"
-                    isSubitem
-                    isCollapsed={shouldShowCollapsed}
-                  />
-                  <NavItem
-                    href="/dashboard/eld/health"
-                    label="Vehicle Health"
-                    planBadge="Starter"
-                    isSubitem
-                    isCollapsed={shouldShowCollapsed}
-                  />
+                  <NavItem href="/dashboard/eld/safety" label="Safety Events" planBadge="Pro" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/eld/scorecards" label="Safety Scorecards" planBadge="Pro" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/eld/geofences" label="Geofences" planBadge="Starter" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/eld/geofences/events" label="Geofence Events" planBadge="Starter" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/eld/health" label="Vehicle Health" planBadge="Starter" isSubitem isCollapsed={shouldShowCollapsed} />
                 </DropdownItem>
               )}
-              {userRole && canViewFeature(userRole, "accounting") && (
-                <NavItem
-                  href="/dashboard/billing/detention-candidates"
-                  icon={Clock}
-                  label="Detention Candidates"
-                  planBadge="Pro"
+
+              {userRole && canViewFeature(userRole, "ifta") && (
+                <DropdownItem
+                  icon={FileCheck}
+                  label="Compliance"
+                  href="/dashboard/compliance"
+                  isOpen={complianceOpen}
+                  onToggle={() => setComplianceOpen(!complianceOpen)}
                   isCollapsed={shouldShowCollapsed}
-                />
+                >
+                  <NavItem href="/dashboard/dvir" label="DVIR Reports" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/ifta" label="IFTA" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/compliance" label="Safety & Compliance" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/edi" label="EDI" planBadge="Fleet" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/hazmat" label="HAZMAT" planBadge="Fleet" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/permits" label="Permits" planBadge="Fleet" isSubitem isCollapsed={shouldShowCollapsed} />
+                  {canViewFeature(userRole, "accounting") && (
+                    <NavItem href="/dashboard/billing/detention-candidates" label="Detention Candidates" planBadge="Pro" isSubitem isCollapsed={shouldShowCollapsed} />
+                  )}
+                </DropdownItem>
               )}
-              {userRole && canViewFeature(userRole, "ifta") && (
-                <NavItem href="/dashboard/ifta" icon={Receipt} label="IFTA" isCollapsed={shouldShowCollapsed} />
-              )}
-              {userRole && canViewFeature(userRole, "ifta") && (
-                <NavItem href="/dashboard/compliance" icon={Shield} label="Compliance" isCollapsed={shouldShowCollapsed} />
-              )}
-              {userRole && canViewFeature(userRole, "ifta") && (
-                <NavItem href="/dashboard/edi" icon={Upload} label="EDI" planBadge="Fleet" isCollapsed={shouldShowCollapsed} />
-              )}
-              {userRole && canViewFeature(userRole, "ifta") && (
-                <NavItem href="/dashboard/hazmat" icon={Shield} label="HAZMAT" planBadge="Fleet" isCollapsed={shouldShowCollapsed} />
-              )}
-              {userRole && canViewFeature(userRole, "ifta") && (
-                <NavItem href="/dashboard/permits" icon={FileCheck} label="Permits" planBadge="Fleet" isCollapsed={shouldShowCollapsed} />
-              )}
+
               {userRole && canViewFeature(userRole, "accounting") && (
                 <DropdownItem
                   icon={DollarSign}
