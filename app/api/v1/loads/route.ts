@@ -118,7 +118,15 @@ export async function POST(request: NextRequest) {
       ipAddress: auth.ipAddress,
       userAgent: auth.userAgent,
     })
-    if (error) return NextResponse.json({ error: error.message || "Failed to create load" }, { status })
+    if (error) {
+      if (error.code === "23505") {
+        return NextResponse.json(
+          { error: "A load with this shipment number already exists." },
+          { status: 409 },
+        )
+      }
+      return NextResponse.json({ error: error.message || "Failed to create load" }, { status: 500 })
+    }
     return NextResponse.json({ data }, { status: 201 })
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
