@@ -51,7 +51,7 @@ export async function authenticateApiKey(request: NextRequest, requiredScope: "r
     }
 
     const scopes = Array.isArray(keyRow.scopes) ? keyRow.scopes.map(String) : ["read"]
-    const hasScope = scopes.includes("admin") || scopes.includes(requiredScope)
+    const hasScope = scopes.includes("admin") || scopes.includes(requiredScope) || (requiredScope === "read" && scopes.includes("write"))
     if (!hasScope) return { ok: false, status: 403, error: `API key missing '${requiredScope}' scope` }
 
     await supabase.from("api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", keyRow.id)

@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
       const txId = String(getStringField(data, "id", "transaction_id") ?? "")
       if (companyId && txId) {
         const paymentDate = new Date().toISOString().slice(0, 10)
-        const { error: payInsErr } = await admin.from("company_payment_history").insert({
+        const { error: payInsErr } = await admin.from("company_payment_history").upsert({
           company_id: companyId,
           amount: amount || 0,
           currency: "USD",
@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
           payment_date: paymentDate,
           processed_at: new Date().toISOString(),
           metadata: { source: "paddle_webhook", event_type: eventType },
-        })
+        }, { onConflict: 'transaction_id', ignoreDuplicates: true })
         if (payInsErr) {
           Sentry.captureException(payInsErr, { tags: { cron: "paddle-webhook" }, extra: { companyId, txId } })
         }
