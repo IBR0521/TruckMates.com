@@ -97,8 +97,6 @@ const nextConfig = {
     ]
   },
   async headers() {
-    // In development, a strict CSP breaks Next.js HMR (needs ws://), third-party scripts (Maps),
-    // and can yield a blank white screen while the tab "loads". Ship CSP only in production.
     if (!isProd) {
       return [
         {
@@ -114,6 +112,21 @@ const nextConfig = {
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
       { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+      {
+        key: "Content-Security-Policy",
+        value: [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.paddle.com https://maps.googleapis.com https://api.here.com",
+          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+          "font-src 'self' https://fonts.gstatic.com",
+          "img-src 'self' data: blob: https:",
+          "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.here.com https://api.paddle.com https://maps.googleapis.com https://api.resend.com https://api.twilio.com https://api.stripe.com",
+          "frame-src 'self' https://cdn.paddle.com",
+          "worker-src 'self' blob:",
+          "base-uri 'self'",
+          "form-action 'self'",
+        ].join("; "),
+      },
     ]
 
     return [
