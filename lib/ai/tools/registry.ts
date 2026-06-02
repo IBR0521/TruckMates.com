@@ -30,6 +30,8 @@ import {
   previewSendInvoice,
   previewUpdateDriverStatus,
   previewUpdateLoadStatus,
+  execDispatchPlanner,
+  previewDispatchPlanner,
 } from "@/lib/ai/tools/handlers"
 
 /** Office roles that may use read-only analysis tools (excludes driver). */
@@ -59,9 +61,25 @@ export function tierMeetsMinimum(companyTier: PlanTier, minimum: PlanTier): bool
 
 const AI_TOOLS: AiToolDefinitionBase[] = [
   {
+    name: "dispatch_planner_experimental",
+    description:
+      "EXPERIMENTAL (Fleet only). Propose a multi-load dispatch assignment plan for unassigned loads using available drivers (HOS/endorsements) and trucks, then apply it only after explicit user confirmation.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+    requires_confirmation: true,
+    force_confirmation: true,
+    allowed_roles: DISPATCH_ROLES,
+    minimum_plan_tier: "fleet",
+    execute: execDispatchPlanner,
+    preview: previewDispatchPlanner,
+  },
+  {
     name: "create_load",
     description:
-      "Create a new freight load for this company. Example: customer_id UUID empty string allowed if unknown; pickup_location \"Chicago, IL\"; delivery_location \"Dallas, TX\"; pickup_date \"2026-05-20\"; rate_usd 2500; weight_lbs 42000; commodity \"Steel coils\". Requires user confirmation before execution.",
+      "Create a new freight load. Required: pickup_location and delivery_location (e.g. \"Chicago, IL\" → \"Dallas, TX\"). Optional: customer_id (UUID), pickup_date/delivery_date (YYYY-MM-DD), rate_usd, weight_lbs, commodity, notes. Requires user confirmation.",
     input_schema: {
       type: "object",
       properties: {
@@ -86,7 +104,7 @@ const AI_TOOLS: AiToolDefinitionBase[] = [
   {
     name: "assign_driver_to_load",
     description:
-      "Assign an active driver to a load using dispatch assignment (same as Quick Assign). Inputs: load_id UUID, driver_id UUID. Requires confirmation.",
+      "Assign a driver to a load (dispatch assignment). Inputs: load_id (UUID), driver_id (UUID). Requires user confirmation.",
     input_schema: {
       type: "object",
       properties: {
@@ -104,7 +122,7 @@ const AI_TOOLS: AiToolDefinitionBase[] = [
   {
     name: "update_load_status",
     description:
-      "Update TMS load status. Valid statuses include pending, confirmed, in_transit, delivered, cancelled, invoiced, paid (exact strings depend on load workflow). User confirmation is REQUIRED when new_status is delivered or cancelled (terminal actions); other transitions execute immediately after tool call.",
+      "Change a load's status. Inputs: load_id (UUID), new_status (one of pending, confirmed, in_transit, delivered, cancelled, invoiced, paid). Confirmation is required for the terminal statuses delivered and cancelled; all other transitions execute immediately.",
     input_schema: {
       type: "object",
       properties: {
@@ -122,7 +140,7 @@ const AI_TOOLS: AiToolDefinitionBase[] = [
   {
     name: "copy_load",
     description:
-      "Duplicate an existing load as a new record (same as Duplicate Load). Optional new_pickup_date \"YYYY-MM-DD\" adjusts pickup on the copy. Requires confirmation.",
+      "Duplicate an existing load into a new record. Inputs: source_load_id (UUID); optional new_pickup_date (YYYY-MM-DD) to set the copy's pickup. Requires user confirmation.",
     input_schema: {
       type: "object",
       properties: {
@@ -140,7 +158,7 @@ const AI_TOOLS: AiToolDefinitionBase[] = [
   {
     name: "send_invoice",
     description:
-      "Email the customer invoice PDF/link using TruckMates invoice email action. Provide invoice_id OR load_id (invoice linked to load). ALWAYS requires human confirmation — financial outbound.",
+      "Email the customer their invoice (PDF and link). Provide invoice_id, or load_id to use that load's invoice. Always requires user confirmation.",
     input_schema: {
       type: "object",
       properties: {
@@ -159,7 +177,7 @@ const AI_TOOLS: AiToolDefinitionBase[] = [
   {
     name: "mark_invoice_paid",
     description:
-      "Mark an invoice paid in accounting (updates status, paid_date, payment_method). ALWAYS requires confirmation.",
+      "Mark an invoice as paid (sets status, paid date, and payment method). Required: invoice_id. Optional: payment_date (YYYY-MM-DD), payment_method (ach, check, card, other). Always requires user confirmation.",
     input_schema: {
       type: "object",
       properties: {
@@ -179,7 +197,7 @@ const AI_TOOLS: AiToolDefinitionBase[] = [
   {
     name: "send_driver_message",
     description:
-      "Send an SMS to a driver via TruckMates SMS integration. message_text should be short and operational. Requires confirmation.",
+      "Send an SMS text message to a driver. Inputs: driver_id (UUID), message_text (keep it short and operational). Requires user confirmation.",
     input_schema: {
       type: "object",
       properties: {
@@ -197,7 +215,7 @@ const AI_TOOLS: AiToolDefinitionBase[] = [
   {
     name: "update_driver_status",
     description:
-      "Patch driver record status (and optional notes field mapped to driver notes). Requires confirmation.",
+      "Set a driver's status. Inputs: driver_id (UUID), status; optional note added to the driver record. Requires user confirmation.",
     input_schema: {
       type: "object",
       properties: {
@@ -216,7 +234,7 @@ const AI_TOOLS: AiToolDefinitionBase[] = [
   {
     name: "create_maintenance_record",
     description:
-      "Schedule maintenance on a truck: truck_id, service_type (e.g. PM-A, DOT inspection), scheduled_date YYYY-MM-DD, optional notes. Requires confirmation.",
+      "Schedule a maintenance service on a truck. Required: truck_id (UUID), service_type (e.g. \"PM-A\", \"DOT inspection\"), scheduled_date (YYYY-MM-DD). Optional: notes. Requires user confirmation.",
     input_schema: {
       type: "object",
       properties: {
@@ -236,7 +254,7 @@ const AI_TOOLS: AiToolDefinitionBase[] = [
   {
     name: "mark_maintenance_complete",
     description:
-      "Mark a maintenance record completed with optional completion_date (YYYY-MM-DD), cost_usd number, notes ignored by backend action today. Requires confirmation.",
+      "Mark a maintenance record as complete. Required: maintenance_id. Optional: completion_date (YYYY-MM-DD) and cost_usd. Requires user confirmation.",
     input_schema: {
       type: "object",
       properties: {
@@ -256,7 +274,7 @@ const AI_TOOLS: AiToolDefinitionBase[] = [
   {
     name: "find_best_truck_for_load",
     description:
-      "READ ONLY: Rank trucks already in context heuristically for load_id (availability messaging only — not an optimizer). Auto-runs without confirmation.",
+      "Read-only. Ranks the company's trucks by availability to recommend the best fit for a load. Input: load_id (UUID). Runs immediately; no confirmation needed.",
     input_schema: {
       type: "object",
       properties: {
@@ -273,7 +291,7 @@ const AI_TOOLS: AiToolDefinitionBase[] = [
   {
     name: "find_available_drivers_near_location",
     description:
-      'READ ONLY: Lists active drivers for planning near pickup_location text and pickup_date string (e.g. "2026-05-21"); geolocation is NOT computed. Auto-runs.',
+      'Read-only. Lists active drivers available for a pickup to support assignment planning. Inputs: pickup_location (text, e.g. "Chicago, IL"); optional pickup_date (YYYY-MM-DD). Runs immediately; no confirmation needed.',
     input_schema: {
       type: "object",
       properties: {
@@ -291,7 +309,7 @@ const AI_TOOLS: AiToolDefinitionBase[] = [
   {
     name: "get_load_profitability_analysis",
     description:
-      "READ ONLY: Summarize stored revenue / profit fields on load_id — does not compute unseen costs. Auto-runs.",
+      "Read-only. Reports a load's recorded revenue and profit figures. Input: load_id (UUID). Runs immediately; no confirmation needed.",
     input_schema: {
       type: "object",
       properties: {
@@ -308,7 +326,7 @@ const AI_TOOLS: AiToolDefinitionBase[] = [
   {
     name: "get_driver_performance_summary",
     description:
-      "READ ONLY: Count loads assigned to driver_id in the last days_back (integer 1–365, default 30). Auto-runs.",
+      "Read-only. Summarizes a driver's recent activity by counting loads assigned over a recent window. Required: driver_id (UUID). Optional: days_back (1–365, default 30). Runs immediately; no confirmation needed.",
     input_schema: {
       type: "object",
       properties: {

@@ -7,6 +7,11 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { callClaude } from "@/lib/ai/client"
 import { LOGISTICS_SYSTEM_PROMPT } from "@/lib/ai/prompts/system"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { normalizePlanTier, hasFeatureAccess } from "@/lib/plan-limits"
+import { extractStructuredFieldsFromBase64, type DocumentKind } from "@/lib/ai/documents/structured-extraction"
+import { compareExtractedToRecords } from "@/lib/ai/documents/discrepancy"
+import { notifyDocumentDiscrepancy } from "@/lib/ai/notifications/document-discrepancies"
 
 export interface ExtractedDriverData {
   type: "driver"
@@ -279,6 +284,155 @@ export async function analyzeDocumentFromUrl(
     }
   } catch (error: unknown) {
     return { data: null, error: errorMessage(error, "Failed to analyze document") }
+  }
+}
+
+function normalizeDocKindFromType(type: string, fileName: string): DocumentKind | null {
+  const t = `${type} ${fileName}`.toLowerCase()
+  if (t.includes("rate") && (t.includes("confirm") || t.includes("con"))) return "rate_confirmation"
+  if (t.includes("rate_confirmation")) return "rate_confirmation"
+  if (t.includes("bol") || t.includes("bill of lading")) return "bol"
+  return null
+}
+
+/**
+ * Structured extraction (rate confirmations + BOLs) + discrepancy surfacing.
+ * Best-effort: never throws; safely no-ops when plan/browser/env does not support extraction.
+ */
+export async function extractAndCheckStructuredDocument(documentId: string): Promise<{ ok: boolean; error: string | null }> {
+  try {
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) return { ok: false, error: ctx.error || "Not authenticated" }
+
+    const admin = createAdminClient()
+    const { data: companyRow } = await admin
+      .from("companies")
+      .select("subscription_tier")
+      .eq("id", ctx.companyId)
+      .maybeSingle()
+    const tier = normalizePlanTier((companyRow as { subscription_tier?: string } | null)?.subscription_tier)
+    if (!hasFeatureAccess(tier, "ai_document_extraction")) {
+      return { ok: true, error: null }
+    }
+
+    const { data: doc, error: docErr } = await admin
+      .from("documents")
+      .select("id, company_id, file_url, name, type, load_id, invoice_id")
+      .eq("id", documentId)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+    if (docErr || !doc) return { ok: false, error: "Document not found" }
+
+    const row = doc as {
+      id: string
+      file_url: string | null
+      name: string | null
+      type: string | null
+      load_id: string | null
+      invoice_id: string | null
+    }
+    const fileUrlOrPath = String(row.file_url || "").trim()
+    const fileName = String(row.name || "").trim() || "document"
+    if (!fileUrlOrPath) return { ok: false, error: "Document file URL missing" }
+
+    const hintedKind = normalizeDocKindFromType(String(row.type || ""), fileName)
+    if (!hintedKind) {
+      // Only rate confirmations and BOLs for v1.
+      return { ok: true, error: null }
+    }
+
+    const apiKey = String(process.env.ANTHROPIC_API_KEY || "").trim()
+    if (!apiKey) return { ok: false, error: "Document extraction unavailable" }
+
+    // Documents store storage path; generate signed URL for fetch.
+    const supabase = await createClient()
+    let source = fileUrlOrPath
+    if (!fileUrlOrPath.startsWith("http://") && !fileUrlOrPath.startsWith("https://")) {
+      const signed = await supabase.storage.from("documents").createSignedUrl(fileUrlOrPath, 300)
+      if (signed.error || !signed.data?.signedUrl) {
+        return { ok: false, error: "Could not access document file" }
+      }
+      source = signed.data.signedUrl
+    }
+
+    const { base64, mediaType: detectedType } = await toBase64AndMediaType({ source, fileName })
+    const mediaType = detectedType !== "application/octet-stream" ? detectedType : pickExtensionMediaType(fileName)
+
+    const extracted = await extractStructuredFieldsFromBase64({
+      base64,
+      mediaType,
+      fileName,
+      companyId: ctx.companyId,
+      hintedKind,
+    })
+    if (extracted.error || !extracted.data) return { ok: false, error: extracted.error || "Extraction failed" }
+
+    // Load matching records (if linked).
+    const [loadRes, invRes] = await Promise.all([
+      row.load_id
+        ? admin
+            .from("loads")
+            .select("id, origin, destination, load_date, estimated_delivery, rate, total_rate, fuel_surcharge, accessorial_charges, bol_number")
+            .eq("company_id", ctx.companyId)
+            .eq("id", row.load_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      row.invoice_id
+        ? admin
+            .from("invoices")
+            .select("id, amount, customer_name, status")
+            .eq("company_id", ctx.companyId)
+            .eq("id", row.invoice_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ])
+
+    const discrepancies = compareExtractedToRecords({
+      extracted: extracted.data,
+      load: (loadRes as { data: unknown }).data as never,
+      invoice: (invRes as { data: unknown }).data as never,
+    })
+
+    // Persist extraction row (upsert latest for doc+kind; history is not needed for v1).
+    await admin.from("ai_document_extractions").upsert(
+      {
+        company_id: ctx.companyId,
+        document_id: documentId,
+        document_kind: extracted.data.document_kind,
+        extracted: extracted.data,
+        confidence: extracted.data.confidence,
+        model: extracted.model,
+        load_id: row.load_id,
+        invoice_id: row.invoice_id,
+        discrepancies,
+        has_discrepancy: discrepancies.length > 0,
+        extracted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "company_id,document_id,document_kind" },
+    )
+
+    if (discrepancies.length > 0) {
+      const title = extracted.data.document_kind === "rate_confirmation" ? "Rate confirmation discrepancy" : "BOL discrepancy"
+      const message = discrepancies[0]?.message || "Discrepancy detected between document and records."
+      void notifyDocumentDiscrepancy({
+        companyId: ctx.companyId,
+        documentId,
+        title,
+        message,
+        priority: discrepancies.some((d) => d.severity === "high") ? "high" : "normal",
+        metadata: {
+          document_kind: extracted.data.document_kind,
+          discrepancies,
+          load_id: row.load_id,
+          invoice_id: row.invoice_id,
+        },
+      })
+    }
+
+    return { ok: true, error: null }
+  } catch (error: unknown) {
+    return { ok: false, error: errorMessage(error, "Structured extraction failed") }
   }
 }
 

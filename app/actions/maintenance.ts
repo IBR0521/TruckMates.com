@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
+import { invalidateAiContextCache } from "@/lib/ai/answer-cache"
 import { sanitizeString, validateRequiredString, validateDate, validatePositiveNumber } from "@/lib/validation"
 import { checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 export async function getMaintenance(filters?: {
@@ -168,6 +169,7 @@ export async function createMaintenance(formData: {
     return { error: safeDbError(error), data: null }
   }
 
+    void invalidateAiContextCache(ctx.companyId, "maintenance")
     revalidatePath("/dashboard/maintenance")
     
     // Trigger webhook
@@ -293,6 +295,7 @@ export async function createMaintenanceAdmin(
       return { error: safeDbError(error), data: null }
     }
 
+    void invalidateAiContextCache(cid, "maintenance")
     revalidatePath("/dashboard/maintenance")
     try {
       const { triggerWebhook } = await import("./webhooks")
@@ -404,6 +407,7 @@ export async function updateMaintenanceStatus(
     return { error: safeDbError(error), data: null }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "maintenance")
   revalidatePath("/dashboard/maintenance")
   revalidatePath(`/dashboard/maintenance/${id}`)
 
@@ -433,6 +437,7 @@ export async function deleteMaintenance(id: string) {
     return { error: safeDbError(error) }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "maintenance")
   revalidatePath("/dashboard/maintenance")
   return { error: null }
 }

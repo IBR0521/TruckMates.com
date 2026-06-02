@@ -4,6 +4,7 @@ import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
+import { invalidateAiContextCache } from "@/lib/ai/answer-cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import * as Sentry from "@sentry/nextjs"
 import { validatePricingData, validateNonNegativeNumber, sanitizeString, validateDate, validateRequiredString } from "@/lib/validation"
@@ -454,6 +455,7 @@ export async function updateInvoice(
       return { error: error ? safeDbError(error, "Invoice not found") : "Invoice not found", data: null }
     }
 
+    void invalidateAiContextCache(ctx.companyId, "financial")
     revalidatePath("/dashboard/accounting/invoices")
     revalidatePath(`/dashboard/accounting/invoices/${id}`)
     if (
@@ -596,6 +598,7 @@ export async function deleteInvoice(id: string) {
 
   if (error) return { error: safeDbError(error) }
 
+  void invalidateAiContextCache(ctx.companyId, "financial")
   revalidatePath("/dashboard/accounting/invoices")
     return { error: null }
   } catch (error: unknown) {
@@ -628,6 +631,7 @@ export async function deleteExpense(id: string) {
 
   if (error) return { error: safeDbError(error) }
 
+  void invalidateAiContextCache(ctx.companyId, "financial")
   revalidatePath("/dashboard/accounting/expenses")
   return { error: null }
   } catch (error: unknown) {
@@ -931,6 +935,7 @@ export async function createInvoice(formData: {
     }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "financial")
   revalidatePath("/dashboard/accounting/invoices")
   
   // Trigger webhook
@@ -1201,6 +1206,7 @@ export async function createExpense(formData: {
     }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "financial")
   revalidatePath("/dashboard/accounting/expenses")
   return { data, error: null }
   } catch (error: unknown) {

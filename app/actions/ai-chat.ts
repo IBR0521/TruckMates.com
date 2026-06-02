@@ -12,6 +12,7 @@ import {
   type PersistedToolResult,
 } from "@/lib/ai/chat"
 import { callClaude } from "@/lib/ai/client"
+import { extractPreferenceEntityId, recordActionPreference } from "@/lib/ai/context"
 import { confirmTool, rejectTool } from "@/lib/ai/tools/executor"
 import { mapLegacyRole } from "@/lib/roles"
 import type { AppRole } from "@/lib/ai/tools/types"
@@ -23,7 +24,7 @@ function isChatRole(value: string): value is ChatRole {
   return value === "user" || value === "assistant"
 }
 
-async function assertAiChatAllowed(companyId: string): Promise<
+export async function assertAiChatAllowed(companyId: string): Promise<
   | { ok: true; enableTools: boolean; companyTier: PlanTier; remainingAiCalls: number }
   | { ok: false; error: string }
 > {
@@ -67,11 +68,11 @@ function coerceToolResults(raw: unknown): PersistedToolResult[] {
   return out
 }
 
-async function loadConversationHistory(
-  admin: ReturnType<typeof createAdminClient>,
+export async function loadConversationHistory(
   conversationId: string,
   companyId: string,
 ): Promise<AiChatHistoryRow[]> {
+  const admin = createAdminClient()
   const { data, error } = await admin
     .from("ai_chat_messages")
     .select("role, content, tool_calls, tool_results")
@@ -355,6 +356,8 @@ export async function createConversation(): Promise<{
 export async function sendChatMessage(params: {
   conversationId: string
   message: string
+  /** When true, request shorter spoken-style replies (voice input). */
+  voiceMode?: boolean
 }): Promise<{
   data: {
     userMessageId: string
@@ -394,7 +397,7 @@ export async function sendChatMessage(params: {
 
   const admin = createAdminClient()
 
-  const conversationHistory = await loadConversationHistory(admin, params.conversationId, ctx.companyId)
+  const conversationHistory = await loadConversationHistory(params.conversationId, ctx.companyId)
 
   const { data: userInsert, error: userErr } = await admin
     .from("ai_chat_messages")
@@ -427,6 +430,7 @@ export async function sendChatMessage(params: {
     conversationHistory,
     enableTools: gate.enableTools,
     remainingAiCalls: gate.remainingAiCalls,
+    voiceMode: Boolean(params.voiceMode),
   })
 
   if (ai.error || !ai.data) {
@@ -529,7 +533,7 @@ export async function confirmToolExecution(params: {
   const admin = createAdminClient()
   const { data: auditRow, error: auditErr } = await admin
     .from("ai_action_audit")
-    .select("id, conversation_id, company_id, user_id, status, message_id")
+    .select("id, conversation_id, company_id, user_id, status, message_id, tool_name, tool_input")
     .eq("id", params.auditId)
     .maybeSingle()
 
@@ -543,6 +547,8 @@ export async function confirmToolExecution(params: {
     user_id: string
     status: string
     message_id: string | null
+    tool_name: string | null
+    tool_input: Record<string, unknown> | null
   }
 
   if (audit.conversation_id !== params.conversationId || audit.company_id !== ctx.companyId || audit.user_id !== ctx.userId) {
@@ -599,7 +605,17 @@ export async function confirmToolExecution(params: {
 
   await admin.from("ai_chat_messages").update({ pending_tool_use_id: null }).eq("id", assistantMessageId)
 
-  const historyReloaded = await loadConversationHistory(admin, params.conversationId, ctx.companyId)
+  // Accumulate the company's approve/reject preference for this tool (+ entity), best-effort.
+  if (audit.tool_name) {
+    void recordActionPreference({
+      companyId: ctx.companyId,
+      toolName: audit.tool_name,
+      entityId: extractPreferenceEntityId(audit.tool_input),
+      outcome: params.approve ? "approved" : "rejected",
+    })
+  }
+
+  const historyReloaded = await loadConversationHistory(params.conversationId, ctx.companyId)
 
   const resume = await resumeAssistantAfterToolResolution({
     companyId: ctx.companyId,

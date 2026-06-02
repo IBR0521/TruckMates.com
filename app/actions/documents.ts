@@ -12,6 +12,7 @@ import { validateFileMagicBytes } from "@/lib/file-signature"
 import { checkStorageLimit } from "@/lib/plan-enforcement"
 import { getPlanLimits } from "@/lib/plan-limits"
 import * as Sentry from "@sentry/nextjs"
+import { extractAndCheckStructuredDocument } from "@/app/actions/document-analysis"
 /**
  * Documents:
  * - **driver** — rows tied to their `drivers.id`, uploads under their auth folder (`{userId}/…` in `file_url`), or fleet can set `driver_id` on upload.
@@ -462,6 +463,15 @@ export async function uploadDocument(
 
     if (docError) {
       return { error: docError.message, data: null }
+    }
+
+    // Best-effort structured extraction + discrepancy check (rate confirmations + BOLs only).
+    // Fire-and-forget: never block upload UX.
+    try {
+      const id = String((documentData as { id?: string }).id || "")
+      if (id) void extractAndCheckStructuredDocument(id)
+    } catch {
+      // ignore
     }
 
     revalidatePath("/dashboard/documents")

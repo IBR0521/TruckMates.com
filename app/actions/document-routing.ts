@@ -6,6 +6,7 @@ import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkEditPermission, checkViewPermission } from "@/lib/server-permissions"
+import { extractAndCheckStructuredDocument } from "@/app/actions/document-analysis"
 /**
  * Link a document to an existing record
  */
@@ -195,6 +196,13 @@ export async function linkDocumentToRecord(
 
     if (updateError) {
       return { success: false, error: updateError.message }
+    }
+
+    // If this document is a rate confirmation / BOL, re-run discrepancy checks now that it is linked.
+    try {
+      void extractAndCheckStructuredDocument(documentId)
+    } catch {
+      // ignore
     }
 
     revalidatePath("/dashboard/documents")

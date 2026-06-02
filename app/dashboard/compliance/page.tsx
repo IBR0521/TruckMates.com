@@ -49,8 +49,9 @@ import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { Download } from "lucide-react"
 import { getCSAScoreHistory } from "@/app/actions/csa-scores"
+import { getExplainabilityRecord, listExplainabilityRecords } from "@/app/actions/ai-explainability"
 
-const VALID_TABS = ["registrations", "roadside", "incidents", "ifta", "eld", "csa"] as const
+const VALID_TABS = ["registrations", "roadside", "incidents", "ifta", "eld", "csa", "ai"] as const
 type ComplianceTab = (typeof VALID_TABS)[number]
 
 type ComplianceRegistration = {
@@ -121,6 +122,18 @@ export default function CompliancePage() {
   const [exportingRegister, setExportingRegister] = useState(false)
   const [csaLoading, setCsaLoading] = useState(true)
   const [csaRows, setCsaRows] = useState<CSAScoreRow[]>([])
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiRecs, setAiRecs] = useState<Array<{
+    id: string
+    created_at: string
+    category: string
+    source: string
+    recommendation: string
+    confidence: number | null
+    model: string | null
+  }>>([])
+  const [aiSelectedId, setAiSelectedId] = useState<string | null>(null)
+  const [aiSelected, setAiSelected] = useState<Record<string, unknown> | null>(null)
   const [incidentForm, setIncidentForm] = useState({
     incident_date: "",
     location: "",
@@ -161,6 +174,57 @@ export default function CompliancePage() {
     }
     setLoading(false)
   }
+
+  async function loadAiExplainability() {
+    setAiLoading(true)
+    try {
+      const res = await listExplainabilityRecords({ limit: 80 })
+      if (res.error || !res.data) {
+        setAiRecs([])
+        return
+      }
+      setAiRecs(
+        res.data.map((r) => ({
+          id: r.id,
+          created_at: r.created_at,
+          category: String(r.category || ""),
+          source: String(r.source || ""),
+          recommendation: String(r.recommendation || ""),
+          confidence:
+            typeof r.confidence === "number"
+              ? r.confidence
+              : r.confidence !== null && r.confidence !== undefined
+                ? Number(r.confidence)
+                : null,
+          model: r.model ? String(r.model) : null,
+        })),
+      )
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== "ai") return
+    void loadAiExplainability()
+  }, [activeTab])
+
+  useEffect(() => {
+    if (activeTab !== "ai" || !aiSelectedId) return
+    let active = true
+    setAiSelected(null)
+    getExplainabilityRecord(aiSelectedId)
+      .then((res) => {
+        if (!active) return
+        setAiSelected((res.data as Record<string, unknown> | null) || null)
+      })
+      .catch(() => {
+        if (active) setAiSelected(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [activeTab, aiSelectedId])
 
   useEffect(() => {
     void loadItems()
@@ -493,13 +557,14 @@ export default function CompliancePage() {
         onValueChange={(value) => router.push(`/dashboard/compliance?tab=${encodeURIComponent(value)}`)}
         className="w-full"
       >
-        <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-5">
+        <TabsList className="mx-4 md:mx-8 mt-4 grid w-fit grid-cols-7">
           <TabsTrigger value="registrations">Registrations</TabsTrigger>
           <TabsTrigger value="roadside">Roadside</TabsTrigger>
           <TabsTrigger value="incidents">Incidents</TabsTrigger>
           <TabsTrigger value="ifta">IFTA</TabsTrigger>
           <TabsTrigger value="eld">ELD</TabsTrigger>
           <TabsTrigger value="csa">CSA Scores</TabsTrigger>
+          <TabsTrigger value="ai">AI Reasoning</TabsTrigger>
         </TabsList>
 
         <TabsContent value="registrations">
@@ -772,6 +837,106 @@ export default function CompliancePage() {
               </div>
             )}
           </Card>
+        </TabsContent>
+
+        <TabsContent value="ai">
+          <div className="p-4 md:p-8 space-y-4">
+            <Card className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold">AI safety/compliance reasoning</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Stored explainability records for HOS/CSA/inspection/HAZMAT recommendations (company-scoped).
+                  </p>
+                </div>
+                <Button variant="outline" onClick={() => void loadAiExplainability()} disabled={aiLoading}>
+                  Refresh
+                </Button>
+              </div>
+            </Card>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card className="p-0 overflow-hidden">
+                {aiLoading ? (
+                  <div className="p-4 text-sm text-muted-foreground">Loading records…</div>
+                ) : aiRecs.length === 0 ? (
+                  <div className="p-4 text-sm text-muted-foreground">No AI explainability records yet.</div>
+                ) : (
+                  <div className="max-h-[520px] overflow-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/40">
+                        <tr className="text-left">
+                          <th className="px-3 py-2">When</th>
+                          <th className="px-3 py-2">Category</th>
+                          <th className="px-3 py-2">Source</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aiRecs.map((r) => (
+                          <tr
+                            key={r.id}
+                            className={`border-t cursor-pointer hover:bg-muted/20 ${aiSelectedId === r.id ? "bg-muted/30" : ""}`}
+                            onClick={() => setAiSelectedId(r.id)}
+                          >
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              {new Date(r.created_at).toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2">
+                              <Badge variant="outline">{r.category || "other"}</Badge>
+                            </td>
+                            <td className="px-3 py-2">
+                              <Badge variant="secondary">{r.source}</Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Card>
+
+              <Card className="p-4 space-y-3">
+                {!aiSelected ? (
+                  <p className="text-sm text-muted-foreground">Select a record to view its stored reasoning.</p>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{String(aiSelected.category || "other")}</Badge>
+                        <Badge variant="secondary">{String(aiSelected.source || "")}</Badge>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {aiSelected.created_at ? new Date(String(aiSelected.created_at)).toLocaleString() : ""}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Recommendation</p>
+                      <div className="rounded-md border border-border bg-card p-3 text-sm whitespace-pre-wrap">
+                        {String(aiSelected.recommendation || "")}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+                      <div>
+                        <span className="font-medium text-foreground">Model:</span> {String(aiSelected.model || "unknown")}
+                      </div>
+                      <div>
+                        <span className="font-medium text-foreground">Confidence:</span>{" "}
+                        {aiSelected.confidence === null || aiSelected.confidence === undefined
+                          ? "n/a"
+                          : String(aiSelected.confidence)}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Data points used (company-scoped)</p>
+                      <pre className="rounded-md border border-border bg-muted/20 p-3 text-xs overflow-auto max-h-[260px]">
+{JSON.stringify(aiSelected.data_points || {}, null, 2)}
+                      </pre>
+                    </div>
+                  </>
+                )}
+              </Card>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
 

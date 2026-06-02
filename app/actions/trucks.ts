@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
+import { invalidateAiContextCache } from "@/lib/ai/answer-cache"
 import { validateTruckData, sanitizeString } from "@/lib/validation"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { checkResourceLimit } from "@/lib/plan-enforcement"
@@ -301,6 +302,7 @@ export async function createTruck(formData: {
     return { error: safeDbError(error), data: null }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "fleet")
   revalidatePath("/dashboard/trucks")
   return { data, error: null }
 }
@@ -451,6 +453,7 @@ export async function updateTruck(
     }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "fleet")
   revalidatePath("/dashboard/trucks")
   revalidatePath(`/dashboard/trucks/${id}`)
 
@@ -527,6 +530,7 @@ export async function deleteTruck(id: string) {
       return { error: safeDbError(error) }
     }
 
+    void invalidateAiContextCache(ctx.companyId, "fleet")
     revalidatePath("/dashboard/trucks")
     return { error: null }
   } catch (error: unknown) {
@@ -603,6 +607,7 @@ export async function bulkDeleteTrucks(ids: string[]) {
     return { error: safeDbError(error), data: null }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "fleet")
   revalidatePath("/dashboard/trucks")
   return { data: { deleted: ids.length }, error: null }
 }
@@ -636,6 +641,7 @@ export async function bulkUpdateTruckStatus(ids: string[], status: string) {
     return { error: safeDbError(error), data: null }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "fleet")
   revalidatePath("/dashboard/trucks")
   return { data: { updated: ids.length }, error: null }
 }

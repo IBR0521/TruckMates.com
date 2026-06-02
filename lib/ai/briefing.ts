@@ -116,6 +116,7 @@ Rules:
 - financial_highlights: unpaid invoices, amounts due, overdue counts, expected revenue this week — ground in provided data.
 - compliance_warnings: licenses, medical, IFTA, DOT windows, recent HOS issues — only if supported by data.
 - recommendations: 3–5 specific actions ranked by priority (1 = highest). Each must reference the data and explain WHY. Include estimated_impact when plausible.
+- last-24h events: the user turn includes a "What actually happened in the last 24 hours" section drawn from real records. Ground the summary and today_outlook.notable_events in those events. If that section states no notable events occurred, say so plainly in the summary and leave notable_events empty — do NOT fabricate activity that is not supported by the data.
 
 Output ONLY valid JSON (no markdown fences, no commentary) with EXACTLY these snake_case top-level keys:
 {
@@ -298,6 +299,177 @@ async function gatherFullContext(companyId: string): Promise<{ text: string; con
   }
 }
 
+/** Lookback window for "what happened" in the daily event summary. */
+const EVENT_LOOKBACK_HOURS = 24
+/** Horizon for "documents now expiring soon" surfaced in the daily summary. */
+const DOC_EXPIRY_HORIZON_DAYS = 7
+
+type CountAndSamples = { count: number; samples: string[] }
+
+function formatMoney(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(value) ? value : 0)
+}
+
+function bumpBreakdown(map: Record<string, number>, key: string): void {
+  const k = key || "unknown"
+  map[k] = (map[k] || 0) + 1
+}
+
+function renderTypeBreakdown(map: Record<string, number>): string {
+  const entries = Object.entries(map).sort((a, b) => b[1] - a[1])
+  if (entries.length === 0) return "none"
+  return entries.map(([type, count]) => `${type} (${count})`).join(", ")
+}
+
+/**
+ * Summarize the company's actual prior-24h events from real tables (scoped to company_id) so the
+ * briefing reflects what genuinely happened: loads delivered/completed, new HOS violations detected,
+ * maintenance that became due/overdue, invoices paid, and documents now expiring within 7 days.
+ *
+ * Returns a compact, LLM-readable block. When nothing notable occurred it returns an explicit
+ * "no notable events" statement so the model states that plainly instead of fabricating activity.
+ * Each sub-query is best-effort and isolated; a hard failure returns "" (section simply omitted).
+ */
+export async function buildDailyEventSummary(companyId: string): Promise<string> {
+  try {
+    const admin = createAdminClient()
+    const now = new Date()
+    const sinceIso = new Date(now.getTime() - EVENT_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString()
+    const sinceDate = sinceIso.slice(0, 10)
+    const todayDate = now.toISOString().slice(0, 10)
+    const horizonDate = new Date(now.getTime() + DOC_EXPIRY_HORIZON_DAYS * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10)
+
+    const [loadsResult, hosResult, maintenanceResult, invoicesResult, documentsResult] = await Promise.all([
+      admin
+        .from("loads")
+        .select("id, shipment_number, status, updated_at")
+        .eq("company_id", companyId)
+        .in("status", ["delivered", "completed"])
+        .gte("updated_at", sinceIso)
+        .order("updated_at", { ascending: false })
+        .limit(100),
+      admin
+        .from("ai_automation_logs")
+        .select("id, action_payload, created_at")
+        .eq("company_id", companyId)
+        .eq("automation_type", "hos_violation_prevention")
+        .eq("triggered", true)
+        .gte("created_at", sinceIso)
+        .order("created_at", { ascending: false })
+        .limit(200),
+      admin
+        .from("maintenance")
+        .select("id, service_type, scheduled_date, status")
+        .eq("company_id", companyId)
+        .not("status", "in", '("completed","cancelled")')
+        .gte("scheduled_date", sinceDate)
+        .lte("scheduled_date", horizonDate)
+        .limit(200),
+      admin
+        .from("invoices")
+        .select("id, invoice_number, amount, status, paid_date")
+        .eq("company_id", companyId)
+        .eq("status", "paid")
+        .gte("paid_date", sinceDate)
+        .limit(200),
+      admin
+        .from("documents")
+        .select("id, type, expiry_date")
+        .eq("company_id", companyId)
+        .not("expiry_date", "is", null)
+        .gte("expiry_date", todayDate)
+        .lte("expiry_date", horizonDate)
+        .limit(200),
+    ])
+
+    const lines: string[] = []
+
+    // Loads completed/delivered in the window.
+    const loadsDelivered: CountAndSamples = { count: 0, samples: [] }
+    if (!loadsResult.error) {
+      const rows = (loadsResult.data || []) as Array<{ shipment_number?: string | null }>
+      loadsDelivered.count = rows.length
+      loadsDelivered.samples = rows
+        .map((r) => String(r.shipment_number || "").trim())
+        .filter(Boolean)
+        .slice(0, 5)
+    }
+    if (loadsDelivered.count > 0) {
+      const sample = loadsDelivered.samples.length ? ` (e.g. ${loadsDelivered.samples.join(", ")})` : ""
+      lines.push(`- Loads completed/delivered: ${loadsDelivered.count}${sample}`)
+    }
+
+    // New HOS violations detected (from automation log of triggered HOS-prevention events).
+    if (!hosResult.error) {
+      const rows = (hosResult.data || []) as Array<{ action_payload: Record<string, unknown> | null }>
+      const severityCounts: Record<string, number> = {}
+      for (const row of rows) {
+        const payload = row.action_payload || {}
+        const trigger =
+          payload.triggerData && typeof payload.triggerData === "object" && !Array.isArray(payload.triggerData)
+            ? (payload.triggerData as Record<string, unknown>)
+            : {}
+        const severity = String(trigger.severity || "unspecified").toLowerCase()
+        bumpBreakdown(severityCounts, severity)
+      }
+      const total = rows.length
+      if (total > 0) {
+        lines.push(`- New HOS violation alerts: ${total} (by severity: ${renderTypeBreakdown(severityCounts)})`)
+      }
+    }
+
+    // Maintenance that became due/overdue (scheduled date within window, not yet completed).
+    if (!maintenanceResult.error) {
+      const rows = (maintenanceResult.data || []) as Array<{ scheduled_date?: string | null }>
+      let overdue = 0
+      let dueSoon = 0
+      for (const row of rows) {
+        const scheduled = String(row.scheduled_date || "").slice(0, 10)
+        if (!scheduled) continue
+        if (scheduled < todayDate) overdue += 1
+        else dueSoon += 1
+      }
+      if (overdue > 0 || dueSoon > 0) {
+        lines.push(`- Maintenance changes: ${overdue} newly overdue, ${dueSoon} now due within ${DOC_EXPIRY_HORIZON_DAYS} days`)
+      }
+    }
+
+    // Invoices paid in the window.
+    if (!invoicesResult.error) {
+      const rows = (invoicesResult.data || []) as Array<{ amount?: unknown }>
+      const count = rows.length
+      const total = rows.reduce((sum, r) => sum + num(r.amount), 0)
+      if (count > 0) {
+        lines.push(`- Invoices paid: ${count} totaling ${formatMoney(total)}`)
+      }
+    }
+
+    // Documents now expiring within the horizon.
+    if (!documentsResult.error) {
+      const rows = (documentsResult.data || []) as Array<{ type?: string | null }>
+      const typeCounts: Record<string, number> = {}
+      for (const row of rows) bumpBreakdown(typeCounts, String(row.type || "unknown").toLowerCase())
+      if (rows.length > 0) {
+        lines.push(`- Documents now expiring within ${DOC_EXPIRY_HORIZON_DAYS} days: ${rows.length} (${renderTypeBreakdown(typeCounts)})`)
+      }
+    }
+
+    if (lines.length === 0) {
+      return "Last 24 hours (real events, scoped to this company): No notable operational events were recorded — no loads completed, no new HOS alerts, no maintenance status changes, no invoices paid, and no documents newly expiring within 7 days."
+    }
+
+    return ["Last 24 hours (real events, scoped to this company):", ...lines].join("\n")
+  } catch {
+    return ""
+  }
+}
+
 export async function generateBriefingForCompany(params: {
   companyId: string
   briefingDate: string
@@ -315,9 +487,15 @@ export async function generateBriefingForCompany(params: {
   const started = Date.now()
   const usageFeature = params.usageFeature ?? "ai_morning_briefing_cron"
 
-  const { text: cacheContext, contextUsed } = await gatherFullContext(params.companyId)
+  const [{ text: cacheContext, contextUsed }, eventSummary] = await Promise.all([
+    gatherFullContext(params.companyId),
+    buildDailyEventSummary(params.companyId),
+  ])
   const userBlock = [
     `Company briefing date: ${params.briefingDate}`,
+    "",
+    "What actually happened in the last 24 hours (real events — base the summary and notable_events on these):",
+    eventSummary || "No 24-hour event data was available for this company.",
     "",
     "Operational context (ground truth — do not invent facts beyond reasonable inference):",
     cacheContext,

@@ -80,7 +80,12 @@ function mapAiPriorityToLegacy(p: ProactiveAlert["priority"]): string {
   return "normal"
 }
 
-async function insertProactiveIfNew(
+/**
+ * Inserts a proactive notification for the company (dedup-scoped via `ai_proactive_alerts`).
+ * Returns "skipped" when an identical unresolved alert already exists. Reused by the
+ * ai-proactive-insights cron so all proactive surfacing shares one notification path.
+ */
+export async function insertProactiveIfNew(
   admin: ReturnType<typeof createAdminClient>,
   companyId: string,
   alert: ProactiveAlert,

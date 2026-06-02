@@ -296,13 +296,14 @@ export async function executeToolForChat(params: {
 
   if (needsConfirmation && !params.skipConfirmation) {
     const preview = await tool.preview(validated.value, ctx)
+    const persistedInput = preview.draftInput ?? validated.value
     const id = await insertAuditRow({
       companyId: params.companyId,
       userId: params.userId,
       conversationId: params.conversationId,
       messageId: params.messageId,
       toolName: params.toolName,
-      toolInput: validated.value,
+      toolInput: persistedInput,
       status: "pending_confirmation",
       requiredConfirmation: true,
       affected: preview.affected[0] ? { type: preview.affected[0].type, id: preview.affected[0].id } : affectedGuess,

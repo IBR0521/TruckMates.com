@@ -6,6 +6,7 @@ import { checkViewPermission, checkCreatePermission, checkEditPermission, checkD
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { mapLegacyRole } from "@/lib/roles"
 import { runAgentEvaluation } from "@/lib/ai/agent/loop"
+import { invalidateAiContextCache } from "@/lib/ai/answer-cache"
 import * as Sentry from "@sentry/nextjs"
 import { revalidatePath } from "next/cache"
 import { createRoute } from "./routes"
@@ -1062,6 +1063,7 @@ export async function createLoad(formData: {
     shipment_number: shipmentNumber,
   })
 
+  void invalidateAiContextCache(ctx.companyId, "load")
   revalidatePath("/dashboard/loads")
   revalidatePath("/dashboard/routes")
   
@@ -1683,6 +1685,7 @@ export async function updateLoad(
     }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "load")
   revalidatePath("/dashboard/loads")
   revalidatePath(`/dashboard/loads/${id}`)
   revalidatePath("/dashboard/accounting/invoices")
@@ -1754,6 +1757,7 @@ export async function deleteLoad(id: string) {
     return { error: "Failed to delete load" }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "load")
   revalidatePath("/dashboard/loads")
   return { error: null }
 }
@@ -1812,6 +1816,7 @@ export async function bulkDeleteLoads(ids: string[]) {
     return { error: "Failed to delete loads", data: null }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "load")
   revalidatePath("/dashboard/loads")
   return { data: { deleted: ids.length }, error: null }
 }
@@ -1881,6 +1886,7 @@ export async function bulkUpdateLoadStatus(ids: string[], status: string) {
     return { error: "Failed to update load status", data: null }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "load")
   revalidatePath("/dashboard/loads")
   return { data: { updated: ids.length }, error: null }
 }
@@ -2014,6 +2020,7 @@ export async function duplicateLoad(id: string) {
     }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "load")
   revalidatePath("/dashboard/loads")
   return { data: newLoad, error: null }
 }

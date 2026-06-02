@@ -6,7 +6,311 @@ import { updateInvoice } from "@/app/actions/accounting"
 import { sendSMSToDriver } from "@/app/actions/sms"
 import { updateDriver } from "@/app/actions/drivers"
 import { createMaintenance, updateMaintenanceStatus } from "@/app/actions/maintenance"
+import { callClaude } from "@/lib/ai/client"
+import { LOGISTICS_SYSTEM_PROMPT } from "@/lib/ai/prompts/system"
 import type { AiToolContext, AiToolExecuteResult, AiToolPreviewResult } from "@/lib/ai/tools/types"
+import { normalizePlanTier, tierAtLeast } from "@/lib/plan-limits"
+
+function isDispatchPlannerEnabled(): boolean {
+  const v = String(process.env.AI_DISPATCH_PLANNER_EXPERIMENTAL || "").trim().toLowerCase()
+  return v === "1" || v === "true" || v === "yes"
+}
+
+type PlannerLoad = {
+  id: string
+  shipment_number: string | null
+  origin: string | null
+  destination: string | null
+  load_date: string | null
+  estimated_delivery: string | null
+  is_hazardous: boolean | null
+  weight: string | null
+}
+
+type PlannerDriver = {
+  id: string
+  name: string | null
+  status: string | null
+  current_location: string | null
+  license_endorsements: string | null
+  hos_drive_left_hr: number | null
+  hos_onduty_left_hr: number | null
+  duty_status_hint: string | null
+}
+
+type PlannerTruck = { id: string; unit_number: string | null; status: string | null; current_location: string | null }
+
+type DispatchPlan = {
+  confidence: number // 0..1
+  assumptions: string[]
+  assignments: Array<{
+    load_id: string
+    driver_id: string
+    truck_id: string | null
+    reasoning: string
+    constraints: {
+      hos_ok: boolean
+      hazmat_ok: boolean
+      deadhead_note: string | null
+    }
+    confidence: number // 0..1
+  }>
+}
+
+const DISPATCH_PLAN_SCHEMA = `Return ONLY valid JSON (no markdown) matching:\n{\n  \"confidence\": number, // 0..1 overall\n  \"assumptions\": string[],\n  \"assignments\": [\n    {\n      \"load_id\": string,\n      \"driver_id\": string,\n      \"truck_id\": string | null,\n      \"reasoning\": string,\n      \"constraints\": {\n        \"hos_ok\": boolean,\n        \"hazmat_ok\": boolean,\n        \"deadhead_note\": string | null\n      },\n      \"confidence\": number // 0..1\n    }\n  ]\n}`
+
+function clamp01(n: unknown): number {
+  const v = Number(n)
+  if (!Number.isFinite(v)) return 0
+  return Math.max(0, Math.min(1, v))
+}
+
+function parseDispatchPlan(raw: unknown): DispatchPlan {
+  const o = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+  const assumptions = Array.isArray(o.assumptions) ? (o.assumptions as unknown[]).map((x) => String(x || "")).filter(Boolean) : []
+  const assignmentsRaw = Array.isArray(o.assignments) ? o.assignments : []
+  const assignments: DispatchPlan["assignments"] = []
+  for (const a of assignmentsRaw) {
+    const r = a && typeof a === "object" && !Array.isArray(a) ? (a as Record<string, unknown>) : {}
+    const constraintsRaw =
+      r.constraints && typeof r.constraints === "object" && !Array.isArray(r.constraints)
+        ? (r.constraints as Record<string, unknown>)
+        : {}
+    const load_id = String(r.load_id || "").trim()
+    const driver_id = String(r.driver_id || "").trim()
+    if (!load_id || !driver_id) continue
+    assignments.push({
+      load_id,
+      driver_id,
+      truck_id: r.truck_id ? String(r.truck_id) : null,
+      reasoning: String(r.reasoning || "").trim(),
+      constraints: {
+        hos_ok: Boolean(constraintsRaw.hos_ok),
+        hazmat_ok: Boolean(constraintsRaw.hazmat_ok),
+        deadhead_note: constraintsRaw.deadhead_note ? String(constraintsRaw.deadhead_note) : null,
+      },
+      confidence: clamp01(r.confidence),
+    })
+  }
+  return { confidence: clamp01(o.confidence), assumptions, assignments }
+}
+
+async function loadPlannerInputs(companyId: string): Promise<{
+  loads: PlannerLoad[]
+  drivers: PlannerDriver[]
+  trucks: PlannerTruck[]
+  missing: string[]
+}> {
+  const admin = createAdminClient()
+  const missing: string[] = []
+
+  const { data: loadsRaw } = await admin
+    .from("loads")
+    .select("id, shipment_number, origin, destination, load_date, estimated_delivery, is_hazardous, weight, status, driver_id")
+    .eq("company_id", companyId)
+    .is("driver_id", null)
+    .in("status", ["pending", "scheduled", "confirmed"])
+    .order("updated_at", { ascending: false })
+    .limit(15)
+  const loads = (loadsRaw || []) as unknown as PlannerLoad[]
+
+  const { data: driversRaw } = await admin
+    .from("drivers")
+    .select("id, name, status, current_location, license_endorsements")
+    .eq("company_id", companyId)
+    .in("status", ["active", "available", "idle"])
+    .limit(15)
+  const baseDrivers = (driversRaw || []) as Array<{
+    id: string
+    name: string | null
+    status: string | null
+    current_location: string | null
+    license_endorsements: string | null
+  }>
+
+  const driverIds = baseDrivers.map((d) => d.id)
+  const { data: hosRaw } = driverIds.length
+    ? await admin
+        .from("eld_hos_clocks")
+        .select("driver_id, remaining_drive_ms, remaining_shift_ms, updated_at")
+        .eq("company_id", companyId)
+        .in("driver_id", driverIds)
+        .order("updated_at", { ascending: false })
+        .limit(2000)
+    : { data: null as unknown }
+
+  // newest clock per driver
+  const hosByDriver = new Map<string, { driveHr: number | null; onDutyHr: number | null }>()
+  for (const r of (hosRaw || []) as Array<{ driver_id?: string | null; remaining_drive_ms?: number | null; remaining_shift_ms?: number | null }>) {
+    const id = String(r.driver_id || "")
+    if (!id || hosByDriver.has(id)) continue
+    const driveHr = r.remaining_drive_ms != null ? Number(r.remaining_drive_ms) / 3600000 : null
+    const onDutyHr = r.remaining_shift_ms != null ? Number(r.remaining_shift_ms) / 3600000 : null
+    hosByDriver.set(id, {
+      driveHr: Number.isFinite(Number(driveHr)) ? driveHr : null,
+      onDutyHr: Number.isFinite(Number(onDutyHr)) ? onDutyHr : null,
+    })
+  }
+  if (driverIds.length > 0 && hosByDriver.size === 0) missing.push("HOS clocks (eld_hos_clocks) are missing; HOS feasibility is approximate.")
+
+  const drivers: PlannerDriver[] = baseDrivers.map((d) => {
+    const hos = hosByDriver.get(d.id)
+    return {
+      ...d,
+      hos_drive_left_hr: hos?.driveHr ?? null,
+      hos_onduty_left_hr: hos?.onDutyHr ?? null,
+      duty_status_hint: null,
+    }
+  })
+
+  const { data: trucksRaw } = await admin
+    .from("trucks")
+    .select("id, unit_number, status, current_location")
+    .eq("company_id", companyId)
+    .in("status", ["available", "idle", "active"])
+    .limit(15)
+  const trucks = (trucksRaw || []) as unknown as PlannerTruck[]
+
+  if (loads.length === 0) missing.push("No unassigned loads found (pending/scheduled/confirmed with no driver).")
+  if (drivers.length === 0) missing.push("No available drivers found (active/available/idle).")
+  if (trucks.length === 0) missing.push("No available trucks found (available/idle/active).")
+
+  return { loads, drivers, trucks, missing }
+}
+
+async function proposeDispatchPlanViaModel(params: {
+  companyId: string
+  loads: PlannerLoad[]
+  drivers: PlannerDriver[]
+  trucks: PlannerTruck[]
+  missing: string[]
+}): Promise<{ plan: DispatchPlan | null; error: string | null }> {
+  const userBlock = [
+    "You are a dispatch planner. Propose a plan to assign drivers (and trucks when available) to unassigned loads.",
+    "Hard constraints:",
+    "- Respect HOS: do not assign a driver if remaining drive time is clearly insufficient; if HOS is missing, state the assumption explicitly.",
+    "- Hazmat: if a load is hazardous, only assign drivers with endorsement 'H' (HAZMAT). If endorsements unknown, state uncertainty and avoid assigning hazmat loads.",
+    "- Do NOT invent IDs. Use only IDs provided below.",
+    "Optimization goals (best-effort): minimize deadhead when current locations exist; otherwise say deadhead unknown.",
+    "Keep reasoning concise (dispatchers are busy).",
+    "",
+    DISPATCH_PLAN_SCHEMA,
+    "",
+    "Missing / limitations (must incorporate into assumptions):",
+    ...params.missing.map((m) => `- ${m}`),
+    "",
+    "Unassigned loads (max 15):",
+    JSON.stringify(params.loads),
+    "",
+    "Available drivers (max 15):",
+    JSON.stringify(params.drivers),
+    "",
+    "Available trucks (max 15):",
+    JSON.stringify(params.trucks),
+  ].join("\n")
+
+  const res = await callClaude<Record<string, unknown>>(
+    `${LOGISTICS_SYSTEM_PROMPT}\n\nReturn a dispatch assignment plan as strict JSON.`,
+    userBlock,
+    {
+      expectJson: true,
+      maxTokens: 1600,
+      model: "sonnet",
+      feature: "dispatch_planner",
+      companyId: params.companyId,
+      cacheSystemPrompt: true,
+    },
+  )
+
+  if (res.error || !res.data) return { plan: null, error: res.error || "Planner unavailable" }
+  return { plan: parseDispatchPlan(res.data), error: null }
+}
+
+export async function previewDispatchPlanner(
+  input: Record<string, unknown>,
+  ctx: AiToolContext,
+): Promise<AiToolPreviewResult> {
+  void input
+
+  if (!isDispatchPlannerEnabled()) {
+    return {
+      summary: "Dispatch planner is disabled (feature flag off).",
+      affected: [],
+    }
+  }
+
+  const admin = createAdminClient()
+  const { data: companyRow } = await admin.from("companies").select("subscription_tier").eq("id", ctx.companyId).maybeSingle()
+  const tier = normalizePlanTier((companyRow as { subscription_tier?: string } | null)?.subscription_tier)
+  if (!tierAtLeast(tier, "fleet")) {
+    return {
+      summary: "Dispatch planner is Fleet tier only.",
+      affected: [],
+    }
+  }
+
+  const { loads, drivers, trucks, missing } = await loadPlannerInputs(ctx.companyId)
+  const { plan, error } = await proposeDispatchPlanViaModel({ companyId: ctx.companyId, loads, drivers, trucks, missing })
+  if (error || !plan) {
+    return { summary: error || "Could not propose a plan.", affected: [] }
+  }
+
+  const lines = plan.assignments.slice(0, 8).map((a, i) => `- ${i + 1}. load ${a.load_id} → driver ${a.driver_id}${a.truck_id ? ` (truck ${a.truck_id})` : ""}`)
+  const extra = plan.assignments.length > 8 ? `(+${plan.assignments.length - 8} more)` : ""
+  const summary = [
+    `Proposed dispatch plan (${plan.assignments.length} assignments).`,
+    ...lines,
+    extra,
+    plan.assumptions.length ? "" : "",
+    plan.assumptions.length ? "Assumptions:" : "",
+    ...plan.assumptions.slice(0, 4).map((a) => `- ${a}`),
+  ]
+    .filter(Boolean)
+    .join("\n")
+
+  return {
+    summary,
+    affected: plan.assignments.slice(0, 10).map((a) => ({ type: "load", id: a.load_id, label: `Load ${a.load_id}` })),
+    draftInput: { plan, generated_at: new Date().toISOString() },
+  }
+}
+
+export async function execDispatchPlanner(
+  input: Record<string, unknown>,
+  ctx: AiToolContext,
+): Promise<AiToolExecuteResult<{ applied: number; results: Array<{ load_id: string; ok: boolean; error?: string }> }>> {
+  if (!isDispatchPlannerEnabled()) {
+    return { ok: false, error: "Dispatch planner is disabled." }
+  }
+
+  const plan = (input.plan && typeof input.plan === "object" && !Array.isArray(input.plan) ? (input.plan as DispatchPlan) : null)
+  if (!plan || !Array.isArray(plan.assignments) || plan.assignments.length === 0) {
+    return { ok: false, error: "No plan found to apply. Re-run planning." }
+  }
+
+  // Execute via existing dispatch helper so all side effects are consistent.
+  const results: Array<{ load_id: string; ok: boolean; error?: string }> = []
+  let applied = 0
+  for (const a of plan.assignments.slice(0, 15)) {
+    const load_id = String((a as any).load_id || "").trim()
+    const driver_id = String((a as any).driver_id || "").trim()
+    if (!load_id || !driver_id) continue
+
+    try {
+      const res = await quickAssignLoad(load_id, driver_id, (a as any).truck_id ? String((a as any).truck_id) : undefined)
+      if ((res as any)?.error) {
+        results.push({ load_id, ok: false, error: String((res as any).error) })
+      } else {
+        applied += 1
+        results.push({ load_id, ok: true })
+      }
+    } catch (e: unknown) {
+      results.push({ load_id, ok: false, error: e instanceof Error ? e.message : "Assign failed" })
+    }
+  }
+
+  return { ok: true, data: { applied, results } }
+}
 
 export async function getInvoiceIdForLoadOrInvoice(params: {
   companyId: string

@@ -1,0 +1,29 @@
+{
+  "extracted": {
+    "document_kind": "rate_confirmation",
+    "confidence": 0.92,
+    "broker_name": "Acme Logistics",
+    "load_reference": "RC-12345",
+    "lane": { "origin": "Chicago, IL", "destination": "Dallas, TX" },
+    "weight_lbs": 42000,
+    "pickup_date": "2026-06-01",
+    "delivery_date": "2026-06-03",
+    "rate_total_usd": 2500,
+    "accessorials": [{ "name": "Fuel surcharge", "amount_usd": 0 }]
+  },
+  "load": {
+    "id": "load-1",
+    "origin": "Chicago, IL",
+    "destination": "Dallas, TX",
+    "load_date": "2026-06-01",
+    "estimated_delivery": "2026-06-03",
+    "total_rate": 2500,
+    "accessorial_charges": 0
+  },
+  "invoice": {
+    "id": "inv-1",
+    "amount": 2500
+  },
+  "expected_discrepancy_keys": []
+}
+

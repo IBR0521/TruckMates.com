@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { executeAgentAction } from "@/lib/ai/agent/executor"
 import { resolveApproval } from "@/lib/ai/agent/settings"
+import { extractPreferenceEntityId, recordActionPreference } from "@/lib/ai/context"
 import type { AgentAction } from "@/lib/ai/types"
 
 function toRecord(value: unknown): Record<string, unknown> {
@@ -85,6 +86,22 @@ export async function POST(request: NextRequest) {
     const resolveResult = await resolveApproval(approvalId, approved)
     if (resolveResult.error) {
       return NextResponse.json({ success: false, error: resolveResult.error }, { status: 500 })
+    }
+
+    // Accumulate the company's approve/reject preference for this automation (+ entity), best-effort.
+    {
+      const prefPayload = toRecord((approval as Record<string, unknown>).action_payload)
+      const prefAction = toRecord(prefPayload.action)
+      const prefEntity =
+        extractPreferenceEntityId(toRecord(prefAction.payload)) ||
+        extractPreferenceEntityId(toRecord(prefPayload.triggerData)) ||
+        extractPreferenceEntityId(prefPayload)
+      void recordActionPreference({
+        companyId: ctx.companyId,
+        toolName: String((approval as Record<string, unknown>).automation_type || ""),
+        entityId: prefEntity,
+        outcome: approved ? "approved" : "rejected",
+      })
     }
 
     if (!approved) {

@@ -9,11 +9,36 @@ import {
 } from "@/lib/ai/context"
 import { executeAgentAction } from "@/lib/ai/agent/executor"
 import { createPendingApproval, getAutomationConfig, logAutomationEvent } from "@/lib/ai/agent/settings"
+import { chooseModel } from "@/lib/ai/model-router"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { LOGISTICS_SYSTEM_PROMPT } from "@/lib/ai/prompts/system"
 import { sendPushToCompanyRoles } from "@/app/actions/push-notifications"
 import type { AgentAction, AgentDecision } from "@/lib/ai/types"
+import {
+  categorizeSafetyCompliance,
+  EXPLAINABILITY_PROMPT_VERSION_AGENT,
+  insertExplainabilityRecord,
+  sha256,
+} from "@/lib/ai/explainability"
 
 type ContextType = "fleet" | "driver" | "load" | "financial" | "compliance" | "maintenance"
+
+/**
+ * De-duplication cooldown for agent evaluations. If the same automation already took an action (or
+ * created a pending approval) for the same entity within this window, we skip re-evaluating to avoid
+ * duplicate actions and wasted model calls. Tune here.
+ */
+const AGENT_DEDUP_COOLDOWN_MINUTES = 60
+
+/**
+ * Canonical entity identifiers we de-duplicate on. Mirrors the keys read in {@link assembleContext},
+ * accepting both camelCase and snake_case variants found in trigger data.
+ */
+const DEDUP_ENTITY_KEYS: ReadonlyArray<{ canonical: "driver" | "load" | "truck"; keys: readonly string[] }> = [
+  { canonical: "driver", keys: ["driverId", "driver_id"] },
+  { canonical: "load", keys: ["loadId", "load_id"] },
+  { canonical: "truck", keys: ["truckId", "truck_id"] },
+]
 
 type RunAgentEvaluationParams = {
   companyId: string
@@ -92,6 +117,70 @@ async function assembleContext(
   return contextBlocks.filter(Boolean).join("\n\n")
 }
 
+/** Pull the canonical entity ids (driver/load/truck) present in a trigger-data record. */
+function extractEntityIds(triggerData: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const { canonical, keys } of DEDUP_ENTITY_KEYS) {
+    for (const key of keys) {
+      const value = toString(triggerData[key] || "")
+      if (value) {
+        out[canonical] = value
+        break
+      }
+    }
+  }
+  return out
+}
+
+/** True when two entity-id maps reference at least one identical (type, id) pair. */
+function entitiesOverlap(a: Record<string, string>, b: Record<string, string>): boolean {
+  return Object.keys(a).some((canonical) => Boolean(a[canonical]) && a[canonical] === b[canonical])
+}
+
+/**
+ * Look for a recent automation event for the same company + automation type that already resulted in
+ * an action taken or pending approval (triggered = true) for the same entity, within the cooldown
+ * window. Returns the matching log id + timestamp, or null. Read errors are non-fatal (return null)
+ * so the guard can never block legitimate evaluations.
+ */
+async function findRecentDuplicateEvent(params: {
+  companyId: string
+  automationType: string
+  currentEntities: Record<string, string>
+  cooldownMinutes: number
+}): Promise<{ id: string; createdAt: string } | null> {
+  try {
+    const cutoff = new Date(Date.now() - params.cooldownMinutes * 60 * 1000).toISOString()
+    const supabase = createAdminClient()
+    const { data, error } = await supabase
+      .from("ai_automation_logs")
+      .select("id, action_payload, created_at")
+      .eq("company_id", params.companyId)
+      .eq("automation_type", params.automationType)
+      .eq("triggered", true)
+      .gte("created_at", cutoff)
+      .order("created_at", { ascending: false })
+      .limit(50)
+
+    if (error || !data) return null
+
+    for (const row of data as Array<{ id: string; action_payload: Record<string, unknown> | null; created_at: string }>) {
+      const payload = row.action_payload || {}
+      const rowTrigger =
+        payload.triggerData && typeof payload.triggerData === "object" && !Array.isArray(payload.triggerData)
+          ? (payload.triggerData as Record<string, unknown>)
+          : {}
+      if (entitiesOverlap(params.currentEntities, extractEntityIds(rowTrigger))) {
+        return { id: String(row.id), createdAt: String(row.created_at) }
+      }
+    }
+
+    return null
+  } catch {
+    return null
+  }
+}
+
 function buildFallbackDecision(reasoning: string): AgentDecision {
   return {
     shouldAct: false,
@@ -142,6 +231,45 @@ export async function runAgentEvaluation(params: RunAgentEvaluationParams): Prom
     return { decision, executed: false, pendingApprovalId: null }
   }
 
+  // De-duplication guard: if we already acted (or queued an approval) for this same entity under the
+  // same automation within the cooldown window, skip re-evaluating to avoid duplicate actions and a
+  // wasted model call. Only applies when the trigger references a concrete entity.
+  const currentEntities = extractEntityIds(params.triggerData)
+  if (Object.keys(currentEntities).length > 0) {
+    const duplicate = await findRecentDuplicateEvent({
+      companyId: params.companyId,
+      automationType: params.trigger,
+      currentEntities,
+      cooldownMinutes: AGENT_DEDUP_COOLDOWN_MINUTES,
+    })
+
+    if (duplicate) {
+      const entitySummary = Object.entries(currentEntities)
+        .map(([type, id]) => `${type} ${id}`)
+        .join(", ")
+      const reasoning = `Skipped: a '${params.trigger}' action for ${entitySummary} was already taken or is pending within the last ${AGENT_DEDUP_COOLDOWN_MINUTES} minutes (cooldown).`
+      const decision = buildFallbackDecision(reasoning)
+      await logAutomationEvent({
+        companyId: params.companyId,
+        automationType: params.trigger,
+        level: config.level,
+        triggered: false,
+        confidence: 0,
+        reasoning,
+        actionTaken: "skipped_cooldown",
+        actionPayload: {
+          triggerData: params.triggerData,
+          cooldownMinutes: AGENT_DEDUP_COOLDOWN_MINUTES,
+          duplicateOfLogId: duplicate.id,
+          duplicateEventAt: duplicate.createdAt,
+        },
+        approved: null,
+        reversedAt: null,
+      })
+      return { decision, executed: false, pendingApprovalId: null }
+    }
+  }
+
   const assembledContext = await assembleContext(params.companyId, params.contextTypes, params.triggerData)
   const decisionPrompt = [
     "Evaluate the event and decide whether TruckMates AI should take action.",
@@ -165,7 +293,7 @@ export async function runAgentEvaluation(params: RunAgentEvaluationParams): Prom
   const aiResponse = await callClaude<AiDecisionPayload>(LOGISTICS_SYSTEM_PROMPT, decisionPrompt, {
     expectJson: true,
     maxTokens: 800,
-    model: "sonnet",
+    model: chooseModel("agent_decision"),
     feature: `agent_${params.trigger}`,
     companyId: params.companyId,
     cacheSystemPrompt: true,
@@ -219,6 +347,41 @@ export async function runAgentEvaluation(params: RunAgentEvaluationParams): Prom
       normalized.confidence < config.confidenceThreshold
         ? `${normalized.reasoning} Confidence below threshold (${config.confidenceThreshold}).`
         : normalized.reasoning,
+  }
+
+  // Explainability: persist safety/compliance recommendations for relevant triggers so they are
+  // reconstructable later. Store only this company's data points (triggerData + assembledContext).
+  {
+    const category =
+      categorizeSafetyCompliance(`${params.trigger}\n${decision.reasoning}`) ||
+      (params.trigger.includes("hos") ? "hos" : params.trigger.includes("csa") ? "csa" : null)
+    const shouldLog =
+      category !== null ||
+      params.trigger === "hos_violation_prevention" ||
+      params.trigger === "csa_threshold_alert" ||
+      params.trigger === "document_expiry_alert"
+    if (shouldLog) {
+      void insertExplainabilityRecord({
+        companyId: params.companyId,
+        source: "agent",
+        category: category || "other",
+        recommendation: decision.reasoning,
+        dataPoints: {
+          trigger: params.trigger,
+          triggerData: params.triggerData,
+          contextTypes: params.contextTypes,
+          context: assembledContext,
+        },
+        contextUsed: params.contextTypes,
+        model: aiResponse.model || null,
+        promptVersion: EXPLAINABILITY_PROMPT_VERSION_AGENT,
+        promptHash: sha256(LOGISTICS_SYSTEM_PROMPT),
+        confidence: Number.isFinite(decision.confidence) ? decision.confidence / 100 : null,
+        conversationId: null,
+        messageId: null,
+        automationType: params.trigger,
+      })
+    }
   }
 
   if (!decision.shouldAct || !decision.action) {

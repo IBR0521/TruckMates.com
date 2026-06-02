@@ -26,7 +26,8 @@
     "start": "next start",
     "e2e:smoke": "node scripts/truckmates-smoke.mjs",
     "eld:generate-test-csv": "node scripts/generate-eld-test-csv.mjs",
-    "eld:generate-fmcsa-output": "node scripts/generate-fmcsa-eld-output.mjs"
+    "eld:generate-fmcsa-output": "node scripts/generate-fmcsa-eld-output.mjs",
+    "ai:eval": "tsx scripts/ai-eval/run.mjs"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^7.3.4",
@@ -124,6 +125,7 @@
     "playwright": "^1.51.0",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",
+    "tsx": "^4.22.4",
     "tw-animate-css": "1.3.3",
     "typescript": "^5",
     "typescript-eslint": "^8.58.0",

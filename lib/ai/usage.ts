@@ -39,6 +39,8 @@ export async function logAiUsage(params: {
   cacheWriteTokens: number
   costUsd: number
   durationMs: number
+  /** Optional structured detail (e.g. unverified numeric claims + the user question for review). */
+  metadata?: Record<string, unknown> | null
 }): Promise<void> {
   try {
     const admin = createAdminClient()
@@ -52,6 +54,7 @@ export async function logAiUsage(params: {
       cache_write_tokens: Math.max(0, Math.round(params.cacheWriteTokens)),
       cost_usd: params.costUsd,
       duration_ms: Math.max(0, Math.round(params.durationMs)),
+      ...(params.metadata ? { metadata: params.metadata } : {}),
     })
 
     if (error) {

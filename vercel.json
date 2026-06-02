@@ -83,6 +83,14 @@
     {
       "path": "/api/cron/sync-eld-fault-codes",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/distill-company-memory",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/ai-proactive-insights",
+      "schedule": "0 6 * * *"
     }
   ],
   "functions": {
@@ -115,6 +123,14 @@
       "memory": 1024
     },
     "app/api/cron/sync-eld-fault-codes/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "app/api/cron/distill-company-memory/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "app/api/cron/ai-proactive-insights/route.ts": {
       "maxDuration": 300,
       "memory": 1024
     },

@@ -82,6 +82,22 @@ type MessagesApiResponse = {
   error?: { message?: string }
 }
 
+type StreamEvent = {
+  type?: string
+  message?: {
+    model?: string
+    usage?: {
+      input_tokens?: number
+      output_tokens?: number
+      cache_creation_input_tokens?: number
+      cache_read_input_tokens?: number
+    }
+  }
+  delta?: { type?: string; text?: string }
+  usage?: { output_tokens?: number }
+  error?: { message?: string }
+}
+
 export async function callClaudeMessages(params: {
   systemBlocks: Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }> | string
   messages: ClaudeMessage[]
@@ -207,4 +223,153 @@ export async function callClaudeMessages(params: {
     const msg = e instanceof Error ? e.message : "Unknown AI error"
     return { data: null, error: msg, quotaWarning }
   }
+}
+
+/**
+ * Streaming counterpart to {@link callClaudeMessages} for the FINAL text answer only.
+ * Intentionally has NO `tools` support — tool-use turns must keep using the non-streaming
+ * `callClaudeMessages` so the tool loop runs deterministically. Yields text deltas as they
+ * arrive and logs AI usage once after the stream completes (`message_stop`). Throws on any
+ * error (missing key, quota hard cap, non-2xx, or an Anthropic `error` event) so the caller
+ * can fall back to the non-streaming path.
+ */
+export async function* callClaudeMessagesStream(params: {
+  systemBlocks: Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }> | string
+  messages: ClaudeMessage[]
+  maxTokens?: number
+  model?: AiModel
+  companyId?: string
+  feature?: string
+}): AsyncGenerator<string> {
+  const apiKey = String(process.env.ANTHROPIC_API_KEY || "").trim()
+  if (!apiKey) throw new Error("AI unavailable")
+
+  const companyId = params.companyId ?? null
+  if (companyId) {
+    const aiUsage = await checkMonthlyUsage({ companyId, usageType: "ai_calls" })
+    if (aiUsage.hardCap) throw new Error("AI quota exceeded for this month. Upgrade to continue.")
+  }
+
+  const routedModel = MODEL_MAP[params.model || "sonnet"]
+  const feature = String(params.feature || "unknown")
+
+  const systemPayload =
+    typeof params.systemBlocks === "string"
+      ? params.systemBlocks
+      : params.systemBlocks.length > 0
+        ? params.systemBlocks
+        : ""
+
+  const body: Record<string, unknown> = {
+    model: routedModel,
+    max_tokens: params.maxTokens ?? 2048,
+    temperature: 0,
+    stream: true,
+    system: systemPayload,
+    messages: params.messages.map((m) => ({
+      role: m.role,
+      content: serializeMessageContent(m.content),
+    })),
+  }
+
+  const startedAt = Date.now()
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok || !response.body) {
+    let message = `Anthropic request failed (${response.status})`
+    try {
+      const errPayload = (await response.json()) as MessagesApiResponse
+      if (errPayload.error?.message) message = errPayload.error.message
+    } catch {
+      /* keep default message */
+    }
+    throw new Error(message)
+  }
+
+  let inputTokens = 0
+  let outputTokens = 0
+  let cacheWriteTokens = 0
+  let cacheReadTokens = 0
+  let responseModel = routedModel
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      let sepIndex = buffer.indexOf("\n\n")
+      while (sepIndex !== -1) {
+        const rawEvent = buffer.slice(0, sepIndex)
+        buffer = buffer.slice(sepIndex + 2)
+        sepIndex = buffer.indexOf("\n\n")
+
+        const dataStr = rawEvent
+          .split("\n")
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trim())
+          .join("")
+        if (!dataStr || dataStr === "[DONE]") continue
+
+        let evt: StreamEvent
+        try {
+          evt = JSON.parse(dataStr) as StreamEvent
+        } catch {
+          continue
+        }
+
+        if (evt.type === "message_start" && evt.message?.usage) {
+          inputTokens = evt.message.usage.input_tokens || 0
+          cacheWriteTokens = evt.message.usage.cache_creation_input_tokens || 0
+          cacheReadTokens = evt.message.usage.cache_read_input_tokens || 0
+          if (evt.message.model) responseModel = evt.message.model
+        } else if (
+          evt.type === "content_block_delta" &&
+          evt.delta?.type === "text_delta" &&
+          typeof evt.delta.text === "string"
+        ) {
+          if (evt.delta.text) yield evt.delta.text
+        } else if (evt.type === "message_delta" && typeof evt.usage?.output_tokens === "number") {
+          outputTokens = evt.usage.output_tokens
+        } else if (evt.type === "error") {
+          throw new Error(evt.error?.message || "AI stream error")
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  const costUsd = calculateCallCost({
+    model: responseModel as "claude-haiku-4-5" | "claude-sonnet-4-5",
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheWriteTokens,
+  })
+
+  void logAiUsage({
+    companyId,
+    feature,
+    model: responseModel,
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheWriteTokens,
+    costUsd,
+    durationMs: Date.now() - startedAt,
+  })
 }

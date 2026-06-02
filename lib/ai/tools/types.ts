@@ -24,6 +24,11 @@ export type AiToolExecuteResult<TOutput> =
 export type AiToolPreviewResult = {
   summary: string
   affected: Array<{ type: string; id: string; label: string }>
+  /**
+   * Optional draft tool input to persist for confirmation. Used when the preview step computes
+   * a plan (or other large artifact) that the execute step must reuse exactly on approval.
+   */
+  draftInput?: Record<string, unknown>
 }
 
 export type AiToolDefinitionBase = {

@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { cache, cacheKeys } from "@/lib/cache"
+import { invalidateAiContextCache } from "@/lib/ai/answer-cache"
 import { validateDriverData, sanitizeString, sanitizeEmail, sanitizePhone } from "@/lib/validation"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
 import { mapLegacyRole } from "@/lib/roles"
@@ -71,6 +72,7 @@ export async function emergencyPurgeDriversKeepOne(confirmPhrase: string) {
     const { keptId, deleted } = await purgeAllDriversKeepOneForCompany(admin, ctx.companyId)
 
     invalidateDriverDashboardCaches(ctx.companyId)
+    void invalidateAiContextCache(ctx.companyId, "driver")
     revalidatePath("/dashboard/drivers")
     revalidatePath("/dashboard")
 
@@ -617,6 +619,7 @@ export async function createDriver(formData: {
     driver_name: data?.name || null,
   })
 
+  void invalidateAiContextCache(ctx.companyId, "driver")
   revalidatePath("/dashboard/drivers")
   return { data, error: null }
 }
@@ -924,6 +927,7 @@ export async function updateDriver(
     }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "driver")
   revalidatePath("/dashboard/drivers")
   revalidatePath(`/dashboard/drivers/${id}`)
 
@@ -1023,6 +1027,7 @@ export async function deleteDriver(id: string) {
     }
 
     invalidateDriverDashboardCaches(ctx.companyId)
+    void invalidateAiContextCache(ctx.companyId, "driver")
     revalidatePath("/dashboard/drivers")
     revalidatePath("/dashboard")
     return { error: null }
@@ -1108,6 +1113,7 @@ export async function bulkDeleteDrivers(ids: string[]) {
   }
 
   invalidateDriverDashboardCaches(ctx.companyId)
+  void invalidateAiContextCache(ctx.companyId, "driver")
   revalidatePath("/dashboard/drivers")
   revalidatePath("/dashboard")
   return { data: { deleted: validIds.length }, error: null }
@@ -1147,6 +1153,7 @@ export async function bulkUpdateDriverStatus(ids: string[], status: string) {
     return { error: safeDbError(error), data: null }
   }
 
+  void invalidateAiContextCache(ctx.companyId, "driver")
   revalidatePath("/dashboard/drivers")
   return { data: { updated: ids.length }, error: null }
 }
