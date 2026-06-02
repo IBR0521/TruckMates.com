@@ -15,7 +15,19 @@ interface RateLimitResult {
   success: boolean
   limit: number
   remaining: number
-  reset: number // Unix timestamp
+  reset: number // Unix timestamp (seconds)
+}
+
+/** Normalize Upstash (ms) or in-memory (seconds) reset values to Unix seconds. */
+function normalizeResetUnixSeconds(reset: number): number {
+  return reset > 1_000_000_000_000 ? Math.floor(reset / 1000) : reset
+}
+
+/** Retry-After header value: seconds until the rate-limit window resets. */
+export function retryAfterFromReset(reset: number): string {
+  const resetSec = normalizeResetUnixSeconds(reset)
+  const nowSec = Math.floor(Date.now() / 1000)
+  return String(Math.max(1, resetSec - nowSec))
 }
 
 type UpstashRatelimitResult = {
@@ -101,7 +113,7 @@ export async function rateLimitRedis(
         success: result.success,
         limit,
         remaining: result.remaining,
-        reset: result.reset,
+        reset: normalizeResetUnixSeconds(result.reset),
       }
     } catch (error) {
       console.error("[Rate Limit] Redis error, falling back to in-memory:", error)

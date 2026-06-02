@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getMobileAuthContext } from "@/lib/auth/mobile"
+import { rateLimitRedis, retryAfterFromReset } from "@/lib/rate-limit-redis"
 
 type IncomingDefect = {
   component?: string
@@ -68,6 +69,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: authError || "Not authenticated" },
         { status: 401 }
+      )
+    }
+
+    const dvirRl = await rateLimitRedis(`eld_dvir:${companyId}`, { limit: 30, window: 60 })
+    if (!dvirRl.success) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": retryAfterFromReset(dvirRl.reset) } },
       )
     }
 

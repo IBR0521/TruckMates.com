@@ -11,6 +11,7 @@ import { checkResourceLimit } from "@/lib/plan-enforcement"
 import { formatLimitErrorMessage, getPlanLimits, nextPlanTier } from "@/lib/plan-limits"
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import * as Sentry from "@sentry/nextjs"
+import { rateLimitRedis } from "@/lib/rate-limit-redis"
 const MANAGER_ROLES: readonly EmployeeRole[] = ["super_admin", "operations_manager"]
 
 async function generateSixDigitInvitationCode(adminSupabase: ReturnType<typeof import("@/lib/supabase/admin").createAdminClient>) {
@@ -312,6 +313,11 @@ export async function inviteUser(data: {
   const role = await getUserRole()
   if (!role || !MANAGER_ROLES.includes(role)) {
     return { error: "Only managers can invite users", data: null }
+  }
+
+  const inviteRl = await rateLimitRedis(`invite:${ctx.companyId}`, { limit: 10, window: 60 })
+  if (!inviteRl.success) {
+    return { error: "Too many invitations sent. Please wait.", data: null }
   }
 
   const subscriptionAccess = await requireActiveSubscriptionForWrite()

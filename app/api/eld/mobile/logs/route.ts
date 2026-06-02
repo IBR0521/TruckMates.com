@@ -3,6 +3,7 @@ import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getMobileAuthContext } from "@/lib/auth/mobile"
 import { ensureDriverIdForUser } from "@/lib/eld/ensure-driver"
+import { rateLimitRedis, retryAfterFromReset } from "@/lib/rate-limit-redis"
 
 type IncomingLog = {
   driver_id?: string
@@ -65,6 +66,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: authError || "Not authenticated" },
         { status: 401 }
+      )
+    }
+
+    const logsRl = await rateLimitRedis(`eld_logs:${companyId}`, { limit: 60, window: 60 })
+    if (!logsRl.success) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": retryAfterFromReset(logsRl.reset) } },
       )
     }
 

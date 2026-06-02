@@ -5,6 +5,7 @@ import { updateBOLPOD } from "@/app/actions/bol"
 import { uploadDocument } from "@/app/actions/documents"
 import { autoGenerateInvoiceOnPOD } from "@/app/actions/auto-invoice"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
+import { rateLimitRedis, retryAfterFromReset } from "@/lib/rate-limit-redis"
 
 /**
  * Upload POD (Proof of Delivery) from mobile app
@@ -56,6 +57,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: companyError || "No company found" },
         { status: 403 }
+      )
+    }
+
+    const podRl = await rateLimitRedis(`pod:${company_id}`, { limit: 30, window: 60 })
+    if (!podRl.success) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": retryAfterFromReset(podRl.reset) } },
       )
     }
 

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { mapLegacyRole } from "@/lib/roles"
 import { sanitizeError } from "@/lib/error-message"
+import { rateLimitRedis, retryAfterFromReset } from "@/lib/rate-limit-redis"
 
 export const dynamic = "force-dynamic"
 
@@ -51,6 +52,14 @@ export async function GET() {
 
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const exportRl = await rateLimitRedis(`export:${user.id}`, { limit: 3, window: 300 })
+    if (!exportRl.success) {
+      return NextResponse.json(
+        { error: "Too many export requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": retryAfterFromReset(exportRl.reset) } },
+      )
     }
 
     const { data: profile, error: profileError } = await supabase

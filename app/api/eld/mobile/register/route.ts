@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getMobileAuthContext } from "@/lib/auth/mobile"
+import { rateLimitRedis, retryAfterFromReset } from "@/lib/rate-limit-redis"
 
 type EldDeviceRow = {
   id: string
@@ -31,6 +32,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: authError || "Not authenticated" },
         { status: 401 }
+      )
+    }
+
+    const registerRl = await rateLimitRedis(`eld_register:${companyId}`, { limit: 10, window: 60 })
+    if (!registerRl.success) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": retryAfterFromReset(registerRl.reset) } },
       )
     }
 

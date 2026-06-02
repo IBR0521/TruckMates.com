@@ -5,6 +5,7 @@ import { executeAgentAction } from "@/lib/ai/agent/executor"
 import { resolveApproval } from "@/lib/ai/agent/settings"
 import { extractPreferenceEntityId, recordActionPreference } from "@/lib/ai/context"
 import type { AgentAction } from "@/lib/ai/types"
+import { rateLimitRedis, retryAfterFromReset } from "@/lib/rate-limit-redis"
 
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -51,6 +52,14 @@ export async function POST(request: NextRequest) {
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.userId || !ctx.companyId) {
       return NextResponse.json({ success: false, error: ctx.error || "Not authenticated" }, { status: 401 })
+    }
+
+    const approveRl = await rateLimitRedis(`ai_approve:${ctx.companyId}`, { limit: 30, window: 60 })
+    if (!approveRl.success) {
+      return NextResponse.json(
+        { success: false, error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": retryAfterFromReset(approveRl.reset) } },
+      )
     }
 
     const body = (await request.json().catch(() => ({}))) as { approvalId?: string; approved?: boolean }

@@ -12,6 +12,7 @@ import { normalizePlanTier, hasFeatureAccess } from "@/lib/plan-limits"
 import { extractStructuredFieldsFromBase64, type DocumentKind } from "@/lib/ai/documents/structured-extraction"
 import { compareExtractedToRecords } from "@/lib/ai/documents/discrepancy"
 import { notifyDocumentDiscrepancy } from "@/lib/ai/notifications/document-discrepancies"
+import { rateLimitRedis } from "@/lib/rate-limit-redis"
 
 export interface ExtractedDriverData {
   type: "driver"
@@ -241,7 +242,14 @@ export async function analyzeDocument(source: string, fileName: string): Promise
 }> {
   try {
     const ctx = await getCachedAuthContext()
-    const result = await runClaudeDocumentAnalysis(source, fileName, ctx.companyId || null)
+    if (ctx.error || !ctx.companyId) {
+      return { data: null, error: ctx.error || "Not authenticated", warning: null }
+    }
+    const docRl = await rateLimitRedis(`doc_analysis:${ctx.companyId}`, { limit: 15, window: 60 })
+    if (!docRl.success) {
+      return { data: null, error: "Too many document analysis requests. Please wait.", warning: null }
+    }
+    const result = await runClaudeDocumentAnalysis(source, fileName, ctx.companyId)
     if (result.error) {
       return { data: null, error: result.error, warning: null }
     }

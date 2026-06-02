@@ -9,6 +9,7 @@ import { sanitizeString } from "@/lib/validation"
 import { escapeHtml } from "@/lib/html-escape"
 import * as Sentry from "@sentry/nextjs"
 import { getResendClientForCompany } from "@/lib/resend-client"
+import { rateLimitRedis } from "@/lib/rate-limit-redis"
 async function getResendClient() {
   const ctx = await getCachedAuthContext()
   return getResendClientForCompany(ctx.companyId ?? null)
@@ -216,6 +217,11 @@ export async function createFeedback(formData: {
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) {
       return { error: ctx.error || "Not authenticated", data: null }
+    }
+
+    const feedbackRl = await rateLimitRedis(`feedback:${ctx.companyId}`, { limit: 5, window: 300 })
+    if (!feedbackRl.success) {
+      return { error: "Too many feedback submissions. Please wait.", data: null }
     }
 
     // Validate and sanitize input

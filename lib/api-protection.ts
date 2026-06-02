@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { rateLimit } from "./rate-limit"
+import { rateLimitRedis } from "./rate-limit-redis"
 
 /**
  * API Protection Layer
@@ -50,7 +50,7 @@ export async function checkApiUsage(
   }
 
   const apiLimit = limits[apiName] || { limit: 50, window: 60 }
-  const rateLimitResult = await rateLimit(rateLimitKey, {
+  const rateLimitResult = await rateLimitRedis(rateLimitKey, {
     limit: apiLimit.limit,
     window: apiLimit.window,
   })

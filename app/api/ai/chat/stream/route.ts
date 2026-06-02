@@ -7,6 +7,7 @@ import { buildChatRequest, chatToolsEligible } from "@/lib/ai/chat"
 import { callClaudeMessagesStream } from "@/lib/ai/client-messages"
 import { chooseModel } from "@/lib/ai/model-router"
 import { assertAiChatAllowed, generateConversationTitle, loadConversationHistory } from "@/app/actions/ai-chat"
+import { rateLimitRedis, retryAfterFromReset } from "@/lib/rate-limit-redis"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -88,6 +89,14 @@ export async function POST(request: NextRequest) {
   // Tool-use turns must not stream — let the client use the existing non-streaming pipeline.
   if (chatToolsEligible({ enableTools: gate.enableTools, companyTier: gate.companyTier, userRole })) {
     return NextResponse.json({ fallback: true }, { status: 200 })
+  }
+
+  const streamRl = await rateLimitRedis(`ai_stream:${companyId}`, { limit: 20, window: 60 })
+  if (!streamRl.success) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429, headers: { "Retry-After": retryAfterFromReset(streamRl.reset) } },
+    )
   }
 
   // Prior history (excludes the message currently being sent), then build the exact same request

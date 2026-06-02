@@ -5,6 +5,7 @@ import { uploadDocument } from "@/app/actions/documents"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { sanitizeString } from "@/lib/validation"
 import { updateBOLSignature } from "@/app/actions/bol"
+import { rateLimitRedis, retryAfterFromReset } from "@/lib/rate-limit-redis"
 
 /**
  * Upload BOL signature from mobile app
@@ -50,6 +51,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: companyError || "No company found" },
         { status: 403 }
+      )
+    }
+
+    const bolSigRl = await rateLimitRedis(`bol_sig:${company_id}`, { limit: 30, window: 60 })
+    if (!bolSigRl.success) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": retryAfterFromReset(bolSigRl.reset) } },
       )
     }
 

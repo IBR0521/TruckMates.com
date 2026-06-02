@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { rateLimitRedis, retryAfterFromReset } from "@/lib/rate-limit-redis"
 
 /**
  * API route to get Google Maps API key for client-side use
@@ -15,6 +16,14 @@ export async function GET() {
     return NextResponse.json(
       { error: "Authentication required" },
       { status: 401 }
+    )
+  }
+
+  const mapsRl = await rateLimitRedis(`maps_key:${user.id}`, { limit: 30, window: 60 })
+  if (!mapsRl.success) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429, headers: { "Retry-After": retryAfterFromReset(mapsRl.reset) } },
     )
   }
 

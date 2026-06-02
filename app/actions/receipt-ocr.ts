@@ -5,6 +5,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { errorMessage } from "@/lib/error-message"
 import { callClaude } from "@/lib/ai/client"
 import { LOGISTICS_SYSTEM_PROMPT } from "@/lib/ai/prompts/system"
+import { rateLimitRedis } from "@/lib/rate-limit-redis"
 
 type FuelReceiptResult = {
   purchase_date?: string
@@ -136,6 +137,13 @@ export async function extractFuelPurchaseFromReceipt(
 
   try {
     const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId) {
+      return { data: null, error: ctx.error || "Not authenticated" }
+    }
+    const ocrRl = await rateLimitRedis(`ocr:${ctx.companyId}`, { limit: 20, window: 60 })
+    if (!ocrRl.success) {
+      return { data: null, error: "Too many OCR requests. Please wait." }
+    }
     const data = await runAnthropicFuelReceiptOCR({
       imageUrl,
       imageFile,
@@ -171,6 +179,11 @@ export async function uploadReceiptAndExtract(imageFile: File): Promise<{
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) {
       return { data: null, error: ctx.error || "Not authenticated" }
+    }
+
+    const ocrRl = await rateLimitRedis(`ocr:${ctx.companyId}`, { limit: 20, window: 60 })
+    if (!ocrRl.success) {
+      return { data: null, error: "Too many OCR requests. Please wait." }
     }
 
     const supabase = await createClient()
