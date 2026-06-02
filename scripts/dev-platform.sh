@@ -15,6 +15,16 @@ for p in 3000 3010 3001; do
 done
 sleep 0.5
 
+# Keep `.next` off iCloud Desktop when requested (Next distDir must stay relative).
+if [[ "${NEXT_DIST_IN_HOME:-}" == "1" ]]; then
+  PROJECT_KEY="$(printf '%s' "$ROOT" | shasum -a 256 | cut -c1-12)"
+  CACHE_NEXT="${HOME}/.cache/truckmates-next/${PROJECT_KEY}/.next"
+  mkdir -p "$(dirname "$CACHE_NEXT")"
+  rm -rf "${ROOT}/.next"
+  ln -sfn "${CACHE_NEXT}" "${ROOT}/.next"
+  echo "Linked .next → ${CACHE_NEXT}"
+fi
+
 export NEXT_TELEMETRY_DISABLED=1
 NEXT_BIN="${ROOT}/node_modules/.bin/next"
 if [[ -x "${NEXT_BIN}" ]]; then

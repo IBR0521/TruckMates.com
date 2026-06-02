@@ -1,6 +1,4 @@
 import { createRequire } from 'node:module'
-import crypto from 'node:crypto'
-import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -9,18 +7,12 @@ const isProd = process.env.NODE_ENV === "production"
 
 // Build output directory.
 // - Vercel/CI: always `.next` in the repo.
-// - Local: default `.next` in-repo so webpack/dev server are not split across volumes (Desktop/iCloud
-//   project + `~/.cache/...` dist was causing requests to hang forever with 0-byte responses).
-// - Opt-in old behavior: set `NEXT_DIST_IN_HOME=1` in `.env.local` if you prefer dist under ~/.cache
-//   (some iCloud Desktop setups prefer keeping `.next` out of synced folders).
+// - Local: always `.next` (relative). Next.js treats distDir as project-relative only — never pass
+//   an absolute path or it becomes `project/Users/.../.cache/...` on Desktop and hangs forever.
+// - Opt-out of iCloud Desktop: set `NEXT_DIST_IN_HOME=1` and run `npm run dev:platform` (symlinks
+//   `.next` → `~/.cache/truckmates-next/<hash>/.next` before starting the dev server).
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const projectKey = crypto.createHash('sha256').update(__dirname).digest('hex').slice(0, 12)
-const distDir =
-  process.env.VERCEL === '1' || process.env.CI === 'true'
-    ? '.next'
-    : process.env.NEXT_DIST_IN_HOME === '1'
-      ? path.join(os.homedir(), '.cache', 'truckmates-next', projectKey, '.next')
-      : '.next'
+const distDir = '.next'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
