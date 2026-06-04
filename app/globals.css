@@ -101,6 +101,97 @@ body {
   --hover-accent: oklch(0.95 0.012 250);
   --hover-card: oklch(0.99 0.005 250);
   --hover-border: oklch(0.82 0.015 250);
+
+  /* Marketing site tokens (public pages) */
+  --mk-bg: #09090e;
+  --mk-surface: #111218;
+  --mk-surface-2: #16181f;
+  --mk-border: rgba(255, 255, 255, 0.07);
+  --mk-border-strong: rgba(255, 255, 255, 0.12);
+  --mk-amber: #f59e0b;
+  --mk-amber-dim: #d97706;
+  --mk-amber-glow: rgba(245, 158, 11, 0.15);
+  --mk-blue: #3b82f6;
+  --mk-blue-dim: rgba(59, 130, 246, 0.12);
+  --mk-text: #f1f5f9;
+  --mk-text-muted: #64748b;
+  --mk-text-dim: #334155;
+  --mk-grid: rgba(255, 255, 255, 0.03);
+
+  /* TruckMates Marketing — Design System v3 */
+  --w-bg: #06080f;
+  --w-bg-2: #0a0e1a;
+  --w-bg-3: #0f1421;
+  --w-card: #0d1320;
+  --w-card-2: #121a2b;
+  --w-card-hover: #121a2b;
+  --w-border: rgba(255, 255, 255, 0.07);
+  --w-border-md: rgba(255, 255, 255, 0.11);
+  --w-border-strong: rgba(255, 255, 255, 0.16);
+  --w-blue: #3b82f6;
+  --w-blue-2: #2563eb;
+  --w-blue-dim: rgba(59, 130, 246, 0.12);
+  --w-blue-glow: rgba(59, 130, 246, 0.22);
+  --w-blue-border: rgba(59, 130, 246, 0.25);
+  --w-green: #10b981;
+  --w-green-bg: rgba(16, 185, 129, 0.12);
+  --w-green-dim: rgba(16, 185, 129, 0.12);
+  --w-green-text: #34d399;
+  --w-amber: #f59e0b;
+  --w-amber-bg: rgba(245, 158, 11, 0.12);
+  --w-red: #ef4444;
+  --w-red-bg: rgba(239, 68, 68, 0.12);
+  --w-cyan: #22d3ee;
+  --w-text: #f8fafc;
+  --w-text-2: #94a3b8;
+  --w-text-3: #475569;
+  --w-dot: rgba(255, 255, 255, 0.035);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes w-truck-pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+    }
+    50% {
+      opacity: 0.85;
+      transform: scale(1.12);
+      box-shadow: 0 0 12px 2px rgba(16, 185, 129, 0.25);
+    }
+  }
+
+  .w-truck-pulse {
+    animation: w-truck-pulse 2.4s ease-in-out infinite;
+  }
+
+  @keyframes w-online-blink {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  .w-online-blink {
+    animation: w-online-blink 2s ease-in-out infinite;
+  }
+}
+
+.font-display {
+  font-family: var(--font-bricolage), sans-serif;
+}
+
+.font-body {
+  font-family: var(--font-jakarta), sans-serif;
+}
+
+.font-data {
+  font-family: var(--font-mono-display), monospace;
 }
 
 .dark {

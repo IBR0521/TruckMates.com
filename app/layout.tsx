@@ -1,6 +1,6 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import { Bricolage_Grotesque, Geist, Geist_Mono, JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { ClientProviders } from "@/components/providers/client-providers"
 import { PostHogProvider } from "@/components/providers/posthog-provider"
@@ -22,6 +22,31 @@ const geistMono = Geist_Mono({
   display: "swap",
   variable: "--font-geist-mono",
   // Mono is for code/VINs in the app — not needed for first paint on marketing pages
+  preload: false,
+  adjustFontFallback: true,
+})
+
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+  variable: "--font-bricolage",
+  adjustFontFallback: true,
+})
+
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-jakarta",
+  adjustFontFallback: true,
+})
+
+const jetbrainsDisplay = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  display: "swap",
+  variable: "--font-mono-display",
   preload: false,
   adjustFontFallback: true,
 })
@@ -57,7 +82,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${geist.variable} ${geistMono.variable} font-sans antialiased bg-background text-foreground`} suppressHydrationWarning>
+      <body
+        className={`${geist.variable} ${geistMono.variable} ${bricolage.variable} ${jakarta.variable} ${jetbrainsDisplay.variable} font-sans antialiased bg-background text-foreground`}
+        suppressHydrationWarning
+      >
         <GoogleMapsRootScript />
         {/* Accessibility: Skip to main content link */}
         <a href="#main-content" className="skip-link">

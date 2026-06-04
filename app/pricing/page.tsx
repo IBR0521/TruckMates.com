@@ -2,10 +2,7 @@
 
 import Link from "next/link"
 import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Check, ArrowRight } from "lucide-react"
+import { Check, ArrowRight, Minus } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
@@ -22,6 +19,13 @@ import {
 import { startPlanCheckout } from "@/app/actions/plan-usage"
 import { getPaddleClient } from "@/lib/billing/paddle-client"
 import { MarketingSiteFooter } from "@/components/marketing/marketing-site-footer"
+import {
+  DotBg,
+  MarketingFinalCta,
+  WBody,
+  WEyebrow,
+  WSectionHeading,
+} from "@/components/marketing/marketing-ui"
 
 const TIER_SUMMARY: Record<PlanTier, string> = {
   owner_operator: "Designed for owner-operators and 1–2 trucks — TMS core loads, invoices, dispatch, limits without premium AI integrations.",
@@ -184,64 +188,88 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-      <header className="border-b border-border bg-background/80 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+    <div className="relative min-h-screen" style={{ background: "var(--w-bg)" }}>
+      <DotBg className="opacity-80" />
+      <header
+        className="border-b"
+        style={{
+          borderColor: "var(--w-border)",
+          background: "rgba(9,9,14,0.85)",
+          backdropFilter: "blur(20px)",
+        }}
+      >
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <Link href="/">
             <Logo size="sm" />
           </Link>
           <div className="flex items-center gap-4">
-            <Link href="/login">
-              <Button variant="ghost">Login</Button>
+            <Link
+              href="/login"
+              className="text-sm hover:text-[var(--w-blue)]"
+              style={{ color: "rgba(241,245,249,0.65)", fontFamily: "var(--font-jakarta), sans-serif" }}
+            >
+              Login
             </Link>
-            <Link href="/register">
-              <Button>Get Started</Button>
+            <Link
+              href="/register"
+              className="rounded-lg px-4 py-2 text-sm font-semibold text-white"
+              style={{ background: "var(--w-blue)", fontFamily: "var(--font-jakarta), sans-serif" }}
+            >
+              Get Started
             </Link>
           </div>
         </div>
       </header>
 
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
-        {onboarding && (
-          <p className="mb-4 text-sm text-primary font-medium">
-            Choose your plan — billing runs securely through Paddle.
-          </p>
-        )}
-        <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
-          Plans built for every carrier size
-        </h1>
-        <p className="text-muted-foreground max-w-2xl mx-auto mb-6">
-          Same core TMS on every tier — AI, integrations, and scale unlock as you grow. Annual pricing is about 20% off
-          the monthly rate.
-        </p>
-        <div className="flex items-center justify-center gap-3 mb-10">
-          <span className={`text-sm font-medium ${!billingAnnual ? "text-foreground" : "text-muted-foreground"}`}>
-            Monthly
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={billingAnnual}
-            onClick={() => setBillingAnnual((v) => !v)}
-            className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+      <section className="relative overflow-hidden pt-[120px] pb-16 text-center">
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          {onboarding && (
+            <p
+              className="mb-4 text-sm font-medium text-[var(--w-blue)]"
+              style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
+            >
+              Choose your plan — billing runs securely through Paddle.
+            </p>
+          )}
+          <WEyebrow>Pricing</WEyebrow>
+          <WSectionHeading>Simple pricing for every size fleet.</WSectionHeading>
+          <WBody className="mx-auto mt-4 max-w-2xl">
+            Five tiers from Owner-Operator to Enterprise. Every limit published on this page — no hidden caps.
+          </WBody>
+          <div
+            className="mx-auto mt-10 inline-flex items-center gap-1 rounded-full p-1"
+            style={{ background: "var(--w-bg-3)", border: "1px solid var(--w-border-md)" }}
           >
-            <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
-                billingAnnual ? "translate-x-5" : "translate-x-1"
-              }`}
-            />
-          </button>
-          <span className={`text-sm font-medium ${billingAnnual ? "text-foreground" : "text-muted-foreground"}`}>
-            Annual
-          </span>
-          <Badge variant="secondary" className="text-xs">
-            ~20% savings
-          </Badge>
+            <button
+              type="button"
+              onClick={() => setBillingAnnual(false)}
+              className="rounded-full px-5 py-2 text-sm transition-colors"
+              style={{
+                fontFamily: "var(--font-jakarta), sans-serif",
+                background: !billingAnnual ? "var(--w-blue)" : "transparent",
+                color: !billingAnnual ? "#fff" : "var(--w-text-2)",
+              }}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              onClick={() => setBillingAnnual(true)}
+              className="rounded-full px-5 py-2 text-sm transition-colors"
+              style={{
+                fontFamily: "var(--font-jakarta), sans-serif",
+                background: billingAnnual ? "var(--w-blue)" : "transparent",
+                color: billingAnnual ? "#fff" : "var(--w-text-2)",
+              }}
+            >
+              Annual (~20% off)
+            </button>
+          </div>
         </div>
       </section>
 
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <section className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {PLAN_TIER_ORDER.map((tier) => {
             const lim = PLAN_LIMITS[tier]
             const isEnterprise = tier === "enterprise"
@@ -250,92 +278,232 @@ export default function PricingPage() {
             const highlighted = tier === "professional"
 
             return (
-              <Card
+              <div
                 key={tier}
-                className={`p-5 flex flex-col ${
-                  highlighted ? "border-primary shadow-lg ring-2 ring-primary/20 xl:scale-[1.02]" : "border-border"
-                }`}
+                className={`relative flex flex-col rounded-2xl p-8 ${highlighted ? "xl:scale-[1.02]" : ""}`}
+                style={{
+                  background: "var(--w-card)",
+                  border: highlighted
+                    ? "1px solid var(--w-blue-border)"
+                    : isEnterprise
+                      ? "1px solid rgba(255,255,255,0.1)"
+                      : "1px solid var(--w-border)",
+                  boxShadow: highlighted
+                    ? "0 0 0 1px rgba(59,130,246,0.15), 0 8px 32px rgba(59,130,246,0.08)"
+                    : undefined,
+                }}
               >
-                {highlighted && <Badge className="w-fit mb-2">Most popular</Badge>}
-                <h2 className="text-lg font-bold text-foreground">{planTierLabel(tier)}</h2>
-                <p className="text-xs text-muted-foreground mt-1 min-h-[2.5rem]">{TIER_SUMMARY[tier]}</p>
-                <div className="mt-4 mb-3">
+                {highlighted ? (
+                  <span
+                    className="absolute top-0 right-0 rounded-bl-lg rounded-tr-2xl px-3 py-1 text-[11px] font-semibold text-white"
+                    style={{ background: "var(--w-blue)", fontFamily: "var(--font-jakarta), sans-serif" }}
+                  >
+                    Most Popular
+                  </span>
+                ) : null}
+                <h2
+                  className="text-[22px] font-bold text-[var(--w-text)]"
+                  style={{ fontFamily: "var(--font-bricolage), sans-serif" }}
+                >
+                  {planTierLabel(tier)}
+                </h2>
+                <p
+                  className="mb-6 mt-1 min-h-[2.5rem] text-[13px] leading-relaxed"
+                  style={{ color: "rgba(241,245,249,0.45)", fontFamily: "var(--font-jakarta), sans-serif" }}
+                >
+                  {TIER_SUMMARY[tier]}
+                </p>
+                <div className="mb-6">
                   {!isEnterprise &&
                     (!billingAnnual ? (
                       <>
-                        <span className="text-2xl font-bold text-foreground">${monthlyPrice}</span>
-                        <span className="text-muted-foreground text-sm"> /mo</span>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          or{" "}
-                          <span className="font-semibold text-foreground">
-                            ${annualPrice}/mo billed annually (~20% off)
-                          </span>
+                        <span
+                          className="text-[44px] leading-none text-[var(--w-green)]"
+                          style={{ fontFamily: "var(--font-mono-display), monospace" }}
+                        >
+                          ${monthlyPrice}
+                        </span>
+                        <span
+                          className="text-sm text-[var(--w-text-2)]"
+                          style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
+                        >
+                          {" "}
+                          /month
+                        </span>
+                        <p
+                          className="mt-2 text-xs text-[var(--w-text-2)]"
+                          style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
+                        >
+                          or ${annualPrice}/mo billed annually
                         </p>
                       </>
                     ) : (
                       <>
-                        <span className="text-2xl font-bold text-foreground">${annualPrice}</span>
-                        <span className="text-muted-foreground text-sm"> /mo</span>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Billed annually • compared with ${monthlyPrice}/mo month‑to‑month
+                        <span
+                          className="text-[44px] leading-none text-[var(--w-green)]"
+                          style={{ fontFamily: "var(--font-mono-display), monospace" }}
+                        >
+                          ${annualPrice}
+                        </span>
+                        <span
+                          className="text-sm text-[var(--w-text-2)]"
+                          style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
+                        >
+                          {" "}
+                          /month billed annually
+                        </span>
+                        <p
+                          className="mt-2 text-xs text-[var(--w-text-2)]"
+                          style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
+                        >
+                          vs ${monthlyPrice}/mo month-to-month
                         </p>
                       </>
                     ))}
                   {isEnterprise && (
-                    <p className="text-2xl font-bold text-foreground pt-1">Custom</p>
+                    <span
+                      className="text-[44px] leading-none text-[var(--w-green)]"
+                      style={{ fontFamily: "var(--font-mono-display), monospace" }}
+                    >
+                      Custom
+                    </span>
                   )}
                 </div>
-                <ul className="space-y-1.5 flex-1 text-xs text-left text-muted-foreground">
+                <div className="my-6 h-px" style={{ background: "var(--w-border)" }} />
+                <ul className="flex-1 space-y-2.5 text-left">
                   {tierFeatureBullets(tier, lim, 5).map((line) => (
-                    <li key={line} className="flex gap-2">
-                      <Check className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                      {line}
+                    <li key={line} className="flex gap-2 text-sm text-[var(--w-text)]">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-[var(--w-blue)]" />
+                      <span style={{ fontFamily: "var(--font-jakarta), sans-serif" }}>{line}</span>
                     </li>
                   ))}
-                  <li className="flex gap-2 pt-1 border-t border-border/60 mt-2">
-                    <Check className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                    <span>
-                      Capacity: {isUnlimited(lim.trucks) ? "∞" : lim.trucks} trucks ·{" "}
-                      {isUnlimited(lim.loads_per_month) ? "∞" : lim.loads_per_month.toLocaleString()} loads/mo ·{" "}
-                      {isUnlimited(lim.user_seats) ? "∞" : lim.user_seats} seats
-                    </span>
-                  </li>
                 </ul>
-                <div className="mt-5">
-                  <Button
-                    className="w-full"
-                    variant={highlighted ? "default" : "outline"}
-                    size="sm"
+                <div className="mt-6">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold uppercase tracking-wide transition-colors disabled:opacity-60"
+                    style={{
+                      fontFamily: "var(--font-bricolage), sans-serif",
+                      background: highlighted ? "var(--w-blue)" : "transparent",
+                      color: highlighted ? "#fff" : "var(--w-text)",
+                      border: highlighted ? "none" : "1px solid var(--w-border-md)",
+                    }}
                     disabled={checkoutTier !== null}
                     onClick={() => handlePlanChoose(tier)}
                   >
                     {planCtaLabel(tier, isAuthenticated, checkoutTier)}
-                    <ArrowRight className="ml-2 w-3 h-3" />
-                  </Button>
+                    <ArrowRight className="h-3 w-3" />
+                  </button>
                 </div>
-              </Card>
+              </div>
             )
           })}
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-8 max-w-3xl mx-auto">
+        <p
+          className="mx-auto mt-8 max-w-3xl text-center text-xs text-[var(--w-text-2)]"
+          style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
+        >
           Subscription and tax receipts are handled by Paddle. Manage or cancel anytime from Settings → Billing.
         </p>
 
+        <div className="mt-20 overflow-x-auto">
+          <h2
+            className="mb-6 text-center text-xl font-bold uppercase tracking-wider text-[var(--w-blue)]"
+            style={{ fontFamily: "var(--font-bricolage), sans-serif" }}
+          >
+            Full feature breakdown
+          </h2>
+          <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+            <thead>
+              <tr>
+                <th
+                  className="p-3 text-xs font-bold uppercase tracking-wider"
+                  style={{
+                    color: "rgba(241,245,249,0.5)",
+                    fontFamily: "var(--font-bricolage), sans-serif",
+                  }}
+                >
+                  Feature
+                </th>
+                {PLAN_TIER_ORDER.map((tier) => (
+                  <th
+                    key={tier}
+                    className="p-3 text-center text-xs font-bold uppercase tracking-wider text-[var(--w-blue)]"
+                    style={{ fontFamily: "var(--font-bricolage), sans-serif" }}
+                  >
+                    {planTierLabel(tier)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {FEATURE_SHOWCASE.map((row, i) => (
+                <tr
+                  key={row.key}
+                  style={{ background: i % 2 === 0 ? "var(--w-bg)" : "var(--w-card)" }}
+                >
+                  <td
+                    className="p-3"
+                    style={{
+                      color: "rgba(241,245,249,0.7)",
+                      fontFamily: "var(--font-jakarta), sans-serif",
+                    }}
+                  >
+                    {row.label}
+                  </td>
+                  {PLAN_TIER_ORDER.map((tier) => {
+                    const enabled = PLAN_FEATURES[tier][row.key]
+                    return (
+                      <td key={tier} className="p-3 text-center">
+                        {enabled ? (
+                          <Check className="mx-auto h-4 w-4 text-[var(--w-blue)]" />
+                        ) : (
+                          <Minus className="mx-auto h-3.5 w-3.5 text-[var(--w-text-3)]" />
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
         <div className="mt-16">
-          <h2 className="text-xl font-bold text-foreground mb-4">Add-ons</h2>
-          <div className="grid md:grid-cols-3 gap-4">
+          <h2
+            className="mb-4 text-xl font-bold text-[var(--w-text)]"
+            style={{ fontFamily: "var(--font-bricolage), sans-serif" }}
+          >
+            Add-ons
+          </h2>
+          <div className="grid gap-4 md:grid-cols-3">
             {ADDONS.map((addon) => (
-              <Card key={addon.name} className="p-4 border-border">
-                <h3 className="font-semibold text-foreground">{addon.name}</h3>
-                <p className="text-sm text-muted-foreground mt-1">{addon.description}</p>
-                <p className="text-sm font-medium text-primary mt-2">{addon.price}</p>
-              </Card>
+              <div
+                key={addon.name}
+                className="rounded-xl p-4"
+                style={{ background: "var(--w-card)", border: "1px solid var(--w-border)" }}
+              >
+                <h3
+                  className="font-semibold text-[var(--w-text)]"
+                  style={{ fontFamily: "var(--font-bricolage), sans-serif" }}
+                >
+                  {addon.name}
+                </h3>
+                <p
+                  className="mt-1 text-sm text-[var(--w-text-2)]"
+                  style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
+                >
+                  {addon.description}
+                </p>
+                <p className="mt-2 text-sm font-medium text-[var(--w-blue)]">{addon.price}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
+      <MarketingFinalCta />
       <MarketingSiteFooter />
     </div>
   )

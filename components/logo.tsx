@@ -7,9 +7,16 @@ interface LogoProps {
   className?: string
   showText?: boolean
   size?: "sm" | "md" | "lg"
+  /** Light wordmark / inverted mark for dark marketing headers */
+  variant?: "default" | "onDark"
 }
 
-export function Logo({ className = "", showText = true, size = "md" }: LogoProps) {
+export function Logo({
+  className = "",
+  showText = true,
+  size = "md",
+  variant = "default",
+}: LogoProps) {
   const [imageError, setImageError] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
   
@@ -39,17 +46,41 @@ export function Logo({ className = "", showText = true, size = "md" }: LogoProps
     img.src = "/logo.png"
   }, [])
 
-  // Show clean text logo if image doesn't exist
-  if (imageError || !imageLoaded) {
+  const textSize =
+    size === "sm" ? "text-sm" : size === "md" ? "text-lg" : "text-2xl"
+  const textColor =
+    variant === "onDark" ? "text-[var(--w-text)]" : "text-foreground"
+
+  // Marketing headers: wordmark only (no logo mark)
+  if (variant === "onDark" && showText) {
     return (
-      <div className={`flex items-center gap-2 ${className}`}>
-        <span className={`font-bold text-foreground ${size === "sm" ? "text-sm" : size === "md" ? "text-lg" : "text-2xl"}`} style={{ letterSpacing: "0.05em" }}>
+      <div className={`flex items-center ${className}`}>
+        <span
+          className={`font-bold ${textSize} ${textColor}`}
+          style={{ letterSpacing: "0.05em", fontFamily: "var(--font-bricolage), sans-serif" }}
+        >
           TRUCKMATES
         </span>
       </div>
     )
   }
-  
+
+  // Show clean text logo if image doesn't exist or still loading
+  if (imageError || !imageLoaded) {
+    return (
+      <div className={`flex items-center gap-2 ${className}`}>
+        {showText ? (
+          <span
+            className={`font-bold ${textSize} ${textColor}`}
+            style={{ letterSpacing: "0.05em", fontFamily: "var(--font-bricolage), sans-serif" }}
+          >
+            TRUCKMATES
+          </span>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
     <div className={`flex items-center ${className}`}>
       <Image

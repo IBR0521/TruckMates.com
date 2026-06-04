@@ -1,125 +1,238 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { Button } from "@/components/ui/button"
-import { ArrowRight, Play } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Menu, X } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
+import { AppShell, DashboardPreview } from "@/components/marketing/previews"
+import { DotBg, WGhostButton, WPrimaryButton } from "@/components/marketing/marketing-ui"
+import { cn } from "@/lib/utils"
 
 const LandingPageBelowFold = dynamic(() => import("./landing-page-below-fold"), {
   loading: () => (
-    <div
-      className="min-h-[45vh] w-full animate-pulse bg-gradient-to-b from-muted/20 via-background to-background"
-      aria-hidden
-    />
+    <div className="min-h-[45vh] w-full animate-pulse" style={{ background: "var(--w-bg-2)" }} aria-hidden />
   ),
 })
 
+const NAV_LINKS = [
+  { label: "Features", href: "/#features" },
+  { label: "Pricing", href: "/pricing" },
+  { label: "Integrations", href: "/integrations" },
+  { label: "About", href: "/about" },
+] as const
+
 export default function LandingPage() {
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  useEffect(() => {
+    if (!mobileOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [mobileOpen])
+
   return (
-    <div className="min-h-screen bg-background" suppressHydrationWarning>
-      {/* Nav — floating pill on wide screens */}
-      <header className="fixed top-0 left-0 right-0 z-50 px-3 pt-3 sm:px-4 sm:pt-4 lg:px-8" suppressHydrationWarning>
+    <div className="min-h-screen" style={{ background: "var(--w-bg)" }} suppressHydrationWarning>
+      {/* Bar must NOT use backdrop-filter — it breaks position:fixed for children */}
+      <header
+        className={cn(
+          "fixed top-0 right-0 left-0 z-50 border-b lg:block",
+          mobileOpen ? "max-lg:hidden" : "max-lg:block",
+        )}
+        style={{
+          background: "#06080F",
+          borderColor: "var(--w-border)",
+        }}
+        suppressHydrationWarning
+      >
         <nav
-          className="mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/75 px-3 py-2.5 shadow-sm backdrop-blur-xl supports-[backdrop-filter]:bg-background/65 sm:px-5"
+          className="mx-auto grid h-[60px] max-w-[1280px] grid-cols-[1fr_auto] items-center px-6 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"
           aria-label="Main"
         >
-          <Logo size="sm" />
-          <div className="flex items-center gap-0.5 sm:gap-2">
+          <Link href="/" className="justify-self-start shrink-0">
+            <Logo size="sm" variant="onDark" showText />
+          </Link>
+
+          <div className="hidden items-center justify-center gap-8 lg:flex">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-sm transition-colors duration-150 hover:text-[var(--w-blue)]"
+                style={{
+                  fontFamily: "var(--font-jakarta), sans-serif",
+                  color: "var(--w-text-2)",
+                }}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className="hidden items-center justify-end gap-6 lg:flex">
             <Link
-              href="/pricing"
-              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted/80 hover:text-foreground sm:hidden"
+              href="/login"
+              className="text-sm transition-colors duration-150 hover:text-[var(--w-blue)]"
+              style={{
+                fontFamily: "var(--font-jakarta), sans-serif",
+                color: "var(--w-text-2)",
+              }}
             >
-              Pricing
+              Log in
             </Link>
-            <Link href="/pricing" className="hidden sm:inline-flex">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                Pricing
-              </Button>
-            </Link>
-            <Link href="/login" className="hidden sm:inline-flex">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                Log in
-              </Button>
-            </Link>
-            <Link href="/register">
-              <Button size="sm" className="rounded-full px-5 shadow-md shadow-primary/20">
-                Start free
-              </Button>
+            <Link
+              href="/register"
+              className="rounded-[10px] px-[18px] py-[9px] text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              style={{
+                background: "var(--w-blue)",
+                fontFamily: "var(--font-jakarta), sans-serif",
+                boxShadow: "0 0 0 1px rgba(59,130,246,0.5), 0 4px 24px var(--w-blue-glow)",
+              }}
+            >
+              Get started
             </Link>
           </div>
+
+          <button
+            type="button"
+            className="justify-self-end rounded-lg p-2 lg:hidden"
+            style={{ color: "var(--w-text-2)" }}
+            aria-label="Open menu"
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen(true)}
+          >
+            <Menu className="h-6 w-6" />
+          </button>
         </nav>
       </header>
 
-      {/* Hero */}
-      <section className="relative overflow-hidden pt-28 pb-16 sm:pt-32 sm:pb-24 lg:pt-36 lg:pb-28" suppressHydrationWarning>
-        {/* Background layers */}
-        <div className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.06] via-background to-background" />
+      {/* Full-screen mobile menu — sibling of header, NOT inside it (backdrop-filter trap) */}
+      {mobileOpen ? (
+        <div
+          className="fixed inset-0 z-[200] flex flex-col lg:hidden"
+          style={{ background: "#06080F" }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu"
+        >
           <div
-            className="absolute -left-1/4 top-0 h-[min(70vh,520px)] w-[min(90vw,640px)] rounded-full bg-primary/[0.09] blur-3xl dark:bg-primary/[0.12]"
-            aria-hidden
-          />
-          <div
-            className="absolute -right-1/4 bottom-0 h-[min(50vh,400px)] w-[min(80vw,480px)] rounded-full bg-primary/[0.05] blur-3xl dark:bg-primary/[0.08]"
-            aria-hidden
-          />
-          <div
-            className="absolute inset-0 bg-[linear-gradient(to_right,oklch(0.5_0.02_250_/_0.06)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.5_0.02_250_/_0.06)_1px,transparent_1px)] bg-[size:48px_48px] [mask-image:linear-gradient(to_bottom,transparent,black_8%,black_88%,transparent)] dark:bg-[linear-gradient(to_right,oklch(0.9_0.02_250_/_0.04)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.9_0.02_250_/_0.04)_1px,transparent_1px)]"
-            aria-hidden
-          />
+            className="flex h-[60px] shrink-0 items-center justify-between border-b px-6"
+            style={{ borderColor: "var(--w-border)" }}
+          >
+            <Link href="/" onClick={() => setMobileOpen(false)}>
+              <Logo size="sm" variant="onDark" showText />
+            </Link>
+            <button
+              type="button"
+              className="rounded-lg p-2"
+              style={{ color: "var(--w-text-2)" }}
+              aria-label="Close menu"
+              onClick={() => setMobileOpen(false)}
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+          <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-8 py-10">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-xl font-semibold text-[var(--w-text)]"
+                style={{ fontFamily: "var(--font-bricolage), sans-serif" }}
+                onClick={() => setMobileOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
+            <div className="mt-4 border-t pt-8" style={{ borderColor: "var(--w-border)" }}>
+              <Link
+                href="/login"
+                className="block text-base text-[var(--w-text-2)]"
+                style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
+                onClick={() => setMobileOpen(false)}
+              >
+                Log in
+              </Link>
+              <Link
+                href="/register"
+                className="mt-4 inline-flex rounded-[10px] px-6 py-3 text-sm font-semibold text-white"
+                style={{ background: "var(--w-blue)", fontFamily: "var(--font-jakarta), sans-serif" }}
+                onClick={() => setMobileOpen(false)}
+              >
+                Get started
+              </Link>
+            </div>
+          </nav>
         </div>
+      ) : null}
 
-        <div className="relative mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
-          <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.06] px-4 py-1.5 text-xs font-medium uppercase tracking-wider text-primary dark:border-primary/30 dark:bg-primary/10">
-            Fleet ops · Web app
-          </p>
-          <h1 className="text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl md:text-5xl lg:text-[2.75rem] lg:leading-[1.12]">
-            Dispatch, IFTA, invoicing, and driver compliance —{" "}
-            <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-              the complete TMS for fleets from 1 to 100 trucks. AI-powered, with ELD integration to Samsara, Motive, and Geotab built in.
-            </span>
+      <section className="relative z-0 overflow-hidden pt-[60px]" suppressHydrationWarning>
+        <DotBg />
+        <div
+          className="pointer-events-none absolute top-0 left-1/2 h-[600px] w-[900px] -translate-x-1/2 blur-3xl"
+          style={{ background: "radial-gradient(circle, rgba(59,130,246,0.10) 0%, transparent 65%)" }}
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute right-0 bottom-0 h-[400px] w-[400px] blur-3xl"
+          style={{ background: "radial-gradient(circle, rgba(34,211,238,0.06) 0%, transparent 70%)" }}
+          aria-hidden
+        />
+
+        <div className="relative mx-auto max-w-[1180px] px-4 pt-[120px] pb-0 text-center sm:px-6">
+          <span
+            className="inline-block rounded-full border px-3.5 py-1.5 text-[11px] font-semibold tracking-widest uppercase text-[var(--w-blue)]"
+            style={{
+              background: "rgba(59,130,246,0.10)",
+              borderColor: "rgba(59,130,246,0.20)",
+              fontFamily: "var(--font-mono-display), monospace",
+            }}
+          >
+            Fleet Management Platform
+          </span>
+          <h1
+            className="mx-auto mt-6 max-w-[820px] text-[clamp(40px,5.5vw,68px)] leading-[1.05] font-extrabold tracking-[-0.025em] text-[var(--w-text)]"
+            style={{ fontFamily: "var(--font-bricolage), sans-serif" }}
+          >
+            Your whole operation. One screen.
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-            No credit card to start. Try the{" "}
-            <Link href="/demo" className="font-medium text-primary underline decoration-primary/30 underline-offset-4 transition hover:decoration-primary">
-              interactive demo
-            </Link>{" "}
-            or open a free account — real screens, AI, and ELD integration in one place.
+          <p
+            className="mx-auto mt-5 max-w-[540px] text-lg leading-[1.65] text-[var(--w-text-2)]"
+            style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
+          >
+            Dispatch, compliance, IFTA, invoicing, and an AI that knows trucking — in one platform built for US
+            carriers.
           </p>
-          <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground/90">
-            No made-up savings figures — try the demo or see{" "}
-            <Link href="#features" className="font-medium text-foreground/90 underline decoration-border underline-offset-4 hover:text-primary">
-              what&apos;s included
-            </Link>{" "}
-            below.
+          <div className="mt-8 flex flex-col items-center justify-center gap-3.5 sm:flex-row">
+            <WPrimaryButton href="/demo">Try the demo →</WPrimaryButton>
+            <WGhostButton href="/register">Start free</WGhostButton>
+          </div>
+          <p
+            className="mt-4 text-[13px]"
+            style={{ color: "var(--w-text-3)", fontFamily: "var(--font-jakarta), sans-serif" }}
+          >
+            No credit card · Free Starter trial · Setup in minutes
           </p>
 
-          <div className="mt-10 flex flex-col items-stretch justify-center gap-3 sm:mx-auto sm:max-w-xl sm:flex-row sm:items-center sm:gap-4">
-            <Link href="/demo" className="sm:flex-1 sm:max-w-[200px]">
-              <Button
-                size="lg"
-                className="h-12 w-full rounded-xl bg-primary text-base font-semibold shadow-lg shadow-primary/25 transition hover:shadow-xl hover:shadow-primary/30 sm:h-12"
-              >
-                <Play className="mr-2 h-5 w-5" aria-hidden />
-                Try demo
-              </Button>
-            </Link>
-            <Link href="/register" className="sm:flex-1 sm:max-w-[200px]">
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-12 w-full rounded-xl border-2 border-border bg-background/50 text-base font-semibold backdrop-blur-sm transition hover:bg-muted/50 dark:bg-card/30"
-              >
-                Start free
-                <ArrowRight className="ml-2 h-5 w-5" aria-hidden />
-              </Button>
-            </Link>
-            <Link href="/pricing" className="sm:flex sm:shrink-0">
-              <Button variant="ghost" size="lg" className="h-12 rounded-xl text-base font-medium text-primary">
-                See pricing →
-              </Button>
-            </Link>
+          <div className="relative z-0 mx-auto mt-12 max-w-[1100px] pb-8 sm:mt-16">
+            <div
+              className="max-h-[min(68vh,620px)] overflow-hidden rounded-[14px]"
+              aria-hidden
+            >
+              <AppShell className="pointer-events-none select-none">
+                <DashboardPreview />
+              </AppShell>
+            </div>
+            <div
+              className="pointer-events-none absolute right-0 bottom-0 left-0 h-24"
+              style={{
+                background: "linear-gradient(to bottom, transparent, var(--w-bg))",
+              }}
+              aria-hidden
+            />
           </div>
         </div>
       </section>

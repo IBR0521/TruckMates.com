@@ -1,11 +1,11 @@
 "use client"
 
-import { Card } from "@/components/ui/card"
-import { ArrowLeft, Building2, Radio, Truck, Shield, DollarSign, User } from "lucide-react"
+import { Building2, Radio, Truck, Shield, DollarSign, User } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
 import { useRouter } from "next/navigation"
 import { ROLES, type EmployeeRole } from "@/lib/roles"
+import { DotBg } from "@/components/marketing/marketing-ui"
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -21,7 +21,7 @@ export default function RegisterPage() {
 
   const handleRoleSelect = (role: EmployeeRole) => {
     const roleInfo = ROLES[role]
-    if (roleInfo.requiresCompany && role === 'super_admin') {
+    if (roleInfo.requiresCompany && role === "super_admin") {
       router.push(`/register/super-admin?role=${role}`)
     } else {
       router.push(`/register/employee?role=${role}`)
@@ -29,67 +29,104 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 py-8">
+    <div className="relative min-h-screen px-4 pb-16" style={{ background: "var(--w-bg)" }}>
+      <DotBg />
       <Link
         href="/"
-        className="absolute top-6 left-6 flex items-center gap-2 text-muted-foreground hover:text-foreground transition"
+        className="absolute top-6 left-6 z-10 text-sm text-[var(--w-blue)]"
+        style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
       >
-        <ArrowLeft className="w-4 h-4" />
-        <span className="text-sm">Back to Home</span>
+        ← Home
       </Link>
 
-      <div className="w-full max-w-4xl">
-        <div className="flex justify-center mb-8">
-          <Logo size="lg" />
+      <div className="relative mx-auto max-w-[920px] pt-[100px]">
+        <div className="flex justify-center">
+          <Logo size="md" />
         </div>
 
-        <Card className="bg-card border-border p-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2 text-center">
-            Create Account
+        <div className="mt-10 text-center">
+          <span
+            className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--w-blue)]"
+            style={{ fontFamily: "var(--font-bricolage), sans-serif" }}
+          >
+            Get started
+          </span>
+          <h1
+            className="mt-3 text-[clamp(32px,4vw,52px)] leading-tight font-extrabold text-[var(--w-text)]"
+            style={{ fontFamily: "var(--font-bricolage), sans-serif" }}
+          >
+            Choose your role.
           </h1>
-          <p className="text-center text-muted-foreground mb-10">
-            Choose your role to get started. Your role determines which features you'll have access to.
+          <p
+            className="mx-auto mt-3 mb-10 max-w-lg text-base text-[var(--w-text-2)]"
+            style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
+          >
+            Select your role to get started. This determines your access level.
           </p>
+        </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Object.values(ROLES).map((roleInfo) => {
-              const Icon = roleIcons[roleInfo.id]
-              return (
-                <button
-                  key={roleInfo.id}
-                  onClick={() => handleRoleSelect(roleInfo.id)}
-                  className="border-2 border-border rounded-xl p-6 hover:border-primary hover:bg-primary/5 transition group text-left h-full flex flex-col"
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Object.values(ROLES).map((roleInfo) => {
+            const Icon = roleIcons[roleInfo.id]
+            return (
+              <button
+                key={roleInfo.id}
+                type="button"
+                onClick={() => handleRoleSelect(roleInfo.id)}
+                className="group w-full rounded-[14px] border p-7 text-left transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-[var(--w-blue-border)] hover:shadow-[0_8px_24px_rgba(59,130,246,0.08)]"
+                style={{
+                  background: "var(--w-card)",
+                  borderColor: "var(--w-border)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--w-card-hover)"
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "var(--w-card)"
+                }}
+              >
+                <div
+                  className="flex h-11 w-11 items-center justify-center rounded-[10px] border"
+                  style={{
+                    background: "var(--w-blue-dim)",
+                    borderColor: "rgba(59,130,246,0.15)",
+                  }}
                 >
-                  <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mb-3 group-hover:bg-primary/30 transition">
-                    <Icon className="w-6 h-6 text-primary" />
-                  </div>
-                  <h3 className="text-base font-semibold text-foreground mb-1">
-                    {roleInfo.name}
-                  </h3>
-                  <p className="text-xs text-muted-foreground flex-1 mb-3 line-clamp-3">
-                    {roleInfo.description}
-                  </p>
-                  <div className="pt-2 border-t border-border/50">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {roleInfo.requiresCompany ? "Requires Company" : "Standalone"}
-                    </span>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
+                  <Icon className="h-5 w-5 text-[var(--w-blue)]" />
+                </div>
+                <h3
+                  className="mt-4 text-[19px] font-bold text-[var(--w-text)]"
+                  style={{ fontFamily: "var(--font-bricolage), sans-serif" }}
+                >
+                  {roleInfo.name}
+                </h3>
+                <p
+                  className="mt-1.5 text-sm leading-[1.55] text-[var(--w-text-2)]"
+                  style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
+                >
+                  {roleInfo.description}
+                </p>
+                <p
+                  className="mt-4 text-[13px] text-[var(--w-blue)] opacity-0 transition-opacity group-hover:opacity-100"
+                  style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
+                >
+                  Get started →
+                </p>
+              </button>
+            )
+          })}
+        </div>
 
-          <div className="mt-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              Already have an account?{" "}
-              <Link href="/login" className="text-primary hover:underline font-medium">
-                Sign in
-              </Link>
-            </p>
-          </div>
-        </Card>
+        <p
+          className="mt-10 text-center text-sm text-[var(--w-text-2)]"
+          style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
+        >
+          Already have an account?{" "}
+          <Link href="/login" className="text-[var(--w-blue)] hover:underline">
+            Sign in
+          </Link>
+        </p>
       </div>
     </div>
   )
 }
-
