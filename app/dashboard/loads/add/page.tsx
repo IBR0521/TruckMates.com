@@ -63,6 +63,7 @@ import {
   type AddressBookEntry,
 } from "@/app/actions/enhanced-address-book"
 import { BookOpen } from "lucide-react"
+import { LoadTemplatePicker } from "@/components/loads/load-template-picker"
 import { GooglePlacesAutocomplete } from "@/components/google-places-autocomplete"
 import {
   Dialog,
@@ -841,6 +842,30 @@ export default function AddLoadPage() {
       }
     >
             <Tabs value={activeStep} onValueChange={(value) => goToStep(value as WizardStepKey)} className="space-y-6">
+              <Card className="border-border/50 p-4">
+                <LoadTemplatePicker
+                  onApplyTemplate={(patch, deliveryPoints) => {
+                    setFormData((prev) => ({ ...prev, ...patch }))
+                    if (deliveryPoints && deliveryPoints.length > 0) {
+                      setDeliveryPoints(
+                        deliveryPoints.map((p, i) => ({
+                          id: `template-${i}`,
+                          delivery_number: p.delivery_number,
+                          location_name: p.location_name,
+                          address: p.address,
+                          city: p.city || "",
+                          state: p.state || "",
+                          zip: p.zip || "",
+                          contact_name: p.contact_name || "",
+                          phone: p.phone || "",
+                          delivery_type: p.delivery_type || "delivery",
+                          notes: p.notes || "",
+                        })),
+                      )
+                    }
+                  }}
+                />
+              </Card>
               <div className="sticky top-[108px] z-20 space-y-3">
                 <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                   <div

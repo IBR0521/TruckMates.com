@@ -10,6 +10,7 @@ import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-ses
 import { createAdminClient } from "@/lib/supabase/admin"
 import { mapLegacyRole } from "@/lib/roles"
 import { getResendClientForCompany } from "@/lib/resend-client"
+import { hasFeatureAccess, normalizePlanTier, type PlanTier } from "@/lib/plan-limits"
 type NotificationType =
   | "route_update"
   | "load_update"
@@ -865,8 +866,28 @@ export async function getUnreadNotificationCount() {
   const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
   const myDriverId = await resolveDriverIdForSessionUser(supabase, ctx.companyId, ctx.userId, role)
 
+  const [{ data: companyRow }, { data: userRow }] = await Promise.all([
+    supabase.from("companies").select("subscription_tier").eq("id", ctx.companyId).maybeSingle(),
+    supabase.from("users").select("notification_smart_mode").eq("id", ctx.userId).maybeSingle(),
+  ])
+  const tier: PlanTier = normalizePlanTier(
+    (companyRow as { subscription_tier?: string | null } | null)?.subscription_tier ?? undefined,
+  )
+  const smartUi =
+    hasFeatureAccess(tier, "ai_smart_notifications") &&
+    Boolean((userRow as { notification_smart_mode?: boolean } | null)?.notification_smart_mode)
+
+  let notificationsCountQuery = supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", ctx.userId)
+    .eq("read", false)
+  if (smartUi) {
+    notificationsCountQuery = notificationsCountQuery.or("ai_suppressed.is.null,ai_suppressed.eq.false")
+  }
+
   const [notificationsResult, alertsResult] = await Promise.all([
-    supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", ctx.userId).eq("read", false),
+    notificationsCountQuery,
     (async () => {
       if (role === "driver" && !myDriverId) {
         return { count: 0 }

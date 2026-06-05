@@ -18,7 +18,8 @@ import {
   ArrowRight,
   Edit2,
   FilePenLine,
-  CircleAlert
+  CircleAlert,
+  BookOpen,
 } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState, useMemo } from "react"
@@ -61,6 +62,9 @@ import { Label } from "@/components/ui/label"
 import { getDrivers } from "@/app/actions/drivers"
 import { createPermit, getPermits, uploadPermitDocument } from "@/app/actions/permits"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
+import { DriverSuggestionList } from "@/components/dispatch/driver-suggestion-list"
+import type { DriverSuggestion } from "@/app/actions/dispatch-assist"
+import { SaveLoadTemplateDialog } from "@/components/loads/save-load-template-dialog"
 
 type LoadData = NonNullable<Awaited<ReturnType<typeof getLoad>>["data"]>
 type RouteData = NonNullable<Awaited<ReturnType<typeof getRoutes>>["data"]>[number]
@@ -108,6 +112,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false)
   const [isDispatchDialogOpen, setIsDispatchDialogOpen] = useState(false)
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false)
+  const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false)
   const [isQuickDispatching, setIsQuickDispatching] = useState(false)
   const [isQuickInvoicing, setIsQuickInvoicing] = useState(false)
   const [drivers, setDrivers] = useState<DriverData[]>([])
@@ -930,6 +935,15 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
                 Create BOL
               </Button>
             </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-3"
+              onClick={() => setIsSaveTemplateOpen(true)}
+            >
+              <BookOpen className="mr-2 h-4 w-4" />
+              Save as template
+            </Button>
           </div>
           {load.customer_id ? (
             <Button
@@ -2200,8 +2214,19 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <DriverSuggestionList
+              loadId={id}
+              enabled={isDispatchDialogOpen}
+              onSelect={(suggestion: DriverSuggestion) => {
+                setSelectedDispatchDriverId(suggestion.driver_id)
+                if (suggestion.truck_id) {
+                  setSelectedDispatchTruckId(suggestion.truck_id)
+                }
+                toast.success(`Selected ${suggestion.driver_name}`)
+              }}
+            />
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Driver</p>
+              <p className="text-sm text-muted-foreground">Driver (manual override)</p>
               <Select value={selectedDispatchDriverId} onValueChange={setSelectedDispatchDriverId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select driver" />
@@ -2216,7 +2241,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
               </Select>
             </div>
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Truck</p>
+              <p className="text-sm text-muted-foreground">Truck (manual override)</p>
               <Select value={selectedDispatchTruckId} onValueChange={setSelectedDispatchTruckId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select truck" />
@@ -2241,6 +2266,12 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         </DialogContent>
       </Dialog>
+
+      <SaveLoadTemplateDialog
+        loadId={id}
+        open={isSaveTemplateOpen}
+        onOpenChange={setIsSaveTemplateOpen}
+      />
 
       <Dialog open={isInvoiceDialogOpen} onOpenChange={setIsInvoiceDialogOpen}>
         <DialogContent className="sm:max-w-md">

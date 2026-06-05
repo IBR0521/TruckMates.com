@@ -27,7 +27,6 @@ import {
   Mail,
   FileText,
   Info,
-  Sparkles,
   BookOpen,
   List,
   LayoutGrid,
@@ -52,7 +51,8 @@ import { findNearbyDriversForLoad, type NearbyDriver } from "@/app/actions/proxi
 import { getAllDriversHOSStatus, type DriverHOSStatus } from "@/app/actions/dispatcher-hos"
 import { getLoadDetails, type LoadDetails } from "@/app/actions/load-details"
 import { DispatchGantt } from "@/components/dispatch/dispatch-gantt"
-import { DispatchAssist } from "@/components/dispatch/dispatch-assist"
+import { DriverSuggestionList } from "@/components/dispatch/driver-suggestion-list"
+import type { DriverSuggestion } from "@/app/actions/dispatch-assist"
 import { type TimelineJob } from "@/app/actions/dispatch-timeline"
 import { format } from "date-fns"
 import {
@@ -132,7 +132,6 @@ export default function DispatchesPage() {
   const [loadDetails, setLoadDetails] = useState<LoadDetails | null>(null)
   const [loadDetailsLoading, setLoadDetailsLoading] = useState(false)
   const [companyId, setCompanyId] = useState<string | null>(null)
-  const [showDispatchAssist, setShowDispatchAssist] = useState<string | null>(null)
   const [dispatchView, setDispatchView] = useState<"list" | "board">("list")
   const [loadAssignments, setLoadAssignments] = useState<Record<string, { driverId?: string; truckId?: string }>>({})
   const [routeAssignments, setRouteAssignments] = useState<Record<string, { driverId?: string; truckId?: string }>>({})
@@ -660,6 +659,14 @@ export default function DispatchesPage() {
     }))
   }
 
+  function handleSuggestionSelect(loadId: string, suggestion: DriverSuggestion) {
+    handleLoadDraftChange(loadId, {
+      driverId: suggestion.driver_id,
+      truckId: suggestion.truck_id || undefined,
+    })
+    toast.success(`Selected ${suggestion.driver_name} — confirm assignment below`)
+  }
+
   const handleRouteDraftChange = (routeId: string, patch: Partial<{ driverId?: string; truckId?: string }>) => {
     setRouteAssignments((prev) => ({
       ...prev,
@@ -779,18 +786,6 @@ export default function DispatchesPage() {
           />
         ) : (
         <div className="max-w-7xl mx-auto space-y-8">
-          {/* Dispatch Assist Modal (Phase 3) */}
-          {showDispatchAssist && (
-            <DispatchAssist
-              loadId={showDispatchAssist}
-              onAssigned={() => {
-                setShowDispatchAssist(null)
-                loadData()
-              }}
-              onClose={() => setShowDispatchAssist(null)}
-            />
-          )}
-
           {/* Timeline / Date context */}
           {hasActionableBacklog ? (
             <Card className="border-border p-4">
@@ -1150,18 +1145,12 @@ export default function DispatchesPage() {
                       </div>
 
                     <div className="space-y-3 pt-3 border-t border-border" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => setShowDispatchAssist(load.id)}
-                        title="AI-suggested assignment based on HOS, distance, and performance"
-                      >
-                        <Sparkles className="w-4 h-4 mr-2" />
-                        Dispatch Assist
-                      </Button>
-                      <p className="text-[11px] text-muted-foreground -mt-1">
-                        AI-suggested assignment. Need proximity only?{" "}
+                      <DriverSuggestionList
+                        loadId={load.id}
+                        onSelect={(suggestion) => handleSuggestionSelect(load.id, suggestion)}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Need proximity only?{" "}
                         <button
                           type="button"
                           className="text-primary hover:underline"

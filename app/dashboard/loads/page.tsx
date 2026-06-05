@@ -2,7 +2,7 @@
 
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, Package, Download, Eye, Edit2, Trash2, Search, Filter, Copy, MoreVertical, CheckSquare, Square, FileText } from "lucide-react"
+import { Plus, Package, Download, Eye, Edit2, Trash2, Search, Filter, Copy, MoreVertical, CheckSquare, Square, FileText, User, History } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
@@ -29,14 +29,35 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { getLoads, deleteLoad, bulkDeleteLoads, bulkUpdateLoadStatus, duplicateLoad, updateLoad } from "@/app/actions/loads"
+import {
+  getLoads,
+  deleteLoad,
+  bulkDeleteLoads,
+  bulkUpdateLoadStatusDetailed,
+  bulkAssignLoads,
+  bulkCreateInvoicesForLoads,
+  duplicateLoad,
+  updateLoad,
+  type BulkLoadSummary,
+} from "@/app/actions/loads"
+import { getDrivers } from "@/app/actions/drivers"
+import { getTrucks } from "@/app/actions/trucks"
 import { autoGenerateInvoiceOnPOD } from "@/app/actions/auto-invoice"
 import { BulkActionsBar } from "@/components/bulk-actions-bar"
 import { InlineEdit } from "@/components/dashboard/inline-edit"
 import { DefensiveDelete } from "@/components/dashboard/defensive-delete"
 import { AuditTrail } from "@/components/dashboard/audit-trail"
-import { History } from "lucide-react"
 import { useLoadsInitialData } from "@/components/dashboard/initial-list-data-contexts"
+import { BulkLoadResultDialog } from "@/components/loads/bulk-load-result-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 
 type LoadListItem = NonNullable<Awaited<ReturnType<typeof getLoads>>["data"]>[number]
 type LoadDeleteDependency = {
@@ -61,6 +82,18 @@ export default function LoadsPage() {
   const [isBulkMode, setIsBulkMode] = useState(false)
   const [deleteDependencies, setDeleteDependencies] = useState<LoadDeleteDependency[]>([])
   const [generatingInvoiceId, setGeneratingInvoiceId] = useState<string | null>(null)
+  const [bulkResult, setBulkResult] = useState<BulkLoadSummary | null>(null)
+  const [bulkResultTitle, setBulkResultTitle] = useState("")
+  const [bulkResultOpen, setBulkResultOpen] = useState(false)
+  const [confirmBulkStatus, setConfirmBulkStatus] = useState<string | null>(null)
+  const [confirmBulkInvoice, setConfirmBulkInvoice] = useState(false)
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false)
+  const [bulkAssignDriverId, setBulkAssignDriverId] = useState("")
+  const [bulkAssignTruckId, setBulkAssignTruckId] = useState("")
+  const [bulkDrivers, setBulkDrivers] = useState<Array<{ id: string; name: string }>>([])
+  const [bulkTrucks, setBulkTrucks] = useState<Array<{ id: string; truck_number: string }>>([])
+  const [bulkRunning, setBulkRunning] = useState(false)
 
   const loadLoads = useCallback(async () => {
     if (!hasLoadedOnce) {
@@ -182,10 +215,19 @@ export default function LoadsPage() {
     // Success - no need to reload, UI already updated
   }
 
-  // Bulk operations
+  function showBulkSummary(title: string, summary: BulkLoadSummary) {
+    setBulkResultTitle(title)
+    setBulkResult(summary)
+    setBulkResultOpen(true)
+    toast.success(`${summary.succeeded} succeeded, ${summary.skipped} skipped, ${summary.failed} failed`)
+  }
+
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return
+    setBulkRunning(true)
     const result = await bulkDeleteLoads(Array.from(selectedIds))
+    setBulkRunning(false)
+    setConfirmBulkDelete(false)
     if (result.error) {
       toast.error(result.error)
     } else {
@@ -198,11 +240,73 @@ export default function LoadsPage() {
 
   const handleBulkStatusUpdate = async (status: string) => {
     if (selectedIds.size === 0) return
-    const result = await bulkUpdateLoadStatus(Array.from(selectedIds), status)
+    setBulkRunning(true)
+    const result = await bulkUpdateLoadStatusDetailed(Array.from(selectedIds), status)
+    setBulkRunning(false)
+    setConfirmBulkStatus(null)
     if (result.error) {
       toast.error(result.error)
-    } else {
-      toast.success(`Updated ${selectedIds.size} load(s) to ${status}`)
+    } else if (result.data) {
+      showBulkSummary(`Bulk status → ${status}`, result.data)
+      setSelectedIds(new Set())
+      setIsBulkMode(false)
+      await loadLoads()
+    }
+  }
+
+  async function openBulkAssign() {
+    const [driversResult, trucksResult] = await Promise.all([getDrivers(), getTrucks()])
+    if (driversResult.data) {
+      setBulkDrivers(
+        driversResult.data
+          .filter((d: { status?: string | null }) => d.status === "active")
+          .map((d: { id: string; name?: string | null }) => ({ id: d.id, name: d.name || "Driver" })),
+      )
+    }
+    if (trucksResult.data) {
+      setBulkTrucks(
+        trucksResult.data.map((t: { id: string; truck_number?: string | null }) => ({
+          id: t.id,
+          truck_number: t.truck_number || t.id.slice(0, 6),
+        })),
+      )
+    }
+    setBulkAssignOpen(true)
+  }
+
+  const handleBulkAssign = async () => {
+    if (!bulkAssignDriverId || selectedIds.size === 0) {
+      toast.error("Select a driver for bulk assignment")
+      return
+    }
+    setBulkRunning(true)
+    const result = await bulkAssignLoads(
+      Array.from(selectedIds),
+      bulkAssignDriverId,
+      bulkAssignTruckId || undefined,
+    )
+    setBulkRunning(false)
+    setBulkAssignOpen(false)
+    if (result.error) {
+      toast.error(result.error)
+    } else if (result.data) {
+      showBulkSummary("Bulk assign driver", result.data)
+      setSelectedIds(new Set())
+      setIsBulkMode(false)
+      await loadLoads()
+    }
+  }
+
+  const handleBulkInvoice = async () => {
+    if (selectedIds.size === 0) return
+    setBulkRunning(true)
+    const result = await bulkCreateInvoicesForLoads(Array.from(selectedIds))
+    setBulkRunning(false)
+    setConfirmBulkInvoice(false)
+    if (result.error) {
+      toast.error(result.error)
+    } else if (result.data) {
+      showBulkSummary("Bulk create invoices", result.data)
       setSelectedIds(new Set())
       setIsBulkMode(false)
       await loadLoads()
@@ -302,7 +406,7 @@ export default function LoadsPage() {
       // Delete: Bulk delete if items selected
       if (e.key === 'Delete' && selectedIds.size > 0 && !isLoading) {
         e.preventDefault()
-        handleBulkDelete()
+        setConfirmBulkDelete(true)
       }
       // Escape: Clear selection
       if (e.key === 'Escape' && selectedIds.size > 0) {
@@ -356,31 +460,49 @@ export default function LoadsPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("draft")}>
+                  <DropdownMenuItem onClick={() => setConfirmBulkStatus("draft")}>
                     Draft
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("pending")}>
+                  <DropdownMenuItem onClick={() => setConfirmBulkStatus("pending")}>
                     Pending
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("confirmed")}>
+                  <DropdownMenuItem onClick={() => setConfirmBulkStatus("confirmed")}>
                     Confirmed
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("scheduled")}>
+                  <DropdownMenuItem onClick={() => setConfirmBulkStatus("scheduled")}>
                     Scheduled
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("in_transit")}>
+                  <DropdownMenuItem onClick={() => setConfirmBulkStatus("in_transit")}>
                     In Transit
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("delivered")}>
+                  <DropdownMenuItem onClick={() => setConfirmBulkStatus("delivered")}>
                     Delivered
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkStatusUpdate("cancelled")}>
+                  <DropdownMenuItem onClick={() => setConfirmBulkStatus("cancelled")}>
                     Cancelled
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button
-                onClick={handleBulkDelete}
+                variant="outline"
+                size="sm"
+                onClick={() => void openBulkAssign()}
+                disabled={bulkRunning}
+              >
+                <User className="w-4 h-4 mr-2" />
+                Assign ({selectedIds.size})
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmBulkInvoice(true)}
+                disabled={bulkRunning}
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Invoice ({selectedIds.size})
+              </Button>
+              <Button
+                onClick={() => setConfirmBulkDelete(true)}
                 variant="outline"
                 size="sm"
                 className="border-red-500/50 bg-transparent hover:bg-red-500/20 text-red-400"
@@ -528,13 +650,11 @@ export default function LoadsPage() {
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      {isBulkMode && (
-                        <Checkbox
-                          checked={selectedIds.has(load.id)}
-                          onCheckedChange={() => toggleSelect(load.id)}
-                          className="mt-1"
-                        />
-                      )}
+                      <Checkbox
+                        checked={selectedIds.has(load.id)}
+                        onCheckedChange={() => toggleSelect(load.id)}
+                        className="mt-1"
+                      />
                       <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center">
                         <Package className="w-5 h-5 text-primary" />
                       </div>
@@ -716,8 +836,20 @@ export default function LoadsPage() {
           setSelectedIds(new Set())
           setIsBulkMode(false)
         }}
-        onBulkDelete={handleBulkDelete}
-        onBulkStatusChange={handleBulkStatusUpdate}
+        onBulkDelete={() => setConfirmBulkDelete(true)}
+        customActions={[
+          {
+            label: "Assign driver",
+            icon: <User className="h-3 w-3 mr-1" />,
+            onClick: () => void openBulkAssign(),
+          },
+          {
+            label: "Create invoices",
+            icon: <FileText className="h-3 w-3 mr-1" />,
+            onClick: () => setConfirmBulkInvoice(true),
+          },
+        ]}
+        onBulkStatusChange={(status) => setConfirmBulkStatus(status)}
         onBulkExport={() => {
           const selectedLoads = loadsList.filter((load) =>
             selectedIds.has(load.id)
@@ -747,6 +879,114 @@ export default function LoadsPage() {
           "cancelled",
         ]}
       />
+
+      <BulkLoadResultDialog
+        open={bulkResultOpen}
+        onOpenChange={setBulkResultOpen}
+        title={bulkResultTitle}
+        summary={bulkResult}
+      />
+
+      <Dialog open={confirmBulkStatus !== null} onOpenChange={(o) => !o && setConfirmBulkStatus(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update {selectedIds.size} load(s)?</DialogTitle>
+            <DialogDescription>
+              Mark {selectedIds.size} selected load(s) as <strong>{confirmBulkStatus}</strong>. Loads
+              with invalid status transitions will be reported individually.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmBulkStatus(null)}>Cancel</Button>
+            <Button
+              disabled={bulkRunning}
+              onClick={() => confirmBulkStatus && void handleBulkStatusUpdate(confirmBulkStatus)}
+            >
+              {bulkRunning ? "Updating..." : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmBulkInvoice} onOpenChange={setConfirmBulkInvoice}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create invoices for {selectedIds.size} load(s)?</DialogTitle>
+            <DialogDescription>
+              Generates invoices for delivered loads in the selection. Loads already invoiced are
+              skipped. Non-delivered loads will fail individually.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmBulkInvoice(false)}>Cancel</Button>
+            <Button disabled={bulkRunning} onClick={() => void handleBulkInvoice()}>
+              {bulkRunning ? "Creating..." : "Create invoices"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete {selectedIds.size} load(s)?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes the selected loads. In-transit or active loads cannot be deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmBulkDelete(false)}>Cancel</Button>
+            <Button variant="destructive" disabled={bulkRunning} onClick={() => void handleBulkDelete()}>
+              {bulkRunning ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkAssignOpen} onOpenChange={setBulkAssignOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk assign {selectedIds.size} load(s)</DialogTitle>
+            <DialogDescription>
+              Each load is validated for HOS and scheduling conflicts. Failures are reported per load.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Driver</Label>
+              <Select value={bulkAssignDriverId} onValueChange={setBulkAssignDriverId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select driver" />
+                </SelectTrigger>
+                <SelectContent>
+                  {bulkDrivers.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Truck (optional)</Label>
+              <Select value={bulkAssignTruckId} onValueChange={setBulkAssignTruckId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select truck" />
+                </SelectTrigger>
+                <SelectContent>
+                  {bulkTrucks.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.truck_number}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkAssignOpen(false)}>Cancel</Button>
+            <Button disabled={bulkRunning || !bulkAssignDriverId} onClick={() => void handleBulkAssign()}>
+              {bulkRunning ? "Assigning..." : "Assign all"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

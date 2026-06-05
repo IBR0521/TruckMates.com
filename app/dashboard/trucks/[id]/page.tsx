@@ -35,6 +35,7 @@ import {
 import { TruckSafetyEventsSection } from "@/components/eld/truck-safety-events-section"
 import { TruckTripHistorySection } from "@/components/trips/truck-trip-history"
 import { TruckFaultCodesSection } from "@/components/eld/truck-fault-codes-section"
+import { TruckMaintenanceCostSection } from "@/components/maintenance/truck-maintenance-cost-section"
 
 type TruckDetail = {
   id: string
@@ -407,6 +408,8 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               </Link>
             </div>
           </DetailSection>
+
+          <TruckMaintenanceCostSection truckId={id} />
 
           <DetailSection title="Registration & Compliance" icon={<ShieldCheck className="w-5 h-5" />} className="border-border/70 bg-card/80">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

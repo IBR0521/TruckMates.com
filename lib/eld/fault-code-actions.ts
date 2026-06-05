@@ -105,14 +105,26 @@ export async function handleNewFaultCode(params: {
       }
     }
 
+    const unitLabel = truckName.startsWith("Truck ")
+      ? `Unit ${truckName.slice(6)}`
+      : truckName
     await insertCompanyAlert({
       companyId: params.fault.company_id,
-      title: `CRITICAL fault: ${params.fault.code}`,
-      message: `${truckName}: ${desc}. Maintenance scheduled for investigation.`,
+      title: maintenanceCreated
+        ? `Maintenance auto-scheduled: ${params.fault.code}`
+        : `CRITICAL fault: ${params.fault.code}`,
+      message: maintenanceCreated
+        ? `Maintenance auto-scheduled for ${unitLabel} from critical fault ${params.fault.code} — ${desc}.`
+        : `${truckName}: ${desc}. Review in Vehicle Health.`,
       eventType: "eld_fault_critical",
       truckId: params.fault.truck_id,
       driverId: params.fault.driver_id,
-      metadata: { fault_code_id: params.fault.id, code: params.fault.code, severity: "critical" },
+      metadata: {
+        fault_code_id: params.fault.id,
+        code: params.fault.code,
+        severity: "critical",
+        maintenance_created: maintenanceCreated,
+      },
     })
     notificationSent = true
   } else if (params.isNewOccurrence && params.fault.severity === "high") {

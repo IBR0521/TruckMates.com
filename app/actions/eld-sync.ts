@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getELDDevices, getELDDevice } from "./eld"
 import { recordBillableApiUsage } from "./api-usage"
 import type { EldDeviceSyncRow, EldDriverMappingRow, ProviderApiJson } from "@/lib/types/eld-sync"
+import { runFaultCodePipelineAfterEldSync } from "@/lib/eld/fault-codes-sync"
 import type { PostgrestError } from "@supabase/supabase-js"
 
 function getTimestampMs(input: unknown): number | null {
@@ -2197,6 +2198,11 @@ export async function syncAllELDDevicesForCron(): Promise<{
     }
   }
 
+  // Fault codes from diagnostics/API → eld_fault_codes → handleNewFaultCode (idempotent).
+  for (const companyId of companyIds) {
+    await runFaultCodePipelineAfterEldSync(companyId)
+  }
+
   return {
     data: { synced, failed, companies: companyIds.size },
     error: null,
@@ -2224,7 +2230,11 @@ export async function syncELDDevice(deviceId: string): Promise<ELDDeviceSyncActi
   }
 
   const device = deviceResult.data as EldDeviceSyncRow
-  return (await syncELDDeviceAdmin(device)) as ELDDeviceSyncActionResult
+  const result = (await syncELDDeviceAdmin(device)) as ELDDeviceSyncActionResult
+  if (!result.error && device.company_id) {
+    await runFaultCodePipelineAfterEldSync(device.company_id)
+  }
+  return result
 }
 
 // Sync all active devices for a company
@@ -2238,13 +2248,21 @@ export async function syncAllELDDevices() {
   const activeDevices = devicesResult.data.filter((d: EldDeviceSyncRow) => d.status === "active")
   const results = []
 
+  const companiesToProcess = new Set<string>()
   for (const device of activeDevices) {
-    const result = await syncELDDevice(device.id)
+    const result = await syncELDDeviceAdmin(device)
+    if (!result.error && device.company_id) {
+      companiesToProcess.add(device.company_id)
+    }
     results.push({
       device_id: device.id,
       device_name: device.device_name,
       ...result
     })
+  }
+
+  for (const companyId of companiesToProcess) {
+    await runFaultCodePipelineAfterEldSync(companyId)
   }
 
   return {

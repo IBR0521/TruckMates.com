@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import WorkOrdersPage from "./work-orders/page"
 import FaultCodeRulesPage from "./fault-code-rules/page"
 import PredictiveMaintenancePage from "./predictive/page"
+import { FleetMaintenanceCostRanking } from "@/components/maintenance/fleet-maintenance-cost-ranking"
 
 type MaintenanceRow = {
   id: string
@@ -204,6 +205,8 @@ export default function MaintenancePage() {
               <p className="text-3xl font-bold text-foreground">{maintenanceRecords.length}</p>
             </Card>
           </div>
+
+          <FleetMaintenanceCostRanking />
 
           {/* Maintenance Table */}
           {isLoading ? (

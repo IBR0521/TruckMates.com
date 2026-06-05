@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Inbox, X, Check, CheckCheck, HelpCircle } from "lucide-react"
+import { Inbox, X, Check, CheckCheck, HelpCircle, AlertTriangle } from "lucide-react"
+import { formatDistanceToNow } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
@@ -15,6 +16,10 @@ import { cn } from "@/lib/utils"
 
 type NotificationItem = {
   id: string
+  /** Unified item kind: system notification vs fleet alert. */
+  itemType?: "notification" | "alert" | null
+  /** DB event type, e.g. load_update or fault_code. */
+  event_type?: string | null
   type?: string | null
   title?: string | null
   message?: string | null
@@ -26,6 +31,7 @@ type NotificationItem = {
   ai_suppressed?: boolean | null
   priority?: string | null
   source?: string | null
+  status?: string | null
 }
 
 const asNotificationItem = (value: unknown): NotificationItem | null => {
@@ -34,6 +40,13 @@ const asNotificationItem = (value: unknown): NotificationItem | null => {
   if (typeof obj.id !== "string") return null
   return {
     id: obj.id,
+    itemType:
+      obj.itemType === "notification" || obj.itemType === "alert"
+        ? obj.itemType
+        : obj.type === "notification" || obj.type === "alert"
+          ? obj.type
+          : null,
+    event_type: typeof obj.event_type === "string" ? obj.event_type : null,
     type: typeof obj.type === "string" ? obj.type : null,
     title: typeof obj.title === "string" ? obj.title : null,
     message: typeof obj.message === "string" ? obj.message : null,
@@ -46,6 +59,7 @@ const asNotificationItem = (value: unknown): NotificationItem | null => {
     ai_suppressed: typeof obj.ai_suppressed === "boolean" ? obj.ai_suppressed : null,
     priority: typeof obj.priority === "string" ? obj.priority : null,
     source: typeof obj.source === "string" ? obj.source : null,
+    status: typeof obj.status === "string" ? obj.status : null,
   }
 }
 
@@ -53,11 +67,7 @@ function formatNotificationDate(value: string | Date | null | undefined): string
   if (!value) return "Unknown date"
   const d = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(d.getTime())) return "Invalid date"
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  })
+  return formatDistanceToNow(d, { addSuffix: true })
 }
 
 function displayBand(n: NotificationItem, smartUi: boolean): "critical" | "high" | "medium" | "low" | "normal" {
@@ -121,10 +131,15 @@ function NotificationRowView({
 }: {
   n: NotificationItem
   smartUi: boolean
-  markAsRead: (id: string) => void
+  markAsRead: (id: string, itemType: "notification" | "alert") => void
 }) {
-  const getNotificationIcon = (type?: string | null) => {
-    switch (type) {
+  const isAlert = n.itemType === "alert" || n.source === "alerts"
+
+  const getNotificationIcon = () => {
+    if (isAlert) {
+      return <AlertTriangle className="h-4 w-4" />
+    }
+    switch (n.event_type) {
       case "route_update":
         return "🛣️"
       case "load_update":
@@ -140,8 +155,11 @@ function NotificationRowView({
     }
   }
 
-  const getNotificationColor = (type?: string | null) => {
-    switch (type) {
+  const getNotificationColor = () => {
+    if (isAlert) {
+      return "bg-orange-500/10 text-orange-600"
+    }
+    switch (n.event_type) {
       case "route_update":
         return "bg-blue-500/10 text-blue-500"
       case "load_update":
@@ -167,16 +185,21 @@ function NotificationRowView({
         <div
           className={cn(
             "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-            getNotificationColor(n.type),
+            getNotificationColor(),
           )}
         >
-          {getNotificationIcon(n.type)}
+          {getNotificationIcon()}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <p className="line-clamp-2 text-sm font-medium">{n.title || "Notification"}</p>
               <PriorityBadge n={n} smartUi={smartUi} />
+              {isAlert && (
+                <Badge variant="outline" className="text-[10px] font-normal">
+                  Alert
+                </Badge>
+              )}
               {n.source === "ai_proactive" && (
                 <Badge variant="secondary" className="text-[10px] font-normal">
                   AI insight
@@ -184,7 +207,12 @@ function NotificationRowView({
               )}
             </div>
             {!n.read && (
-              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => markAsRead(n.id)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                onClick={() => markAsRead(n.id, isAlert ? "alert" : "notification")}
+              >
                 <Check className="h-3 w-3" />
               </Button>
             )}
@@ -200,11 +228,18 @@ function NotificationRowView({
 export function NotificationsCenter() {
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const { notifications, unreadCount, markAsRead, markAllAsRead, smartUi } = useRealtimeNotifications()
+  const { notifications, unreadCount, markAsRead, markAllAsRead, refreshNotifications, smartUi } =
+    useRealtimeNotifications()
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    if (open) {
+      void refreshNotifications()
+    }
+  }, [open, refreshNotifications])
 
   const parsed = useMemo(() => {
     return (notifications as unknown[])
@@ -215,7 +250,7 @@ export function NotificationsCenter() {
   const grouped = useMemo(() => {
     const rows = parsed.map((n) => ({
       ...n,
-      type: "notification" as const,
+      type: n.itemType ?? "notification",
       ai_cluster_id: n.ai_cluster_id ?? null,
     }))
     return groupNotificationRows(rows, smartUi)

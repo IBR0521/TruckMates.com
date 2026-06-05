@@ -19,6 +19,7 @@ const ALERTS_LIST_SELECT =
 
 type NotificationRow = {
   id: string
+  type?: string | null
   title?: string | null
   message?: string | null
   priority?: string | null
@@ -119,6 +120,8 @@ export async function getUnifiedNotifications(filters?: {
       id: string
       type: "notification" | "alert"
       source: "system" | "alerts"
+      /** DB event type, e.g. load_update or fault_code (distinct from unified `type`). */
+      event_type: string | null
       title: string | null | undefined
       message: string | null | undefined
       priority: string
@@ -170,6 +173,7 @@ export async function getUnifiedNotifications(filters?: {
             id: notif.id,
             type: "notification",
             source: "system",
+            event_type: notif.type ?? null,
             title: notif.title,
             message: notif.message,
             priority: displayPriority,
@@ -249,6 +253,7 @@ export async function getUnifiedNotifications(filters?: {
             id: alert.id,
             type: "alert",
             source: "alerts",
+            event_type: alert.event_type ?? null,
             title: alert.title,
             message: alert.message,
             priority: legacyA,

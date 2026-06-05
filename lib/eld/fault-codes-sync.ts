@@ -623,3 +623,19 @@ export async function syncFaultCodesForCompany(companyId: string): Promise<{
     cleared,
   }
 }
+
+/**
+ * Run after ELD telemetry sync so diagnostics/API fault rows flow into
+ * `eld_fault_codes` and `handleNewFaultCode` side effects (maintenance + alerts).
+ * Safe to call multiple times — persistence is idempotent per active fault.
+ */
+export async function runFaultCodePipelineAfterEldSync(companyId: string): Promise<void> {
+  try {
+    await syncFaultCodesForCompany(companyId)
+  } catch (e: unknown) {
+    Sentry.captureMessage(
+      `fault pipeline after ELD sync failed for company ${companyId}: ${e instanceof Error ? e.message : "unknown"}`,
+      { level: "warning" },
+    )
+  }
+}

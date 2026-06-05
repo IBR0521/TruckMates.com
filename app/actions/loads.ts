@@ -2057,3 +2057,292 @@ export async function getLoadSuggestions(origin?: string, destination?: string) 
   return { data: suggestions, error: null }
 }
 
+export type BulkLoadItemResult = {
+  load_id: string
+  shipment_number: string | null
+  ok: boolean
+  skipped?: boolean
+  skip_reason?: string
+  error?: string
+}
+
+export type BulkLoadSummary = {
+  results: BulkLoadItemResult[]
+  succeeded: number
+  skipped: number
+  failed: number
+}
+
+function summarizeBulkResults(results: BulkLoadItemResult[]): BulkLoadSummary {
+  return {
+    results,
+    succeeded: results.filter((r) => r.ok && !r.skipped).length,
+    skipped: results.filter((r) => r.skipped).length,
+    failed: results.filter((r) => !r.ok && !r.skipped).length,
+  }
+}
+
+/** Per-load status update — each item runs through the same transition rules as updateLoad. */
+export async function bulkUpdateLoadStatusDetailed(
+  ids: string[],
+  status: string,
+): Promise<{ error: string | null; data: BulkLoadSummary | null }> {
+  const permission = await checkEditPermission("loads")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to edit loads", data: null }
+  }
+
+  const normalizedTarget = parseLoadStatus(status)
+  if (!normalizedTarget) {
+    return { error: `Invalid status. Must be one of: ${ALL_LOAD_STATUSES.join(", ")}`, data: null }
+  }
+
+  const supabase = await createClient()
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const { data: loads } = await supabase
+    .from("loads")
+    .select("id, shipment_number, status")
+    .in("id", ids)
+    .eq("company_id", ctx.companyId)
+
+  type BulkLoadRow = { id: string; shipment_number: string | null; status: string }
+  const loadMap = new Map<string, BulkLoadRow>(
+    (loads ?? []).map((l: BulkLoadRow) => [l.id, l]),
+  )
+
+  const results: BulkLoadItemResult[] = []
+
+  for (const id of ids) {
+    const row = loadMap.get(id)
+    if (!row) {
+      results.push({
+        load_id: id,
+        shipment_number: null,
+        ok: false,
+        error: "Load not found",
+      })
+      continue
+    }
+
+    const currentStatus = normalizeLoadStatus(row.status)
+    if (currentStatus === normalizedTarget) {
+      results.push({
+        load_id: id,
+        shipment_number: row.shipment_number,
+        ok: true,
+        skipped: true,
+        skip_reason: "Already at target status",
+      })
+      continue
+    }
+
+    const allowedNext = getAllowedNextLoadStatuses(currentStatus)
+    if (!allowedNext.includes(normalizedTarget)) {
+      results.push({
+        load_id: id,
+        shipment_number: row.shipment_number,
+        ok: false,
+        error: `Invalid transition ${currentStatus} → ${normalizedTarget}`,
+      })
+      continue
+    }
+
+    const updateResult = await updateLoad(id, { status: normalizedTarget })
+    if (updateResult.error) {
+      results.push({
+        load_id: id,
+        shipment_number: row.shipment_number,
+        ok: false,
+        error: updateResult.error,
+      })
+    } else {
+      results.push({
+        load_id: id,
+        shipment_number: row.shipment_number,
+        ok: true,
+      })
+    }
+  }
+
+  void invalidateAiContextCache(ctx.companyId, "load")
+  revalidatePath("/dashboard/loads")
+  return { data: summarizeBulkResults(results), error: null }
+}
+
+/** Bulk assign driver/truck — each load uses quickAssignLoad + validateAssignment. */
+export async function bulkAssignLoads(
+  ids: string[],
+  driverId: string,
+  truckId?: string,
+): Promise<{ error: string | null; data: BulkLoadSummary | null }> {
+  const permission = await checkEditPermission("dispatch")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to assign loads", data: null }
+  }
+
+  if (!driverId) {
+    return { error: "Driver is required for bulk assignment", data: null }
+  }
+
+  const supabase = await createClient()
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const { data: loads } = await supabase
+    .from("loads")
+    .select("id, shipment_number, status")
+    .in("id", ids)
+    .eq("company_id", ctx.companyId)
+
+  type BulkLoadRow = { id: string; shipment_number: string | null; status: string }
+  const loadMap = new Map<string, BulkLoadRow>(
+    (loads ?? []).map((l: BulkLoadRow) => [l.id, l]),
+  )
+
+  const { quickAssignLoad } = await import("./dispatches")
+  const { validateAssignment } = await import("./dispatch-assist")
+
+  const results: BulkLoadItemResult[] = []
+
+  for (const id of ids) {
+    const row = loadMap.get(id)
+    if (!row) {
+      results.push({
+        load_id: id,
+        shipment_number: null,
+        ok: false,
+        error: "Load not found",
+      })
+      continue
+    }
+
+    if (["delivered", "cancelled", "completed"].includes(String(row.status || "").toLowerCase())) {
+      results.push({
+        load_id: id,
+        shipment_number: row.shipment_number,
+        ok: false,
+        error: "Cannot assign completed or cancelled load",
+      })
+      continue
+    }
+
+    const validation = await validateAssignment(driverId, truckId || "", id)
+    if (validation.data && !validation.data.valid) {
+      results.push({
+        load_id: id,
+        shipment_number: row.shipment_number,
+        ok: false,
+        error: validation.data.errors.join("; ") || "Assignment validation failed",
+      })
+      continue
+    }
+
+    const assignResult = await quickAssignLoad(id, driverId, truckId)
+    if (assignResult.error) {
+      results.push({
+        load_id: id,
+        shipment_number: row.shipment_number,
+        ok: false,
+        error: assignResult.error,
+      })
+    } else {
+      results.push({
+        load_id: id,
+        shipment_number: row.shipment_number,
+        ok: true,
+      })
+    }
+  }
+
+  revalidatePath("/dashboard/loads")
+  revalidatePath("/dashboard/dispatches")
+  return { data: summarizeBulkResults(results), error: null }
+}
+
+/** Bulk invoice for delivered loads — idempotent per load. */
+export async function bulkCreateInvoicesForLoads(
+  ids: string[],
+): Promise<{ error: string | null; data: BulkLoadSummary | null }> {
+  const permission = await checkEditPermission("loads")
+  if (!permission.allowed) {
+    return { error: permission.error || "You don't have permission to create invoices", data: null }
+  }
+
+  const supabase = await createClient()
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const { data: loads } = await supabase
+    .from("loads")
+    .select("id, shipment_number, status")
+    .in("id", ids)
+    .eq("company_id", ctx.companyId)
+
+  type BulkLoadRow = { id: string; shipment_number: string | null; status: string }
+  const loadMap = new Map<string, BulkLoadRow>(
+    (loads ?? []).map((l: BulkLoadRow) => [l.id, l]),
+  )
+
+  const { autoGenerateInvoiceOnPOD } = await import("./auto-invoice")
+  const results: BulkLoadItemResult[] = []
+
+  for (const id of ids) {
+    const row = loadMap.get(id)
+    if (!row) {
+      results.push({
+        load_id: id,
+        shipment_number: null,
+        ok: false,
+        error: "Load not found",
+      })
+      continue
+    }
+
+    const status = String(row.status || "").toLowerCase()
+    if (status !== "delivered" && status !== "completed") {
+      results.push({
+        load_id: id,
+        shipment_number: row.shipment_number,
+        ok: false,
+        error: "Only delivered loads can be invoiced",
+      })
+      continue
+    }
+
+    const invoiceResult = await autoGenerateInvoiceOnPOD(id)
+    if (invoiceResult.error) {
+      results.push({
+        load_id: id,
+        shipment_number: row.shipment_number,
+        ok: false,
+        error: invoiceResult.error,
+      })
+    } else if (invoiceResult.data?.alreadyExists) {
+      results.push({
+        load_id: id,
+        shipment_number: row.shipment_number,
+        ok: true,
+        skipped: true,
+        skip_reason: "Already invoiced",
+      })
+    } else {
+      results.push({
+        load_id: id,
+        shipment_number: row.shipment_number,
+        ok: true,
+      })
+    }
+  }
+
+  revalidatePath("/dashboard/loads")
+  return { data: summarizeBulkResults(results), error: null }
+}
+

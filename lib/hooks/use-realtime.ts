@@ -1,12 +1,9 @@
 "use client"
 
-import { useEffect, useState, useMemo, useRef } from "react"
+import { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js"
 import { aiPriorityRank, effectiveAiPriority } from "@/lib/notifications/smart-ui"
-
-const NOTIFICATIONS_SELECT =
-  "id, user_id, company_id, type, title, message, priority, metadata, read, read_at, created_at, updated_at, ai_priority, ai_cluster_id, ai_reasoning, ai_suppressed, source"
 
 type RecordWithId = {
   id?: unknown
@@ -15,6 +12,9 @@ type RecordWithId = {
 type NotificationLike = {
   id?: string
   user_id?: string
+  /** Unified feed item kind — distinct from DB event type (`event_type`). */
+  itemType?: "notification" | "alert"
+  event_type?: string | null
   read?: boolean
   read_at?: string
   ai_priority?: string | null
@@ -22,7 +22,53 @@ type NotificationLike = {
   priority?: string | null
   created_at?: string
   source?: string | null
+  status?: string | null
+  title?: string | null
+  message?: string | null
+  ai_reasoning?: string | null
+  ai_cluster_id?: string | null
+  /** Used by groupNotificationRows — mirrors `itemType`. */
+  type?: string
 } & Record<string, unknown>
+
+type UnifiedBellRow = {
+  id: string
+  type: "notification" | "alert"
+  source: "system" | "alerts"
+  event_type: string | null
+  title: string | null | undefined
+  message: string | null | undefined
+  priority: string
+  read: boolean
+  created_at: string
+  status?: string | null
+  ai_priority: string | null
+  ai_cluster_id: string | null
+  ai_reasoning: string | null
+  ai_suppressed: boolean
+  event_source: string
+  legacy_priority: string
+}
+
+function mapUnifiedToBellRow(row: UnifiedBellRow): NotificationLike {
+  return {
+    id: row.id,
+    itemType: row.type,
+    type: row.type,
+    event_type: row.event_type,
+    title: row.title,
+    message: row.message,
+    read: row.read,
+    created_at: row.created_at,
+    priority: row.legacy_priority || row.priority,
+    ai_priority: row.ai_priority,
+    ai_reasoning: row.ai_reasoning,
+    ai_cluster_id: row.ai_cluster_id,
+    ai_suppressed: row.ai_suppressed,
+    source: row.source === "alerts" ? "alerts" : row.event_source,
+    status: row.status,
+  }
+}
 
 function sortNotificationsClient(list: NotificationLike[], smartUi: boolean): NotificationLike[] {
   const copy = [...list]
@@ -205,8 +251,7 @@ export function useRealtimeRecord<T = unknown>(
 }
 
 /**
- * Hook for real-time notifications
- * Note: Requires notifications table in database
+ * Hook for header bell notifications (unified system notifications + fleet alerts).
  */
 export function useRealtimeNotifications() {
   const [notifications, setNotifications] = useState<NotificationLike[]>([])
@@ -214,14 +259,43 @@ export function useRealtimeNotifications() {
   const [userId, setUserId] = useState<string | null>(null)
   const [smartUi, setSmartUi] = useState(false)
   const smartUiRef = useRef(false)
-  // FIXED: Memoize supabase client to avoid dependency issues
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     smartUiRef.current = smartUi
   }, [smartUi])
 
-  // Load existing notifications and get user ID
+  const refreshUnreadCount = useCallback(async () => {
+    const { getUnreadNotificationCount } = await import("@/app/actions/notifications")
+    const countResult = await getUnreadNotificationCount()
+    if (countResult.data) {
+      setUnreadCount(countResult.data.total)
+    }
+  }, [])
+
+  const refreshNotifications = useCallback(async () => {
+    try {
+      const { getUnifiedNotifications } = await import("@/app/actions/unified-notifications")
+      const result = await getUnifiedNotifications({ limit: 50, type: "all" })
+      if (result.data) {
+        const rows = result.data.map((row) => mapUnifiedToBellRow(row as UnifiedBellRow))
+        setNotifications(sortNotificationsClient(rows, smartUiRef.current))
+      }
+      await refreshUnreadCount()
+    } catch (error) {
+      console.log("[NOTIFICATIONS] Failed to refresh unified feed:", error)
+    }
+  }, [refreshUnreadCount])
+
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current)
+    refreshTimeoutRef.current = setTimeout(() => {
+      void refreshNotifications()
+    }, 400)
+  }, [refreshNotifications])
+
+  // Initial load
   useEffect(() => {
     const loadNotifications = async () => {
       try {
@@ -236,43 +310,16 @@ export function useRealtimeNotifications() {
         const ui = display.data?.smartUi ?? false
         setSmartUi(ui)
 
-        // MEDIUM FIX 13: Use efficient COUNT query instead of fetching all records
-        const { getUnreadNotificationCount } = await import("@/app/actions/notifications")
-        const countResult = await getUnreadNotificationCount()
-        if (countResult.data) {
-          setUnreadCount(countResult.data.total)
-        }
-
-        // Still fetch notifications for display (limited to 50)
-        const { data, error } = await supabase
-          .from("notifications")
-          .select(NOTIFICATIONS_SELECT)
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(50)
-
-        if (error) {
-          // Table might not exist, that's okay
-          console.log("[NOTIFICATIONS] Table not found or error:", error.message)
-          return
-        }
-
-        if (data) {
-          const rows = data as NotificationLike[]
-          const visible = ui ? rows.filter((n) => !n.ai_suppressed) : rows
-          setNotifications(sortNotificationsClient(visible, ui))
-        }
+        await refreshNotifications()
       } catch (error) {
-        // Silently fail if notifications table doesn't exist
         console.log("[NOTIFICATIONS] Failed to load:", error)
       }
     }
 
     loadNotifications()
-  }, [supabase])
+  }, [supabase, refreshNotifications])
 
-  // Subscribe to real-time updates
-  // FIXED: Add user_id filter to prevent receiving all users' notifications
+  // Realtime for in-app notifications; alerts are refreshed via scheduleRefresh (no realtime publication).
   useEffect(() => {
     if (!userId) return
 
@@ -285,36 +332,11 @@ export function useRealtimeNotifications() {
             event: "*",
             schema: "public",
             table: "notifications",
-            filter: `user_id=eq.${userId}`, // FIXED: Filter by user_id
+            filter: `user_id=eq.${userId}`,
           },
-          (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
-            const ui = smartUiRef.current
-            if (payload.eventType === "INSERT") {
-              const notification = payload.new as NotificationLike
-              if (notification.user_id === userId) {
-                setNotifications((prev) => {
-                  if (ui && notification.ai_suppressed) return prev
-                  return sortNotificationsClient([notification, ...prev], ui).slice(0, 50)
-                })
-                if (!notification.read) {
-                  setUnreadCount((prev) => prev + 1)
-                }
-              }
-            } else if (payload.eventType === "UPDATE") {
-              const notification = payload.new as NotificationLike
-              if (notification.user_id !== userId) return
-              setNotifications((prev) => {
-                const merged = prev.map((n) => (String(n.id) === String(notification.id) ? { ...n, ...notification } : n))
-                const visible = ui ? merged.filter((n) => !n.ai_suppressed) : merged
-                return sortNotificationsClient(visible, ui).slice(0, 50)
-              })
-            } else if (payload.eventType === "DELETE") {
-              const oldRow = payload.old as { id?: string }
-              if (oldRow?.id) {
-                setNotifications((prev) => prev.filter((n) => String(n.id) !== String(oldRow.id)))
-              }
-            }
-          }
+          () => {
+            scheduleRefresh()
+          },
         )
         .subscribe()
 
@@ -322,32 +344,32 @@ export function useRealtimeNotifications() {
         supabase.removeChannel(channel)
       }
     } catch (error) {
-      // Silently fail if real-time is not available
       console.log("[NOTIFICATIONS] Real-time not available:", error)
     }
-  }, [supabase, userId]) // FIXED: Only depend on userId, not supabase
+  }, [supabase, userId, scheduleRefresh])
 
-  const markAsRead = async (notificationId: string) => {
+  useEffect(() => {
+    return () => {
+      if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current)
+    }
+  }, [])
+
+  const markAsRead = async (notificationId: string, itemType: "notification" | "alert" = "notification") => {
     try {
-      const { error } = await supabase
-        .from("notifications")
-        .update({ read: true, read_at: new Date().toISOString() })
-        .eq("id", notificationId)
-        .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
-
-      if (!error) {
+      const { markNotificationAsRead } = await import("@/app/actions/unified-notifications")
+      const result = await markNotificationAsRead(notificationId, itemType)
+      if (!result.error) {
         setNotifications((prev) =>
           prev.map((n) => {
             if (n.id === notificationId && !n.read) {
-              // MEDIUM FIX 13: Only decrement if it was unread
-              setUnreadCount((prev) => Math.max(0, prev - 1))
+              setUnreadCount((count) => Math.max(0, count - 1))
               return { ...n, read: true, read_at: new Date().toISOString() }
             }
             return n
-          })
+          }),
         )
       } else {
-        console.error("[NOTIFICATIONS] Error marking as read:", error)
+        console.error("[NOTIFICATIONS] Error marking as read:", result.error)
       }
     } catch (error) {
       console.error("[NOTIFICATIONS] Failed to mark as read:", error)
@@ -356,22 +378,13 @@ export function useRealtimeNotifications() {
 
   const markAllAsRead = async () => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { error } = await supabase
-        .from("notifications")
-        .update({ read: true, read_at: new Date().toISOString() })
-        .eq("user_id", user.id)
-        .eq("read", false)
-
-      if (!error) {
+      const { markAllNotificationsAsRead } = await import("@/app/actions/unified-notifications")
+      const result = await markAllNotificationsAsRead()
+      if (!result.error) {
         setNotifications((prev) => prev.map((n) => ({ ...n, read: true, read_at: new Date().toISOString() })))
         setUnreadCount(0)
       } else {
-        console.error("[NOTIFICATIONS] Error marking all as read:", error)
+        console.error("[NOTIFICATIONS] Error marking all as read:", result.error)
       }
     } catch (error) {
       console.error("[NOTIFICATIONS] Failed to mark all as read:", error)
@@ -383,6 +396,7 @@ export function useRealtimeNotifications() {
     unreadCount,
     markAsRead,
     markAllAsRead,
+    refreshNotifications,
     smartUi,
   }
 }
