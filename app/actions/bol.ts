@@ -653,17 +653,18 @@ export async function updateBOLPOD(
       error?: string | null
     } | null = null
 
-    // Trigger invoice automation once POD is captured.
-    // This is idempotent: autoGenerateInvoiceOnPOD returns existing invoice if already created.
+    // Opt-in draft invoice once POD is captured (idempotent via maybeAutoInvoiceOnDelivery).
     if (updatedBol && updatedBol.load_id && (updatedBol.pod_received_date || updatedBol.pod_received_by)) {
       try {
-        const { autoGenerateInvoiceOnPOD } = await import("./auto-invoice")
-        const invoiceResult = await autoGenerateInvoiceOnPOD(updatedBol.load_id)
+        const { maybeAutoInvoiceOnDelivery } = await import("./auto-invoice")
+        const invoiceResult = await maybeAutoInvoiceOnDelivery(updatedBol.load_id, ctx.companyId)
         if (invoiceResult.error) {
           invoiceAutomation = {
             triggered: true,
             error: invoiceResult.error,
           }
+        } else if (invoiceResult.data?.skipped) {
+          invoiceAutomation = { triggered: false, error: null }
         } else {
           invoiceAutomation = {
             triggered: true,

@@ -3,7 +3,7 @@ import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { updateBOLPOD } from "@/app/actions/bol"
 import { uploadDocument } from "@/app/actions/documents"
-import { autoGenerateInvoiceOnPOD } from "@/app/actions/auto-invoice"
+import { maybeAutoInvoiceOnDelivery } from "@/app/actions/auto-invoice"
 import { getCachedUserCompany } from "@/lib/query-optimizer"
 import { rateLimitRedis, retryAfterFromReset } from "@/lib/rate-limit-redis"
 
@@ -148,16 +148,17 @@ export async function POST(request: NextRequest) {
       console.error("Failed to update load status:", error)
     }
 
-    // Auto-generate invoice (now handled by database trigger, but keep as fallback)
+    // Opt-in: draft invoice when auto_invoice_on_delivery is enabled for the company
     let invoiceId: string | undefined
+    let invoiceAutoDrafted = false
     try {
-      const invoiceResult = await autoGenerateInvoiceOnPOD(loadId)
-      if (invoiceResult.data?.invoiceId) {
+      const invoiceResult = await maybeAutoInvoiceOnDelivery(loadId, company_id)
+      if (invoiceResult.data?.invoiceId && !invoiceResult.data.skipped) {
         invoiceId = invoiceResult.data.invoiceId
+        invoiceAutoDrafted = !invoiceResult.data.alreadyExists
       }
     } catch (error) {
       console.error("Failed to auto-generate invoice:", error)
-      // Don't fail the request if invoice generation fails
     }
 
     // Send POD alert notifications (database trigger also handles this, but keep as backup)
@@ -173,9 +174,12 @@ export async function POST(request: NextRequest) {
 
       if (load) {
         // Create alert for dispatchers
+        const invoiceNote = invoiceAutoDrafted
+          ? " A draft invoice was created automatically — review and send when ready."
+          : ""
         await createAlert({
           title: `POD Captured - Load ${load.shipment_number || loadId.substring(0, 8)}`,
-          message: `Proof of Delivery captured for load ${load.shipment_number || "N/A"} (${load.origin || "Origin"} to ${load.destination || "Destination"}). Invoice has been automatically generated.`,
+          message: `Proof of Delivery captured for load ${load.shipment_number || "N/A"} (${load.origin || "Origin"} to ${load.destination || "Destination"}).${invoiceNote}`,
           event_type: "pod_captured",
           priority: "high",
           load_id: loadId,
@@ -185,6 +189,7 @@ export async function POST(request: NextRequest) {
             delivery_condition: deliveryCondition,
             photo_count: photoUrls.length,
             invoice_id: invoiceId,
+            invoice_auto_drafted: invoiceAutoDrafted,
           },
         }).catch(() => {
           // Alert creation might fail, continue
