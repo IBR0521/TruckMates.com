@@ -122,7 +122,7 @@ async function loadPlannerInputs(companyId: string): Promise<{
     .from("drivers")
     .select("id, name, status, license_endorsements")
     .eq("company_id", companyId)
-    .in("status", ["active"])
+    .not("status", "in", '("inactive")')
     .limit(15)
   if (driversError) {
     return { loads, drivers: [], trucks: [], missing: [], error: driversError.message }
@@ -180,9 +180,24 @@ async function loadPlannerInputs(companyId: string): Promise<{
   }
   const trucks = (trucksRaw || []) as unknown as PlannerTruck[]
 
-  if (loads.length === 0) missing.push("No unassigned loads found (pending/scheduled/confirmed with no driver).")
-  if (drivers.length === 0) missing.push("No available drivers found (active).")
-  if (trucks.length === 0) missing.push("No available trucks found (available/idle/active).")
+  if (loads.length === 0) {
+    const { count } = await admin.from("loads").select("id", { count: "exact", head: true }).eq("company_id", companyId)
+    missing.push(
+      `No unassigned loads found (need driver_id IS NULL and status in pending/scheduled/confirmed). Found ${count ?? 0} total loads for this company.`,
+    )
+  }
+  if (drivers.length === 0) {
+    const { count } = await admin.from("drivers").select("id", { count: "exact", head: true }).eq("company_id", companyId)
+    missing.push(
+      `No assignable drivers found (excluding inactive). Found ${count ?? 0} drivers total.`,
+    )
+  }
+  if (trucks.length === 0) {
+    const { count } = await admin.from("trucks").select("id", { count: "exact", head: true }).eq("company_id", companyId)
+    missing.push(
+      `No available trucks found (status in available/idle/active). Found ${count ?? 0} trucks total.`,
+    )
+  }
 
   return { loads, drivers, trucks, missing, error: null }
 }
@@ -261,12 +276,11 @@ export async function previewDispatchPlanner(
     return blockedPreview(error || "Could not propose a dispatch plan with the current fleet data.")
   }
 
-  const lines = plan.assignments.slice(0, 8).map((a, i) => `- ${i + 1}. load ${a.load_id} → driver ${a.driver_id}${a.truck_id ? ` (truck ${a.truck_id})` : ""}`)
-  const extra = plan.assignments.length > 8 ? `(+${plan.assignments.length - 8} more)` : ""
+  const toApply = plan.assignments.slice(0, 15)
+  const lines = toApply.map((a, i) => `- ${i + 1}. load ${a.load_id} → driver ${a.driver_id}${a.truck_id ? ` (truck ${a.truck_id})` : ""}`)
   const summary = [
-    `Proposed dispatch plan (${plan.assignments.length} assignments).`,
+    `Proposed dispatch plan (${toApply.length} assignments).`,
     ...lines,
-    extra,
     plan.assumptions.length ? "" : "",
     plan.assumptions.length ? "Assumptions:" : "",
     ...plan.assumptions.slice(0, 4).map((a) => `- ${a}`),
@@ -276,7 +290,7 @@ export async function previewDispatchPlanner(
 
   return {
     summary,
-    affected: plan.assignments.slice(0, 10).map((a) => ({ type: "load", id: a.load_id, label: `Load ${a.load_id}` })),
+    affected: toApply.map((a) => ({ type: "load", id: a.load_id, label: `Load ${a.load_id}` })),
     draftInput: { plan, generated_at: new Date().toISOString() },
   }
 }
