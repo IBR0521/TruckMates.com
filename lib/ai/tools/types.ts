@@ -40,7 +40,7 @@ export type AiToolPreviewBlocked = {
 export type AiToolPreviewResult = AiToolPreviewSuccess | AiToolPreviewBlocked
 
 export function isPreviewBlocked(preview: AiToolPreviewResult): preview is AiToolPreviewBlocked {
-  return preview.blocked === true
+  return "blocked" in preview && preview.blocked === true
 }
 
 export function blockedPreview(reason: string): AiToolPreviewBlocked {
