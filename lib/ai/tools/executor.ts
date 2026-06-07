@@ -1,11 +1,36 @@
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getToolByName, tierMeetsMinimum, toolConfirmationRequired } from "@/lib/ai/tools/registry"
+import { getCompanyAutomationSettings } from "@/lib/ai/agent/settings"
+import { getToolByName, tierMeetsMinimum } from "@/lib/ai/tools/registry"
 import { getInvoiceIdForLoadOrInvoice, revalidateToolReferences } from "@/lib/ai/tools/handlers"
 import { validateToolInputSchema } from "@/lib/ai/tools/validate-input"
-import type { AiToolContext, AppRole } from "@/lib/ai/tools/types"
+import type { AiToolContext, AiToolDefinitionBase, AppRole } from "@/lib/ai/tools/types"
 import { isPreviewBlocked } from "@/lib/ai/tools/types"
 import type { PlanTier } from "@/lib/plan-limits"
 import { hasFeatureAccess } from "@/lib/plan-limits"
+
+const GLOBAL_OVERRIDE_AUTOMATION_TYPE = "__company_pause_override__"
+
+async function loadCompanyGlobalAutomationMode(companyId: string): Promise<string | null> {
+  const { data } = await getCompanyAutomationSettings(companyId)
+  const global = data.find((c) => c.automationType === GLOBAL_OVERRIDE_AUTOMATION_TYPE)
+  return global?.level ?? null
+}
+
+async function resolveToolConfirmationRequired(
+  tool: AiToolDefinitionBase,
+  input: Record<string, unknown>,
+  companyId: string,
+  companyGlobalMode?: string | null,
+): Promise<boolean> {
+  if (tool.force_confirmation) return true
+  const mode = companyGlobalMode !== undefined ? companyGlobalMode : await loadCompanyGlobalAutomationMode(companyId)
+  if (mode === "autonomous") return false
+  if (tool.name === "update_load_status") {
+    const st = String(input.new_status || "").toLowerCase()
+    return st === "delivered" || st === "cancelled"
+  }
+  return tool.requires_confirmation
+}
 
 async function getFirstAffected(
   toolName: string,
@@ -113,6 +138,8 @@ export async function executeToolForChat(params: {
 
   const affectedGuess = await getFirstAffected(params.toolName, params.toolInput, params.companyId)
 
+  const companyGlobalMode = await loadCompanyGlobalAutomationMode(params.companyId)
+
   const tool = getToolByName(params.toolName)
   if (!tool) {
     const id = await insertAuditRow({
@@ -141,7 +168,7 @@ export async function executeToolForChat(params: {
       toolName: params.toolName,
       toolInput: params.toolInput,
       status: "blocked",
-      requiredConfirmation: toolConfirmationRequired(tool, params.toolInput),
+      requiredConfirmation: await resolveToolConfirmationRequired(tool, params.toolInput, params.companyId, companyGlobalMode),
       errorMessage: "Role not allowed for this tool.",
       affected: affectedGuess,
       executedAt: false,
@@ -159,7 +186,7 @@ export async function executeToolForChat(params: {
       toolName: params.toolName,
       toolInput: params.toolInput,
       status: "blocked",
-      requiredConfirmation: toolConfirmationRequired(tool, params.toolInput),
+      requiredConfirmation: await resolveToolConfirmationRequired(tool, params.toolInput, params.companyId, companyGlobalMode),
       errorMessage: "Plan tier too low.",
       affected: affectedGuess,
       executedAt: false,
@@ -181,7 +208,7 @@ export async function executeToolForChat(params: {
       toolName: params.toolName,
       toolInput: params.toolInput,
       status: "blocked",
-      requiredConfirmation: toolConfirmationRequired(tool, params.toolInput),
+      requiredConfirmation: await resolveToolConfirmationRequired(tool, params.toolInput, params.companyId, companyGlobalMode),
       errorMessage: "ai_advanced_actions not enabled for tier.",
       affected: affectedGuess,
       executedAt: false,
@@ -204,7 +231,7 @@ export async function executeToolForChat(params: {
       toolName: params.toolName,
       toolInput: params.toolInput,
       status: "failed",
-      requiredConfirmation: toolConfirmationRequired(tool, params.toolInput),
+      requiredConfirmation: await resolveToolConfirmationRequired(tool, params.toolInput, params.companyId, companyGlobalMode),
       errorMessage: validated.error,
       affected: affectedGuess,
       executedAt: false,
@@ -235,7 +262,7 @@ export async function executeToolForChat(params: {
     }
   }
 
-  const needsConfirmation = toolConfirmationRequired(tool, validated.value)
+  const needsConfirmation = await resolveToolConfirmationRequired(tool, validated.value, params.companyId, companyGlobalMode)
 
   if (needsConfirmation && params.skipConfirmation) {
     const id = await insertAuditRow({
