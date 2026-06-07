@@ -64,7 +64,7 @@ Some data may be processed by third-party services:
 - Minimum 12-month commitment
 - Additional setup fee may apply
 
-**Contact**: enterprise@truckmates.com for EU data residency options
+**Contact**: sales@truckmateslogistic.com for EU data residency options
 
 ---
 
@@ -157,12 +157,12 @@ Some data may be processed by third-party services:
 ## Contact
 
 ### Data Residency Inquiries
-- **Email**: privacy@truckmates.com
-- **Support**: support@truckmates.com
-- **Enterprise**: enterprise@truckmates.com
+- **Email**: sales@truckmateslogistic.com
+- **Support**: sales@truckmateslogistic.com
+- **Enterprise**: sales@truckmateslogistic.com
 
 ### Data Protection Officer
-- **Email**: dpo@truckmates.com
+- **Email**: sales@truckmateslogistic.com
 - **Response Time**: Within 72 hours
 
 ---

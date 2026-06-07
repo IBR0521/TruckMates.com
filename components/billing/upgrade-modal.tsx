@@ -23,6 +23,7 @@ import {
   isUnlimited,
   planTierLabel,
 } from "@/lib/plan-limits"
+import { CONTACT_EMAIL } from "@/lib/constants/contact"
 import { getBillingPlanContext, startPlanCheckout } from "@/app/actions/plan-usage"
 import { getPaddleClient } from "@/lib/billing/paddle-client"
 
@@ -100,7 +101,7 @@ export function UpgradeModal({
 
   const runCheckout = async (tier: PlanTier) => {
     if (tier === "enterprise") {
-      window.location.href = "mailto:sales@truckmates.com?subject=TruckMates%20Enterprise%20plan"
+      window.location.href = `mailto:${CONTACT_EMAIL}?subject=TruckMates%20Enterprise%20plan`
       return
     }
 

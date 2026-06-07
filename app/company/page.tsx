@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { ArrowLeft, Building2, MapPin, Phone, Mail, FileText } from "lucide-react"
+import { CONTACT_EMAIL } from "@/lib/constants/contact"
 
 export default function CompanyPage() {
   return (
@@ -83,7 +84,7 @@ export default function CompanyPage() {
                   <Mail className="w-5 h-5 text-muted-foreground mt-0.5" />
                   <div>
                     <p className="text-muted-foreground text-sm mb-1">Email</p>
-                    <p className="text-foreground">support@truckmates.com</p>
+                    <p className="text-foreground">{CONTACT_EMAIL}</p>
                   </div>
                 </div>
               </div>

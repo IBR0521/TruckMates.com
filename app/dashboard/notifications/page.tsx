@@ -140,11 +140,11 @@ function NotificationsTabContent() {
     }
   }
 
-  function getNotificationIcon(type: string, source: string) {
+  function getNotificationIcon(eventType: string | null | undefined, source: string) {
     if (source === "alerts") {
       return <AlertTriangle className="w-5 h-5" />
     }
-    switch (type) {
+    switch (eventType) {
       case "route_update":
         return "🛣️"
       case "load_update":
@@ -296,13 +296,13 @@ function NotificationsTabContent() {
       >
         <div className="flex items-start gap-4">
           <div className="mt-1 flex-shrink-0">
-            {typeof getNotificationIcon(notification.type, notification.source) === "string" ? (
+            {typeof getNotificationIcon(notification.event_type, notification.source) === "string" ? (
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-lg">
-                {getNotificationIcon(notification.type, notification.source)}
+                {getNotificationIcon(notification.event_type, notification.source)}
               </div>
             ) : (
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                {getNotificationIcon(notification.type, notification.source)}
+                {getNotificationIcon(notification.event_type, notification.source)}
               </div>
             )}
           </div>

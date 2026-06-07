@@ -287,7 +287,7 @@ TruckMates is committed to providing enterprise-grade security for our fleet man
 
 ### 7.1 Reporting Security Issues
 
-**Email**: security@truckmates.com  
+**Email**: sales@truckmateslogistic.com  
 **Response Time**: Within 24 hours  
 **PGP Key**: Available upon request
 
@@ -307,9 +307,9 @@ TruckMates is committed to providing enterprise-grade security for our fleet man
 
 ### 7.2 Security Inquiries
 
-**General Questions**: security@truckmates.com  
-**Compliance Requests**: compliance@truckmates.com  
-**Data Protection Officer**: dpo@truckmates.com
+**General Questions**: sales@truckmateslogistic.com  
+**Compliance Requests**: sales@truckmateslogistic.com  
+**Data Protection Officer**: sales@truckmateslogistic.com
 
 ---
 

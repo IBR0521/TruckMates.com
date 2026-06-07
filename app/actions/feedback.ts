@@ -10,6 +10,7 @@ import { escapeHtml } from "@/lib/html-escape"
 import * as Sentry from "@sentry/nextjs"
 import { getResendClientForCompany } from "@/lib/resend-client"
 import { rateLimitRedis } from "@/lib/rate-limit-redis"
+import { CONTACT_EMAIL } from "@/lib/constants/contact"
 async function getResendClient() {
   const ctx = await getCachedAuthContext()
   return getResendClientForCompany(ctx.companyId ?? null)
@@ -32,7 +33,7 @@ async function sendFeedbackEmail(feedbackData: {
   }
 
   // Get admin email from environment variable or use default
-  const adminEmail = process.env.ADMIN_EMAIL || process.env.FEEDBACK_EMAIL || "ibr20117o@gmail.com"
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.FEEDBACK_EMAIL || CONTACT_EMAIL
 
   const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"

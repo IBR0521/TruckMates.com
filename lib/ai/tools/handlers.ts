@@ -32,14 +32,13 @@ type PlannerDriver = {
   id: string
   name: string | null
   status: string | null
-  current_location: string | null
   license_endorsements: string | null
   hos_drive_left_hr: number | null
   hos_onduty_left_hr: number | null
   duty_status_hint: string | null
 }
 
-type PlannerTruck = { id: string; unit_number: string | null; status: string | null; current_location: string | null }
+type PlannerTruck = { id: string; truck_number: string | null; status: string | null; current_location: string | null }
 
 type DispatchPlan = {
   confidence: number // 0..1
@@ -101,11 +100,12 @@ async function loadPlannerInputs(companyId: string): Promise<{
   drivers: PlannerDriver[]
   trucks: PlannerTruck[]
   missing: string[]
+  error: string | null
 }> {
   const admin = createAdminClient()
   const missing: string[] = []
 
-  const { data: loadsRaw } = await admin
+  const { data: loadsRaw, error: loadsError } = await admin
     .from("loads")
     .select("id, shipment_number, origin, destination, load_date, estimated_delivery, is_hazardous, weight, status, driver_id")
     .eq("company_id", companyId)
@@ -113,19 +113,24 @@ async function loadPlannerInputs(companyId: string): Promise<{
     .in("status", ["pending", "scheduled", "confirmed"])
     .order("updated_at", { ascending: false })
     .limit(15)
+  if (loadsError) {
+    return { loads: [], drivers: [], trucks: [], missing: [], error: loadsError.message }
+  }
   const loads = (loadsRaw || []) as unknown as PlannerLoad[]
 
-  const { data: driversRaw } = await admin
+  const { data: driversRaw, error: driversError } = await admin
     .from("drivers")
-    .select("id, name, status, current_location, license_endorsements")
+    .select("id, name, status, license_endorsements")
     .eq("company_id", companyId)
-    .in("status", ["active", "available", "idle"])
+    .in("status", ["active"])
     .limit(15)
+  if (driversError) {
+    return { loads, drivers: [], trucks: [], missing: [], error: driversError.message }
+  }
   const baseDrivers = (driversRaw || []) as Array<{
     id: string
     name: string | null
     status: string | null
-    current_location: string | null
     license_endorsements: string | null
   }>
 
@@ -164,19 +169,22 @@ async function loadPlannerInputs(companyId: string): Promise<{
     }
   })
 
-  const { data: trucksRaw } = await admin
+  const { data: trucksRaw, error: trucksError } = await admin
     .from("trucks")
-    .select("id, unit_number, status, current_location")
+    .select("id, truck_number, status, current_location")
     .eq("company_id", companyId)
     .in("status", ["available", "idle", "active"])
     .limit(15)
+  if (trucksError) {
+    return { loads, drivers, trucks: [], missing: [], error: trucksError.message }
+  }
   const trucks = (trucksRaw || []) as unknown as PlannerTruck[]
 
   if (loads.length === 0) missing.push("No unassigned loads found (pending/scheduled/confirmed with no driver).")
-  if (drivers.length === 0) missing.push("No available drivers found (active/available/idle).")
+  if (drivers.length === 0) missing.push("No available drivers found (active).")
   if (trucks.length === 0) missing.push("No available trucks found (available/idle/active).")
 
-  return { loads, drivers, trucks, missing }
+  return { loads, drivers, trucks, missing, error: null }
 }
 
 async function proposeDispatchPlanViaModel(params: {
@@ -192,7 +200,7 @@ async function proposeDispatchPlanViaModel(params: {
     "- Respect HOS: do not assign a driver if remaining drive time is clearly insufficient; if HOS is missing, state the assumption explicitly.",
     "- Hazmat: if a load is hazardous, only assign drivers with endorsement 'H' (HAZMAT). If endorsements unknown, state uncertainty and avoid assigning hazmat loads.",
     "- Do NOT invent IDs. Use only IDs provided below.",
-    "Optimization goals (best-effort): minimize deadhead when current locations exist; otherwise say deadhead unknown.",
+    "Optimization goals (best-effort): minimize deadhead when truck locations exist; driver proximity is not available in this pass.",
     "Keep reasoning concise (dispatchers are busy).",
     "",
     DISPATCH_PLAN_SCHEMA,
@@ -244,7 +252,10 @@ export async function previewDispatchPlanner(
     return blockedPreview("Dispatch planner requires a Fleet subscription.")
   }
 
-  const { loads, drivers, trucks, missing } = await loadPlannerInputs(ctx.companyId)
+  const { loads, drivers, trucks, missing, error: inputsError } = await loadPlannerInputs(ctx.companyId)
+  if (inputsError) {
+    return blockedPreview(`Could not load fleet data for planning: ${inputsError}`)
+  }
   const { plan, error } = await proposeDispatchPlanViaModel({ companyId: ctx.companyId, loads, drivers, trucks, missing })
   if (error || !plan) {
     return blockedPreview(error || "Could not propose a dispatch plan with the current fleet data.")
@@ -560,12 +571,12 @@ export async function execCreateMaintenanceRecord(input: Record<string, unknown>
 export async function previewCreateMaintenance(input: Record<string, unknown>, ctx: AiToolContext): Promise<AiToolPreviewResult> {
   const truck_id = String(input.truck_id || "")
   const admin = createAdminClient()
-  const { data: truck } = await admin.from("trucks").select("unit_number").eq("id", truck_id).eq("company_id", ctx.companyId).maybeSingle()
-  const tn = truck as { unit_number?: string } | null
+  const { data: truck } = await admin.from("trucks").select("truck_number").eq("id", truck_id).eq("company_id", ctx.companyId).maybeSingle()
+  const tn = truck as { truck_number?: string } | null
   return {
-    summary: `Schedule ${String(input.service_type)} on truck ${tn?.unit_number || truck_id} for ${String(input.scheduled_date)}.`,
+    summary: `Schedule ${String(input.service_type)} on truck ${tn?.truck_number || truck_id} for ${String(input.scheduled_date)}.`,
     affected: [
-      { type: "truck", id: truck_id, label: tn?.unit_number || truck_id },
+      { type: "truck", id: truck_id, label: tn?.truck_number || truck_id },
       { type: "maintenance", id: "(new)", label: "Maintenance record" },
     ],
   }
@@ -600,14 +611,14 @@ export async function execFindBestTruckForLoad(input: Record<string, unknown>, c
   if (!load) return { ok: false, error: "Load not found." }
   const { data: trucks } = await admin
     .from("trucks")
-    .select("id, unit_number, status, carrier_type")
+    .select("id, truck_number, status, carrier_type")
     .eq("company_id", ctx.companyId)
     .in("status", ["available", "in_use"])
     .limit(25)
-  const ranked = (trucks || []).map((t: { id: string; unit_number?: string; status?: string; carrier_type?: string }, i: number) => ({
+  const ranked = (trucks || []).map((t: { id: string; truck_number?: string; status?: string; carrier_type?: string }, i: number) => ({
     rank: i + 1,
     truck_id: t.id,
-    unit_number: t.unit_number || t.id,
+    truck_number: t.truck_number || t.id,
     status: t.status,
     carrier_type: t.carrier_type,
     reasoning:

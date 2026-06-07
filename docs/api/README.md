@@ -154,7 +154,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 ## Support
 
 For API support, please contact:
-- Email: support@truckmates.com
+- Email: sales@truckmateslogistic.com
 - Documentation: https://docs.truckmates.com
 - Status Page: https://status.truckmates.com
 

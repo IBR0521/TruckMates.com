@@ -259,7 +259,7 @@ id,load_number,origin,destination,status,amount,created_at
 ## Support
 
 For export-related questions or issues:
-- **Email**: support@truckmates.com
+- **Email**: sales@truckmateslogistic.com
 - **Documentation**: [Full API Documentation](/docs/api)
 - **Help Center**: [Export Guide](https://help.truckmates.com/exports)
 

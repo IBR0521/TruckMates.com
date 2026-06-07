@@ -16,6 +16,7 @@ import {
   type PlanFeatures,
   type PlanTier,
 } from "@/lib/plan-limits"
+import { CONTACT_EMAIL } from "@/lib/constants/contact"
 import { startPlanCheckout } from "@/app/actions/plan-usage"
 import { getPaddleClient } from "@/lib/billing/paddle-client"
 import { MarketingSiteFooter } from "@/components/marketing/marketing-site-footer"
@@ -138,7 +139,7 @@ export default function PricingPage() {
   const handlePlanChoose = async (tier: PlanTier) => {
     if (tier === "enterprise") {
       window.location.href =
-        "mailto:sales@truckmates.com?subject=TruckMates%20Enterprise%20plan"
+        `mailto:${CONTACT_EMAIL}?subject=TruckMates%20Enterprise%20plan`
       return
     }
     if (!isAuthenticated) {

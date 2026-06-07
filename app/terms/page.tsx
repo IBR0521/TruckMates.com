@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
+import { CONTACT_EMAIL } from "@/lib/constants/contact"
 
 export default function TermsPage() {
   return (
@@ -275,7 +276,7 @@ export default function TermsPage() {
                 </p>
                 <div className="bg-secondary/50 p-4 rounded-lg">
                   <p className="text-foreground font-semibold mb-2">TruckMates Legal Team</p>
-                  <p className="text-muted-foreground">Email: legal@truckmates.com</p>
+                  <p className="text-muted-foreground">Email: {CONTACT_EMAIL}</p>
                 </div>
               </section>
             </Card>
