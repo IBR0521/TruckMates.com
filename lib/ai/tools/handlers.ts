@@ -314,7 +314,26 @@ export async function previewDispatchPlanner(
   }
 
   const toApply = finalPlan.assignments.slice(0, 15)
-  const lines = toApply.map((a, i) => `- ${i + 1}. load ${a.load_id} → driver ${a.driver_id}${a.truck_id ? ` (truck ${a.truck_id})` : ""}`)
+  const loadById = new Map(loads.map((l) => [String(l.id), l]))
+  const driverById = new Map(drivers.map((d) => [String(d.id), d]))
+  const truckById = new Map(trucks.map((t) => [String(t.id), t]))
+  const loadLabel = (id: string) => {
+    const l = loadById.get(id)
+    if (!l) return `Load ${id.slice(0, 8)}`
+    const lane = l.origin && l.destination ? ` (${l.origin} → ${l.destination})` : ""
+    return `Load ${l.shipment_number || id.slice(0, 8)}${lane}`
+  }
+  const driverName = (id: string) => driverById.get(id)?.name || `driver ${id.slice(0, 8)}`
+  const truckLabel = (id: string | null) => {
+    if (!id) return null
+    const t = truckById.get(id)
+    return t?.truck_number ? `truck ${t.truck_number}` : `truck ${id.slice(0, 8)}`
+  }
+
+  const lines = toApply.map((a, i) => {
+    const truck = truckLabel(a.truck_id)
+    return `${i + 1}. ${loadLabel(a.load_id)} → ${driverName(a.driver_id)}${truck ? ` · ${truck}` : ""}`
+  })
   const summary = [
     `Proposed dispatch plan (${toApply.length} assignments).`,
     ...lines,
@@ -327,7 +346,7 @@ export async function previewDispatchPlanner(
 
   return {
     summary,
-    affected: toApply.map((a) => ({ type: "load", id: a.load_id, label: `Load ${a.load_id}` })),
+    affected: toApply.map((a) => ({ type: "load", id: a.load_id, label: loadLabel(a.load_id) })),
     draftInput: { plan: finalPlan, generated_at: new Date().toISOString() },
   }
 }

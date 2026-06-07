@@ -220,21 +220,7 @@ export function PendingConfirmationsPanel(props: {
       {props.pending.map((p) => (
         <div key={p.auditId} className="rounded-md border border-border bg-card p-3 space-y-2 text-xs">
           <p className="font-medium">{humanizeToolName(p.toolName)}</p>
-          <p className="text-muted-foreground">{p.summary}</p>
-          {p.affected.length > 0 ? (
-            <div>
-              <p className="font-medium text-foreground mb-1">Affected</p>
-              <ul className="list-disc pl-4 space-y-0.5">
-                {p.affected.map((a) => (
-                  <li key={`${a.type}-${a.id}`}>
-                    <span className="font-medium">{a.type}</span>: {a.label}{" "}
-                    <span className="text-muted-foreground">({a.id})</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          <div className="flex flex-wrap gap-2 pt-1">
+          <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" disabled={props.disabled || busyId !== null} onClick={() => void run(p.auditId, true)}>
               {busyId === p.auditId ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Approve & execute"}
             </Button>
@@ -242,6 +228,23 @@ export function PendingConfirmationsPanel(props: {
               Cancel
             </Button>
           </div>
+          <p className="text-muted-foreground">{p.summary}</p>
+          {p.affected.length > 0 ? (
+            <div className="max-h-32 overflow-y-auto">
+              <p className="font-medium text-foreground mb-1">Affected</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                {p.affected.slice(0, 8).map((a) => (
+                  <li key={`${a.type}-${a.id}`}>
+                    <span className="font-medium">{a.type}</span>: {a.label}{" "}
+                    <span className="text-muted-foreground">({a.id})</span>
+                  </li>
+                ))}
+                {p.affected.length > 8 ? (
+                  <li className="list-none text-muted-foreground">+{p.affected.length - 8} more</li>
+                ) : null}
+              </ul>
+            </div>
+          ) : null}
         </div>
       ))}
     </div>
