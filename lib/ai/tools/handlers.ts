@@ -95,6 +95,36 @@ function parseDispatchPlan(raw: unknown): DispatchPlan {
   return { confidence: clamp01(o.confidence), assumptions, assignments }
 }
 
+function buildFallbackPlan(loads: PlannerLoad[], drivers: PlannerDriver[], trucks: PlannerTruck[]): DispatchPlan {
+  const assignments: DispatchPlan["assignments"] = []
+  const hazmatDrivers = drivers.filter((d) => String(d.license_endorsements || "").toUpperCase().includes("H"))
+  let di = 0
+  let ti = 0
+  for (const load of loads.slice(0, 15)) {
+    const isHaz = Boolean(load.is_hazardous)
+    const pool = isHaz && hazmatDrivers.length ? hazmatDrivers : drivers
+    if (!pool.length) continue
+    const driver = pool[di % pool.length]
+    di++
+    const truck = trucks.length ? trucks[ti++ % trucks.length] : null
+    assignments.push({
+      load_id: String(load.id),
+      driver_id: String(driver.id),
+      truck_id: truck ? String(truck.id) : null,
+      reasoning: "Round-robin assignment (AI planner returned no plan); HOS/endorsements unverified.",
+      constraints: { hos_ok: false, hazmat_ok: isHaz ? hazmatDrivers.length > 0 : true, deadhead_note: null },
+      confidence: 0.3,
+    })
+  }
+  return {
+    confidence: 0.3,
+    assignments,
+    assumptions: [
+      "Fallback round-robin plan — the AI planner returned no assignments. HOS not verified (no ELD connected); dispatcher must confirm hours and endorsements before dispatch.",
+    ],
+  }
+}
+
 async function loadPlannerInputs(companyId: string): Promise<{
   loads: PlannerLoad[]
   drivers: PlannerDriver[]
@@ -247,6 +277,8 @@ async function proposeDispatchPlanViaModel(params: {
     },
   )
 
+  console.error("[DISPATCH_PLANNER] raw model response:", JSON.stringify(res.data), "error:", res.error)
+
   if (res.error || !res.data) return { plan: null, error: res.error || "Planner unavailable" }
   return { plan: parseDispatchPlan(res.data), error: null }
 }
@@ -273,18 +305,22 @@ export async function previewDispatchPlanner(
     return blockedPreview(`Could not load fleet data for planning: ${inputsError}`)
   }
   const { plan, error } = await proposeDispatchPlanViaModel({ companyId: ctx.companyId, loads, drivers, trucks, missing })
-  if (error || !plan) {
-    return blockedPreview(error || "Could not propose a dispatch plan with the current fleet data.")
+  let finalPlan = plan
+  if ((!finalPlan || finalPlan.assignments.length === 0) && loads.length > 0 && drivers.length > 0) {
+    finalPlan = buildFallbackPlan(loads, drivers, trucks)
+  }
+  if (!finalPlan || finalPlan.assignments.length === 0) {
+    return blockedPreview(error || "No assignable loads or drivers are available.")
   }
 
-  const toApply = plan.assignments.slice(0, 15)
+  const toApply = finalPlan.assignments.slice(0, 15)
   const lines = toApply.map((a, i) => `- ${i + 1}. load ${a.load_id} → driver ${a.driver_id}${a.truck_id ? ` (truck ${a.truck_id})` : ""}`)
   const summary = [
     `Proposed dispatch plan (${toApply.length} assignments).`,
     ...lines,
-    plan.assumptions.length ? "" : "",
-    plan.assumptions.length ? "Assumptions:" : "",
-    ...plan.assumptions.slice(0, 4).map((a) => `- ${a}`),
+    finalPlan.assumptions.length ? "" : "",
+    finalPlan.assumptions.length ? "Assumptions:" : "",
+    ...finalPlan.assumptions.slice(0, 4).map((a) => `- ${a}`),
   ]
     .filter(Boolean)
     .join("\n")
@@ -292,7 +328,7 @@ export async function previewDispatchPlanner(
   return {
     summary,
     affected: toApply.map((a) => ({ type: "load", id: a.load_id, label: `Load ${a.load_id}` })),
-    draftInput: { plan, generated_at: new Date().toISOString() },
+    draftInput: { plan: finalPlan, generated_at: new Date().toISOString() },
   }
 }
 
