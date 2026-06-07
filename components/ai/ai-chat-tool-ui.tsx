@@ -198,7 +198,12 @@ export function PendingConfirmationsPanel(props: {
         rejectReason: approve ? undefined : "Cancelled by user.",
       })
       if (res.error || !res.data) {
-        toast.error(res.error || "Could not update action.")
+        if (res.error && !res.error.includes("already cancelled") && !res.error.includes("failed previously")) {
+          toast.error(res.error || "Could not update action.")
+        } else if (res.error) {
+          toast.message(res.error)
+        }
+        await props.onResolved()
         return
       }
       if (res.quotaWarning) toast.message("You are approaching your monthly AI usage limit.")

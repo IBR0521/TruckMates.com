@@ -44,6 +44,8 @@ function NotificationsTabContent() {
     suppressedCount: number
   } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [loadDegraded, setLoadDegraded] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [includeSuppressed, setIncludeSuppressed] = useState(false)
   const [filters, setFilters] = useState({
     type: "all" as "all" | "notifications" | "alerts",
@@ -68,11 +70,26 @@ function NotificationsTabContent() {
         includeSuppressed: includeSuppressed || undefined,
       })
 
-      if (result.error) {
-        toast.error(result.error)
-        setNotifications([])
-        setListMeta(null)
+      if (result.error || result.degraded) {
+        setLoadDegraded(true)
+        setLoadError(result.error ?? "Couldn't load notifications")
+        toast.error("Couldn't load notifications", {
+          description: result.error ?? undefined,
+        })
+        setNotifications(result.data ?? [])
+        if (result.meta) {
+          setListMeta({
+            smartUi: result.meta.smartUi,
+            planAllowsSmart: result.meta.planAllowsSmart,
+            userSmart: result.meta.userSmart,
+            suppressedCount: result.meta.suppressedCount ?? 0,
+          })
+        } else {
+          setListMeta(null)
+        }
       } else {
+        setLoadDegraded(false)
+        setLoadError(null)
         setNotifications(result.data || [])
         if (result.meta) {
           setListMeta({
@@ -86,6 +103,8 @@ function NotificationsTabContent() {
         }
       }
     } catch (error: unknown) {
+      setLoadDegraded(true)
+      setLoadError(error instanceof Error ? error.message : "Failed to load notifications")
       toast.error("Failed to load notifications")
       console.error(error)
     } finally {
@@ -459,6 +478,17 @@ function NotificationsTabContent() {
             {isLoading ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground">Loading notifications...</p>
+              </div>
+            ) : loadDegraded ? (
+              <div className="text-center py-12">
+                <AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-4 opacity-80" />
+                <p className="font-medium text-foreground">Couldn&apos;t load notifications</p>
+                {loadError ? (
+                  <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">{loadError}</p>
+                ) : null}
+                <Button variant="outline" className="mt-4" onClick={() => loadNotifications()}>
+                  Retry
+                </Button>
               </div>
             ) : displayRows.length === 0 ? (
               <div className="text-center py-12">

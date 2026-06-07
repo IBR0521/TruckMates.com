@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js"
 import { aiPriorityRank, effectiveAiPriority } from "@/lib/notifications/smart-ui"
+import { toast } from "sonner"
 
 type RecordWithId = {
   id?: unknown
@@ -256,6 +257,9 @@ export function useRealtimeRecord<T = unknown>(
 export function useRealtimeNotifications() {
   const [notifications, setNotifications] = useState<NotificationLike[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
+  const [unreadCountDegraded, setUnreadCountDegraded] = useState(false)
+  const [loadDegraded, setLoadDegraded] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [smartUi, setSmartUi] = useState(false)
   const smartUiRef = useRef(false)
@@ -269,7 +273,13 @@ export function useRealtimeNotifications() {
   const refreshUnreadCount = useCallback(async () => {
     const { getUnreadNotificationCount } = await import("@/app/actions/notifications")
     const countResult = await getUnreadNotificationCount()
+    if (countResult.degraded || countResult.error) {
+      setUnreadCountDegraded(true)
+      console.error("[NOTIFICATIONS] Unread count degraded:", countResult.error)
+      return
+    }
     if (countResult.data) {
+      setUnreadCountDegraded(false)
       setUnreadCount(countResult.data.total)
     }
   }, [])
@@ -278,13 +288,46 @@ export function useRealtimeNotifications() {
     try {
       const { getUnifiedNotifications } = await import("@/app/actions/unified-notifications")
       const result = await getUnifiedNotifications({ limit: 50, type: "all" })
+
+      if (result.degraded || result.error) {
+        setLoadDegraded(true)
+        setLoadError(result.error ?? "Couldn't load notifications")
+        console.error("[NOTIFICATIONS] Unified feed degraded:", result.error, result.partialErrors)
+        toast.error("Couldn't load notifications", {
+          description: result.error ?? undefined,
+        })
+
+        if (result.data) {
+          const rows = result.data.map((row) => mapUnifiedToBellRow(row as UnifiedBellRow))
+          setNotifications(sortNotificationsClient(rows, smartUiRef.current))
+          // Badge from loaded rows only — do not trust a separate COUNT when list queries failed.
+          setUnreadCount(rows.filter((n) => !n.read).length)
+          setUnreadCountDegraded(true)
+        } else {
+          setNotifications([])
+          setUnreadCount(0)
+          setUnreadCountDegraded(true)
+        }
+        return
+      }
+
+      setLoadDegraded(false)
+      setLoadError(null)
+
       if (result.data) {
         const rows = result.data.map((row) => mapUnifiedToBellRow(row as UnifiedBellRow))
         setNotifications(sortNotificationsClient(rows, smartUiRef.current))
+      } else {
+        setNotifications([])
       }
+
       await refreshUnreadCount()
     } catch (error) {
-      console.log("[NOTIFICATIONS] Failed to refresh unified feed:", error)
+      setLoadDegraded(true)
+      setLoadError(error instanceof Error ? error.message : "Couldn't load notifications")
+      setUnreadCountDegraded(true)
+      console.error("[NOTIFICATIONS] Failed to refresh unified feed:", error)
+      toast.error("Couldn't load notifications")
     }
   }, [refreshUnreadCount])
 
@@ -359,15 +402,19 @@ export function useRealtimeNotifications() {
       const { markNotificationAsRead } = await import("@/app/actions/unified-notifications")
       const result = await markNotificationAsRead(notificationId, itemType)
       if (!result.error) {
+        let wasUnread = false
         setNotifications((prev) =>
           prev.map((n) => {
             if (n.id === notificationId && !n.read) {
-              setUnreadCount((count) => Math.max(0, count - 1))
+              wasUnread = true
               return { ...n, read: true, read_at: new Date().toISOString() }
             }
             return n
           }),
         )
+        if (wasUnread) {
+          setUnreadCount((count) => Math.max(0, count - 1))
+        }
       } else {
         console.error("[NOTIFICATIONS] Error marking as read:", result.error)
       }
@@ -394,6 +441,9 @@ export function useRealtimeNotifications() {
   return {
     notifications,
     unreadCount,
+    unreadCountDegraded,
+    loadDegraded,
+    loadError,
     markAsRead,
     markAllAsRead,
     refreshNotifications,

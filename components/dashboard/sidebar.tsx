@@ -51,6 +51,7 @@ import {
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import { canViewFeature, canCreateFeature } from "@/lib/feature-permissions"
 import { getEldConnectionCount } from "@/app/actions/eld-wizard"
+import { getAiChatPlanContext } from "@/app/actions/ai-chat"
 
 interface SidebarProps {
   isOpen: boolean
@@ -88,6 +89,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
   const [managerCompanyId, setManagerCompanyId] = useState<string | null>(null)
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0)
   const [showEldConnectHint, setShowEldConnectHint] = useState(false)
+  const [aiAssistantPlanBadge, setAiAssistantPlanBadge] = useState<string | null>("Pro")
   const LAST_ROLE_KEY = "tm:lastKnownUserRole"
 
   // Check if we're on desktop (lg breakpoint = 1024px) - client only
@@ -146,6 +148,17 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
       setReportsOpen(true)
     }
   }, [pathname])
+
+  useEffect(() => {
+    let active = true
+    void getAiChatPlanContext().then((res) => {
+      if (!active || !res.data) return
+      setAiAssistantPlanBadge(res.data.sidebarLockBadge)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -335,7 +348,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
           {userRole === "driver" ? (
             <>
               <NavItem href="/dashboard" icon={BarChart3} label="Dashboard" isCollapsed={shouldShowCollapsed} />
-              <NavItem href="/dashboard/ai-assistant" icon={Bot} label="AI Assistant" planBadge="Starter" isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/ai-assistant" icon={Bot} label="AI Assistant" planBadge={aiAssistantPlanBadge} isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/loads" icon={Package} label="My load" isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/eld" icon={Shield} label="ELD / HOS" isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/dvir" icon={FileCheck} label="DVIR" isCollapsed={shouldShowCollapsed} />
@@ -348,7 +361,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               <NavSectionLabel label="Overview" isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard" icon={BarChart3} label="Dashboard" isCollapsed={shouldShowCollapsed} />
               {userRole && canViewFeature(userRole, "dashboard") && (
-                <NavItem href="/dashboard/ai-assistant" icon={Bot} label="AI Assistant" planBadge="Starter" isCollapsed={shouldShowCollapsed} />
+                <NavItem href="/dashboard/ai-assistant" icon={Bot} label="AI Assistant" planBadge={aiAssistantPlanBadge} isCollapsed={shouldShowCollapsed} />
               )}
 
               <NavSectionLabel label="Operations" isCollapsed={shouldShowCollapsed} />

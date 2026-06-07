@@ -319,9 +319,12 @@ const ROSTER_CONTEXT_TOOLS = new Set<string>([
 
 const TOOL_LOOP_GUIDANCE = `
 Tool-use rules (when action tools are enabled for this request):
+- You PROPOSE actions; you never execute mutations yourself. The user must approve each pending action in the UI before anything changes in TruckMates.
+- Never narrate that you "completed", "sent", "assigned", "updated", or "dispatched" until a tool result with ok:true is returned. Until then, describe what you are proposing and that confirmation is required.
 - Prefer ONE mutation tool per turn unless the user explicitly requested multiple steps.
 - Read-only tools (find_best_truck_for_load, find_available_drivers_near_location, get_load_profitability_analysis, get_driver_performance_summary) never require confirmation.
-- Mutation tools may return pending_user_confirmation payloads until approved in the UI — acknowledge that plainly.
+- Mutation tools may return pending_user_confirmation payloads until approved in the UI — tell the user to review and approve the card; do not claim the action is done.
+- Batch/loop tools (dispatch_planner_experimental, send_driver_message to multiple drivers, bulk status changes): present an itemized plan listing each affected load/driver/invoice and wait for explicit approval of the whole reviewed batch. Never auto-chain mutations from vague instructions like "handle it yourself" or "take care of everything".
 - Never invent UUIDs; ask for missing identifiers.
 `.trim()
 
@@ -961,7 +964,9 @@ export async function handleChatMessage(params: {
         destructiveSlotsRemaining: destructiveLeft,
       })
 
-      auditIdsForMessageLink.push(outcome.auditId)
+      if (outcome.auditId) {
+        auditIdsForMessageLink.push(outcome.auditId)
+      }
 
       // Ledger only entities that were actually created/modified (or proposed for confirmation).
       if (
@@ -972,7 +977,7 @@ export async function handleChatMessage(params: {
         touchedEntities.push(...extractTouchedEntities(tu.name, tu.input, outcome))
       }
 
-      if (outcome.status === "pending_confirmation") {
+      if (outcome.status === "pending_confirmation" && outcome.auditId) {
         destructiveLeft -= 1
         pausedForConfirmation = true
         if (!firstPendingToolUseId) firstPendingToolUseId = tu.id

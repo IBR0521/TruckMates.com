@@ -890,7 +890,7 @@ export async function getUnreadNotificationCount() {
     notificationsCountQuery,
     (async () => {
       if (role === "driver" && !myDriverId) {
-        return { count: 0 }
+        return { count: 0, error: null }
       }
       let q = supabase
         .from("alerts")
@@ -911,9 +911,50 @@ export async function getUnreadNotificationCount() {
           q = q.or(`driver_id.eq.${myDriverId},load_id.in.(${loadIds.join(",")})`)
         }
       }
-        return await q
+      return await q
     })(),
   ])
+
+  const partialErrors: Array<{ table: "notifications" | "alerts"; code: string; message: string }> = []
+
+  if (notificationsResult.error) {
+    Sentry.captureException(notificationsResult.error, {
+      tags: {
+        source: "getUnreadNotificationCount",
+        table: "notifications",
+        postgrest_code: notificationsResult.error.code ?? "unknown",
+      },
+    })
+    partialErrors.push({
+      table: "notifications",
+      code: notificationsResult.error.code ?? "unknown",
+      message: safeDbError(notificationsResult.error, "notifications count failed"),
+    })
+  }
+
+  if (alertsResult.error) {
+    Sentry.captureException(alertsResult.error, {
+      tags: {
+        source: "getUnreadNotificationCount",
+        table: "alerts",
+        postgrest_code: alertsResult.error.code ?? "unknown",
+      },
+    })
+    partialErrors.push({
+      table: "alerts",
+      code: alertsResult.error.code ?? "unknown",
+      message: safeDbError(alertsResult.error, "alerts count failed"),
+    })
+  }
+
+  if (partialErrors.length > 0) {
+    return {
+      data: null,
+      error: partialErrors.map((e) => `${e.table} (${e.code}): ${e.message}`).join("; "),
+      degraded: true,
+      partialErrors,
+    }
+  }
 
   const notificationsCount = notificationsResult.count || 0
   const alertsCount = alertsResult.count ?? 0
@@ -924,7 +965,8 @@ export async function getUnreadNotificationCount() {
       notifications: notificationsCount,
       alerts: alertsCount,
     },
-    error: null
+    error: null,
+    degraded: false,
   }
 }
 

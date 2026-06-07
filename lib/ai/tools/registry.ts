@@ -1,6 +1,7 @@
 import type { PlanTier } from "@/lib/plan-limits"
 import { PLAN_TIER_ORDER } from "@/lib/plan-limits"
 import type { AiToolDefinitionBase, AppRole } from "@/lib/ai/tools/types"
+import { isAiDispatchPlannerExperimentalEnabled } from "@/lib/ai/feature-flags"
 import {
   execAssignDriverToLoad,
   execCopyLoad,
@@ -73,6 +74,7 @@ const AI_TOOLS: AiToolDefinitionBase[] = [
     force_confirmation: true,
     allowed_roles: DISPATCH_ROLES,
     minimum_plan_tier: "fleet",
+    feature_flag: isAiDispatchPlannerExperimentalEnabled,
     execute: execDispatchPlanner,
     preview: previewDispatchPlanner,
   },
@@ -356,7 +358,9 @@ export function getToolByName(name: string): AiToolDefinitionBase | undefined {
 export function getAvailableTools(ctx: { userRole: AppRole; companyTier: PlanTier }): AiToolDefinitionBase[] {
   return AI_TOOLS.filter((t) => {
     if (!t.allowed_roles.includes(ctx.userRole)) return false
-    return tierMeetsMinimum(ctx.companyTier, t.minimum_plan_tier)
+    if (!tierMeetsMinimum(ctx.companyTier, t.minimum_plan_tier)) return false
+    if (t.feature_flag && !t.feature_flag()) return false
+    return true
   })
 }
 

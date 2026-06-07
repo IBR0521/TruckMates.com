@@ -3,6 +3,7 @@ import { getToolByName, tierMeetsMinimum, toolConfirmationRequired } from "@/lib
 import { getInvoiceIdForLoadOrInvoice, revalidateToolReferences } from "@/lib/ai/tools/handlers"
 import { validateToolInputSchema } from "@/lib/ai/tools/validate-input"
 import type { AiToolContext, AppRole } from "@/lib/ai/tools/types"
+import { isPreviewBlocked } from "@/lib/ai/tools/types"
 import type { PlanTier } from "@/lib/plan-limits"
 import { hasFeatureAccess } from "@/lib/plan-limits"
 
@@ -99,7 +100,7 @@ export async function executeToolForChat(params: {
   destructiveSlotsRemaining: number
 }): Promise<{
   status: "pending_confirmation" | "executed" | "auto_executed" | "failed" | "blocked"
-  auditId: string
+  auditId?: string
   preview?: { summary: string; affected: Array<{ type: string; id: string; label: string }> }
   result?: unknown
   error?: string
@@ -296,6 +297,9 @@ export async function executeToolForChat(params: {
 
   if (needsConfirmation && !params.skipConfirmation) {
     const preview = await tool.preview(validated.value, ctx)
+    if (isPreviewBlocked(preview)) {
+      return { status: "blocked", error: preview.reason }
+    }
     const persistedInput = preview.draftInput ?? validated.value
     const id = await insertAuditRow({
       companyId: params.companyId,
@@ -402,7 +406,10 @@ export async function confirmTool(params: {
   companyId: string
   userId: string
   userRole: AppRole
-}): Promise<{ ok: true; result: unknown } | { ok: false; error: string }> {
+}): Promise<
+  | { ok: true; result: unknown; alreadyResolved?: boolean }
+  | { ok: false; error: string; alreadyResolved?: boolean; priorResult?: unknown }
+> {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from("ai_action_audit")
@@ -422,6 +429,32 @@ export async function confirmTool(params: {
     return { ok: false, error: "Not authorized for this audit record." }
   }
   if (row.status !== "pending_confirmation") {
+    if (row.status === "executed" || row.status === "auto_executed") {
+      const { data: full } = await admin
+        .from("ai_action_audit")
+        .select("tool_output, error_message")
+        .eq("id", params.auditId)
+        .maybeSingle()
+      const prior = full as { tool_output?: unknown; error_message?: string | null } | null
+      return { ok: true, result: prior?.tool_output ?? null, alreadyResolved: true as const }
+    }
+    if (row.status === "failed") {
+      const { data: full } = await admin
+        .from("ai_action_audit")
+        .select("error_message, tool_output")
+        .eq("id", params.auditId)
+        .maybeSingle()
+      const prior = full as { error_message?: string | null; tool_output?: unknown } | null
+      return {
+        ok: false,
+        error: prior?.error_message || "This action failed previously.",
+        alreadyResolved: true as const,
+        priorResult: prior?.tool_output,
+      }
+    }
+    if (row.status === "rejected") {
+      return { ok: false, error: "This action was already cancelled.", alreadyResolved: true as const }
+    }
     return { ok: false, error: "This action is not awaiting confirmation." }
   }
 
@@ -490,6 +523,9 @@ export async function rejectTool(auditId: string, params: { companyId: string; u
   const row = data as { company_id: string; user_id: string; status: string }
   if (row.company_id !== params.companyId || row.user_id !== params.userId) {
     return { ok: false, error: "Not authorized." }
+  }
+  if (row.status === "rejected") {
+    return { ok: true }
   }
   if (row.status !== "pending_confirmation") {
     return { ok: false, error: "Not awaiting confirmation." }

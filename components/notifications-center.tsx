@@ -228,7 +228,7 @@ function NotificationRowView({
 export function NotificationsCenter() {
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const { notifications, unreadCount, markAsRead, markAllAsRead, refreshNotifications, smartUi } =
+  const { notifications, unreadCount, unreadCountDegraded, loadDegraded, loadError, markAsRead, markAllAsRead, refreshNotifications, smartUi } =
     useRealtimeNotifications()
 
   useEffect(() => {
@@ -270,14 +270,22 @@ export function NotificationsCenter() {
         <PopoverTrigger asChild>
           <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
             <Inbox className="h-5 w-5" />
-            {unreadCount > 0 && (
+            {unreadCountDegraded ? (
+              <Badge
+                variant="outline"
+                className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center p-0 text-xs"
+                title="Unread count unavailable"
+              >
+                —
+              </Badge>
+            ) : unreadCount > 0 ? (
               <Badge
                 variant="destructive"
                 className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center p-0 text-xs"
               >
                 {unreadCount > 9 ? "9+" : unreadCount}
               </Badge>
-            )}
+            ) : null}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-80 p-0" align="end">
@@ -296,7 +304,18 @@ export function NotificationsCenter() {
             </div>
           </div>
           <ScrollArea className="h-[400px]">
-            {parsed.length === 0 ? (
+            {loadDegraded ? (
+              <div className="p-8 text-center text-sm">
+                <AlertTriangle className="mx-auto mb-2 h-8 w-8 text-destructive opacity-80" />
+                <p className="font-medium text-foreground">Couldn&apos;t load notifications</p>
+                {loadError ? (
+                  <p className="mt-2 text-xs text-muted-foreground">{loadError}</p>
+                ) : null}
+                <Button variant="outline" size="sm" className="mt-4" onClick={() => void refreshNotifications()}>
+                  Retry
+                </Button>
+              </div>
+            ) : parsed.length === 0 ? (
               <div className="p-8 text-center text-sm text-muted-foreground">
                 <Inbox className="mx-auto mb-2 h-8 w-8 opacity-50" />
                 <p>No notifications</p>

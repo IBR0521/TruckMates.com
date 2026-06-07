@@ -2,7 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCachedAuthContext } from "@/lib/auth/server"
-import { checkFeatureAccess, checkMonthlyUsage } from "@/lib/plan-enforcement"
+import { resolveAiChatPlanContext, type AiChatPlanContext } from "@/lib/ai/plan-context"
 import { safeDbError } from "@/lib/utils/error"
 import {
   handleChatMessage,
@@ -25,17 +25,37 @@ function isChatRole(value: string): value is ChatRole {
 }
 
 export async function assertAiChatAllowed(companyId: string): Promise<
-  | { ok: true; enableTools: boolean; companyTier: PlanTier; remainingAiCalls: number }
+  | ({ ok: true; enableTools: boolean; companyTier: PlanTier; remainingAiCalls: number } & Pick<
+      AiChatPlanContext,
+      "actionsModeLabel" | "sidebarLockBadge" | "tierLabel"
+    >)
   | { ok: false; error: string }
 > {
-  const chat = await checkFeatureAccess({ companyId, feature: "ai_chat" })
-  if (!chat.allowed) {
+  const plan = await resolveAiChatPlanContext(companyId)
+  if (!plan.chatAllowed) {
     return { ok: false, error: "AI assistant is not available on your current plan." }
   }
-  const actions = await checkFeatureAccess({ companyId, feature: "ai_advanced_actions" })
-  const usage = await checkMonthlyUsage({ companyId, usageType: "ai_calls" })
-  const remainingAiCalls = usage.limit === -1 ? -1 : Math.max(0, usage.limit - usage.used)
-  return { ok: true, enableTools: actions.allowed, companyTier: actions.currentTier, remainingAiCalls }
+  return {
+    ok: true,
+    enableTools: plan.enableTools,
+    companyTier: plan.tier,
+    remainingAiCalls: plan.remainingAiCalls,
+    actionsModeLabel: plan.actionsModeLabel,
+    sidebarLockBadge: plan.sidebarLockBadge,
+    tierLabel: plan.tierLabel,
+  }
+}
+
+export async function getAiChatPlanContext(): Promise<{
+  data: AiChatPlanContext | null
+  error: string | null
+}> {
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
+  }
+  const plan = await resolveAiChatPlanContext(ctx.companyId)
+  return { data: plan, error: null }
 }
 
 function coerceToolCalls(raw: unknown): PersistedToolCall[] | null {
@@ -249,7 +269,7 @@ export async function getConversation(conversationId: string): Promise<{
     }>
   } | null
   error: string | null
-  meta?: { enableTools: boolean }
+  meta?: { enableTools: boolean; actionsModeLabel?: string }
 }> {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId || !ctx.userId) {
@@ -313,7 +333,7 @@ export async function getConversation(conversationId: string): Promise<{
 
   return {
     error: null,
-    meta: { enableTools: gate.enableTools },
+    meta: { enableTools: gate.enableTools, actionsModeLabel: gate.actionsModeLabel },
     data: {
       id: convRow.id,
       title: String(convRow.title || "New conversation"),
@@ -372,6 +392,7 @@ export async function sendChatMessage(params: {
       affected: Array<{ type: string; id: string; label: string }>
     }>
     enableTools: boolean
+    actionsModeLabel?: string
   } | null
   error: string | null
   quotaWarning?: boolean
@@ -502,6 +523,7 @@ export async function sendChatMessage(params: {
       contextUsed: ai.data.contextUsed,
       pendingConfirmations: ai.data.pendingConfirmations,
       enableTools: gate.enableTools,
+      actionsModeLabel: gate.actionsModeLabel,
     },
   }
 }
@@ -533,7 +555,7 @@ export async function confirmToolExecution(params: {
   const admin = createAdminClient()
   const { data: auditRow, error: auditErr } = await admin
     .from("ai_action_audit")
-    .select("id, conversation_id, company_id, user_id, status, message_id, tool_name, tool_input")
+    .select("id, conversation_id, company_id, user_id, status, message_id, tool_name, tool_input, tool_output, error_message")
     .eq("id", params.auditId)
     .maybeSingle()
 
@@ -549,22 +571,80 @@ export async function confirmToolExecution(params: {
     message_id: string | null
     tool_name: string | null
     tool_input: Record<string, unknown> | null
+    tool_output: unknown
+    error_message: string | null
   }
 
   if (audit.conversation_id !== params.conversationId || audit.company_id !== ctx.companyId || audit.user_id !== ctx.userId) {
     return { data: null, error: "You cannot resolve this action." }
   }
 
+  const userRole = mapLegacyRole(ctx.user.role) as AppRole
+  const assistantMessageId = audit.message_id
+
+  /** Idempotent re-approve / re-cancel on already-resolved audit rows. */
   if (audit.status !== "pending_confirmation") {
-    return { data: null, error: "This action is not awaiting confirmation." }
+    if (params.approve && (audit.status === "executed" || audit.status === "auto_executed")) {
+      if (assistantMessageId) {
+        const patched = await patchAssistantToolResultsByAudit({
+          admin,
+          assistantMessageId,
+          auditId: params.auditId,
+          approved: true,
+          result: audit.tool_output,
+        })
+        if (!patched.ok) return { data: null, error: patched.error }
+        await admin.from("ai_chat_messages").update({ pending_tool_use_id: null }).eq("id", assistantMessageId)
+      }
+    } else if (!params.approve && audit.status === "rejected") {
+      if (assistantMessageId) {
+        const patched = await patchAssistantToolResultsByAudit({
+          admin,
+          assistantMessageId,
+          auditId: params.auditId,
+          approved: false,
+          rejectReason: params.rejectReason?.trim() || "User cancelled.",
+        })
+        if (!patched.ok) return { data: null, error: patched.error }
+      }
+      return { data: { responseText: "Action was already cancelled." }, error: null }
+    } else if (audit.status === "failed") {
+      if (assistantMessageId) {
+        await patchAssistantToolResultsByAudit({
+          admin,
+          assistantMessageId,
+          auditId: params.auditId,
+          approved: false,
+          rejectReason: audit.error_message || "Action failed.",
+        })
+      }
+      return { data: null, error: audit.error_message || "This action failed previously." }
+    } else {
+      return { data: null, error: "This action is not awaiting confirmation." }
+    }
+
+    const historyReloaded = await loadConversationHistory(params.conversationId, ctx.companyId)
+    const resume = await resumeAssistantAfterToolResolution({
+      companyId: ctx.companyId,
+      conversationHistory: historyReloaded,
+      enableTools: gate.enableTools,
+      companyTier: gate.companyTier,
+      userRole,
+      remainingAiCalls: gate.remainingAiCalls,
+    })
+    if (resume.error || resume.data === null) {
+      return { data: null, error: resume.error || "Could not resume assistant." }
+    }
+    return {
+      data: { responseText: resume.data.responseText },
+      error: null,
+      quotaWarning: resume.quotaWarning,
+    }
   }
 
-  const assistantMessageId = audit.message_id
   if (!assistantMessageId) {
     return { data: null, error: "Assistant message link missing; retry from a new chat turn." }
   }
-
-  const userRole = mapLegacyRole(ctx.user.role) as AppRole
 
   let execResult: unknown = null
   if (params.approve) {

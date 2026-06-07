@@ -21,7 +21,7 @@ export type AiToolExecuteResult<TOutput> =
   | { ok: true; data: TOutput }
   | { ok: false; error: string }
 
-export type AiToolPreviewResult = {
+export type AiToolPreviewSuccess = {
   summary: string
   affected: Array<{ type: string; id: string; label: string }>
   /**
@@ -29,6 +29,22 @@ export type AiToolPreviewResult = {
    * a plan (or other large artifact) that the execute step must reuse exactly on approval.
    */
   draftInput?: Record<string, unknown>
+}
+
+/** Preview could not produce a confirmable plan — must not create a pending_confirmation row. */
+export type AiToolPreviewBlocked = {
+  blocked: true
+  reason: string
+}
+
+export type AiToolPreviewResult = AiToolPreviewSuccess | AiToolPreviewBlocked
+
+export function isPreviewBlocked(preview: AiToolPreviewResult): preview is AiToolPreviewBlocked {
+  return preview.blocked === true
+}
+
+export function blockedPreview(reason: string): AiToolPreviewBlocked {
+  return { blocked: true, reason }
 }
 
 export type AiToolDefinitionBase = {
@@ -42,6 +58,8 @@ export type AiToolDefinitionBase = {
   minimum_plan_tier: PlanTier
   /** When true, executor always stages confirmation (financial safety). */
   force_confirmation?: boolean
+  /** When set, tool is omitted from the model's tool list unless this returns true. */
+  feature_flag?: () => boolean
   execute: (input: Record<string, unknown>, ctx: AiToolContext) => Promise<AiToolExecuteResult<unknown>>
   preview: (input: Record<string, unknown>, ctx: AiToolContext) => Promise<AiToolPreviewResult>
 }

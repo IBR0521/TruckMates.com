@@ -156,6 +156,7 @@ export function AiChatWidget() {
   const [title, setTitle] = useState("New conversation")
   const [messages, setMessages] = useState<UiMessage[]>([])
   const [enableToolsMode, setEnableToolsMode] = useState(false)
+  const [actionsModeLabel, setActionsModeLabel] = useState("Read-only answers")
   const [input, setInput] = useState("")
   const [recent, setRecent] = useState<Array<{ id: string; title: string }>>([])
   const bottomRef = useRef<HTMLDivElement | null>(null)
@@ -194,6 +195,7 @@ export function AiChatWidget() {
     }
     setTitle(conv.data.title)
     setEnableToolsMode(Boolean(conv.meta?.enableTools))
+    setActionsModeLabel(conv.meta?.actionsModeLabel || (conv.meta?.enableTools ? "Actions enabled" : "Read-only answers"))
     setMessages(conv.data.messages.map(mapApiMessage))
   }, [conversationId])
 
@@ -217,6 +219,7 @@ export function AiChatWidget() {
           return
         }
         setEnableToolsMode(Boolean(conv.meta?.enableTools))
+    setActionsModeLabel(conv.meta?.actionsModeLabel || (conv.meta?.enableTools ? "Actions enabled" : "Read-only answers"))
         setMessages(conv.data.messages.map(mapApiMessage))
         return
       }
@@ -232,10 +235,12 @@ export function AiChatWidget() {
       const conv = await getConversation(newId)
       if (conv.data) {
         setEnableToolsMode(Boolean(conv.meta?.enableTools))
+    setActionsModeLabel(conv.meta?.actionsModeLabel || (conv.meta?.enableTools ? "Actions enabled" : "Read-only answers"))
         setMessages(conv.data.messages.map(mapApiMessage))
       } else {
         setMessages([])
         setEnableToolsMode(false)
+        setActionsModeLabel("Read-only answers")
       }
     } finally {
       setBusy(false)
@@ -262,6 +267,7 @@ export function AiChatWidget() {
       const conv = await getConversation(newId)
       if (conv.data) {
         setEnableToolsMode(Boolean(conv.meta?.enableTools))
+    setActionsModeLabel(conv.meta?.actionsModeLabel || (conv.meta?.enableTools ? "Actions enabled" : "Read-only answers"))
         setMessages(conv.data.messages.map(mapApiMessage))
       } else {
         setMessages([])
@@ -282,6 +288,7 @@ export function AiChatWidget() {
       }
       setTitle(conv.data.title)
       setEnableToolsMode(Boolean(conv.meta?.enableTools))
+    setActionsModeLabel(conv.meta?.actionsModeLabel || (conv.meta?.enableTools ? "Actions enabled" : "Read-only answers"))
       setMessages(conv.data.messages.map(mapApiMessage))
     } finally {
       setBusy(false)
@@ -307,6 +314,7 @@ export function AiChatWidget() {
         toast.message("You are approaching your monthly AI usage limit.")
       }
       setEnableToolsMode(Boolean(res.data.enableTools))
+      setActionsModeLabel(res.data.actionsModeLabel || (res.data.enableTools ? "Actions enabled" : "Read-only answers"))
       await refreshConversation()
       await refreshRecents()
       return res.data.assistantContent
@@ -430,7 +438,7 @@ export function AiChatWidget() {
             <p className="text-[11px] text-muted-foreground pt-1">
               Mode:{" "}
               <span className={enableToolsMode ? "text-emerald-600 dark:text-emerald-400 font-medium" : ""}>
-                {enableToolsMode ? "Actions enabled (Pro+)" : "Read-only answers (Starter)"}
+                {actionsModeLabel}
               </span>
             </p>
             <div className="flex flex-wrap gap-2 pt-2">

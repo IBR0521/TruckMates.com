@@ -9,6 +9,7 @@ import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-ses
 import { mapLegacyRole } from "@/lib/roles"
 import { hasFeatureAccess, normalizePlanTier, type PlanTier } from "@/lib/plan-limits"
 import { aiPriorityRank, effectiveAiPriority } from "@/lib/notifications/smart-ui"
+import type { PostgrestError } from "@supabase/supabase-js"
 /** `public.notifications` — supabase/notifications_table.sql */
 const NOTIFICATIONS_LIST_SELECT =
   "id, user_id, company_id, type, title, message, priority, metadata, read, read_at, created_at, updated_at, ai_priority, ai_cluster_id, ai_reasoning, ai_suppressed, source"
@@ -45,6 +46,46 @@ type AlertRow = {
   route_id?: string | null
   driver_id?: string | null
   truck_id?: string | null
+}
+
+export type UnifiedNotificationsPartialError = {
+  table: "notifications" | "alerts"
+  code: string
+  message: string
+}
+
+export type UnifiedNotificationsMeta = {
+  smartUi: boolean
+  planAllowsSmart: boolean
+  userSmart: boolean
+  suppressedCount: number
+  degraded: boolean
+  notificationsLoadFailed: boolean
+  alertsLoadFailed: boolean
+  partialErrors?: UnifiedNotificationsPartialError[]
+}
+
+function reportQueryFailure(
+  table: "notifications" | "alerts",
+  error: PostgrestError,
+): UnifiedNotificationsPartialError {
+  Sentry.captureException(error, {
+    tags: {
+      source: "getUnifiedNotifications",
+      table,
+      postgrest_code: error.code ?? "unknown",
+    },
+    extra: {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    },
+  })
+  return {
+    table,
+    code: error.code ?? "unknown",
+    message: safeDbError(error, `${table} query failed`),
+  }
 }
 
 /**
@@ -138,6 +179,10 @@ export async function getUnifiedNotifications(filters?: {
       legacy_priority: string
     }> = []
 
+    const partialErrors: UnifiedNotificationsPartialError[] = []
+    let notificationsLoadFailed = false
+    let alertsLoadFailed = false
+
     // Get system notifications
     if (!filters?.type || filters.type === "all" || filters.type === "notifications") {
       let notificationsQuery = supabase
@@ -161,7 +206,10 @@ export async function getUnifiedNotifications(filters?: {
 
       const { data: notifications, error: notifError } = await notificationsQuery
 
-      if (!notifError && notifications) {
+      if (notifError) {
+        notificationsLoadFailed = true
+        partialErrors.push(reportQueryFailure("notifications", notifError))
+      } else if (notifications) {
         notifications.forEach((notif: NotificationRow) => {
           const legacyP = notif.priority || "normal"
           const displayPriority = smartUi ? effectiveAiPriority(notif.ai_priority, legacyP) : legacyP
@@ -237,7 +285,10 @@ export async function getUnifiedNotifications(filters?: {
 
       const { data: alerts, error: alertsError } = await alertsQuery
 
-      if (!alertsError && alerts) {
+      if (alertsError) {
+        alertsLoadFailed = true
+        partialErrors.push(reportQueryFailure("alerts", alertsError))
+      } else if (alerts) {
         let alertRows = alerts as AlertRow[]
         if (role === "driver" && filters?.search) {
           const q = filters.search.toLowerCase()
@@ -315,16 +366,27 @@ export async function getUnifiedNotifications(filters?: {
       filtered = priorityFiltered.filter((n) => n.read === filters.read)
     }
 
+    const degraded = partialErrors.length > 0
+    const meta: UnifiedNotificationsMeta = {
+      smartUi,
+      planAllowsSmart,
+      userSmart,
+      suppressedCount,
+      degraded,
+      notificationsLoadFailed,
+      alertsLoadFailed,
+      ...(degraded ? { partialErrors } : {}),
+    }
+
     return {
       data: filtered,
-      error: null,
+      error: degraded
+        ? partialErrors.map((e) => `${e.table} (${e.code}): ${e.message}`).join("; ")
+        : null,
+      degraded,
+      partialErrors: degraded ? partialErrors : undefined,
       count: filtered.length,
-      meta: {
-        smartUi,
-        planAllowsSmart,
-        userSmart,
-        suppressedCount,
-      },
+      meta,
     }
   } catch (error: unknown) {
     return { error: errorMessage(error, "Failed to get unified notifications"), data: null, count: 0, meta: null }

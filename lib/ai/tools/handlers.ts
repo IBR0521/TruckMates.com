@@ -9,11 +9,12 @@ import { createMaintenance, updateMaintenanceStatus } from "@/app/actions/mainte
 import { callClaude } from "@/lib/ai/client"
 import { LOGISTICS_SYSTEM_PROMPT } from "@/lib/ai/prompts/system"
 import type { AiToolContext, AiToolExecuteResult, AiToolPreviewResult } from "@/lib/ai/tools/types"
+import { blockedPreview } from "@/lib/ai/tools/types"
+import { isAiDispatchPlannerExperimentalEnabled } from "@/lib/ai/feature-flags"
 import { normalizePlanTier, tierAtLeast } from "@/lib/plan-limits"
 
 function isDispatchPlannerEnabled(): boolean {
-  const v = String(process.env.AI_DISPATCH_PLANNER_EXPERIMENTAL || "").trim().toLowerCase()
-  return v === "1" || v === "true" || v === "yes"
+  return isAiDispatchPlannerExperimentalEnabled()
 }
 
 type PlannerLoad = {
@@ -233,26 +234,20 @@ export async function previewDispatchPlanner(
   void input
 
   if (!isDispatchPlannerEnabled()) {
-    return {
-      summary: "Dispatch planner is disabled (feature flag off).",
-      affected: [],
-    }
+    return blockedPreview("Dispatch planner is unavailable (feature not enabled for this environment).")
   }
 
   const admin = createAdminClient()
   const { data: companyRow } = await admin.from("companies").select("subscription_tier").eq("id", ctx.companyId).maybeSingle()
   const tier = normalizePlanTier((companyRow as { subscription_tier?: string } | null)?.subscription_tier)
   if (!tierAtLeast(tier, "fleet")) {
-    return {
-      summary: "Dispatch planner is Fleet tier only.",
-      affected: [],
-    }
+    return blockedPreview("Dispatch planner requires a Fleet subscription.")
   }
 
   const { loads, drivers, trucks, missing } = await loadPlannerInputs(ctx.companyId)
   const { plan, error } = await proposeDispatchPlanViaModel({ companyId: ctx.companyId, loads, drivers, trucks, missing })
   if (error || !plan) {
-    return { summary: error || "Could not propose a plan.", affected: [] }
+    return blockedPreview(error || "Could not propose a dispatch plan with the current fleet data.")
   }
 
   const lines = plan.assignments.slice(0, 8).map((a, i) => `- ${i + 1}. load ${a.load_id} → driver ${a.driver_id}${a.truck_id ? ` (truck ${a.truck_id})` : ""}`)
@@ -471,7 +466,7 @@ export async function previewSendInvoice(input: Record<string, unknown>, ctx: Ai
   const loadId = typeof input.load_id === "string" ? input.load_id : undefined
   const invoiceId = typeof input.invoice_id === "string" ? input.invoice_id : undefined
   const resolved = await getInvoiceIdForLoadOrInvoice({ companyId: ctx.companyId, loadId, invoiceId })
-  if ("error" in resolved) return { summary: resolved.error, affected: [] }
+  if ("error" in resolved) return blockedPreview(resolved.error)
   const admin = createAdminClient()
   const { data: inv } = await admin.from("invoices").select("invoice_number, amount").eq("id", resolved.invoiceId).maybeSingle()
   const row = inv as { invoice_number?: string; amount?: number } | null
@@ -635,7 +630,7 @@ export async function execFindBestTruckForLoad(input: Record<string, unknown>, c
 
 export async function previewFindBestTruck(input: Record<string, unknown>, ctx: AiToolContext): Promise<AiToolPreviewResult> {
   const res = await execFindBestTruckForLoad(input, ctx)
-  if (!res.ok) return { summary: res.error, affected: [] }
+  if (!res.ok) return blockedPreview(res.error)
   return { summary: "Analyze fleet trucks against this load for a ranked suggestion list.", affected: [{ type: "load", id: String(input.load_id), label: "Load" }] }
 }
 

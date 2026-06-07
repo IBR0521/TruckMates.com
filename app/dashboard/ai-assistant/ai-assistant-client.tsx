@@ -53,6 +53,7 @@ export function AiAssistantClient() {
   const [title, setTitle] = useState("New conversation")
   const [messages, setMessages] = useState<UiMessage[]>([])
   const [enableToolsMode, setEnableToolsMode] = useState(false)
+  const [actionsModeLabel, setActionsModeLabel] = useState("Read-only answers")
   const [input, setInput] = useState("")
   const [sidebar, setSidebar] = useState<Array<{ id: string; title: string; lastMessageAt: string }>>([])
   const bottomRef = useRef<HTMLDivElement | null>(null)
@@ -77,6 +78,7 @@ export function AiAssistantClient() {
     }
     setTitle(conv.data.title)
     setEnableToolsMode(Boolean(conv.meta?.enableTools))
+    setActionsModeLabel(conv.meta?.actionsModeLabel || (conv.meta?.enableTools ? "Actions enabled" : "Read-only answers"))
     setMessages(conv.data.messages.map(mapApiMessage))
   }, [conversationId])
 
@@ -106,6 +108,7 @@ export function AiAssistantClient() {
       }
       setTitle(conv.data.title)
       setEnableToolsMode(Boolean(conv.meta?.enableTools))
+    setActionsModeLabel(conv.meta?.actionsModeLabel || (conv.meta?.enableTools ? "Actions enabled" : "Read-only answers"))
       setMessages(conv.data.messages.map(mapApiMessage))
     } finally {
       setBusy(false)
@@ -143,6 +146,7 @@ export function AiAssistantClient() {
       const conv = await getConversation(newId)
       if (conv.data) {
         setEnableToolsMode(Boolean(conv.meta?.enableTools))
+    setActionsModeLabel(conv.meta?.actionsModeLabel || (conv.meta?.enableTools ? "Actions enabled" : "Read-only answers"))
         setMessages(conv.data.messages.map(mapApiMessage))
       } else {
         setMessages([])
@@ -185,6 +189,7 @@ export function AiAssistantClient() {
       const conv = await getConversation(newId)
       if (conv.data) {
         setEnableToolsMode(Boolean(conv.meta?.enableTools))
+    setActionsModeLabel(conv.meta?.actionsModeLabel || (conv.meta?.enableTools ? "Actions enabled" : "Read-only answers"))
         setMessages(conv.data.messages.map(mapApiMessage))
       } else {
         setMessages([])
@@ -210,6 +215,7 @@ export function AiAssistantClient() {
         toast.message("You are approaching your monthly AI usage limit.")
       }
       setEnableToolsMode(Boolean(res.data.enableTools))
+      setActionsModeLabel(res.data.actionsModeLabel || (res.data.enableTools ? "Actions enabled" : "Read-only answers"))
       await refreshConversation()
       await loadSidebar()
     } finally {
@@ -256,7 +262,7 @@ export function AiAssistantClient() {
             <p className="text-[11px] text-muted-foreground mt-0.5">
               Mode:{" "}
               <span className={enableToolsMode ? "text-emerald-600 dark:text-emerald-400 font-medium" : ""}>
-                {enableToolsMode ? "Actions enabled (Pro+)" : "Read-only answers (Starter)"}
+                {actionsModeLabel}
               </span>
             </p>
           </div>
