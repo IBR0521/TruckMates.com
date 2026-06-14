@@ -12,6 +12,7 @@ import { exportToPDF } from "@/lib/export-utils"
 import { toast } from "sonner"
 import { getInvoice } from "@/app/actions/accounting"
 import { sendInvoiceEmail } from "@/app/actions/invoice-email"
+import { resolveCustomerEmailFromSources } from "@/lib/customer-email"
 import { markInvoiceFactoringFunded } from "@/app/actions/factoring-email"
 import { submitInvoiceToTriumphPay, syncInvoiceFactoringStatus } from "@/app/actions/factoring-api"
 import {
@@ -26,7 +27,10 @@ type InvoiceDetail = {
   id: string
   invoice_number?: string | null
   customer_name?: string | null
-  loads?: { shipment_number?: string | null } | null
+  loads?: {
+    shipment_number?: string | null
+    consignee_contact_email?: string | null
+  } | null
   amount?: string | number | null
   status?: string | null
   due_date?: string | null
@@ -346,7 +350,10 @@ PDF and supporting documents are not attached here. Use TruckMates â†’ Invoice â
   const handleSendToCustomer = async () => {
     try {
       setSendingCustomer(true)
-      const res = await sendInvoiceEmail(id)
+      const toEmail = resolveCustomerEmailFromSources([
+        invoice?.loads?.consignee_contact_email,
+      ])
+      const res = await sendInvoiceEmail(id, toEmail ? { to_email: toEmail } : undefined)
       if (res.error) {
         toast.error(res.error)
         return

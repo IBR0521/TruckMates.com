@@ -105,7 +105,9 @@ export async function getInvoice(id: string) {
           shipment_number,
           origin,
           destination,
-          company_name
+          company_name,
+          consignee_contact_email,
+          customer_id
         )
       `)
       .eq("id", id)

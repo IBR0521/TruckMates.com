@@ -34,6 +34,8 @@ export async function sendInvoiceEmail(
     cc_emails?: string[]
     bcc_emails?: string[]
     send_copy_to_company?: boolean
+    /** Explicit recipient — e.g. load consignee contact email from the invoice UI */
+    to_email?: string
     /** @deprecated Packet always includes invoice PDF + optional BOL/rate/POD (same as factoring). */
     include_bol?: boolean
     /** @deprecated See include_bol. */
@@ -70,7 +72,7 @@ export async function sendInvoiceEmail(
     const { data: invoice, error: invoiceError } = await supabase
       .from("invoices")
       .select(
-        "id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items",
+        "id, company_id, invoice_number, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items",
       )
       .eq("id", invoiceId)
       .eq("company_id", ctx.companyId)
@@ -94,15 +96,6 @@ export async function sendInvoiceEmail(
     }
 
     let invoiceCustomer: CustomerEmailRow | null = null
-    if (invoice.customer_id) {
-      const { data: customer } = await supabase
-        .from("customers")
-        .select("id, name, email, primary_contact_email, company_name")
-        .eq("id", invoice.customer_id)
-        .eq("company_id", ctx.companyId)
-        .maybeSingle()
-      invoiceCustomer = customer
-    }
 
     let loadCustomer: CustomerEmailRow | null = null
     let consigneeContactEmail: string | null = null
@@ -130,6 +123,7 @@ export async function sendInvoiceEmail(
             .eq("company_id", ctx.companyId)
             .maybeSingle()
           loadCustomer = customer
+          invoiceCustomer = customer
         }
       }
     }
@@ -144,9 +138,10 @@ export async function sendInvoiceEmail(
       .maybeSingle()
 
     const customerEmail = resolveCustomerEmailFromSources([
+      options?.to_email,
+      consigneeContactEmail,
       resolveCustomerEmail(loadCustomer),
       resolveCustomerEmail(invoiceCustomer),
-      consigneeContactEmail,
     ])
     if (!customerEmail) {
       return {
