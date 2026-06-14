@@ -2,15 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import crypto from "crypto"
 import { errorMessage } from "@/lib/error-message"
 import { detectIdleTime } from "@/app/actions/idle-time-tracking"
+import type { AdminSupabaseClient } from "@/lib/supabase/admin"
 
 /** Cap sequential idle RPCs per webhook request (inserts still proceed for every point). */
 const MAX_IDLE_DETECTIONS_PER_REQUEST = 48
-
-type InsertClient = {
-  from: (table: "eld_logs" | "eld_locations" | "eld_violations" | "eld_events") => {
-    insert: (values: unknown) => PromiseLike<{ error: unknown }>
-  }
-}
 
 type ELDDevice = {
   id: string
@@ -226,7 +221,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function processHOSLog(data: GeotabWebhookData, device: ELDDevice, supabase: InsertClient) {
+async function processHOSLog(data: GeotabWebhookData, device: ELDDevice, supabase: AdminSupabaseClient) {
   const logData = data.entity || data
   
   // Derive log_date from start_time (required field)
@@ -282,7 +277,7 @@ async function processHOSLog(data: GeotabWebhookData, device: ELDDevice, supabas
 async function processLocation(
   data: GeotabWebhookData,
   device: ELDDevice,
-  supabase: InsertClient
+  supabase: AdminSupabaseClient
 ) {
   const baseEntity = data.entity || data
 
@@ -339,7 +334,7 @@ async function processLocation(
 async function processViolation(
   data: GeotabWebhookData,
   device: ELDDevice,
-  supabase: InsertClient
+  supabase: AdminSupabaseClient
 ) {
   const violationData = data.entity || data
   

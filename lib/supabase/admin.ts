@@ -22,4 +22,6 @@ export function createAdminClient() {
   })
 }
 
+export type AdminSupabaseClient = ReturnType<typeof createAdminClient>
+
 

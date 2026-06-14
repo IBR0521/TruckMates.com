@@ -2,15 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { detectIdleTime } from "@/app/actions/idle-time-tracking"
 import crypto from "crypto"
+import type { AdminSupabaseClient } from "@/lib/supabase/admin"
 
 /** Cap sequential idle RPCs per webhook response (inserts still proceed for every point). */
 const MAX_IDLE_DETECTIONS_PER_REQUEST = 48
-
-type InsertClient = {
-  from: (table: "eld_logs" | "eld_locations" | "eld_violations" | "eld_events") => {
-    insert: (values: unknown) => PromiseLike<{ error: unknown }>
-  }
-}
 
 type ELDDevice = {
   id: string
@@ -209,7 +204,7 @@ export async function POST(request: NextRequest) {
 async function processHOSLog(
   data: KeepTruckinWebhookData,
   device: ELDDevice,
-  supabase: InsertClient
+  supabase: AdminSupabaseClient
 ) {
   // Map KeepTruckin log format to TruckMates format
   // Derive log_date from start_time (required field)
@@ -265,7 +260,7 @@ async function processHOSLog(
 async function processLocation(
   data: KeepTruckinWebhookData,
   device: ELDDevice,
-  supabase: InsertClient
+  supabase: AdminSupabaseClient
 ) {
   const rows = expandKeepTruckinLocationPayloads(data)
     .map((row) => mergeKeepTruckinLocationRow(data, row))
@@ -320,7 +315,7 @@ async function processLocation(
 async function processViolation(
   data: KeepTruckinWebhookData,
   device: ELDDevice,
-  supabase: InsertClient
+  supabase: AdminSupabaseClient
 ) {
   const event = {
     company_id: device.company_id,

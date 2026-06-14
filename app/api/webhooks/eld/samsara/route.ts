@@ -2,15 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { detectIdleTime } from "@/app/actions/idle-time-tracking"
 import crypto from "crypto"
+import type { AdminSupabaseClient } from "@/lib/supabase/admin"
 
 /** Cap sequential idle RPCs per webhook response (inserts still proceed for every point). */
 const MAX_IDLE_DETECTIONS_PER_REQUEST = 48
-
-type InsertClient = {
-  from: (table: "eld_logs" | "eld_locations" | "eld_violations" | "eld_events") => {
-    insert: (values: unknown) => PromiseLike<{ error: unknown }>
-  }
-}
 
 type ELDDevice = {
   id: string
@@ -231,7 +226,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function processHOSLogs(data: SamsaraWebhookData, device: ELDDevice, supabase: InsertClient) {
+async function processHOSLogs(data: SamsaraWebhookData, device: ELDDevice, supabase: AdminSupabaseClient) {
   const logs: SamsaraLog[] = Array.isArray(data.logs)
     ? data.logs
     : Array.isArray(data.hosLogs)
@@ -293,7 +288,7 @@ async function processHOSLogs(data: SamsaraWebhookData, device: ELDDevice, supab
 async function processLocation(
   data: SamsaraWebhookData,
   device: ELDDevice,
-  supabase: InsertClient
+  supabase: AdminSupabaseClient
 ) {
   const payloads = expandSamsaraLocationPayloads(data).sort((a, b) => {
     const ta = Date.parse(String(a.timestamp ?? a.time ?? "")) || 0
@@ -352,7 +347,7 @@ async function processLocation(
 async function processViolation(
   data: SamsaraWebhookData,
   device: ELDDevice,
-  supabase: InsertClient
+  supabase: AdminSupabaseClient
 ) {
   const event = {
     company_id: device.company_id,
