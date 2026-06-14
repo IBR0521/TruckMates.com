@@ -8,6 +8,8 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkEditPermission } from "@/lib/server-permissions"
 import * as Sentry from "@sentry/nextjs"
+import { hasValidPermitAttachment } from "@/lib/permit-requirement"
+import { getDispatchGateErrors } from "@/lib/dispatch-gates"
 type DispatchScopedLoad = {
   terminal_id?: string | null
   status?: string | null
@@ -20,11 +22,6 @@ type OverlapLoadRow = {
   shipment_number?: string | null
   load_date?: string | null
   estimated_delivery?: string | null
-}
-
-type PermitRow = {
-  expiry_date?: string | null
-  document_id?: string | null
 }
 
 type DriverUserRow = {
@@ -274,6 +271,36 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
   
   // Update status to scheduled if both driver and truck are assigned and status is pending
   if (driverId && truckId && currentLoad?.status === "pending") {
+    const { data: companySettings } = await supabase
+      .from("company_settings")
+      .select("require_bol_before_dispatch, require_documents_before_dispatch, required_documents")
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+
+    const [{ count: bolCount }, { data: loadDocs }] = await Promise.all([
+      supabase
+        .from("bols")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", ctx.companyId)
+        .eq("load_id", loadId),
+      supabase
+        .from("documents")
+        .select("type")
+        .eq("company_id", ctx.companyId)
+        .eq("load_id", loadId),
+    ])
+
+    const gateErrors = getDispatchGateErrors({
+      loadId,
+      nextStatus: "scheduled",
+      settings: companySettings,
+      hasBol: (bolCount ?? 0) > 0,
+      attachedDocumentTypes: (loadDocs || []).map((d: { type?: string | null }) => String(d.type || "")),
+    })
+    if (gateErrors.length > 0) {
+      return { error: gateErrors[0], data: null }
+    }
+
     if (currentLoad.requires_permit) {
       const today = new Date().toISOString().split("T")[0]
       const { data: permits, error: permitError } = await supabase
@@ -284,10 +311,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
       if (permitError) {
         return { error: safeDbError(permitError), data: null }
       }
-      const validPermit = ((permits || []) as PermitRow[]).some((permit) => {
-        const notExpired = !permit.expiry_date || permit.expiry_date >= today
-        return Boolean(permit.document_id) && notExpired
-      })
+      const validPermit = hasValidPermitAttachment(permits, today)
       if (!validPermit) {
         return {
           error: "This load requires an oversize/overweight permit attachment before dispatch.",

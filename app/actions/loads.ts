@@ -22,6 +22,8 @@ import {
   insertCreditLimitOverrideAudit,
   type DeferredCreditOverrideAudit,
 } from "@/lib/credit-check"
+import { computePermitRequirement, hasValidPermitAttachment } from "@/lib/permit-requirement"
+import { getDispatchGateErrors, isDispatchTransition } from "@/lib/dispatch-gates"
 
 /** Subset of load fields used for background notifications after updates */
 type LoadUpdateNotificationPayload = {
@@ -56,6 +58,10 @@ const LOAD_DETAIL_SELECT = `
   trip_planning_estimate, created_at, updated_at
 `
 
+const LOAD_DETAIL_WITH_CUSTOMER_SELECT = `${LOAD_DETAIL_SELECT.trim()},
+  customers:customer_id (id, name, company_name, email, primary_contact_email, phone, primary_contact_phone)
+`
+
 const LOAD_LIST_SELECT =
   "id, shipment_number, origin, destination, status, driver_id, truck_id, trailer_id, terminal_id, shipment_id, load_date, estimated_delivery, created_at, company_name, value, contents, delivery_type, total_delivery_points, weight, weight_kg, nmfc_code, freight_class, piece_count, cube_ft, requested_via_portal, portal_request_status, portal_request_message, requested_equipment_type"
 
@@ -66,34 +72,6 @@ function driverHasHazmatEndorsement(endorsements: unknown): boolean {
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean)
   return normalized.includes("h") || normalized.includes("hazmat") || normalized.includes("haz mat")
-}
-
-function computePermitRequirement(input: {
-  weight_kg?: unknown
-  weight?: unknown
-  length?: unknown
-  width?: unknown
-  height?: unknown
-  is_oversized?: unknown
-}): { required: boolean; reason: string | null } {
-  const weightKg = Number(input.weight_kg || 0)
-  const parsedWeightLbs = Number(String(input.weight || "").replace(/[^0-9.]/g, ""))
-  const weightLbs = weightKg > 0 ? weightKg * 2.20462 : 0
-  const effectiveWeightLbs = weightLbs > 0 ? weightLbs : parsedWeightLbs
-  const lengthFt = Number(input.length || 0)
-  const widthFt = Number(input.width || 0)
-  const heightFt = Number(input.height || 0)
-  const oversized = Boolean(input.is_oversized)
-
-  const reasons: string[] = []
-  if (effectiveWeightLbs > 80000) reasons.push(`weight ${effectiveWeightLbs.toFixed(0)} lbs > 80,000 lbs`)
-  if (lengthFt > 53) reasons.push(`length ${lengthFt} ft > 53 ft`)
-  if (widthFt > 8.5) reasons.push(`width ${widthFt} ft > 8.5 ft`)
-  if (heightFt > 13.5) reasons.push(`height ${heightFt} ft > 13.5 ft`)
-  if (oversized) reasons.push("load is marked oversized")
-
-  if (reasons.length === 0) return { required: false, reason: null }
-  return { required: true, reason: reasons.join("; ") }
 }
 
 // Helper function to send notifications in background (non-blocking)
@@ -258,7 +236,7 @@ export async function getLoad(id: string) {
 
     const { data: load, error } = await supabase
       .from("loads")
-      .select(LOAD_DETAIL_SELECT)
+      .select(LOAD_DETAIL_WITH_CUSTOMER_SELECT)
       .eq("id", id)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
@@ -1407,18 +1385,50 @@ export async function updateLoad(
   updateData.requires_permit = computedPermit.required
   updateData.permit_requirement_reason = computedPermit.reason
 
+  const currentStatus = String(currentLoad.status ?? "").toLowerCase()
   const nextStatus = String(updateData.status ?? currentLoad.status ?? "").toLowerCase()
-  if (computedPermit.required && ["scheduled", "in_transit"].includes(nextStatus)) {
+
+  if (isDispatchTransition(currentStatus, nextStatus)) {
+    const { data: companySettings } = await supabase
+      .from("company_settings")
+      .select("require_bol_before_dispatch, require_documents_before_dispatch, required_documents")
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+
+    const [{ count: bolCount }, { data: loadDocs }] = await Promise.all([
+      supabase
+        .from("bols")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", ctx.companyId)
+        .eq("load_id", id),
+      supabase
+        .from("documents")
+        .select("type")
+        .eq("company_id", ctx.companyId)
+        .eq("load_id", id),
+    ])
+
+    const gateErrors = getDispatchGateErrors({
+      loadId: id,
+      currentStatus,
+      nextStatus,
+      settings: companySettings,
+      hasBol: (bolCount ?? 0) > 0,
+      attachedDocumentTypes: (loadDocs || []).map((d: { type?: string | null }) => String(d.type || "")),
+    })
+    if (gateErrors.length > 0) {
+      return { error: gateErrors[0], data: null }
+    }
+  }
+
+  if (computedPermit.required && isDispatchTransition(currentStatus, nextStatus)) {
     const today = new Date().toISOString().split("T")[0]
     const { data: permits } = await supabase
       .from("permits")
       .select("id, expiry_date, document_id")
       .eq("company_id", ctx.companyId)
       .eq("load_id", id)
-    const validPermit = (permits || []).some((permit: { expiry_date: string | null; document_id: string | null }) => {
-      const notExpired = !permit.expiry_date || permit.expiry_date >= today
-      return Boolean(permit.document_id) && notExpired
-    })
+    const validPermit = hasValidPermitAttachment(permits, today)
     if (!validPermit) {
       return { error: "Permit attachment is required before dispatching this load.", data: null }
     }

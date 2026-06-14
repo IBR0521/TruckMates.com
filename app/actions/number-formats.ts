@@ -20,6 +20,12 @@ const COMPANY_SETTINGS_SELECT = `
   check_call_notify_pickup_completed, check_call_notify_enroute, check_call_notify_at_consignee, check_call_notify_dropoff_completed,
   factoring_company_name, factoring_submission_email, factoring_include_bol, factoring_include_rate_conf, factoring_include_pod, factoring_email_template, factoring_auto_submit,
   triumphpay_enabled, triumphpay_api_base_url, triumphpay_api_key, triumphpay_api_secret,
+  require_bol_before_dispatch, require_documents_before_dispatch,
+  auto_assign_driver, auto_assign_truck, allow_status_skip, assignment_priority,
+  consider_driver_hours, consider_truck_maintenance, max_distance_for_auto_assign,
+  default_status, weight_unit, distance_unit, temperature_unit,
+  require_confirmation_before_dispatch, dispatch_approval_required,
+  auto_dispatch_on_ready, allow_bulk_dispatch,
   created_at, updated_at
 `
 
@@ -180,6 +186,23 @@ export async function updateCompanySettings(settings: {
   triumphpay_api_base_url?: string | null
   triumphpay_api_key?: string | null
   triumphpay_api_secret?: string | null
+  require_bol_before_dispatch?: boolean
+  require_documents_before_dispatch?: boolean
+  auto_assign_driver?: boolean
+  auto_assign_truck?: boolean
+  allow_status_skip?: boolean
+  assignment_priority?: string
+  consider_driver_hours?: boolean
+  consider_truck_maintenance?: boolean
+  max_distance_for_auto_assign?: number
+  default_status?: string
+  weight_unit?: string
+  distance_unit?: string
+  temperature_unit?: string
+  require_confirmation_before_dispatch?: boolean
+  dispatch_approval_required?: boolean
+  auto_dispatch_on_ready?: boolean
+  allow_bulk_dispatch?: boolean
   // HIGH FIX 3: Removed broad index signatures to prevent arbitrary column injection
 }) {
   const supabase = await createClient()
@@ -213,6 +236,12 @@ export async function updateCompanySettings(settings: {
     'factoring_company_name', 'factoring_submission_email', 'factoring_include_bol', 'factoring_include_rate_conf',
     'factoring_include_pod', 'factoring_email_template', 'factoring_auto_submit',
     'triumphpay_enabled', 'triumphpay_api_base_url', 'triumphpay_api_key', 'triumphpay_api_secret',
+    'require_bol_before_dispatch', 'require_documents_before_dispatch',
+    'auto_assign_driver', 'auto_assign_truck', 'allow_status_skip', 'assignment_priority',
+    'consider_driver_hours', 'consider_truck_maintenance', 'max_distance_for_auto_assign',
+    'default_status', 'weight_unit', 'distance_unit', 'temperature_unit',
+    'require_confirmation_before_dispatch', 'dispatch_approval_required',
+    'auto_dispatch_on_ready', 'allow_bulk_dispatch',
   ]
   
   for (const field of allowedFields) {

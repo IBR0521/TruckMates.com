@@ -27,6 +27,7 @@ import { use } from "react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { getLoad, updateLoad } from "@/app/actions/loads"
+import { resolveCustomerEmail } from "@/lib/customer-email"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { getTrailers } from "@/app/actions/trailers"
@@ -197,6 +198,17 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
           }
         }
         
+        const linkedCustomer = (load as {
+          customers?: {
+            name?: string | null
+            company_name?: string | null
+            email?: string | null
+            primary_contact_email?: string | null
+            phone?: string | null
+            primary_contact_phone?: string | null
+          } | null
+        }).customers
+
         setFormData({
           shipmentNumber: load.shipment_number || "",
           bolNumber: load.bol_number || "",
@@ -239,9 +251,20 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
           fuelSurcharge: load.fuel_surcharge ? load.fuel_surcharge.toString() : "",
           accessorialCharges: load.accessorial_charges ? load.accessorial_charges.toString() : "",
           totalRate: load.total_rate ? load.total_rate.toString() : "",
-          customerName: load.customer_name || "",
-          customerPhone: load.customer_phone || "",
-          customerEmail: load.customer_email || "",
+          customerName:
+            linkedCustomer?.name ||
+            linkedCustomer?.company_name ||
+            load.consignee_contact_name ||
+            "",
+          customerPhone:
+            linkedCustomer?.phone ||
+            linkedCustomer?.primary_contact_phone ||
+            load.consignee_contact_phone ||
+            "",
+          customerEmail:
+            resolveCustomerEmail(linkedCustomer) ||
+            load.consignee_contact_email ||
+            "",
           customerReference: load.customer_reference || "",
           notes: load.notes || "",
           companyName: load.company_name || "",
@@ -278,10 +301,10 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
       }
     }
 
-    const weightKg = formData.weightKg 
-      ? parseInt(formData.weightKg) 
-      : formData.weight 
-        ? Math.round(parseFloat(formData.weight.replace(/[^0-9.]/g, "")) * 1000) 
+    const weightKg = formData.weightKg
+      ? parseInt(formData.weightKg)
+      : formData.weight
+        ? Math.round(parseFloat(formData.weight.replace(/[^0-9.]/g, "")) * 0.453592)
         : null
 
     const result = await updateLoad(id, {
@@ -322,7 +345,7 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
       consignee_zip: formData.destinationZip || undefined,
       consignee_contact_name: formData.destinationContactName || undefined,
       consignee_contact_phone: formData.destinationContactPhone || undefined,
-      consignee_contact_email: undefined,
+      consignee_contact_email: formData.customerEmail || undefined,
       delivery_time: formData.deliveryTime || undefined,
       pieces: formData.pieces ? parseInt(formData.pieces) : undefined,
       temperature: formData.temperature || undefined,
@@ -794,12 +817,12 @@ export default function EditLoadPage({ params }: { params: Promise<{ id: string 
                     />
                   </div>
                   <div>
-                    <Label htmlFor="weight">Weight (tons)</Label>
+                    <Label htmlFor="weight">Weight (lbs)</Label>
                     <Input
                       id="weight"
                       name="weight"
                       type="text"
-                      placeholder="22.5 tons"
+                      placeholder="42000"
                       value={formData.weight}
                       onChange={handleChange}
                       className="mt-1"

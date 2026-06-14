@@ -91,9 +91,10 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     async function loadInvoice() {
       setIsLoading(true)
       const result = await getInvoice(id)
+      if (!aliveRef.current) return
       if (result.error) {
         toast.error(result.error || "Failed to load invoice")
-        if (aliveRef.current) router.push("/dashboard/accounting/invoices")
+        router.push("/dashboard/accounting/invoices")
         return
       }
       const parsedInvoice = asInvoiceDetail(result.data)

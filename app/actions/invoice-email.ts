@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache"
 import { getResendClientForCompany } from "@/lib/resend-client"
 import { buildInvoicePacketAttachments, buildInvoicePacketEmailContent } from "@/lib/invoice-packet-build"
 import { capturePostHogServerEvent } from "@/lib/analytics/posthog-server"
+import { resolveCustomerEmail, resolveCustomerEmailFromSources } from "@/lib/customer-email"
 
 /** Exported for factoring / other transactional email that uses the same Resend integration. */
 export async function getResendClient() {
@@ -65,30 +66,73 @@ export async function sendInvoiceEmail(
       }
     }
 
-    // Get invoice
+    // Explicit columns + separate fetches (nested embed + select(*) breaks when CRM FK/embed is missing).
     const { data: invoice, error: invoiceError } = await supabase
-    .from("invoices")
-    .select(`
-      *,
-      loads:load_id (
-        id,
-        shipment_number,
-        customer_id,
-        customers:customer_id (
-          id,
-          name,
-          email,
-          company_name
-        )
+      .from("invoices")
+      .select(
+        "id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items",
       )
-    `)
-    .eq("id", invoiceId)
-    .eq("company_id", ctx.companyId)
-    .maybeSingle()
+      .eq("id", invoiceId)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
 
-  if (invoiceError || !invoice) {
-    return { error: "Invoice not found", data: null }
-  }
+    if (invoiceError || !invoice) {
+      return {
+        error: invoiceError
+          ? safeDbError(invoiceError, "Failed to load invoice for email")
+          : "Invoice not found",
+        data: null,
+      }
+    }
+
+    type CustomerEmailRow = {
+      id?: string
+      name?: string | null
+      email?: string | null
+      primary_contact_email?: string | null
+      company_name?: string | null
+    }
+
+    let invoiceCustomer: CustomerEmailRow | null = null
+    if (invoice.customer_id) {
+      const { data: customer } = await supabase
+        .from("customers")
+        .select("id, name, email, primary_contact_email, company_name")
+        .eq("id", invoice.customer_id)
+        .eq("company_id", ctx.companyId)
+        .maybeSingle()
+      invoiceCustomer = customer
+    }
+
+    let loadCustomer: CustomerEmailRow | null = null
+    let consigneeContactEmail: string | null = null
+    let loadNumber = "—"
+    let loadCompanyName: string | null = null
+
+    if (invoice.load_id) {
+      const { data: loadRow } = await supabase
+        .from("loads")
+        .select("id, shipment_number, customer_id, consignee_contact_email, company_name")
+        .eq("id", invoice.load_id)
+        .eq("company_id", ctx.companyId)
+        .maybeSingle()
+
+      if (loadRow) {
+        loadNumber = loadRow.shipment_number || loadNumber
+        consigneeContactEmail = loadRow.consignee_contact_email
+        loadCompanyName = loadRow.company_name
+
+        if (loadRow.customer_id) {
+          const { data: customer } = await supabase
+            .from("customers")
+            .select("id, name, email, primary_contact_email, company_name")
+            .eq("id", loadRow.customer_id)
+            .eq("company_id", ctx.companyId)
+            .maybeSingle()
+          loadCustomer = customer
+        }
+      }
+    }
 
   const settingsResult = await getCompanySettings()
   const settings = (settingsResult.data || {}) as Record<string, unknown>
@@ -99,28 +143,26 @@ export async function sendInvoiceEmail(
       .eq("id", ctx.companyId)
       .maybeSingle()
 
-    const customerEmail = invoice.loads?.customers?.email || invoice.customer_name
-    if (!customerEmail || !customerEmail.includes("@")) {
-      return { error: "Customer email is required and must be valid", data: null }
-    }
-
-    const loadRow = invoice.loads as { shipment_number?: string | null; company_name?: string | null } | null
-    let loadNumber = loadRow?.shipment_number || "—"
-    if (!loadRow?.shipment_number && invoice.load_id) {
-      const { data: lr } = await supabase
-        .from("loads")
-        .select("shipment_number")
-        .eq("id", invoice.load_id)
-        .eq("company_id", ctx.companyId)
-        .maybeSingle()
-      if (lr?.shipment_number) loadNumber = lr.shipment_number
+    const customerEmail = resolveCustomerEmailFromSources([
+      resolveCustomerEmail(loadCustomer),
+      resolveCustomerEmail(invoiceCustomer),
+      consigneeContactEmail,
+    ])
+    if (!customerEmail) {
+      return {
+        error:
+          "Customer email is required. Add an email on the linked CRM customer (or consignee contact email on the load).",
+        data: null,
+      }
     }
 
     const customerName =
-      invoice.loads?.customers?.name ||
-      invoice.loads?.customers?.company_name ||
+      loadCustomer?.name ||
+      loadCustomer?.company_name ||
+      invoiceCustomer?.name ||
+      invoiceCustomer?.company_name ||
       invoice.customer_name ||
-      loadRow?.company_name ||
+      loadCompanyName ||
       "Customer"
     const companyName = company?.name || (settings.company_name_display as string) || "Company"
     const companyEmail = company?.email || process.env.RESEND_FROM_EMAIL || "noreply@truckmates.com"
@@ -219,7 +261,7 @@ export async function sendInvoiceEmail(
     }
 
     // Record email send into CRM contact_history so it appears in unified communications.
-    const customerId = invoice.loads?.customers?.id ? String(invoice.loads.customers.id) : null
+    const customerId = loadCustomer?.id || invoiceCustomer?.id || null
     if (customerId) {
       try {
         await supabase.from("contact_history").insert({

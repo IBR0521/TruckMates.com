@@ -8,6 +8,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { resolveCustomerEmail } from "@/lib/customer-email"
 import * as Sentry from "@sentry/nextjs"
 
 type LoadAddressBookDetails = {
@@ -200,7 +201,7 @@ export async function getLoadDetails(loadId: string): Promise<{
       try {
         const { data: customerData } = await supabase
           .from("customers")
-          .select("id, name, phone, email")
+          .select("id, name, phone, email, primary_contact_email")
           .eq("id", loadWithOptionalRelations.customer_id)
           .eq("company_id", ctx.companyId) // V3-004: Enforce company ownership for customer
           .maybeSingle()
@@ -345,7 +346,7 @@ export async function getLoadDetails(loadId: string): Promise<{
         id: customer.id,
         name: customer.name,
         phone: customer.phone,
-        email: customer.email,
+        email: resolveCustomerEmail(customer),
       } : null,
       delivery_points: deliveryPoints || [],
       notes: notes,

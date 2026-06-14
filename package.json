@@ -25,6 +25,7 @@
     "test:ci": "vitest --run --reporter=dot",
     "start": "next start",
     "e2e:smoke": "node scripts/truckmates-smoke.mjs",
+    "operations:hardtest": "node scripts/operations-hard-test.mjs",
     "eld:generate-test-csv": "node scripts/generate-eld-test-csv.mjs",
     "eld:generate-fmcsa-output": "node scripts/generate-fmcsa-eld-output.mjs",
     "ai:eval": "tsx scripts/ai-eval/run.mjs"

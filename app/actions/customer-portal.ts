@@ -10,6 +10,7 @@ import crypto from "crypto"
 import { handleDbError } from "@/lib/db-helpers"
 import { getResendClientForCompany } from "@/lib/resend-client"
 import { sendNotification } from "./notifications"
+import { resolveCustomerEmail } from "@/lib/customer-email"
 async function getResendClient() {
   const ctx = await getCachedAuthContext()
   return getResendClientForCompany(ctx.companyId ?? null)
@@ -62,7 +63,7 @@ export async function createCustomerPortalAccess(formData: {
     // V3-007 FIX: Replace select(*) with explicit columns
     const { data: customer } = await supabase
       .from("customers")
-      .select("id, company_id, name, company_name, email, phone, address_line1, address_line2, city, state, zip_code, country, contact_name, contact_email, contact_phone")
+      .select("id, company_id, name, company_name, email, phone, address_line1, address_line2, city, state, zip_code, country, primary_contact_name, primary_contact_email, primary_contact_phone")
       .eq("id", formData.customer_id)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
@@ -142,10 +143,11 @@ export async function createCustomerPortalAccess(formData: {
     }
 
     // Send email notification if enabled and customer has email
-    if (formData.email_notifications !== false && customer.email) {
+    const portalRecipientEmail = resolveCustomerEmail(customer)
+    if (formData.email_notifications !== false && portalRecipientEmail) {
       try {
         const emailSend = await sendPortalAccessEmail({
-          customerEmail: customer.email,
+          customerEmail: portalRecipientEmail,
           customerName: customer.name || customer.company_name || "Customer",
           portalUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://truckmates.com"}/portal/${accessToken}`,
           companyName: ctx.companyId ? (await supabase.from("companies").select("name").eq("id", ctx.companyId).maybeSingle()).data?.name || "TruckMates" : "TruckMates",
@@ -157,7 +159,7 @@ export async function createCustomerPortalAccess(formData: {
             customer_id: formData.customer_id,
             type: "email",
             subject: `Your ${(await supabase.from("companies").select("name").eq("id", ctx.companyId).maybeSingle()).data?.name || "TruckMates"} Customer Portal Access`,
-            message: `Portal access email sent to ${customer.email}.`,
+            message: `Portal access email sent to ${portalRecipientEmail}.`,
             direction: "outbound",
             user_id: ctx.userId ?? null,
             occurred_at: new Date().toISOString(),
@@ -165,7 +167,7 @@ export async function createCustomerPortalAccess(formData: {
             source: "email",
             metadata: {
               email_kind: "customer_portal_access",
-              to: customer.email,
+              to: portalRecipientEmail,
               portal_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://truckmates.com"}/portal/${accessToken}`,
             },
           })
@@ -707,7 +709,7 @@ export async function reviewPortalLoadRequest(input: {
     const supabase = await createClient()
     const { data: load, error: loadError } = await supabase
       .from("loads")
-      .select("id, company_id, shipment_number, status, requested_via_portal, portal_request_status, customer_id, customers:customer_id(name, company_name, email)")
+      .select("id, company_id, shipment_number, status, requested_via_portal, portal_request_status, customer_id, customers:customer_id(name, company_name, email, primary_contact_email)")
       .eq("id", input.load_id)
       .eq("company_id", ctx.companyId)
       .maybeSingle()
@@ -748,7 +750,9 @@ export async function reviewPortalLoadRequest(input: {
       return { error: safeDbError(updateError, "Failed to review portal request"), data: null }
     }
 
-    const customerEmail = (load as { customers?: { email?: string | null } | null })?.customers?.email || undefined
+    const customerEmail = resolveCustomerEmail(
+      (load as { customers?: { email?: string | null; primary_contact_email?: string | null } | null })?.customers,
+    )
     if (customerEmail) {
       try {
         const resend = await getResendClient()
