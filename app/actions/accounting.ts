@@ -814,13 +814,23 @@ export async function createInvoice(formData: {
   let deferredInvoiceCreditOverride: DeferredCreditOverrideAudit | null = null
 
   const customerNameForCredit = sanitizeString(formData.customer_name, 200)
-  const { data: invoiceCustomerMatch } = await supabase
+  const { data: invoiceCustomerMatchByName } = await supabase
     .from("customers")
     .select("id, name")
     .eq("company_id", ctx.companyId)
     .ilike("name", customerNameForCredit)
     .limit(1)
     .maybeSingle()
+  const { data: invoiceCustomerMatchByCompany } = invoiceCustomerMatchByName
+    ? { data: null }
+    : await supabase
+        .from("customers")
+        .select("id, name")
+        .eq("company_id", ctx.companyId)
+        .ilike("company_name", customerNameForCredit)
+        .limit(1)
+        .maybeSingle()
+  const invoiceCustomerMatch = invoiceCustomerMatchByName ?? invoiceCustomerMatchByCompany
 
   if (invoiceCustomerMatch?.id) {
     const invoiceCredit = await evaluateCustomerCreditGate({
@@ -886,6 +896,30 @@ export async function createInvoice(formData: {
       }
     }
     data = invRow
+
+    // Link CRM customer on the invoice when we can resolve one (load link or name match).
+    let linkedCustomerId: string | null =
+      typeof invRow.customer_id === "string" ? invRow.customer_id : null
+    if (!linkedCustomerId && formData.load_id) {
+      const { data: loadRow } = await supabase
+        .from("loads")
+        .select("customer_id")
+        .eq("id", formData.load_id)
+        .eq("company_id", ctx.companyId)
+        .maybeSingle()
+      if (loadRow?.customer_id) linkedCustomerId = String(loadRow.customer_id)
+    }
+    if (!linkedCustomerId && invoiceCustomerMatch?.id) {
+      linkedCustomerId = String(invoiceCustomerMatch.id)
+    }
+    if (linkedCustomerId && !invRow.customer_id) {
+      await supabase
+        .from("invoices")
+        .update({ customer_id: linkedCustomerId })
+        .eq("id", invoiceId)
+        .eq("company_id", ctx.companyId)
+      data = { ...invRow, customer_id: linkedCustomerId }
+    }
   } catch (error: unknown) {
     return { data: null, error: safeDbError(error, "Invoice not created") }
   }

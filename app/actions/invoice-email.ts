@@ -9,7 +9,7 @@ import { revalidatePath } from "next/cache"
 import { getResendClientForCompany } from "@/lib/resend-client"
 import { buildInvoicePacketAttachments, buildInvoicePacketEmailContent } from "@/lib/invoice-packet-build"
 import { capturePostHogServerEvent } from "@/lib/analytics/posthog-server"
-import { resolveCustomerEmail, resolveCustomerEmailFromSources } from "@/lib/customer-email"
+import { resolveInvoiceRecipientEmail } from "@/lib/invoice-recipient-email"
 
 /** Exported for factoring / other transactional email that uses the same Resend integration. */
 export async function getResendClient() {
@@ -19,6 +19,41 @@ export async function getResendClient() {
     Sentry.captureMessage("[RESEND] No API key (set RESEND_API_KEY or add key in Settings → Integration)", "warning")
   }
   return client
+}
+
+/** Resolve recipient email for an invoice (used by invoice detail UI before send). */
+export async function getInvoiceRecipientEmail(
+  invoiceId: string,
+  overrideEmail?: string | null,
+) {
+  const supabase = await createClient()
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const { data: invoice, error: invoiceError } = await supabase
+    .from("invoices")
+    .select("id, customer_id, customer_name, load_id")
+    .eq("id", invoiceId)
+    .eq("company_id", ctx.companyId)
+    .maybeSingle()
+
+  if (invoiceError || !invoice) {
+    return {
+      error: invoiceError ? safeDbError(invoiceError, "Invoice not found") : "Invoice not found",
+      data: null,
+    }
+  }
+
+  const recipient = await resolveInvoiceRecipientEmail(
+    supabase,
+    ctx.companyId,
+    invoice,
+    overrideEmail,
+  )
+
+  return { data: recipient, error: null }
 }
 
 /**
@@ -34,7 +69,7 @@ export async function sendInvoiceEmail(
     cc_emails?: string[]
     bcc_emails?: string[]
     send_copy_to_company?: boolean
-    /** Explicit recipient — e.g. load consignee contact email from the invoice UI */
+    /** Explicit recipient override from the invoice UI */
     to_email?: string
     /** @deprecated Packet always includes invoice PDF + optional BOL/rate/POD (same as factoring). */
     include_bol?: boolean
@@ -48,7 +83,6 @@ export async function sendInvoiceEmail(
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
-    // Check rate limit for Resend API
     try {
       const { checkApiUsage } = await import("@/lib/api-protection")
       const rateCheck = await checkApiUsage("resend", "send_email")
@@ -59,8 +93,6 @@ export async function sendInvoiceEmail(
         }
       }
     } catch (error) {
-      // BUG-065 FIX: Fail closed instead of fail open for billing-adjacent operations
-      // Deny the request if rate limit check throws rather than allowing it
       Sentry.captureException(error)
       return {
         error: "Rate limit check failed. Please try again later.",
@@ -68,11 +100,10 @@ export async function sendInvoiceEmail(
       }
     }
 
-    // Explicit columns + separate fetches (nested embed + select(*) breaks when CRM FK/embed is missing).
     const { data: invoice, error: invoiceError } = await supabase
       .from("invoices")
       .select(
-        "id, company_id, invoice_number, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items",
+        "id, company_id, invoice_number, customer_id, customer_name, load_id, amount, status, issue_date, due_date, payment_terms, description, items",
       )
       .eq("id", invoiceId)
       .eq("company_id", ctx.companyId)
@@ -87,46 +118,23 @@ export async function sendInvoiceEmail(
       }
     }
 
-    type CustomerEmailRow = {
-      id?: string
-      name?: string | null
-      email?: string | null
-      primary_contact_email?: string | null
-      company_name?: string | null
-    }
+    const recipient = await resolveInvoiceRecipientEmail(
+      supabase,
+      ctx.companyId,
+      invoice,
+      options?.to_email,
+    )
 
-    let invoiceCustomer: CustomerEmailRow | null = null
-
-    let loadCustomer: CustomerEmailRow | null = null
-    let consigneeContactEmail: string | null = null
-    let loadNumber = "—"
-    let loadCompanyName: string | null = null
-
-    if (invoice.load_id) {
-      const { data: loadRow } = await supabase
-        .from("loads")
-        .select("id, shipment_number, customer_id, consignee_contact_email, company_name")
-        .eq("id", invoice.load_id)
-        .eq("company_id", ctx.companyId)
-        .maybeSingle()
-
-      if (loadRow) {
-        loadNumber = loadRow.shipment_number || loadNumber
-        consigneeContactEmail = loadRow.consignee_contact_email
-        loadCompanyName = loadRow.company_name
-
-        if (loadRow.customer_id) {
-          const { data: customer } = await supabase
-            .from("customers")
-            .select("id, name, email, primary_contact_email, company_name")
-            .eq("id", loadRow.customer_id)
-            .eq("company_id", ctx.companyId)
-            .maybeSingle()
-          loadCustomer = customer
-          invoiceCustomer = customer
-        }
+    if (!recipient.email) {
+      return {
+        error:
+          "No valid customer email found. Add an email on the CRM customer, the load consignee contact, or a primary CRM contact — then try again.",
+        data: null,
       }
     }
+
+    const customerEmail = recipient.email
+    const customerId = recipient.customerId
 
   const settingsResult = await getCompanySettings()
   const settings = (settingsResult.data || {}) as Record<string, unknown>
@@ -137,28 +145,20 @@ export async function sendInvoiceEmail(
       .eq("id", ctx.companyId)
       .maybeSingle()
 
-    const customerEmail = resolveCustomerEmailFromSources([
-      options?.to_email,
-      consigneeContactEmail,
-      resolveCustomerEmail(loadCustomer),
-      resolveCustomerEmail(invoiceCustomer),
-    ])
-    if (!customerEmail) {
-      return {
-        error:
-          "Customer email is required. Add an email on the linked CRM customer (or consignee contact email on the load).",
-        data: null,
-      }
+    let loadNumber = "—"
+    let loadCompanyName: string | null = null
+    if (invoice.load_id) {
+      const { data: loadRow } = await supabase
+        .from("loads")
+        .select("shipment_number, company_name")
+        .eq("id", invoice.load_id)
+        .eq("company_id", ctx.companyId)
+        .maybeSingle()
+      if (loadRow?.shipment_number) loadNumber = loadRow.shipment_number
+      loadCompanyName = loadRow?.company_name ?? null
     }
 
-    const customerName =
-      loadCustomer?.name ||
-      loadCustomer?.company_name ||
-      invoiceCustomer?.name ||
-      invoiceCustomer?.company_name ||
-      invoice.customer_name ||
-      loadCompanyName ||
-      "Customer"
+    const customerName = invoice.customer_name || loadCompanyName || "Customer"
     const companyName = company?.name || (settings.company_name_display as string) || "Company"
     const companyEmail = company?.email || process.env.RESEND_FROM_EMAIL || "noreply@truckmates.com"
     const amountStr = `$${Number(invoice.amount || 0).toFixed(2)}`
@@ -196,7 +196,6 @@ export async function sendInvoiceEmail(
     const resend = await getResendClient()
     
     if (!resend) {
-      // If Resend is not configured, log and return error
       Sentry.captureMessage("[INVOICE EMAIL] Resend API key not configured. Email not sent.", "warning")
       return {
         error:
@@ -205,19 +204,16 @@ export async function sendInvoiceEmail(
       }
     }
 
-    // Prepare recipients
     const toEmails = [customerEmail]
     const ccEmails = options?.cc_emails || []
     const bccEmails = options?.bcc_emails || []
     
-    // Add company email to BCC if requested
     if (options?.send_copy_to_company && companyEmail) {
       bccEmails.push(companyEmail)
     }
 
     const attachments = packet.attachments
 
-    // Get from email (check env var, then database, then default)
     let fromEmail = process.env.RESEND_FROM_EMAIL
     if (!fromEmail && ctx.companyId) {
       try {
@@ -255,8 +251,6 @@ export async function sendInvoiceEmail(
       }
     }
 
-    // Record email send into CRM contact_history so it appears in unified communications.
-    const customerId = loadCustomer?.id || invoiceCustomer?.id || null
     if (customerId) {
       try {
         await supabase.from("contact_history").insert({
@@ -278,6 +272,7 @@ export async function sendInvoiceEmail(
             cc: ccEmails,
             bcc: bccEmails,
             resend_id: emailResult.data?.id || null,
+            recipient_source: recipient.source,
           },
         })
       } catch (logError) {
@@ -285,8 +280,6 @@ export async function sendInvoiceEmail(
       }
     }
 
-    // Update invoice status to "sent"
-    // V3-001 FIX: Add company_id filter to prevent IDOR
     await supabase
       .from("invoices")
       .update({ status: "sent" })
@@ -312,14 +305,8 @@ export async function sendInvoiceEmail(
         to: customerEmail,
         messageId: emailResult.data?.id,
         attachmentCount: attachments.length,
+        recipient_source: recipient.source,
       },
       error: null,
     }
 }
-
-
-
-
-
-
-

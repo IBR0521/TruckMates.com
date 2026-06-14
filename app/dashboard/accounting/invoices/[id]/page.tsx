@@ -11,8 +11,7 @@ import { use } from "react"
 import { exportToPDF } from "@/lib/export-utils"
 import { toast } from "sonner"
 import { getInvoice } from "@/app/actions/accounting"
-import { sendInvoiceEmail } from "@/app/actions/invoice-email"
-import { resolveCustomerEmailFromSources } from "@/lib/customer-email"
+import { sendInvoiceEmail, getInvoiceRecipientEmail } from "@/app/actions/invoice-email"
 import { markInvoiceFactoringFunded } from "@/app/actions/factoring-email"
 import { submitInvoiceToTriumphPay, syncInvoiceFactoringStatus } from "@/app/actions/factoring-api"
 import {
@@ -21,6 +20,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { normalizeInvoiceLineItems } from "@/lib/invoice-line-items"
 
 type InvoiceDetail = {
@@ -76,6 +85,9 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [isSyncing, setIsSyncing] = useState(false)
   const [isRefreshingPayment, setIsRefreshingPayment] = useState(false)
   const [sendingCustomer, setSendingCustomer] = useState(false)
+  const [showEmailDialog, setShowEmailDialog] = useState(false)
+  const [manualEmail, setManualEmail] = useState("")
+  const [resolvedRecipientEmail, setResolvedRecipientEmail] = useState<string | null>(null)
   const [shareMailPreparing, setShareMailPreparing] = useState(false)
   const [sendingFactoring, setSendingFactoring] = useState(false)
   const [markingFunded, setMarkingFunded] = useState(false)
@@ -104,6 +116,10 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
       const parsedInvoice = asInvoiceDetail(result.data)
       if (parsedInvoice) {
         setInvoice(parsedInvoice)
+        const recipientResult = await getInvoiceRecipientEmail(id)
+        if (aliveRef.current && !recipientResult.error) {
+          setResolvedRecipientEmail(recipientResult.data?.email ?? null)
+        }
       }
       setIsLoading(false)
     }
@@ -347,20 +363,52 @@ PDF and supporting documents are not attached here. Use TruckMates â†’ Invoice â
     }
   }
 
+  const sendInvoiceWithEmail = async (toEmail: string) => {
+    const res = await sendInvoiceEmail(id, { to_email: toEmail })
+    if (res.error) {
+      toast.error(res.error)
+      return false
+    }
+    toast.success(`Invoice emailed to ${toEmail}`)
+    const refreshed = await getInvoice(id)
+    if (!refreshed.error && refreshed.data) setInvoice(refreshed.data as InvoiceDetail)
+    setResolvedRecipientEmail(toEmail)
+    return true
+  }
+
   const handleSendToCustomer = async () => {
     try {
       setSendingCustomer(true)
-      const toEmail = resolveCustomerEmailFromSources([
-        invoice?.loads?.consignee_contact_email,
-      ])
-      const res = await sendInvoiceEmail(id, toEmail ? { to_email: toEmail } : undefined)
-      if (res.error) {
-        toast.error(res.error)
+      const recipientResult = await getInvoiceRecipientEmail(id)
+      if (recipientResult.error) {
+        toast.error(recipientResult.error)
         return
       }
-      toast.success("Invoice emailed to customer")
-      const refreshed = await getInvoice(id)
-      if (!refreshed.error && refreshed.data) setInvoice(refreshed.data)
+      const resolvedEmail = recipientResult.data?.email
+      setResolvedRecipientEmail(resolvedEmail ?? null)
+      if (resolvedEmail) {
+        await sendInvoiceWithEmail(resolvedEmail)
+        return
+      }
+      setManualEmail("")
+      setShowEmailDialog(true)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? errorMessage(e) : "Failed to send")
+    } finally {
+      setSendingCustomer(false)
+    }
+  }
+
+  const handleConfirmManualEmail = async () => {
+    const trimmed = manualEmail.trim()
+    if (!trimmed.includes("@") || !trimmed.includes(".")) {
+      toast.error("Enter a valid email address")
+      return
+    }
+    try {
+      setSendingCustomer(true)
+      const sent = await sendInvoiceWithEmail(trimmed)
+      if (sent) setShowEmailDialog(false)
     } catch (e: unknown) {
       toast.error(e instanceof Error ? errorMessage(e) : "Failed to send")
     } finally {
@@ -510,6 +558,11 @@ PDF and supporting documents are not attached here. Use TruckMates â†’ Invoice â
               className="border-border bg-transparent"
               disabled={sendingCustomer}
               onClick={() => void handleSendToCustomer()}
+              title={
+                resolvedRecipientEmail
+                  ? `Send to ${resolvedRecipientEmail}`
+                  : "Resolve customer email or enter one manually"
+              }
             >
               <Mail className="w-4 h-4 mr-2" />
               {sendingCustomer ? "Sendingâ€¦" : "Email customer"}
@@ -677,6 +730,43 @@ PDF and supporting documents are not attached here. Use TruckMates â†’ Invoice â
           </Card>
         </div>
       </div>
+
+      <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Email invoice to customer</DialogTitle>
+            <DialogDescription>
+              No billing email was found for{" "}
+              <span className="font-medium text-foreground">
+                {invoice?.customer_name?.trim() || "this customer"}
+              </span>
+              . Enter the recipient address below, or add an email on the CRM customer / load consignee contact
+              for next time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="invoice-recipient-email">Recipient email</Label>
+            <Input
+              id="invoice-recipient-email"
+              type="email"
+              placeholder="billing@customer.com"
+              value={manualEmail}
+              onChange={(e) => setManualEmail(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleConfirmManualEmail()
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEmailDialog(false)} disabled={sendingCustomer}>
+              Cancel
+            </Button>
+            <Button onClick={() => void handleConfirmManualEmail()} disabled={sendingCustomer}>
+              {sendingCustomer ? "Sendingâ€¦" : "Send invoice"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
