@@ -7,6 +7,7 @@ import {
   filterDelayedLoads,
   type DelayedLoadRow,
 } from "@/lib/delivery-delay-scan"
+import { batchOperations } from "@/lib/performance"
 
 const MANAGER_ROLES = new Set(["super_admin", "operations_manager"])
 const DEDUPE_HOURS = 12
@@ -114,16 +115,15 @@ export async function scanAllDeliveryDelays(): Promise<{
     return { data: null, error: error.message || "Failed to list companies" }
   }
 
-  let notified = 0
-  for (const row of companies || []) {
-    const companyId = String(row.id || "")
-    if (!companyId) continue
-    const result = await scanDeliveryDelaysForCompany(companyId)
-    if (result.data) notified += result.data.notified
-  }
+  const companyIds = (companies || [])
+    .map((row) => String(row.id || ""))
+    .filter(Boolean)
+
+  const results = await batchOperations(companyIds, 8, scanDeliveryDelaysForCompany)
+  const notified = results.reduce((sum, result) => sum + (result.data?.notified ?? 0), 0)
 
   return {
-    data: { companies: (companies || []).length, notified },
+    data: { companies: companyIds.length, notified },
     error: null,
   }
 }

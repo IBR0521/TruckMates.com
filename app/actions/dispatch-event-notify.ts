@@ -7,6 +7,7 @@ import {
   isDispatchNotifyEventEnabled,
   type DispatchNotificationSettings,
 } from "@/lib/dispatch-notify-settings"
+import { batchOperations } from "@/lib/performance"
 
 const MANAGER_ROLES = new Set(["super_admin", "operations_manager", "dispatcher"])
 const DEDUPE_HOURS = 12
@@ -276,31 +277,33 @@ export async function scanAllDispatchEvents(): Promise<{
     return { data: null, error: error.message || "Failed to list companies" }
   }
 
-  let missedCheckCalls = 0
-  let driverLate = 0
-  let routeDeviation = 0
-  let emergencyEscalations = 0
+  const companyIds = (companies || [])
+    .map((row) => String(row.id || ""))
+    .filter(Boolean)
 
-  for (const row of companies || []) {
-    const companyId = String(row.id || "")
-    if (!companyId) continue
+  const results = await batchOperations(companyIds, 6, async (companyId) => {
+    const [missed, late, deviation, emergency] = await Promise.all([
+      scanMissedCheckCallsForCompany(companyId),
+      scanDriverLateForCompany(companyId),
+      scanRouteDeviationsForCompany(companyId),
+      scanEmergencyEscalationsForCompany(companyId),
+    ])
+    return {
+      missed: missed.data?.notified ?? 0,
+      late: late.data?.notified ?? 0,
+      deviation: deviation.data?.notified ?? 0,
+      emergency: emergency.data?.notified ?? 0,
+    }
+  })
 
-    const missed = await scanMissedCheckCallsForCompany(companyId)
-    if (missed.data) missedCheckCalls += missed.data.notified
-
-    const late = await scanDriverLateForCompany(companyId)
-    if (late.data) driverLate += late.data.notified
-
-    const deviation = await scanRouteDeviationsForCompany(companyId)
-    if (deviation.data) routeDeviation += deviation.data.notified
-
-    const emergency = await scanEmergencyEscalationsForCompany(companyId)
-    if (emergency.data) emergencyEscalations += emergency.data.notified
-  }
+  const missedCheckCalls = results.reduce((sum, r) => sum + r.missed, 0)
+  const driverLate = results.reduce((sum, r) => sum + r.late, 0)
+  const routeDeviation = results.reduce((sum, r) => sum + r.deviation, 0)
+  const emergencyEscalations = results.reduce((sum, r) => sum + r.emergency, 0)
 
   return {
     data: {
-      companies: (companies || []).length,
+      companies: companyIds.length,
       missed_check_calls: missedCheckCalls,
       driver_late: driverLate,
       route_deviation: routeDeviation,
