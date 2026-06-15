@@ -676,7 +676,7 @@ async function reconcileInvitationsWithExistingUsers(companyId: string) {
           acceptorId = profile.id
         } else if (cid == null) {
           const invitedRole = mapLegacyRole(
-            String((inv as { invited_role?: string | null }).invited_role || profile?.role || "driver"),
+            String((inv as { invited_role?: string | null }).invited_role || "driver"),
           )
           const { error: attachErr } = await admin
             .from("users")
